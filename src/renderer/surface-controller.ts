@@ -11,6 +11,7 @@
 type Surface = Readonly<{
   root: HTMLElement;
   priority: number;
+  transient?: boolean;
   dismiss(): void;
 }>;
 
@@ -45,6 +46,19 @@ export function installSurfaceController(
   const topmost = () => [...surfaces.values()].sort((left, right) =>
     right.priority - left.priority || right.order - left.order
   )[0] ?? null;
+
+  const dismissTransient = (except?: symbol) => {
+    const open = [...surfaces.entries()]
+      .filter(([id, surface]) => id !== except && surface.transient)
+      .sort((left, right) =>
+        right[1].priority - left[1].priority || right[1].order - left[1].order
+      );
+    for (const [id, surface] of open) {
+      surface.dismiss();
+      // A faulty surface must not keep stale ownership after dismissal.
+      surfaces.delete(id);
+    }
+  };
 
   const claim = (event: KeyboardEvent) => {
     event.preventDefault();
@@ -122,7 +136,10 @@ export function installSurfaceController(
         setOpen(next: boolean) {
           if (next === open) return;
           open = next;
-          if (next) surfaces.set(id, { ...surface, order: order++ });
+          if (next) {
+            if (surface.transient) dismissTransient(id);
+            surfaces.set(id, { ...surface, order: order++ });
+          }
           else surfaces.delete(id);
         },
         raise() {
@@ -137,5 +154,6 @@ export function installSurfaceController(
         },
       });
     },
+    dismissTransient,
   });
 }

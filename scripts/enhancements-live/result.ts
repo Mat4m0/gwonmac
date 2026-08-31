@@ -1,5 +1,46 @@
 import type { Page } from "playwright";
 
+/** Collapse startup failures before they enter the character-probe artifact. */
+export function closedCharacterSwitchFailureCode(error: unknown): string {
+  const message = error instanceof Error ? error.message : "";
+  if (message.startsWith("Electron exited before connection")) return "app-exited-before-debugger";
+  if (message === "Electron did not expose its debugging endpoint") return "debugger-timeout";
+  if (message === "Electron exposed no browser context") return "browser-context-missing";
+  if (message === "No Guild Wars account window opened within 30 minutes") {
+    return "account-window-timeout";
+  }
+  if (message === "Enhancement live run requires exactly one open account window") {
+    return "account-window-ambiguous";
+  }
+  if (/^[a-z][a-z0-9_]{0,63}$/u.test(message)) return `client-${message}`;
+  return "runner-internal";
+}
+
+/**
+ * Reduce the character probe's live result to its privacy-safe contract.
+ * Passing the generic live projection is intentional: this boundary proves
+ * that map/player/target diagnostics cannot reach stdout or failure artifacts.
+ */
+export function projectCharacterSwitchLiveResult(
+  result: Readonly<{
+    scenario: string;
+    supported: boolean;
+    buildId: number | null;
+    installation: number;
+  }>,
+  evidence: unknown,
+  rendererErrorCount: number,
+) {
+  return {
+    scenario: result.scenario,
+    supported: result.supported,
+    buildId: result.buildId,
+    installation: result.installation,
+    rendererErrorCount,
+    ...(evidence ? { evidence } : {}),
+  };
+}
+
 /**
  * The whole live-run readout, projected inside the page in one round trip.
  *

@@ -228,6 +228,7 @@ test.describe("client compatibility", () => {
               nativeCursor: { status: "unavailable", reason: "game-update" },
               playRegionObservation: { status: "off" },
         preGameControls: { status: "off" },
+        characterSwitchAction: { status: "off" },
               targetObservation: { status: "off" },
               partyObservation: { status: "off" },
               teamApply: { status: "off" },

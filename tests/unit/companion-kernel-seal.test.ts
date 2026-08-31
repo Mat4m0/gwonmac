@@ -83,6 +83,7 @@ describe("companion kernel build contract", () => {
       { name: "companion_skill_slot_bytes", typeIndex: 2 },
       { name: "companion_skill_cooldown_bytes", typeIndex: 2 },
       { name: "companion_play_region_bytes", typeIndex: 2 },
+      { name: "companion_character_list_bytes", typeIndex: 2 },
     ]);
   });
 
@@ -150,6 +151,7 @@ describe("companion kernel build contract", () => {
       companion_skill_cooldown_bytes:
         COMPANION_KERNEL_EXPORT_VALUES.companion_skill_cooldown_bytes,
       companion_play_region_bytes: COMPANION_PLAY_REGION_BYTES,
+      companion_character_list_bytes: 4_632,
     });
     // One export per value, so a region added to the kernel cannot be left
     // unverified by forgetting to state its size.

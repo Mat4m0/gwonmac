@@ -21,6 +21,7 @@ const base: ClientSession = {
       skillCooldownObservation: { status: "off" },
       playRegionObservation: { status: "off" },
         preGameControls: { status: "off" },
+        characterSwitchAction: { status: "off" },
     },
   },
   extendedMemory: {

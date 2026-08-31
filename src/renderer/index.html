@@ -14,6 +14,7 @@
 <link rel="stylesheet" href="settings.css">
 <link rel="stylesheet" href="settings-cartography.css">
 <link rel="stylesheet" href="cartography-overlay-controls.css">
+<link rel="stylesheet" href="character-switch.css">
 <link rel="stylesheet" href="loading.css">
 <!-- tabindex=0 + autofocus match the shipped page; tabindex=-1 is focusable but
      not keyboard-focusable, and key events never reached the module. -->
@@ -610,9 +611,12 @@
         <section class="settings-pane" id="settings-pane-controls" role="tabpanel"
                  aria-labelledby="settings-tab-controls">
           <header class="settings-pane-header">
-            <h3 id="settings-controls-title" class="settings-pane-title">Tools</h3>
-            <p class="settings-pane-intro">Choose which optional GWonMac features are available while you play.</p>
+            <h3 id="settings-controls-title" class="settings-pane-title">Controls</h3>
+            <p class="settings-pane-intro">Manage GWonMac shortcuts and choose which optional features are available while you play.</p>
           </header>
+          <div class="settings-tools-list settings-core-controls">
+            <!-- build-include:settings-character-switch.html -->
+          </div>
           <section class="settings-feature-master" aria-labelledby="settings-tools-master-label">
             <label class="settings-check ui-check">
               <input type="checkbox" name="gwonmacTools" aria-describedby="settings-tools-help">
@@ -812,8 +816,8 @@
               </div>
               <p class="settings-tool-description">Show the selected target’s distance and range band.</p>
             </section>
-            <button type="button" id="settings-shortcuts-restore" class="ui-link settings-shortcuts-restore">Restore default shortcuts</button>
           </div>
+          <button type="button" id="settings-shortcuts-restore" class="ui-link settings-shortcuts-restore">Restore default shortcuts</button>
           <details id="settings-availability" class="settings-availability">
             <summary>Availability for this Guild Wars version</summary>
             <dl class="settings-feature-status">

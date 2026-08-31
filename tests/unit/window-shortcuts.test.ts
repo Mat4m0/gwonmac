@@ -70,6 +70,12 @@ describe("window shortcut input", () => {
       ...overrides,
     });
 
+    assert.equal(dispatch(keyDown("KeyR", "r")), true);
+    assert.deepEqual(actions, ["character.switch"]);
+    assert.equal(dispatch({ ...keyDown("KeyR", "r"), type: "keyUp" }), true);
+    actions.length = 0;
+    assert.equal(dispatch(keyDown("KeyR", "r", { shift: true })), false);
+
     assert.equal(dispatch(keyDown("KeyB", "b")), true);
     for (let repeat = 0; repeat < 3; repeat += 1) {
       assert.equal(dispatch(keyDown("KeyB", "b", { isAutoRepeat: true })), true);

@@ -14,6 +14,7 @@ import {
   COMPANION_TOOLBOX_BYTES,
 } from "../../src/renderer/companion-snapshot.ts";
 import { COMPANION_KERNEL_EXPORT_VALUES } from "../../scripts/companion-kernel-contract.mjs";
+import { COMPANION_ABI } from "../../src/shared/companion-abi.ts";
 import { companionKernelFixture } from "../helpers/companion-kernel-fixture.ts";
 
 const CONFIG_BYTES = ENHANCEMENT_CONFIG_WORD_COUNT * 4;
@@ -33,6 +34,7 @@ function request() {
       skillSlots: { pointer: 393_216, bytes: COMPANION_SKILL_SLOT_BYTES },
       skillCooldowns: { pointer: 409_600, bytes: COMPANION_SKILL_COOLDOWN_BYTES },
       playRegion: { pointer: 425_984, bytes: COMPANION_PLAY_REGION_BYTES },
+      characterList: { pointer: 450_560, bytes: COMPANION_ABI.characterList.bytes },
     },
   } as const;
 }
@@ -47,6 +49,7 @@ function initArguments(): readonly number[] {
     393_216, COMPANION_SKILL_SLOT_BYTES,
     409_600, COMPANION_SKILL_COOLDOWN_BYTES,
     425_984, COMPANION_PLAY_REGION_BYTES,
+    450_560, COMPANION_ABI.characterList.bytes,
     FEATURE_FLAGS,
   ];
 }

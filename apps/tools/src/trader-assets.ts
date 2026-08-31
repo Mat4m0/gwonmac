@@ -1,4 +1,5 @@
 import type { TraderItem, TraderProfession } from "./trader-catalog";
+import { professionPresentation } from "../../../src/shared/profession-assets";
 
 const ASSETS = import.meta.glob<string>("./assets/trader/**/*.png", {
   eager: true,
@@ -32,7 +33,9 @@ export function traderItemIcon(item: TraderItem): string {
 }
 
 export function traderProfessionIcon(profession: TraderProfession): string {
-  return requiredAsset(`professions/${PROFESSION_IDS[profession]}.png`);
+  const icon = professionPresentation(PROFESSION_IDS[profession] ?? 0)?.icon;
+  if (!icon) throw new Error(`missing trader profession asset: ${profession}`);
+  return icon;
 }
 
 function requiredAsset(path: string): string {

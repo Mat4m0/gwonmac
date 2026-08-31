@@ -25,6 +25,20 @@ interface CertifiedCartographyBuild {
  */
 const CERTIFIED_CARTOGRAPHY_BUILDS: ReadonlyMap<string, CertifiedCartographyBuild> = new Map([
   [
+    "62267d95b30752823aa364c289bdc84f2c025dac4caeda86a76a432001667acb",
+    {
+      memoryLayout: "relocated",
+      outputSha256: "c932e214fef2faad7d63c6e58918b2b5b82ff08d771bb189e1950e3a6cb2139d",
+    },
+  ],
+  [
+    "e22c2c0876f1381a133fbb0c739f73f9fc6a7d8988da5ce0d9789481ab7f0c9e",
+    {
+      memoryLayout: "relocated",
+      outputSha256: "be783c4fdfb3ccd042adc719ebd97873ec0fe6216348c2f773109d4ee081f1d6",
+    },
+  ],
+  [
     "e00e8368a1d0e1003bf1882dce2d4b3cd8e2e8b6c4acc72474c8b56e2e35c6bb",
     {
       memoryLayout: "official",
@@ -57,6 +71,20 @@ const CERTIFIED_CARTOGRAPHY_BUILDS: ReadonlyMap<string, CertifiedCartographyBuil
     {
       memoryLayout: "relocated",
       outputSha256: "3016b231dc47236360598f58f5dc35066595028c2a3aae39e2a9ca9580a2a656",
+    },
+  ],
+  [
+    "87469f9cd8b93bd36e5b401bf0450d47b7856322de6e001c9c9d7dd996cd98d4",
+    {
+      memoryLayout: "official",
+      outputSha256: "393b23f080f10491d209031570fdfe7e80063dbb48f8fcb8c33fc662a2067a6b",
+    },
+  ],
+  [
+    "81a2ceb81db4e8ae35f561a20b3c76dbb0b692a1e5ab4de7ff2879e0e8720d53",
+    {
+      memoryLayout: "official",
+      outputSha256: "5ca898031b871a71f8ada41c81cfeb1150261998b866cbfb315fb4607c0fd594",
     },
   ],
 ]);

@@ -32,6 +32,7 @@ import {
   resetGameInput,
   sendRendererCommand,
   toggleTravel,
+  toggleCharacterSwitch,
   toggleTrade,
   toggleTools,
 } from "./renderer-commands.js";
@@ -417,9 +418,15 @@ export function installApplicationMenu({
           }),
         },
         {
+          id: "switch-character",
+          label: "Switch Character",
+          accelerator: "CmdOrCtrl+R",
+          click: withGameOwner((win) => toggleCharacterSwitch(win)),
+        },
+        {
           id: "reload-game",
           label: "Reload Guild Wars…",
-          accelerator: "CmdOrCtrl+R",
+          accelerator: "CmdOrCtrl+Shift+R",
           click: withGameOwner((win) => showReloadGame(host, win)),
         },
         ...(dev

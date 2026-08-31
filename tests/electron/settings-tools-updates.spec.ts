@@ -202,9 +202,11 @@ test.describe("tools and update settings", () => {
       const { app, page } = fixture;
       await openControls(app, page);
 
+      const characterRow = page.locator('[data-shortcut-action="character.switch"]');
       const toolsRow = page.locator('[data-shortcut-action="tools.toggle"]');
       const tradeRow = page.locator('[data-shortcut-action="trade.toggle"]');
       const storageRow = page.locator('[data-shortcut-action="storage.open"]');
+      await expect(characterRow.locator("kbd")).toHaveText("⌘R");
       await expect(toolsRow.locator("kbd")).toHaveText("⌘B");
       await expect(tradeRow.locator("kbd")).toHaveText("⌘K");
       await expect(storageRow.locator("kbd")).toHaveText("⌘⇧C");

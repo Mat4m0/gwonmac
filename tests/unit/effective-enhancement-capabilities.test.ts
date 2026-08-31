@@ -40,6 +40,7 @@ function session(capabilities: EnhancementCapabilities): ClientSession {
       skillCooldownObservation: selected(capabilities.skillCooldownObservation),
       playRegionObservation: selected(capabilities.playRegionObservation),
       preGameControls: selected(capabilities.preGameControls),
+      characterSwitchAction: selected(capabilities.characterSwitchAction),
     },
   };
   return {
@@ -52,7 +53,7 @@ function session(capabilities: EnhancementCapabilities): ClientSession {
 
 describe("effective Enhancement capability boundary", () => {
   it("reproduces every served profile from Main's session, independent of request", () => {
-    for (let mask = 1; mask <= 0x3ff; mask += 1) {
+    for (let mask = 1; mask <= 0xfff; mask += 1) {
       const capabilities = enhancementCapabilitiesForProfile(
         `features-${mask.toString(16).padStart(2, "0")}`,
       );
@@ -84,6 +85,7 @@ describe("effective Enhancement capability boundary", () => {
           skillCooldownObservation: off,
           playRegionObservation: off,
           preGameControls: off,
+          characterSwitchAction: off,
         },
       },
     };
@@ -100,6 +102,7 @@ describe("effective Enhancement capability boundary", () => {
       skillCooldownObservation: false,
       playRegionObservation: false,
       preGameControls: false,
+      characterSwitchAction: false,
     });
   });
 

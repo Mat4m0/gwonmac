@@ -25,7 +25,10 @@ export type CompatibilityReport = {
 };
 
 type Feature = keyof ClientCompatibility['features'];
-type VisibleFeature = Exclude<Feature, 'playRegionObservation' | 'preGameControls'>;
+type VisibleFeature = Exclude<
+  Feature,
+  'playRegionObservation' | 'preGameControls' | 'characterSwitchAction'
+>;
 
 const FEATURE_NAMES: Readonly<Record<VisibleFeature, string>> = Object.freeze({
   gameFileSaving: 'Guild Wars file saving',

@@ -26,7 +26,7 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
         "26a71c3e2bf55ab992dce659c1192213858ee25799daa87841ed23a3ddbb601a",
       // Recomputed from the exact current JSPI artifact when the independent
       // play-region capability landed. The retained output is the complete
-      // product profile proved by semantic verifier ABI 6.
+      // product profiles proved by the current semantic verifier.
       //
       // `pnpm check` cannot catch a stale value here. The transform input is a
       // derived game binary this repository does not contain, so nothing in the
@@ -36,9 +36,11 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
       // ENHANCEMENT_TRANSFORM_ABI or any config word changes.
       outputSha256: Object.freeze({
         "features-601":
-          "cfdc58bd7a024fe6cdc4ae631e6edfcb23cb54a8885d3f264243c0fcc2ba64cf",
-        "features-7ff":
-          "74b75630edff0cb9e9b68cc719a43d496b72c1b1aa9720afb40d7c1ed9aac0f5",
+          "9de0f92805a704052d5f0ee42a1405055f005d15a81355241a1c642e8ec76718",
+        "features-e01":
+          "62267d95b30752823aa364c289bdc84f2c025dac4caeda86a76a432001667acb",
+        "features-fff":
+          "e22c2c0876f1381a133fbb0c739f73f9fc6a7d8988da5ce0d9789481ab7f0c9e",
       }),
       programId: 1,
       // The verifier derives this bounded identity from the exact module; it is
@@ -510,6 +512,47 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
         }),
       }),
       preGameControls: Object.freeze({
+        characterSwitchAction: Object.freeze({
+          enqueueExport: "enhancement_character_action",
+          configureExport: "enhancement_configure_character_action",
+          logoutMessageId: 0x1000_009d,
+          frameDispatchOffset: 0xa8,
+          frameChild: Object.freeze({
+            functionIndex: 6796,
+            params: Object.freeze(["i32", "i32"] as const),
+            results: Object.freeze(["i32"] as const),
+            bodySha256: "9f73f1018d0bf99fd0d16b6ede0921dbe29cf70a4da4a61c9b24c1e68dbb0bf0",
+          }),
+          frameParent: Object.freeze({
+            functionIndex: 6797,
+            params: Object.freeze(["i32"] as const),
+            results: Object.freeze(["i32"] as const),
+            bodySha256: "46c90817c6ab335d5b8d57fdc1e38abd146c2b123dd8dcf0f08aca8245b8a9f2",
+          }),
+          frameResolver: Object.freeze({
+            functionIndex: 6534,
+            params: Object.freeze(["i32"] as const),
+            results: Object.freeze(["i32"] as const),
+            bodySha256: "f0d5e7c4c71f920541037b1225613e334e2476723a427cab5c2688538265eb47",
+          }),
+          frameDispatch: Object.freeze({
+            functionIndex: 6508,
+            params: Object.freeze(["i32", "i32", "i32", "i32"] as const),
+            results: Object.freeze([] as const),
+            bodySha256: "ccf496f855fa579dac0d1ea86b95b6a6db21104d2a41b1d03c6bd213ee26ca7e",
+          }),
+          logoutProducer: Object.freeze({
+            functionIndex: 12434,
+            params: Object.freeze(["i32", "i32", "i32"] as const),
+            results: Object.freeze([] as const),
+            bodySha256: "b618abba3579ffe6f149a23e2550f6b86571b0f3beaa30acea059153f7cd6b06",
+          }),
+        }),
+        characterListLayout: Object.freeze({
+          characterArrayPointer: 0x5a75e8,
+          characterArrayCount: 0x5a75f0,
+          selectedCharacterName: 0x5a7760,
+        }),
         hashFunction: Object.freeze({
           functionIndex: 365,
           params: Object.freeze(["i32", "i32"] as const),
@@ -535,8 +578,10 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
           frameArray: 0x5a1fdc,
           frameCount: 0x5a1fe4,
           frameBytes: 0x1c8,
+          frameChildOffsetId: 0xb8,
           frameId: 0xbc,
           frameHashId: 0x134,
+          frameRelation: 0x128,
           frameState: 0x18c,
           contextRoot: 0x5a0e70,
           gameContextSlot: 6,

@@ -225,6 +225,14 @@
   font-size: var(--ui-font-size-lg);
   font-weight: var(--ui-font-weight-semibold);
 }
+.settings-tool-name {
+  margin: 0;
+  color: var(--ui-text-bright);
+  font-size: var(--ui-font-size-lg);
+}
+.settings-core-controls { margin-bottom: var(--ui-space-4); }
+.settings-core-shortcut .settings-tool-description,
+.settings-core-shortcut .settings-tool-config { margin-inline-start: 0; }
 .settings-tool-stage {
   color: var(--ui-accent);
   font-size: var(--ui-font-size-sm);

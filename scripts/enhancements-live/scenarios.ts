@@ -22,10 +22,15 @@ import path from "node:path";
 import type { CDPSession, Page } from "playwright";
 import type { AutomationCommand } from "../../src/shared/automation.js";
 import type { EnhancementProgram } from "../../src/shared/enhancement-contracts.js";
+import type { CharacterSwitchDiagnostics } from "../../src/renderer/character-switch-model.js";
 import type { EnhancementDoctorReport } from "../../src/tools/enhancement-workspace.js";
 import { BENCHMARK_ARMS, isBalancedOrder } from "./benchmark.js";
 import { runToolboxFoundation, runToolboxHeroPanel } from "./toolbox-scenarios.js";
 import { operatorCheckpoint } from "./scenario-checkpoint.js";
+import {
+  runCharacterSwitchScenario,
+  validateCharacterSwitchScenario,
+} from "./character-switch-scenario.js";
 
 export type LiveTier = "automation" | "observation" | "graphics-observation";
 export type LiveReadiness = "frontend" | "observer" | "toolbox" | "cursor" | "storage";
@@ -56,12 +61,13 @@ function liveReadinessSatisfied(required: LiveReadiness): boolean {
 }
 
 /**
- * What every scenario gets: one fixed cursor projection read and a clock.
+ * What every scenario gets: fixed closed projection reads and a clock.
  * There is no generic page evaluator: arbitrary renderer code is an action
  * capability even when the context withholds Playwright's input objects.
  */
 export type ObservationContext = Readonly<{
   readCursorProjection: () => Promise<CompanionDeveloperRuntime["cursor"]>;
+  readCharacterSwitchDiagnostics: () => Promise<CharacterSwitchDiagnostics | null>;
   wait: (milliseconds: number) => Promise<void>;
 }>;
 
@@ -82,6 +88,7 @@ export type AutomationContext = ObservationContext & Readonly<{
  */
 export type LiveCapabilities = Readonly<{
   page: Page;
+  currentPage?: () => Promise<Page>;
   cdp: CDPSession;
   sendAutomationCommand: (command: AutomationCommand) => Promise<void>;
 }>;
@@ -91,7 +98,7 @@ export type LiveCapabilities = Readonly<{
  * between scenarios, so each `validate` below names the shape its own `run`
  * returned rather than sharing one loose type.
  */
-export type LiveResult = { evidence?: unknown };
+export type LiveResult = { evidence?: unknown; rendererErrorCount?: number };
 
 type AutomationScenario = {
   tier: "automation";
@@ -804,6 +811,13 @@ export const SCENARIOS: Readonly<Record<string, LiveScenario>> = Object.freeze({
       }
     },
   }),
+  "character-switch": Object.freeze({
+    tier: "observation",
+    program: "none",
+    readiness: "frontend",
+    run: runCharacterSwitchScenario,
+    validate: validateCharacterSwitchScenario,
+  }),
   "map-transition": Object.freeze({
     tier: "automation",
     program: "target-observer",
@@ -931,8 +945,8 @@ export function liveRunRefusal(
 }
 
 /**
- * What a scenario is handed. Observation gets only one fixed typed cursor
- * projection read and a clock. Automation additionally gets the page, the CDP
+ * What a scenario is handed. Observation gets only fixed typed projections
+ * and a clock. Automation additionally gets the page, the CDP
  * session and the command channel — the two capabilities that act on the
  * player's behalf are objects it holds, not flags it is asked to respect.
  *
@@ -951,11 +965,18 @@ export function scenarioContext(
   tier: "automation" | "observation",
   capabilities: LiveCapabilities,
 ): AutomationContext | ObservationContext {
-  const { page, cdp, sendAutomationCommand } = capabilities;
+  const {
+    page,
+    currentPage = async () => page,
+    cdp,
+    sendAutomationCommand,
+  } = capabilities;
   const observation: ObservationContext = {
-    readCursorProjection: () => page.evaluate(() =>
+    readCursorProjection: async () => (await currentPage()).evaluate(() =>
       window.gwCompanionRuntime?.cursor ?? null),
-    wait: (milliseconds) => page.waitForTimeout(milliseconds),
+    readCharacterSwitchDiagnostics: async () => (await currentPage()).evaluate(() =>
+      window.gwCharacterSwitch?.diagnostics() ?? null),
+    wait: (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
   };
   return Object.freeze(
     tier === "automation"

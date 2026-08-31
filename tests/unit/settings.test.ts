@@ -57,6 +57,9 @@ describe("settings", () => {
       tradeChat: true,
       xunlaiStorage: false,
       travelPalette: true,
+      characterSwitchProfession: true,
+      characterSwitchLevel: true,
+      characterSwitchLocation: true,
       travelShortcuts: DEFAULT_SETTINGS.travelShortcuts,
       targetReadout: false,
       shortcutOverrides: {},
@@ -114,6 +117,9 @@ describe("settings", () => {
       tradeChat: true,
       xunlaiStorage: false,
       travelPalette: true,
+      characterSwitchProfession: true,
+      characterSwitchLevel: true,
+      characterSwitchLocation: true,
       travelShortcuts: DEFAULT_SETTINGS.travelShortcuts,
       targetReadout: false,
       shortcutOverrides: {},
@@ -142,6 +148,14 @@ describe("settings", () => {
     assert.equal("patchMode" in got, false);
     assert.equal(got.renderScale, 2);
     assert.equal("mystery" in got, false);
+  });
+
+  it("hard-cuts the unreleased combined Character Switch detail setting", () => {
+    const got = parseSettings({ characterSwitchDetails: false });
+    assert.equal("characterSwitchDetails" in got, false);
+    assert.equal(got.characterSwitchProfession, true);
+    assert.equal(got.characterSwitchLevel, true);
+    assert.equal(got.characterSwitchLocation, true);
   });
 
   it("preserves every explicit supported render scale", () => {
@@ -491,6 +505,9 @@ describe("settings", () => {
       "cartographyPresetLibrary",
       "cartographyRevealMode",
       "cartographyWalkabilityOpacity",
+      "characterSwitchLevel",
+      "characterSwitchLocation",
+      "characterSwitchProfession",
       "compatibilityNoticeSeenFor",
       "controllerPromptStyle",
       "dataStrategy",
@@ -600,6 +617,9 @@ describe("settings", () => {
       tradeChat: true,
       xunlaiStorage: false,
       travelPalette: true,
+      characterSwitchProfession: true,
+      characterSwitchLevel: true,
+      characterSwitchLocation: true,
       travelShortcuts: DEFAULT_SETTINGS.travelShortcuts,
       targetReadout: false,
       shortcutOverrides: {},

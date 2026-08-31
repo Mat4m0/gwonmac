@@ -49,6 +49,7 @@ function projectCompatibility(
       skillCooldownObservation: status("skillCooldownObservation"),
       playRegionObservation: status("playRegionObservation"),
       preGameControls: status("preGameControls"),
+      characterSwitchAction: status("characterSwitchAction"),
     }),
   });
 }

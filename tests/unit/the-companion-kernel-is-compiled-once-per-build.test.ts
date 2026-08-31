@@ -42,7 +42,8 @@ function rendererCheckout(): string {
   };
   write(
     "src/renderer/index.html",
-    "<!doctype html>\n        <!-- build-include:settings-cartography.html -->\n",
+    "<!doctype html>\n        <!-- build-include:settings-cartography.html -->\n"
+      + "        <!-- build-include:settings-character-switch.html -->\n",
   );
   write("src/renderer/accounts.html", "<!doctype html>\n");
   write("src/renderer/accounts.css", "css");
@@ -53,8 +54,10 @@ function rendererCheckout(): string {
   write("src/renderer/harness.css", "css");
   write("src/renderer/loading.css", "css");
   write("src/renderer/cartography-overlay-controls.css", "controls-css");
+  write("src/renderer/character-switch.css", "character-css");
   write("src/renderer/settings-cartography.css", "cartography-css");
   write("src/renderer/settings-cartography.html", "        <section>Cartography</section>\n");
+  write("src/renderer/settings-character-switch.html", "        <section>Characters</section>\n");
   write("src/renderer/settings.css", "css");
   write("src/renderer/fonts/COPYING-QUALITYPE", "licence");
   write("src/renderer/fonts/QTFrizQuad.otf", "font");
@@ -69,6 +72,9 @@ function rendererCheckout(): string {
   // the Tools application reads it too, and apps/** may only reach src/shared.
   write("src/shared/ui/tokens.css", "tokens");
   write("src/shared/ui/components.css", "components");
+  for (let profession = 1; profession <= 10; profession += 1) {
+    write(`src/shared/images/professions/${profession}.png`, `profession-${profession}`);
+  }
   write("node_modules/@fontsource-variable/inter/wght.css", "inter-css");
   write("node_modules/@fontsource-variable/inter/LICENSE", "inter-licence");
   for (const subset of [
@@ -111,7 +117,8 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
   it("still produces the renderer tree and its static media", () => {
     assert.equal(
       readFileSync(path.join(root, "build/renderer/index.html"), "utf8"),
-      "<!doctype html>\n        <section>Cartography</section>\n",
+      "<!doctype html>\n        <section>Cartography</section>\n"
+        + "        <section>Characters</section>\n",
     );
     assert.equal(
       existsSync(path.join(root, "build/renderer/settings-cartography.html")),
@@ -161,6 +168,7 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
       "accounts.css",
       "accounts.html",
       "cartography-overlay-controls.css",
+      "character-switch.css",
       "favicon.ico",
       "favicon.png",
       "fonts/COPYING-INTER",
@@ -184,6 +192,16 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
       "loading.css",
       "settings-cartography.css",
       "settings.css",
+      "shared/images/professions/1.png",
+      "shared/images/professions/10.png",
+      "shared/images/professions/2.png",
+      "shared/images/professions/3.png",
+      "shared/images/professions/4.png",
+      "shared/images/professions/5.png",
+      "shared/images/professions/6.png",
+      "shared/images/professions/7.png",
+      "shared/images/professions/8.png",
+      "shared/images/professions/9.png",
       // Copied out of src/shared, and flattened to `ui/` so the renderer and
       // the Tools bundle load the one design system by the same href.
       "ui/components.css",

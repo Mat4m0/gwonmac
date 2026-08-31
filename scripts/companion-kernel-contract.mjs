@@ -35,6 +35,7 @@ export const COMPANION_KERNEL_EXPORT_VALUES = Object.freeze({
   companion_skill_slot_bytes: COMPANION_ABI.skillSlots.bytes,
   companion_skill_cooldown_bytes: COMPANION_ABI.skillCooldowns.bytes,
   companion_play_region_bytes: COMPANION_ABI.playRegion.bytes,
+  companion_character_list_bytes: COMPANION_ABI.characterList.bytes,
 });
 
 export const COMPANION_KERNEL_DYLINK0 = Object.freeze([
@@ -86,10 +87,13 @@ export const COMPANION_KERNEL_DYLINK0 = Object.freeze([
   //                in host-owned memory outside this footprint.
   //   2209 -> 2212 the Travel unlock observer moves beside its play-region
   //                publisher, keeping feature-specific memory reads together.
+  //   2212 -> 2244 the account-character publisher adds its region pointer,
+  //                stable-root state, and sequence; its bounded 4632-byte
+  //                snapshot remains in host-owned memory.
   // This constant exists so a kernel whose footprint moves cannot ship without
   // someone saying why. One page is still the ceiling, and this remains far
   // under it.
-  0x01, 0x05, 0xa4, 0x11, 0x02, 0x00, 0x00,
+  0x01, 0x05, 0xc4, 0x11, 0x02, 0x00, 0x00,
 ]);
 
 const WASM_PAGE_BYTES = 65_536;

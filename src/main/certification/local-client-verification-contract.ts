@@ -119,6 +119,10 @@ export const LOCAL_FEATURE_INVARIANTS = Object.freeze({
     "pre-game.label-hash-function",
     "pre-game.frame-layout",
   ] as const),
+  characterSwitchAction: Object.freeze([
+    ...SHARED_FEATURE_INVARIANTS,
+    "character-switch.exact-action-path",
+  ] as const),
 } as const satisfies Readonly<
   Record<LocalClientFeature, readonly string[]>
 >);
@@ -203,6 +207,8 @@ export interface LocalFeatureCertificateMap {
       | "playerSkillbarObservation" | "skillCooldownObservation"
     >;
   readonly preGameControls: Readonly<{ core: EnhancementProofCore }>
+    & RequiredBuildFact<"preGameControls">;
+  readonly characterSwitchAction: Readonly<{ core: EnhancementProofCore }>
     & RequiredBuildFact<"preGameControls">;
 }
 
@@ -442,6 +448,10 @@ export function localFeatureVerdictsForBuild(
       && core !== null && build?.preGameControls !== undefined
     ? Object.freeze({ core, preGameControls: build.preGameControls })
     : null;
+  const characterSwitchAction = effective?.characterSwitchAction
+      && core !== null && build?.preGameControls?.characterSwitchAction !== undefined
+    ? Object.freeze({ core, preGameControls: build.preGameControls })
+    : null;
   return Object.freeze({
     nativeCursor: featureVerdict<"nativeCursor">(
       inputSha256,
@@ -519,6 +529,13 @@ export function localFeatureVerdictsForBuild(
       preGameControls,
       failures.preGameControls,
       "pre-game.exact-frame-labels",
+    ),
+    characterSwitchAction: featureVerdict<"characterSwitchAction">(
+      inputSha256,
+      requested.characterSwitchAction,
+      characterSwitchAction,
+      failures.characterSwitchAction,
+      "character-switch.exact-action-path",
     ),
   });
 }

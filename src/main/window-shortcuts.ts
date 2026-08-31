@@ -61,6 +61,7 @@ const textEditCommand = (input: Electron.Input): GameTextEditCommand | null => {
 class WindowShortcuts {
   readonly #actions: ShortcutActions;
   #shortcuts = resolveShortcuts({
+    "character.switch": null,
     "tools.toggle": null,
     "trade.toggle": null,
     "storage.open": null,
@@ -256,6 +257,7 @@ class WindowShortcuts {
   >): void {
     const resolved = resolveShortcuts(settings.shortcutOverrides);
     this.#shortcuts = {
+      "character.switch": resolved["character.switch"],
       "tools.toggle": featureActivationRequested("buildLibrary", settings)
         ? resolved["tools.toggle"]
         : null,

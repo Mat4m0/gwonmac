@@ -114,6 +114,16 @@ const CAPABILITY_DEFINITIONS = Object.freeze([
     id: "preGameControls",
     requiresAll: ["playRegionObservation"],
     requiresAny: [],
+    configOwners: ["character-list"],
+    hooks: [],
+  },
+  {
+    // Character switching is a separate named action authority. Read-only
+    // pre-game programs can observe the same certified state without gaining
+    // logout, Selector, or Play exports.
+    id: "characterSwitchAction",
+    requiresAll: ["preGameControls"],
+    requiresAny: [],
     configOwners: [],
     hooks: [],
   },
@@ -205,6 +215,7 @@ export const NO_ENHANCEMENT_CAPABILITIES: EnhancementCapabilities = Object.freez
   skillCooldownObservation: false,
   playRegionObservation: false,
   preGameControls: false,
+  characterSwitchAction: false,
 });
 
 function isExactBooleanRecord<Key extends string>(
@@ -240,6 +251,7 @@ export function parseEnhancementCapabilities(
     skillCooldownObservation: value.skillCooldownObservation,
     playRegionObservation: value.playRegionObservation,
     preGameControls: value.preGameControls,
+    characterSwitchAction: value.characterSwitchAction,
   });
 }
 
@@ -264,7 +276,7 @@ export function enhancementCapabilityProfile(
 /** Named product/developer choices. Certificates and caches use only bit identities. */
 export const ENHANCEMENT_CAPABILITY_PRESETS = Object.freeze({
   cursor: capabilitiesFromMask(0x001),
-  core: capabilitiesFromMask(0x601),
+  core: capabilitiesFromMask(0xe01),
   reconnect: capabilitiesFromMask(0x601),
   region: capabilitiesFromMask(0x200),
   target: capabilitiesFromMask(0x202),
@@ -272,7 +284,7 @@ export const ENHANCEMENT_CAPABILITY_PRESETS = Object.freeze({
   cursorParty: capabilitiesFromMask(0x285),
   storage: capabilitiesFromMask(0x270),
   partyCommandsStorage: capabilitiesFromMask(0x2fc),
-  all: capabilitiesFromMask(0x7ff),
+  all: capabilitiesFromMask(0xfff),
 });
 
 /** The two capability sets shipped by Core and Tools release launches. */
@@ -286,7 +298,7 @@ export {
   ENHANCEMENT_LAYOUT_WORD_COUNT,
   ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT,
 } from "./enhancement-config.js";
-export const ENHANCEMENT_TRANSFORM_ABI = 46;
+export const ENHANCEMENT_TRANSFORM_ABI = 49;
 
 export function enhancementConfigWordActive(
   capabilities: EnhancementCapabilities,

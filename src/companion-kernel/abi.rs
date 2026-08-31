@@ -33,13 +33,24 @@ pub(crate) const FEATURE_TARGET_OBSERVATION: u32 = 1 << 3;
 pub(crate) const FEATURE_SKILL_SLOT_GEOMETRY: u32 = 1 << 4;
 pub(crate) const FEATURE_SKILL_COOLDOWN_OBSERVATION: u32 = 1 << 5;
 pub(crate) const FEATURE_PLAY_REGION_OBSERVATION: u32 = 1 << 6;
+pub(crate) const FEATURE_CHARACTER_LIST: u32 = 1 << 7;
 pub(crate) const KNOWN_FEATURES: u32 = FEATURE_NATIVE_CURSOR
     | FEATURE_GAME_SNAPSHOT
     | FEATURE_TOOLBOX_FOUNDATION
     | FEATURE_TARGET_OBSERVATION
     | FEATURE_SKILL_SLOT_GEOMETRY
     | FEATURE_SKILL_COOLDOWN_OBSERVATION
-    | FEATURE_PLAY_REGION_OBSERVATION;
+    | FEATURE_PLAY_REGION_OBSERVATION
+    | FEATURE_CHARACTER_LIST;
+
+pub(crate) const CHARACTER_LIST_BYTES: u32 = size_of::<CharacterListSnapshot>() as u32;
+pub(crate) const CHARACTER_LIST_MAGIC: u32 = 0x4843_5747;
+pub(crate) const CHARACTER_LIST_ABI_AND_SIZE: u32 = (CHARACTER_LIST_BYTES << 16) | 2;
+pub(crate) const FLAG_CHARACTER_LIST_READY: u32 = 1 << 0;
+pub(crate) const FLAG_CHARACTER_LIST_WARMING: u32 = 1 << 1;
+pub(crate) const FLAG_CHARACTER_LIST_ABSENT: u32 = 1 << 2;
+pub(crate) const CHARACTER_SLOTS: usize = 64;
+pub(crate) const CHARACTER_NAME_UNITS: usize = 20;
 
 pub(crate) const PLAY_REGION_BYTES: u32 = size_of::<PlayRegionSnapshot>() as u32;
 pub(crate) const PLAY_REGION_MAGIC: u32 = 0x5250_5747;
@@ -280,6 +291,9 @@ pub(crate) struct Layout {
     pub(crate) skill_slot_recharge: u32,
     pub(crate) world_unlocked_maps: u32,
     pub(crate) character_uuid: u32,
+    pub(crate) character_array_pointer: u32,
+    pub(crate) character_array_count: u32,
+    pub(crate) selected_character_name: u32,
     pub(crate) player_chat_message: u32,
     pub(crate) hide_hero_panel_message: u32,
     pub(crate) show_hero_panel_message: u32,
@@ -388,11 +402,39 @@ impl Layout {
         skill_slot_recharge: 0,
         world_unlocked_maps: 0,
         character_uuid: 0,
+        character_array_pointer: 0,
+        character_array_count: 0,
+        selected_character_name: 0,
         player_chat_message: 0,
         hide_hero_panel_message: 0,
         show_hero_panel_message: 0,
         party_dirty_messages: [0; PARTY_DIRTY_MESSAGE_COUNT],
     };
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub(crate) struct CharacterRecord {
+    pub(crate) name: [u16; CHARACTER_NAME_UNITS],
+    pub(crate) primary_profession: u32,
+    pub(crate) secondary_profession: u32,
+    pub(crate) character_type: u32,
+    pub(crate) campaign: u32,
+    pub(crate) level: u32,
+    pub(crate) map_id: u32,
+    pub(crate) character_key_low: u32,
+    pub(crate) character_key_high: u32,
+}
+
+#[repr(C)]
+pub(crate) struct CharacterListSnapshot {
+    pub(crate) magic: u32,
+    pub(crate) abi_and_size: u32,
+    pub(crate) sequence: u32,
+    pub(crate) flags: u32,
+    pub(crate) count: u32,
+    pub(crate) selected_index: u32,
+    pub(crate) records: [CharacterRecord; CHARACTER_SLOTS],
 }
 
 #[repr(C)]
@@ -560,7 +602,9 @@ pub(crate) struct PartySnapshot {
     pub(crate) character_skills: [u32; SKILL_UNLOCK_WORDS],
 }
 
-const _: [(); 452] = [(); size_of::<Layout>()];
+const _: [(); 464] = [(); size_of::<Layout>()];
+const _: [(); 72] = [(); size_of::<CharacterRecord>()];
+const _: [(); 4632] = [(); size_of::<CharacterListSnapshot>()];
 const _: [(); 96] = [(); size_of::<PartySlot>()];
 const _: [(); 1560] = [(); size_of::<PartySnapshot>()];
 const _: [(); 64] = [(); size_of::<Snapshot>()];

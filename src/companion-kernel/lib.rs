@@ -39,6 +39,8 @@ use core::panic::PanicInfo;
 use core::ptr::{read_volatile, write_volatile};
 
 mod abi;
+mod character_identity;
+mod character_list;
 mod cursor;
 mod memory;
 mod party;
@@ -697,6 +699,8 @@ pub unsafe extern "C" fn companion_init(
     skill_cooldown_size: u32,
     play_region_ptr: u32,
     play_region_size: u32,
+    character_list_ptr: u32,
+    character_list_size: u32,
     features: u32,
 ) -> u32 {
     if features == 0
@@ -760,6 +764,12 @@ pub unsafe extern "C" fn companion_init(
             play_region_size,
             PLAY_REGION_BYTES,
         )
+        || !valid_region(
+            features & FEATURE_CHARACTER_LIST != 0,
+            character_list_ptr,
+            character_list_size,
+            CHARACTER_LIST_BYTES,
+        )
     {
         return 0;
     }
@@ -804,6 +814,9 @@ pub unsafe extern "C" fn companion_init(
         if features & FEATURE_PLAY_REGION_OBSERVATION != 0 {
             play_region::initialize(play_region_ptr);
         }
+        if features & FEATURE_CHARACTER_LIST != 0 {
+            character_list::initialize(character_list_ptr);
+        }
     }
     1
 }
@@ -843,6 +856,9 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, c: u32, _
             if active & FEATURE_PLAY_REGION_OBSERVATION != 0 {
                 unsafe { play_region::tick(layout) };
             }
+            if active & FEATURE_CHARACTER_LIST != 0 {
+                unsafe { character_list::tick(layout) };
+            }
         }
         DISPATCH_CURSOR => {
             if unsafe { INITIALIZED } && unsafe { FEATURES } & FEATURE_NATIVE_CURSOR != 0 {
@@ -874,6 +890,8 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, c: u32, _
                 || a & FEATURE_NATIVE_CURSOR != available & FEATURE_NATIVE_CURSOR
                 || a & FEATURE_PLAY_REGION_OBSERVATION
                     != available & FEATURE_PLAY_REGION_OBSERVATION
+                || a & FEATURE_CHARACTER_LIST
+                    != available & FEATURE_CHARACTER_LIST
                 || a & FEATURE_TOOLBOX_FOUNDATION != 0
                     && a & FEATURE_PLAY_REGION_OBSERVATION == 0
                 || a & FEATURE_SKILL_SLOT_GEOMETRY != 0
@@ -898,7 +916,7 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, c: u32, _
 
 #[no_mangle]
 pub extern "C" fn companion_abi() -> u32 {
-    19
+    20
 }
 
 #[no_mangle]
@@ -939,6 +957,11 @@ pub extern "C" fn companion_skill_cooldown_bytes() -> u32 {
 #[no_mangle]
 pub extern "C" fn companion_play_region_bytes() -> u32 {
     PLAY_REGION_BYTES
+}
+
+#[no_mangle]
+pub extern "C" fn companion_character_list_bytes() -> u32 {
+    CHARACTER_LIST_BYTES
 }
 
 #[no_mangle]

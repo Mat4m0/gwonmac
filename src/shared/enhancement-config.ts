@@ -103,6 +103,9 @@ export interface EnhancementLayout {
   frameScreenTop: number;
   frameRelation: number;
   frameState: number;
+  characterArrayPointer: number;
+  characterArrayCount: number;
+  selectedCharacterName: number;
 }
 
 export type EnhancementPlayRegionLayout = Pick<EnhancementLayout,
@@ -140,6 +143,9 @@ export type EnhancementSkillSlotGeometryLayout = Pick<EnhancementLayout,
 export type EnhancementSkillCooldownLayout = Pick<EnhancementLayout,
   | "skillSlotRecharge"
 >;
+export type EnhancementCharacterListLayout = Pick<EnhancementLayout,
+  | "characterArrayPointer" | "characterArrayCount" | "selectedCharacterName"
+>;
 export type EnhancementPlayerSkillbarLayout = Pick<EnhancementLayout,
   | "worldSkillbars" | "skillbarStride" | "skillbarAgentId"
   | "skillbarSkills" | "skillSlotStride"
@@ -162,7 +168,8 @@ export type EnhancementPartyLayout = Pick<EnhancementLayout,
 >;
 
 type Owner = "play-region" | "observation" | "target" | "cursor" | "party" | "storage"
-  | "travel" | "player-skillbar" | "party-skillbar" | "skill-slots" | "skill-cooldown";
+  | "travel" | "player-skillbar" | "party-skillbar" | "skill-slots" | "skill-cooldown"
+  | "character-list";
 type ConfigField =
   | Readonly<{
     source: "layout";
@@ -198,6 +205,11 @@ type ConfigField =
     source: "layout";
     owner: "skill-cooldown";
     key: keyof EnhancementSkillCooldownLayout;
+  }>
+  | Readonly<{
+    source: "layout";
+    owner: "character-list";
+    key: keyof EnhancementCharacterListLayout;
   }>
   | Readonly<{
     source: "dispatcher";
@@ -249,6 +261,11 @@ const skillCooldown = (
 const travel = (
   ...keys: readonly (keyof EnhancementTravelLayout)[]
 ): readonly ConfigField[] => keys.map((key) => ({ source: "layout", key, owner: "travel" }));
+const characterList = (
+  ...keys: readonly (keyof EnhancementCharacterListLayout)[]
+): readonly ConfigField[] => keys.map((key) => ({
+  source: "layout", key, owner: "character-list",
+}));
 
 export const ENHANCEMENT_CONFIG_FIELDS = Object.freeze([
   ...playRegion("contextRoot"),
@@ -283,6 +300,9 @@ export const ENHANCEMENT_CONFIG_FIELDS = Object.freeze([
   ...skillCooldown("skillSlotRecharge"),
   ...travel("worldUnlockedMaps"),
   ...playRegion("characterUuid"),
+  ...characterList(
+    "characterArrayPointer", "characterArrayCount", "selectedCharacterName",
+  ),
   { source: "dispatcher", key: "playerChatMessage", owner: "party" },
   { source: "dispatcher", key: "hideHeroPanelMessage", owner: "party" },
   { source: "dispatcher", key: "showHeroPanelMessage", owner: "party" },

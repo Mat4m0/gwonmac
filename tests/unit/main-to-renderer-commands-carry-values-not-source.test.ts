@@ -98,8 +98,12 @@ function harness(argv: string[]) {
   // capability.
   let toolboxListening = false;
   let storageListening = false;
+  let transientDismissals = 0;
   const window = {
     gwNative: api,
+    gwSurfaces: {
+      dismissTransient() { transientDismissals += 1; },
+    },
     gwDiagnostics: {
       resetForCapture: () => Promise.resolve(),
       captureStarted(level: unknown) {
@@ -178,6 +182,7 @@ function harness(argv: string[]) {
     installStorage: () => {
       storageListening = true;
     },
+    transientDismissals: () => transientDismissals,
   };
 }
 
@@ -256,6 +261,17 @@ test("menu commands reach the renderer as events and are acknowledged", async ()
     [4, "completed"],
     [5, "completed"],
   ]);
+  assert.equal(fixture.transientDismissals(), 4,
+    "explicit interface commands dismiss transient palettes before dispatch");
+});
+
+test("an early interface command runs before the surface controller is installed", async () => {
+  const fixture = harness(ARGV);
+  Reflect.deleteProperty(fixture.window, "gwSurfaces");
+  fixture.deliver(1, { type: "settings.open" });
+  await new Promise(setImmediate);
+  assert.deepEqual(fixture.dispatched, ["gw:settings"]);
+  assert.deepEqual(fixture.acknowledgements(), [[1, "completed"]]);
 });
 
 test("one physical key release crosses preload and is acknowledged", async () => {

@@ -300,7 +300,7 @@ export async function assertTargetReadoutLifecycle() {
     );
     assert.deepEqual(disposed, {
       // Runtime allocation, target snapshot, config, and policy region.
-      freed: [0x1000, 0x11_010, 0x11_050, 0x11_218],
+      freed: [0x1000, 0x11_010, 0x11_050, 0x11_220],
       hook: 0,
       // Cleanup withdraws the published runtime by writing null over it.
       runtime: null,

@@ -15,6 +15,7 @@ const COMPANION_CURSOR_BYTES = COMPANION_ABI.cursor.bytes;
 const COMPANION_PARTY_BYTES = COMPANION_ABI.party.bytes;
 const COMPANION_SNAPSHOT_BYTES = COMPANION_ABI.snapshot.bytes;
 const COMPANION_TOOLBOX_BYTES = COMPANION_ABI.toolbox.bytes;
+const COMPANION_CHARACTER_LIST_BYTES = COMPANION_ABI.characterList.bytes;
 
 type KernelRegion = Readonly<{ pointer: number; bytes: number }>;
 
@@ -25,6 +26,7 @@ export type CompanionCoreMemoryNeeds = Readonly<{
   commandPayloadBytes: number;
   professionTrace: boolean;
   professionTraceBytes: number;
+  characterList?: boolean;
 }>;
 
 type Allocation = Readonly<{
@@ -117,6 +119,9 @@ export function allocateCompanionCoreMemory(input: Readonly<{
     const professionTracePointer = needs.professionTrace
       ? take("profession trace", needs.professionTraceBytes, "observer")
       : 0;
+    const characterListPointer = needs.characterList
+      ? take("character list", COMPANION_CHARACTER_LIST_BYTES, "observer")
+      : 0;
 
     const region = (
       name: string,
@@ -158,6 +163,9 @@ export function allocateCompanionCoreMemory(input: Readonly<{
             needs.professionTraceBytes,
           )]
         : []),
+      ...(needs.characterList
+        ? [region("character list", characterListPointer, COMPANION_CHARACTER_LIST_BYTES)]
+        : []),
     ]);
     validateCompanionOwnedRegions(regions, memory.buffer.byteLength);
     const kernelRegion = (pointer: number, bytes: number): KernelRegion =>
@@ -186,6 +194,10 @@ export function allocateCompanionCoreMemory(input: Readonly<{
       ),
       commandPayloadPointer,
       professionTracePointer,
+      characterList: kernelRegion(
+        characterListPointer,
+        needs.characterList ? COMPANION_CHARACTER_LIST_BYTES : 0,
+      ),
       regions,
       initialize() {
         if (observerReleased || callbackReleased) {

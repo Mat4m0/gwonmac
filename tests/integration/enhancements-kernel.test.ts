@@ -30,7 +30,10 @@ import {
   readyToolbox,
   rejected,
   sameCompanionToolboxState,
+  setConfigField,
 } from "../fixtures/enhancements.ts";
+import { COMPANION_ABI, COMPANION_FEATURE_BITS } from "../../src/shared/companion-abi.ts";
+import { readCompanionCharacterList } from "../../src/renderer/companion-character-list-snapshot.ts";
 
 const GAME_SNAPSHOT_FEATURES =
   FEATURE_GAME_SNAPSHOT | FEATURE_PLAY_REGION_OBSERVATION;
@@ -40,6 +43,42 @@ const GAME_TOOLBOX_FEATURES =
   FEATURE_GAME_SNAPSHOT
   | FEATURE_TOOLBOX_FOUNDATION
   | FEATURE_PLAY_REGION_OBSERVATION;
+const CHARACTER_LIST_FEATURE = COMPANION_FEATURE_BITS.characterList;
+
+function writeUtf16(view: DataView, address: number, value: string): void {
+  for (let index = 0; index < value.length; index += 1) {
+    view.setUint16(address + index * 2, value.charCodeAt(index), true);
+  }
+  view.setUint16(address + value.length * 2, 0, true);
+}
+
+function writeCharacterRecord(
+  view: DataView,
+  address: number,
+  options: Readonly<{
+    name: string;
+    uuidSeed: number;
+    primary: number;
+    secondary: number;
+    campaign: number;
+    level: number;
+    mapId: number;
+  }>,
+): void {
+  view.setUint32(address + 4, 33, true);
+  for (let index = 0; index < 16; index += 1) {
+    view.setUint8(address + 8 + index, (options.uuidSeed + index) & 0xff);
+  }
+  writeUtf16(view, address + 0x18, options.name);
+  view.setUint16(address + 0x40, 8, true);
+  view.setUint16(address + 0x42, options.mapId, true);
+  view.setUint32(address + 0x48, options.primary << 20, true);
+  view.setUint16(
+    address + 0x5c,
+    options.campaign | (options.level << 4) | (options.secondary << 10),
+    true,
+  );
+}
 
 describe("Companion kernel", () => {
   it("returns from adversarial callback scalars without panicking", async () => {
@@ -230,6 +269,60 @@ describe("Companion kernel", () => {
     assert.equal(
       (state.unlockedMapWords?.[Math.floor(133 / 32)] ?? 0) >>> (133 % 32) & 1,
       1,
+    );
+  });
+
+  it("publishes the bounded account list with secondary professions and opaque unique keys", async () => {
+    const kernel = await createKernel();
+    setConfigField(kernel.config, "characterArrayPointer", ADDRESSES.characterArrayPointer);
+    setConfigField(kernel.config, "characterArrayCount", ADDRESSES.characterArrayCount);
+    setConfigField(kernel.config, "selectedCharacterName", ADDRESSES.selectedCharacterName);
+    kernel.view.setUint32(ADDRESSES.characterArrayPointer, ADDRESSES.characterRecordBuffer, true);
+    kernel.view.setUint32(ADDRESSES.characterArrayCount, 2, true);
+    writeCharacterRecord(kernel.view, ADDRESSES.characterRecordBuffer, {
+      name: "Alpha", uuidSeed: 1, primary: 1, secondary: 0,
+      campaign: 1, level: 20, mapId: 55,
+    });
+    writeCharacterRecord(kernel.view, ADDRESSES.characterRecordBuffer + 0x84, {
+      name: "Beta", uuidSeed: 33, primary: 2, secondary: 6,
+      campaign: 2, level: 17, mapId: 194,
+    });
+    writeUtf16(kernel.view, ADDRESSES.selectedCharacterName, "Beta");
+    assert.equal(kernel.init({
+      features: CHARACTER_LIST_FEATURE,
+      characterListPointer: ADDRESSES.characterList,
+      characterListSize: COMPANION_ABI.characterList.bytes,
+    }), 1);
+
+    kernel.tick();
+    assert.equal(
+      readCompanionCharacterList(kernel.memory.buffer, ADDRESSES.characterList).status,
+      "warming",
+    );
+    kernel.tick();
+    kernel.tick();
+    const ready = readCompanionCharacterList(kernel.memory.buffer, ADDRESSES.characterList);
+    assert.equal(ready.status, "ready");
+    if (ready.status !== "ready") return;
+    assert.equal(ready.selectedIndex, 1);
+    assert.deepEqual(
+      ready.characters.map(({ name, primaryProfession, secondaryProfession, level, mapId }) =>
+        [name, primaryProfession, secondaryProfession, level, mapId]),
+      [["Alpha", 1, 0, 20, 55], ["Beta", 2, 6, 17, 194]],
+    );
+    assert.notEqual(ready.characters[0]?.characterKey, "0000000000000000");
+    assert.notEqual(ready.characters[0]?.characterKey, ready.characters[1]?.characterKey);
+
+    for (let index = 0; index < 16; index += 1) {
+      kernel.view.setUint8(
+        ADDRESSES.characterRecordBuffer + 0x84 + 8 + index,
+        kernel.view.getUint8(ADDRESSES.characterRecordBuffer + 8 + index),
+      );
+    }
+    kernel.tick();
+    assert.deepEqual(
+      readCompanionCharacterList(kernel.memory.buffer, ADDRESSES.characterList),
+      { status: "waiting", reason: "snapshot" },
     );
   });
 

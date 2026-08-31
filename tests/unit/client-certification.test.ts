@@ -26,6 +26,7 @@ const ALL_CAPABILITIES = Object.freeze({
   skillCooldownObservation: false,
   playRegionObservation: true,
     preGameControls: false,
+    characterSwitchAction: false,
 });
 
 function localVerification(

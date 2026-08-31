@@ -24,6 +24,7 @@ import {
 import {
   ENHANCEMENT_CONFIG_FIELDS,
   type EnhancementCursorLayout,
+  type EnhancementCharacterListLayout,
   type EnhancementObservationBaseLayout,
   type EnhancementPartySkillbarLayout,
   type EnhancementPlayRegionLayout,
@@ -142,6 +143,9 @@ export function enhancementConfigWords(
           break;
         case "skill-cooldown":
           value = build.skillCooldownObservation?.layout[field.key];
+          break;
+        case "character-list":
+          value = build.preGameControls?.characterListLayout[field.key];
           break;
         default: {
           const unreachable: never = field;
@@ -379,6 +383,43 @@ export interface KnownEnhancementBuild {
   }>;
   /** Exact label-hash authority and frame layout used by reload automation. */
   preGameControls?: Readonly<{
+    characterSwitchAction: Readonly<{
+      enqueueExport: string;
+      configureExport: string;
+      logoutMessageId: number;
+      frameDispatchOffset: number;
+      frameChild: Readonly<{
+        functionIndex: number;
+        params: readonly ["i32", "i32"];
+        results: readonly ["i32"];
+        bodySha256: string;
+      }>;
+      frameParent: Readonly<{
+        functionIndex: number;
+        params: readonly ["i32"];
+        results: readonly ["i32"];
+        bodySha256: string;
+      }>;
+      frameResolver: Readonly<{
+        functionIndex: number;
+        params: readonly ["i32"];
+        results: readonly ["i32"];
+        bodySha256: string;
+      }>;
+      frameDispatch: Readonly<{
+        functionIndex: number;
+        params: readonly ["i32", "i32", "i32", "i32"];
+        results: readonly [];
+        bodySha256: string;
+      }>;
+      logoutProducer: Readonly<{
+        functionIndex: number;
+        params: readonly ["i32", "i32", "i32"];
+        results: readonly [];
+        bodySha256: string;
+      }>;
+    }>;
+    characterListLayout: EnhancementCharacterListLayout;
     hashFunction: Readonly<{
       functionIndex: number;
       params: readonly ["i32", "i32"];
@@ -400,8 +441,8 @@ export interface KnownEnhancementBuild {
       reconnectDialog: number;
     }>;
     layout: Pick<EnhancementSkillSlotGeometryLayout,
-      "frameArray" | "frameCount" | "frameBytes" | "frameId"
-      | "frameState"> & Pick<EnhancementPlayRegionLayout,
+      "frameArray" | "frameCount" | "frameBytes" | "frameChildOffsetId"
+      | "frameId" | "frameRelation" | "frameState"> & Pick<EnhancementPlayRegionLayout,
       "contextRoot" | "gameContextSlot" | "characterContext"
       | "characterUuid" | "currentInstanceType">
       & Readonly<{ frameHashId: number }>;
@@ -454,6 +495,9 @@ export function supportedEnhancementCapabilities(
       && build.skillCooldownObservation !== undefined,
     playRegionObservation,
     preGameControls: build.preGameControls !== undefined,
+    characterSwitchAction: build.preGameControls?.characterSwitchAction !== undefined
+      && build.uiDispatcher !== undefined
+      && gameThread,
   });
   // Evidence locators decide only what they proved. The shared registry owns
   // every dependency and closes the available set in one canonical place.
