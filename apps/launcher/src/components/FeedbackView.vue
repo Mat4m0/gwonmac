@@ -39,7 +39,7 @@ function previewFeedback() {
 <template>
   <section class="page feedback-page">
     <div class="page-head">
-      <div><span class="eyebrow">Feedback</span><h1>Tell us what happened</h1><p>Small reports are useful. You do not need to write a perfect bug report.</p></div>
+      <div><h1>Tell us what happened</h1><p>Small reports are useful. You do not need to write a perfect bug report.</p></div>
     </div>
 
     <form v-if="availability === 'fixture'" class="feedback-form" @submit.prevent="previewFeedback">

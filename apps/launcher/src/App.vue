@@ -4,11 +4,9 @@ import {
   AlertTriangle,
   Archive,
   Check,
-  Clock3,
   FileText,
   Flame,
   Map as MapIcon,
-  RotateCcw,
   ScrollText,
   Shield,
   Swords,
@@ -34,17 +32,24 @@ import HomeView from "./components/HomeView.vue";
 import KnownIssuesView from "./components/KnownIssuesView.vue";
 import MapsSettings from "./components/MapsSettings.vue";
 import type { LauncherRoute, SettingsRoute } from "./routes";
-import { backgroundDownloadPresentation, playableNoticePresentation } from "./update-game-files-copy";
 
 const route = ref<LauncherRoute>("home");
 const settingsRoute = ref<SettingsRoute>("general");
-const settingsSections: readonly { readonly id: SettingsRoute; readonly label: string }[] = [
-  { id: "general", label: "General" },
-  { id: "content", label: "Content" },
-  { id: "tools", label: "Tools" },
-  { id: "maps", label: "Maps" },
-  { id: "game-files", label: "Game files" },
-  { id: "advanced", label: "Advanced" },
+const settingsGroups: readonly {
+  readonly label: string;
+  readonly items: readonly { readonly id: SettingsRoute; readonly label: string }[];
+}[] = [
+  { label: "Launcher", items: [
+    { id: "general", label: "Updates" },
+    { id: "content", label: "Content" },
+    { id: "advanced", label: "Advanced" },
+  ] },
+  { label: "Game", items: [
+    { id: "game", label: "Game settings" },
+    { id: "tools", label: "Tools" },
+    { id: "maps", label: "Maps" },
+    { id: "game-files", label: "Game files" },
+  ] },
 ];
 const snapshot = ref<LauncherSnapshot>(fixtureSnapshotFor(window.location.search));
 const selected = ref<ProfileId[]>([...snapshot.value.selectedProfileIds]);
@@ -66,7 +71,9 @@ const operationError = ref("");
 const startupError = ref(false);
 const gameFilesInfo = ref<CacheInfo | null>(null);
 const gameFilesLoading = ref(false);
+const MIGRATION_NOTICE_DURATION_MS = 8_000;
 let unsubscribe: (() => void) | undefined;
+let migrationNoticeTimer: ReturnType<typeof setTimeout> | undefined;
 
 const native = window.launcherNative;
 const synchronized = ref(!native);
@@ -87,29 +94,34 @@ onMounted(async () => {
     startupError.value = true;
   }
 });
-onBeforeUnmount(() => unsubscribe?.());
+onBeforeUnmount(() => {
+  unsubscribe?.();
+  clearTimeout(migrationNoticeTimer);
+});
 watch([synchronized, () => snapshot.value.experience.introduction], async ([ready, introduction]) => {
   if (!ready || introduction !== "pending") return;
   await nextTick();
   introCallout.value?.focus();
 }, { immediate: true });
+watch([synchronized, () => snapshot.value.experience.showMigrationNotice], ([ready, show]) => {
+  clearTimeout(migrationNoticeTimer);
+  migrationNoticeTimer = undefined;
+  if (!ready || !show) return;
+  migrationNoticeTimer = setTimeout(() => void dismissMigrationNotice(), MIGRATION_NOTICE_DURATION_MS);
+}, { immediate: true });
 
 const visibleProfiles = computed(() => snapshot.value.profiles.filter((profile) => !profile.archived));
+const appearanceProfileDetails = computed(() => snapshot.value.profiles.find((profile) => profile.id === appearanceProfile.value) ?? null);
+const canArchiveAppearanceProfile = computed(() => {
+  const profile = appearanceProfileDetails.value;
+  return profile !== null
+    && profile.id !== visibleProfiles.value[0]?.id
+    && (profile.state === "ready" || profile.state === "failed");
+});
 const selectedProfiles = computed(() => visibleProfiles.value.filter((profile) => selected.value.includes(profile.id)));
 const openSelected = computed(() => selectedProfiles.value.filter((profile) => profile.state === "running"));
 const closedSelected = computed(() => selectedProfiles.value.filter((profile) => profile.state !== "running"));
 const waiting = computed(() => selectedProfiles.value.some((profile) => profile.state === "queued"));
-const preparationPercent = computed(() => {
-  if (snapshot.value.readiness.state !== "preparing") return 0;
-  const { received, total } = snapshot.value.readiness.progress;
-  return total > 0 ? Math.min(100, Math.round((received / total) * 100)) : 0;
-});
-const playableNotice = computed(() => playableNoticePresentation(snapshot.value.readiness));
-const backgroundDownloadBanner = computed(() => snapshot.value.readiness.state === "playable"
-  && snapshot.value.readiness.backgroundDownload
-  ? backgroundDownloadPresentation(snapshot.value.readiness.backgroundDownload)
-  : null);
-
 async function toggleProfile(id: ProfileId) {
   const next = selected.value.includes(id)
     ? selected.value.filter((value) => value !== id)
@@ -169,6 +181,14 @@ async function saveAppearance() {
     await native?.profiles.updateAppearance({ id: appearanceProfile.value!, icon: appearanceIcon.value, color: appearanceColor.value });
     appearanceProfile.value = null;
   });
+}
+
+async function archiveAppearanceProfile() {
+  const profile = appearanceProfileDetails.value;
+  if (!profile || !canArchiveAppearanceProfile.value) return;
+  if (await runAction("The account could not be archived.", () => native?.profiles.archive(profile.id))) {
+    appearanceProfile.value = null;
+  }
 }
 
 function openSettings(section: SettingsRoute = "general") {
@@ -238,6 +258,8 @@ async function completeIntroduction() {
 }
 
 async function dismissMigrationNotice() {
+  clearTimeout(migrationNoticeTimer);
+  migrationNoticeTimer = undefined;
   if (native) await runAction("The notice could not be dismissed.", () => native.experience.dismissMigrationNotice());
   else snapshot.value = { ...snapshot.value, experience: { ...snapshot.value.experience, showMigrationNotice: false } };
 }
@@ -324,30 +346,14 @@ async function replaceToolShortcut() {
   <div v-if="startupError" class="launcher-boot launcher-error" role="alert"><AlertTriangle /><h1>The launcher could not open</h1><p>Your accounts and game files were not changed.</p><button class="primary" @click="retryStartup">Try again</button></div>
   <div v-else-if="!synchronized" class="launcher-boot" role="status">Opening launcher…</div>
   <div v-else class="app-shell" :data-intro-step="snapshot.experience.introduction === 'pending' ? introStep : undefined">
-    <LauncherHeader :route="route" @navigate="route = $event" @settings="openSettings()" @introduction="runAction('The introduction could not be opened.', () => native?.experience.replayIntroduction())" />
+    <LauncherHeader :route="route" @navigate="route = $event" @settings="openSettings()" @external="openExternal" />
 
-    <section v-if="snapshot.readiness.state === 'repair-required'" class="priority-banner danger">
-      <AlertTriangle /><div><strong>Game files need repair</strong><span>Guild Wars cannot start until the client is ready.</span></div>
-      <button @click="openSettings('game-files')">Open Game Files</button>
-    </section>
-    <section v-else-if="snapshot.readiness.state === 'preparing'" class="priority-banner">
-      <Clock3 /><div><strong>Preparing Guild Wars · {{ preparationPercent }}%</strong><span>{{ snapshot.readiness.progress.label }}</span></div>
-      <button v-if="waiting" @click="primaryAction">Cancel waiting</button><button v-else @click="openSettings('game-files')">View download</button>
-    </section>
-    <section v-else-if="snapshot.appUpdate.phase === 'ready' && !updateBannerDismissed" class="priority-banner">
-      <RotateCcw /><div><strong>An update is ready</strong><span>Install it when you are finished playing.</span></div>
-      <div class="banner-actions"><button class="quiet-button" @click="updateBannerDismissed = true">Later</button><button @click="runAction('The update could not be installed.', () => native?.updates.restartAndInstall())">Restart and update</button></div>
-    </section>
-    <section v-else-if="playableNotice" class="priority-banner">
-      <AlertTriangle /><div><strong>{{ playableNotice.title }}</strong><span>{{ playableNotice.detail }}</span></div>
-      <button @click="openSettings('game-files')">View game files</button>
-    </section>
-    <section v-else-if="snapshot.readiness.state === 'offline-playable'" class="priority-banner"><AlertTriangle /><div><strong>You are offline</strong><span>You can play with the game files already on this Mac.</span></div></section>
-    <section v-else-if="backgroundDownloadBanner" class="priority-banner"><Clock3 /><div><strong>{{ backgroundDownloadBanner.title }}</strong><span>{{ backgroundDownloadBanner.detail }}</span></div><button @click="openSettings('game-files')">View download</button></section>
-    <section v-else class="funding-banner">
-      <div><strong>Help cover the yearly costs</strong><span>Apple Developer Program, domain, and hosting</span></div>
-      <div class="funding-progress"><span>{{ fixtureContent ? '€42 raised' : 'Yearly cost' }}</span><div><i :style="{ width: fixtureContent ? '34%' : '0%' }" /></div><span>€125 goal</span></div>
-      <button @click="openExternal('donate')">Support project</button>
+    <section class="funding-banner" aria-label="Project funding">
+      <div><strong>Support gwonmac</strong></div>
+      <div class="funding-progress" :aria-label="fixtureContent ? '€42 of €125 funded' : '€125 yearly cost'">
+        <span>{{ fixtureContent ? '€42' : 'Yearly costs' }}</span><div><i :style="{ width: fixtureContent ? '34%' : '0%' }" /></div><span>€125</span>
+      </div>
+      <button @click="openExternal('donate')">Support</button>
     </section>
 
     <main :class="{ 'artwork-only': route === 'home' && !snapshot.preferences.content.news && !snapshot.preferences.content.dailies }">
@@ -360,7 +366,6 @@ async function replaceToolShortcut() {
         @customize="editAppearance"
         @show="showProfile"
         @play="id => runAction('This account could not be opened. Try again.', () => native?.profiles.play([id]))"
-        @archive="id => runAction('The account could not be archived.', () => native?.profiles.archive(id))"
         @restore="id => runAction('The account could not be restored.', () => native?.profiles.restore(id))"
         @delete="id => runAction('The account could not be deleted.', () => native?.profiles.delete(id))"
       />
@@ -370,7 +375,13 @@ async function replaceToolShortcut() {
       <FeedbackView v-else-if="route === 'feedback'" :availability="snapshot.contentAvailability.feedback" @external="openExternal" />
 
       <section v-else class="settings-page">
-        <aside aria-label="Settings sections"><h2>Settings</h2><button v-for="item in settingsSections" :key="item.id" :aria-current="settingsRoute === item.id ? 'page' : undefined" :class="{ active: settingsRoute === item.id }" @click="selectSettings(item.id)">{{ item.label }}</button></aside>
+        <aside aria-label="Settings sections">
+          <h2>Settings</h2>
+          <div v-for="group in settingsGroups" :key="group.label" class="settings-nav-group" role="group" :aria-label="group.label">
+            <h3>{{ group.label }}</h3>
+            <button v-for="item in group.items" :key="item.id" :aria-current="settingsRoute === item.id ? 'page' : undefined" :class="{ active: settingsRoute === item.id }" @click="selectSettings(item.id)">{{ item.label }}</button>
+          </div>
+        </aside>
         <div class="settings-content">
           <GeneralUpdateSettings
             v-if="settingsRoute === 'general'"
@@ -382,6 +393,13 @@ async function replaceToolShortcut() {
             :open-releases="() => openExternal('releases')"
           />
           <template v-else-if="settingsRoute === 'content'"><h1>Content</h1><div class="setting-group"><label><span><strong>News</strong><small>Official Guild Wars and Reforged updates.</small></span><input type="checkbox" :checked="snapshot.preferences.content.news" @change="updateContent({ news: checked($event) })" /></label><label><span><strong>Dailies</strong><small>Daily activities and the weekly schedule.</small></span><input type="checkbox" :checked="snapshot.preferences.content.dailies" @change="updateContent({ dailies: checked($event) })" /></label><label v-if="snapshot.preferences.content.news && snapshot.preferences.content.dailies"><span><strong>First Home tab</strong></span><select :value="snapshot.preferences.content.first" @change="updateContent({ first: ($event.currentTarget as HTMLSelectElement).value as 'news' | 'dailies' })"><option value="news">News</option><option value="dailies">Dailies</option></select></label><label v-if="snapshot.preferences.content.news"><span><strong>Official Guild Wars news</strong></span><input type="checkbox" :checked="snapshot.preferences.content.officialNews" @change="updateContent({ officialNews: checked($event) })" /></label><label v-if="snapshot.preferences.content.news"><span><strong>Guild Wars Reforged news</strong></span><input type="checkbox" :checked="snapshot.preferences.content.reforgedNews" @change="updateContent({ reforgedNews: checked($event) })" /></label></div></template>
+          <template v-else-if="settingsRoute === 'game'">
+            <h1>Game settings</h1>
+            <div class="setting-group">
+              <label><span><strong>Render quality</strong><small>Higher quality uses more graphics power.</small></span><select :value="snapshot.settings.renderScale" @change="updateLauncherSettings({ renderScale: Number(($event.currentTarget as HTMLSelectElement).value) as 1 | 1.5 | 2 })"><option :value="1">Standard</option><option :value="1.5">High</option><option :value="2">Very high</option></select></label>
+              <label><span><strong>Extended memory</strong><small>Allow longer sessions to use more memory.</small></span><input type="checkbox" :checked="snapshot.settings.extendedMemoryEnabled" @change="updateLauncherSettings({ extendedMemoryEnabled: checked($event) })" /></label>
+            </div>
+          </template>
           <template v-else-if="settingsRoute === 'tools'">
             <h1>Tools</h1><p>Tools apply to every account.</p>
             <div class="setting-group">
@@ -409,8 +427,6 @@ async function replaceToolShortcut() {
           <template v-else>
             <h1>Advanced</h1>
             <div class="setting-group">
-              <label><span><strong>Render quality</strong><small>Higher quality uses more graphics power.</small></span><select :value="snapshot.settings.renderScale" @change="updateLauncherSettings({ renderScale: Number(($event.currentTarget as HTMLSelectElement).value) as 1 | 1.5 | 2 })"><option :value="1">Standard</option><option :value="1.5">High</option><option :value="2">Very high</option></select></label>
-              <label><span><strong>Extended memory</strong><small>Allow longer sessions to use more memory.</small></span><input type="checkbox" :checked="snapshot.settings.extendedMemoryEnabled" @change="updateLauncherSettings({ extendedMemoryEnabled: checked($event) })" /></label>
               <label><span><strong>Diagnostics</strong><small>Collect more local troubleshooting data.</small></span><input type="checkbox" :checked="snapshot.settings.showDiagnostics" @change="updateLauncherSettings({ showDiagnostics: checked($event) })" /></label>
               <button class="secondary" @click="runAction('Logs could not be opened.', () => native?.external.revealLogs())"><FileText />Open logs</button>
               <button class="danger-button" @click="runAction('Launcher settings could not be reset.', () => native?.settings.reset())">Reset launcher settings</button>
@@ -420,16 +436,28 @@ async function replaceToolShortcut() {
       </section>
     </main>
 
-    <div v-if="operationError" class="operation-error" role="alert"><AlertTriangle /><span>{{ operationError }}</span><button class="icon-button" aria-label="Dismiss error" @click="operationError = ''"><X /></button></div>
-
-    <LaunchBar :snapshot="snapshot" :selected="selected" :busy="busy" @toggle="toggleProfile" @show="showProfile" @action="primaryAction" @manage="route = 'accounts'" />
+    <LaunchBar
+      :snapshot="snapshot"
+      :selected="selected"
+      :busy="busy"
+      :operation-error="operationError"
+      :update-dismissed="updateBannerDismissed"
+      @toggle="toggleProfile"
+      @show="showProfile"
+      @action="primaryAction"
+      @manage="route = 'accounts'"
+      @game-files="openSettings('game-files')"
+      @dismiss-error="operationError = ''"
+      @dismiss-update="updateBannerDismissed = true"
+      @install-update="runAction('The update could not be installed.', () => native?.updates.restartAndInstall())"
+    />
 
     <BaseModal v-if="addOpen" labelledby="add-account-title" @close="addOpen = false">
       <form @submit.prevent="createProfile"><div class="modal-head"><h2 id="add-account-title">Add account</h2><button type="button" class="icon-button" aria-label="Close" @click="addOpen = false"><X /></button></div><p>This opens another separate Guild Wars window. Sign-in stays inside the game.</p><label>Name<input v-model="newName" autofocus maxlength="48" placeholder="Second account" /></label><details><summary>Appearance</summary><fieldset class="icon-options"><legend>Icon</legend><button v-for="(component, icon) in profileIcons" :key="icon" type="button" :aria-label="icon" :aria-pressed="newIcon === icon" :class="{ selected: newIcon === icon }" @click="newIcon = icon"><component :is="component" /></button></fieldset><fieldset class="color-options"><legend>Color</legend><button v-for="color in ['#9a6638', '#496b58', '#46658a', '#76558b', '#9a4f4f', '#76703c', '#4c777d', '#6f6258']" :key="color" type="button" :aria-label="`Use ${color}`" :aria-pressed="newColor === color" :class="{ selected: newColor === color }" :style="{ background: color }" @click="newColor = color" /><label>Custom color<input v-model="newColor" type="color" /></label></fieldset></details><div class="form-actions"><button type="button" class="secondary" @click="addOpen = false">Cancel</button><button class="primary" :disabled="!newName.trim()">Add account</button></div></form>
     </BaseModal>
 
     <BaseModal v-if="appearanceProfile" labelledby="appearance-title" @close="appearanceProfile = null">
-      <form @submit.prevent="saveAppearance"><div class="modal-head"><h2 id="appearance-title">Account appearance</h2><button type="button" class="icon-button" aria-label="Close" @click="appearanceProfile = null"><X /></button></div><p>Choose a simple icon and color for this account.</p><fieldset class="icon-options"><legend>Icon</legend><button v-for="(component, icon) in profileIcons" :key="icon" type="button" :aria-label="icon" :aria-pressed="appearanceIcon === icon" :class="{ selected: appearanceIcon === icon }" @click="appearanceIcon = icon"><component :is="component" /></button></fieldset><fieldset class="color-options"><legend>Color</legend><button v-for="color in ['#9a6638', '#496b58', '#46658a', '#76558b', '#9a4f4f', '#76703c', '#4c777d', '#6f6258']" :key="color" type="button" :aria-label="`Use ${color}`" :aria-pressed="appearanceColor === color" :class="{ selected: appearanceColor === color }" :style="{ background: color }" @click="appearanceColor = color" /><label>Custom color<input v-model="appearanceColor" type="color" /></label></fieldset><div class="form-actions"><button type="button" class="secondary" @click="appearanceProfile = null">Cancel</button><button class="primary">Save</button></div></form>
+      <form @submit.prevent="saveAppearance"><div class="modal-head"><h2 id="appearance-title">Edit account</h2><button type="button" class="icon-button" aria-label="Close" @click="appearanceProfile = null"><X /></button></div><p>Choose how this account appears in the launcher.</p><fieldset class="icon-options"><legend>Icon</legend><button v-for="(component, icon) in profileIcons" :key="icon" type="button" :aria-label="icon" :aria-pressed="appearanceIcon === icon" :class="{ selected: appearanceIcon === icon }" @click="appearanceIcon = icon"><component :is="component" /></button></fieldset><fieldset class="color-options"><legend>Color</legend><button v-for="color in ['#9a6638', '#496b58', '#46658a', '#76558b', '#9a4f4f', '#76703c', '#4c777d', '#6f6258']" :key="color" type="button" :aria-label="`Use ${color}`" :aria-pressed="appearanceColor === color" :class="{ selected: appearanceColor === color }" :style="{ background: color }" @click="appearanceColor = color" /><label>Custom color<input v-model="appearanceColor" type="color" /></label></fieldset><div v-if="canArchiveAppearanceProfile" class="archive-account-row"><span><strong>Archive account</strong><small>Hide this account without deleting its data.</small></span><button type="button" class="archive-button" @click="archiveAppearanceProfile"><Archive />Archive</button></div><div class="form-actions"><button type="button" class="secondary" @click="appearanceProfile = null">Cancel</button><button class="primary">Save</button></div></form>
     </BaseModal>
 
     <div v-if="snapshot.experience.preferencesReset" class="toast"><AlertTriangle /><div><strong>Launcher preferences were reset.</strong><span>Your accounts, saved login, game files, builds, and templates were not changed.</span></div><button class="icon-button" aria-label="Dismiss" @click="dismissPreferencesReset"><X /></button></div>
@@ -437,8 +465,8 @@ async function replaceToolShortcut() {
 
     <BaseModal v-if="snapshot.experience.setup === 'pending'" labelledby="setup-title" :dismissible="false" wide>
       <div class="setup-card">
-        <template v-if="setupStep === 1"><span class="eyebrow">Welcome</span><h2 id="setup-title">Welcome to Guild Wars Reforged</h2><p>Guild Wars Reforged runs Guild Wars on your Mac. It is an unofficial community project and is not affiliated with ArenaNet or NCSOFT.</p><div class="form-actions"><button class="primary" @click="setupStep = 2">Continue</button></div></template>
-        <template v-else><span class="eyebrow">Optional</span><h2 id="setup-title">Optional Tools</h2><p>Build Management saves team builds. Quick Travel opens a map search. Xunlai Storage opens storage in supported outposts.</p><p><strong>Tools apply to every account.</strong></p><p class="setup-note">If you enable Tools, the app restarts once to finish setup.</p><div class="form-actions spread"><button class="secondary" @click="setupStep = 1">Back</button><span /><button class="secondary" @click="completeSetup(false)">Not now</button><button class="primary" @click="completeSetup(true)">Enable Tools</button></div></template>
+        <template v-if="setupStep === 1"><h2 id="setup-title">Welcome to Guild Wars Reforged</h2><p>Guild Wars Reforged runs Guild Wars on your Mac. It is an unofficial community project and is not affiliated with ArenaNet or NCSOFT.</p><div class="form-actions"><button class="primary" @click="setupStep = 2">Continue</button></div></template>
+        <template v-else><h2 id="setup-title">Optional Tools</h2><p>Build Management saves team builds. Quick Travel opens a map search. Xunlai Storage opens storage in supported outposts.</p><p><strong>Tools apply to every account.</strong></p><p class="setup-note">If you enable Tools, the app restarts once to finish setup.</p><div class="form-actions spread"><button class="secondary" @click="setupStep = 1">Back</button><span /><button class="secondary" @click="completeSetup(false)">Not now</button><button class="primary" @click="completeSetup(true)">Enable Tools</button></div></template>
       </div>
     </BaseModal>
 

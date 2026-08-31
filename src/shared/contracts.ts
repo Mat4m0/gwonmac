@@ -594,6 +594,7 @@ export type ExternalLinkKind =
   | "bugReport"
   | "featureRequest"
   | "discord"
+  | "arenaNetSupport"
   | "donate"
   | "releases"
   | "store"
@@ -613,6 +614,7 @@ export const EXTERNAL_URLS: Record<ExternalLinkKind, string> = {
   bugReport: `https://github.com/${RELEASE_REPO}/issues/new?template=bug-report.yml`,
   featureRequest: `https://github.com/${RELEASE_REPO}/issues/new?template=feature-request.yml`,
   discord: "https://discord.gg/Z9ft52RBD3",
+  arenaNetSupport: "https://help.guildwars.com/hc/en-us/requests/new",
   donate: "https://ko-fi.com/mat4m0",
   releases: `https://github.com/${RELEASE_REPO}/releases`,
   // Official ArenaNet store, for players who do not own the game yet.

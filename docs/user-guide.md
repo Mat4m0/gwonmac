@@ -155,10 +155,11 @@ client is healthy. A failure in one profile does not close healthy profiles.
 
 ## Known issues and feedback
 
-Use **Known issues** for maintained workarounds when a feed becomes available.
-Until then, the launcher links to GitHub and Discord. Some issues belong to the
-official Guild Wars client and must be reported to ArenaNet; the launcher should
-say that without claiming it can fix them.
+Use **Known issues** to see problems that ship with the current launcher
+version. Each open issue describes the symptom and its current workaround. The
+page also explains how to check the same action in ArenaNet's official client.
+Report an issue to ArenaNet when it also happens there. Report a macOS-only
+issue to gwonmac on GitHub or Discord.
 
 Use **Feedback** to prepare a short problem report or idea. Direct submission
 and file upload are intentionally not connected in this cutover. Continue on

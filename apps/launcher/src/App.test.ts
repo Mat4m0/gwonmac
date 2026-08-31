@@ -14,26 +14,40 @@ function installNative(overrides: Record<string, unknown>): LauncherNativeApi {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   Object.defineProperty(window, "launcherNative", { configurable: true, value: undefined });
   document.querySelectorAll(".modal-backdrop").forEach((element) => element.remove());
 });
 
 describe("unified launcher shell", () => {
+  it("keeps funding on top and operational status only in the launch bar", () => {
+    const wrapper = mount(App);
+
+    expect(wrapper.get(".funding-banner").text()).toContain("Support gwonmac");
+    expect(wrapper.get(".funding-banner").text()).not.toContain("yearly project costs");
+    expect(wrapper.get(".funding-banner").text()).not.toContain("Downloading game files");
+    expect(wrapper.get(".launchbar").text()).toContain("Downloading game files");
+    expect(wrapper.find(".priority-banner").exists()).toBe(false);
+  });
+
   it("keeps Home focused on content and moves account management to Accounts", async () => {
     const wrapper = mount(App);
     expect(wrapper.get("h1").text()).toContain("Wayfarer’s Reverie");
     await wrapper.get('button[aria-label="Settings"]').trigger("click");
-    expect(wrapper.get(".settings-content h1").text()).toBe("General");
+    expect(wrapper.get(".settings-content h1").text()).toBe("Updates");
     await wrapper.findAll("nav button")[1]!.trigger("click");
     expect(wrapper.get(".accounts-page h1").text()).toBe("Game windows");
     expect(wrapper.text()).toContain("Main account");
   });
 
-  it("shows seven daily cards and a full-week disclosure", async () => {
+  it("shows a distinct daily schedule and a full-week disclosure", async () => {
     const wrapper = mount(App);
     await wrapper.findAll(".segmented button")[1]!.trigger("click");
-    expect(wrapper.findAll(".daily-grid article")).toHaveLength(7);
-    expect(wrapper.get(".load-more").text()).toBe("Show the next 7 days");
+    expect(wrapper.findAll(".daily-item")).toHaveLength(7);
+    expect(wrapper.text()).toContain("Zaishen Mission");
+    expect(wrapper.text()).toContain("Nicholas Sandford");
+    expect(wrapper.text()).not.toContain("Daily activity");
+    expect(wrapper.get(".load-more").text()).toBe("Show full week");
   });
 
   it("uses truthful production wording for feedback submission", async () => {
@@ -46,13 +60,22 @@ describe("unified launcher shell", () => {
   it("keeps Tool switches and shortcuts together", async () => {
     const wrapper = mount(App);
     await wrapper.get('button[aria-label="Settings"]').trigger("click");
-    await wrapper.findAll(".settings-page aside button")[2]!.trigger("click");
+    await wrapper.findAll(".settings-page aside button").find((button) => button.text() === "Tools")!.trigger("click");
     expect(wrapper.text()).toContain("Tools apply to every account");
     expect(wrapper.text()).toContain("Build Management");
     expect(wrapper.text()).toContain("⌘B");
     expect(wrapper.text()).toContain("Quick Travel");
     expect(wrapper.text()).toContain("Xunlai Storage");
     expect(wrapper.text()).not.toContain("Trade Chat");
+  });
+
+  it("keeps Discord and GitHub in the global header", async () => {
+    const wrapper = mount(App);
+
+    expect(wrapper.get('.titlebar button[aria-label="Open Discord"]').attributes("title")).toBe("Discord");
+    expect(wrapper.get('.titlebar button[aria-label="Open GitHub"]').attributes("title")).toBe("GitHub");
+    await wrapper.get('button[aria-label="Settings"]').trigger("click");
+    expect(wrapper.find(".settings-community-links").exists()).toBe(false);
   });
 
   it("keeps Tools off unless a fresh player explicitly enables them", async () => {
@@ -104,7 +127,7 @@ describe("unified launcher shell", () => {
     const wrapper = mount(App);
     await flushPromises();
     await wrapper.get('button[aria-label="Settings"]').trigger("click");
-    await wrapper.findAll(".settings-page aside button")[2]!.trigger("click");
+    await wrapper.findAll(".settings-page aside button").find((button) => button.text() === "Tools")!.trigger("click");
     await wrapper.findAll(".tool-row .secondary")[0]!.trigger("click");
     await flushPromises();
     expect(wrapper.text()).toContain("already used by Quick Travel");
@@ -121,13 +144,6 @@ describe("unified launcher shell", () => {
         get: async () => ({
           ...fixtureSnapshot,
           experience: { ...fixtureSnapshot.experience, showMigrationNotice: false },
-          preferences: {
-            content: {
-              ...fixtureSnapshot.preferences.content,
-              news: false,
-              dailies: false,
-            },
-          },
           contentAvailability: { news: "placeholder", dailies: "placeholder", knownIssues: "placeholder", feedback: "placeholder" },
         }),
         onChange: () => () => undefined,
@@ -136,12 +152,25 @@ describe("unified launcher shell", () => {
     const wrapper = mount(App);
     await flushPromises();
     expect(wrapper.get(".hero-copy h1").text()).toBe("Your accounts. One launcher.");
-    expect(wrapper.get("main").classes()).toContain("artwork-only");
+    expect(wrapper.get("#news-panel").text()).toContain("News is not connected yet.");
+    expect(wrapper.get(".segmented").text()).toContain("Dailies");
     expect(wrapper.text()).not.toContain("Wayfarer’s Reverie");
     await wrapper.findAll("nav button")[3]!.trigger("click");
     expect(wrapper.text()).toContain("Direct feedback is not connected yet.");
     expect(wrapper.find("textarea").exists()).toBe(false);
     expect(wrapper.text()).not.toContain("Add screenshot or file");
+  });
+
+  it("persists and clears the migrated-account notice after one short appearance", async () => {
+    vi.useFakeTimers();
+    const dismissMigrationNotice = vi.fn(async () => undefined);
+    installNative({ experience: { dismissMigrationNotice } });
+    const wrapper = mount(App);
+    await flushPromises();
+
+    expect(wrapper.get(".toast").text()).toContain("Your existing account is ready");
+    await vi.advanceTimersByTimeAsync(8_000);
+    expect(dismissMigrationNotice).toHaveBeenCalledOnce();
   });
 
   it("shows a recoverable startup failure", async () => {
@@ -194,7 +223,7 @@ describe("unified launcher shell", () => {
     const wrapper = mount(App);
     await flushPromises();
     await wrapper.get('button[aria-label="Settings"]').trigger("click");
-    await wrapper.findAll(".settings-page aside button")[4]!.trigger("click");
+    await wrapper.findAll(".settings-page aside button").find((button) => button.text() === "Game files")!.trigger("click");
     await flushPromises();
     expect(info).toHaveBeenCalledOnce();
     expect(wrapper.text()).toContain("1.0 GB of 2.0 GB verified");
@@ -216,6 +245,32 @@ describe("unified launcher shell", () => {
     document.querySelector<HTMLFormElement>(".modal form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     await flushPromises();
     expect(create).toHaveBeenCalledWith({ name: "PvP account", appearance: { icon: "map", color: "#46658a" } });
+  });
+
+  it("keeps reversible account archiving inside account appearance", async () => {
+    const archive = vi.fn(async () => undefined);
+    const readyProfiles = fixtureSnapshot.profiles.map((profile) => ({
+      ...profile,
+      state: "ready" as const,
+    }));
+    installNative({
+      state: {
+        get: async () => ({ ...fixtureSnapshot, profiles: readyProfiles }),
+        onChange: () => () => undefined,
+      },
+      profiles: { archive },
+    });
+    const wrapper = mount(App);
+    await flushPromises();
+    await wrapper.findAll("nav button")[1]!.trigger("click");
+
+    expect(wrapper.text()).not.toContain("Archive");
+    await wrapper.findAll(".account-appearance")[1]!.trigger("click");
+    expect(document.body.textContent).toContain("Hide this account without deleting its data");
+    document.querySelector<HTMLButtonElement>(".archive-account-row .archive-button")!.click();
+    await flushPromises();
+
+    expect(archive).toHaveBeenCalledWith(readyProfiles[1]!.id);
   });
 
   it("supports arrow-key navigation for Home tabs", async () => {

@@ -1,6 +1,18 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
-import { Clock3, ExternalLink, Newspaper, SlidersHorizontal, Swords } from "lucide-vue-next";
+import {
+  Castle,
+  Clock3,
+  Crosshair,
+  ExternalLink,
+  MapPin,
+  Newspaper,
+  PackageOpen,
+  ScrollText,
+  ShieldCheck,
+  SlidersHorizontal,
+  Swords,
+} from "lucide-vue-next";
 import type { LauncherExternalLink, LauncherSnapshot } from "@shared/launcher-contracts";
 
 const props = defineProps<{ snapshot: LauncherSnapshot }>();
@@ -12,6 +24,25 @@ const emit = defineEmits<{
 const contentTab = ref<"news" | "dailies">(props.snapshot.preferences.content.first);
 const weekExpanded = ref(false);
 const fixtureContent = computed(() => props.snapshot.contentAvailability.news === "fixture");
+
+const today = [
+  { category: "Zaishen Mission", title: "Gate of Pain", icon: ScrollText },
+  { category: "Zaishen Bounty", title: "Zoldark the Unholy", icon: Crosshair },
+  { category: "Zaishen Combat", title: "Random Arena", icon: Swords },
+  { category: "Zaishen Vanquish", title: "Skyward Reach", icon: MapPin },
+  { category: "Shining Blade", title: "Justiciar Marron", icon: ShieldCheck },
+  { category: "Vanguard Quest", title: "Footman Tate", icon: Castle },
+  { category: "Nicholas Sandford", title: "Baked Husks", icon: PackageOpen },
+] as const;
+
+const week = [
+  { date: "Tomorrow · Aug 30", activities: ["Ruins of Morah", "Justiciar Kimii", "Dragon's Gullet"] },
+  { date: "Monday · Aug 31", activities: ["A Time for Heroes", "Royen Beastkeeper", "The Falls"] },
+  { date: "Tuesday · Sep 1", activities: ["Dunes of Despair", "Mohby Windbeak", "Sacnoth Valley"] },
+  { date: "Wednesday · Sep 2", activities: ["Tahnnakai Temple", "Joh the Hostile", "Mount Qinkai"] },
+  { date: "Thursday · Sep 3", activities: ["Blood Washes Blood", "Baubao Wavewrath", "Grothmar Wardowns"] },
+  { date: "Friday · Sep 4", activities: ["The Eternal Grove", "Jarimiya the Unmerciful", "Jaga Moraine"] },
+] as const;
 
 watch(() => props.snapshot.preferences.content, (content) => {
   if (!content[contentTab.value]) contentTab.value = content.first;
@@ -28,8 +59,8 @@ async function moveTab(event: KeyboardEvent) {
 
 <template>
   <section class="hero-panel" :class="{ 'hero-placeholder': !fixtureContent }">
-    <div v-if="fixtureContent" class="hero-copy"><span class="eyebrow">Guild Wars · August 29</span><h1>Wayfarer’s Reverie starts Tuesday.</h1><p>The event includes quests across Tyria, Cantha, and Elona.</p><button class="text-link" @click="contentTab = 'news'">Read update <ExternalLink /></button></div>
-    <div v-else class="hero-copy"><span class="eyebrow">Guild Wars Reforged</span><h1>Your accounts. One launcher.</h1><p>Updates, game files, Tools, and every Guild Wars window are managed here.</p></div>
+    <div v-if="fixtureContent" class="hero-copy"><h1>Wayfarer’s Reverie starts Tuesday.</h1><time class="hero-meta" datetime="2026-08-29">Guild Wars news · August 29</time><p>The event includes quests across Tyria, Cantha, and Elona.</p><button class="text-link" @click="contentTab = 'news'">Read update <ExternalLink /></button></div>
+    <div v-else class="hero-copy"><h1>Your accounts. One launcher.</h1><p>Updates, game files, Tools, and every Guild Wars window are managed here.</p></div>
   </section>
   <section v-if="snapshot.preferences.content.news || snapshot.preferences.content.dailies" class="home-panel">
     <div class="panel-head">
@@ -49,9 +80,20 @@ async function moveTab(event: KeyboardEvent) {
     <div v-else-if="snapshot.contentAvailability.dailies === 'placeholder'" id="dailies-panel" role="tabpanel" aria-labelledby="dailies-tab" class="empty-state"><Clock3 /><h3>Daily activities are not connected yet.</h3><p>Use the Guild Wars Wiki for the current schedule.</p></div>
     <div v-else id="dailies-panel" role="tabpanel" aria-labelledby="dailies-tab" class="daily-view">
       <div class="daily-date"><span>Today · Aug 29</span><strong>Changes in 5h 18m</strong><small>18:00 local time</small></div>
-      <div class="daily-grid"><article v-for="daily in ['Gate of Pain', 'Zoldark the Unholy', 'Random Arena', 'Skyward Reach', 'Justiciar Marron', 'Footman Tate', 'Baked Husks']" :key="daily"><Swords /><div><small>Daily activity</small><strong>{{ daily }}</strong></div><ExternalLink /></article></div>
-      <template v-if="weekExpanded"><div v-for="day in ['Tomorrow · Aug 30', 'Monday · Aug 31', 'Tuesday · Sep 1', 'Wednesday · Sep 2', 'Thursday · Sep 3', 'Friday · Sep 4']" :key="day" class="daily-week-row"><strong>{{ day }}</strong><span>Zaishen Mission · Zaishen Bounty · Vanguard Quest</span></div></template>
-      <button class="load-more" :aria-expanded="weekExpanded" @click="weekExpanded = !weekExpanded">{{ weekExpanded ? 'Show today only' : 'Show the next 7 days' }}</button>
+      <div class="daily-list">
+        <div v-for="daily in today" :key="daily.category" class="daily-item">
+          <span class="daily-icon" aria-hidden="true"><component :is="daily.icon" /></span>
+          <span class="daily-category">{{ daily.category }}</span>
+          <strong>{{ daily.title }}</strong>
+        </div>
+      </div>
+      <div v-if="weekExpanded" class="daily-week">
+        <div v-for="day in week" :key="day.date" class="daily-week-row">
+          <strong>{{ day.date }}</strong>
+          <span class="week-activities"><span v-for="activity in day.activities" :key="activity">{{ activity }}</span></span>
+        </div>
+      </div>
+      <button class="load-more" :aria-expanded="weekExpanded" @click="weekExpanded = !weekExpanded">{{ weekExpanded ? 'Show today only' : 'Show full week' }}</button>
     </div>
   </section>
 </template>

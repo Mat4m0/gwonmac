@@ -31,7 +31,7 @@ function performAction(): Promise<void> {
 </script>
 
 <template>
-  <h1>General</h1>
+  <h1>Updates</h1>
   <div class="setting-group">
     <label>
       <span>

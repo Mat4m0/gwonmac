@@ -94,13 +94,6 @@ export function fixtureSnapshotFor(search: string): LauncherSnapshot {
         ...fixtureSnapshot,
         experience: { ...fixtureSnapshot.experience, showMigrationNotice: false },
         readiness: { state: "playable", backgroundDownload: null },
-        preferences: {
-          content: {
-            ...fixtureSnapshot.preferences.content,
-            news: false,
-            dailies: false,
-          },
-        },
         contentAvailability: { news: "placeholder", dailies: "placeholder", knownIssues: "placeholder", feedback: "placeholder" },
       };
     default:

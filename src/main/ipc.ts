@@ -355,6 +355,7 @@ const asExternalLinkKind = one((value: unknown): ExternalLinkKind => {
     value !== "bugReport" &&
     value !== "featureRequest" &&
     value !== "discord" &&
+    value !== "arenaNetSupport" &&
     value !== "donate" &&
     value !== "releases" &&
     value !== "store" &&
