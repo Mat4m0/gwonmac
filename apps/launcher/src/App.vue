@@ -341,7 +341,7 @@ async function replaceToolShortcut() {
     <LauncherHeader :route="route" @navigate="route = $event" @settings="openSettings()" />
 
     <section class="funding-banner" aria-label="Project funding">
-      <div><strong>Support Guild Wars Reforged</strong><span>€125 covers the yearly project costs</span></div>
+      <div><strong>Support gwonmac</strong></div>
       <div class="funding-progress" :aria-label="fixtureContent ? '€42 of €125 funded' : '€125 yearly cost'">
         <span>{{ fixtureContent ? '€42' : 'Yearly costs' }}</span><div><i :style="{ width: fixtureContent ? '34%' : '0%' }" /></div><span>€125</span>
       </div>

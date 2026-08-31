@@ -23,7 +23,8 @@ describe("unified launcher shell", () => {
   it("keeps funding on top and operational status only in the launch bar", () => {
     const wrapper = mount(App);
 
-    expect(wrapper.get(".funding-banner").text()).toContain("Support Guild Wars Reforged");
+    expect(wrapper.get(".funding-banner").text()).toContain("Support gwonmac");
+    expect(wrapper.get(".funding-banner").text()).not.toContain("yearly project costs");
     expect(wrapper.get(".funding-banner").text()).not.toContain("Downloading game files");
     expect(wrapper.get(".launchbar").text()).toContain("Downloading game files");
     expect(wrapper.find(".priority-banner").exists()).toBe(false);
