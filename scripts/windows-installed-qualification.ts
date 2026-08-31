@@ -2,7 +2,7 @@
  * Install the exact unsigned Squirrel.Windows artifact on a fresh hosted
  * runner and exercise its real LocalAppData, launcher, game, and uninstall.
  */
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -25,6 +25,86 @@ const execFileAsync = promisify(execFile);
 const root = path.resolve(import.meta.dirname, "..");
 const release = DISTRIBUTION_CHANNEL_CONFIG.release;
 const signedQualification = process.env.GW_WINDOWS_SIGNED_QUALIFICATION === "1";
+
+const delay = (milliseconds: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
+
+interface WindowsProcess {
+  readonly ProcessId: number;
+  readonly ParentProcessId: number;
+  readonly CommandLine: string | null;
+}
+
+async function proveNormalCrashpadStartup(
+  executable: string,
+  arguments_: readonly string[],
+): Promise<void> {
+  let output = "";
+  const child = spawn(executable, arguments_, {
+    env: {
+      ...process.env,
+      ELECTRON_ENABLE_LOGGING: "1",
+      GW_REQUIRE_CACHED_CLIENT: "1",
+      GW_BACKGROUND_LAUNCH: "1",
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
+  });
+  const capture = (chunk: Buffer) => {
+    output = `${output}${chunk.toString("utf8")}`.slice(-65_536);
+  };
+  child.stdout.on("data", capture);
+  child.stderr.on("data", capture);
+  try {
+    await delay(5_000);
+    assert.equal(
+      child.exitCode,
+      null,
+      `the normal installed application exited before qualification\n${output.trim()}`,
+    );
+    assert.ok(child.pid, "the normal installed application has no process ID");
+    const { stdout } = await execFileAsync(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        "Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,CommandLine | ConvertTo-Json -Compress",
+      ],
+      { encoding: "utf8", timeout: 30_000, windowsHide: true },
+    );
+    const parsed = JSON.parse(stdout) as WindowsProcess | WindowsProcess[];
+    const processes = Array.isArray(parsed) ? parsed : [parsed];
+    const descendants = new Set([child.pid]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const candidate of processes) {
+        if (
+          descendants.has(candidate.ParentProcessId)
+          && !descendants.has(candidate.ProcessId)
+        ) {
+          descendants.add(candidate.ProcessId);
+          changed = true;
+        }
+      }
+    }
+    assert.ok(
+      processes.some((candidate) =>
+        descendants.has(candidate.ProcessId)
+        && candidate.CommandLine?.includes("--type=crashpad-handler")
+      ),
+      "the normal installed application did not keep a Crashpad handler alive",
+    );
+  } finally {
+    if (child.exitCode === null && child.pid) {
+      await execFileAsync("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], {
+        timeout: 30_000,
+        windowsHide: true,
+      }).catch(() => {});
+    }
+  }
+}
 
 function hostedWindowsRunner(): string {
   if (
@@ -143,6 +223,13 @@ try {
     userData: storage.sessions,
   });
 
+  const qualificationArguments = [
+    "--disable-gpu",
+    "--enable-logging=stderr",
+    ...(signedQualification ? [] : ["--gw-volatile-secrets"]),
+  ];
+  await proveNormalCrashpadStartup(installedExecutable, qualificationArguments);
+
   running = await launchPackagedApp({
     appPath: packageRoot,
     executablePath: installedExecutable,
@@ -151,12 +238,12 @@ try {
     // GitHub's hosted Windows service session has no stable accelerated
     // graphics context. Keep the Chromium sandbox enabled, but render this
     // package qualification in software so a runner-only GPU crash cannot
-    // mask launcher, profile, storage, and uninstall behavior. Crashpad stays
-    // on: this must exercise the same early local handler as production.
+    // mask launcher, profile, storage, and uninstall behavior. The preceding
+    // normal launch proves production Crashpad. CDP is test instrumentation
+    // that starts before application JavaScript can connect that handler.
     arguments: [
-      "--disable-gpu",
-      "--enable-logging=stderr",
-      ...(signedQualification ? [] : ["--gw-volatile-secrets"]),
+      ...qualificationArguments,
+      "--disable-crash-reporter",
     ],
     environment: { ELECTRON_ENABLE_LOGGING: "1" },
     useDefaultUserData: true,

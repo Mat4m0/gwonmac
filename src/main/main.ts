@@ -228,6 +228,11 @@ if (!explicitUserData && (process.platform === "win32" || linuxFlatpak)) {
   app.setPath("sessionData", applicationStorageRoots.sessions);
 }
 if (process.platform === "win32") {
+  // Chromium can create utility processes while Electron is still entering
+  // application startup. Connect their local Crashpad handler before any
+  // shell integration or single-instance work can trigger that process work.
+  // Reports remain on this device; no upload endpoint is configured.
+  crashReporter.start({ uploadToServer: false });
   app.setAppUserModelId(windowsAppUserModelId(app.getName()));
 }
 
@@ -236,13 +241,6 @@ const primaryInstance = !windowsSquirrelStartupHandled
 if (!primaryInstance) {
   app.quit();
 } else {
-  // Electron's Windows renderers initialize Crashpad before application code
-  // runs. Start their local handler before `ready` so a renderer never exits
-  // because no handler is connected. Reports remain on this device; this
-  // application does not configure a crash-report upload endpoint.
-  if (process.platform === "win32") {
-    crashReporter.start({ uploadToServer: false });
-  }
   enableSandboxBeforeReady();
   registerGwScheme();
   wireLifecycle();
