@@ -216,15 +216,26 @@ export async function launchPackagedApp(
 
 /** Let the app own normal quit and escalate only if its bounded cleanup fails. */
 export async function closePackagedApp(
-  { browser, child, page }: RunningPackagedApp,
+  { browser, child, launcherPage, page }: RunningPackagedApp,
 ): Promise<void> {
-  // Closing the unified launcher's game window deliberately leaves its
-  // companion available. Ask the app to perform its normal coordinated quit
-  // so release proofs cover shutdown and do not wait for a forced signal.
-  await Promise.race([
-    page.evaluate(() => window.gwNative.app.requestQuit()).catch(() => {}),
-    delay(4_000),
-  ]);
+  // A game-window quit closes only that profile; the unified launcher is
+  // intentionally left alive. CDP's browser close is the automation
+  // equivalent of quitting the application and reaches Electron's ordinary
+  // before-quit cleanup. Older game-only package proofs retain their renderer
+  // request because they have no companion window.
+  if (launcherPage) {
+    await Promise.race([
+      browser.newBrowserCDPSession()
+        .then((cdp) => cdp.send("Browser.close"))
+        .catch(() => {}),
+      delay(4_000),
+    ]);
+  } else {
+    await Promise.race([
+      page.evaluate(() => window.gwNative.app.requestQuit()).catch(() => {}),
+      delay(4_000),
+    ]);
+  }
   await page.close().catch(() => {});
   await browser.close().catch(() => {});
   if (await waitForExit(child, 6_000)) return;
