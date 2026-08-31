@@ -176,6 +176,11 @@ import {
   windowsSquirrelFirstRun,
 } from "./windows-squirrel-startup.js";
 import { trustedFlatpakIdentity } from "./linux-flatpak.js";
+import {
+  LinuxPortalKeychain,
+  linuxPortalSecretProvider,
+  linuxSecretPortalPath,
+} from "./linux-portal-keychain.js";
 
 const windowsSquirrelStartupHandled = process.platform === "win32"
   && handleWindowsSquirrelStartup({
@@ -664,6 +669,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
   await startDiagnostics();
   const distributionChannel = packagedDistributionChannel();
   const distribution = distributionCapabilities(distributionChannel);
+  const nativeApplicationUpdates = distribution.automaticUpdates && !linuxFlatpak;
   if (!app.isPackaged) {
     console.warn(
       "Saved login is memory-only in pnpm dev; use pnpm dev:signed for persistent development credentials.",
@@ -734,6 +740,17 @@ if (primaryInstance) void app.whenReady().then(async () => {
         windowsNativeHost,
         distributionChannel,
       );
+    } else if (process.platform === "linux" && linuxFlatpak) {
+      const linuxSecretRoot = path.join(paths.storage.data, "secrets");
+      await sweepOrphanDirectories([linuxSecretRoot]);
+      keychain = new LinuxPortalKeychain({
+        identity: DISTRIBUTION_CHANNEL_CONFIG[distributionChannel].bundleId,
+        root: linuxSecretRoot,
+        provideSecret: linuxPortalSecretProvider({
+          executable: linuxSecretPortalPath(nativeHostLayout),
+          tokenPath: path.join(paths.storage.config, "secret-portal-token"),
+        }),
+      });
     } else {
       throw new Error("persistent secret provider is unavailable");
     }
@@ -760,7 +777,8 @@ if (primaryInstance) void app.whenReady().then(async () => {
   const sockets = buildSocketManager();
   appUpdaterController = new AppUpdater({
     currentVersion: HOST_VERSION,
-    capable: distribution.automaticUpdates,
+    capable: nativeApplicationUpdates,
+    externallyManaged: linuxFlatpak,
     target: appUpdateTarget(process.platform, process.arch),
     nativeUpdater: {
       setFeedURL: (options) => autoUpdater.setFeedURL(options),
@@ -1125,7 +1143,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
         !clientRuntime.active
         || clientRuntime.isDownloading
         || !periodicCheckDue({
-          capable: distribution.automaticUpdates,
+          capable: nativeApplicationUpdates,
           autoCheckUpdates: current.autoCheckUpdates,
           activeSockets: sockets.size(),
           lastUpdateCheckAt: current.lastUpdateCheckAt,

@@ -69,6 +69,7 @@ export function cacheSummary(info: CacheInfo): string {
 
 export function updateStatus(update: AppUpdateState): { title: string; detail: string } {
   switch (update.phase) {
+    case "managed": return { title: "Application updates", detail: "Updates are installed by your software center." };
     case "checking": return { title: "Checking for updates…", detail: `Installed version ${update.currentVersion}` };
     case "up-to-date": return { title: "Guild Wars Reforged is up to date", detail: `Version ${update.currentVersion}` };
     case "downloading": return { title: `Downloading version ${update.latestVersion}…`, detail: `Installed version ${update.currentVersion}` };

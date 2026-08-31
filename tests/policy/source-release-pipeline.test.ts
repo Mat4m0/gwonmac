@@ -129,7 +129,9 @@ test("the host has one native automatic application replacement path", () => {
   assert.match(main, /import \{[\s\S]{0,80}\bapp,[\s\S]{0,80}\bautoUpdater,/);
   assert.match(main, /new AppUpdater/);
   assert.match(main, /packagedDistributionChannel\(\)/);
-  assert.match(main, /capable: distribution\.automaticUpdates/);
+  assert.match(main, /const nativeApplicationUpdates = distribution\.automaticUpdates && !linuxFlatpak/);
+  assert.match(main, /capable: nativeApplicationUpdates/);
+  assert.match(main, /externallyManaged: linuxFlatpak/);
   assert.match(main, /autoUpdater\.quitAndInstall\(\)/);
   // Startup, client-ready events, and the periodic tick share one scheduler.
   // That scheduler owns the audited due-time and client-readiness gates, so a
@@ -180,7 +182,7 @@ test("distribution channels use preflighted signing and a scoped marker", () => 
   assert.match(forge, /distribution-channel\.json/);
   assert.match(
     forge,
-    /\(platform === "darwin" \|\| platform === "win32"\)[\s\S]*packageMode\.kind === "signed"/,
+    /\(platform === "darwin" \|\| platform === "win32" \|\| platform === "linux"\)[\s\S]*packageMode\.kind === "signed"/,
   );
   assert.doesNotMatch(forge, /official-update\.json|GW_OFFICIAL_RELEASE/);
   assert.match(forge, /appBundleId: channelConfig\.bundleId/);

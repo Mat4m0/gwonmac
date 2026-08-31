@@ -23,6 +23,22 @@ describe("launcher update settings", () => {
     expect(wrapper.text()).toContain("Guild Wars game files update separately");
   });
 
+  it("leaves Flatpak application updates to the software center", () => {
+    const wrapper = mount(GeneralUpdateSettings, {
+      props: {
+        settings: fixtureSnapshot.settings,
+        update: { phase: "managed", currentVersion: "2026.8.10" },
+        save: noOp,
+        check: noOp,
+        restart: noOp,
+        openReleases: noOp,
+      },
+    });
+    expect(wrapper.text()).toContain("installed by your software center");
+    expect(wrapper.text()).not.toContain("Automatically update this launcher");
+    expect(wrapper.find("button").exists()).toBe(false);
+  });
+
   it("opens Releases instead of looping a manual Stable return through Check now", async () => {
     const openReleases = vi.fn(noOp);
     const check = vi.fn(noOp);

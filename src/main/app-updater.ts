@@ -46,6 +46,7 @@ interface NativeUpdater {
 export interface AppUpdaterOptions {
   currentVersion: string;
   capable: boolean;
+  externallyManaged?: boolean;
   target: AppUpdateTarget | null;
   nativeUpdater: NativeUpdater;
   fetch?: typeof fetch;
@@ -78,10 +79,9 @@ export class AppUpdater {
       ?? ((input, init) => globalThis.fetch(input, init));
     this.now = options.now ?? (() => Date.now());
     this.timeoutMs = options.timeoutMs ?? TIMEOUT_MS;
-    this.state = {
-      phase: "idle",
-      currentVersion: options.currentVersion,
-    };
+    this.state = options.externallyManaged
+      ? { phase: "managed", currentVersion: options.currentVersion }
+      : { phase: "idle", currentVersion: options.currentVersion };
   }
 
   getState(): AppUpdateState {
@@ -103,6 +103,7 @@ export class AppUpdater {
   }
 
   check(track: UpdateTrack): Promise<void> {
+    if (this.state.phase === "managed") return Promise.resolve();
     if (
       this.inFlight
       || this.state.phase === "downloading"
@@ -316,9 +317,10 @@ export class AppUpdater {
   }
 
   private lastCheckedAt(): string | undefined {
-    return "checkedAt" in this.state
-      ? this.state.checkedAt
-      : this.state.lastCheckedAt;
+    if ("checkedAt" in this.state) return this.state.checkedAt;
+    return "lastCheckedAt" in this.state
+      ? this.state.lastCheckedAt
+      : undefined;
   }
 
   private fail(

@@ -15,6 +15,12 @@ export function applicationUpdatePresentation(
   update: AppUpdateState,
 ): ApplicationUpdatePresentation {
   switch (update.phase) {
+    case "managed":
+      return {
+        title: "Launcher updates",
+        detail: `Version ${update.currentVersion}. Updates are installed by your software center.`,
+        action: "none",
+      };
     case "checking":
       return {
         title: "Checking for launcher updates…",

@@ -103,7 +103,7 @@ const config: ForgeConfig = {
     // `.node` addon cannot be dlopen'd from it, and a helper cannot be spawned
     // from it.
     asar: {
-      unpack: "**/build/native/{host.node,windows-host.node,gw-dat-decode,gw-dat-decode.exe}",
+      unpack: "**/build/native/{host.node,windows-host.node,gw-secret-portal,gw-dat-decode,gw-dat-decode.exe}",
     },
     name: channelConfig.productName,
     executableName: channelConfig.productName,
