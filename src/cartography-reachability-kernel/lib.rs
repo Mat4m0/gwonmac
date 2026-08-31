@@ -48,6 +48,10 @@ const DOORWAYS: u32 = QUEUE_PLANES + MAX_TRAPS * 4;
 const DOORWAY_BYTES: u32 = 12;
 const VISUAL_BITS: u32 = DOORWAYS + MAX_DOORWAYS * DOORWAY_BYTES;
 const VISUAL_WORDS: u32 = MAX_VISUAL_RASTER_CELLS / 32;
+// Before the terrain raster overwrites this scratch, its two equal halves hold
+// reachable ground and all navmesh ground at continent-cell resolution.
+const REACHABLE_CELL_BITS: u32 = VISUAL_BITS;
+const NAVMESH_CELL_BITS: u32 = REACHABLE_CELL_BITS + CELL_WORDS * 4;
 const REGION_BYTES: u32 = VISUAL_BITS + VISUAL_WORDS * 4;
 
 const GAME_CONTEXT_SLOT: u32 = 6;
@@ -693,63 +697,134 @@ fn clipped_area(values: [f32; 6], left: f32, bottom: f32, right: f32, top: f32) 
     twice.abs() * 0.5
 }
 
+unsafe fn rasterize_trap_cells(
+    region: u32,
+    bits: u32,
+    values: [f32; 6],
+    anchor_x: f32,
+    anchor_y: f32,
+    width: u32,
+    height: u32,
+) -> Result<u32, u32> {
+    let map_x = |game_x: f32| anchor_x + game_x / GAME_UNITS_PER_MAP_UNIT;
+    let map_y = |game_y: f32| anchor_y - game_y / GAME_UNITS_PER_MAP_UNIT;
+    let min_x = map_x(values[0]).min(map_x(values[1])).min(map_x(values[3])).min(map_x(values[4]));
+    let max_x = map_x(values[0]).max(map_x(values[1])).max(map_x(values[3])).max(map_x(values[4]));
+    let min_y = map_y(values[2]).min(map_y(values[5]));
+    let max_y = map_y(values[2]).max(map_y(values[5]));
+    let first_x = floor_i32(min_x / MAP_UNITS_PER_CELL).ok_or(STATUS_UNAVAILABLE)?;
+    let last_x = floor_i32((max_x - 1e-4) / MAP_UNITS_PER_CELL).ok_or(STATUS_UNAVAILABLE)?;
+    let first_y = floor_i32(min_y / MAP_UNITS_PER_CELL).ok_or(STATUS_UNAVAILABLE)?;
+    let last_y = floor_i32((max_y - 1e-4) / MAP_UNITS_PER_CELL).ok_or(STATUS_UNAVAILABLE)?;
+    let mut added = 0_u32;
+    for cell_y in first_y..=last_y {
+        for cell_x in first_x..=last_x {
+            if cell_x < 0 || cell_y < 0 || cell_x >= width as i32 || cell_y >= height as i32 {
+                continue;
+            }
+            let game_left = (cell_x as f32 * MAP_UNITS_PER_CELL - anchor_x) * GAME_UNITS_PER_MAP_UNIT;
+            let game_right = game_left + GAME_UNITS_PER_CELL;
+            let game_top = (anchor_y - cell_y as f32 * MAP_UNITS_PER_CELL) * GAME_UNITS_PER_MAP_UNIT;
+            let game_bottom = game_top - GAME_UNITS_PER_CELL;
+            if clipped_area(values, game_left, game_bottom, game_right, game_top) <= 1e-4 {
+                continue;
+            }
+            let index = cell_y as u32 * width + cell_x as u32;
+            if !unsafe { bit(region, bits, index).ok_or(STATUS_UNAVAILABLE)? } {
+                unsafe { set_bit(region, bits, index).ok_or(STATUS_UNAVAILABLE)? };
+                added = added.checked_add(1).ok_or(STATUS_LIMIT)?;
+            }
+        }
+    }
+    Ok(added)
+}
+
+fn cell_center_in_bounds(
+    cell_x: i32,
+    cell_y: i32,
+    min_x: f32,
+    min_y: f32,
+    max_x: f32,
+    max_y: f32,
+) -> bool {
+    let center_x = (cell_x as f32 + 0.5) * MAP_UNITS_PER_CELL;
+    let center_y = (cell_y as f32 + 0.5) * MAP_UNITS_PER_CELL;
+    center_x >= min_x && center_x < max_x && center_y >= min_y && center_y < max_y
+}
+
+unsafe fn any_cell_in_ring(
+    region: u32,
+    bits: u32,
+    width: u32,
+    height: u32,
+    center_x: i32,
+    center_y: i32,
+    radius: i32,
+) -> Result<bool, u32> {
+    for dy in -radius..=radius {
+        for dx in -radius..=radius {
+            let x = center_x + dx;
+            let y = center_y + dy;
+            if x < 0 || y < 0 || x >= width as i32 || y >= height as i32 {
+                continue;
+            }
+            if unsafe { bit(region, bits, y as u32 * width + x as u32) }
+                .ok_or(STATUS_UNAVAILABLE)?
+            {
+                return Ok(true);
+            }
+        }
+    }
+    Ok(false)
+}
+
 unsafe fn rasterize(
     region: u32,
+    planes: &[Plane; MAX_PLANES],
+    plane_count: u32,
     tail: u32,
     anchor_x: f32,
     anchor_y: f32,
     width: u32,
     height: u32,
+    map_min_x: f32,
+    map_min_y: f32,
+    map_max_x: f32,
+    map_max_y: f32,
     reveal_radius: u32,
 ) -> Result<u32, u32> {
     let cells = width.checked_mul(height).ok_or(STATUS_INVALID_INPUT)?;
     let words = cells.div_ceil(32);
-    unsafe { clear_words(region, CELL_BITS, CELL_WORDS) };
+    unsafe { clear_words(region, REACHABLE_CELL_BITS, CELL_WORDS) };
     let mut ground_cells = 0_u32;
     for queue_index in 0..tail {
         let trap = unsafe { u32_at(add(region, QUEUE_POINTERS + queue_index * 4).ok_or(STATUS_LIMIT)?).ok_or(STATUS_UNAVAILABLE)? };
         let values = unsafe { trap_values(trap).ok_or(STATUS_UNAVAILABLE)? };
-        let map_x = |game_x: f32| anchor_x + game_x / GAME_UNITS_PER_MAP_UNIT;
-        let map_y = |game_y: f32| anchor_y - game_y / GAME_UNITS_PER_MAP_UNIT;
-        let min_x = map_x(values[0]).min(map_x(values[1])).min(map_x(values[3])).min(map_x(values[4]));
-        let max_x = map_x(values[0]).max(map_x(values[1])).max(map_x(values[3])).max(map_x(values[4]));
-        let min_y = map_y(values[2]).min(map_y(values[5]));
-        let max_y = map_y(values[2]).max(map_y(values[5]));
-        let first_x = floor_i32(min_x / MAP_UNITS_PER_CELL).ok_or(STATUS_UNAVAILABLE)?;
-        let last_x = floor_i32((max_x - 1e-4) / MAP_UNITS_PER_CELL).ok_or(STATUS_UNAVAILABLE)?;
-        let first_y = floor_i32(min_y / MAP_UNITS_PER_CELL).ok_or(STATUS_UNAVAILABLE)?;
-        let last_y = floor_i32((max_y - 1e-4) / MAP_UNITS_PER_CELL).ok_or(STATUS_UNAVAILABLE)?;
-        for cell_y in first_y..=last_y {
-            for cell_x in first_x..=last_x {
-                if cell_x < 0 || cell_y < 0 || cell_x >= width as i32 || cell_y >= height as i32 {
-                    continue;
-                }
-                let game_left = (cell_x as f32 * MAP_UNITS_PER_CELL - anchor_x) * GAME_UNITS_PER_MAP_UNIT;
-                let game_right = game_left + GAME_UNITS_PER_CELL;
-                let game_top = (anchor_y - cell_y as f32 * MAP_UNITS_PER_CELL) * GAME_UNITS_PER_MAP_UNIT;
-                let game_bottom = game_top - GAME_UNITS_PER_CELL;
-                if clipped_area(values, game_left, game_bottom, game_right, game_top) <= 1e-4 {
-                    continue;
-                }
-                let index = cell_y as u32 * width + cell_x as u32;
-                if !unsafe { bit(region, CELL_BITS, index).ok_or(STATUS_UNAVAILABLE)? } {
-                    unsafe { set_bit(region, CELL_BITS, index).ok_or(STATUS_UNAVAILABLE)? };
-                    ground_cells += 1;
-                }
-            }
+        let added = unsafe {
+            rasterize_trap_cells(
+                region, REACHABLE_CELL_BITS, values, anchor_x, anchor_y, width, height,
+            )?
+        };
+        ground_cells = ground_cells.checked_add(added).ok_or(STATUS_LIMIT)?;
+    }
+
+    unsafe { clear_words(region, NAVMESH_CELL_BITS, CELL_WORDS) };
+    for plane_index in 0..plane_count {
+        let plane = unsafe { *planes.get_unchecked(plane_index as usize) };
+        for trap_index in 0..plane.trap_count {
+            let trap = indexed(plane.traps, trap_index, TRAP_BYTES).ok_or(STATUS_LIMIT)?;
+            let values = unsafe { trap_values(trap).ok_or(STATUS_UNAVAILABLE)? };
+            unsafe {
+                rasterize_trap_cells(
+                    region, NAVMESH_CELL_BITS, values, anchor_x, anchor_y, width, height,
+                )?
+            };
         }
     }
-    // VISITED_BITS and QUEUE_POINTERS own the cached connected component and
-    // must survive later classifications. VISUAL_BITS is large enough for the
-    // continent-cell scratch and is cleared by rasterize_terrain immediately
-    // after this dilation pass.
-    for word in 0..words {
-        let value = unsafe { u32_at(add(region, CELL_BITS + word * 4).ok_or(STATUS_LIMIT)?).ok_or(STATUS_UNAVAILABLE)? };
-        unsafe { store_u32(add(region, VISUAL_BITS + word * 4).ok_or(STATUS_LIMIT)?, value) };
-    }
+
     unsafe { clear_words(region, CELL_BITS, words) };
     for index in 0..cells {
-        if !unsafe { bit(region, VISUAL_BITS, index).ok_or(STATUS_UNAVAILABLE)? } {
+        if !unsafe { bit(region, REACHABLE_CELL_BITS, index).ok_or(STATUS_UNAVAILABLE)? } {
             continue;
         }
         let x = index % width;
@@ -759,12 +834,36 @@ unsafe fn rasterize(
             for dx in -radius..=radius {
                 let target_x = x as i32 + dx;
                 let target_y = y as i32 + dy;
-                if target_x >= 0 && target_y >= 0 && target_x < width as i32 && target_y < height as i32 {
-                    unsafe {
-                        set_bit(region, CELL_BITS, target_y as u32 * width + target_x as u32)
-                            .ok_or(STATUS_UNAVAILABLE)?
-                    };
+                if target_x < 0 || target_y < 0
+                    || target_x >= width as i32 || target_y >= height as i32
+                {
+                    continue;
                 }
+                let distance = dx.abs().max(dy.abs());
+                let within_bounds = if distance <= 1 {
+                    cell_center_in_bounds(
+                        target_x, target_y,
+                        map_min_x - MAP_UNITS_PER_CELL,
+                        map_min_y - MAP_UNITS_PER_CELL,
+                        map_max_x + MAP_UNITS_PER_CELL,
+                        map_max_y + MAP_UNITS_PER_CELL,
+                    )
+                } else {
+                    cell_center_in_bounds(
+                        target_x, target_y, map_min_x, map_min_y, map_max_x, map_max_y,
+                    ) && unsafe {
+                        any_cell_in_ring(
+                            region, NAVMESH_CELL_BITS, width, height, target_x, target_y, 1,
+                        )?
+                    }
+                };
+                if !within_bounds {
+                    continue;
+                }
+                unsafe {
+                    set_bit(region, CELL_BITS, target_y as u32 * width + target_x as u32)
+                        .ok_or(STATUS_UNAVAILABLE)?
+                };
             }
         }
     }
@@ -1061,7 +1160,21 @@ unsafe fn classify(
     };
     unsafe { clear_words(region, CELL_BITS, CELL_WORDS) };
     let ground_cells = unsafe {
-        rasterize(region, tail, anchor_x, anchor_y, width, height, reveal_radius)?
+        rasterize(
+            region,
+            &planes,
+            context.map_count,
+            tail,
+            anchor_x,
+            anchor_y,
+            width,
+            height,
+            map_min_x,
+            map_min_y,
+            map_max_x,
+            map_max_y,
+            reveal_radius,
+        )?
     };
     let (visual_width, visual_height, visual_map_units_per_pixel) = unsafe {
         rasterize_terrain(

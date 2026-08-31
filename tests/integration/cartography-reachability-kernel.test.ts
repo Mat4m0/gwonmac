@@ -281,13 +281,37 @@ describe("Cartography reachability kernel", () => {
     assert.equal(terrainBit(144, 80), true);
   });
 
-  it("expands Bird's Eye to 7x7 without joining a disconnected component", async () => {
+  it("keeps normal reveal credit within one cell of the map boundary", async () => {
+    const kernel = await createKernel();
+    assert.equal(
+      kernel.classifyShape(256, 64, 1, [181 * 32, 20 * 32, 192 * 32, 36 * 32]),
+      1,
+    );
+    const words = kernel.words();
+    assert.equal(bit(words, 180, 25), true);
+    assert.equal(bit(words, 179, 25), false);
+  });
+
+  it("requires nearby navmesh for the outer Bird's Eye reveal rings", async () => {
     const kernel = await createKernel();
     assert.equal(kernel.classify(3), 1);
+    assert.equal(bit(kernel.words(), 177, 22), false);
+
+    trap(kernel.view, 2, 177, 22);
+    assert.equal(kernel.classify(3), 1);
+    assert.equal(bit(kernel.words(), 177, 22), true);
+  });
+
+  it("keeps the outer Bird's Eye rings inside the strict map boundary", async () => {
+    const kernel = await createKernel();
+    trap(kernel.view, 2, 178, 25);
+    assert.equal(
+      kernel.classifyShape(256, 64, 3, [181 * 32, 20 * 32, 192 * 32, 36 * 32]),
+      1,
+    );
     const words = kernel.words();
-    assert.equal(bit(words, 177, 22), true);
-    assert.equal(bit(words, 184, 28), true);
-    assert.equal(bit(words, 185, 25), false);
+    assert.equal(bit(words, 180, 25), true);
+    assert.equal(bit(words, 178, 25), false);
   });
 
   it("crosses valid paired portals but rejects closed and blocked destinations", async () => {
