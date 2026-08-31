@@ -21,6 +21,7 @@ import test from "node:test";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import type {
+  CartographyEvidenceCapture,
   GwNativeApi,
   RendererSettingsPatch,
   RendererCommand,
@@ -164,6 +165,16 @@ function call(api: GwNativeApi, dotted: string): Capability {
 const PACKET = new Uint8Array([1, 2, 3, 4]);
 const PROFILE_ID = "00000000-0000-4000-8000-000000000001";
 const RENDERER_SETTINGS_PATCH = { renderScale: 2 } satisfies RendererSettingsPatch;
+const CARTOGRAPHY_EVIDENCE_CAPTURE = {
+  source: {
+    layoutId: null,
+    gridRevision: 1,
+    toolboxSha256: "a".repeat(64),
+    kernelSha256: null,
+  },
+  continent: { status: "unavailable", reason: "not-observed" },
+  currentInstance: null,
+} satisfies CartographyEvidenceCapture;
 
 /** A request/response capability, with the arguments a caller really passes. */
 interface Invocation {
@@ -394,6 +405,11 @@ const INVOCATIONS: Invocation[] = [
     path: "diagnostics.setProfile",
     args: ["official-baseline"],
     channel: IPC.diagnosticsProfileSet,
+  },
+  {
+    path: "cartography.exportEvidence",
+    args: [CARTOGRAPHY_EVIDENCE_CAPTURE],
+    channel: IPC.cartographyEvidenceExport,
   },
   { path: "app.openExternal", args: ["bugReport"], channel: IPC.appOpenExternal },
   { path: "app.reveal", args: ["gameData"], channel: IPC.appRevealPath },
