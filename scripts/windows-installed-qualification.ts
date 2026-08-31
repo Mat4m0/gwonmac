@@ -272,15 +272,6 @@ try {
     installedExecutable,
     qualificationArguments,
   );
-  const instrumentedArguments = [
-    ...qualificationArguments,
-    // CDP qualification pipes the GUI process' output into this harness.
-    // Electron's built-in Windows Crashpad process cannot inherit that
-    // test-only process shape reliably. The detached launch above proves the
-    // ordinary production path before renderer instrumentation begins.
-    "--disable-crash-reporter",
-  ];
-
   running = await launchPackagedApp({
     appPath: packageRoot,
     executablePath: installedExecutable,
@@ -292,7 +283,11 @@ try {
     // mask launcher, profile, storage, and uninstall behavior. The preceding
     // launch already proves ordinary desktop startup; CDP is test-only
     // renderer instrumentation.
-    arguments: instrumentedArguments,
+    arguments: qualificationArguments,
+    // Keep the installed GUI process in the same detached, pipe-free shape as
+    // an Explorer launch. CDP connects through DevToolsActivePort and does not
+    // need to change the process' Windows console or Crashpad inheritance.
+    desktopProcessShape: true,
     environment: { ELECTRON_ENABLE_LOGGING: "1" },
     useDefaultUserData: true,
   });
@@ -431,6 +426,7 @@ try {
     productName: release.productName,
     userData: storage.sessions,
     arguments: signedQualification ? [] : ["--gw-volatile-secrets"],
+    desktopProcessShape: true,
     useDefaultUserData: true,
   });
   const restartedLauncher = running.launcherPage;
@@ -479,6 +475,7 @@ try {
       executablePath: installedExecutable,
       productName: release.productName,
       userData: storage.sessions,
+      desktopProcessShape: true,
       useDefaultUserData: true,
     });
     const rollbackLauncher = running.launcherPage;

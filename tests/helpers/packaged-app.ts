@@ -26,6 +26,8 @@ export interface PackagedAppLaunch {
   readonly arguments?: readonly string[];
   /** Use the package's native platform roots instead of a user-data override. */
   readonly useDefaultUserData?: boolean;
+  /** Launch as an OS desktop process while CDP connects through its port file. */
+  readonly desktopProcessShape?: boolean;
   /** Open the first active profile when the packaged app starts on the launcher. */
   readonly openFirstProfile?: boolean;
 }
@@ -160,7 +162,11 @@ export async function launchPackagedApp(
         GW_BACKGROUND_LAUNCH: "1",
         ...options.environment,
       },
-      stdio: ["ignore", "pipe", "pipe"],
+      detached: options.desktopProcessShape === true,
+      stdio: options.desktopProcessShape === true
+        ? "ignore"
+        : ["ignore", "pipe", "pipe"],
+      windowsHide: options.desktopProcessShape === true,
     },
   );
   child.stdout?.on("data", capture);

@@ -9,6 +9,10 @@ const script = readFileSync(
   path.join(root, "scripts/windows-installed-qualification.ts"),
   "utf8",
 );
+const packagedApp = readFileSync(
+  path.join(root, "tests/helpers/packaged-app.ts"),
+  "utf8",
+);
 const workflow = readFileSync(
   path.join(root, ".github/workflows/portable-native-build.yml"),
   "utf8",
@@ -27,11 +31,10 @@ test("installed qualification is restricted to a disposable hosted runner", () =
   assert.match(script, /useDefaultUserData: true/u);
   assert.match(script, /"--disable-gpu"/u);
   assert.match(script, /proveNormalWindowsStartup/u);
-  assert.match(
-    script,
-    /const instrumentedArguments = \[[\s\S]*"--disable-crash-reporter"[\s\S]*arguments: instrumentedArguments/u,
-  );
-  assert.doesNotMatch(script, /crashpad-handler/u);
+  assert.match(script, /desktopProcessShape: true/u);
+  assert.match(packagedApp, /detached: options\.desktopProcessShape === true/u);
+  assert.match(packagedApp, /\? "ignore"[\s\S]*windowsHide: options\.desktopProcessShape === true/u);
+  assert.doesNotMatch(script, /crashpad-handler|disable-crash-reporter/u);
   assert.doesNotMatch(script, /--no-sandbox|--disable-setuid-sandbox/u);
 });
 
