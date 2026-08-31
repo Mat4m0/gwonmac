@@ -135,7 +135,7 @@ test("minimum window and 200% zoom keep primary launcher controls reachable", as
     await expectCurrentContentFitsHorizontally(fixture);
 
     await fixture.page.getByRole("button", { name: "Settings" }).click();
-    for (const section of ["General", "Content", "Tools", "Maps", "Game files", "Advanced"]) {
+    for (const section of ["Updates", "Content", "Advanced", "Game settings", "Tools", "Maps", "Game files"]) {
       await fixture.page.getByRole("button", { name: section, exact: true }).click();
       await expect(fixture.page.getByRole("heading", { name: section, exact: true })).toBeVisible();
       await expectCurrentContentFitsHorizontally(fixture);

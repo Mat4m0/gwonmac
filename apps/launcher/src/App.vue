@@ -35,13 +35,21 @@ import type { LauncherRoute, SettingsRoute } from "./routes";
 
 const route = ref<LauncherRoute>("home");
 const settingsRoute = ref<SettingsRoute>("general");
-const settingsSections: readonly { readonly id: SettingsRoute; readonly label: string }[] = [
-  { id: "general", label: "General" },
-  { id: "content", label: "Content" },
-  { id: "tools", label: "Tools" },
-  { id: "maps", label: "Maps" },
-  { id: "game-files", label: "Game files" },
-  { id: "advanced", label: "Advanced" },
+const settingsGroups: readonly {
+  readonly label: string;
+  readonly items: readonly { readonly id: SettingsRoute; readonly label: string }[];
+}[] = [
+  { label: "Launcher", items: [
+    { id: "general", label: "Updates" },
+    { id: "content", label: "Content" },
+    { id: "advanced", label: "Advanced" },
+  ] },
+  { label: "Game", items: [
+    { id: "game", label: "Game settings" },
+    { id: "tools", label: "Tools" },
+    { id: "maps", label: "Maps" },
+    { id: "game-files", label: "Game files" },
+  ] },
 ];
 const snapshot = ref<LauncherSnapshot>(fixtureSnapshotFor(window.location.search));
 const selected = ref<ProfileId[]>([...snapshot.value.selectedProfileIds]);
@@ -367,7 +375,13 @@ async function replaceToolShortcut() {
       <FeedbackView v-else-if="route === 'feedback'" :availability="snapshot.contentAvailability.feedback" @external="openExternal" />
 
       <section v-else class="settings-page">
-        <aside aria-label="Settings sections"><h2>Settings</h2><button v-for="item in settingsSections" :key="item.id" :aria-current="settingsRoute === item.id ? 'page' : undefined" :class="{ active: settingsRoute === item.id }" @click="selectSettings(item.id)">{{ item.label }}</button></aside>
+        <aside aria-label="Settings sections">
+          <h2>Settings</h2>
+          <div v-for="group in settingsGroups" :key="group.label" class="settings-nav-group" role="group" :aria-label="group.label">
+            <h3>{{ group.label }}</h3>
+            <button v-for="item in group.items" :key="item.id" :aria-current="settingsRoute === item.id ? 'page' : undefined" :class="{ active: settingsRoute === item.id }" @click="selectSettings(item.id)">{{ item.label }}</button>
+          </div>
+        </aside>
         <div class="settings-content">
           <GeneralUpdateSettings
             v-if="settingsRoute === 'general'"
@@ -379,6 +393,13 @@ async function replaceToolShortcut() {
             :open-releases="() => openExternal('releases')"
           />
           <template v-else-if="settingsRoute === 'content'"><h1>Content</h1><div class="setting-group"><label><span><strong>News</strong><small>Official Guild Wars and Reforged updates.</small></span><input type="checkbox" :checked="snapshot.preferences.content.news" @change="updateContent({ news: checked($event) })" /></label><label><span><strong>Dailies</strong><small>Daily activities and the weekly schedule.</small></span><input type="checkbox" :checked="snapshot.preferences.content.dailies" @change="updateContent({ dailies: checked($event) })" /></label><label v-if="snapshot.preferences.content.news && snapshot.preferences.content.dailies"><span><strong>First Home tab</strong></span><select :value="snapshot.preferences.content.first" @change="updateContent({ first: ($event.currentTarget as HTMLSelectElement).value as 'news' | 'dailies' })"><option value="news">News</option><option value="dailies">Dailies</option></select></label><label v-if="snapshot.preferences.content.news"><span><strong>Official Guild Wars news</strong></span><input type="checkbox" :checked="snapshot.preferences.content.officialNews" @change="updateContent({ officialNews: checked($event) })" /></label><label v-if="snapshot.preferences.content.news"><span><strong>Guild Wars Reforged news</strong></span><input type="checkbox" :checked="snapshot.preferences.content.reforgedNews" @change="updateContent({ reforgedNews: checked($event) })" /></label></div></template>
+          <template v-else-if="settingsRoute === 'game'">
+            <h1>Game settings</h1>
+            <div class="setting-group">
+              <label><span><strong>Render quality</strong><small>Higher quality uses more graphics power.</small></span><select :value="snapshot.settings.renderScale" @change="updateLauncherSettings({ renderScale: Number(($event.currentTarget as HTMLSelectElement).value) as 1 | 1.5 | 2 })"><option :value="1">Standard</option><option :value="1.5">High</option><option :value="2">Very high</option></select></label>
+              <label><span><strong>Extended memory</strong><small>Allow longer sessions to use more memory.</small></span><input type="checkbox" :checked="snapshot.settings.extendedMemoryEnabled" @change="updateLauncherSettings({ extendedMemoryEnabled: checked($event) })" /></label>
+            </div>
+          </template>
           <template v-else-if="settingsRoute === 'tools'">
             <h1>Tools</h1><p>Tools apply to every account.</p>
             <div class="setting-group">
@@ -406,8 +427,6 @@ async function replaceToolShortcut() {
           <template v-else>
             <h1>Advanced</h1>
             <div class="setting-group">
-              <label><span><strong>Render quality</strong><small>Higher quality uses more graphics power.</small></span><select :value="snapshot.settings.renderScale" @change="updateLauncherSettings({ renderScale: Number(($event.currentTarget as HTMLSelectElement).value) as 1 | 1.5 | 2 })"><option :value="1">Standard</option><option :value="1.5">High</option><option :value="2">Very high</option></select></label>
-              <label><span><strong>Extended memory</strong><small>Allow longer sessions to use more memory.</small></span><input type="checkbox" :checked="snapshot.settings.extendedMemoryEnabled" @change="updateLauncherSettings({ extendedMemoryEnabled: checked($event) })" /></label>
               <label><span><strong>Diagnostics</strong><small>Collect more local troubleshooting data.</small></span><input type="checkbox" :checked="snapshot.settings.showDiagnostics" @change="updateLauncherSettings({ showDiagnostics: checked($event) })" /></label>
               <button class="secondary" @click="runAction('Logs could not be opened.', () => native?.external.revealLogs())"><FileText />Open logs</button>
               <button class="danger-button" @click="runAction('Launcher settings could not be reset.', () => native?.settings.reset())">Reset launcher settings</button>

@@ -34,7 +34,7 @@ describe("unified launcher shell", () => {
     const wrapper = mount(App);
     expect(wrapper.get("h1").text()).toContain("Wayfarer’s Reverie");
     await wrapper.get('button[aria-label="Settings"]').trigger("click");
-    expect(wrapper.get(".settings-content h1").text()).toBe("General");
+    expect(wrapper.get(".settings-content h1").text()).toBe("Updates");
     await wrapper.findAll("nav button")[1]!.trigger("click");
     expect(wrapper.get(".accounts-page h1").text()).toBe("Game windows");
     expect(wrapper.text()).toContain("Main account");
@@ -60,7 +60,7 @@ describe("unified launcher shell", () => {
   it("keeps Tool switches and shortcuts together", async () => {
     const wrapper = mount(App);
     await wrapper.get('button[aria-label="Settings"]').trigger("click");
-    await wrapper.findAll(".settings-page aside button")[2]!.trigger("click");
+    await wrapper.findAll(".settings-page aside button").find((button) => button.text() === "Tools")!.trigger("click");
     expect(wrapper.text()).toContain("Tools apply to every account");
     expect(wrapper.text()).toContain("Build Management");
     expect(wrapper.text()).toContain("⌘B");
@@ -118,7 +118,7 @@ describe("unified launcher shell", () => {
     const wrapper = mount(App);
     await flushPromises();
     await wrapper.get('button[aria-label="Settings"]').trigger("click");
-    await wrapper.findAll(".settings-page aside button")[2]!.trigger("click");
+    await wrapper.findAll(".settings-page aside button").find((button) => button.text() === "Tools")!.trigger("click");
     await wrapper.findAll(".tool-row .secondary")[0]!.trigger("click");
     await flushPromises();
     expect(wrapper.text()).toContain("already used by Quick Travel");
@@ -214,7 +214,7 @@ describe("unified launcher shell", () => {
     const wrapper = mount(App);
     await flushPromises();
     await wrapper.get('button[aria-label="Settings"]').trigger("click");
-    await wrapper.findAll(".settings-page aside button")[4]!.trigger("click");
+    await wrapper.findAll(".settings-page aside button").find((button) => button.text() === "Game files")!.trigger("click");
     await flushPromises();
     expect(info).toHaveBeenCalledOnce();
     expect(wrapper.text()).toContain("1.0 GB of 2.0 GB verified");
