@@ -88,6 +88,25 @@ async function installed(): Promise<boolean> {
   }
 }
 
+async function flatpakIsRunning(): Promise<boolean> {
+  const { stdout } = await execFileAsync(
+    "flatpak",
+    ["ps", "--columns=application"],
+    { encoding: "utf8" },
+  );
+  return stdout.split(/\r?\n/u).some((line) => line.trim() === applicationId);
+}
+
+async function waitForFlatpakExit(): Promise<void> {
+  const deadline = Date.now() + 15_000;
+  while (await flatpakIsRunning()) {
+    if (Date.now() >= deadline) {
+      throw new Error(`the installed Flatpak did not exit normally: ${applicationId}`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+}
+
 assert.equal(await installed(), true, "the signed Flatpak is not installed");
 assert.equal(
   existsSync(appRoot),
@@ -225,6 +244,7 @@ try {
   running = { ...running, page: secondGame };
   await closePackagedApp(running);
   running = null;
+  await waitForFlatpakExit();
 
   running = await launch();
   const restartedLauncher = running.launcherPage;
@@ -246,6 +266,7 @@ try {
   running = { ...running, page: restartedMain };
   await closePackagedApp(running);
   running = null;
+  await waitForFlatpakExit();
 
   await execFileAsync("flatpak", ["uninstall", "--user", "-y", applicationId]);
   assert.equal(await installed(), false);
