@@ -27,7 +27,7 @@ test("lets proven map knowledge replace a larger continent estimate", () => {
     currentRemaining: 2,
     rememberedKnown: 0,
     rememberedRemaining: 0,
-  }), { count: 2, actionable: true });
+  }), { count: 2, source: "current" });
   assert.equal(cartographyClusterPresentation({
     estimatedRemaining: 10,
     currentKnown: 8,
@@ -41,7 +41,7 @@ test("lets proven map knowledge replace a larger continent estimate", () => {
     currentRemaining: 0,
     rememberedKnown: 8,
     rememberedRemaining: 2,
-  }), { count: 2, actionable: false });
+  }), { count: 2, source: "remembered" });
   assert.equal(cartographyClusterPresentation({
     estimatedRemaining: 10,
     currentKnown: 0,
@@ -55,7 +55,7 @@ test("lets proven map knowledge replace a larger continent estimate", () => {
     currentRemaining: 0,
     rememberedKnown: 0,
     rememberedRemaining: 0,
-  }), { count: 12, actionable: false });
+  }), { count: 12, source: "estimate" });
 });
 
 const missionFrame: MissionMapFrameSpikeSnapshot = Object.freeze({

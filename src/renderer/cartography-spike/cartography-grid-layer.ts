@@ -29,7 +29,7 @@ export type CartographyProgressClusterSize = 1 | 4 | 16;
 
 export type CartographyClusterPresentation = Readonly<{
   count: number;
-  actionable: boolean;
+  source: "current" | "remembered" | "estimate";
 }>;
 
 /** Prefer exact live or remembered map knowledge over the continent estimate. */
@@ -43,15 +43,15 @@ export function cartographyClusterPresentation(input: Readonly<{
   if (input.estimatedRemaining === 0) return null;
   if (input.currentKnown > 0) {
     return input.currentRemaining > 0
-      ? Object.freeze({ count: input.currentRemaining, actionable: true })
+      ? Object.freeze({ count: input.currentRemaining, source: "current" as const })
       : null;
   }
   if (input.rememberedKnown > 0) {
     return input.rememberedRemaining > 0
-      ? Object.freeze({ count: input.rememberedRemaining, actionable: false })
+      ? Object.freeze({ count: input.rememberedRemaining, source: "remembered" as const })
       : null;
   }
-  return Object.freeze({ count: input.estimatedRemaining, actionable: false });
+  return Object.freeze({ count: input.estimatedRemaining, source: "estimate" as const });
 }
 
 /** Stable level of detail for one projected cartography cell. */
@@ -131,7 +131,7 @@ function drawClusterMarker(
   firstY: number,
   size: number,
   count: number,
-  actionable: boolean,
+  source: CartographyClusterPresentation["source"],
   actionableColor: string,
   casingColor: string,
   opacity: number,
@@ -156,19 +156,21 @@ function drawClusterMarker(
   context.fill();
   context.beginPath();
   context.arc(centerX, centerY, radius, 0, Math.PI * 2);
-  if (actionable) {
+  if (source === "current") {
     context.fillStyle = actionableColor;
     context.fill();
   } else {
-    context.strokeStyle = ESTIMATED_COLOR;
+    context.strokeStyle = source === "remembered" ? actionableColor : ESTIMATED_COLOR;
     context.lineWidth = 2;
     context.stroke();
   }
-  context.fillStyle = actionable ? casingColor : ESTIMATED_COLOR;
+  context.fillStyle = source === "current"
+    ? casingColor
+    : source === "remembered" ? actionableColor : ESTIMATED_COLOR;
   context.font = "600 11px system-ui, sans-serif";
   context.textAlign = "center";
   context.textBaseline = "middle";
-  context.fillText(String(count), centerX, centerY + 0.5);
+  context.fillText(source === "estimate" ? `≈${count}` : String(count), centerX, centerY + 0.5);
   context.restore();
 }
 
@@ -428,7 +430,7 @@ export function createCartographyGridLayer(parent: HTMLElement, id: string): Car
             groupY,
             groupSize,
             cluster.count,
-            cluster.actionable,
+            cluster.source,
             style.unseen.color,
             style.casingColor,
             Math.min(1, strength * 1.2),
