@@ -1,0 +1,58 @@
+# Compile the native package inputs on their real target toolchains. This is a
+# build proof only; installed runtime and distribution qualification stay in
+# their platform-specific release gates.
+name: Portable native build
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/portable-native-build.yml"
+      - "apps/**"
+      - "scripts/build.mjs"
+      - "src/**"
+      - "tests/integration/gw-dat-dimensions.test.ts"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "rust-toolchain.toml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2025, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@d15e628ca66d93ee5f352c71671a7bc6a97af5c9 # v6.0.8
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "24"
+          cache: pnpm
+      - name: Enable the x64 MSVC build environment
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@a102174a2b586eec2ea151a69e6fd14404a8ce7c # v1.13.0
+        with:
+          arch: x64
+      - name: Install the Linux native build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++ libglib2.0-dev
+      - name: Install the pinned Rust toolchain
+        run: rustup toolchain install
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Run the portable source and renderer gate
+        run: pnpm run check:portable
+      - name: Exercise the target decoder executable
+        run: >-
+          node --import ./scripts/ts-hook.mjs --test
+          tests/integration/gw-dat-dimensions.test.ts

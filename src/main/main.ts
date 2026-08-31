@@ -108,7 +108,7 @@ import {
   VolatileNativeKeychain,
   type NativeKeychain,
 } from "./core/native-keychain.js";
-import { loadNativeHost } from "./native-host.js";
+import { loadDarwinNativeHost } from "./native-host.js";
 import { installMacosCommandKeyUps } from "./macos-command-key-ups.js";
 import { recordMainInput } from './input-trace.js';
 import { cleanupLegacySecretFiles } from "./core/legacy-secret-cleanup.js";
@@ -500,30 +500,35 @@ if (primaryInstance) void app.whenReady().then(async () => {
       "Mat4m0/gwonmac · App icon artwork © ArenaNet LLC · QT Friz Quad © 1992 QualiType (SIL OFL 1.1) · Not affiliated with ArenaNet or NCSOFT.",
     website: EXTERNAL_URLS.github,
   });
-  const nativeHost = loadNativeHost({
+  const nativeHostLayout = {
     packaged: app.isPackaged,
     appPath: app.getAppPath(),
     resourcesPath: process.resourcesPath,
-  });
-  const stopCommandKeyUps = installMacosCommandKeyUps(nativeHost, {
-    focusedGameTarget() {
-      return windowRegistry.focusedGameWindow();
-    },
-    release(win, code) {
-      releaseWindowShortcutKey(win, code);
-      recordMainInput(win, {
-        source: 'appkit',
-        kind: 'native-key',
-        phase: 'up',
-        key: code.startsWith('Key') || code.startsWith('Digit')
-          ? 'printable'
-          : 'other',
-        repeat: false,
-        decision: 'normalized-release',
-      });
-      void sendRendererCommand(win, { type: "input.release", code });
-    },
-  });
+  };
+  const darwinNativeHost = process.platform === "darwin"
+    ? loadDarwinNativeHost(nativeHostLayout)
+    : null;
+  const stopCommandKeyUps = darwinNativeHost
+    ? installMacosCommandKeyUps(darwinNativeHost, {
+        focusedGameTarget() {
+          return windowRegistry.focusedGameWindow();
+        },
+        release(win, code) {
+          releaseWindowShortcutKey(win, code);
+          recordMainInput(win, {
+            source: 'appkit',
+            kind: 'native-key',
+            phase: 'up',
+            key: code.startsWith('Key') || code.startsWith('Digit')
+              ? 'printable'
+              : 'other',
+            repeat: false,
+            decision: 'normalized-release',
+          });
+          void sendRendererCommand(win, { type: "input.release", code });
+        },
+      })
+    : () => {};
   app.once("will-quit", () => stopCommandKeyUps());
   const paths = gamePaths();
   const legacySingleData = await hasReleasedSingleData(paths);
@@ -626,9 +631,15 @@ if (primaryInstance) void app.whenReady().then(async () => {
   if (adoptedStorage) {
     await prepareWindowState(SINGLE_DIAGNOSTIC_OWNER_ID, adoptedStorage.windowState);
   }
-  const keychain: NativeKeychain = persistentSecrets
-    ? nativeHost
-    : new VolatileNativeKeychain();
+  let keychain: NativeKeychain;
+  if (persistentSecrets) {
+    if (darwinNativeHost === null) {
+      throw new Error("persistent secret provider is unavailable");
+    }
+    keychain = darwinNativeHost;
+  } else {
+    keychain = new VolatileNativeKeychain();
+  }
   const expectedUserData = process.env.GW_EXPECT_USER_DATA;
   const profileMatches =
     !expectedUserData ||

@@ -1,5 +1,5 @@
 /**
- * Finding and loading gwonmac's one native macOS host addon.
+ * Finding and loading gwonmac's Darwin-only native host addon.
  *
  * A packaged build resolves it inside `app.asar.unpacked` because a `.node`
  * binary cannot load from within an archive. The boundary is shape-checked so
@@ -9,7 +9,7 @@ import { createRequire } from "node:module";
 import type { NativeKeychain } from "./core/native-keychain.js";
 import { unpackedPath, type BundleLayout } from "./core/paths.js";
 
-export interface NativeHost extends NativeKeychain {
+export interface NativeInputMonitor {
   /**
    * Observe app-local key releases owned by a Command chord. Returning true
    * consumes that release only while Command remains down, after the renderer
@@ -18,15 +18,17 @@ export interface NativeHost extends NativeKeychain {
   monitorCommandKeyUps(handler: (keyCode: number) => boolean): () => void;
 }
 
+export type DarwinNativeHost = NativeKeychain & NativeInputMonitor;
+
 export type NativeHostLayout = BundleLayout;
 
 export function nativeHostPath(layout: NativeHostLayout): string {
   return unpackedPath(layout, "build/native/host.node");
 }
 
-function isNativeHost(value: unknown): value is NativeHost {
+function isDarwinNativeHost(value: unknown): value is DarwinNativeHost {
   if (typeof value !== "object" || value === null) return false;
-  const candidate = value as Partial<Record<keyof NativeHost, unknown>>;
+  const candidate = value as Partial<Record<keyof DarwinNativeHost, unknown>>;
   return (
     typeof candidate.load === "function" &&
     typeof candidate.save === "function" &&
@@ -35,9 +37,11 @@ function isNativeHost(value: unknown): value is NativeHost {
   );
 }
 
-export function loadNativeHost(layout: NativeHostLayout): NativeHost {
+export function loadDarwinNativeHost(
+  layout: NativeHostLayout,
+): DarwinNativeHost {
   const loaded: unknown = createRequire(import.meta.url)(nativeHostPath(layout));
-  if (!isNativeHost(loaded)) {
+  if (!isDarwinNativeHost(loaded)) {
     throw new TypeError("native host module has an invalid shape");
   }
   return loaded;

@@ -8,6 +8,7 @@ import {
   documentDirectories,
   gamePaths,
   multiProfilePaths,
+  nativeExecutableName,
   unpackedPath,
 } from "../../src/main/core/paths.ts";
 import { parseProfileId } from "../../src/shared/multiple-accounts.ts";
@@ -151,6 +152,12 @@ describe("resolved profile paths", () => {
         `/App/Contents/Resources/app.asar.unpacked/${relative}`,
       );
     }
+  });
+
+  it("adds an executable suffix only on Windows", () => {
+    assert.equal(nativeExecutableName("gw-dat-decode", "darwin"), "gw-dat-decode");
+    assert.equal(nativeExecutableName("gw-dat-decode", "linux"), "gw-dat-decode");
+    assert.equal(nativeExecutableName("gw-dat-decode", "win32"), "gw-dat-decode.exe");
   });
 
   it("pins the diagnostics frame log name", () => {

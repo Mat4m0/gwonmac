@@ -3,7 +3,11 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { BUILD_STEPS } from "../../scripts/build.mjs";
+import {
+  BUILD_STEPS,
+  nativeBuildSteps,
+  packageManagerInvocation,
+} from "../../scripts/build.mjs";
 import {
   DISTRIBUTION_CHANNEL_CONFIG,
   DISTRIBUTION_CHANNELS,
@@ -105,21 +109,58 @@ test("the canonical build emits one host-only Node-API 8 addon", () => {
   );
 });
 
-// Two files are unpacked, and both are executable code that cannot run from
-// inside the archive: an addon cannot be dlopen'd from it and a helper cannot
-// be spawned from it. The pattern stays a literal pair rather than a directory
-// glob, so adding a third is an edit here as well as there.
-test("Forge unpacks only the two executables from ASAR", () => {
+test("Windows and Linux build the decoder without the Darwin host", () => {
+  const windows = nativeBuildSteps("win32", "x64");
+  const linux = nativeBuildSteps("linux", "x64");
+
+  assert.deepEqual(windows.map(([command]) => command), ["cl.exe"]);
+  assert.ok(windows[0]?.[1].includes("/Fe:build/native/gw-dat-decode.exe"));
+  assert.deepEqual(linux.map(([command]) => command), ["c++"]);
+  assert.deepEqual(linux[0]?.[1].slice(-2), [
+    "-o",
+    "build/native/gw-dat-decode",
+  ]);
+  for (const steps of [windows, linux]) {
+    assert.equal(
+      steps.some(([, args]) => args.includes("src/native/host/host.mm")),
+      false,
+    );
+  }
+});
+
+test("the build invokes pnpm through Node without shell parsing", () => {
+  assert.deepEqual(
+    packageManagerInvocation("win32", "C:\\pnpm\\pnpm.cjs", "node.exe"),
+    ["node.exe", ["C:\\pnpm\\pnpm.cjs"]],
+  );
+  assert.deepEqual(
+    packageManagerInvocation("linux", "/opt/pnpm/pnpm.cjs", "/usr/bin/node"),
+    ["/usr/bin/node", ["/opt/pnpm/pnpm.cjs"]],
+  );
+  assert.throws(() => packageManagerInvocation("win32", undefined));
+  assert.deepEqual(packageManagerInvocation("darwin", undefined), ["pnpm", []]);
+});
+
+test("the first target ports refuse unsupported CPU architectures", () => {
+  assert.throws(() => nativeBuildSteps("win32", "arm64"));
+  assert.throws(() => nativeBuildSteps("linux", "arm64"));
+});
+
+// Each package contains the decoder for its own platform. macOS also contains
+// the native host. Every listed file is executable code that cannot run inside
+// the archive, and the allowlist remains exact rather than opening a directory.
+test("Forge unpacks only the platform-native executables from ASAR", () => {
   const forge = read("forge.config.ts");
   const packageIgnore = read("scripts/package-ignore.ts");
   assert.match(
     forge,
-    /asar: \{ unpack: "\*\*\/build\/native\/\{host\.node,gw-dat-decode\}" \}/u,
+    /unpack: "\*\*\/build\/native\/\{host\.node,gw-dat-decode,gw-dat-decode\.exe\}"/u,
   );
   for (const kept of [
     /p === "\/build\/native"/u,
     /p === "\/build\/native\/host\.node"/u,
     /p === "\/build\/native\/gw-dat-decode"/u,
+    /p === "\/build\/native\/gw-dat-decode\.exe"/u,
   ]) {
     assert.match(packageIgnore, kept);
   }

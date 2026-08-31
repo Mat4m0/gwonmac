@@ -4,7 +4,7 @@
  * existing renderer command boundary.
  */
 import { physicalCodeForMacKeyCode } from "./core/macos-key-code.js";
-import type { NativeHost } from "./native-host.js";
+import type { NativeInputMonitor } from "./native-host.js";
 
 export interface MacosCommandKeyUpRouting<T> {
   focusedGameTarget(): T | null;
@@ -12,7 +12,7 @@ export interface MacosCommandKeyUpRouting<T> {
 }
 
 export function installMacosCommandKeyUps<T>(
-  nativeHost: Pick<NativeHost, "monitorCommandKeyUps">,
+  nativeHost: NativeInputMonitor,
   routing: MacosCommandKeyUpRouting<T>,
 ): () => void {
   return nativeHost.monitorCommandKeyUps((keyCode) => {

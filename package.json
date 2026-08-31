@@ -32,6 +32,7 @@
     "typecheck": "tsc --noEmit && tsc -p tsconfig.renderer.json --noEmit && tsc -p tsconfig.tests.json && pnpm --filter @gwonmac/tools-ui typecheck && pnpm --filter @gwonmac/launcher-ui typecheck",
     "lint": "eslint .",
     "check:links": "node --import ./scripts/ts-hook.mjs scripts/check-markdown-links.ts",
+    "check:portable": "pnpm typecheck && pnpm lint && pnpm check:links && pnpm tools:test && pnpm --filter @gwonmac/launcher-ui test",
     "test:unit": "node --import ./scripts/ts-hook.mjs --test --test-timeout=60000 tests/unit/*.ts",
     "test:client-artifact": "node --max-old-space-size=8192 --import ./scripts/ts-hook.mjs --test --test-concurrency=1 --test-timeout=60000 tests/client-artifact/*.ts",
     "test:integration": "node --import ./scripts/ts-hook.mjs --test --test-timeout=60000 tests/integration/*.ts",

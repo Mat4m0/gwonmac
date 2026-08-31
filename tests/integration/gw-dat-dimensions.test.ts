@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { test } from "node:test";
+import { nativeExecutableName } from "../../src/main/core/paths.js";
 
 const run = promisify(execFile);
 const root = process.cwd();
@@ -13,9 +14,12 @@ const MAX_COMPRESSED_BYTES = 1024 * 1024;
 
 test(
   "the archive decoder refuses oversized stdin without waiting for EOF",
-  { skip: process.platform !== "darwin" },
   async () => {
-    const decoder = spawn(path.join(root, "build/native/gw-dat-decode"), [], {
+    const decoder = spawn(path.join(
+      root,
+      "build/native",
+      nativeExecutableName("gw-dat-decode", process.platform),
+    ), [], {
       stdio: ["pipe", "ignore", "ignore"],
       windowsHide: true,
     });

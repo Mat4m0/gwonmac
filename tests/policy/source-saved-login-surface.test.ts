@@ -73,8 +73,11 @@ test("only provisioned distribution channels enable persistent secrets", () => {
   assert.match(profileStorage, /workspace\.legacyPrimaryProfileId/);
   assert.doesNotMatch(main, /accountWorkspace\.legacyPrimaryProfileId/);
   assert.match(main, /capable: distribution\.automaticUpdates/);
-  assert.match(main, /persistentSecrets\s*\? nativeHost/);
-  assert.match(main, /: new VolatileNativeKeychain\(\)/);
+  assert.match(
+    main,
+    /if \(persistentSecrets\) \{[\s\S]{0,180}darwinNativeHost === null[\s\S]{0,180}persistent secret provider is unavailable[\s\S]{0,120}keychain = darwinNativeHost/,
+  );
+  assert.match(main, /else \{\s*keychain = new VolatileNativeKeychain\(\)/);
   assert.doesNotMatch(shippedApplication, /use-mock-keychain/);
 });
 
