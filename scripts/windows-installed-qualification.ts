@@ -180,7 +180,11 @@ async function stopSquirrelFirstRun(executable: string): Promise<void> {
   // the exact disposable package we just installed.
   await delay(1_000);
   const command =
-    "$target=[IO.Path]::GetFullPath($args[0]); Get-CimInstance Win32_Process | Where-Object {$_.ExecutablePath -and [IO.Path]::GetFullPath($_.ExecutablePath) -eq $target}";
+    "$target=[IO.Path]::GetFullPath($env:GW_QUALIFICATION_EXECUTABLE); Get-CimInstance Win32_Process | Where-Object {$_.ExecutablePath -and [IO.Path]::GetFullPath($_.ExecutablePath) -eq $target}";
+  const environment = {
+    ...process.env,
+    GW_QUALIFICATION_EXECUTABLE: executable,
+  };
   const { stdout: stopped } = await execFileAsync(
     "powershell.exe",
     [
@@ -188,9 +192,8 @@ async function stopSquirrelFirstRun(executable: string): Promise<void> {
       "-NonInteractive",
       "-Command",
       `${command} | ForEach-Object {$_.ProcessId; Stop-Process -Id $_.ProcessId -Force}`,
-      executable,
     ],
-    { encoding: "utf8", timeout: 30_000, windowsHide: true },
+    { encoding: "utf8", env: environment, timeout: 30_000, windowsHide: true },
   );
   assert.notEqual(
     stopped.trim(),
@@ -200,8 +203,8 @@ async function stopSquirrelFirstRun(executable: string): Promise<void> {
   await delay(500);
   const { stdout } = await execFileAsync(
     "powershell.exe",
-    ["-NoProfile", "-NonInteractive", "-Command", `${command} | Select-Object -ExpandProperty ProcessId`, executable],
-    { encoding: "utf8", timeout: 30_000, windowsHide: true },
+    ["-NoProfile", "-NonInteractive", "-Command", `${command} | Select-Object -ExpandProperty ProcessId`],
+    { encoding: "utf8", env: environment, timeout: 30_000, windowsHide: true },
   );
   assert.equal(stdout.trim(), "", "Squirrel's automatic first run is still alive");
 }
