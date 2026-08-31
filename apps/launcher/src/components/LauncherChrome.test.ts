@@ -11,6 +11,7 @@ describe("launcher chrome", () => {
     expect(wrapper.get('button[aria-current="page"]').text()).toContain("Accounts");
     expect(wrapper.text()).not.toContain("Show introduction");
     expect(wrapper.text()).not.toContain("Unofficial client");
+    expect(wrapper.find('button[aria-label="Open Discord"] .discord-mark').exists()).toBe(true);
     await wrapper.get('button[aria-label="Settings"]').trigger("click");
     expect(wrapper.emitted("settings")).toHaveLength(1);
     await wrapper.get('button[aria-label="Open Discord"]').trigger("click");

@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { AlertTriangle, Github, Home, MessageCircle, MessageSquareText, Settings, Users } from "lucide-vue-next";
+import { AlertTriangle, Github, Home, MessageSquareText, Settings, Users } from "lucide-vue-next";
 import type { LauncherExternalLink } from "@shared/launcher-contracts";
 import type { LauncherRoute } from "../routes";
+import DiscordIcon from "./DiscordIcon.vue";
 import logoUrl from "@site/reforged-logo.webp";
 
 defineProps<{ route: LauncherRoute }>();
@@ -22,7 +23,7 @@ const emit = defineEmits<{
       <button class="feedback-nav" :class="{ active: route === 'feedback' }" :aria-current="route === 'feedback' ? 'page' : undefined" @click="emit('navigate', 'feedback')"><MessageSquareText />Feedback</button>
     </nav>
     <div class="title-actions">
-      <button class="icon-button" aria-label="Open Discord" title="Discord" @click="emit('external', 'discord')"><MessageCircle /></button>
+      <button class="icon-button" aria-label="Open Discord" title="Discord" @click="emit('external', 'discord')"><DiscordIcon /></button>
       <button class="icon-button" aria-label="Open GitHub" title="GitHub" @click="emit('external', 'github')"><Github /></button>
       <button class="icon-button" aria-label="Settings" @click="emit('settings')"><Settings /></button>
     </div>

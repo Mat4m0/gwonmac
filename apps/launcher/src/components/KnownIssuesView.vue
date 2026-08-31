@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { AlertTriangle, Check, ExternalLink, Github, MessageCircle, RotateCcw, Smartphone, Wrench } from "lucide-vue-next";
+import { AlertTriangle, Check, ExternalLink, Github, RotateCcw, Smartphone, Wrench } from "lucide-vue-next";
 import type { LauncherExternalLink } from "@shared/launcher-contracts";
+import DiscordIcon from "./DiscordIcon.vue";
 
 defineProps<{ availability: "fixture" | "placeholder" }>();
 const emit = defineEmits<{ external: [kind: LauncherExternalLink] }>();
@@ -41,7 +42,7 @@ const emit = defineEmits<{ external: [kind: LauncherExternalLink] }>();
         </ol>
         <div class="issue-help-actions">
           <button class="primary" @click="emit('external', 'arenaNetSupport')">Report to ArenaNet <ExternalLink /></button>
-          <button class="secondary" @click="emit('external', 'discord')"><MessageCircle />Ask on Discord</button>
+          <button class="secondary" @click="emit('external', 'discord')"><DiscordIcon />Ask on Discord</button>
           <button class="secondary" @click="emit('external', 'bugReport')"><Github />Report Mac issue</button>
         </div>
       </div>
