@@ -30,6 +30,7 @@
     "test:windows-credentials": "node --import ./scripts/ts-hook.mjs scripts/windows-credential-probe.ts",
     "test:windows-installed": "node --import ./scripts/ts-hook.mjs scripts/windows-installed-qualification.ts",
     "test:windows-package": "node --import ./scripts/ts-hook.mjs scripts/windows-package-probe.ts",
+    "test:linux-installed": "node --import ./scripts/ts-hook.mjs scripts/linux-installed-qualification.ts",
     "test:signed-dev": "node --import ./scripts/ts-hook.mjs scripts/run-signed-dev.ts --test-keychain",
     "tools:dev": "pnpm --filter @gwonmac/tools-ui dev",
     "tools:test": "pnpm --filter @gwonmac/tools-ui test",

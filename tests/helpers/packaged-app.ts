@@ -19,6 +19,8 @@ export interface PackagedAppLaunch {
   readonly productName: string;
   /** Exact executable for installed Windows/Linux packages. */
   readonly executablePath?: string;
+  /** Arguments a package manager needs before the Electron application args. */
+  readonly executableArgumentsPrefix?: readonly string[];
   readonly userData: string;
   readonly environment?: Readonly<Record<string, string>>;
   readonly arguments?: readonly string[];
@@ -139,6 +141,7 @@ export async function launchPackagedApp(
   const child = spawn(
     executablePath,
     [
+      ...(options.executableArgumentsPrefix ?? []),
       ...(options.useDefaultUserData === true
         ? []
         : [`--user-data-dir=${options.userData}`]),
