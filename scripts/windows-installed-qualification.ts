@@ -268,10 +268,6 @@ try {
     "--enable-logging=stderr",
     ...(signedQualification ? [] : ["--gw-volatile-secrets"]),
   ];
-  const normalStartupFailure = await proveNormalWindowsStartup(
-    installedExecutable,
-    qualificationArguments,
-  );
   running = await launchPackagedApp({
     appPath: packageRoot,
     executablePath: installedExecutable,
@@ -280,9 +276,9 @@ try {
     // GitHub's hosted Windows service session has no stable accelerated
     // graphics context. Keep the Chromium sandbox enabled, but render this
     // package qualification in software so a runner-only GPU crash cannot
-    // mask launcher, profile, storage, and uninstall behavior. The preceding
-    // launch already proves ordinary desktop startup; CDP is test-only
-    // renderer instrumentation.
+    // mask launcher, profile, storage, and uninstall behavior. CDP is
+    // test-only renderer instrumentation; the final detached launch proves
+    // ordinary desktop startup after these checks close gracefully.
     arguments: qualificationArguments,
     // Keep the installed GUI process in the same detached, pipe-free shape as
     // an Explorer launch. CDP connects through DevToolsActivePort and does not
@@ -517,6 +513,13 @@ try {
     running = null;
   }
 
+  // Run the uninstrumented desktop-start proof last. Its bounded cleanup is a
+  // forced process-tree stop, so it must not poison a later Electron startup
+  // before the installed profile and rollback checks have run.
+  const normalStartupFailure = await proveNormalWindowsStartup(
+    installedExecutable,
+    qualificationArguments,
+  );
   await uninstall(updateExecutable);
   assert.equal(
     existsSync(installedExecutable),
