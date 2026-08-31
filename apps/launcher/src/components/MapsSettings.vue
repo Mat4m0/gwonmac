@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import type { LauncherSettings, LauncherSettingsPatch } from "@shared/launcher-contracts";
+import type { ShortcutPlatform } from "@shared/keyboard-shortcuts";
 import {
   CARTOGRAPHY_BUILTIN_PRESETS,
   CARTOGRAPHY_LINE_PATTERNS,
@@ -23,6 +24,7 @@ import {
 
 const props = defineProps<{
   settings: LauncherSettings;
+  platform: ShortcutPlatform;
   save: (patch: LauncherSettingsPatch) => Promise<void>;
 }>();
 
@@ -31,6 +33,7 @@ const importValue = ref("");
 const editing = ref(false);
 const active = computed(() => resolveCartographyPresetEntry(props.settings.cartographyPresetLibrary));
 const exportValue = computed(() => active.value ? encodeCartographyPreset({ name: active.value.name, style: active.value.style }) : "");
+const copyShortcut = computed(() => props.platform === "macos" ? "Command-C" : "Ctrl-C");
 const lineLabels = {
   lattice: "Grid lines",
   current: "Current cell",
@@ -174,7 +177,7 @@ async function updateUnseen(field: "color" | "marker", value: string) {
       <label><span><strong>Style name</strong></span><input :value="active.name" maxlength="40" @change="rename(($event.currentTarget as HTMLInputElement).value)" /></label>
       <button class="text-link" @click="remove">Delete custom style</button>
     </template>
-    <details><summary>Import or share a style</summary><label>Style text<textarea rows="4" :value="importValue || exportValue" @input="importValue = ($event.currentTarget as HTMLTextAreaElement).value" /></label><button class="secondary" :disabled="!importValue" @click="importPreset">Import as new style</button><p>Select the text and press Command-C to share the current style. Paste another style here to import it.</p></details>
+    <details><summary>Import or share a style</summary><label>Style text<textarea rows="4" :value="importValue || exportValue" @input="importValue = ($event.currentTarget as HTMLTextAreaElement).value" /></label><button class="secondary" :disabled="!importValue" @click="importPreset">Import as new style</button><p>Select the text and press {{ copyShortcut }} to share the current style. Paste another style here to import it.</p></details>
   </div>
 
   <div v-if="editing && active?.custom" class="setting-group map-style-editor">

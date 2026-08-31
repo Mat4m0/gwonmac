@@ -11,6 +11,9 @@ on:
       - "scripts/build.mjs"
       - "scripts/platform-storage-probe.ts"
       - "scripts/windows-credential-probe.ts"
+      - "scripts/windows-icon.ts"
+      - "scripts/windows-package-probe.ts"
+      - "forge.config.ts"
       - "src/**"
       - "tests/integration/gw-dat-dimensions.test.ts"
       - "package.json"
@@ -63,3 +66,21 @@ jobs:
         run: >-
           node --import ./scripts/ts-hook.mjs --test
           tests/integration/gw-dat-dimensions.test.ts
+      - name: Build the unsigned Windows Squirrel package
+        if: runner.os == 'Windows'
+        env:
+          GW_PACKAGE_INTENT: local
+        run: pnpm make -- --platform=win32 --arch=x64
+      - name: Inspect the exact Windows package boundary
+        if: runner.os == 'Windows'
+        run: pnpm test:windows-package
+      - name: Prove the local package has no trusted distribution signature
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem "out/make/squirrel.windows/x64/*Setup.exe"
+          if ($setup.Count -ne 1) { throw "Expected one Setup executable" }
+          $signature = Get-AuthenticodeSignature $setup.FullName
+          if ($signature.Status -ne "NotSigned") {
+            throw "Local package unexpectedly has status $($signature.Status)"
+          }

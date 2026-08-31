@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import {
-  APP_UPDATE_FEED_URLS,
+  appUpdateFeedUrls,
   releaseAssetUrl,
 } from "../src/shared/project-identity.js";
 import {
@@ -132,7 +132,7 @@ async function readCandidateManifest(
   } catch {
     throw new Error(`release manifest ${candidate.tag} is not JSON`);
   }
-  const parsed = parseReleaseManifest(value);
+  const parsed = parseReleaseManifest(value, "darwin-arm64");
   if (
     !parsed
     || parsed.manifest.tag !== candidate.tag
@@ -170,8 +170,8 @@ export function assertFeedsDoNotMoveBackward(
   previous: UpdateFeeds,
 ): void {
   for (const track of UPDATE_TRACKS) {
-    const nextManifest = parseReleaseManifest(next[track]);
-    const previousManifest = parseReleaseManifest(previous[track]);
+    const nextManifest = parseReleaseManifest(next[track], "darwin-arm64");
+    const previousManifest = parseReleaseManifest(previous[track], "darwin-arm64");
     if (!nextManifest || !previousManifest) {
       throw new Error(`${track} channel comparison received an invalid manifest`);
     }
@@ -192,7 +192,7 @@ export async function readPublishedFeeds(
   options: { bootstrap: boolean; cacheBust: string },
 ): Promise<UpdateFeeds | null> {
   const responses = await Promise.all(UPDATE_TRACKS.map(async (track) => {
-    const url = new URL(APP_UPDATE_FEED_URLS[track]);
+    const url = new URL(appUpdateFeedUrls("darwin-arm64")[track]);
     url.searchParams.set("publication", options.cacheBust);
     const response = await fetchImpl(url, {
       headers: { accept: "application/json" },
@@ -203,7 +203,7 @@ export async function readPublishedFeeds(
       throw new Error(`${track} channel returned HTTP ${response.status}`);
     }
     const value: unknown = await response.json();
-    const parsed = parseReleaseManifest(value);
+    const parsed = parseReleaseManifest(value, "darwin-arm64");
     if (
       !parsed
       || !isReleaseEligibleForTrack(parsed.releaseVersion, track)

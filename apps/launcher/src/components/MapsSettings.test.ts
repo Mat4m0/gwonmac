@@ -7,7 +7,7 @@ describe("Maps settings", () => {
   it("keeps the global map controls and their style editor in the launcher", async () => {
     const save = vi.fn(async () => undefined);
     const wrapper = mount(MapsSettings, {
-      props: { settings: fixtureSnapshot.settings, save },
+      props: { settings: fixtureSnapshot.settings, platform: "macos", save },
     });
 
     expect(wrapper.text()).toContain("These settings apply to every account");
@@ -28,7 +28,7 @@ describe("Maps settings", () => {
   it("refuses invalid imported style text without writing settings", async () => {
     const save = vi.fn(async () => undefined);
     const wrapper = mount(MapsSettings, {
-      props: { settings: fixtureSnapshot.settings, save },
+      props: { settings: fixtureSnapshot.settings, platform: "macos", save },
     });
     const textarea = wrapper.get("textarea");
     await textarea.setValue("not a map style");

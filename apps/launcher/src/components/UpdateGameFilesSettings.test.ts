@@ -134,7 +134,7 @@ describe("Game Files settings", () => {
         reset: noOp,
       },
     });
-    expect(wrapper.text()).toContain("stopped because this Mac is offline");
+    expect(wrapper.text()).toContain("stopped because this computer is offline");
     await wrapper.get(".download-card button").trigger("click");
     expect(resume).toHaveBeenCalledOnce();
   });

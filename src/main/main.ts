@@ -118,6 +118,7 @@ import { installMacosCommandKeyUps } from "./macos-command-key-ups.js";
 import { recordMainInput } from './input-trace.js';
 import { cleanupLegacySecretFiles } from "./core/legacy-secret-cleanup.js";
 import {
+  DISTRIBUTION_CHANNEL_CONFIG,
   distributionCapabilities,
   isDistributionChannel,
   parseDistributionMarker,
@@ -147,6 +148,7 @@ import { LauncherOrchestrator } from "./launcher-orchestrator.js";
 import { registerLauncherIpc } from "./launcher-ipc.js";
 import { LAUNCHER_IPC } from "../shared/launcher-contracts.js";
 import type { GlobalTool, LauncherSettingsPatch, ShortcutReplacement } from "../shared/launcher-contracts.js";
+import { appUpdateTarget } from "../shared/project-identity.js";
 import {
   DEFAULT_SHORTCUTS,
   shortcutPlatform,
@@ -164,15 +166,30 @@ import { captureLauncherShortcut } from "./launcher-shortcut-capture.js";
 import {
   loadWindowsNativeHost,
   WindowsCredentialKeychain,
+  windowsExecutableTrusted,
 } from "./windows-native-host.js";
 import { windowsAppUserModelId } from "./windows-shell.js";
+import {
+  handleWindowsSquirrelStartup,
+  WINDOWS_SQUIRREL_FIRST_RUN_GRACE_MS,
+  windowsSquirrelFirstRun,
+} from "./windows-squirrel-startup.js";
 
+const windowsSquirrelStartupHandled = process.platform === "win32"
+  && handleWindowsSquirrelStartup({
+    argv: process.argv,
+    execPath: process.execPath,
+    executableName: `${app.getName()}.exe`,
+    quit: () => app.quit(),
+  });
+const windowsSquirrelFirstRunActive = process.platform === "win32"
+  && windowsSquirrelFirstRun(process.argv);
 const nativeHostLayout = {
   packaged: app.isPackaged,
   appPath: app.getAppPath(),
   resourcesPath: process.resourcesPath,
 };
-const windowsNativeHost = process.platform === "win32"
+const windowsNativeHost = process.platform === "win32" && !windowsSquirrelStartupHandled
   ? loadWindowsNativeHost(nativeHostLayout)
   : null;
 const explicitUserData = app.commandLine.hasSwitch("user-data-dir");
@@ -196,7 +213,8 @@ if (process.platform === "win32") {
   app.setAppUserModelId(windowsAppUserModelId(app.getName()));
 }
 
-const primaryInstance = app.requestSingleInstanceLock();
+const primaryInstance = !windowsSquirrelStartupHandled
+  && app.requestSingleInstanceLock();
 if (!primaryInstance) {
   app.quit();
 } else {
@@ -376,7 +394,6 @@ function packagedDistributionChannel(): DistributionChannel | null {
     const channel = process.env.GW_TEST_DISTRIBUTION_CHANNEL;
     return isDistributionChannel(channel) ? channel : null;
   }
-  if (process.platform !== "darwin") return null;
   try {
     const marker = JSON.parse(
       readFileSync(
@@ -384,7 +401,18 @@ function packagedDistributionChannel(): DistributionChannel | null {
         "utf8",
       ),
     ) as unknown;
-    return parseDistributionMarker(marker)?.channel ?? null;
+    const channel = parseDistributionMarker(marker)?.channel ?? null;
+    if (channel === null) return null;
+    if (DISTRIBUTION_CHANNEL_CONFIG[channel].productName !== app.getName()) {
+      return null;
+    }
+    if (process.platform === "darwin") return channel;
+    if (
+      process.platform === "win32"
+      && windowsNativeHost !== null
+      && windowsExecutableTrusted(windowsNativeHost)
+    ) return channel;
+    return null;
   } catch {
     return null;
   }
@@ -712,6 +740,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
   appUpdaterController = new AppUpdater({
     currentVersion: HOST_VERSION,
     capable: distribution.automaticUpdates,
+    target: appUpdateTarget(process.platform, process.arch),
     nativeUpdater: {
       setFeedURL: (options) => autoUpdater.setFeedURL(options),
       checkForUpdates: () => {
@@ -925,7 +954,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
       () => currentSettings ?? settings,
     ),
     replaceShortcut: async ({ tool, binding }: ShortcutReplacement) => {
-      if (shortcutReserved(binding)) throw new Error("That shortcut is reserved by macOS or the application");
+      if (shortcutReserved(binding)) throw new Error("That shortcut is reserved by the system or the application");
       const active = currentSettings ?? settings;
       let overrides = active.shortcutOverrides;
       const conflict = shortcutOwner(binding, active, tool);
@@ -1093,7 +1122,13 @@ if (primaryInstance) void app.whenReady().then(async () => {
   // The same persisted due-time governs launch and background checks. A player
   // who restarts repeatedly therefore does not spend another network request
   // until the previous settled attempt is six hours old.
-  scheduleAutomaticAppUpdateCheck();
+  const firstAutomaticUpdateTimer = windowsSquirrelFirstRunActive
+    ? setTimeout(
+        scheduleAutomaticAppUpdateCheck,
+        WINDOWS_SQUIRREL_FIRST_RUN_GRACE_MS,
+      )
+    : null;
+  if (firstAutomaticUpdateTimer === null) scheduleAutomaticAppUpdateCheck();
   // A 30-minute tick with a six-hour due-time instead of a six-hour timer:
   // a laptop waking past the boundary checks within half an hour, with no
   // resume handler and no new diagnostic event. check() already coalesces,
@@ -1108,6 +1143,9 @@ if (primaryInstance) void app.whenReady().then(async () => {
   }, PERIODIC_CHECK_TICK_MS);
   onAppQuit(() => {
     scheduleAutomaticAppUpdateCheck = null;
+    if (firstAutomaticUpdateTimer !== null) {
+      clearTimeout(firstAutomaticUpdateTimer);
+    }
     clearInterval(periodicCheckTick);
   });
   if (secondInstanceRequested) win.once("ready-to-show", revealMainWindow);

@@ -41,7 +41,7 @@ export function releaseManifest(options: {
     pub_date: publishedAt.toISOString(),
     notes: "",
   };
-  if (!parseReleaseManifest(manifest)) {
+  if (!parseReleaseManifest(manifest, "darwin-arm64")) {
     throw new Error("generated release manifest is invalid");
   }
   return `${JSON.stringify(manifest, null, 2)}\n`;

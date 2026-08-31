@@ -1,9 +1,14 @@
 /**
- * The one closed contract for a published Squirrel.Mac release manifest.
+ * The one closed contract for a published native-updater release manifest.
  * Release construction, static-channel publication, and application discovery
  * all use this reader so none can accept a different tag, asset, or host.
  */
-import { releaseAssetUrl } from "./project-identity.js";
+import {
+  releaseAssetUrl,
+  releaseDownloadRoot,
+  releaseUpdateArtifactName,
+  type AppUpdateTarget,
+} from "./project-identity.js";
 import {
   formatReleaseVersion,
   parseReleaseVersion,
@@ -36,6 +41,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  */
 export function parseReleaseManifest(
   value: unknown,
+  target: AppUpdateTarget,
 ): ParsedReleaseManifest | null {
   if (!isRecord(value)) return null;
   const keys = Object.keys(value).sort();
@@ -60,9 +66,8 @@ export function parseReleaseManifest(
     Number.isNaN(publishedAt.valueOf())
     || publishedAt.toISOString() !== value.pub_date
   ) return null;
-  const zipName =
-    `Guild-Wars-Reforged-${value.version}-macOS-arm64.zip`;
-  if (value.url !== releaseAssetUrl(value.tag, zipName)) return null;
+  const artifactName = releaseUpdateArtifactName(value.version, target);
+  if (value.url !== releaseAssetUrl(value.tag, artifactName)) return null;
   return {
     manifest: {
       url: value.url,
@@ -73,6 +78,8 @@ export function parseReleaseManifest(
       notes: "",
     },
     releaseVersion,
-    immutableFeedUrl: releaseAssetUrl(value.tag, "RELEASES.json"),
+    immutableFeedUrl: target === "darwin-arm64"
+      ? releaseAssetUrl(value.tag, "RELEASES.json")
+      : releaseDownloadRoot(value.tag),
   };
 }

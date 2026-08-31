@@ -8,7 +8,9 @@
  * traffic. Release discovery reads one static channel document and never
  * spends a GitHub REST API request from the player's shared public IP.
  *
- * Only a package carrying the release marker may reach Squirrel.Mac. The
+ * Only a package carrying the release marker may reach the native Squirrel
+ * updater. Windows additionally verifies the running executable's
+ * Authenticode trust before main creates this owner. The
  * selected Stable/Beta track is read once per check. Stable admits only
  * stable releases; Beta additionally admits beta and RC releases. Alpha is
  * never eligible. Ad-hoc developer builds carry no release marker and cannot
@@ -20,7 +22,10 @@ import type {
   AppUpdateErrorCode,
   AppUpdateState,
 } from "../shared/contracts.js";
-import { APP_UPDATE_FEED_URLS } from "../shared/project-identity.js";
+import {
+  appUpdateFeedUrls,
+  type AppUpdateTarget,
+} from "../shared/project-identity.js";
 import {
   compareReleaseVersions,
   isReleaseEligibleForTrack,
@@ -41,6 +46,7 @@ interface NativeUpdater {
 export interface AppUpdaterOptions {
   currentVersion: string;
   capable: boolean;
+  target: AppUpdateTarget | null;
   nativeUpdater: NativeUpdater;
   fetch?: typeof fetch;
   now?: () => number;
@@ -165,7 +171,7 @@ export class AppUpdater {
       currentVersion: this.options.currentVersion,
       ...(previous === undefined ? {} : { lastCheckedAt: previous }),
     });
-    if (!this.options.capable) {
+    if (!this.options.capable || this.options.target === null) {
       await this.failAndRemember("updater-unavailable");
       return;
     }
@@ -180,10 +186,13 @@ export class AppUpdater {
     let response: Response;
     try {
       try {
-        response = await this.fetchImpl(APP_UPDATE_FEED_URLS[track], {
-          signal: controller.signal,
-          headers: { accept: "application/json" },
-        });
+        response = await this.fetchImpl(
+          appUpdateFeedUrls(this.options.target)[track],
+          {
+            signal: controller.signal,
+            headers: { accept: "application/json" },
+          },
+        );
       } catch (error) {
         await this.failAndRemember(
           this.noteFailure(
@@ -210,7 +219,7 @@ export class AppUpdater {
         );
         return;
       }
-      const feed = parseReleaseManifest(body);
+      const feed = parseReleaseManifest(body, this.options.target);
       if (
         !feed
         || !isReleaseEligibleForTrack(feed.releaseVersion, track)
