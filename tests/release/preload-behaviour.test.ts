@@ -20,8 +20,8 @@ import path from "node:path";
 import test from "node:test";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import type { CartographyEvidenceCapture } from "../../src/shared/cartography-evidence.ts";
 import type {
-  CartographyEvidenceCapture,
   GwNativeApi,
   RendererSettingsPatch,
   RendererCommand,
@@ -173,7 +173,14 @@ const CARTOGRAPHY_EVIDENCE_CAPTURE = {
     kernelSha256: null,
   },
   continent: { status: "unavailable", reason: "not-observed" },
-  currentInstance: null,
+  currentInstance: {
+    status: "unavailable",
+    reason: "not-observed",
+    mapId: null,
+    areaEpoch: null,
+    resourceGeneration: null,
+    kernel: null,
+  },
 } satisfies CartographyEvidenceCapture;
 
 /** A request/response capability, with the arguments a caller really passes. */
