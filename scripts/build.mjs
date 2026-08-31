@@ -69,8 +69,9 @@ const DECODER_SOURCES = [
 
 /**
  * Native recipes selected by the build host. macOS keeps its exact released
- * addon and decoder commands. Windows and Linux compile only the portable
- * decoder until their credential implementations pass installed tests.
+ * addon and decoder commands. Windows compiles its Credential Manager addon
+ * and decoder; Linux compiles only the decoder until its secure provider is
+ * qualified on an installed package.
  *
  * @param {NodeJS.Platform} platform
  * @param {NodeJS.Architecture} architecture
@@ -145,18 +146,50 @@ export function nativeBuildSteps(platform, architecture) {
     if (architecture !== "x64") {
       throw new Error(`unsupported Windows build architecture: ${architecture}`);
     }
-    return [[
-      "cl.exe",
+    return [
       [
-        "/nologo",
-        "/std:c++20",
-        "/O2",
-        "/EHsc",
-        "/Isrc/native/gw-dat",
-        ...DECODER_SOURCES,
-        "/Fe:build/native/gw-dat-decode.exe",
+        "lib.exe",
+        [
+          "/nologo",
+          "/def:node_modules/node-api-headers/def/node_api.def",
+          "/machine:x64",
+          "/out:build/native/node.lib",
+        ],
       ],
-    ]];
+      [
+        "cl.exe",
+        [
+          "/nologo",
+          "/std:c++20",
+          "/O2",
+          "/EHsc",
+          "/LD",
+          "/DNAPI_VERSION=8",
+          "/Inode_modules/node-api-headers/include",
+          "/Fobuild\\native\\",
+          "/Fdbuild/native/windows-host.pdb",
+          "src/native/windows-host/host.cpp",
+          "Advapi32.lib",
+          "Shell32.lib",
+          "Ole32.lib",
+          "build/native/node.lib",
+          "/Fe:build/native/windows-host.node",
+        ],
+      ],
+      [
+        "cl.exe",
+        [
+          "/nologo",
+          "/std:c++20",
+          "/O2",
+          "/EHsc",
+          "/Isrc/native/gw-dat",
+          "/Fobuild\\native\\",
+          ...DECODER_SOURCES,
+          "/Fe:build/native/gw-dat-decode.exe",
+        ],
+      ],
+    ];
   }
 
   if (platform === "linux") {

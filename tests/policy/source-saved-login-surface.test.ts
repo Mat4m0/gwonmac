@@ -75,7 +75,19 @@ test("only provisioned distribution channels enable persistent secrets", () => {
   assert.match(main, /capable: distribution\.automaticUpdates/);
   assert.match(
     main,
-    /if \(persistentSecrets\) \{[\s\S]{0,180}darwinNativeHost === null[\s\S]{0,180}persistent secret provider is unavailable[\s\S]{0,120}keychain = darwinNativeHost/,
+    /if \(persistentSecrets\) \{[\s\S]{0,160}distributionChannel === null[\s\S]{0,120}persistent secret provider is unavailable/,
+  );
+  assert.match(
+    main,
+    /process\.platform === "darwin" && darwinNativeHost !== null[\s\S]{0,100}keychain = darwinNativeHost/,
+  );
+  assert.match(
+    main,
+    /process\.platform === "win32" && windowsNativeHost !== null[\s\S]{0,160}keychain = new WindowsCredentialKeychain/,
+  );
+  assert.match(
+    main,
+    /else \{\s*throw new Error\("persistent secret provider is unavailable"\)/,
   );
   assert.match(main, /else \{\s*keychain = new VolatileNativeKeychain\(\)/);
   assert.doesNotMatch(shippedApplication, /use-mock-keychain/);

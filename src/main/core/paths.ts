@@ -81,6 +81,21 @@ export function colocatedStorageRoots(root: string): ApplicationStorageRoots {
   };
 }
 
+/** Resolve the first Windows release layout below the native LocalAppData root. */
+export function windowsStorageRoots(
+  localAppData: string,
+): ApplicationStorageRoots {
+  const root = path.win32.join(localAppData, "Guild Wars Reforged");
+  return {
+    config: path.win32.join(root, "config"),
+    data: path.win32.join(root, "data"),
+    cache: path.win32.join(root, "cache"),
+    state: path.win32.join(root, "state"),
+    logs: path.win32.join(root, "logs"),
+    sessions: path.win32.join(root, "data", "sessions"),
+  };
+}
+
 export function gamePaths(storage: ApplicationStorageRoots): GamePaths {
   const game = path.join(storage.cache, "game");
   const artifacts = path.join(game, "artifacts");

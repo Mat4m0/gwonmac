@@ -11,6 +11,7 @@ import {
   app,
   autoUpdater,
   type BrowserWindow,
+  crashReporter,
   dialog,
   Notification,
   powerMonitor,
@@ -77,7 +78,11 @@ import {
   wireLifecycle,
 } from "./lifecycle.js";
 import { sweepOrphanDirectories } from "./core/atomic-file.js";
-import { documentDirectories } from "./core/paths.js";
+import {
+  colocatedStorageRoots,
+  documentDirectories,
+  windowsStorageRoots,
+} from "./core/paths.js";
 import { gamePaths } from "./paths.js";
 import {
   DEVELOPER_ENHANCEMENT_PROGRAM,
@@ -155,19 +160,48 @@ import {
   shortcutOwner,
 } from "./core/launcher-tools.js";
 import { captureLauncherShortcut } from "./launcher-shortcut-capture.js";
+import {
+  loadWindowsNativeHost,
+  WindowsCredentialKeychain,
+} from "./windows-native-host.js";
 
-// The public app name changed after alpha profiles already existed. Keep that
-// one profile as the canonical home so the rename cannot strand saved login,
-// settings, diagnostics, or roughly 4 GB of verified game data. An explicit
-// profile remains authoritative for tests and the deliberately scoped tools.
-if (!app.commandLine.hasSwitch("user-data-dir")) {
+const nativeHostLayout = {
+  packaged: app.isPackaged,
+  appPath: app.getAppPath(),
+  resourcesPath: process.resourcesPath,
+};
+const windowsNativeHost = process.platform === "win32"
+  ? loadWindowsNativeHost(nativeHostLayout)
+  : null;
+const explicitUserData = app.commandLine.hasSwitch("user-data-dir");
+
+// macOS keeps its released root exactly. Windows has no released population,
+// so its first layout starts in native LocalAppData. Explicit fixture roots
+// always win and remain fully disposable on every platform.
+if (!explicitUserData && process.platform === "darwin") {
   app.setPath("userData", path.join(app.getPath("appData"), "Guild Wars"));
+}
+const applicationStorageRoots = explicitUserData
+  ? colocatedStorageRoots(app.getPath("userData"))
+  : windowsNativeHost
+    ? windowsStorageRoots(windowsNativeHost.localAppData())
+    : colocatedStorageRoots(app.getPath("userData"));
+if (!explicitUserData && process.platform === "win32") {
+  app.setPath("userData", applicationStorageRoots.sessions);
+  app.setPath("sessionData", applicationStorageRoots.sessions);
 }
 
 const primaryInstance = app.requestSingleInstanceLock();
 if (!primaryInstance) {
   app.quit();
 } else {
+  // Electron's Windows renderers initialize Crashpad before application code
+  // runs. Start their local handler before `ready` so a renderer never exits
+  // because no handler is connected. Reports remain on this device; this
+  // application does not configure a crash-report upload endpoint.
+  if (process.platform === "win32") {
+    crashReporter.start({ uploadToServer: false });
+  }
   enableSandboxBeforeReady();
   registerGwScheme();
   wireLifecycle();
@@ -194,7 +228,7 @@ const HOST_VERSION = (() => {
 })();
 
 const preferences = new PreferencesCoordinator(
-  () => gamePaths(),
+  () => gamePaths(applicationStorageRoots),
   () => logEvent({ k: "travelPreferences.corruptRecovered" }),
   publishSettings,
 );
@@ -377,7 +411,7 @@ async function hasReleasedSingleData(paths: ReturnType<typeof gamePaths>): Promi
 }
 
 async function ensureDirs(): Promise<void> {
-  const paths = gamePaths();
+  const paths = gamePaths(applicationStorageRoots);
   await mkdir(paths.game, { recursive: true });
   await mkdir(paths.chunks, { recursive: true });
   await mkdir(paths.diagnostics, { recursive: true });
@@ -500,11 +534,6 @@ if (primaryInstance) void app.whenReady().then(async () => {
       "Mat4m0/gwonmac · App icon artwork © ArenaNet LLC · QT Friz Quad © 1992 QualiType (SIL OFL 1.1) · Not affiliated with ArenaNet or NCSOFT.",
     website: EXTERNAL_URLS.github,
   });
-  const nativeHostLayout = {
-    packaged: app.isPackaged,
-    appPath: app.getAppPath(),
-    resourcesPath: process.resourcesPath,
-  };
   const darwinNativeHost = process.platform === "darwin"
     ? loadDarwinNativeHost(nativeHostLayout)
     : null;
@@ -530,7 +559,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
       })
     : () => {};
   app.once("will-quit", () => stopCommandKeyUps());
-  const paths = gamePaths();
+  const paths = gamePaths(applicationStorageRoots);
   const legacySingleData = await hasReleasedSingleData(paths);
   const workspaceExisted = await pathExists(paths.multiWorkspace);
   const loadedLauncherState = await loadOrCreateLauncherState(
@@ -633,10 +662,19 @@ if (primaryInstance) void app.whenReady().then(async () => {
   }
   let keychain: NativeKeychain;
   if (persistentSecrets) {
-    if (darwinNativeHost === null) {
+    if (distributionChannel === null) {
       throw new Error("persistent secret provider is unavailable");
     }
-    keychain = darwinNativeHost;
+    if (process.platform === "darwin" && darwinNativeHost !== null) {
+      keychain = darwinNativeHost;
+    } else if (process.platform === "win32" && windowsNativeHost !== null) {
+      keychain = new WindowsCredentialKeychain(
+        windowsNativeHost,
+        distributionChannel,
+      );
+    } else {
+      throw new Error("persistent secret provider is unavailable");
+    }
   } else {
     keychain = new VolatileNativeKeychain();
   }

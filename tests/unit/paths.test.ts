@@ -10,6 +10,7 @@ import {
   multiProfilePaths,
   nativeExecutableName,
   unpackedPath,
+  windowsStorageRoots,
 } from "../../src/main/core/paths.ts";
 import { parseProfileId } from "../../src/shared/multiple-accounts.ts";
 
@@ -209,5 +210,17 @@ describe("resolved profile paths", () => {
       "/roots/cache/game/compatibility",
       "/roots/cache/game/enhancements",
     ]);
+  });
+
+  it("pins the first Windows layout beneath native LocalAppData", () => {
+    assert.deepEqual(windowsStorageRoots("C:\\Users\\Player\\AppData\\Local"), {
+      config: "C:\\Users\\Player\\AppData\\Local\\Guild Wars Reforged\\config",
+      data: "C:\\Users\\Player\\AppData\\Local\\Guild Wars Reforged\\data",
+      cache: "C:\\Users\\Player\\AppData\\Local\\Guild Wars Reforged\\cache",
+      state: "C:\\Users\\Player\\AppData\\Local\\Guild Wars Reforged\\state",
+      logs: "C:\\Users\\Player\\AppData\\Local\\Guild Wars Reforged\\logs",
+      sessions:
+        "C:\\Users\\Player\\AppData\\Local\\Guild Wars Reforged\\data\\sessions",
+    });
   });
 });

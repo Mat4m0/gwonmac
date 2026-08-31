@@ -9,6 +9,8 @@ on:
       - ".github/workflows/portable-native-build.yml"
       - "apps/**"
       - "scripts/build.mjs"
+      - "scripts/platform-storage-probe.ts"
+      - "scripts/windows-credential-probe.ts"
       - "src/**"
       - "tests/integration/gw-dat-dimensions.test.ts"
       - "package.json"
@@ -52,6 +54,11 @@ jobs:
       - run: pnpm build
       - name: Run the portable source and renderer gate
         run: pnpm run check:portable
+      - name: Exercise Windows Credential Manager with synthetic values
+        if: runner.os == 'Windows'
+        run: pnpm test:windows-credentials
+      - name: Exercise atomic storage on the target filesystem
+        run: pnpm storage:probe
       - name: Exercise the target decoder executable
         run: >-
           node --import ./scripts/ts-hook.mjs --test
