@@ -19,6 +19,15 @@ afterEach(() => {
 });
 
 describe("unified launcher shell", () => {
+  it("keeps funding on top and operational status only in the launch bar", () => {
+    const wrapper = mount(App);
+
+    expect(wrapper.get(".funding-banner").text()).toContain("Support Guild Wars Reforged");
+    expect(wrapper.get(".funding-banner").text()).not.toContain("Downloading game files");
+    expect(wrapper.get(".launchbar").text()).toContain("Downloading game files");
+    expect(wrapper.find(".priority-banner").exists()).toBe(false);
+  });
+
   it("keeps Home focused on content and moves account management to Accounts", async () => {
     const wrapper = mount(App);
     expect(wrapper.get("h1").text()).toContain("Wayfarer’s Reverie");

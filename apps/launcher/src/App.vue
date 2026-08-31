@@ -4,11 +4,9 @@ import {
   AlertTriangle,
   Archive,
   Check,
-  Clock3,
   FileText,
   Flame,
   Map as MapIcon,
-  RotateCcw,
   ScrollText,
   Shield,
   Swords,
@@ -34,7 +32,6 @@ import HomeView from "./components/HomeView.vue";
 import KnownIssuesView from "./components/KnownIssuesView.vue";
 import MapsSettings from "./components/MapsSettings.vue";
 import type { LauncherRoute, SettingsRoute } from "./routes";
-import { backgroundDownloadPresentation, playableNoticePresentation } from "./update-game-files-copy";
 
 const route = ref<LauncherRoute>("home");
 const settingsRoute = ref<SettingsRoute>("general");
@@ -106,17 +103,6 @@ const selectedProfiles = computed(() => visibleProfiles.value.filter((profile) =
 const openSelected = computed(() => selectedProfiles.value.filter((profile) => profile.state === "running"));
 const closedSelected = computed(() => selectedProfiles.value.filter((profile) => profile.state !== "running"));
 const waiting = computed(() => selectedProfiles.value.some((profile) => profile.state === "queued"));
-const preparationPercent = computed(() => {
-  if (snapshot.value.readiness.state !== "preparing") return 0;
-  const { received, total } = snapshot.value.readiness.progress;
-  return total > 0 ? Math.min(100, Math.round((received / total) * 100)) : 0;
-});
-const playableNotice = computed(() => playableNoticePresentation(snapshot.value.readiness));
-const backgroundDownloadBanner = computed(() => snapshot.value.readiness.state === "playable"
-  && snapshot.value.readiness.backgroundDownload
-  ? backgroundDownloadPresentation(snapshot.value.readiness.backgroundDownload)
-  : null);
-
 async function toggleProfile(id: ProfileId) {
   const next = selected.value.includes(id)
     ? selected.value.filter((value) => value !== id)
@@ -341,28 +327,12 @@ async function replaceToolShortcut() {
   <div v-else class="app-shell" :data-intro-step="snapshot.experience.introduction === 'pending' ? introStep : undefined">
     <LauncherHeader :route="route" @navigate="route = $event" @settings="openSettings()" />
 
-    <section v-if="snapshot.readiness.state === 'repair-required'" class="priority-banner danger">
-      <AlertTriangle /><div><strong>Game files need repair</strong><span>Guild Wars cannot start until the client is ready.</span></div>
-      <button @click="openSettings('game-files')">Open Game Files</button>
-    </section>
-    <section v-else-if="snapshot.readiness.state === 'preparing'" class="priority-banner">
-      <Clock3 /><div><strong>Preparing Guild Wars · {{ preparationPercent }}%</strong><span>{{ snapshot.readiness.progress.label }}</span></div>
-      <button v-if="waiting" @click="primaryAction">Cancel waiting</button><button v-else @click="openSettings('game-files')">View download</button>
-    </section>
-    <section v-else-if="snapshot.appUpdate.phase === 'ready' && !updateBannerDismissed" class="priority-banner">
-      <RotateCcw /><div><strong>An update is ready</strong><span>Install it when you are finished playing.</span></div>
-      <div class="banner-actions"><button class="quiet-button" @click="updateBannerDismissed = true">Later</button><button @click="runAction('The update could not be installed.', () => native?.updates.restartAndInstall())">Restart and update</button></div>
-    </section>
-    <section v-else-if="playableNotice" class="priority-banner">
-      <AlertTriangle /><div><strong>{{ playableNotice.title }}</strong><span>{{ playableNotice.detail }}</span></div>
-      <button @click="openSettings('game-files')">View game files</button>
-    </section>
-    <section v-else-if="snapshot.readiness.state === 'offline-playable'" class="priority-banner"><AlertTriangle /><div><strong>You are offline</strong><span>You can play with the game files already on this Mac.</span></div></section>
-    <section v-else-if="backgroundDownloadBanner" class="priority-banner"><Clock3 /><div><strong>{{ backgroundDownloadBanner.title }}</strong><span>{{ backgroundDownloadBanner.detail }}</span></div><button @click="openSettings('game-files')">View download</button></section>
-    <section v-else class="funding-banner">
-      <div><strong>Help cover the yearly costs</strong><span>Apple Developer Program, domain, and hosting</span></div>
-      <div class="funding-progress"><span>{{ fixtureContent ? '€42 raised' : 'Yearly cost' }}</span><div><i :style="{ width: fixtureContent ? '34%' : '0%' }" /></div><span>€125 goal</span></div>
-      <button @click="openExternal('donate')">Support project</button>
+    <section class="funding-banner" aria-label="Project funding">
+      <div><strong>Support Guild Wars Reforged</strong><span>€125 covers the yearly project costs</span></div>
+      <div class="funding-progress" :aria-label="fixtureContent ? '€42 of €125 funded' : '€125 yearly cost'">
+        <span>{{ fixtureContent ? '€42' : 'Yearly costs' }}</span><div><i :style="{ width: fixtureContent ? '34%' : '0%' }" /></div><span>€125</span>
+      </div>
+      <button @click="openExternal('donate')">Support</button>
     </section>
 
     <main :class="{ 'artwork-only': route === 'home' && !snapshot.preferences.content.news && !snapshot.preferences.content.dailies }">
@@ -434,9 +404,21 @@ async function replaceToolShortcut() {
       </section>
     </main>
 
-    <div v-if="operationError" class="operation-error" role="alert"><AlertTriangle /><span>{{ operationError }}</span><button class="icon-button" aria-label="Dismiss error" @click="operationError = ''"><X /></button></div>
-
-    <LaunchBar :snapshot="snapshot" :selected="selected" :busy="busy" @toggle="toggleProfile" @show="showProfile" @action="primaryAction" @manage="route = 'accounts'" />
+    <LaunchBar
+      :snapshot="snapshot"
+      :selected="selected"
+      :busy="busy"
+      :operation-error="operationError"
+      :update-dismissed="updateBannerDismissed"
+      @toggle="toggleProfile"
+      @show="showProfile"
+      @action="primaryAction"
+      @manage="route = 'accounts'"
+      @game-files="openSettings('game-files')"
+      @dismiss-error="operationError = ''"
+      @dismiss-update="updateBannerDismissed = true"
+      @install-update="runAction('The update could not be installed.', () => native?.updates.restartAndInstall())"
+    />
 
     <BaseModal v-if="addOpen" labelledby="add-account-title" @close="addOpen = false">
       <form @submit.prevent="createProfile"><div class="modal-head"><h2 id="add-account-title">Add account</h2><button type="button" class="icon-button" aria-label="Close" @click="addOpen = false"><X /></button></div><p>This opens another separate Guild Wars window. Sign-in stays inside the game.</p><label>Name<input v-model="newName" autofocus maxlength="48" placeholder="Second account" /></label><details><summary>Appearance</summary><fieldset class="icon-options"><legend>Icon</legend><button v-for="(component, icon) in profileIcons" :key="icon" type="button" :aria-label="icon" :aria-pressed="newIcon === icon" :class="{ selected: newIcon === icon }" @click="newIcon = icon"><component :is="component" /></button></fieldset><fieldset class="color-options"><legend>Color</legend><button v-for="color in ['#9a6638', '#496b58', '#46658a', '#76558b', '#9a4f4f', '#76703c', '#4c777d', '#6f6258']" :key="color" type="button" :aria-label="`Use ${color}`" :aria-pressed="newColor === color" :class="{ selected: newColor === color }" :style="{ background: color }" @click="newColor = color" /><label>Custom color<input v-model="newColor" type="color" /></label></fieldset></details><div class="form-actions"><button type="button" class="secondary" @click="addOpen = false">Cancel</button><button class="primary" :disabled="!newName.trim()">Add account</button></div></form>

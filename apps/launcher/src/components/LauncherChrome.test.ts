@@ -97,9 +97,36 @@ describe("launcher chrome", () => {
       props: { snapshot: paused, selected: paused.selectedProfileIds, busy: false },
     });
 
-    expect(wrapper.get(".readiness").text()).toContain("Ready to play · Download paused");
-    expect(wrapper.get(".readiness").text()).toContain("Guild Wars is available.");
+    expect(wrapper.get(".readiness").text()).toContain("Game file download paused");
+    expect(wrapper.get(".readiness").text()).toContain("resume the offline files");
     expect(wrapper.get(".readiness").text()).not.toContain("Tools are available");
+  });
+
+  it("keeps download progress and its action in the launch bar", async () => {
+    const wrapper = mount(LaunchBar, {
+      props: { snapshot: fixtureSnapshot, selected: fixtureSnapshot.selectedProfileIds, busy: false },
+    });
+
+    expect(wrapper.get(".readiness").text()).toContain("Downloading game files");
+    expect(wrapper.get(".readiness progress").attributes("value")).toBe("92");
+    await wrapper.get(".status-action").trigger("click");
+    expect(wrapper.emitted("gameFiles")).toHaveLength(1);
+  });
+
+  it("keeps errors in the launch bar and makes them dismissible", async () => {
+    const wrapper = mount(LaunchBar, {
+      props: {
+        snapshot: fixtureSnapshot,
+        selected: fixtureSnapshot.selectedProfileIds,
+        busy: false,
+        operationError: "Guild Wars could not be opened.",
+      },
+    });
+
+    expect(wrapper.get(".readiness").attributes("role")).toBe("alert");
+    expect(wrapper.get(".readiness").text()).toContain("Guild Wars could not be opened.");
+    await wrapper.get('button[aria-label="Dismiss error"]').trigger("click");
+    expect(wrapper.emitted("dismissError")).toHaveLength(1);
   });
 
   it("keeps destructive and duplicate actions away from waiting accounts", () => {

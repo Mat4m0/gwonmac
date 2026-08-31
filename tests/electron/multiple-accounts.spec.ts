@@ -541,7 +541,7 @@ test("mandatory client repair blocks Play without rejecting and stays global", a
     expect(outcome.readiness.state).toBe("repair-required");
     expect(outcome.profiles[0]?.state).toBe("ready");
     expect(fixture.app.windows().filter((page) => page.url() === "gw://app/")).toHaveLength(0);
-    await fixture.page.locator(".priority-banner").getByRole("button", { name: "Open Game Files" }).click();
+    await fixture.page.locator(".launchbar").getByRole("button", { name: "Open Game Files" }).click();
     await expect(fixture.page.getByRole("button", { name: "Repair game files" })).toBeVisible();
   } finally {
     await closeOffline(fixture);
