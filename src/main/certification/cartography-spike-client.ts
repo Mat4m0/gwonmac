@@ -28,56 +28,28 @@ const CERTIFIED_CARTOGRAPHY_BUILDS: ReadonlyMap<string, CertifiedCartographyBuil
     "62267d95b30752823aa364c289bdc84f2c025dac4caeda86a76a432001667acb",
     {
       memoryLayout: "relocated",
-      outputSha256: "181f06d7f9974b30978b5f211a3c449eccf85392e13822f87264b875faeb2eeb",
+      outputSha256: "946a12cac572ba93149cc5d1e12c7e9976aad93b29fe771f9d82c001ddab38ef",
     },
   ],
   [
     "e22c2c0876f1381a133fbb0c739f73f9fc6a7d8988da5ce0d9789481ab7f0c9e",
     {
       memoryLayout: "relocated",
-      outputSha256: "28d0d1d5805288c4085d309f54c0a87c3c80b0067efeb15195f1e9291f9237e9",
+      outputSha256: "250007f511c495047661736b50cc12cee1f86a317d9698de09fa8beb6ced16c0",
     },
   ],
   [
     "e00e8368a1d0e1003bf1882dce2d4b3cd8e2e8b6c4acc72474c8b56e2e35c6bb",
     {
       memoryLayout: "official",
-      outputSha256: "579b1b3a60821f32fb43899d606b994b6aca531b913a36cd1a91379107dd3de9",
+      outputSha256: "6f546f13bdb2ef6ec4118a5b1550b2523f178fc0a61061896037a44f3ac89659",
     },
   ],
   [
     "7db72c8d5b4864fb4526e1455edfee3755887a242f68ec1c2f8447cfb38ad281",
     {
       memoryLayout: "relocated",
-      outputSha256: "d8f98b51482f722a8154600e2e61ff72c468c11e043dbf44c0b75d8f3a5d4232",
-    },
-  ],
-  [
-    "9d3383ad41e767570a0b2b8d8e2fec2e52cdcbd25d9c1680b8eb979f4eef6991",
-    {
-      memoryLayout: "relocated",
-      outputSha256: "379139b3490aac7007c65a984d5717ae626e15593394b2f3d692a482e873244b",
-    },
-  ],
-  [
-    "1f4a199ea902f839abb3b71861759f956db2aa4e7f31fcabd1970d12d24ca3a0",
-    {
-      memoryLayout: "relocated",
-      outputSha256: "53a4bdff835b46ac8741301e2f37fcf23ccd73716381d0851f0947bd328335e5",
-    },
-  ],
-  [
-    "87469f9cd8b93bd36e5b401bf0450d47b7856322de6e001c9c9d7dd996cd98d4",
-    {
-      memoryLayout: "official",
-      outputSha256: "393b23f080f10491d209031570fdfe7e80063dbb48f8fcb8c33fc662a2067a6b",
-    },
-  ],
-  [
-    "81a2ceb81db4e8ae35f561a20b3c76dbb0b692a1e5ab4de7ff2879e0e8720d53",
-    {
-      memoryLayout: "official",
-      outputSha256: "5ca898031b871a71f8ada41c81cfeb1150261998b866cbfb315fb4607c0fd594",
+      outputSha256: "1892f597d53988b5b541a7ca7997da8fc6758f0793e464293ba5f619152e6583",
     },
   ],
 ]);
