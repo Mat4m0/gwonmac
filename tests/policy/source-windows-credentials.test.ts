@@ -18,9 +18,8 @@ test("Windows storage starts from the native LocalAppData known folder", () => {
   assert.match(main, /explicitUserData\s*\? colocatedStorageRoots/u);
 });
 
-test("Windows starts the local Crashpad handler before renderer creation", () => {
-  assert.match(main, /process\.platform === "win32"[\s\S]*crashReporter\.start\(\{ uploadToServer: false \}\)/u);
-  assert.doesNotMatch(main, /crashReporter\.start\(\{[^}]*submitURL/u);
+test("Windows does not retain process-memory crash reports", () => {
+  assert.doesNotMatch(main, /crashReporter|crashDumps|\.dmp/u);
 });
 
 test("Credential Manager owns only closed application and profile slots", () => {

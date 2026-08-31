@@ -11,7 +11,6 @@ import {
   app,
   autoUpdater,
   type BrowserWindow,
-  crashReporter,
   dialog,
   Notification,
   powerMonitor,
@@ -228,11 +227,6 @@ if (!explicitUserData && (process.platform === "win32" || linuxFlatpak)) {
   app.setPath("sessionData", applicationStorageRoots.sessions);
 }
 if (process.platform === "win32") {
-  // Chromium can create utility processes while Electron is still entering
-  // application startup. Connect their local Crashpad handler before any
-  // shell integration or single-instance work can trigger that process work.
-  // Reports remain on this device; no upload endpoint is configured.
-  crashReporter.start({ uploadToServer: false });
   app.setAppUserModelId(windowsAppUserModelId(app.getName()));
 }
 
