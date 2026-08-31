@@ -48,7 +48,9 @@ jobs:
           flatpak remote-add --user --gpg-import="$RUNNER_TEMP/flatpak-ci-public.gpg" gwonmac-ci "file://$GITHUB_WORKSPACE/flatpak-repo"
           flatpak install --user -y gwonmac-ci io.github.mat4m0.gwonmac
       - name: Qualify the installed Xwayland package
-        run: dbus-run-session -- xvfb-run -a pnpm test:linux-installed
+        # Start the session bus inside the display so portal services activated
+        # by D-Bus inherit DISPLAY instead of starting headless.
+        run: xvfb-run -a dbus-run-session -- pnpm test:linux-installed
       - name: Retain the exact signed repository for Wayland qualification
         run: cp "$RUNNER_TEMP/flatpak-ci-public.gpg" flatpak-repo/qualification-public.gpg
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

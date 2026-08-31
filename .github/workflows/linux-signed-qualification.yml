@@ -69,11 +69,11 @@ jobs:
           DESKTOP: ${{ matrix.desktop }}
           GW_LINUX_SECRET_QUALIFICATION: "1"
         run: |
-          dbus-run-session -- bash -euc '
+          xvfb-run -a dbus-run-session -- bash -euc '
             export XDG_CURRENT_DESKTOP="${DESKTOP^^}"
             export XDG_SESSION_TYPE=x11
             if [ "$DESKTOP" = gnome ]; then
               eval "$(printf "\n" | gnome-keyring-daemon --unlock --components=secrets)"
             fi
-            xvfb-run -a pnpm test:linux-installed
+            pnpm test:linux-installed
           '

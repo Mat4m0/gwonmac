@@ -54,4 +54,11 @@ describe("Linux Flatpak package", () => {
     assert.doesNotMatch(defaultGate, /GW_LINUX_NATIVE_WAYLAND/u);
     assert.match(buildWorkflow, /native-wayland:[\s\S]*GW_LINUX_NATIVE_WAYLAND=1/u);
   });
+
+  it("starts desktop session buses inside their X display", () => {
+    for (const workflow of [buildWorkflow, signedWorkflow]) {
+      assert.match(workflow, /xvfb-run -a dbus-run-session --/u);
+      assert.doesNotMatch(workflow, /dbus-run-session -- xvfb-run/u);
+    }
+  });
 });
