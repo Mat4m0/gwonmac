@@ -149,6 +149,8 @@ jobs:
           # supplies that standard interface for this KDE integration gate;
           # current KWallet 6 supplies the same interface on supported systems.
           sudo apt-get install -y flatpak xvfb dbus-x11 plasma-workspace xdg-desktop-portal xdg-desktop-portal-kde kwalletmanager gnome-keyring
+          mkdir -p "$HOME/.config/xdg-desktop-portal"
+          printf '[preferred]\ndefault=kde;gtk;\norg.freedesktop.impl.portal.Secret=gnome-keyring;\n' > "$HOME/.config/xdg-desktop-portal/kde-portals.conf"
       - name: Install the exact GPG-verified package
         run: |
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo

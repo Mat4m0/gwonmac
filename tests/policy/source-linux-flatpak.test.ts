@@ -89,5 +89,9 @@ describe("Linux Flatpak package", () => {
     assert.match(buildWorkflow, /GW_LINUX_SECRET_QUALIFICATION: "1"/u);
     assert.match(buildWorkflow, /gnome-keyring-daemon --unlock/u);
     assert.match(buildWorkflow, /xdg-desktop-portal-kde/u);
+    for (const workflow of [buildWorkflow, signedWorkflow]) {
+      assert.match(workflow, /kde-portals\.conf/u);
+      assert.match(workflow, /org\.freedesktop\.impl\.portal\.Secret=gnome-keyring/u);
+    }
   });
 });
