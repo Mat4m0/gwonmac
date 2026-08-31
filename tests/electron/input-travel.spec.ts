@@ -180,6 +180,31 @@ test.describe("renderer Travel input", () => {
       await page.getByRole("button", { name: "Close Quick Travel" }).click();
       await expect(palette).toBeHidden();
       await expect.poll(() => isDomActiveElement(canvas)).toBe(true);
+
+      // The shared owner closes the native modal even if a feature's local
+      // dismissal callback fails to do so. Otherwise Chromium refuses to show
+      // the replacement and leaves the previous interface blocking the game.
+      await page.evaluate(() => {
+        const stubborn = document.createElement("dialog");
+        stubborn.id = "stubborn-transient-dialog";
+        document.body.append(stubborn);
+        window.gwSurfaces.registerDialog({
+          root: stubborn,
+          priority: 5,
+          transient: true,
+          dismiss: () => undefined,
+          restoreFocus: () => document.getElementById("canvas"),
+        }).show();
+      });
+      await expect(page.locator("#stubborn-transient-dialog")).toHaveAttribute("open", "");
+      await page.evaluate(() => {
+        window.dispatchEvent(new CustomEvent("gw:travel-toggle", {
+          cancelable: true,
+          detail: {},
+        }));
+      });
+      await expect(page.locator("#stubborn-transient-dialog")).not.toHaveAttribute("open", "");
+      await expect(palette).toBeVisible();
     } finally {
       await closeOffline(fixture);
     }

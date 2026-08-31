@@ -165,11 +165,19 @@ export function installSurfaceController(
   return Object.freeze({
     register,
     registerDialog(dialog: ModalDialog): GwonmacDialogHandle {
+      const dismissForReplacement = () => {
+        dialog.dismiss();
+        // Replacing a transient modal is unconditional. Feature dismissals
+        // may first update local view state, but they cannot leave the old
+        // native dialog in the top layer and block its replacement.
+        if (dialog.root.open) dialog.root.close();
+        surface.setOpen(false);
+      };
       const surface = register({
         root: dialog.root,
         priority: dialog.priority,
         ...(dialog.transient === undefined ? {} : { transient: dialog.transient }),
-        dismiss: dialog.dismiss,
+        dismiss: dismissForReplacement,
       });
       let disposed = false;
 
@@ -191,6 +199,10 @@ export function installSurfaceController(
         dialog.dismiss();
       };
       const onClose = () => {
+        // Chromium queues `close`. The dialog may already have reopened by
+        // the time an older event arrives; that event must not withdraw the
+        // new modal claim or restore focus behind it.
+        if (dialog.root.open) return;
         surface.setOpen(false);
         // A transient replacement may already be modal by the time Chromium
         // delivers the old dialog's close event. Restore only when the target
@@ -220,8 +232,10 @@ export function installSurfaceController(
           }
         },
         close() {
-          if (!dialog.root.open) return;
-          dialog.root.close();
+          if (dialog.root.open) dialog.root.close();
+          // `close` is queued, while ownership changes synchronously. Withdraw
+          // now so a same-turn reopen receives a fresh modal claim.
+          surface.setOpen(false);
         },
         dispose() {
           if (disposed) return;
