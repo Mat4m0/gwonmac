@@ -26,7 +26,17 @@ import {
   travelToggleTake,
 } from "./enhancement-travel-command-transform.js";
 import type { EnhancementTransformResolution } from "./enhancement-transform.js";
+import {
+  ENHANCEMENT_PRE_GAME_DIAGNOSTIC_EXPORT,
+  ENHANCEMENT_PRE_GAME_STATE_EXPORT,
+} from "./enhancement-pre-game-transform.js";
 import { TRAVEL_DESTINATIONS } from "../../shared/travel-destinations.js";
+import {
+  characterActionConfigure,
+  characterActionDrain,
+  characterActionEnqueue,
+  characterActionExecute,
+} from "./enhancement-character-switch-transform.js";
 
 const REVIEWED_TRAVEL_MAP_IDS = TRAVEL_DESTINATIONS.map(({ mapId }) => mapId);
 
@@ -36,6 +46,34 @@ function fail(message: string): never {
 
 function required<T>(value: T | null | undefined, label: string): T {
   return value ?? fail(`${label} is not available for the selected capabilities`);
+}
+
+export function featureExportNames(
+  resolution: EnhancementTransformResolution,
+): readonly string[] {
+  const { capabilities, preGameResolution, teamApply, xunlaiAction, travelAction } = resolution;
+  const action = capabilities.characterSwitchAction
+    ? required(preGameResolution, "pre-game action certificate")
+        .certificate.characterSwitchAction
+    : null;
+  return Object.freeze([
+    ...(capabilities.preGameControls
+      ? [ENHANCEMENT_PRE_GAME_STATE_EXPORT, ENHANCEMENT_PRE_GAME_DIAGNOSTIC_EXPORT]
+      : []),
+    ...(action ? [action.enqueueExport, action.configureExport] : []),
+    ...(capabilities.teamApply
+      ? [teamApply.thunkExport, teamApply.professionTrace.readerExport]
+      : []),
+    ...(capabilities.xunlaiAction
+      ? [xunlaiAction.openExport, xunlaiAction.configureExport]
+      : []),
+    ...(capabilities.travelAction
+      ? [travelAction.enqueueExport, travelAction.configureExport, travelAction.toggleExport]
+      : []),
+    ...(capabilities.chatAliases
+      ? ["enhancement_configure_trade_toggle", "enhancement_take_trade_toggle"]
+      : []),
+  ]);
 }
 
 export type TransformTypeIndices = Readonly<{
@@ -49,6 +87,9 @@ export type TransformTypeIndices = Readonly<{
   travelToggle: number | null;
   tradeConfigure: number | null;
   tradeToggle: number | null;
+  characterEnqueue: number | null;
+  characterConfigure: number | null;
+  characterExecute: number | null;
 }>;
 
 export type TransformGlobalIndices = Readonly<{
@@ -61,6 +102,10 @@ export type TransformGlobalIndices = Readonly<{
   travelToggle: number;
   tradeEnabled: number;
   tradeToggle: number;
+  characterPayload: number;
+  characterEnabled: number;
+  characterExpectedIndex: number;
+  characterConfirmationAttempts: number;
 }>;
 
 export type TransformRewriteWorkspace = Readonly<{
@@ -92,6 +137,7 @@ export function applyFeatureContributions(
     storageSlashParserHook,
     packetSender,
     commandDrainBoundary,
+    preGameResolution,
   } = resolution;
   const {
     nextBodies,
@@ -102,6 +148,37 @@ export function applyFeatureContributions(
     traceGlobals,
     uiOriginalIndex,
   } = workspace;
+  const characterExecuteIndex = capabilities.characterSwitchAction
+    ? (() => {
+        const preGame = required(preGameResolution, "pre-game action certificate");
+        const action = preGame.certificate.characterSwitchAction;
+        return appendFunction(
+          required(typeIndices.characterExecute, "character action executor type"),
+          characterActionExecute({
+            layout: {
+              ...preGame.certificate.layout,
+              characterArrayPointer: preGame.certificate.characterListLayout.characterArrayPointer,
+              characterArrayCount: preGame.certificate.characterListLayout.characterArrayCount,
+            },
+            dispatcherFunctionIndex: uiOriginalIndex ?? required(
+              uiDispatcher,
+              "character action UI dispatcher",
+            ).functionIndex,
+            frameChildFunctionIndex: action.frameChild.functionIndex,
+            frameParentFunctionIndex: action.frameParent.functionIndex,
+            frameResolverFunctionIndex: action.frameResolver.functionIndex,
+            frameDispatchFunctionIndex: action.frameDispatch.functionIndex,
+            frameDispatchOffset: action.frameDispatchOffset,
+            logoutMessageId: action.logoutMessageId,
+            selectorHash: preGame.certificate.labelHashes.selector,
+            playHash: preGame.certificate.labelHashes.play,
+            pendingGlobalIndex: globalIndices.commandPending,
+            expectedIndexGlobalIndex: globalIndices.characterExpectedIndex,
+            confirmationAttemptsGlobalIndex: globalIndices.characterConfirmationAttempts,
+          }),
+        );
+      })()
+    : null;
   const rewriteAliases = (parserOriginalIndex: number): void => {
     const parser = required(storageSlashParserHook, "storage slash parser");
     nextBodies[parser.localIndex] = localActionSlashParser(
@@ -199,6 +276,15 @@ export function applyFeatureContributions(
             payloadGlobalIndex: globalIndices.travelPayload,
             reviewedMapIds: REVIEWED_TRAVEL_MAP_IDS,
             },
+          )
+        : null,
+      capabilities.characterSwitchAction
+        ? characterActionDrain(
+            globalIndices.commandPending,
+            globalIndices.commandArgumentBase,
+            globalIndices.characterPayload,
+            globalIndices.characterEnabled,
+            required(characterExecuteIndex, "character action executor"),
           )
         : null,
     ),
@@ -310,6 +396,40 @@ export function applyFeatureContributions(
         index: appendFunction(
           required(typeIndices.travelToggle, "travel toggle function type"),
           travelToggleTake(globalIndices.travelToggle),
+        ),
+      },
+    );
+  }
+  if (capabilities.characterSwitchAction) {
+    const action = required(
+      resolution.preGameResolution,
+      "pre-game character action certificate",
+    ).certificate.characterSwitchAction;
+    addedFunctionExports.push(
+      {
+        name: action.enqueueExport,
+        index: appendFunction(
+          required(typeIndices.characterEnqueue, "character enqueue function type"),
+          characterActionEnqueue(
+            globalIndices.commandPending,
+            globalIndices.commandArgumentBase,
+            globalIndices.characterEnabled,
+            globalIndices.characterExpectedIndex,
+            globalIndices.characterConfirmationAttempts,
+          ),
+        ),
+      },
+      {
+        name: action.configureExport,
+        index: appendFunction(
+          required(typeIndices.characterConfigure, "character configure function type"),
+          characterActionConfigure(
+            globalIndices.commandPending,
+            globalIndices.characterPayload,
+            globalIndices.characterEnabled,
+            globalIndices.characterExpectedIndex,
+            globalIndices.characterConfirmationAttempts,
+          ),
         ),
       },
     );

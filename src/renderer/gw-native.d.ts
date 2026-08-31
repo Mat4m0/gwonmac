@@ -33,6 +33,12 @@ import type {
   PathingSpikeController,
   WorldMapAnchorSpikeController,
 } from "../shared/cartography-spike.js";
+import type { CompanionCharacterListState } from "./companion-character-list-snapshot.js";
+import type { CharacterSwitchHost } from "./character-switch-host.js";
+import type {
+  CharacterSwitchContext as SharedCharacterSwitchContext,
+  CharacterSwitchSource,
+} from "./character-switch-model.js";
 import type {
   InputTrace as SharedInputTrace,
   InputTraceEntry as SharedInputTraceEntry,
@@ -84,12 +90,27 @@ declare global {
     dispose(): void;
   }
 
+  interface GwonmacDialogHandle {
+    show(): void;
+    close(): void;
+    dispose(): void;
+  }
+
   interface GwonmacSurfaceController {
     register(surface: Readonly<{
       root: HTMLElement;
       priority: number;
+      transient?: boolean;
       dismiss(): void;
     }>): GwonmacSurfaceHandle;
+    registerDialog(dialog: Readonly<{
+      root: HTMLDialogElement;
+      priority: number;
+      transient?: boolean;
+      dismiss(): void;
+      restoreFocus(): HTMLElement | null;
+    }>): GwonmacDialogHandle;
+    dismissTransient(): void;
   }
 
   type InputTraceEntry = SharedInputTraceEntry;
@@ -208,11 +229,18 @@ declare global {
   }
 
   type PreGameState = "unknown" | "character-select" | "reconnect" | "loading";
+  type CharacterSwitchContext = SharedCharacterSwitchContext;
 
   interface PreGameControls {
     state(): PreGameState;
-    playable(): "outpost" | "explorable" | null;
+    switchContext(): CharacterSwitchContext;
     diagnosticMask(): number;
+  }
+
+  interface CharacterListSource {
+    readonly state: CompanionCharacterListState;
+    subscribe(listener: (state: CompanionCharacterListState) => void): () => boolean;
+    dispose(): void;
   }
 
   interface EnhancementAutomation {
@@ -288,6 +316,10 @@ declare global {
     }>;
     gwCompanionRuntime?: CompanionDeveloperRuntime | CompanionObserverRuntime | null;
     gwPreGameControls?: PreGameControls | null;
+    gwCharacterList?: CharacterListSource | null;
+    gwCharacterSwitchHost?: CharacterSwitchHost | null;
+    gwCharacterSwitch?: CharacterSwitchSource | null;
+    /** Unpackaged, read-only account-character research projection. */
     gwCompanionState?: PublishedCompanionState;
     /** The cursor's bounded presentation state; present once the nativeCursor enhancement installs. */
     gwCursorState?(): Readonly<{

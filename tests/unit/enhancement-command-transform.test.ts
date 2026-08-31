@@ -219,6 +219,7 @@ describe("Enhancement command transform", () => {
       nativeCursor: false,
       playRegionObservation: false,
     preGameControls: false,
+    characterSwitchAction: false,
       targetObservation: false,
       partyObservation: false,
       teamApply: false,
@@ -242,6 +243,7 @@ describe("Enhancement command transform", () => {
         ...aliasesOnly,
         playRegionObservation: true,
     preGameControls: false,
+    characterSwitchAction: false,
         [action]: true,
       };
       const effective = intersectEnhancementCapabilities(capabilities, capabilities);

@@ -29,6 +29,7 @@ const COMPANION_SNAPSHOT_BYTES = COMPANION_ABI.snapshot.bytes;
 const COMPANION_TOOLBOX_BYTES = COMPANION_ABI.toolbox.bytes;
 const COMPANION_SKILL_SLOT_BYTES = COMPANION_ABI.skillSlots.bytes;
 const COMPANION_SKILL_COOLDOWN_BYTES = COMPANION_ABI.skillCooldowns.bytes;
+const COMPANION_CHARACTER_LIST_BYTES = COMPANION_ABI.characterList.bytes;
 
 type CompanionKernelInit = (
   snapshotPointer: number,
@@ -47,6 +48,8 @@ type CompanionKernelInit = (
   skillCooldownBytes: number,
   playRegionPointer: number,
   playRegionBytes: number,
+  characterListPointer: number,
+  characterListBytes: number,
   featureFlags: number,
 ) => number;
 
@@ -79,6 +82,7 @@ type CompanionKernelRequest = Readonly<{
     skillSlots: KernelRegion;
     skillCooldowns: KernelRegion;
     playRegion: KernelRegion;
+    characterList?: KernelRegion;
   }>;
 }>;
 
@@ -108,6 +112,7 @@ function hasExactSignatures(exports: WebAssembly.Exports): boolean {
 
 function runtimeEnd(request: CompanionKernelRequest): number {
   const sharedRegions = Object.entries(request.regions)
+    .filter((entry): entry is [string, KernelRegion] => entry[1] !== undefined)
     .filter(([, region]) => region.bytes > 0)
     .map(([name, region]) => ({
       name,
@@ -143,7 +148,9 @@ function bindCompanionKernel(
   const skillSlotBytes = exports.companion_skill_slot_bytes as () => number;
   const skillCooldownBytes = exports.companion_skill_cooldown_bytes as () => number;
   const playRegionBytes = exports.companion_play_region_bytes as () => number;
+  const characterListBytes = exports.companion_character_list_bytes as () => number;
   const { regions } = request;
+  const characterList = regions.characterList ?? { pointer: 0, bytes: 0 };
   if (
     companionAbi() !== COMPANION_ABI.kernel
     || configBytes() !== regions.config.bytes
@@ -154,6 +161,7 @@ function bindCompanionKernel(
     || skillSlotBytes() !== COMPANION_SKILL_SLOT_BYTES
     || skillCooldownBytes() !== COMPANION_SKILL_COOLDOWN_BYTES
     || playRegionBytes() !== COMPANION_PLAY_REGION_BYTES
+    || characterListBytes() !== COMPANION_CHARACTER_LIST_BYTES
   ) {
     throw new Error("Companion kernel rejected its ABI");
   }
@@ -175,6 +183,8 @@ function bindCompanionKernel(
     regions.skillCooldowns.bytes,
     regions.playRegion.pointer,
     regions.playRegion.bytes,
+    characterList.pointer,
+    characterList.bytes,
     request.featureFlags,
   ) !== 1) {
     throw new Error("Companion kernel rejected its ABI");

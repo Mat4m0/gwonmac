@@ -8,6 +8,7 @@ import {
   strokeCasedPath,
   type CellCorners,
 } from "../../src/renderer/cartography-spike/cartography-paint.js";
+import { cartographyCellPresentation } from "../../src/renderer/cartography-spike/cartography-grid-layer.js";
 
 class RecordingContext {
   readonly strokes: Readonly<{ color: unknown; width: number; dash: readonly number[] }>[] = [];
@@ -86,4 +87,22 @@ test("mission-map hover range is dormant until Shift is held", () => {
   assert.equal(cartographyHoverRevealRadius(false, true), 0);
   assert.equal(cartographyHoverRevealRadius(true, false), 1);
   assert.equal(cartographyHoverRevealRadius(true, true), 3);
+});
+
+test("cell guidance never replaces the live exploration state", () => {
+  assert.deepEqual(
+    cartographyCellPresentation(false, true, "diamond"),
+    { marker: "diamond", tone: "unseen" },
+  );
+  assert.deepEqual(
+    cartographyCellPresentation(false, false, "diamond"),
+    { marker: "hatch", tone: "other-route" },
+  );
+  assert.deepEqual(
+    cartographyCellPresentation(true, false, "diamond"),
+    null,
+  );
+  assert.equal(cartographyCellPresentation(true, true, "diamond"), null);
+  assert.equal(cartographyCellPresentation(null, false, "diamond"), null);
+  assert.equal(cartographyCellPresentation(false, null, "diamond"), null);
 });

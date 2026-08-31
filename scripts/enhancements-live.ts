@@ -25,7 +25,11 @@ import {
   validateCommonAcceptance,
 } from "./enhancements-live/acceptance.js";
 import { runGraphicsProbeSession } from "./enhancements-live/graphics-probe.js";
-import { projectLiveResult } from "./enhancements-live/result.js";
+import {
+  closedCharacterSwitchFailureCode,
+  projectCharacterSwitchLiveResult,
+  projectLiveResult,
+} from "./enhancements-live/result.js";
 
 type Shutdown = { code: number | null; signal: NodeJS.Signals | null };
 
@@ -58,6 +62,7 @@ if (!plan) {
   process.exit(2);
 }
 const selectedScenario = plan.scenario;
+const privacySensitive = plan.name === "character-switch";
 const preflight = await inspectEnhancementWorkspace(
   userData,
   plan.scenario.program,
@@ -109,8 +114,10 @@ const captureProcessOutput = (chunk: Buffer) => {
     -MAX_PROCESS_OUTPUT_BYTES,
   );
 };
-stdout.on("data", captureProcessOutput);
-stderr.on("data", captureProcessOutput);
+if (!privacySensitive) {
+  stdout.on("data", captureProcessOutput);
+  stderr.on("data", captureProcessOutput);
+}
 
 /**
  * Electron announces its debugging endpoint on stderr once. Rejects if the app
@@ -176,11 +183,11 @@ async function waitForGamePage(context: BrowserContext): Promise<Page> {
 const endpoint = await debuggingEndpoint(stderr);
 
 let browser: Browser | undefined;
-// The page the failure handler screenshots, which is the only reason a handle
-// has to outlive the run. The run itself holds the page as a `const`, so the
-// sampler it hands a scenario closes over a page that is definitely there.
+// The current account renderer can be replaced during logout or reload. Fixed
+// observation projections resolve it again for every read.
 let failurePage: Page | null = null;
 const rendererErrors: string[] = [];
+let rendererErrorCount = 0;
 let keepAlive = leaveOpen;
 // What the failure handler writes out. It is set as soon as the run has a
 // readout, so a run that fails its acceptance still reports the readout it
@@ -194,10 +201,31 @@ try {
   failurePage = page;
   const cdp = await context.newCDPSession(page);
   await cdp.send("Performance.enable");
-  page.on("console", (message) => {
-    if (message.type() === "error") rendererErrors.push(message.text());
-  });
-  page.on("pageerror", (error) => rendererErrors.push(error.message));
+  const observedPages = new WeakSet<Page>();
+  const observeRenderer = (candidate: Page) => {
+    if (observedPages.has(candidate)) return;
+    observedPages.add(candidate);
+    candidate.on("console", (message) => {
+      if (message.type() !== "error") return;
+      rendererErrorCount += 1;
+      if (!privacySensitive) {
+        rendererErrors.push(message.text());
+      }
+    });
+    candidate.on("pageerror", (error) => {
+      rendererErrorCount += 1;
+      if (!privacySensitive) {
+        rendererErrors.push(error.message);
+      }
+    });
+  };
+  observeRenderer(page);
+  const currentPage = async () => {
+    const candidate = await waitForGamePage(context);
+    observeRenderer(candidate);
+    failurePage = candidate;
+    return candidate;
+  };
   await page.waitForLoadState("domcontentloaded");
   let loginInputs = await waitForPlayable(
     page,
@@ -245,9 +273,14 @@ try {
       snapshotComplete: preflight.snapshot?.complete === true,
       transformedCache: preflight.client.transformedCache,
     },
-    rendererErrors: [...rendererErrors],
+    rendererErrors: privacySensitive
+      ? []
+      : [...rendererErrors],
+    ...(privacySensitive
+      ? { rendererErrorCount }
+      : {}),
   });
-  let result: unknown;
+  let result: { evidence?: unknown } & Record<string, unknown>;
   if (selectedScenario.tier === "graphics-observation") {
     const graphics = await runGraphicsProbeSession({
       page,
@@ -275,24 +308,45 @@ try {
     }
     selectedScenario.validate(graphicsResult);
   } else {
-    const capabilities = { page, cdp, sendAutomationCommand };
+    const capabilities = {
+      page,
+      currentPage,
+      cdp,
+      readRendererErrorCount: () => rendererErrorCount,
+      sendAutomationCommand,
+    };
     // The tier decides both halves at once, so automation capabilities cannot
     // reach an observation scenario even by mistake.
     const scenarioEvidence = selectedScenario.tier === "automation"
       ? await selectedScenario.run(scenarioContext("automation", capabilities))
       : await selectedScenario.run(scenarioContext("observation", capabilities));
+    const resultPage = await currentPage();
     const standardResult = {
-      ...await projectLiveResult(page, cadence, plan.name),
+      ...await projectLiveResult(resultPage, cadence, plan.name),
       ...runMetadata(),
       ...(scenarioEvidence ? { evidence: scenarioEvidence } : {}),
     };
-    result = standardResult;
+    // The generic projection contains useful gameplay diagnostics such as the
+    // current map and player identifiers. The character-list run has a stricter
+    // privacy contract: publish only exact-build status, counts, and its closed
+    // aggregate evidence. Keep the full projection in memory solely for the
+    // existing common acceptance checks; never persist or print it.
+    result = privacySensitive
+      ? projectCharacterSwitchLiveResult(
+          standardResult,
+          scenarioEvidence,
+          rendererErrorCount,
+        )
+      : standardResult;
     failureResult = result;
-    validateCommonAcceptance(standardResult, expectedBuildId, {
+    validateCommonAcceptance({
+      ...standardResult,
+      rendererErrors,
+    }, expectedBuildId, {
       enhancementExpected: plan.scenario.program !== "none",
       coreObservation: plan.scenario.program === "target-observer",
     });
-    selectedScenario.validate(standardResult);
+    selectedScenario.validate(result);
   }
   console.log(JSON.stringify(result));
 
@@ -318,11 +372,12 @@ try {
 } catch (error) {
   keepAlive = true;
   await mkdir(failureDir, { recursive: true });
-  // Every Toolbox-program scenario can expose visible chat, so none records
-  // pixels on failure.
+  // Toolbox/reconnect can expose private text, and the character probe may be
+  // running over account UI, so none records pixels on failure.
   if (
     plan.scenario.program !== "toolbox-foundation"
     && plan.scenario.program !== "reconnect-probe"
+    && !privacySensitive
     && failurePage
     && !failurePage.isClosed()
   ) {
@@ -333,13 +388,30 @@ try {
   await writeFile(
     path.join(failureDir, "failure.json"),
     JSON.stringify({
-      message: error instanceof Error ? error.message : String(error),
+      message: privacySensitive
+        ? "character-switch-failed"
+        : error instanceof Error
+          ? error.message
+          : String(error),
       result: failureResult,
-      rendererErrors,
-      processOutput,
+      ...(privacySensitive && failureResult === null
+        ? { startupCode: closedCharacterSwitchFailureCode(error) }
+        : {}),
+      rendererErrors: privacySensitive
+        ? []
+        : rendererErrors,
+      processOutput: privacySensitive
+        ? null
+        : processOutput,
     }),
   );
-  console.error(error);
+  if (privacySensitive) {
+    console.error(
+      "character switch failed; inspect the privacy-safe failure.json",
+    );
+  } else {
+    console.error(error);
+  }
   console.error("Electron was left open; no active download was interrupted.");
   process.exitCode = 1;
 } finally {

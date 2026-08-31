@@ -58,6 +58,7 @@ void app.whenReady().then(async () => {
           skillCooldownObservation: false,
           playRegionObservation: true,
           preGameControls: false,
+    characterSwitchAction: false,
         },
       });
   state.localVerifierCompleted = true;

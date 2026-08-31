@@ -182,6 +182,10 @@ const api = {
     set: (value) => ipcRenderer.invoke(IPC.settingsSet, value),
     onChange: (callback) => listen(IPC.settingsEvent, callback),
   },
+  characterSwitchUsage: {
+    get: () => ipcRenderer.invoke(IPC.characterSwitchUsageGet),
+    record: (value) => ipcRenderer.invoke(IPC.characterSwitchUsageRecord, value),
+  },
   credentials: {
     load: () => ipcRenderer.invoke(IPC.credentialsLoad),
     save: (value) => ipcRenderer.invoke(IPC.credentialsSave, value),

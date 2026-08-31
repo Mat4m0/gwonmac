@@ -21,8 +21,10 @@ to the game installation.
 ## Generated grid
 
 The grid is generated at runtime from certified map projections. There is no
-grid texture or per-map data file. Both map surfaces use one 32-map-unit cell
-definition and the client's half-open boundary rules.
+grid texture. Both map surfaces use one 32-map-unit cell definition and the
+client's half-open boundary rules. Compact continent masks imported from
+GWToolbox++ identify cells that Guild Wars can credit somewhere; exact current
+map bounds and live pathing decide whether this loaded map can reveal them.
 
 The Mission Map provides absolute map coordinates, pan, zoom, and drawable
 size. The Compass contributes its certified camera direction and circle. A
@@ -40,6 +42,16 @@ preview the Bird's Eye 7×7 range. Optional persistent modes show the same
 footprints around the player on the Compass.
 Observed exploration state is advisory and resets or hides whenever the client
 cannot provide a complete current-generation snapshot.
+
+Current-map pathing adds conservative reveal guidance without replacing that
+observed state. The configured unseen marker means this map has ground within
+the active reveal range. Grey hatching means Toolbox++ identifies the unseen
+cell as globally creditable, but the loaded map has no known ground in range;
+another map, mission, arena, or special route may be required. Explored cells
+have no marker. Cells outside the exact current-map rectangle, or absent from
+the baked creditable mask, are left unmarked instead of being guessed at.
+Pathing can exist behind a gate or on disconnected terrain, so a candidate is
+not a routing promise. Both actionable colors are part of each shareable style.
 
 ## Walkability
 

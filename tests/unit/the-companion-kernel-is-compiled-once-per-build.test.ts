@@ -47,6 +47,7 @@ function rendererCheckout(): string {
   write("src/renderer/favicon.png", "png");
   write("src/renderer/harness.css", "css");
   write("src/renderer/cartography-overlay-controls.css", "controls-css");
+  write("src/renderer/character-switch.css", "character-css");
   write("src/renderer/loading.css", "css");
   write("src/renderer/fonts/COPYING-QUALITYPE", "licence");
   write("src/renderer/fonts/QTFrizQuad.otf", "font");
@@ -59,6 +60,9 @@ function rendererCheckout(): string {
   // the Tools application reads it too, and apps/** may only reach src/shared.
   write("src/shared/ui/tokens.css", "tokens");
   write("src/shared/ui/components.css", "components");
+  for (let profession = 1; profession <= 10; profession += 1) {
+    write(`src/shared/images/professions/${profession}.png`, `profession-${profession}`);
+  }
   write("node_modules/@fontsource-variable/inter/wght.css", "inter-css");
   write("node_modules/@fontsource-variable/inter/LICENSE", "inter-licence");
   for (const subset of [
@@ -137,6 +141,7 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
       .sort();
     assert.deepEqual(relative, [
       "cartography-overlay-controls.css",
+      "character-switch.css",
       "favicon.ico",
       "favicon.png",
       "fonts/COPYING-INTER",
@@ -156,6 +161,16 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
       "images/playstation-controller-prompts.png",
       "index.html",
       "loading.css",
+      "shared/images/professions/1.png",
+      "shared/images/professions/10.png",
+      "shared/images/professions/2.png",
+      "shared/images/professions/3.png",
+      "shared/images/professions/4.png",
+      "shared/images/professions/5.png",
+      "shared/images/professions/6.png",
+      "shared/images/professions/7.png",
+      "shared/images/professions/8.png",
+      "shared/images/professions/9.png",
       // Copied out of src/shared, and flattened to `ui/` so the renderer and
       // the Tools bundle load the one design system by the same href.
       "ui/components.css",

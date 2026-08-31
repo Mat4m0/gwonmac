@@ -50,6 +50,9 @@ must receive input unchanged. A stationary state must not redraw continuously.
 | Resize game window | `capture mission-game-resized` | Projection remains attached at the new global scale. |
 | Hold Shift and hover a cell | `capture mission-cell-hover` | Hover guidance identifies one cell and its normal 3×3 reveal neighborhood without intercepting map input; releasing Shift hides it. |
 | Hold Option+Shift and hover a cell | `capture mission-birds-eye-hover` | The same cell shows the Bird's Eye 7×7 footprint; releasing either modifier returns to the expected smaller or hidden state. |
+| Unseen cell revealable from this map | `capture mission-current-map-credit` | The configured unseen marker appears only where live current-map ground is within the active reveal range. |
+| Unseen cell requiring another route | `capture mission-other-map-credit` | Grey hatching marks a Toolbox++ creditable cell without current-map ground in range. |
+| Explored or out-of-map cell | `capture mission-non-actionable` | No unseen marker or hatching is drawn. |
 | Close and reopen | `capture mission-reopened` | Projection returns without a stale duplicate canvas. |
 
 Compare the reported cell pixel sizes with the visible result. Values must
@@ -63,7 +66,8 @@ use the shared style coherently, and preserve native map detail. Repeat a
 combined capture at low, medium, and full opacity for each layer and with the
 Cartographer, Synthwave, and Monochrome styles. Select **Customize style…** and confirm
 that colors, line widths, line patterns, and all five unseen-cell markers change
-the same role on the Compass and Mission Map. Copy that style, delete the local
+the same role on the Compass and Mission Map. Confirm the unseen and other-map-route
+colors can be changed independently. Copy that style, delete the local
 copy, import it again, and confirm the imported style remains selected after
 reopening Settings.
 

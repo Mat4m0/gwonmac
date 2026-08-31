@@ -189,7 +189,11 @@ describe("an observation live run cannot reach the automation tier", () => {
     const observation = scenarioContext("observation", capabilities);
     assert.deepEqual(
       Object.keys(observation).sort(),
-      ["readCursorProjection", "wait"],
+      [
+        "readCharacterSwitchDiagnostics",
+        "readCursorProjection",
+        "wait",
+      ],
     );
     for (const capability of [
       "page",
@@ -218,7 +222,7 @@ describe("an observation live run cannot reach the automation tier", () => {
     assert.equal("run" in graphics, false);
   });
 
-  it("lets an observation scenario read only the fixed cursor projection", async () => {
+  it("lets an observation scenario read only its fixed projections", async () => {
     const context = scenarioContext("observation", {
       page: asPage({
         evaluate: async (_body: unknown, argument: unknown) => argument ?? "read",
@@ -228,10 +232,12 @@ describe("an observation live run cannot reach the automation tier", () => {
       sendAutomationCommand: async () => undefined,
     }) as {
       readCursorProjection: () => Promise<unknown>;
+      readCharacterSwitchDiagnostics: () => Promise<unknown>;
       wait: (ms: number) => Promise<unknown>;
     };
     assert.equal(await context.readCursorProjection(), "read");
-    assert.equal(await context.wait(1), "waited");
+    assert.equal(await context.readCharacterSwitchDiagnostics(), "read");
+    assert.equal(await context.wait(1), undefined);
   });
 
   it("synthesizes no bootstrap input when the client is not yet playable", async () => {

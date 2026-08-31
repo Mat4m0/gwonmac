@@ -13,6 +13,7 @@ import path from "node:path";
 // different applications. A new asset must be reviewed here.
 const ASSETS = [
   "cartography-overlay-controls.css",
+  "character-switch.css",
   "favicon.ico",
   "favicon.png",
   "fonts/COPYING-QUALITYPE",
@@ -33,6 +34,16 @@ const ASSETS = [
 const SHARED_ASSETS = [
   ["src/shared/ui/tokens.css", "ui/tokens.css"],
   ["src/shared/ui/components.css", "ui/components.css"],
+  ["src/shared/images/professions/1.png", "shared/images/professions/1.png"],
+  ["src/shared/images/professions/2.png", "shared/images/professions/2.png"],
+  ["src/shared/images/professions/3.png", "shared/images/professions/3.png"],
+  ["src/shared/images/professions/4.png", "shared/images/professions/4.png"],
+  ["src/shared/images/professions/5.png", "shared/images/professions/5.png"],
+  ["src/shared/images/professions/6.png", "shared/images/professions/6.png"],
+  ["src/shared/images/professions/7.png", "shared/images/professions/7.png"],
+  ["src/shared/images/professions/8.png", "shared/images/professions/8.png"],
+  ["src/shared/images/professions/9.png", "shared/images/professions/9.png"],
+  ["src/shared/images/professions/10.png", "shared/images/professions/10.png"],
   // The website and Hub use one reviewed static painting. Keep it canonical in
   // the website package and copy it into the renderer at build time.
   ["apps/website/public/bg-reforged.jpg", "images/bg-reforged.jpg"],

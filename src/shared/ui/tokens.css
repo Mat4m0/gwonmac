@@ -400,7 +400,10 @@
 /* Accessibility changes the rendered material, never the player's saved
  * preference. Returning to the ordinary system setting restores their value. */
 @media (prefers-reduced-transparency: reduce) {
-  :root { --ui-effective-panel-opacity: 1; }
+  :root {
+    --ui-effective-panel-opacity: 1;
+    --ui-overlay-fill: #080807;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -60,6 +60,31 @@
   text-shadow: var(--ui-text-shadow);
 }
 
+/* Top-level task dialogs share one modal treatment. Their owners decide only
+ * content, close policy, and initial focus; the renderer surface controller
+ * owns backdrop dismissal, input isolation, and focus restoration. */
+.ui-modal::backdrop { background: var(--ui-overlay-fill); }
+
+/* Palette dialogs use the whole top layer as their dismissible hit area while
+ * their visible panel stays compact. Explicit top/left positioning avoids the
+ * browser's intrinsic dialog centering offsetting this viewport-sized shell. */
+.ui-modal-layer {
+  position: fixed;
+  inset: auto;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  color: var(--ui-text);
+}
+
 .ui-frame::before,
 .ui-frame::after {
   content: "";

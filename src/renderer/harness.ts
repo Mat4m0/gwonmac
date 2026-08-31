@@ -234,6 +234,15 @@ if (developerProgram !== 'none') {
 let automaticCharacterReturn:
   | import('./automatic-character-return.js').AutomaticCharacterReturn
   | null = null;
+let characterSwitchHost:
+  | import('./character-switch-host.js').CharacterSwitchHost
+  | null = null;
+let installCharacterSwitchHost:
+  typeof import('./character-switch-host.js').installCharacterSwitchHost;
+const cancelAutomaticReturnForCharacterSwitch = () => {
+  automaticCharacterReturn?.cancelForCharacterSwitch();
+};
+window.addEventListener('gw:character-switch-claim', cancelAutomaticReturnForCharacterSwitch);
 const diagnosticProfile = native().init.diagnosticProfile;
 const glOverridesEnabled = diagnosticProfile === 'standard';
 const presentationPath = diagnosticProfile === 'direct-canvas'
@@ -644,6 +653,13 @@ addEventListener('beforeunload', () => {
   controllerPrompts = null;
   disposeMemoryWarningSettings();
   automaticCharacterReturn?.dispose();
+  characterSwitchHost?.dispose();
+  characterSwitchHost = null;
+  delete window.gwCharacterSwitchHost;
+  window.removeEventListener(
+    'gw:character-switch-claim',
+    cancelAutomaticReturnForCharacterSwitch,
+  );
   delete window.gwVirtualGamepad;
   delete window.gwControllerPromptTextureStats;
 });
@@ -1162,9 +1178,8 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
     () => inputHost?.traceState(),
   );
   gamepadTrace = host.installGamepadTrace(inputTrace);
-  // Install before game input so a key claimed by the topmost GWonMac surface
-  // cannot also reach the official client's window-capture listener.
-  window.gwSurfaces = host.installSurfaceController(document);
+  characterSwitchHost = installCharacterSwitchHost(document.body);
+  window.gwCharacterSwitchHost = characterSwitchHost;
   native().inputTrace.onEntry((entry) => inputTrace?.record(entry));
   window.addEventListener('gw:input-trace', (event) => {
     if (!(event instanceof CustomEvent) || typeof event.detail !== 'boolean') return;
@@ -1296,6 +1311,7 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
       proxyRoutes,
       virtualGamepad,
       controllerPromptTexture,
+      characterSwitch,
     ] = await Promise.all([
       import('./platform-capabilities.js'),
       import('./socket-host.js'),
@@ -1317,6 +1333,7 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
       import('../shared/proxy-routes.js'),
       import('./virtual-gamepad.js'),
       import('./controller-prompt-texture.js'),
+      import('./character-switch-host.js'),
     ]);
     host = {
       ...clientExit,
@@ -1334,6 +1351,12 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
       ...templateFilesystemTrace,
       ...controllerPromptTexture,
     };
+    // Dialogs belong to the application shell and must work before a game
+    // artifact is available. Installing their owner here also still precedes
+    // the official client's input hooks when a verified client does load.
+    window.gwSurfaces = host.installSurfaceController(document);
+    window.dispatchEvent(new Event('gw:surfaces-ready'));
+    installCharacterSwitchHost = characterSwitch.installCharacterSwitchHost;
     createClientHealthConfirmation =
       clientHealth.createClientHealthConfirmation;
     applyAppearance = appearance.applyAppearance;

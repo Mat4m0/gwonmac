@@ -9,6 +9,9 @@ import type { KnownEnhancementBuild } from "./enhancement-builds.js";
 
 type Certificate = NonNullable<KnownEnhancementBuild["preGameControls"]>;
 
+export const ENHANCEMENT_PRE_GAME_STATE_EXPORT = "enhancement_pre_game_state";
+export const ENHANCEMENT_PRE_GAME_DIAGNOSTIC_EXPORT = "enhancement_pre_game_diagnostic";
+
 export type ResolvedPreGameFunction = Readonly<{
   localIndex: number;
   typeIndex: number;
@@ -48,6 +51,29 @@ export function resolveEnhancementPreGameTransform(options: Readonly<{
     options.fail("pre-game frame body does not match its certificate");
   }
   return { certificate, hashFunction };
+}
+
+export function verifyCharacterSwitchActionCertificate(options: Readonly<{
+  resolution: EnhancementPreGameResolution;
+  resolveFunction: ResolveFunction;
+  bodyHash: (functionIndex: number) => string;
+  fail: (message: string) => never;
+}>): void {
+  const certificate = options.resolution?.certificate
+    ?? options.fail("character switch action requires pre-game controls");
+  const action = certificate.characterSwitchAction;
+  for (const [label, proof] of Object.entries({
+    "character frame child": action.frameChild,
+    "character frame parent": action.frameParent,
+    "character frame resolver": action.frameResolver,
+    "character frame dispatch": action.frameDispatch,
+    "character logout producer": action.logoutProducer,
+  })) {
+    options.resolveFunction(label, proof.functionIndex, proof.params, proof.results);
+    if (options.bodyHash(proof.functionIndex) !== proof.bodySha256) {
+      options.fail(`${label} body does not match its semantic fingerprint`);
+    }
+  }
 }
 
 function rejectWithMaskIf(condition: Uint8Array): Uint8Array {
@@ -262,4 +288,23 @@ export function preGameStateReader(
     Uint8Array.of(0x0b),
     Uint8Array.of(0x41), sleb(0), Uint8Array.of(0x0b),
   );
+}
+
+export function appendPreGameReaders(options: Readonly<{
+  resolution: NonNullable<EnhancementPreGameResolution>;
+  typeIndex: number;
+  appendFunction: (typeIndex: number, body: Uint8Array) => number;
+}>): readonly Readonly<{ name: string; index: number }>[] {
+  const diagnosticIndex = options.appendFunction(
+    options.typeIndex,
+    preGameDiagnosticReader(options.resolution.certificate),
+  );
+  const stateIndex = options.appendFunction(
+    options.typeIndex,
+    preGameStateReader(options.resolution.certificate, diagnosticIndex),
+  );
+  return Object.freeze([
+    Object.freeze({ name: ENHANCEMENT_PRE_GAME_STATE_EXPORT, index: stateIndex }),
+    Object.freeze({ name: ENHANCEMENT_PRE_GAME_DIAGNOSTIC_EXPORT, index: diagnosticIndex }),
+  ]);
 }

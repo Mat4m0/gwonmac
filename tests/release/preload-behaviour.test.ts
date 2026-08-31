@@ -210,6 +210,16 @@ const INVOCATIONS: Invocation[] = [
     args: [{ characterKey: "0123456789abcdef", mapId: 55 }],
     channel: IPC.travelHistoryRecord,
   },
+  {
+    path: "characterSwitchUsage.get",
+    args: [],
+    channel: IPC.characterSwitchUsageGet,
+  },
+  {
+    path: "characterSwitchUsage.record",
+    args: [{ characterKey: "0123456789abcdef" }],
+    channel: IPC.characterSwitchUsageRecord,
+  },
   { path: "trade.subscribe", args: ["kamadan"], channel: IPC.tradeSubscribe },
   { path: "trade.unsubscribe", args: [], channel: IPC.tradeUnsubscribe },
   {

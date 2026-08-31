@@ -457,6 +457,12 @@ export class ClientRuntime {
           supported.preGameControls,
           preparationFailed,
         ),
+        characterSwitchAction: optionalFeatureStatus(
+          requested.characterSwitchAction,
+          effective.characterSwitchAction,
+          supported.characterSwitchAction,
+          preparationFailed,
+        ),
       },
     };
     gauge("wasm.templateSaveCompatible", prepared.gameFileSaving.status === "available");

@@ -13,8 +13,13 @@ function exportsFor(): WebAssembly.Exports {
   return {
     [WORLD_MAP_ANCHOR_SPIKE_GLOBALS.status]: scalar("i32", 1),
     [WORLD_MAP_ANCHOR_SPIKE_GLOBALS.generation]: scalar("i32", 7),
+    [WORLD_MAP_ANCHOR_SPIKE_GLOBALS.continent]: scalar("i32", 0),
     [WORLD_MAP_ANCHOR_SPIKE_GLOBALS.worldAnchorX]: scalar("f32", 4_776),
     [WORLD_MAP_ANCHOR_SPIKE_GLOBALS.worldAnchorY]: scalar("f32", 4_682),
+    [WORLD_MAP_ANCHOR_SPIKE_GLOBALS.mapMinX]: scalar("f32", 4_000),
+    [WORLD_MAP_ANCHOR_SPIKE_GLOBALS.mapMinY]: scalar("f32", 4_000),
+    [WORLD_MAP_ANCHOR_SPIKE_GLOBALS.mapMaxX]: scalar("f32", 6_000),
+    [WORLD_MAP_ANCHOR_SPIKE_GLOBALS.mapMaxY]: scalar("f32", 6_000),
     [WORLD_MAP_ANCHOR_SPIKE_GLOBALS.observe]: () => undefined,
   };
 }
@@ -25,8 +30,13 @@ test("reads a bounded pointer-free world-map anchor", () => {
   assert.deepEqual(reader.snapshot(), {
     status: 1,
     generation: 7,
+    continent: 0,
     worldAnchorX: 4_776,
     worldAnchorY: 4_682,
+    mapMinX: 4_000,
+    mapMinY: 4_000,
+    mapMaxX: 6_000,
+    mapMaxY: 6_000,
   });
 });
 
@@ -38,8 +48,13 @@ test("refuses an unavailable or implausible world-map anchor", () => {
   assert.deepEqual(reader.snapshot(), {
     status: 4,
     generation: 7,
+    continent: 0,
     worldAnchorX: 4_776,
     worldAnchorY: 4_682,
+    mapMinX: 4_000,
+    mapMinY: 4_000,
+    mapMaxX: 6_000,
+    mapMaxY: 6_000,
   });
   (exports[WORLD_MAP_ANCHOR_SPIKE_GLOBALS.status] as WebAssembly.Global).value = 1;
   (exports[WORLD_MAP_ANCHOR_SPIKE_GLOBALS.worldAnchorX] as WebAssembly.Global).value = Infinity;

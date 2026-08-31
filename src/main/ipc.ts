@@ -101,6 +101,10 @@ import {
   submitVisualCapture,
 } from "./visual-capture.js";
 import { parseDiagnosticProfile } from "./core/diagnostic-profile.js";
+import {
+  parseCharacterSwitchUsageRecord,
+  type CharacterSwitchUsageDocument,
+} from "../shared/character-switch-usage.js";
 
 export interface IpcContext {
   sockets: SocketManager;
@@ -110,6 +114,8 @@ export interface IpcContext {
   getSnapshotMetadata: () => Promise<SnapshotMetadata>;
   getSettings: () => Promise<AppSettings>;
   updateSettings: (patch: RendererSettingsPatch) => Promise<AppSettings>;
+  getCharacterSwitchUsage: () => Promise<CharacterSwitchUsageDocument>;
+  recordCharacterSwitchUsage: (characterKey: string) => Promise<CharacterSwitchUsageDocument>;
   setDiagnosticProfile: (profile: DiagnosticProfile) => Promise<DiagnosticProfile>;
   confirmClientHealthy: (token: ClientHealthToken) => Promise<void>;
   getClientSession: (win: BrowserWindow) => ClientSession;
@@ -433,6 +439,11 @@ export function registerIpcHandlers(ctx: IpcContext): {
       return saved;
     }),
 
+    characterSwitchUsageGet: channel(nothing, () => ctx.getCharacterSwitchUsage()),
+    characterSwitchUsageRecord: channel(
+      one(parseCharacterSwitchUsageRecord),
+      (_win, characterKey) => ctx.recordCharacterSwitchUsage(characterKey),
+    ),
     credentialsLoad: channel(nothing, async (win) => {
       const ownerId = ctx.windows.requireDiagnosticOwnerForWindow(win);
       try {

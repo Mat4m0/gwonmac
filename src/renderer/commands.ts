@@ -57,6 +57,13 @@
   }
 
   window.gwNative.commands.handle(async (command) => {
+    if (
+      command.type === 'accounts.settings.open'
+      || command.type === 'tools.toggle'
+      || command.type === 'trade.toggle'
+      || command.type === 'storage.open'
+      || command.type === 'diagnostics.toggle'
+    ) window.gwSurfaces?.dismissTransient();
     switch (command.type) {
       case 'input.reset':
         dispatch('gw:input-reset');
@@ -104,6 +111,14 @@
         const result: { error?: unknown } = {};
         if (!dispatch('gw:travel-toggle', result)) {
           throw new Error('Travel is not available in this launch.');
+        }
+        if (result.error !== undefined) throw result.error;
+        break;
+      }
+      case 'character.toggle': {
+        const result: { error?: unknown } = {};
+        if (!dispatch('gw:character-toggle', result)) {
+          throw new Error('Character switching is not available in this launch.');
         }
         if (result.error !== undefined) throw result.error;
         break;

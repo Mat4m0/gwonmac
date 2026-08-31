@@ -7,6 +7,7 @@
 use core::ptr::write_volatile;
 
 use crate::abi::*;
+use crate::character_identity::character_key;
 use crate::memory::{checked_add, checked_mul, contains, indexed, offset, pointer, read_u32};
 use crate::{resolve_game, GameState};
 
@@ -87,7 +88,7 @@ unsafe fn observe_travel_unlocks(layout: Layout, game: u32) -> Option<[u32; TRAV
     Some(words)
 }
 
-unsafe fn character_key(layout: Layout, game: u32) -> Option<u64> {
+unsafe fn current_character_key(layout: Layout, game: u32) -> Option<u64> {
     if layout.character_uuid == 0 {
         return None;
     }
@@ -95,20 +96,7 @@ unsafe fn character_key(layout: Layout, game: u32) -> Option<u64> {
     let character =
         offset(game, layout.character_context).and_then(|at| unsafe { pointer(at, required) })?;
     let uuid = offset(character, layout.character_uuid)?;
-    if !contains(uuid, 16) {
-        return None;
-    }
-    let mut hash = 0xcbf2_9ce4_8422_2325_u64;
-    let mut nonzero = 0_u32;
-    for index in 0..4_u32 {
-        let word = unsafe { read_u32(offset(uuid, index * 4)?)? };
-        nonzero |= word;
-        for byte in word.to_le_bytes() {
-            hash ^= byte as u64;
-            hash = hash.wrapping_mul(0x100_0000_01b3);
-        }
-    }
-    (nonzero != 0 && hash != 0).then_some(hash)
+    unsafe { character_key(uuid) }
 }
 
 pub(crate) unsafe fn tick(layout: Layout) {
@@ -120,7 +108,7 @@ pub(crate) unsafe fn tick(layout: Layout) {
             play_region,
             ..
         } if play_region == PLAY_REGION_PVE || play_region == PLAY_REGION_PVP => unsafe {
-            let key = character_key(layout, game);
+            let key = current_character_key(layout, game);
             let unlocks = observe_travel_unlocks(layout, game);
             let flags = FLAG_PLAY_REGION_READY
                 | if key.is_some() {

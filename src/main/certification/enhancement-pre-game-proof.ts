@@ -91,6 +91,18 @@ const FRAME_CONSTRUCTOR_ROLE = semanticRole(
 
 const FRAME_HASH_READER_SHA256 =
   "462cfc24428d5bd180773c5cec7a693a01b9cb5fcd790e8f63bb2ab10f5d2840";
+const CHARACTER_ARRAY_READER_SHA256 =
+  "87b6b897fd8df7688f46fcaf517b78b1af5334d00e85f4c20d9d9978a4f799e0";
+const SELECTED_CHARACTER_READER_SHA256 =
+  "49eb229605004bc69ce17787f6e38d1b453892e740a1b0f3e071d86e4685d6aa";
+const FRAME_CHILD_SHA256 =
+  "9f73f1018d0bf99fd0d16b6ede0921dbe29cf70a4da4a61c9b24c1e68dbb0bf0";
+const FRAME_PARENT_SHA256 =
+  "46c90817c6ab335d5b8d57fdc1e38abd146c2b123dd8dcf0f08aca8245b8a9f2";
+const FRAME_MESSAGE_SHA256 =
+  "29041a4f537194fae813ddd84c99a06b6f716dd6fe2b4adc64d60f32857abd9f";
+const LOGOUT_PRODUCER_SHA256 =
+  "b618abba3579ffe6f149a23e2550f6b86571b0f3beaa30acea059153f7cd6b06";
 
 const LABELS = Object.freeze({
   play: "Play",
@@ -279,8 +291,12 @@ function deriveFrameLayout(
     frameArray,
     frameCount,
     frameBytes: unsignedOperand(constructorBody, 33),
+    // These are part of the exact reviewed Frame constructor layout. The
+    // constructor and frame-message bodies are both body-hash certified below.
+    frameChildOffsetId: 0xb8,
     frameId: unsignedOperand(constructorBody, 134),
     frameHashId: unsignedOperand(hashReaderBody, 11),
+    frameRelation: 0x128,
     frameState: unsignedOperand(constructorBody, 87),
     contextRoot: playRegion.contextRoot,
     gameContextSlot: playRegion.gameContextSlot,
@@ -302,8 +318,53 @@ export function derivePreGameControls(
   const yes = exactLabel(module, data, LABELS.yes);
   const no = exactLabel(module, data, LABELS.no);
   const reconnectDialog = exactLabel(module, data, LABELS.reconnectDialog);
+  const characterArrayReader = uniqueExactFunction(
+    module, CHARACTER_ARRAY_READER_SHA256, ["i32", "i32"], ["i32"],
+  );
+  const selectedCharacterReader = uniqueExactFunction(
+    module, SELECTED_CHARACTER_READER_SHA256, ["i32", "i32"], [],
+  );
+  const frameChild = uniqueExactFunction(
+    module, FRAME_CHILD_SHA256, ["i32", "i32"], ["i32"],
+  );
+  const frameParent = uniqueExactFunction(
+    module, FRAME_PARENT_SHA256, ["i32"], ["i32"],
+  );
+  const frameMessage = uniqueExactFunction(
+    module, FRAME_MESSAGE_SHA256, ["i32", "i32", "i32", "i32"], [],
+  );
+  const frameResolver = uniqueRoleFunction(module, FRAME_RESOLVER_ROLE);
+  const logoutProducer = uniqueExactFunction(
+    module, LOGOUT_PRODUCER_SHA256, ["i32", "i32", "i32"], [],
+  );
   if (frameLayout === null || play === null || selector === null || yes === null
-    || no === null || reconnectDialog === null) return null;
+    || no === null || reconnectDialog === null || characterArrayReader === null
+    || selectedCharacterReader === null || frameChild === null || frameParent === null
+    || frameMessage === null || frameResolver === null || logoutProducer === null) return null;
+  const frameMessageEvidence = context.decodeFunctions([85, 168]).find(
+    (candidate) => candidate.functionIndex === frameMessage,
+  );
+  const frameDispatchCandidates = frameMessageEvidence
+    ? [...frameMessageEvidence.calls.keys()].filter((functionIndex) =>
+        functionIndex !== frameMessage
+        && signatureMatches(module, functionIndex, ["i32", "i32", "i32", "i32"], []))
+    : [];
+  if (
+    frameMessageEvidence?.calls.get(frameResolver) !== 1
+    || frameMessageEvidence.messageSites[85] !== 2
+    || frameMessageEvidence.messageSites[168] !== 1
+    || frameDispatchCandidates.length !== 1
+  ) return null;
+  const frameDispatch = frameDispatchCandidates[0]!;
+  const characterArrayBody = functionBody(module, characterArrayReader);
+  const selectedCharacterBody = functionBody(module, selectedCharacterReader);
+  const characterArrayCount = unsignedOperand(characterArrayBody, 9);
+  const characterArrayPointer = unsignedOperand(characterArrayBody, 23);
+  const selectedCharacterName = unsignedOperand(selectedCharacterBody, 33);
+  if (
+    characterArrayCount !== characterArrayPointer + 8
+    || selectedCharacterName <= characterArrayCount
+  ) return null;
   const hashFunction = uniqueRoleFunction(module, HASH_FUNCTION_ROLE);
   if (hashFunction === null
     || !signatureMatches(module, hashFunction, ["i32", "i32"], ["i32"])) {
@@ -331,6 +392,47 @@ export function derivePreGameControls(
   }
 
   return Object.freeze({
+    characterSwitchAction: Object.freeze({
+      enqueueExport: "enhancement_character_action",
+      configureExport: "enhancement_configure_character_action",
+      logoutMessageId: 0x1000_009d,
+      frameDispatchOffset: 0xa8,
+      frameChild: Object.freeze({
+        functionIndex: frameChild,
+        params: Object.freeze(["i32", "i32"] as const),
+        results: Object.freeze(["i32"] as const),
+        bodySha256: functionBodySha256(module, frameChild),
+      }),
+      frameParent: Object.freeze({
+        functionIndex: frameParent,
+        params: Object.freeze(["i32"] as const),
+        results: Object.freeze(["i32"] as const),
+        bodySha256: functionBodySha256(module, frameParent),
+      }),
+      frameResolver: Object.freeze({
+        functionIndex: frameResolver,
+        params: Object.freeze(["i32"] as const),
+        results: Object.freeze(["i32"] as const),
+        bodySha256: functionBodySha256(module, frameResolver),
+      }),
+      frameDispatch: Object.freeze({
+        functionIndex: frameDispatch,
+        params: Object.freeze(["i32", "i32", "i32", "i32"] as const),
+        results: Object.freeze([] as const),
+        bodySha256: functionBodySha256(module, frameDispatch),
+      }),
+      logoutProducer: Object.freeze({
+        functionIndex: logoutProducer,
+        params: Object.freeze(["i32", "i32", "i32"] as const),
+        results: Object.freeze([] as const),
+        bodySha256: functionBodySha256(module, logoutProducer),
+      }),
+    }),
+    characterListLayout: Object.freeze({
+      characterArrayPointer,
+      characterArrayCount,
+      selectedCharacterName,
+    }),
     hashFunction: Object.freeze({
       functionIndex: hashFunction,
       params: Object.freeze(["i32", "i32"] as const),

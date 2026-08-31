@@ -105,10 +105,24 @@ exploration cells and highlights the cell containing your character.
 keeps the native map artwork visible.
 
 Choose Cartographer, Synthwave, or Monochrome. Custom styles can change colors,
-line widths, patterns, unseen-cell markers, and inspection ranges. Hold Shift
-over a Mission Map cell to inspect its normal 3×3 reveal area, or Option-Shift
-for the Bird's Eye 7×7 area. One style applies to the Compass and Mission Map.
-Both layers hide when the current map projection or data cannot be certified.
+line widths, patterns, unseen-cell markers, and inspection ranges. A normal
+unseen marker means the loaded map has ground within reveal range. Grey hatching
+means the cell may need another map or special route. Guidance never changes
+the game's explored state. Hold Shift over a Mission Map cell to inspect its
+normal 3×3 reveal area, or Option-Shift for the Bird's Eye 7×7 area. One style
+applies to the Compass and Mission Map. Both layers hide when the current map
+projection or data cannot be certified.
+
+## Switch Character
+
+Press **Command-R** to open **Switch Character** from a playable outpost.
+Accounts with up to ten characters need no search. Larger accounts show the ten
+most-used characters until you search the complete live account list. Press
+**Command-Shift-R** to reload Guild Wars.
+
+Character names and search text are not saved. Successful switches update a
+small local ranking with only opaque keys, counts, and recency. Failed or
+cancelled attempts do not change the ranking.
 
 ## Saved login
 

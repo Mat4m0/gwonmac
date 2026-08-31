@@ -27,6 +27,10 @@ import {
 } from "./companion-play-region-snapshot.js";
 import type * as OptionalObserverReadersModule from "./companion-tools-observer-readers.js";
 import type { EnhancementObserverConsumer } from "../shared/diagnostics.js";
+import {
+  readCompanionCharacterList,
+  type CompanionCharacterListState,
+} from "./companion-character-list-snapshot.js";
 
 export type SnapshotObserverTarget = {
   memory: WebAssembly.Memory;
@@ -36,6 +40,7 @@ export type SnapshotObserverTarget = {
   skillSlotPointer?: number;
   skillCooldownPointer?: number;
   playRegionPointer?: number;
+  characterListPointer?: number;
   snapshotReads: number;
   rejectedSnapshots: number;
   hertz: number;
@@ -62,6 +67,9 @@ export type SkillCooldownConsumer = {
 
 export type PlayRegionConsumer = {
   update(state: CompanionPlayRegionState): void;
+};
+export type CharacterListConsumer = {
+  update(state: CompanionCharacterListState): void;
 };
 
 export type OptionalObserverReaders = typeof OptionalObserverReadersModule;
@@ -106,6 +114,7 @@ export function observeCompanion(
   playRegion: PlayRegionConsumer | null = null,
   readers: OptionalObserverReaders | null = null,
   firstObservation: (consumer: EnhancementObserverConsumer) => void = () => {},
+  characterList: CharacterListConsumer | null = null,
 ) {
   let frame = 0;
   let cadenceAt = performance.now();
@@ -125,6 +134,12 @@ export function observeCompanion(
       );
       playRegion.update(state);
       if (state.status === "ready") firstObservation("region");
+    }
+    if (characterList) {
+      characterList.update(readCompanionCharacterList(
+        runtime.memory.buffer,
+        runtime.characterListPointer ?? 0,
+      ));
     }
     if (observeState && readout?.enabled?.() !== false) {
       if (!readers) throw new Error("Tools snapshot readers are unavailable");

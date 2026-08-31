@@ -2,10 +2,10 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { ENHANCEMENT_BUILDS } from
-  "../../src/main/certification/enhancement-builds.js";
 import { deriveCompassFrameSpikeProof } from
   "../../src/main/certification/compass-frame-spike-proof.js";
+import { verifyLocalClientBytes } from
+  "../../src/main/certification/local-client-verifier.js";
 import { wasmEvidence } from
   "../../src/main/certification/wasm-evidence.js";
 import {
@@ -39,12 +39,13 @@ test("certifies one named Compass frame and refuses owner mutations", {
   assert.ok(artifact, "GW_CLIENT_WASM must name the retained official artifact");
   const bytes = new Uint8Array(await readFile(artifact));
   const context = wasmEvidence(bytes);
-  const retained = ENHANCEMENT_BUILDS[0];
-  assert.ok(context && retained?.preGameControls && retained.skillSlotGeometry);
+  const verified = verifyLocalClientBytes(bytes);
+  const current = verified.enhancementBuild;
+  assert.ok(context && current?.preGameControls && current.skillSlotGeometry);
   const proof = deriveCompassFrameSpikeProof(
     context,
-    retained.preGameControls,
-    retained.skillSlotGeometry,
+    current.preGameControls,
+    current.skillSlotGeometry,
   );
   assert.ok(proof);
   assert.equal(proof.ownerFunction, 15_750);
@@ -67,8 +68,8 @@ test("certifies one named Compass frame and refuses owner mutations", {
   assert.equal(
     deriveCompassFrameSpikeProof(
       changedContext,
-      retained.preGameControls,
-      retained.skillSlotGeometry,
+      current.preGameControls,
+      current.skillSlotGeometry,
     ),
     null,
   );

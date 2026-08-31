@@ -34,6 +34,7 @@ export type CartographyGridStyle = Readonly<{
   casingColor: CartographyColor;
   lattice: CartographyLineStyle;
   unseen: Readonly<{ color: CartographyColor; marker: CartographyUnseenMarker }>;
+  noWalkableColor: CartographyColor;
   current: CartographyLineStyle;
   hover: CartographyLineStyle;
   normalRange: CartographyLineStyle;
@@ -79,7 +80,9 @@ const WALKABILITY_FIELDS = new Set([
 ]);
 const GRID_FIELDS = new Set([
   "casingColor", "lattice", "unseen", "current", "hover", "normalRange",
-  "birdsEyeRange",
+  // Accepted and discarded so local presets from the development preview
+  // migrate cleanly to the two-state guidance model.
+  "birdsEyeRange", "noWalkableColor", "exploredNoWalkableColor",
 ]);
 const UNSEEN_FIELDS = new Set(["color", "marker"]);
 const STYLE_FIELDS = new Set(["walkability", "grid"]);
@@ -160,10 +163,16 @@ export function normaliseCartographyPresetStyle(value: unknown): CartographyPres
   const birdsEyeRange = normaliseCartographyLineStyle(value.grid.birdsEyeRange);
   const casingColor = normaliseColor(value.grid.casingColor);
   const unseenColor = normaliseColor(value.grid.unseen.color);
+  // The appearance library predates revealability guidance. Defaults keep
+  // player-created local presets usable while every newly saved style writes
+  // the complete current shape.
+  const noWalkableColor = normaliseColor(
+    value.grid.noWalkableColor ?? "#8F99A3",
+  );
   if (veilColor === null || boundaryColor === null || boundaryWidth === null
     || boundaryCasingColor === null || lattice === null || current === null
     || hover === null || normalRange === null || birdsEyeRange === null
-    || casingColor === null || unseenColor === null
+    || casingColor === null || unseenColor === null || noWalkableColor === null
     || !CARTOGRAPHY_UNSEEN_MARKERS.includes(value.grid.unseen.marker as CartographyUnseenMarker)) {
     return null;
   }
@@ -181,6 +190,7 @@ export function normaliseCartographyPresetStyle(value: unknown): CartographyPres
         color: unseenColor,
         marker: value.grid.unseen.marker as CartographyUnseenMarker,
       }),
+      noWalkableColor,
       current,
       hover,
       normalRange,
@@ -210,6 +220,7 @@ export const CARTOGRAPHY_BUILTIN_PRESETS: Readonly<Record<
     grid: {
       casingColor: "#050709", lattice: line("#E8E1D0", 2),
       unseen: { color: "#FF7A1A", marker: "diamond" },
+      noWalkableColor: "#8F99A3",
       current: line("#FFFFFF", 3), hover: line("#FFE45C", 4),
       normalRange: line("#00D9FF", 4),
       birdsEyeRange: line("#FF4FD8", 4, "dash-dot"),
@@ -223,6 +234,7 @@ export const CARTOGRAPHY_BUILTIN_PRESETS: Readonly<Record<
     grid: {
       casingColor: "#070A12", lattice: line("#00E5FF", 2),
       unseen: { color: "#FFB000", marker: "cross" },
+      noWalkableColor: "#8795A8",
       current: line("#FFFFFF", 3), hover: line("#F9F871", 4),
       normalRange: line("#00E5FF", 4),
       birdsEyeRange: line("#B967FF", 4, "dash-dot"),
@@ -236,6 +248,7 @@ export const CARTOGRAPHY_BUILTIN_PRESETS: Readonly<Record<
     grid: {
       casingColor: "#050607", lattice: line("#A8B0B8", 2, "dotted"),
       unseen: { color: "#FFFFFF", marker: "diamond" },
+      noWalkableColor: "#707780",
       current: line("#FFFFFF", 3), hover: line("#D8DDE2", 4),
       normalRange: line("#F2F4F5", 4),
       birdsEyeRange: line("#8F99A3", 4, "dash-dot"),

@@ -30,6 +30,7 @@ const CORE_CAPABILITIES = Object.freeze({
   skillCooldownObservation: false,
   playRegionObservation: true,
   preGameControls: true,
+  characterSwitchAction: true,
 });
 
 function rewriteCode(
@@ -59,6 +60,7 @@ test("Core proofs survive the retained client rebuild and fail locally", {
   assert.equal(result.featureVerdicts?.nativeCursor.status, "proved");
   assert.equal(result.featureVerdicts?.playRegionObservation.status, "proved");
   assert.equal(result.featureVerdicts?.preGameControls.status, "proved");
+  assert.equal(result.featureVerdicts?.characterSwitchAction.status, "proved");
   const build = result.enhancementBuild;
   assert.ok(build?.cursorEvent);
   assert.ok(build.playRegionObservation);
@@ -74,6 +76,16 @@ test("Core proofs survive the retained client rebuild and fail locally", {
   assert.equal(
     build.preGameControls.layout.frameCount,
     build.preGameControls.layout.frameArray + 8,
+  );
+  assert.notEqual(
+    build.preGameControls.characterSwitchAction.frameDispatch.functionIndex,
+    6841,
+    "low frame messages must not use the external API that rejects IDs below FRAME_MSG_EX",
+  );
+  assert.equal(
+    build.preGameControls.characterSwitchAction.frameResolver.functionIndex,
+    6534,
+    "native child and parent IDs must be checked through the client's own ID manager",
   );
 
   const module = wasmEvidence(bytes)!.moduleView();

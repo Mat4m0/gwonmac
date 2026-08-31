@@ -244,7 +244,7 @@ describe("TravelPalette", () => {
     expect(wrapper.get(".travel-available").text()).toContain("Ascalon City (pre-Searing)");
     expect(wrapper.get(".travel-available").text()).toContain("Piken Square (pre-Searing)");
     expect(wrapper.get(".travel-available").text()).toContain("Current");
-    expect(wrapper.get('[aria-label="Travel to Ashford Abbey, shortcut 1, recent"]').text()).toContain("1Recent");
+    expect(wrapper.get('[aria-label="Travel to Ashford Abbey, Prophecies, shortcut 1, recent"]').text()).toContain("1Recent");
     expect(wrapper.get('[aria-current="location"]').attributes("disabled")).toBeDefined();
     expect(wrapper.find(".travel-history").exists()).toBe(false);
     expect(wrapper.find(".travel-favorites").exists()).toBe(false);

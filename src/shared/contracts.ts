@@ -83,6 +83,7 @@ import type {
   TraderPriceHistoryResult,
   TraderQuoteSnapshot,
 } from "./trade-chat.js";
+import type { CharacterSwitchUsageDocument } from "./character-switch-usage.js";
 
 export { RELEASE_REPO } from "./project-identity.js";
 export { DEFAULT_UPDATE_TRACK, UPDATE_TRACKS };
@@ -401,6 +402,12 @@ export interface AppSettings {
   xunlaiStorage: boolean;
   /** Allow the focused Travel palette and its explicit map command. */
   travelPalette: boolean;
+  /** Show the canonical profession icon and profession names in Character Switch. */
+  characterSwitchProfession: boolean;
+  /** Show the character's certified level in Character Switch. */
+  characterSwitchLevel: boolean;
+  /** Show a location only when Travel's reviewed catalogue names its map. */
+  characterSwitchLocation: boolean;
   /** Ordered destinations for the palette's direct 1–9 shortcuts. */
   travelShortcuts: StoredTravelShortcuts;
   /** Experimental live target distance/range readout. */
@@ -470,6 +477,9 @@ export const RENDERER_WRITABLE_SETTINGS = [
   "cartographyGridEnabled",
   "cartographyGridOpacity",
   "cartographyWalkabilityOpacity",
+  "characterSwitchProfession",
+  "characterSwitchLevel",
+  "characterSwitchLocation",
 ] as const satisfies readonly (keyof AppSettings)[];
 type RendererWritableSetting = (typeof RENDERER_WRITABLE_SETTINGS)[number];
 
@@ -527,6 +537,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   tradeChat: true,
   xunlaiStorage: false,
   travelPalette: true,
+  characterSwitchProfession: true,
+  characterSwitchLevel: true,
+  characterSwitchLocation: true,
   travelShortcuts: DEFAULT_STORED_TRAVEL_SHORTCUTS,
   targetReadout: false,
   shortcutOverrides: {},
@@ -716,6 +729,7 @@ export interface ClientCompatibility {
     skillCooldownObservation: OptionalFeatureStatus;
     playRegionObservation: OptionalFeatureStatus;
     preGameControls: OptionalFeatureStatus;
+    characterSwitchAction: OptionalFeatureStatus;
   }>;
 }
 
@@ -913,6 +927,7 @@ export type RendererCommand =
   | { type: "trade.toggle" }
   | { type: "storage.open" }
   | { type: "travel.toggle" }
+  | { type: "character.toggle" }
   | { type: "filesystem.sync" }
   | { type: "input.trace"; enabled: boolean }
   | { type: "diagnostics.toggle" }
@@ -980,6 +995,8 @@ export const CORE_IPC = {
   settingsGet: "gw:settings:get",
   settingsSet: "gw:settings:set",
   settingsEvent: "gw:settings:event",
+  characterSwitchUsageGet: "gw:characterSwitchUsage:get",
+  characterSwitchUsageRecord: "gw:characterSwitchUsage:record",
   credentialsLoad: "gw:credentials:load",
   credentialsSave: "gw:credentials:save",
   credentialsClear: "gw:credentials:clear",
@@ -1135,6 +1152,10 @@ export interface CoreGwNativeApiBase {
     get(): Promise<AppSettings>;
     set(value: RendererSettingsPatch): Promise<AppSettings>;
     onChange(callback: (settings: AppSettings) => void): () => void;
+  };
+  characterSwitchUsage: {
+    get(): Promise<CharacterSwitchUsageDocument>;
+    record(value: { characterKey: string }): Promise<CharacterSwitchUsageDocument>;
   };
   credentials: {
     load(): Promise<StoredCredentials | null>;
