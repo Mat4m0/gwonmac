@@ -45,6 +45,10 @@ export interface GamePaths {
   cartographySpike: string;
   nativeDoubleClick: string;
   extendedMemory: string;
+  texturePacks: string;
+  texturePackSelection: string;
+  texturePackSources: string;
+  texturePackStaging: string;
   chunks: string;
   skillAssets: string;
   cacheClearRequest: string;
@@ -55,6 +59,7 @@ export function gamePaths(userData: string): GamePaths {
   const game = path.join(userData, "game");
   const artifacts = path.join(game, "artifacts");
   const multiRoot = path.join(userData, "multi");
+  const texturePacks = path.join(userData, "texture-packs");
   return {
     userData,
     settings: path.join(userData, "settings.json"),
@@ -84,6 +89,10 @@ export function gamePaths(userData: string): GamePaths {
     cartographySpike: path.join(game, "cartography-spike"),
     nativeDoubleClick: path.join(game, "double-click"),
     extendedMemory: path.join(game, "extended-memory"),
+    texturePacks,
+    texturePackSelection: path.join(texturePacks, "selection.json"),
+    texturePackSources: path.join(texturePacks, "packs"),
+    texturePackStaging: path.join(texturePacks, "staging"),
     chunks: path.join(game, "chunks"),
     // Icons and text decoded out of the player's own archive, under a
     // per-client-build directory so a new build starts a new cache rather than
@@ -137,6 +146,7 @@ export function documentDirectories(paths: GamePaths): string[] {
     paths.previousArtifacts,
     paths.compatibility,
     paths.enhancements,
+    paths.texturePacks,
   ];
 }
 

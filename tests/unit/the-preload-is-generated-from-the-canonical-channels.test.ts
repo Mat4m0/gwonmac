@@ -167,6 +167,7 @@ test("the launch argument prefix comes from the contracts too", () => {
       enhancementSelection: { nativeCursor: false, tools: false },
       diagnosticProfile: "standard",
       templateFsTrace: false,
+      texturePackGeneration: null,
     },
   );
   assert.deepEqual(
@@ -258,6 +259,7 @@ test("the launcher preload exposes only its frozen launcher bridge", async () =>
     "profiles",
     "settings",
     "state",
+    "texturePacks",
     "tools",
     "updates",
   ]);

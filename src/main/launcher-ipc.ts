@@ -38,6 +38,7 @@ import {
   type Parser,
 } from "./ipc-channel-registry.js";
 import type { WindowRegistry } from "./window-registry.js";
+import { parseTexturePackId, type TexturePackImportResult } from "../shared/texture-packs.js";
 
 export interface LauncherIpcContext {
   readonly windows: WindowRegistry;
@@ -72,6 +73,9 @@ export interface LauncherIpcContext {
   readonly pauseDownload: () => Promise<void>;
   readonly resumeDownload: () => Promise<void>;
   readonly resetGameFiles: (win: BrowserWindow) => Promise<void>;
+  readonly importTexturePack: (win: BrowserWindow) => Promise<TexturePackImportResult>;
+  readonly selectTexturePack: (id: string | null) => Promise<void>;
+  readonly removeTexturePack: (win: BrowserWindow, id: string) => Promise<void>;
   readonly openExternal: (kind: LauncherExternalLink) => Promise<void>;
   readonly openNews: (id: string) => Promise<void>;
   readonly revealLogs: () => void;
@@ -101,6 +105,8 @@ const booleanValue = one((value: unknown): boolean => {
   if (typeof value !== "boolean") throw new Error("value must be a boolean");
   return value;
 });
+const nullableTexturePackId = one((value: unknown): string | null =>
+  value === null ? null : parseTexturePackId(value));
 const setup = one((value: unknown): boolean => {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("setup request must be an object");
   const source = value as Record<string, unknown>;
@@ -168,6 +174,9 @@ export function registerLauncherIpc(ctx: LauncherIpcContext): void {
     gameFilesResumeDownload: channel(nothing, () => ctx.resumeDownload(), "launcher"),
     gameFilesResetAndRestart: channel(nothing, (win) => ctx.resetGameFiles(win), "launcher"),
     newsOpen: channel(one(parseLauncherNewsId), (_win, id) => ctx.openNews(id), "launcher"),
+    texturePacksImport: channel(nothing, (win) => ctx.importTexturePack(win), "launcher"),
+    texturePacksSelect: channel(nullableTexturePackId, (_win, id) => ctx.selectTexturePack(id), "launcher"),
+    texturePacksRemove: channel(one(parseTexturePackId), (win, id) => ctx.removeTexturePack(win, id), "launcher"),
     externalOpen: channel(one(parseLauncherExternalLink), (_win, kind) => ctx.openExternal(kind), "launcher"),
     externalRevealLogs: channel(nothing, () => ctx.revealLogs(), "launcher"),
     updatesCheck: channel(nothing, () => ctx.checkUpdates(), "launcher"),

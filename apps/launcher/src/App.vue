@@ -31,6 +31,7 @@ import LaunchBar from "./components/LaunchBar.vue";
 import HomeView from "./components/HomeView.vue";
 import KnownIssuesView from "./components/KnownIssuesView.vue";
 import MapsSettings from "./components/MapsSettings.vue";
+import TexturePacksSettings from "./components/TexturePacksSettings.vue";
 import type { LauncherRoute, SettingsRoute } from "./routes";
 
 const route = ref<LauncherRoute>("home");
@@ -48,6 +49,7 @@ const settingsGroups: readonly {
     { id: "game", label: "Game settings" },
     { id: "tools", label: "Tools" },
     { id: "maps", label: "Maps" },
+    { id: "texture-packs", label: "Texture packs" },
     { id: "game-files", label: "Game files" },
   ] },
 ];
@@ -426,6 +428,7 @@ async function replaceToolShortcut() {
             </div>
           </template>
           <MapsSettings v-else-if="settingsRoute === 'maps'" :settings="snapshot.settings" :save="updateLauncherSettings" />
+          <TexturePacksSettings v-else-if="settingsRoute === 'texture-packs'" :texture-packs="snapshot.texturePacks" />
           <GameFilesSettings
             v-else-if="settingsRoute === 'game-files'"
             :readiness="snapshot.readiness"

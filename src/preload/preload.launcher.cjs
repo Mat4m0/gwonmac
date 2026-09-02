@@ -67,6 +67,11 @@ const launcherApi = {
   news: {
     open: (id) => ipcRenderer.invoke(LAUNCHER_IPC.newsOpen, id),
   },
+  texturePacks: {
+    import: () => ipcRenderer.invoke(LAUNCHER_IPC.texturePacksImport),
+    select: (id) => ipcRenderer.invoke(LAUNCHER_IPC.texturePacksSelect, id),
+    remove: (id) => ipcRenderer.invoke(LAUNCHER_IPC.texturePacksRemove, id),
+  },
   external: {
     open: (kind) => ipcRenderer.invoke(LAUNCHER_IPC.externalOpen, kind),
     revealLogs: () => ipcRenderer.invoke(LAUNCHER_IPC.externalRevealLogs),

@@ -145,6 +145,7 @@ test("the host has one native automatic application replacement path", () => {
   assert.match(identity, /stable: `\$\{UPDATE_FEED_ROOT\}\/stable\/darwin\/arm64\/RELEASES\.json`/);
   assert.match(identity, /beta: `\$\{UPDATE_FEED_ROOT\}\/beta\/darwin\/arm64\/RELEASES\.json`/);
   assert.deepEqual(json("package.json").dependencies, {
+    pngjs: "^7.0.0",
     ws: "^8.21.3",
   });
 });
@@ -591,9 +592,10 @@ test("runtime package entries and audit exceptions stay explicit", () => {
   const workspace = read("pnpm-workspace.yaml");
   const lockfile = read("pnpm-lock.yaml");
   assert.deepEqual(rootPackage.dependencies, {
-    // The main process owns the bounded public trade-feed connection. Keeping
-    // this exact allowlist makes any further runtime dependency an intentional
-    // policy change.
+    // The main process owns bounded TPF PNG decoding and the public trade-feed
+    // connection. Keeping this exact allowlist makes any further runtime
+    // dependency an intentional policy change.
+    pngjs: "^7.0.0",
     ws: "^8.21.3",
   });
   assert.equal(

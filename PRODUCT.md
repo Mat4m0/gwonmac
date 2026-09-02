@@ -35,6 +35,7 @@ each in an independently controlled game window.
 - Keep host-owned Builds and Teams available without live Tools.
 - Give players clear Stable and Beta application-update behavior.
 - Keep local data and diagnostics under the player's control.
+- Let players use local legacy TexMod UI texture packs without running mod code.
 - Adopt existing player data as the first profile without copying, moving, or
   deleting it.
 - Keep the project understandable for one new contributor.
@@ -90,6 +91,16 @@ The app never performs an automatic downgrade. Every public beta and release
 candidate must preserve the latest Stable version's durable data contract.
 See [Release verification](docs/release-verification.md).
 
+## Texture packs
+
+Players can import legacy 32-bit TexMod `.tpf` interface packs and select one
+global appearance for newly opened game windows. Import is inactive by default,
+Official textures are always available, and an open window keeps the immutable
+generation it started with. gwonmac stores an exact private source copy and a
+rebuildable compiled generation. Packs replace matching textures only; they
+cannot run code or access game state. The complete contract and limits live in
+[Texture packs](docs/texture-packs.md).
+
 ## Non-goals
 
 - No Windows or Linux version.
@@ -102,6 +113,7 @@ See [Release verification](docs/release-verification.md).
   for additional account profiles.
 - No generic memory, packet, command, or plugin API.
 - No port of the Windows plugin ABI.
+- No general mod loader, executable TPF content, texture stacking, or pack editor.
 - No gwonmac telemetry from the Mac app.
 - No silent eviction policy or fixed disk-usage promise.
 - No forced mid-session restart.

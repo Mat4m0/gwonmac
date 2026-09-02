@@ -93,13 +93,13 @@
     "pixelmatch": "^7.2.0",
     "playwright": "^1.55.0",
     "plist": "3.1.1",
-    "pngjs": "^7.0.0",
     "rollup": "^4.62.2",
     "typescript": "^5.9.2",
     "typescript-eslint": "^8.43.0",
     "vue-eslint-parser": "^10.4.1"
   },
   "dependencies": {
+    "pngjs": "^7.0.0",
     "ws": "^8.21.3"
   }
 }

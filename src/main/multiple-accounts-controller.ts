@@ -73,6 +73,8 @@ export interface MultipleAccountsControllerOptions {
   readonly windowHost: WindowHost;
   readonly windows: WindowCoordinator<BrowserWindow>;
   readonly publishState: (state: AccountsState) => void;
+  readonly texturePackGeneration: () => Promise<string | null>;
+  readonly releaseTexturePackGeneration: (generation: string) => Promise<void>;
   /** Developer-only seam for synthetic clients in unsigned package tests. */
   readonly allowUnreadyLaunch?: boolean;
 }
@@ -534,6 +536,7 @@ export class MultipleAccountsController {
     this.profileRuntime.set(profileId, "opening");
     this.publish();
     let failureStage: Parameters<typeof launchIssueForStage>[0] = "preparing";
+    let releaseTexturePackGeneration = () => undefined;
     try {
       const owner = storage.session.kind === "default"
         ? session.defaultSession
@@ -565,6 +568,13 @@ export class MultipleAccountsController {
         newWindowOrdinal,
       );
       failureStage = "starting";
+      const texturePackGeneration = await this.options.texturePackGeneration();
+      let generationReleased = false;
+      releaseTexturePackGeneration = () => {
+        if (!texturePackGeneration || generationReleased) return;
+        generationReleased = true;
+        void this.options.releaseTexturePackGeneration(texturePackGeneration);
+      };
       let hubWasVisibleBeforeRecovery = false;
       const win = createMainWindow(this.options.windowHost, {
         context: { role: "game", profileId },
@@ -574,6 +584,7 @@ export class MultipleAccountsController {
         windowStatePath: storage.windowState,
         showInactive: true,
         awaitFirstFrame: !this.options.allowUnreadyLaunch,
+        texturePackGeneration,
         onRendererRecoveryStart: () => {
           hubWasVisibleBeforeRecovery = windowRegistry.launcherWindow()?.isVisible() ?? false;
         },
@@ -586,12 +597,14 @@ export class MultipleAccountsController {
           this.options.windows.revealLauncher({ activateApp: true });
         },
         onProfileClosed: () => {
+          releaseTexturePackGeneration();
           if (this.profileRuntime.get(profileId).state !== "failed") {
             this.profileRuntime.set(profileId, "ready");
             this.publish();
           }
         },
       });
+      win.once("closed", releaseTexturePackGeneration);
       win.on("focus", () => this.options.windows.recordFocused(win));
       await Promise.all([
         this.waitForWindow(win),
@@ -601,6 +614,7 @@ export class MultipleAccountsController {
       this.publish();
       return { win, opened: true };
     } catch (error) {
+      releaseTexturePackGeneration();
       this.profileRuntime.set(profileId, "failed", launchIssueForStage(failureStage));
       this.publish();
       const failedWindow = windowRegistry.profileWindow(profileId);

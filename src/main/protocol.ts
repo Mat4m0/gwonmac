@@ -99,6 +99,10 @@ export interface ProtocolDeps {
     wasmPath: string;
     jsPath: string;
   } | null;
+  getTexturePackAsset: (
+    generation: string,
+    asset: "manifest.json" | "textures.rgba",
+  ) => Promise<Uint8Array | null>;
   diagnosticOwnerId?: () => number;
   launcherNewsImage?: (key: string) => Promise<Response>;
 }
@@ -520,6 +524,21 @@ async function handleGwRequest(
   const first = (base.split("/")[0] ?? "").toLowerCase();
 
   if (base === "Gw.snapshot") return handleSnapshot(request, deps);
+
+  const texturePackRoute = /^texture-packs\/([0-9a-f]{32})\/(manifest\.json|textures\.rgba)$/u.exec(base);
+  if (texturePackRoute) {
+    const asset = texturePackRoute[2] as "manifest.json" | "textures.rgba";
+    const bytes = await deps.getTexturePackAsset(texturePackRoute[1]!, asset);
+    if (!bytes) return new Response("not found", { status: 404, headers: headers() });
+    return new Response(compactResponseBody(bytes), {
+      status: 200,
+      headers: headers({
+        "Cache-Control": "no-store",
+        "Content-Type": asset === "manifest.json" ? MIME[".json"]! : "application/octet-stream",
+        "Content-Length": String(bytes.byteLength),
+      }),
+    });
+  }
 
   const gameFontRole = base === "game-font.ttf"
     ? "body"

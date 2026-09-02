@@ -23,6 +23,10 @@ import {
 } from "./cartography-overlay.js";
 import type { ShortcutBinding } from "./keyboard-shortcuts.js";
 import type { ProfileId } from "./multiple-accounts.js";
+import type {
+  TexturePackImportResult,
+  TexturePackSnapshot,
+} from "./texture-packs.js";
 
 export const LAUNCHER_IPC = Object.freeze({
   stateGet: "gw:launcher:state:get",
@@ -58,6 +62,9 @@ export const LAUNCHER_IPC = Object.freeze({
   gameFilesResumeDownload: "gw:launcher:gameFiles:resumeDownload",
   gameFilesResetAndRestart: "gw:launcher:gameFiles:resetAndRestart",
   newsOpen: "gw:launcher:news:open",
+  texturePacksImport: "gw:launcher:texturePacks:import",
+  texturePacksSelect: "gw:launcher:texturePacks:select",
+  texturePacksRemove: "gw:launcher:texturePacks:remove",
   externalOpen: "gw:launcher:external:open",
   externalRevealLogs: "gw:launcher:external:revealLogs",
   updatesCheck: "gw:launcher:updates:check",
@@ -226,6 +233,7 @@ export interface LauncherSnapshot {
     features: GlobalToolSettings;
   }>;
   readonly settings: LauncherSettings;
+  readonly texturePacks: TexturePackSnapshot;
   readonly profiles: readonly LauncherProfileSummary[];
   readonly selectedProfileIds: readonly ProfileId[];
   readonly preferences: LauncherPreferences;
@@ -284,6 +292,11 @@ export interface LauncherNativeApi {
     pauseDownload(): Promise<void>;
     resumeDownload(): Promise<void>;
     resetAndRestart(): Promise<void>;
+  };
+  readonly texturePacks: {
+    import(): Promise<TexturePackImportResult>;
+    select(id: string | null): Promise<void>;
+    remove(id: string): Promise<void>;
   };
   readonly updates: {
     check(): Promise<void>;

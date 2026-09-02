@@ -193,8 +193,9 @@ const INIT: RendererInit = {
     nativeCursor: false,
     tools: false,
   },
-  diagnosticProfile: "standard",
-  templateFsTrace: true,
+      diagnosticProfile: "standard",
+      templateFsTrace: true,
+      texturePackGeneration: null,
 };
 const ARGV = ["electron", `${RENDERER_INIT_ARGUMENT}${JSON.stringify(INIT)}`];
 const plainInit = (value: RendererInit): RendererInit => ({
@@ -214,8 +215,9 @@ test("a renderer with no readable init argument gets the production posture", ()
       nativeCursor: false,
       tools: false,
     },
-    diagnosticProfile: "standard",
-    templateFsTrace: false,
+        diagnosticProfile: "standard",
+        templateFsTrace: false,
+        texturePackGeneration: null,
   };
   assert.deepEqual(plainInit(harness([]).api.init), missing);
   assert.deepEqual(

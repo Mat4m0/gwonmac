@@ -164,6 +164,8 @@ import {
   shortcutOwner,
 } from "./core/launcher-tools.js";
 import { captureLauncherShortcut } from "./launcher-shortcut-capture.js";
+import { TexturePackManager } from "./core/texture-pack-manager.js";
+import { createTexturePackActions } from "./texture-pack-actions.js";
 
 // The public app name changed after alpha profiles already existed. Keep that
 // one profile as the canonical home so the rename cannot strand saved login,
@@ -632,6 +634,13 @@ if (primaryInstance) void app.whenReady().then(async () => {
     });
   });
   currentSettings = settings;
+  const texturePacks = new TexturePackManager({
+    root: paths.texturePacks,
+    selection: paths.texturePackSelection,
+    packs: paths.texturePackSources,
+    staging: paths.texturePackStaging,
+  }, () => launcherOrchestrator?.publish());
+  await texturePacks.initialise();
   let diagnosticProfile = await loadDiagnosticProfile(paths.diagnosticProfile);
   const diagnosticPolicy = diagnosticProfilePolicy(diagnosticProfile);
   const enhancementSelection: EnhancementSelection = diagnosticPolicy.officialClient
@@ -731,6 +740,8 @@ if (primaryInstance) void app.whenReady().then(async () => {
   });
   const protocolDeps = {
     getActiveClient: () => clientRuntime.active,
+    getTexturePackAsset: (generation: string, asset: "manifest.json" | "textures.rgba") =>
+      texturePacks.runtimeAsset(generation, asset),
     diagnosticOwnerId: () => SINGLE_DIAGNOSTIC_OWNER_ID,
     launcherNewsImage: (key: string) => launcherNews.image(key),
   };
@@ -755,6 +766,8 @@ if (primaryInstance) void app.whenReady().then(async () => {
     publishState: () => {
       launcherOrchestrator?.publish();
     },
+    texturePackGeneration: () => texturePacks.acquireCurrentGeneration(),
+    releaseTexturePackGeneration: (generation) => texturePacks.releaseGeneration(generation),
     allowUnreadyLaunch,
   });
   await accounts.resumePendingDeletions();
@@ -782,6 +795,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     getSettings: () => currentSettings ?? settings,
     getNews: (track, contentPreferences) => launcherNews.snapshot(track, contentPreferences),
     toolsLoaded: () => enhancementSelection.tools,
+    getTexturePacks: () => texturePacks.snapshot(),
     developmentFixtures: !app.isPackaged || process.env.GW_LAUNCHER_FIXTURES === "1",
     allowUnreadyLaunch,
     publish: (snapshot) => {
@@ -881,6 +895,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
       if (response !== 0) return;
       await (toolsRuntime?.resetSettings() ?? preferences.resetCoreSettings());
       await launcherState.resetPresentation();
+      await texturePacks.select(null);
       launcherOrchestrator!.publish();
     },
     setToolsMaster: async (enabled) => {
@@ -959,6 +974,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
       app.relaunch();
       app.quit();
     },
+    ...createTexturePackActions(texturePacks),
     openExternal: async (kind) => {
       await shell.openExternal(EXTERNAL_URLS[kind]);
     },

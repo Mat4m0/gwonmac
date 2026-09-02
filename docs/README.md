@@ -10,6 +10,7 @@ its rules.
 | Which process owns this work? | [Process model](process-model.md) |
 | How do account profiles adopt and isolate player data? | [Account profiles](multiple-accounts.md) |
 | How do ArenaNet client files and game data update? | [Content pipeline](content-pipeline.md) |
+| How do players import and run TexMod UI packs? | [Texture packs](texture-packs.md) |
 | How does the official client host and certification work? | [WASM host](wasm-host.md) |
 | How do client features remain safe across ArenaNet updates? | [ArenaNet compatibility](arenanet-compatibility.md) |
 | How does Trade Chat discovery work? | [Trade Chat discovery](trade-discovery.md) |
