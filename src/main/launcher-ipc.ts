@@ -4,7 +4,6 @@
  */
 import type { BrowserWindow } from "electron";
 import type {
-  GlobalTool,
   GlobalToolUpdate,
   LauncherSettingsPatch,
   LauncherShortcutCaptureResult,
@@ -25,7 +24,7 @@ import {
   parseLauncherSettingsPatch,
 } from "../shared/launcher-contracts.js";
 import type { CacheInfo } from "../shared/contracts.js";
-import { isShortcutBinding } from "../shared/keyboard-shortcuts.js";
+import { isShortcutBinding, parseShortcutAction, type ShortcutAction } from "../shared/keyboard-shortcuts.js";
 import {
   parseProfileId,
   parseProfileName,
@@ -63,9 +62,9 @@ export interface LauncherIpcContext {
   readonly resetSettings: (win: BrowserWindow) => Promise<void>;
   readonly setToolsMaster: (enabled: boolean) => Promise<void>;
   readonly setToolFeature: (input: GlobalToolUpdate) => Promise<void>;
-  readonly captureShortcut: (win: BrowserWindow, tool: GlobalTool) => Promise<LauncherShortcutCaptureResult>;
+  readonly captureShortcut: (win: BrowserWindow, action: ShortcutAction) => Promise<LauncherShortcutCaptureResult>;
   readonly replaceShortcut: (input: ShortcutReplacement) => Promise<void>;
-  readonly restoreDefaultShortcut: (tool: GlobalTool) => Promise<void>;
+  readonly restoreDefaultShortcut: (action: ShortcutAction) => Promise<void>;
   readonly restartToApplyTools: (win: BrowserWindow) => Promise<void>;
   readonly cacheInfo: () => Promise<CacheInfo>;
   readonly retryPreparation: () => Promise<void>;
@@ -130,8 +129,8 @@ const toolUpdate = one((value: unknown): GlobalToolUpdate => {
 const shortcutReplacement = one((value: unknown): ShortcutReplacement => {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("shortcut replacement must be an object");
   const source = value as Record<string, unknown>;
-  if (Object.keys(source).some((key) => !["tool", "binding"].includes(key)) || !isShortcutBinding(source.binding)) throw new Error("shortcut replacement is invalid");
-  return { tool: parseGlobalTool(source.tool), binding: source.binding };
+  if (Object.keys(source).some((key) => !["action", "binding"].includes(key)) || (source.binding !== null && !isShortcutBinding(source.binding))) throw new Error("shortcut replacement is invalid");
+  return { action: parseShortcutAction(source.action), binding: source.binding };
 });
 
 export function registerLauncherIpc(ctx: LauncherIpcContext): void {
@@ -163,9 +162,9 @@ export function registerLauncherIpc(ctx: LauncherIpcContext): void {
     settingsReset: channel(nothing, (win) => ctx.resetSettings(win), "launcher"),
     toolsSetMasterEnabled: channel(booleanValue, (_win, enabled) => ctx.setToolsMaster(enabled), "launcher"),
     toolsSetFeature: channel(toolUpdate, (_win, input) => ctx.setToolFeature(input), "launcher"),
-    toolsCaptureShortcut: channel(one(parseGlobalTool), (win, tool) => ctx.captureShortcut(win, tool), "launcher"),
+    toolsCaptureShortcut: channel(one(parseShortcutAction), (win, action) => ctx.captureShortcut(win, action), "launcher"),
     toolsReplaceShortcut: channel(shortcutReplacement, (_win, input) => ctx.replaceShortcut(input), "launcher"),
-    toolsRestoreDefaultShortcut: channel(one(parseGlobalTool), (_win, tool) => ctx.restoreDefaultShortcut(tool), "launcher"),
+    toolsRestoreDefaultShortcut: channel(one(parseShortcutAction), (_win, action) => ctx.restoreDefaultShortcut(action), "launcher"),
     toolsRestartToApply: channel(nothing, (win) => ctx.restartToApplyTools(win), "launcher"),
     gameFilesInfo: channel(nothing, () => ctx.cacheInfo(), "launcher"),
     gameFilesRetryPreparation: channel(nothing, () => ctx.retryPreparation(), "launcher"),

@@ -284,6 +284,8 @@ declare global {
       xunlaiStorage: boolean;
       travelPalette: boolean;
       targetReadout: boolean;
+      characterSwitchEnabled: boolean;
+      cartographyEnabled: boolean;
       cartographyOverlayEnabled: boolean;
       cartographyGridEnabled: boolean;
       skillKeyBindings: AppSettings['skillKeyBindings'];

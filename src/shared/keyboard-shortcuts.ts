@@ -8,6 +8,8 @@ export const SHORTCUT_ACTIONS = [
   "trade.toggle",
   "storage.open",
   "travel.open",
+  "cartography.grid.toggle",
+  "cartography.walkability.toggle",
 ] as const;
 export type ShortcutAction = (typeof SHORTCUT_ACTIONS)[number];
 
@@ -28,14 +30,15 @@ export type ShortcutCaptureResult =
   | Readonly<{ status: "cleared" }>
   | Readonly<{ status: "invalid" }>;
 
-export const DEFAULT_SHORTCUTS: Readonly<Record<ShortcutAction, ShortcutBinding>> =
-  Object.freeze({
+export const DEFAULT_SHORTCUTS = Object.freeze({
     "character.switch": Object.freeze({ key: "r", shift: false, option: false }),
     "tools.toggle": Object.freeze({ key: "b", shift: false, option: false }),
     "trade.toggle": Object.freeze({ key: "k", shift: false, option: false }),
     "storage.open": Object.freeze({ key: "c", shift: true, option: false }),
     "travel.open": Object.freeze({ key: "t", shift: false, option: false }),
-  });
+    "cartography.grid.toggle": null,
+    "cartography.walkability.toggle": null,
+  } satisfies Record<ShortcutAction, ShortcutBinding | null>);
 
 export const SHORTCUT_LABELS: Readonly<Record<ShortcutAction, string>> =
   Object.freeze({
@@ -44,6 +47,8 @@ export const SHORTCUT_LABELS: Readonly<Record<ShortcutAction, string>> =
     "trade.toggle": "Trade Chat",
     "storage.open": "Open Xunlai storage",
     "travel.open": "Travel",
+    "cartography.grid.toggle": "Exploration grid",
+    "cartography.walkability.toggle": "Walkable terrain",
   });
 
 export interface ShortcutInput {
@@ -66,6 +71,13 @@ export function isShortcutBinding(value: unknown): value is ShortcutBinding {
     && /^[a-z0-9]$/u.test(binding.key)
     && typeof binding.shift === "boolean"
     && typeof binding.option === "boolean";
+}
+
+export function parseShortcutAction(value: unknown): ShortcutAction {
+  if (typeof value === "string" && SHORTCUT_ACTIONS.includes(value as ShortcutAction)) {
+    return value as ShortcutAction;
+  }
+  throw new Error("Shortcut action is invalid");
 }
 
 export function isShortcutOverrides(value: unknown): value is ShortcutOverrides {
@@ -98,6 +110,8 @@ export function resolveShortcuts(
     "travel.open": overrides["travel.open"] === undefined
       ? DEFAULT_SHORTCUTS["travel.open"]
       : overrides["travel.open"],
+    "cartography.grid.toggle": overrides["cartography.grid.toggle"] ?? null,
+    "cartography.walkability.toggle": overrides["cartography.walkability.toggle"] ?? null,
   });
 }
 
@@ -146,6 +160,9 @@ const RESERVED_SHORTCUTS: readonly ShortcutBinding[] = [
   })),
   { key: "z", shift: true, option: false },
   { key: "r", shift: true, option: false },
+  { key: "m", shift: true, option: false },
+  { key: "h", shift: false, option: true },
+  { key: "i", shift: false, option: true },
   // Travel owns Command+1…9 for quick-destination assignment.
   ..."123456789".split("").map((key) => ({
     key,
@@ -174,7 +191,7 @@ export function withShortcutOverride(
   binding: ShortcutBinding | null,
 ): ShortcutOverrides {
   const next = { ...overrides };
-  if (binding !== null && shortcutEquals(binding, DEFAULT_SHORTCUTS[action])) {
+  if (shortcutEquals(binding, DEFAULT_SHORTCUTS[action])) {
     delete next[action];
   } else {
     next[action] = binding;

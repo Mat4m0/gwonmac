@@ -1,36 +1,23 @@
 /**
- * Maps the launcher's three public global Tools to the released settings and
- * shortcut vocabulary. Hidden experiments never enter the launcher contract.
+ * Projects launcher feature switches from the canonical activation policy.
+ * Explicit shortcut replacement resolves conflicts across every app action.
  */
 import type { AppSettings, AppSettingsPatch } from "../../shared/contracts.js";
-import type { GlobalTool, GlobalToolSettings } from "../../shared/launcher-contracts.js";
-import {
-  resolveShortcuts,
-  type ShortcutAction,
-  type ShortcutBinding,
-} from "../../shared/keyboard-shortcuts.js";
-
-export const TOOL_ACTION: Readonly<Record<GlobalTool, ShortcutAction>> = Object.freeze({
-  "build-management": "tools.toggle",
-  "quick-travel": "travel.open",
-  "xunlai-storage": "storage.open",
-});
+import { GLOBAL_TOOLS, GLOBAL_TOOL_FEATURES, type GlobalTool, type GlobalToolSettings } from "../../shared/launcher-contracts.js";
+import { FEATURE_SELECTION_POLICIES } from "../../shared/feature-contracts.js";
+import { resolveShortcuts, shortcutConflict, shortcutReserved, withShortcutOverride, type ShortcutAction, type ShortcutBinding } from "../../shared/keyboard-shortcuts.js";
 
 export function launcherToolSettings(settings: AppSettings): GlobalToolSettings {
-  const shortcuts = resolveShortcuts(settings.shortcutOverrides);
-  return Object.freeze({
-    "build-management": Object.freeze({ enabled: settings.buildLibrary, shortcut: shortcuts["tools.toggle"] }),
-    "quick-travel": Object.freeze({ enabled: settings.travelPalette, shortcut: shortcuts["travel.open"] }),
-    "xunlai-storage": Object.freeze({ enabled: settings.xunlaiStorage, shortcut: shortcuts["storage.open"] }),
-  });
+  return Object.freeze(Object.fromEntries(GLOBAL_TOOLS.map((tool) => [tool, Object.freeze({
+    enabled: settings[FEATURE_SELECTION_POLICIES[GLOBAL_TOOL_FEATURES[tool]].activation.setting],
+  })]))) as GlobalToolSettings;
 }
 
 export function globalToolPatch(tool: GlobalTool, enabled: boolean): AppSettingsPatch {
-  if (tool === "build-management") return { buildLibrary: enabled };
-  if (tool === "quick-travel") return { travelPalette: enabled };
-  return { xunlaiStorage: enabled };
+  return { [FEATURE_SELECTION_POLICIES[GLOBAL_TOOL_FEATURES[tool]].activation.setting]: enabled };
 }
 
+/** Keep the existing first-run opt-in; new controls do not change player defaults. */
 export function allGlobalToolsPatch(enabled: boolean): AppSettingsPatch {
   return {
     gwonmacTools: enabled,
@@ -40,21 +27,15 @@ export function allGlobalToolsPatch(enabled: boolean): AppSettingsPatch {
   };
 }
 
-export function shortcutOwner(
-  binding: ShortcutBinding,
+/** An explicit replacement clears the previous owner across all app actions. */
+export function launcherShortcutPatch(
   settings: AppSettings,
-  except: GlobalTool,
-): GlobalTool | null {
-  const features = launcherToolSettings(settings);
-  for (const tool of Object.keys(features) as GlobalTool[]) {
-    const candidate = features[tool].shortcut;
-    if (
-      tool !== except
-      && candidate
-      && candidate.key === binding.key
-      && candidate.shift === binding.shift
-      && candidate.option === binding.option
-    ) return tool;
-  }
-  return null;
+  action: ShortcutAction,
+  binding: ShortcutBinding | null,
+): AppSettingsPatch {
+  if (binding !== null && shortcutReserved(binding)) throw new Error("That shortcut is reserved by macOS or the application");
+  let overrides = settings.shortcutOverrides;
+  const conflict = binding === null ? null : shortcutConflict(action, binding, resolveShortcuts(overrides));
+  if (conflict) overrides = withShortcutOverride(overrides, conflict, null);
+  return { shortcutOverrides: withShortcutOverride(overrides, action, binding) };
 }

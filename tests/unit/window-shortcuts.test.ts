@@ -18,6 +18,31 @@ type ShortcutInput = Pick<
 >;
 
 describe("window shortcut input", () => {
+  it("gates Core and Maps independently and keeps a hidden layer's shortcut usable", () => {
+    let dispatch!: (event: { preventDefault(): void }, input: ShortcutInput) => void;
+    const win = { webContents: { on: (_name: string, listener: typeof dispatch) => { dispatch = listener; } }, on() { return win; } } as unknown as BrowserWindow;
+    const actions: string[] = [];
+    installWindowShortcuts(win, { run: action => actions.push(action), edit: () => undefined, quitOrReload: async () => undefined });
+    const settings = { ...DEFAULT_SETTINGS, shortcutOverrides: { "cartography.grid.toggle": { key: "g", shift: false, option: false }, "cartography.walkability.toggle": { key: "l", shift: false, option: false } } };
+    const press = (code: string) => {
+      let prevented = false;
+      const input: ShortcutInput = { type: "keyDown", code, key: code.slice(3).toLowerCase(), meta: true, control: false, shift: false, alt: false, isAutoRepeat: false };
+      dispatch({ preventDefault() { prevented = true; } }, input);
+      dispatch({ preventDefault() {} }, { ...input, type: "keyUp" });
+      return prevented;
+    };
+    updateWindowShortcuts(win, settings);
+    assert.equal(press("KeyG"), false);
+    assert.equal(press("KeyR"), true);
+    updateWindowShortcuts(win, { ...settings, gwonmacTools: true, characterSwitchEnabled: false });
+    assert.equal(press("KeyR"), false);
+    assert.equal(press("KeyG"), true);
+    assert.equal(press("KeyL"), true);
+    updateWindowShortcuts(win, { ...settings, gwonmacTools: true, cartographyEnabled: false });
+    assert.equal(press("KeyG"), false);
+    assert.equal(press("KeyL"), false);
+    assert.deepEqual(actions, ["character.switch", "cartography.grid.toggle", "cartography.walkability.toggle"]);
+  });
   it("runs one Command action, preserves Control, and contains capture repeats", async () => {
     let beforeInput: (
       event: { preventDefault(): void },

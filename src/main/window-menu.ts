@@ -25,7 +25,7 @@ import {
   type GameTextEditCommand,
 } from "../shared/contracts.js";
 import { errorCode } from "../shared/errors.js";
-import { featureActivationRequested } from "../shared/feature-contracts.js";
+import { featureActivationRequested, type FeatureId } from "../shared/feature-contracts.js";
 import { logEvent, reloadTranscriptForWindow } from "./diagnostics.js";
 import { exportDiagnosticsReport } from "./diagnostics-export.js";
 import {
@@ -44,6 +44,7 @@ import {
   setInputTraceVisibility,
 } from './input-trace.js';
 import type { WindowHost } from "./window.js";
+import { resolveShortcuts, shortcutAccelerator, type ShortcutAction } from "../shared/keyboard-shortcuts.js";
 import { windowRegistry } from "./window-registry.js";
 
 const USER_GUIDE_URL = `${EXTERNAL_URLS.github}/blob/main/docs/user-guide.md`;
@@ -77,23 +78,32 @@ export function installNativeApplicationMenu(
   Menu.setApplicationMenu(menu);
 }
 
-/** Keep optional commands visible while removing every disabled action. */
-export function updateToolsMenuItems(
-  settings: Pick<
-    AppSettings,
-    "gwonmacTools" | "buildLibrary" | "tradeChat" | "xunlaiStorage" | "travelPalette"
-  >,
-): void {
+type ToolMenuSettings = Pick<AppSettings,
+  "gwonmacTools" | "buildLibrary" | "tradeChat" | "xunlaiStorage"
+  | "travelPalette" | "characterSwitchEnabled" | "shortcutOverrides">;
+const TOOL_MENU_FEATURES: Readonly<Record<string, { feature: FeatureId; action: ShortcutAction }>> = {
+  "toggle-tools": { feature: "buildLibrary", action: "tools.toggle" },
+  "toggle-trade": { feature: "tradeChat", action: "trade.toggle" },
+  "open-xunlai-storage": { feature: "xunlaiStorage", action: "storage.open" },
+  "open-travel": { feature: "travel", action: "travel.open" },
+  "switch-character": { feature: "characterSwitch", action: "character.switch" },
+};
+// Electron makes accelerators immutable. Retain the existing menu builder,
+// not a second mutable copy of either menu items or settings.
+let rebuildGameMenu: ((settings: ToolMenuSettings) => void) | undefined;
+
+/** Keep native menu availability and accelerators aligned with input ownership. */
+export function updateToolsMenuItems(settings: ToolMenuSettings): void {
   const menu = Menu.getApplicationMenu();
-  const availability = {
-    "toggle-tools": featureActivationRequested("buildLibrary", settings),
-    "toggle-trade": featureActivationRequested("tradeChat", settings),
-    "open-xunlai-storage": featureActivationRequested("xunlaiStorage", settings),
-    "open-travel": featureActivationRequested("travel", settings),
-  } as const;
-  for (const [id, enabled] of Object.entries(availability)) {
+  const shortcuts = resolveShortcuts(settings.shortcutOverrides);
+  for (const [id, { feature, action }] of Object.entries(TOOL_MENU_FEATURES)) {
     const item = menu?.getMenuItemById(id);
-    if (item) item.enabled = enabled;
+    if (!item) continue;
+    if ((item.accelerator ?? null) !== (shortcutAccelerator(shortcuts[action]) ?? null)) {
+      rebuildGameMenu?.(settings);
+      return;
+    }
+    item.enabled = featureActivationRequested(feature, settings);
   }
 }
 
@@ -327,11 +337,8 @@ async function showQuitOrReloadGameOnce(
   }
 }
 
-export function installApplicationMenu({
-  host,
-  resetWindowState,
-  revealLauncher,
-}: ApplicationMenuActions): void {
+export function installApplicationMenu(actions: ApplicationMenuActions, settings?: ToolMenuSettings): void {
+  const { host, resetWindowState, revealLauncher } = actions;
   const isMac = process.platform === "darwin";
   const dev = isDevBuild();
 
@@ -438,7 +445,7 @@ export function installApplicationMenu({
         {
           id: "switch-character",
           label: "Switch Character",
-          accelerator: "CmdOrCtrl+R",
+          enabled: false,
           click: withGameOwner((win) => toggleCharacterSwitch(win)),
         },
         {
@@ -582,5 +589,24 @@ export function installApplicationMenu({
     },
   ];
 
+  if (settings) {
+    const shortcuts = resolveShortcuts(settings.shortcutOverrides);
+    const view = template.find(section => section.label === "View");
+    if (Array.isArray(view?.submenu)) for (const item of view.submenu) {
+      const selection = TOOL_MENU_FEATURES[item.id ?? ""];
+      if (!selection) continue;
+      item.enabled = featureActivationRequested(selection.feature, settings);
+      const accelerator = shortcutAccelerator(shortcuts[selection.action]);
+      if (accelerator) item.accelerator = accelerator;
+    }
+  }
+  rebuildGameMenu = next => installApplicationMenu(actions, next);
   installNativeApplicationMenu(template, revealLauncher);
+  if (!settings) {
+    const installedMenu = Menu.getApplicationMenu();
+    void host.getSettings().then(next => {
+      // A different window may have installed its own menu in the meantime.
+      if (Menu.getApplicationMenu() === installedMenu) updateToolsMenuItems(next);
+    }).catch(error => console.error("Game menu settings could not load", error));
+  }
 }

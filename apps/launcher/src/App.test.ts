@@ -142,12 +142,34 @@ describe("unified launcher shell", () => {
     const wrapper = mount(App);
     await wrapper.get('button[aria-label="Settings"]').trigger("click");
     await wrapper.findAll(".settings-page aside button").find((button) => button.text() === "Tools")!.trigger("click");
-    expect(wrapper.text()).toContain("Tools apply to every account");
+    expect(wrapper.text()).toContain("Settings and shortcuts apply to every account");
     expect(wrapper.text()).toContain("Build Management");
     expect(wrapper.text()).toContain("⌘B");
     expect(wrapper.text()).toContain("Quick Travel");
     expect(wrapper.text()).toContain("Xunlai Storage");
-    expect(wrapper.text()).not.toContain("Trade Chat");
+    expect(wrapper.text()).toContain("Trade Chat");
+    expect(wrapper.text()).toContain("Character Switch");
+    expect(wrapper.text()).toContain("Skill Cooldowns");
+  });
+
+  it("shows Maps only when both its feature and Tools are enabled, and leaves a hidden route", async () => {
+    let update!: (snapshot: typeof fixtureSnapshot) => void;
+    installNative({ state: { get: async () => fixtureSnapshot, onChange: (listener: typeof update) => { update = listener; return () => undefined; } } });
+    const wrapper = mount(App);
+    await flushPromises();
+    await wrapper.get('button[aria-label="Settings"]').trigger("click");
+    const maps = () => wrapper.findAll(".settings-page aside button").find(button => button.text() === "Maps");
+    expect(maps()).toBeUndefined();
+    const enabled = { ...fixtureSnapshot, tools: { ...fixtureSnapshot.tools, configured: true } };
+    update(enabled);
+    await wrapper.vm.$nextTick();
+    await maps()!.trigger("click");
+    expect(wrapper.get(".settings-content h1").text()).toBe("Maps");
+    expect(wrapper.text()).toContain("Unassigned by default");
+    update({ ...enabled, tools: { ...enabled.tools, features: { ...enabled.tools.features, maps: { enabled: false } } } });
+    await wrapper.vm.$nextTick();
+    expect(maps()).toBeUndefined();
+    expect(wrapper.get(".settings-content h1").text()).toBe("Tools");
   });
 
   it("keeps Discord and GitHub in the global header", async () => {
@@ -192,7 +214,7 @@ describe("unified launcher shell", () => {
       tools: {
         captureShortcut: async () => ({
           status: "conflict" as const,
-          tool: "quick-travel" as const,
+          action: "travel.open" as const,
           binding: { key: "t", shift: false, option: false },
         }),
         replaceShortcut,
@@ -202,12 +224,12 @@ describe("unified launcher shell", () => {
     await flushPromises();
     await wrapper.get('button[aria-label="Settings"]').trigger("click");
     await wrapper.findAll(".settings-page aside button").find((button) => button.text() === "Tools")!.trigger("click");
-    await wrapper.findAll(".tool-row .secondary")[0]!.trigger("click");
+    await wrapper.get('button[aria-label="Change Switch Character shortcut"]').trigger("click");
     await flushPromises();
-    expect(wrapper.text()).toContain("already used by Quick Travel");
-    await wrapper.findAll(".settings-content .form-actions .primary")[0]!.trigger("click");
+    expect(wrapper.text()).toContain("Already used by Travel");
+    await wrapper.get(".shortcut-actions .primary").trigger("click");
     expect(replaceShortcut).toHaveBeenCalledWith({
-      tool: "build-management",
+      action: "character.switch",
       binding: { key: "t", shift: false, option: false },
     });
   });

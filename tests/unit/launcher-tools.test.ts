@@ -1,39 +1,48 @@
-/** Verifies the launcher's public three-Tool projection and shortcut policy. */
+/** Every public feature and keyboard action shares the canonical settings policy. */
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { DEFAULT_SETTINGS } from "../../src/shared/contracts.ts";
-import {
-  allGlobalToolsPatch,
-  globalToolPatch,
-  launcherToolSettings,
-  shortcutOwner,
-} from "../../src/main/core/launcher-tools.ts";
+import { GLOBAL_TOOLS, GLOBAL_TOOL_FEATURES } from "../../src/shared/launcher-contracts.ts";
+import { FEATURE_SELECTION_POLICIES, featureActivationRequested } from "../../src/shared/feature-contracts.ts";
+import { DEFAULT_SHORTCUTS, resolveShortcuts } from "../../src/shared/keyboard-shortcuts.ts";
+import { allGlobalToolsPatch, globalToolPatch, launcherToolSettings, launcherShortcutPatch } from "../../src/main/core/launcher-tools.ts";
 
 describe("global launcher Tools", () => {
-  it("projects only Build Management, Quick Travel, and Xunlai Storage", () => {
-    const tools = launcherToolSettings(DEFAULT_SETTINGS);
-    assert.deepEqual(Object.keys(tools), ["build-management", "quick-travel", "xunlai-storage"]);
-    assert.equal(tools["quick-travel"].shortcut?.key, "t");
+  it("projects every independently configurable feature from its canonical setting", () => {
+    assert.deepEqual(Object.keys(launcherToolSettings(DEFAULT_SETTINGS)), GLOBAL_TOOLS);
+    for (const tool of GLOBAL_TOOLS) {
+      const id = GLOBAL_TOOL_FEATURES[tool];
+      for (const enabled of [false, true]) {
+        const settings = { ...DEFAULT_SETTINGS, gwonmacTools: true, ...globalToolPatch(tool, enabled) };
+        assert.equal(launcherToolSettings(settings)[tool].enabled, enabled, tool);
+        assert.equal(featureActivationRequested(id, settings), enabled, tool);
+      }
+    }
+    const settings = new Set(GLOBAL_TOOLS.map(tool => FEATURE_SELECTION_POLICIES[GLOBAL_TOOL_FEATURES[tool]].activation.setting));
+    for (const policy of Object.values(FEATURE_SELECTION_POLICIES)) {
+      if (policy.activation.kind !== "master") assert.ok(settings.has(policy.activation.setting));
+    }
   });
 
-  it("enables the complete fresh-install Tool set in one settings write", () => {
-    assert.deepEqual(allGlobalToolsPatch(true), {
-      gwonmacTools: true,
-      buildLibrary: true,
-      travelPalette: true,
-      xunlaiStorage: true,
-    });
-    assert.deepEqual(globalToolPatch("xunlai-storage", false), { xunlaiStorage: false });
+  it("preserves the existing fresh-install opt-in without enabling new features", () => {
+    assert.deepEqual(allGlobalToolsPatch(true), { gwonmacTools: true, buildLibrary: true, travelPalette: true, xunlaiStorage: true });
+    assert.deepEqual(globalToolPatch("maps", false), { cartographyEnabled: false });
+    assert.deepEqual(globalToolPatch("character-switch", false), { characterSwitchEnabled: false });
   });
 
-  it("finds a conflict only among the three visible Tool shortcuts", () => {
-    assert.equal(
-      shortcutOwner({ key: "t", shift: false, option: false }, DEFAULT_SETTINGS, "build-management"),
-      "quick-travel",
-    );
-    assert.equal(
-      shortcutOwner({ key: "k", shift: false, option: false }, DEFAULT_SETTINGS, "build-management"),
-      null,
-    );
+  it("replaces conflicts across Core, Trade, Travel, and Maps even when disabled", () => {
+    for (const action of ["character.switch", "trade.toggle", "travel.open"] as const) {
+      const patch = launcherShortcutPatch(DEFAULT_SETTINGS, "cartography.grid.toggle", DEFAULT_SHORTCUTS[action]);
+      const resolved = resolveShortcuts(patch.shortcutOverrides!);
+      assert.equal(resolved[action], null);
+      assert.deepEqual(resolved["cartography.grid.toggle"], DEFAULT_SHORTCUTS[action]);
+    }
+    assert.throws(() => launcherShortcutPatch(DEFAULT_SETTINGS, "travel.open", { key: "q", shift: false, option: false }), /reserved/);
+  });
+
+  it("clears map shortcuts back to an empty override without changing other preferences", () => {
+    const settings = { ...DEFAULT_SETTINGS, shortcutOverrides: { "cartography.grid.toggle": { key: "g", shift: false, option: false } } };
+    assert.deepEqual(launcherShortcutPatch(settings, "cartography.grid.toggle", null), { shortcutOverrides: {} });
+    assert.equal(DEFAULT_SHORTCUTS["cartography.walkability.toggle"], null);
   });
 });

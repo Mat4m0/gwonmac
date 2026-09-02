@@ -1,4 +1,6 @@
 import type { LauncherSnapshot } from "@shared/launcher-contracts";
+import { DEFAULT_SETTINGS } from "@shared/contracts";
+import { resolveShortcuts } from "@shared/keyboard-shortcuts";
 import { DEFAULT_CARTOGRAPHY_PRESET_LIBRARY } from "@shared/cartography-overlay";
 import { LEGACY_PRIMARY_PROFILE_ID, parseProfileId } from "@shared/multiple-accounts";
 
@@ -27,12 +29,25 @@ export const fixtureSnapshot: LauncherSnapshot = {
     loaded: false,
     restartRequired: false,
     features: {
-      "build-management": { enabled: true, shortcut: { key: "b", shift: false, option: false } },
-      "quick-travel": { enabled: true, shortcut: { key: "t", shift: false, option: false } },
-      "xunlai-storage": { enabled: false, shortcut: { key: "c", shift: true, option: false } },
+      "character-switch": { enabled: true },
+      "build-management": { enabled: true },
+      "quick-travel": { enabled: true },
+      "xunlai-storage": { enabled: false },
+      "trade-chat": { enabled: false },
+      maps: { enabled: true },
+      "target-readout": { enabled: false },
+      "skill-key-labels": { enabled: false },
+      "skill-cooldowns": { enabled: true },
     },
   },
+  shortcuts: resolveShortcuts({}),
   settings: {
+    autoRelogAfterReload: DEFAULT_SETTINGS.autoRelogAfterReload,
+    characterSwitchProfession: DEFAULT_SETTINGS.characterSwitchProfession,
+    characterSwitchLevel: DEFAULT_SETTINGS.characterSwitchLevel,
+    characterSwitchLocation: DEFAULT_SETTINGS.characterSwitchLocation,
+    skillKeyBindings: DEFAULT_SETTINGS.skillKeyBindings,
+    skillCooldownColor: DEFAULT_SETTINGS.skillCooldownColor,
     autoCheckUpdates: true,
     updateTrack: "stable",
     renderScale: 2,
@@ -90,6 +105,7 @@ export function fixtureSnapshotFor(search: string): LauncherSnapshot {
           configured: false,
           loaded: false,
           features: {
+            ...fixtureSnapshot.tools.features,
             "build-management": { ...fixtureSnapshot.tools.features["build-management"], enabled: false },
             "quick-travel": { ...fixtureSnapshot.tools.features["quick-travel"], enabled: false },
             "xunlai-storage": { ...fixtureSnapshot.tools.features["xunlai-storage"], enabled: false },

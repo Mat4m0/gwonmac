@@ -382,6 +382,8 @@ export interface AppSettings {
    * game behind them. This is presentation only and never reaches the game.
    */
   uiPanelOpacity: number;
+  /** Enable map guidance and its controls without changing saved layer visibility. */
+  cartographyEnabled: boolean;
   /** Show certified walkability on the native Compass and Mission Map. */
   cartographyOverlayEnabled: boolean;
   /** Draw the game's fixed cartography cells over both native map surfaces. */
@@ -406,6 +408,8 @@ export interface AppSettings {
   xunlaiStorage: boolean;
   /** Allow the focused Travel palette and its explicit map command. */
   travelPalette: boolean;
+  /** Allow the Core Character Switch surface independently of optional Tools. */
+  characterSwitchEnabled: boolean;
   /** Show the canonical profession icon and profession names in Character Switch. */
   characterSwitchProfession: boolean;
   /** Show the character's certified level in Character Switch. */
@@ -529,6 +533,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   uiFont: "guild-wars",
   controllerPromptStyle: "game-default",
   uiPanelOpacity: 94,
+  cartographyEnabled: true,
   cartographyOverlayEnabled: false,
   cartographyGridEnabled: false,
   cartographyRevealMode: "off",
@@ -541,6 +546,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   tradeChat: true,
   xunlaiStorage: false,
   travelPalette: true,
+  characterSwitchEnabled: true,
   characterSwitchProfession: true,
   characterSwitchLevel: true,
   characterSwitchLocation: true,

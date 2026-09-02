@@ -23,6 +23,7 @@ import type {
 } from "../shared/contracts.js";
 import type { LauncherDestination } from "../shared/launcher-contracts.js";
 import { RENDERER_INIT_ARGUMENT } from "../shared/contracts.js";
+import { featureActivationRequested } from "../shared/feature-contracts.js";
 import type {
   EnhancementProgram,
   EnhancementSelection,
@@ -638,7 +639,15 @@ export function createMainWindow(
       else if (action === "tools.toggle") void toggleTools(win);
       else if (action === "trade.toggle") void toggleTrade(win);
       else if (action === "storage.open") void openStorage(win);
-      else void toggleTravel(win);
+      else if (action === "travel.open") void toggleTravel(win);
+      else {
+        void host.getSettings().then((settings) => {
+          if (!featureActivationRequested("cartography", settings)) return;
+          const key = action === "cartography.grid.toggle"
+            ? "cartographyGridEnabled" : "cartographyOverlayEnabled";
+          return host.updateSettings({ [key]: !settings[key] });
+        }).catch((error) => console.error("Map layer shortcut failed", error));
+      }
     },
     edit(command) {
       void editWindowText(win, command);

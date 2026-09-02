@@ -44,6 +44,16 @@ describe("launcher presentation state", () => {
     assert.equal(parseLauncherExternalLink("arenaNetSupport"), "arenaNetSupport");
     assert.throws(() => parseLauncherExternalLink("https://example.com"));
   });
+  it("validates customization without accepting feature switches on the generic settings channel", () => {
+    assert.deepEqual(parseLauncherSettingsPatch({ characterSwitchLocation: false, autoRelogAfterReload: true, skillCooldownColor: { kind: "custom", value: "#123456" } }), {
+      characterSwitchLocation: false, autoRelogAfterReload: true, skillCooldownColor: { kind: "custom", value: "#123456" },
+    });
+    for (const invalid of [
+      { characterSwitchLocation: "false" }, { cartographyEnabled: true },
+      { characterSwitchEnabled: false }, { skillKeyBindings: [] },
+      { skillCooldownColor: { kind: "custom", value: "red" } },
+    ]) assert.throws(() => parseLauncherSettingsPatch(invalid));
+  });
   it("classifies every supported starting state before account bootstrap", () => {
     assert.equal(classifyLauncherInstallation({ legacySingleData: false, existingWorkspace: false }), "fresh");
     assert.equal(classifyLauncherInstallation({ legacySingleData: true, existingWorkspace: false }), "migrated-single");

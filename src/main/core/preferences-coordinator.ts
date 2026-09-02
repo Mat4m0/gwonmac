@@ -21,6 +21,8 @@ import { AtomicPublicationUnconfirmedError } from "./atomic-file.js";
 import { Mutex } from "./mutex.js";
 import { DEFAULT_SETTINGS } from "../../shared/contracts.js";
 import { loadSettings, saveSettings } from "./settings.js";
+import { launcherShortcutPatch } from "./launcher-tools.js";
+import type { ShortcutAction, ShortcutBinding } from "../../shared/keyboard-shortcuts.js";
 
 async function travelDomain() {
   const [shared, stored] = await Promise.all([
@@ -123,6 +125,11 @@ export class PreferencesCoordinator {
 
   updateSettings(patch: AppSettingsPatch): Promise<AppSettings> {
     return this.#commitSettings((current) => ({ ...current, ...patch }));
+  }
+
+  replaceShortcut(action: ShortcutAction, binding: ShortcutBinding | null): Promise<AppSettings> {
+    // Conflict resolution and persistence must see the same latest bindings.
+    return this.#commitSettings(current => ({ ...current, ...launcherShortcutPatch(current, action, binding) }));
   }
 
   updateRendererSettings(patch: RendererSettingsPatch): Promise<AppSettings> {

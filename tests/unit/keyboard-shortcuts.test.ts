@@ -20,6 +20,8 @@ describe("keyboard shortcuts", () => {
       "tools.toggle": { key: "k", shift: true, option: false },
       "storage.open": null,
     }), {
+      "cartography.grid.toggle": null,
+      "cartography.walkability.toggle": null,
       "character.switch": DEFAULT_SHORTCUTS["character.switch"],
       "tools.toggle": { key: "k", shift: true, option: false },
       "trade.toggle": DEFAULT_SHORTCUTS["trade.toggle"],

@@ -201,7 +201,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
   const playRegion = () => snapshot().playRegion;
   const cartographyActive = () => {
     const settings = window.gwToolsSettings();
-    return settings.cartographyOverlayEnabled || settings.cartographyGridEnabled;
+    return policy().cartography && (settings.cartographyOverlayEnabled || settings.cartographyGridEnabled);
   };
   let companionState: CompanionSnapshot | null = null;
   let party: ToolboxObservation | null = null;

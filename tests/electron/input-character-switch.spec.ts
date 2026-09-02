@@ -114,6 +114,7 @@ test("a 27-character account browses and searches the complete alphabetical list
 
     await professionSetting.uncheck();
     await expect(professionSetting).toBeEnabled();
+    await expect.poll(() => page.evaluate(async () => (await window.gwNative.settings.get()).characterSwitchProfession)).toBe(false);
     await page.keyboard.press("Escape");
     await expect(list.locator("img")).toHaveCount(0);
     await expect(list.locator(".character-switch-meta").first()).toHaveText(

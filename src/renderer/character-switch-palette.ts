@@ -167,6 +167,7 @@ export function createCharacterSwitchPalette(
   });
   let preferencePending = false;
   let preferenceFailure = false;
+  let enabled = false;
   let rows: ReturnType<typeof orderCharacters> = [];
   const busy = () => source.action.status === "switching";
   const modal = window.gwSurfaces.registerDialog({
@@ -197,6 +198,10 @@ export function createCharacterSwitchPalette(
       ?.scrollIntoView({ block: "nearest" });
   };
   const render = () => {
+    if (!enabled) {
+      closePalette(true);
+      return;
+    }
     if (source.action.status === "switching" && root.open) {
       closePalette(false);
       return;
@@ -542,6 +547,7 @@ export function createCharacterSwitchPalette(
     if (details.open) diagnostic.textContent = JSON.stringify(source.diagnostics(), null, 2);
   });
   const onToggle = (event: Event) => {
+    if (!enabled) return;
     event.preventDefault();
     if (source.action.status === "switching") return;
     if (root.open) closePalette(true);
@@ -549,13 +555,15 @@ export function createCharacterSwitchPalette(
   };
   window.addEventListener("gw:character-toggle", onToggle);
   const unsubscribeSettings = window.gwNative.settings.onChange((settings) => {
+    enabled = settings.characterSwitchEnabled;
     displayPreferences = displayPreferencesFrom(settings);
     render();
   });
   void window.gwNative.settings.get().then((settings) => {
+    enabled = settings.characterSwitchEnabled;
     displayPreferences = displayPreferencesFrom(settings);
     render();
-  }).catch(() => { /* The default remains usable; saving reports its own failure. */ });
+  }).catch(() => { /* Keep the surface closed until its enable setting is known. */ });
   const unsubscribe = source.subscribe(render);
   return Object.freeze({ dispose() {
     unsubscribe();

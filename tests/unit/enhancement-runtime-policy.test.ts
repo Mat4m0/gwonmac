@@ -6,6 +6,8 @@ import {
 import { FEATURE_SELECTION_POLICIES } from "../../src/shared/feature-contracts.js";
 
 const off = Object.freeze({
+  characterSwitchEnabled: false,
+  cartographyEnabled: false,
   gwonmacTools: false,
   buildLibrary: false,
   tradeChat: false,
@@ -18,6 +20,8 @@ const off = Object.freeze({
 
 test("developer programs replace saved optional-tool selection in PvE", () => {
   assert.deepEqual(enhancementRuntimePolicy("toolbox-foundation", off, "pve"), {
+    characterSwitch: false,
+    cartography: false,
     tools: true,
     buildLibrary: true,
     tradeChat: true,
@@ -29,6 +33,8 @@ test("developer programs replace saved optional-tool selection in PvE", () => {
     skillCooldowns: false,
   });
   assert.deepEqual(enhancementRuntimePolicy("toolbox-commands", off, "pve"), {
+    characterSwitch: false,
+    cartography: false,
     tools: true,
     buildLibrary: true,
     tradeChat: true,
@@ -40,6 +46,8 @@ test("developer programs replace saved optional-tool selection in PvE", () => {
     skillCooldowns: false,
   });
   assert.deepEqual(enhancementRuntimePolicy("xunlai-storage", off, "pve"), {
+    characterSwitch: false,
+    cartography: false,
     tools: true,
     buildLibrary: true,
     tradeChat: true,
@@ -51,6 +59,8 @@ test("developer programs replace saved optional-tool selection in PvE", () => {
     skillCooldowns: false,
   });
   assert.deepEqual(enhancementRuntimePolicy("target-observer", off, "pve"), {
+    characterSwitch: false,
+    cartography: false,
     tools: false,
     buildLibrary: false,
     tradeChat: false,
@@ -65,6 +75,8 @@ test("developer programs replace saved optional-tool selection in PvE", () => {
 
 test("unknown regions keep local Tools while live PvE features fail closed", () => {
   const on = Object.freeze({
+    characterSwitchEnabled: false,
+    cartographyEnabled: false,
     gwonmacTools: true,
     buildLibrary: true,
     tradeChat: true,
@@ -75,6 +87,8 @@ test("unknown regions keep local Tools while live PvE features fail closed", () 
     skillCooldownOverlayEnabled: false,
   });
   assert.deepEqual(enhancementRuntimePolicy("none", on, "unknown"), {
+    characterSwitch: false,
+    cartography: false,
     tools: true,
     buildLibrary: true,
     tradeChat: true,
@@ -89,6 +103,8 @@ test("unknown regions keep local Tools while live PvE features fail closed", () 
 
 test("confirmed active PvP play disables every product and developer tool", () => {
   const on = Object.freeze({
+    characterSwitchEnabled: false,
+    cartographyEnabled: false,
     gwonmacTools: true,
     buildLibrary: true,
     tradeChat: true,
@@ -106,6 +122,8 @@ test("confirmed active PvP play disables every product and developer tool", () =
     "xunlai-storage",
   ] as const) {
     assert.deepEqual(enhancementRuntimePolicy(program, on, "pvp"), {
+      characterSwitch: false,
+      cartography: false,
       tools: false,
       buildLibrary: false,
       tradeChat: false,
@@ -121,6 +139,8 @@ test("confirmed active PvP play disables every product and developer tool", () =
 
 test("product tool settings remain live once the capability is present", () => {
   assert.deepEqual(enhancementRuntimePolicy("none", {
+    characterSwitchEnabled: false,
+    cartographyEnabled: false,
     gwonmacTools: true,
     buildLibrary: true,
     tradeChat: true,
@@ -130,6 +150,8 @@ test("product tool settings remain live once the capability is present", () => {
     skillKeyLabelsEnabled: false,
     skillCooldownOverlayEnabled: true,
   }, "pve"), {
+    characterSwitch: false,
+    cartography: false,
     tools: true,
     buildLibrary: true,
     tradeChat: true,
@@ -145,6 +167,8 @@ test("product tool settings remain live once the capability is present", () => {
 test("skill feature selection distinguishes labels from cooldowns", () => {
   const empty = enhancementRuntimePolicy("none", {
     ...off,
+    characterSwitchEnabled: false,
+    cartographyEnabled: false,
     gwonmacTools: true,
     skillKeyLabelsEnabled: false,
     skillCooldownOverlayEnabled: false,
@@ -153,6 +177,8 @@ test("skill feature selection distinguishes labels from cooldowns", () => {
   assert.equal(empty.skillCooldowns, false);
   const labels = enhancementRuntimePolicy("none", {
     ...off,
+    characterSwitchEnabled: false,
+    cartographyEnabled: false,
     gwonmacTools: true,
     skillKeyLabelsEnabled: true,
     skillCooldownOverlayEnabled: false,

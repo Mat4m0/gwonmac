@@ -93,20 +93,27 @@ safety limits, storage, and troubleshooting.
 ## Optional Tools
 
 Tools are global. The same master switch, Tool switches, and shortcuts apply to
-every account. The launcher exposes only:
+every account. The launcher exposes:
 
 - **Build Management** — save and organize builds and teams;
 - **Quick Travel** — search reviewed Guild Wars destinations;
-- **Xunlai Storage** — open storage in supported PvE outposts.
+- **Xunlai Storage** — open storage in supported PvE outposts;
+- **Trade Chat** — browse the trade feed;
+- **Maps** — enable exploration and walkability guidance;
+- **Target Distance** — show distance to the selected target in PvE;
+- **Skill Key Labels** — label the eight skill slots with your controls;
+- **Skill Cooldowns** — show numeric recharge timers with a preset or custom color.
 
-Open **Settings → Tools** to configure them. Each Tool row contains its switch,
-shortcut, **Change shortcut**, and **Restore default**. There is no separate
-Shortcuts page.
+Open **Settings → Tools** to configure them. Features with shortcuts have
+**Change shortcut**, **Clear**, and **Restore default** controls.
+Skill labels only change the displayed labels, not Guild Wars key bindings.
+Character Switch has its own switch, shortcut, and display settings here.
+It is a Core feature and does not require **Enable Tools**.
 
 Shortcuts use macOS Command combinations such as Command-T. Normal editing and
 application shortcuts such as Command-C, Command-V, Command-Q, and Command-W
-remain reserved. If a new shortcut conflicts with another Tool, the launcher
-asks before replacing it.
+remain reserved. If a new or restored shortcut conflicts with any feature,
+the launcher asks before replacing it. This includes disabled features.
 
 Enabling the Tools runtime can require a restart. With no games open, the
 launcher offers to restart. With games open, it saves the change for the next
@@ -115,7 +122,11 @@ apply to all running profiles when the Tools runtime is already loaded.
 
 ## Maps and cartography
 
-Open **Settings → Maps** for two independent features. **Grid** marks the game's
+Enable **Tools** and **Maps** in **Settings → Tools** to show **Settings → Maps**.
+Disabling Maps hides its controls and overlays without clearing your preferences.
+The **Exploration grid** and **Walkable terrain** shortcuts are unassigned by
+default. Assign them in Maps settings to toggle each layer independently.
+**Grid** marks the game's
 exploration cells and highlights the cell containing your character.
 **Walkable terrain** shades terrain outside certified pathing geometry while it
 keeps the native map artwork visible.

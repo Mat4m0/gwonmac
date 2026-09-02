@@ -213,6 +213,16 @@ test("feature selection policies are deeply immutable", () => {
   }
 });
 
+test("Core Character Switch is independent while Maps follows its master and feature switch", () => {
+  assert.equal(featureActivationRequested("characterSwitch", DEFAULT_SETTINGS), true);
+  assert.equal(featureActivationRequested("characterSwitch", { ...DEFAULT_SETTINGS, characterSwitchEnabled: false }), false);
+  assert.equal(featureActivationRequested("cartography", DEFAULT_SETTINGS), false);
+  assert.equal(featureActivationRequested("cartography", { ...DEFAULT_SETTINGS, gwonmacTools: true }), true);
+  assert.equal(featureActivationRequested("cartography", { ...DEFAULT_SETTINGS, gwonmacTools: true, cartographyEnabled: false }), false);
+  assert.equal(featureRegionAllowsRequest("cartography", "pvp"), false);
+  assert.equal(featureRegionAllowsRequest("characterSwitch", "unknown"), true);
+});
+
 test("shared activation and area policy cover required, setting, and content features", () => {
   assert.equal(featureActivationRequested("tools", DEFAULT_SETTINGS), false);
   assert.equal(featureActivationRequested("skillCooldowns", DEFAULT_SETTINGS), false);

@@ -1,9 +1,15 @@
-import { mount } from "@vue/test-utils";
+import { flushPromises, mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
 import MapsSettings from "./MapsSettings.vue";
 import { fixtureSnapshot } from "../fixtures";
 
 describe("Maps settings", () => {
+  it("reports a failed persistence call without claiming the change was saved", async () => {
+    const wrapper = mount(MapsSettings, { props: { settings: fixtureSnapshot.settings, save: async () => { throw new Error("disk"); } } });
+    await wrapper.findAll('input[type="checkbox"]')[0]!.setValue(true);
+    await flushPromises();
+    expect(wrapper.get('[role="status"]').text()).toContain("could not be saved");
+  });
   it("keeps the global map controls and their style editor in the launcher", async () => {
     const save = vi.fn(async () => undefined);
     const wrapper = mount(MapsSettings, {
