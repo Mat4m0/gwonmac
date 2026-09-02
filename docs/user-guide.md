@@ -44,11 +44,11 @@ position in place. The cutover does not copy, move, or delete that data.
 
 The launcher hides after every selected account opens successfully. It stays
 visible if an account needs attention. Use **Window → Show Launcher** to open
-another account. **Settings…** opens launcher Settings directly. Closing one
-game affects only that account. Closing the last game shows the launcher.
-Clicking the Dock icon restores the most recent launcher or game window that
-you used. If that window has closed, the next most recent game window is
-restored.
+another account. You can also right-click the Dock icon and choose **Show
+Launcher**. **Settings…** opens launcher Settings directly. Closing one game
+affects only that account. Closing the last game shows the launcher. Clicking
+the Dock icon restores the most recent launcher or game window that you used.
+If that window has closed, the next most recent game window is restored.
 
 ## Home content
 

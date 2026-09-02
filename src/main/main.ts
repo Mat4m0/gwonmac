@@ -12,6 +12,7 @@ import {
   autoUpdater,
   type BrowserWindow,
   dialog,
+  Menu,
   Notification,
   powerMonitor,
   session,
@@ -1042,6 +1043,13 @@ if (primaryInstance) void app.whenReady().then(async () => {
     windowCoordinator,
     revealLauncher,
   );
+  app.dock?.setMenu(Menu.buildFromTemplate([
+    {
+      id: "show-launcher",
+      label: "Show Launcher",
+      click: () => revealLauncher("home"),
+    },
+  ]));
   let automaticUpdateCheckInFlight = false;
   const maybeCheckForAppUpdates = async (): Promise<void> => {
     if (automaticUpdateCheckInFlight) return;

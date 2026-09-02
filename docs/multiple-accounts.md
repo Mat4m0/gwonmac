@@ -90,7 +90,8 @@ restores it at Settings. Closing the launcher hides it while a game is open.
 Closing one game affects only that profile; closing the final game reveals the
 launcher. A Dock activation restores the most recently used live window. If
 that window has closed, it falls back through the previous game windows before
-revealing the launcher.
+revealing the launcher. The Dock menu's **Show Launcher** command always
+restores the launcher at Home.
 A second app launch restores the launcher explicitly. An asynchronous Play
 completion does not steal focus if the player has already moved to another app.
 
