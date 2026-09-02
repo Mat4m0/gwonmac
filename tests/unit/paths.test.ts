@@ -50,6 +50,10 @@ describe("resolved profile paths", () => {
       cartographySpike: `${root}/game/cartography-spike`,
       nativeDoubleClick: `${root}/game/double-click`,
       extendedMemory: `${root}/game/extended-memory`,
+      texturePacks: `${root}/texture-packs`,
+      texturePackSelection: `${root}/texture-packs/selection.json`,
+      texturePackSources: `${root}/texture-packs/packs`,
+      texturePackStaging: `${root}/texture-packs/staging`,
       chunks: `${root}/game/chunks`,
       skillAssets: `${root}/game/skill-assets`,
       cacheClearRequest: `${root}/clear-cache-on-start`,
@@ -72,6 +76,7 @@ describe("resolved profile paths", () => {
       `${root}/game/artifacts.previous`,
       `${root}/game/compatibility`,
       `${root}/game/enhancements`,
+      `${root}/texture-packs`,
       // `game/skill-assets` is deliberately absent. Its writes land in a
       // per-archive subdirectory that this non-recursive sweep would not reach,
       // so `SkillAssets.prepare` collects its own orphans instead — the same

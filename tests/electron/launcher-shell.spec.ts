@@ -27,6 +27,7 @@ test("the Vue launcher owns a narrow frozen bridge and offline subtree", async (
         "profiles",
         "settings",
         "state",
+        "texturePacks",
         "tools",
         "updates",
       ],

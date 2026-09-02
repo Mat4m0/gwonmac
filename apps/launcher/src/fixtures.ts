@@ -46,6 +46,10 @@ export const fixtureSnapshot: LauncherSnapshot = {
     cartographyGridOpacity: 65,
     cartographyControlIdleOpacity: 35,
   },
+  texturePacks: {
+    selectedPackId: null,
+    packs: [],
+  },
   profiles: [
     { id: LEGACY_PRIMARY_PROFILE_ID, name: "Main account", archived: false, state: "ready", appearance: { icon: "swords", color: "#8a5a32" } },
     { id: parseProfileId("ba46cb0e-55c2-4c05-9808-5c35ce83b0b0"), name: "Storage account", archived: false, state: "running", appearance: { icon: "archive", color: "#496b58" } },

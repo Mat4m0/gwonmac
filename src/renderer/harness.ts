@@ -572,6 +572,7 @@ window.gwApplySettings = (next) => {
 let imageSource: import('./image-source.js').ImageSource | null = null;
 let gamepadImportsAvailable = false;
 let controllerPrompts: import('./controller-prompt-texture.js').PreparedControllerPrompts | null = null;
+let texturePack: import('./texture-pack.js').PreparedTexturePack | null = null;
 
 // The host's supporting modules. They are ESM; this bootstrap is not, because
 // the generated glue redeclares `var Module`. So boot() imports them and holds
@@ -591,7 +592,8 @@ let host: typeof import('./graphics.js') &
   typeof import('./gamepad-trace.js') &
   typeof import('./template-save-compatibility.js') &
   typeof import('./template-filesystem-trace.js') &
-  typeof import('./controller-prompt-texture.js');
+  typeof import('./controller-prompt-texture.js') &
+  typeof import('./texture-pack.js');
 
 /**
  * The one HTTP shape the image source is given: a ranged read of the snapshot,
@@ -640,6 +642,8 @@ addEventListener('beforeunload', () => {
   window.gwVirtualGamepad?.dispose();
   controllerPrompts?.dispose();
   controllerPrompts = null;
+  texturePack?.dispose();
+  texturePack = null;
   disposeMemoryWarningSettings();
   automaticCharacterReturn?.dispose();
   loginStatus?.dispose();
@@ -679,6 +683,9 @@ Module = {
       );
     } else {
       delete window.gwTextureStats;
+    }
+    if (texturePack) {
+      texturePack.install({ imports, module: Module });
     }
     if (controllerPrompts) {
       const installedControllerPrompts = controllerPrompts.install({
@@ -1311,6 +1318,7 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
       proxyRoutes,
       virtualGamepad,
       controllerPromptTexture,
+      texturePackModule,
       characterSwitch,
     ] = await Promise.all([
       import('./platform-capabilities.js'),
@@ -1333,6 +1341,7 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
       import('../shared/proxy-routes.js'),
       import('./virtual-gamepad.js'),
       import('./controller-prompt-texture.js'),
+      import('./texture-pack.js'),
       import('./character-switch-host.js'),
     ]);
     host = {
@@ -1350,6 +1359,7 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
       ...templateSaveCompatibility,
       ...templateFilesystemTrace,
       ...controllerPromptTexture,
+      ...texturePackModule,
     };
     // Dialogs belong to the application shell and must work before a game
     // artifact is available. Installing their owner here also still precedes
@@ -1403,6 +1413,17 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
       native().client.session(),
     ]);
     appSettings = settings;
+    const texturePackGeneration = window.gwNative.init.texturePackGeneration;
+    if (texturePackGeneration) {
+      try {
+        texturePack = await host.prepareTexturePack(texturePackGeneration, log);
+      } catch (error) {
+        log(
+          '[warn] texture pack could not be prepared; using official textures:',
+          error instanceof Error ? error.message : String(error),
+        );
+      }
+    }
     if (settings.controllerPromptStyle === 'playstation') {
       try {
         controllerPrompts = await host.preparePlayStationControllerPrompts({

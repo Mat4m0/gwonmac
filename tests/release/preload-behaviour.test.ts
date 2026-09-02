@@ -701,6 +701,7 @@ test("the launch configuration is read from argv, and defaults to production", (
     enhancementSelection: { nativeCursor: false, tools: false },
     diagnosticProfile: "standard",
     templateFsTrace: false,
+    texturePackGeneration: null,
   });
   assert.deepEqual(
     plainInit(
@@ -714,6 +715,7 @@ test("the launch configuration is read from argv, and defaults to production", (
             },
             diagnosticProfile: "direct-canvas",
             templateFsTrace: true,
+            texturePackGeneration: "0123456789abcdef0123456789abcdef",
           }),
       ]).api.init,
     ),
@@ -723,6 +725,7 @@ test("the launch configuration is read from argv, and defaults to production", (
       enhancementSelection: { nativeCursor: true, tools: false },
       diagnosticProfile: "direct-canvas",
       templateFsTrace: true,
+      texturePackGeneration: "0123456789abcdef0123456789abcdef",
     },
   );
   assert.deepEqual(
@@ -742,6 +745,7 @@ test("the launch configuration is read from argv, and defaults to production", (
       enhancementSelection: { nativeCursor: false, tools: false },
       diagnosticProfile: "standard",
       templateFsTrace: false,
+      texturePackGeneration: null,
     },
   );
   // Anything that is not the exact boolean `true`, and anything unparseable,
@@ -758,6 +762,7 @@ test("the launch configuration is read from argv, and defaults to production", (
         enhancementSelection: { nativeCursor: false, tools: false },
         diagnosticProfile: "standard",
         templateFsTrace: false,
+        texturePackGeneration: null,
       },
       malformed,
     );

@@ -887,6 +887,8 @@ export interface RendererInit {
   diagnosticProfile: DiagnosticProfile;
   /** Template filesystem syscall trace. Unpackaged builds only. */
   templateFsTrace: boolean;
+  /** Opaque, immutable generation selected when this game window opened. */
+  texturePackGeneration: string | null;
 }
 
 /**

@@ -77,6 +77,19 @@ client/cache reset. Reset keeps profiles, saved logins, application settings,
 Tools and shortcuts, builds, templates, screenshots, chat logs, and profile
 window positions.
 
+## Texture packs
+
+Open **Settings → Game → Texture packs** to import a classic TexMod `.tpf` UI
+design. Import keeps the pack inactive. Select it after import, then open a new
+game window to use it. The selection is global across account profiles; game
+windows that are already open keep the appearance they started with.
+
+Select **Official textures** to disable packs for future game windows. Removing
+a pack deletes gwonmac's managed copy and selects Official textures when that
+pack was active. Resetting settings also selects Official textures, but keeps
+installed packs. See [Texture packs](texture-packs.md) for supported formats,
+safety limits, storage, and troubleshooting.
+
 ## Optional Tools
 
 Tools are global. The same master switch, Tool switches, and shortcuts apply to

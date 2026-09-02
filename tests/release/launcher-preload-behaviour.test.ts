@@ -90,6 +90,10 @@ test("the built launcher preload exposes every launcher command and nothing else
   await api.gameFiles.resumeDownload();
   await api.gameFiles.resetAndRestart();
   await api.news.open("gwonmac-2026-8-10");
+  const texturePackId = "0123456789abcdef0123456789abcdef";
+  await api.texturePacks.import();
+  await api.texturePacks.select(texturePackId);
+  await api.texturePacks.remove(texturePackId);
   await api.updates.check();
   await api.updates.restartAndInstall();
   await api.external.open("github");

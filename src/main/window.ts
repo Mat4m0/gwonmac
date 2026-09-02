@@ -409,6 +409,7 @@ export function rendererInitArgument(options: {
   enhancementSelection: EnhancementSelection;
   enhancementProgram: EnhancementProgram;
   diagnosticProfile: DiagnosticProfile;
+  texturePackGeneration?: string | null;
 }): string {
   const init: RendererInit = {
     development: !app.isPackaged,
@@ -417,6 +418,7 @@ export function rendererInitArgument(options: {
     diagnosticProfile: options.diagnosticProfile,
     templateFsTrace:
       !app.isPackaged && process.env.GW_TEMPLATE_FS_TRACE === "1",
+    texturePackGeneration: options.texturePackGeneration ?? null,
   };
   return `${RENDERER_INIT_ARGUMENT}${JSON.stringify(init)}`;
 }
@@ -438,6 +440,8 @@ export function createMainWindow(
     readonly onRendererFailure?: () => void;
     /** Runs only when this profile has no replacement window. */
     readonly onProfileClosed?: () => void;
+    /** Texture generation retained by this window and its crash recovery. */
+    readonly texturePackGeneration?: string | null;
   },
 ): BrowserWindow {
   const context = options.context;
@@ -459,7 +463,10 @@ export function createMainWindow(
     show: false,
     webPreferences: {
       preload: preloadPath(host.enhancementSelection.tools),
-      additionalArguments: [rendererInitArgument(host)],
+      additionalArguments: [rendererInitArgument({
+        ...host,
+        texturePackGeneration: options.texturePackGeneration ?? null,
+      })],
       // Guild Wars advances its Emscripten main loop on animation frames.
       // Keep game simulation, network delivery, and enabled background audio
       // running when macOS fully covers or minimizes this window.

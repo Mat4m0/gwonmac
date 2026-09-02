@@ -14,6 +14,7 @@ import type {
   LauncherSnapshot,
 } from "../shared/launcher-contracts.js";
 import type { ProfileId } from "../shared/multiple-accounts.js";
+import type { TexturePackSnapshot } from "../shared/texture-packs.js";
 import type { LauncherStateStore } from "./core/launcher-state.js";
 import { launcherToolSettings } from "./core/launcher-tools.js";
 
@@ -36,6 +37,7 @@ export interface LauncherOrchestratorOptions {
   readonly getSettings: () => AppSettings;
   readonly getNews: (track: AppSettings["updateTrack"], preferences: LauncherSnapshot["preferences"]) => LauncherSnapshot["news"];
   readonly toolsLoaded: () => boolean;
+  readonly getTexturePacks?: () => TexturePackSnapshot;
   readonly developmentFixtures: boolean;
   /** Unpackaged Electron tests only: lets renderer-focused suites bypass client preparation. */
   readonly allowUnreadyLaunch?: boolean;
@@ -96,6 +98,10 @@ export class LauncherOrchestrator {
         cartographyWalkabilityOpacity: settings.cartographyWalkabilityOpacity,
         cartographyGridOpacity: settings.cartographyGridOpacity,
         cartographyControlIdleOpacity: settings.cartographyControlIdleOpacity,
+      },
+      texturePacks: this.options.getTexturePacks?.() ?? {
+        selectedPackId: null,
+        packs: [],
       },
       profiles: accounts.profiles.map((profile) => ({
         id: profile.id,

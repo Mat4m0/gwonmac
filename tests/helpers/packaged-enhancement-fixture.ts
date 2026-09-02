@@ -580,6 +580,7 @@ export async function assertPackagedOffSession() {
         },
         diagnosticProfile: "standard",
         templateFsTrace: false,
+        texturePackGeneration: null,
       },
     );
 

@@ -94,6 +94,13 @@ The main process uses [`ws`](https://github.com/websockets/ws) for bounded
 WebSocket client connections. `ws` is copyright its contributors and is
 distributed under the MIT License.
 
+## pngjs
+
+The main process uses [`pngjs`](https://github.com/pngjs/pngjs) to decode
+bounded PNG entries in local texture packs and to encode local cartography
+evidence. `pngjs` is copyright its contributors and is distributed under the
+MIT License. Its license is retained in the packaged module.
+
 ## QT Friz Quad
 
 QT Friz Quad is © 1992 QualiType and is distributed under the SIL Open Font

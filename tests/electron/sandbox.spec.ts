@@ -35,6 +35,7 @@ test.describe("sandbox boundary", () => {
           },
           diagnosticProfile: "standard",
           templateFsTrace: false,
+          texturePackGeneration: null,
         },
         enhancementSelectionFrozen: true,
         enhancementPresent: false,
@@ -226,6 +227,7 @@ test.describe("sandbox boundary", () => {
         },
         diagnosticProfile: "standard",
         templateFsTrace: false,
+        texturePackGeneration: null,
       });
       await expect(fixture.page.locator("#enhancement")).toHaveCount(0);
     } finally {
@@ -286,6 +288,7 @@ test.describe("sandbox boundary", () => {
         },
         diagnosticProfile: "standard",
         templateFsTrace: true,
+        texturePackGeneration: null,
       });
       await expect(fixture.page.locator("#enhancement")).toHaveCount(0);
     } finally {

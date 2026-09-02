@@ -90,6 +90,11 @@ function rendererInit() {
     enhancementSelection,
     diagnosticProfile,
     templateFsTrace: parsed.templateFsTrace === true,
+    texturePackGeneration:
+      typeof parsed.texturePackGeneration === "string"
+        && /^[0-9a-f]{32}$/.test(parsed.texturePackGeneration)
+        ? parsed.texturePackGeneration
+        : null,
   };
 }
 
