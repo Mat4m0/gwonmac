@@ -755,8 +755,7 @@ describe("client module preparation", () => {
       enhancementBuild: null,
       requestedCapabilities: CURSOR_TOOLBOX,
       effectiveCapabilities: NO_CAPABILITIES,
-      cartography: false,
-      cartographyError: null,
+      cartography: { status: "disabled" },
       // An unrecognised client is served exactly as downloaded, so it receives
       // neither the double-click transform nor substitute touch input.
       nativeDoubleClick: false,
@@ -766,6 +765,32 @@ describe("client module preparation", () => {
       assertMissing(value.compatibilityCacheRoot),
       assertMissing(value.enhancementCacheRoot),
     ]);
+  });
+
+  it("keeps Cartography refusal independent from an earlier transform failure", async () => {
+    const value = await fixture();
+    const templateError = {
+      ...value.templateSaveBuild,
+      sha256: "0".repeat(64),
+    };
+    const prepared = await prepareClientModule({
+      ...options(
+        value,
+        { templateSaveBuild: templateError, enhancementBuild: null },
+        CURSOR_TOOLBOX,
+      ),
+      cartographySpike: {
+        cacheRoot: join(value.root, "cartography"),
+        verifyLocally: async () => null,
+      },
+    });
+
+    assert.equal(prepared.failure?.stage, "template-save");
+    assert.equal(prepared.cartography.status, "unavailable");
+    assert.equal(prepared.wasmPath, value.officialWasmPath);
+    if (prepared.cartography.status === "unavailable") {
+      assert.match(String(prepared.cartography.error), /semantic proof refused/);
+    }
   });
 
   it("serves independently certified enhancements when file proof refuses", async () => {

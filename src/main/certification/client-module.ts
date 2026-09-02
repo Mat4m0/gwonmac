@@ -73,10 +73,14 @@ export interface ClientModulePreparationFailure {
   readonly stage:
     | "template-save"
     | "enhancement"
-    | "cartography"
     | "native-double-click";
   readonly error: unknown;
 }
+
+export type CartographyPreparationMode =
+  | { readonly status: "disabled" }
+  | { readonly status: "active" }
+  | { readonly status: "unavailable"; readonly error: unknown };
 
 interface PreparedWasmClientModule {
   readonly wasmPath: string;
@@ -93,10 +97,8 @@ interface PreparedWasmClientModule {
    * renderer's switch and not merely a report.
    */
   readonly nativeDoubleClick: boolean;
-  /** Whether the served module carries the certified Cartography observers. */
-  readonly cartography: boolean;
-  /** Independent refusal detail; an earlier transform failure must not hide it. */
-  readonly cartographyError: unknown | null;
+  /** The single authority for Cartography preparation and its refusal reason. */
+  readonly cartography: CartographyPreparationMode;
 }
 
 function productCapabilityCount(capabilities: EnhancementCapabilities): number {
@@ -322,18 +324,20 @@ export async function prepareClientModule(
         options.cartographySpike.verifyLocally,
       )
     : null;
-  const cartographyPrepared: PreparedWasmClientModule = cartography === null
-    ? certified
-    : {
-        ...certified,
-        wasmPath: cartography.wasmPath,
-        wasmSha256: cartography.wasmSha256,
-        cartography: cartography.error === null,
-        cartographyError: cartography.error,
-        failure: cartography.error === null
-          ? certified.failure
-          : certified.failure ?? { stage: "cartography", error: cartography.error },
-      };
+  let cartographyPrepared: PreparedWasmClientModule = certified;
+  if (cartography?.status === "active") {
+    cartographyPrepared = {
+      ...certified,
+      wasmPath: cartography.wasmPath,
+      wasmSha256: cartography.wasmSha256,
+      cartography: { status: "active" },
+    };
+  } else if (cartography?.status === "unavailable") {
+    cartographyPrepared = {
+      ...certified,
+      cartography: { status: "unavailable", error: cartography.error },
+    };
+  }
   const prepared = await withNativeDoubleClick(
     cartographyPrepared,
     options.nativeDoubleClickCacheRoot,
@@ -453,8 +457,7 @@ async function prepareCertifiedChain(
       enhancementBuild: null,
       requestedCapabilities,
       effectiveCapabilities: NO_ENHANCEMENT_CAPABILITIES,
-      cartography: false,
-      cartographyError: null,
+      cartography: { status: "disabled" },
       nativeDoubleClick: false,
       failure: fileFailure ?? cleanupFailure,
     };
@@ -469,8 +472,7 @@ async function prepareCertifiedChain(
       enhancementBuild: null,
       requestedCapabilities,
       effectiveCapabilities: NO_ENHANCEMENT_CAPABILITIES,
-      cartography: false,
-      cartographyError: null,
+      cartography: { status: "disabled" },
       nativeDoubleClick: false,
       failure: {
         stage: "enhancement",
@@ -487,8 +489,7 @@ async function prepareCertifiedChain(
       enhancementBuild: null,
       requestedCapabilities,
       effectiveCapabilities: NO_ENHANCEMENT_CAPABILITIES,
-      cartography: false,
-      cartographyError: null,
+      cartography: { status: "disabled" },
       nativeDoubleClick: false,
       failure: await discardEnhancementCache(enhancementCacheRoot),
     };
@@ -512,8 +513,7 @@ async function prepareCertifiedChain(
         enhancementBuild,
         requestedCapabilities,
         effectiveCapabilities: candidate,
-        cartography: false,
-        cartographyError: null,
+        cartography: { status: "disabled" },
         nativeDoubleClick: false,
         failure: firstFailure === null
           ? fileFailure
@@ -530,8 +530,7 @@ async function prepareCertifiedChain(
     enhancementBuild,
     requestedCapabilities,
     effectiveCapabilities: NO_ENHANCEMENT_CAPABILITIES,
-    cartography: false,
-    cartographyError: null,
+    cartography: { status: "disabled" },
     nativeDoubleClick: false,
     failure: firstFailure === null
       ? null

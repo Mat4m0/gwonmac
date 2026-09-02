@@ -118,7 +118,7 @@ test("every shipped runtime profile reproduces the real client chain", async () 
     try {
       const prepared = await prepare();
       assert.equal(prepared.failure, null);
-      assert.equal(prepared.cartography, true);
+      assert.deepEqual(prepared.cartography, { status: "active" });
       assert.equal(prepared.nativeDoubleClick, true);
       assert.equal(prepared.extendedMemory.status, "active");
       assert.deepEqual(prepared.effectiveCapabilities, capabilities);
@@ -129,7 +129,7 @@ test("every shipped runtime profile reproduces the real client chain", async () 
       await writeFile(prepared.wasmPath, "stale release qualification cache");
       const rebuilt = await prepare();
       assert.equal(rebuilt.failure, null);
-      assert.equal(rebuilt.cartography, true);
+      assert.deepEqual(rebuilt.cartography, { status: "active" });
       assert.equal(rebuilt.nativeDoubleClick, true);
       assert.equal(rebuilt.extendedMemory.status, "active");
       assert.equal(rebuilt.wasmSha256, prepared.wasmSha256);

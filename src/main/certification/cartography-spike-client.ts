@@ -14,11 +14,18 @@ import {
 } from "./pathing-spike-transform.js";
 import type { CartographySpikeBuild } from "./cartography-spike-verifier.js";
 
-export type CartographySpikePreparation = Readonly<{
-  wasmPath: string;
-  wasmSha256: string;
-  error: unknown | null;
-}>;
+export type CartographySpikePreparation =
+  | Readonly<{
+      status: "active";
+      wasmPath: string;
+      wasmSha256: string;
+    }>
+  | Readonly<{
+      status: "unavailable";
+      wasmPath: string;
+      wasmSha256: string;
+      error: unknown;
+    }>;
 
 /** Prepare Cartography only from an isolated semantic certificate. */
 export async function prepareCartographySpike(
@@ -34,6 +41,7 @@ export async function prepareCartographySpike(
   if (!build) {
     await discardDerivedWasm(cacheRoot).catch(() => undefined);
     return Object.freeze({
+      status: "unavailable",
       wasmPath,
       wasmSha256,
       error: new Error(`Cartography semantic proof refused input ${wasmSha256}`),
@@ -55,15 +63,20 @@ export async function prepareCartographySpike(
   };
   try {
     return Object.freeze({
+      status: "active",
       wasmPath: await prepareDerivedWasm(
         wasmPath,
         cache,
         (input) => transformCartographySpikeWasm(input, build.memoryLayout),
       ),
       wasmSha256: build.outputSha256,
-      error: null,
     });
   } catch (error) {
-    return Object.freeze({ wasmPath, wasmSha256, error });
+    return Object.freeze({
+      status: "unavailable",
+      wasmPath,
+      wasmSha256,
+      error,
+    });
   }
 }

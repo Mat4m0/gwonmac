@@ -8,6 +8,7 @@ const hostUrl = new URL(
   import.meta.url,
 );
 const {
+  verifyCartographyLocally,
   verifyClientLocally,
   verifyExtendedMemoryLocally,
   verifyNativeDoubleClickLocally,
@@ -40,6 +41,11 @@ void app.whenReady().then(async () => {
       })
     : mode === "native-double-click"
     ? await verifyNativeDoubleClickLocally({
+        wasmPath: officialWasmPath,
+        inputSha256: officialSha256,
+      })
+    : mode === "cartography"
+    ? await verifyCartographyLocally({
         wasmPath: officialWasmPath,
         inputSha256: officialSha256,
       })

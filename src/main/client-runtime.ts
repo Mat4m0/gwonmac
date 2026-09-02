@@ -472,7 +472,8 @@ export class ClientRuntime {
       },
     };
     gauge("wasm.templateSaveCompatible", prepared.gameFileSaving.status === "available");
-    gauge("wasm.cartographyPrepared", prepared.cartography);
+    const cartographyPrepared = prepared.cartography.status === "active";
+    gauge("wasm.cartographyPrepared", cartographyPrepared);
     gauge("enhancement.effectiveCursor", effective.nativeCursor);
     gauge("enhancement.effectiveTargetObservation", effective.targetObservation);
     gauge("enhancement.effectivePartyObservation", effective.partyObservation);
@@ -508,12 +509,12 @@ export class ClientRuntime {
         code: errorCode(prepared.failure.error),
       });
     }
-    if (prepared.cartographyError !== null) {
+    if (prepared.cartography.status === "unavailable") {
       logEvent({
         k: "wasm.cartographyPrepareFailed",
-        code: errorCode(prepared.cartographyError),
+        code: errorCode(prepared.cartography.error),
       });
-    } else if (this.options.cartographySpike) {
+    } else if (prepared.cartography.status === "active") {
       logEvent({ k: "wasm.cartographyPrepared" });
     }
     if (prepared.enhancementBuild) {
@@ -559,7 +560,7 @@ export class ClientRuntime {
       extendedMemory,
       transforms: {
         templateSave: prepared.gameFileSaving.status === "available",
-        cartography: prepared.cartography,
+        cartography: cartographyPrepared,
         nativeDoubleClick: prepared.nativeDoubleClick,
       },
       enhancementVerification: {

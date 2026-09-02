@@ -36,7 +36,7 @@ test("prepares and reuses the certified cartography client", async () => {
     const first = await prepareCartographySpike(
       artifact, inputSha256, cacheRoot, verifyCartography,
     );
-    assert.equal(first.error, null);
+    assert.equal(first.status, "active");
     assert.notEqual(first.wasmPath, artifact);
     assert.equal(sha256(new Uint8Array(await readFile(first.wasmPath))), first.wasmSha256);
 
@@ -66,7 +66,7 @@ test("prepares the sealed template-only fallback chain", async () => {
       join(root, "cache"),
       verifyCartography,
     );
-    assert.equal(prepared.error, null);
+    assert.equal(prepared.status, "active");
     assert.equal(sha256(await readFile(prepared.wasmPath)), prepared.wasmSha256);
   } finally {
     await rm(root, { recursive: true, force: true });

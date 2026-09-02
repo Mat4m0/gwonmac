@@ -36,27 +36,22 @@ import {
 
 const VERIFIER_TIMEOUT_MS = 5_000;
 
-function runVerifierProcess(
-  officialWasmPath: string,
-  officialSha256: string,
-  requestedCapabilities: EnhancementCapabilities,
-): Promise<LocalClientVerification | null> {
+function runIsolatedVerifier<Result>(options: {
+  args: readonly string[];
+  serviceName: string;
+  accept: (value: unknown) => Result | null;
+}): Promise<Result | null> {
   return new Promise((resolve) => {
     const entry = fileURLToPath(
       new URL("./local-client-verifier-process.js", import.meta.url),
     );
     const child = utilityProcess.fork(
       entry,
-      [
-        "client",
-        officialWasmPath,
-        officialSha256,
-        enhancementCapabilityProfile(requestedCapabilities) ?? "none",
-      ],
-      { serviceName: "Guild Wars client compatibility verifier" },
+      [...options.args],
+      { serviceName: options.serviceName },
     );
     let settled = false;
-    const finish = (value: LocalClientVerification | null): void => {
+    const finish = (value: Result | null): void => {
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
@@ -64,112 +59,7 @@ function runVerifierProcess(
       resolve(value);
     };
     const timeout = setTimeout(() => finish(null), VERIFIER_TIMEOUT_MS);
-    child.once("message", (value: unknown) => {
-      finish(
-        isLocalClientVerification(value, officialSha256, requestedCapabilities)
-          ? value
-          : null,
-      );
-    });
-    child.once("exit", () => finish(null));
-  });
-}
-
-function runNativeDoubleClickVerifierProcess(
-  wasmPath: string,
-  inputSha256: string,
-): Promise<NativeDoubleClickBuild | null> {
-  return new Promise((resolve) => {
-    const entry = fileURLToPath(
-      new URL("./local-client-verifier-process.js", import.meta.url),
-    );
-    const child = utilityProcess.fork(
-      entry,
-      ["native-double-click", wasmPath, inputSha256],
-      { serviceName: "Guild Wars double-click verifier" },
-    );
-    let settled = false;
-    const finish = (value: NativeDoubleClickBuild | null): void => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      child.kill();
-      resolve(value);
-    };
-    const timeout = setTimeout(() => finish(null), VERIFIER_TIMEOUT_MS);
-    child.once("message", (value: unknown) => {
-      finish(isDerivedNativeDoubleClickBuild(value, inputSha256) ? value : null);
-    });
-    child.once("exit", () => finish(null));
-  });
-}
-
-function runCartographyVerifierProcess(
-  wasmPath: string,
-  inputSha256: string,
-): Promise<CartographySpikeBuild | null> {
-  return new Promise((resolve) => {
-    const entry = fileURLToPath(
-      new URL("./local-client-verifier-process.js", import.meta.url),
-    );
-    const child = utilityProcess.fork(
-      entry,
-      ["cartography", wasmPath, inputSha256],
-      { serviceName: "Guild Wars Cartography compatibility verifier" },
-    );
-    let settled = false;
-    const finish = (value: CartographySpikeBuild | null): void => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      child.kill();
-      resolve(value);
-    };
-    const timeout = setTimeout(() => finish(null), VERIFIER_TIMEOUT_MS);
-    child.once("message", (value: unknown) => {
-      finish(isCartographySpikeBuild(value, inputSha256) ? value : null);
-    });
-    child.once("exit", () => finish(null));
-  });
-}
-
-function runExtendedMemoryVerifierProcess(options: {
-  jsPath: string;
-  jsInputSha256: string;
-  wasmPath: string;
-  wasmInputSha256: string;
-}): Promise<ExtendedMemoryStructuralProof | null> {
-  return new Promise((resolve) => {
-    const entry = fileURLToPath(
-      new URL("./local-client-verifier-process.js", import.meta.url),
-    );
-    const child = utilityProcess.fork(
-      entry,
-      [
-        "extended-memory",
-        options.jsPath,
-        options.jsInputSha256,
-        options.wasmPath,
-        options.wasmInputSha256,
-      ],
-      { serviceName: "Guild Wars extended-memory verifier" },
-    );
-    let settled = false;
-    const finish = (value: ExtendedMemoryStructuralProof | null): void => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      child.kill();
-      resolve(value);
-    };
-    const timeout = setTimeout(() => finish(null), VERIFIER_TIMEOUT_MS);
-    child.once("message", (value: unknown) => finish(
-      isExtendedMemoryStructuralProof(
-        value,
-        options.jsInputSha256,
-        options.wasmInputSha256,
-      ) ? value : null,
-    ));
+    child.once("message", (value: unknown) => finish(options.accept(value)));
     child.once("exit", () => finish(null));
   });
 }
@@ -184,11 +74,20 @@ export async function verifyClientLocally(options: {
   officialSha256: string;
   requestedCapabilities: EnhancementCapabilities;
 }): Promise<LocalClientVerification | null> {
-  return runVerifierProcess(
-    options.officialWasmPath,
-    options.officialSha256,
-    options.requestedCapabilities,
-  ).catch(() => null);
+  return runIsolatedVerifier({
+    args: [
+      "client",
+      options.officialWasmPath,
+      options.officialSha256,
+      enhancementCapabilityProfile(options.requestedCapabilities) ?? "none",
+    ],
+    serviceName: "Guild Wars client compatibility verifier",
+    accept: (value) => isLocalClientVerification(
+      value,
+      options.officialSha256,
+      options.requestedCapabilities,
+    ) ? value : null,
+  }).catch(() => null);
 }
 
 /** Derives a native callback record without parsing unknown bytes in Main. */
@@ -196,10 +95,13 @@ export async function verifyNativeDoubleClickLocally(options: {
   wasmPath: string;
   inputSha256: string;
 }): Promise<NativeDoubleClickBuild | null> {
-  return runNativeDoubleClickVerifierProcess(
-    options.wasmPath,
-    options.inputSha256,
-  ).catch(() => null);
+  return runIsolatedVerifier({
+    args: ["native-double-click", options.wasmPath, options.inputSha256],
+    serviceName: "Guild Wars double-click verifier",
+    accept: (value) => isDerivedNativeDoubleClickBuild(value, options.inputSha256)
+      ? value
+      : null,
+  }).catch(() => null);
 }
 
 /** Qualifies Cartography layout and output without parsing client bytes in Main. */
@@ -207,10 +109,13 @@ export async function verifyCartographyLocally(options: {
   wasmPath: string;
   inputSha256: string;
 }): Promise<CartographySpikeBuild | null> {
-  return runCartographyVerifierProcess(
-    options.wasmPath,
-    options.inputSha256,
-  ).catch(() => null);
+  return runIsolatedVerifier({
+    args: ["cartography", options.wasmPath, options.inputSha256],
+    serviceName: "Guild Wars Cartography compatibility verifier",
+    accept: (value) => isCartographySpikeBuild(value, options.inputSha256)
+      ? value
+      : null,
+  }).catch(() => null);
 }
 
 /** Qualifies the manifest-bound 4 GB pair without parsing it in Main. */
@@ -220,5 +125,19 @@ export async function verifyExtendedMemoryLocally(options: {
   wasmPath: string;
   wasmInputSha256: string;
 }): Promise<ExtendedMemoryStructuralProof | null> {
-  return runExtendedMemoryVerifierProcess(options).catch(() => null);
+  return runIsolatedVerifier({
+    args: [
+      "extended-memory",
+      options.jsPath,
+      options.jsInputSha256,
+      options.wasmPath,
+      options.wasmInputSha256,
+    ],
+    serviceName: "Guild Wars extended-memory verifier",
+    accept: (value) => isExtendedMemoryStructuralProof(
+      value,
+      options.jsInputSha256,
+      options.wasmInputSha256,
+    ) ? value : null,
+  }).catch(() => null);
 }

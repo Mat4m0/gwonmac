@@ -109,6 +109,7 @@ export type CartographyMemoryLayout = Readonly<{
   frameCount: number;
   contextRoot: number;
   areaInfo: number;
+  agentArray: number;
 }>;
 
 export const CARTOGRAPHY_MEMORY_LAYOUTS = Object.freeze({
@@ -117,12 +118,14 @@ export const CARTOGRAPHY_MEMORY_LAYOUTS = Object.freeze({
     frameCount: 0x5a1fe4,
     contextRoot: 0x5a0e70,
     areaInfo: 0x1cc5c0,
+    agentArray: 0x5a4de8,
   }),
   relocated: Object.freeze({
     frameArray: 0x5a3b1c,
     frameCount: 0x5a3b24,
     contextRoot: 0x5a29b0,
     areaInfo: 0x1cc700,
+    agentArray: 0x5a6928,
   }),
 } satisfies Readonly<Record<"official" | "relocated", CartographyMemoryLayout>>);
 

@@ -23,6 +23,10 @@ import {
 import { enhancementProofContext } from "./wasm-evidence.js";
 
 const SHA256 = /^[0-9a-f]{64}$/;
+const MEMORY_LAYOUT_IDS: readonly CartographyMemoryLayoutId[] = [
+  "official",
+  "relocated",
+];
 
 export interface CartographySpikeBuild {
   readonly inputSha256: string;
@@ -44,16 +48,17 @@ function matchingMemoryLayout(input: Uint8Array): CartographyMemoryLayoutId | nu
   const preGame = derivePreGameControls(context, playRegion);
   if (!preGame) return null;
 
-  const matches = Object.entries(CARTOGRAPHY_MEMORY_LAYOUTS).filter(([, layout]) =>
-    layout.frameArray === preGame.layout.frameArray
-    && layout.frameCount === preGame.layout.frameCount
-    && layout.contextRoot === playRegion.contextRoot
-    && layout.areaInfo === playRegion.areaInfo
-    && (layout === CARTOGRAPHY_MEMORY_LAYOUTS.official
-      ? observation.agentArray === 0x5a4de8
-      : observation.agentArray === 0x5a6928),
-  );
-  return matches.length === 1 ? matches[0]![0] as CartographyMemoryLayoutId : null;
+  const matches = MEMORY_LAYOUT_IDS.filter((memoryLayout) => {
+    const layout = CARTOGRAPHY_MEMORY_LAYOUTS[memoryLayout];
+    return (
+      layout.frameArray === preGame.layout.frameArray
+      && layout.frameCount === preGame.layout.frameCount
+      && layout.contextRoot === playRegion.contextRoot
+      && layout.areaInfo === playRegion.areaInfo
+      && layout.agentArray === observation.agentArray
+    );
+  });
+  return matches.length === 1 ? matches[0] ?? null : null;
 }
 
 /** Derive one exact Cartography transaction from semantically unchanged input. */
