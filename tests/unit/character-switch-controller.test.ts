@@ -20,18 +20,7 @@ function withBrowserGlobals(run: () => Promise<void>): Promise<void> {
   const events = new EventTarget();
   Object.defineProperty(globalThis, "window", {
     configurable: true,
-    value: Object.assign(events, {
-      gwNative: {
-        characterSwitchUsage: {
-          get: async () => ({ formatVersion: 1, sequence: 0, entries: [] }),
-          record: async ({ characterKey }: { characterKey: string }) => ({
-            formatVersion: 1,
-            sequence: 1,
-            entries: [{ characterKey, successfulSwitches: 1, lastUsedSequence: 1 }],
-          }),
-        },
-      },
-    }),
+    value: events,
   });
   Object.defineProperty(globalThis, "document", {
     configurable: true,
@@ -54,15 +43,6 @@ describe("character switch controller", { concurrency: false }, () => {
       const memory = new WebAssembly.Memory({ initial: 1 });
       const pointer = 64;
       const calls: number[] = [];
-      const recorded: string[] = [];
-      window.gwNative.characterSwitchUsage.record = async ({ characterKey }) => {
-        recorded.push(characterKey);
-        return {
-          formatVersion: 1,
-          sequence: 1,
-          entries: [{ characterKey, successfulSwitches: 1, lastUsedSequence: 1 }],
-        };
-      };
       let list = ready(2, 0);
       let preGame: PreGameState = "unknown";
       const source = {
@@ -95,7 +75,6 @@ describe("character switch controller", { concurrency: false }, () => {
       await new Promise((resolve) => setTimeout(resolve, 1_000));
       assert.equal(controller.action.status, "complete");
       assert.deepEqual(calls, [1, 2, 3]);
-      assert.deepEqual(recorded, ["0000000000000002"]);
       const diagnostics = JSON.stringify(controller.diagnostics());
       assert.equal(diagnostics.includes("Private Alpha"), false);
       assert.equal(diagnostics.includes("Private Beta"), false);
@@ -144,11 +123,6 @@ describe("character switch controller", { concurrency: false }, () => {
     await withBrowserGlobals(async () => {
       const memory = new WebAssembly.Memory({ initial: 1 });
       const pointer = 64;
-      let usageRecords = 0;
-      window.gwNative.characterSwitchUsage.record = async () => {
-        usageRecords += 1;
-        throw new Error("failed switches must not reach usage persistence");
-      };
       const source = {
         state: ready(10, 0),
         subscribe() { return () => false; },
@@ -184,7 +158,6 @@ describe("character switch controller", { concurrency: false }, () => {
       if (diagnostics.version !== 7) throw new Error("expected live diagnostics");
       assert.equal(diagnostics.lastCode, "logout-refused");
       assert.equal(diagnostics.lastFrameProofMask, 0xff);
-      assert.equal(usageRecords, 0);
       controller.reset();
       assert.deepEqual(controller.action, { status: "idle" });
       const resetDiagnostics = controller.diagnostics();

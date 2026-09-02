@@ -12,7 +12,7 @@ import {
 } from "./fixtures.mjs";
 import { startGameInput } from "./input-helpers.js";
 
-test("a 27-character account searches, scrolls, and keeps the ten-key default", async () => {
+test("a 27-character account browses and searches the complete alphabetical list", async () => {
   const fixture = await launchPlayableClient("gw-character-switch-e2e-");
   try {
     const { page } = fixture;
@@ -57,7 +57,6 @@ test("a 27-character account searches, scrolls, and keeps the ten-key default", 
             ? ({ status: "switching", stage: "logout" } as const)
             : ({ status: "idle" } as const);
         },
-        usage: { formatVersion: 1, sequence: 0, entries: [] },
         context: "outpost",
         request(characterKey) {
           const index = characters.findIndex((character) => character.characterKey === characterKey);
@@ -82,8 +81,14 @@ test("a 27-character account searches, scrolls, and keeps the ten-key default", 
     const list = dialog.locator("#character-switch-list");
     await expect(dialog).toBeVisible();
     await expect.poll(() => isDomActiveElement(search)).toBe(true);
-    await expect(list.getByRole("button")).toHaveCount(10);
-    await expect(list.locator("img")).toHaveCount(10);
+    await expect(list.getByRole("button")).toHaveCount(27);
+    await expect(list.locator("img")).toHaveCount(27);
+    await expect.poll(() => list.evaluate((node) => node.scrollHeight > node.clientHeight)).toBe(true);
+    for (let index = 0; index < 10; index += 1) await search.press("ArrowDown");
+    await expect(list.locator(".character-switch-row[data-selected=true]")).toContainText(
+      "Character 12",
+    );
+    await expect.poll(() => list.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
     await expect(list.locator(".character-switch-meta").first()).toContainText("Level 20");
     await expect(list.locator(".character-switch-meta").first()).toContainText("Lion's Arch");
     await expect(list.getByRole("button").first()).toHaveAccessibleName(
@@ -145,7 +150,6 @@ test("a 27-character account searches, scrolls, and keeps the ten-key default", 
 
     await search.fill("Character");
     await expect(list.getByRole("option")).toHaveCount(26);
-    await expect.poll(() => list.evaluate((node) => node.scrollHeight > node.clientHeight)).toBe(true);
     await search.press("1");
     await expect(page.locator("body")).not.toHaveAttribute("data-character-switch-request", /.*/u);
 
@@ -154,7 +158,7 @@ test("a 27-character account searches, scrolls, and keeps the ten-key default", 
     await expect(list.getByRole("option")).toContainText("Rudolph Prime");
     await search.press("Escape");
     await expect(search).toHaveValue("");
-    await expect(list.getByRole("button")).toHaveCount(10);
+    await expect(list.getByRole("button")).toHaveCount(27);
     await expect(list).not.toHaveAttribute("role", "listbox");
 
     await search.press("Tab");
@@ -213,7 +217,6 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
           if (phase === "failed") return { status: "failed", code: "selection-not-confirmed", retryable: false } as const;
           return { status: "idle" } as const;
         },
-        usage: { formatVersion: 1, sequence: 0, entries: [] },
         get context() { return context; },
         request(characterKey) {
           pendingKey = characterKey;
@@ -257,10 +260,13 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
     });
 
     const dialog = page.getByRole("dialog", { name: "Switch Character" });
+    const search = page.getByRole("combobox", { name: "Search characters" });
     await page.evaluate(() => window.dispatchEvent(
       new CustomEvent("gw:character-toggle", { cancelable: true }),
     ));
     await expect(dialog).toBeVisible();
+    await expect(search).toBeVisible();
+    await expect.poll(() => isDomActiveElement(search)).toBe(true);
     await page.locator("#character-switch-root").click({ position: { x: 8, y: 8 } });
     await expect(dialog).toBeHidden();
     await expect(page.locator("body")).not.toHaveAttribute("data-game-clicks", /.*/u);

@@ -5,7 +5,6 @@ import {
   numberedCharacterPosition,
   orderCharacters,
   searchCharacters,
-  visibleCharacterRows,
 } from "../../src/renderer/character-switch-palette.js";
 import type { CharacterSummary } from "../../src/renderer/companion-character-list-snapshot.js";
 
@@ -51,22 +50,7 @@ describe("character switch ordering", () => {
     assert.equal(moveCharacterSelection(0, 1, 1, 0), 0);
   });
 
-  it("ranks successful switches by count, recency, then name", () => {
-    const usage = {
-      formatVersion: 1,
-      sequence: 9,
-      entries: [
-        { characterKey: characters[0]!.characterKey, successfulSwitches: 2, lastUsedSequence: 7 },
-        { characterKey: characters[2]!.characterKey, successfulSwitches: 2, lastUsedSequence: 9 },
-      ],
-    } as const;
-    assert.deepEqual(
-      orderCharacters(characters, usage).map(({ character: row }) => row.name),
-      ["Beta", "Zed", "alpha"],
-    );
-  });
-
-  it("searches all 27 characters with prefix matches before substring matches", () => {
+  it("searches all 27 characters without changing their alphabetical order", () => {
     const account = Object.freeze(Array.from({ length: 27 }, (_, index) => Object.freeze({
       ...character(index === 26 ? "Rudolph Prime" : `Character ${String(index + 1).padStart(2, "0")}`),
       characterKey: (index + 1).toString(16).padStart(16, "0"),
@@ -81,31 +65,32 @@ describe("character switch ordering", () => {
     assert.equal(searchCharacters(ordered, "no result").length, 0);
   });
 
-  it("keeps small accounts complete and large accounts at ten until searched", () => {
+  it("keeps every account complete before and during search", () => {
     for (const size of [1, 9, 10, 11, 27, 64]) {
       const account = Object.freeze(Array.from({ length: size }, (_, index) => Object.freeze({
         ...character(`Character ${String(index + 1).padStart(2, "0")}`),
         characterKey: (index + 1).toString(16).padStart(16, "0"),
       })));
       const ordered = orderCharacters(account);
-      assert.equal(visibleCharacterRows(ordered, size, "").length, Math.min(size, 10));
-      assert.equal(visibleCharacterRows(ordered, size, "Character").length, size <= 10 ? size : size);
+      assert.equal(searchCharacters(ordered, "").length, size);
+      assert.equal(searchCharacters(ordered, "Character").length, size);
     }
   });
 
-  it("ignores usage keys that are absent from the live account", () => {
-    const usage = {
-      formatVersion: 1,
-      sequence: 10,
-      entries: [{
-        characterKey: "ffffffffffffffff",
-        successfulSwitches: 99,
-        lastUsedSequence: 10,
-      }],
-    } as const;
+  it("matches reordered words and accents while preserving alphabetical order", () => {
+    const account = Object.freeze([
+      character("Á Candy Cane Shard", 2),
+      character("Dhuum Survivor", 3),
+      character("Eternal Foo", 4),
+    ]);
+    const ordered = orderCharacters(account);
     assert.deepEqual(
-      orderCharacters(characters, usage).map(({ character: row }) => row.name),
-      ["alpha", "Beta", "Zed"],
+      searchCharacters(ordered, "shard candy").map(({ character: row }) => row.name),
+      ["Á Candy Cane Shard"],
+    );
+    assert.deepEqual(
+      searchCharacters(ordered, "a candy").map(({ character: row }) => row.name),
+      ["Á Candy Cane Shard"],
     );
   });
 });

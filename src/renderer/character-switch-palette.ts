@@ -7,10 +7,6 @@ import type {
 } from "./companion-character-list-snapshot.js";
 import { professionPresentation } from "../shared/profession-assets.js";
 import { travelDestination } from "../shared/travel-destinations.js";
-import {
-  EMPTY_CHARACTER_SWITCH_USAGE,
-  type CharacterSwitchUsageDocument,
-} from "../shared/character-switch-usage.js";
 import type {
   CharacterSwitchFailureCode,
   CharacterSwitchSource,
@@ -53,24 +49,24 @@ const failureMessage = (code: CharacterSwitchFailureCode): string => {
 
 export function orderCharacters(
   characters: readonly CharacterSummary[],
-  usage: CharacterSwitchUsageDocument = EMPTY_CHARACTER_SWITCH_USAGE,
 ): readonly Readonly<{ character: CharacterSummary; index: number }>[] {
-  const byKey = new Map(usage.entries.map((entry) => [entry.characterKey, entry]));
   return Object.freeze(characters
     .map((character, index) => Object.freeze({ character, index }))
-    .sort((left, right) => {
-      const leftUsage = byKey.get(left.character.characterKey);
-      const rightUsage = byKey.get(right.character.characterKey);
-      return (rightUsage?.successfulSwitches ?? 0) - (leftUsage?.successfulSwitches ?? 0)
-        || (rightUsage?.lastUsedSequence ?? 0) - (leftUsage?.lastUsedSequence ?? 0)
-        || left.character.name.localeCompare(right.character.name);
-    }));
+    .sort((left, right) => left.character.name.localeCompare(
+      right.character.name,
+      undefined,
+      { sensitivity: "base" },
+    )));
 }
 
 export const CHARACTER_SEARCH_LIMIT = 40;
 
 function normaliseCharacterQuery(value: string): string {
-  return value.trim().toLocaleLowerCase();
+  return value
+    .normalize("NFKD")
+    .replace(/\p{M}+/gu, "")
+    .trim()
+    .toLocaleLowerCase();
 }
 
 export function searchCharacters(
@@ -80,24 +76,11 @@ export function searchCharacters(
   if (query.length > CHARACTER_SEARCH_LIMIT) return Object.freeze([]);
   const term = normaliseCharacterQuery(query);
   if (term === "") return rows;
-  return Object.freeze(rows
-    .flatMap((row) => {
-      const name = row.character.name.toLocaleLowerCase();
-      const score = name.startsWith(term) ? 0 : name.includes(term) ? 1 : null;
-      return score === null ? [] : [{ row, score }];
-    })
-    .sort((left, right) => left.score - right.score)
-    .map(({ row }) => row));
-}
-
-export function visibleCharacterRows(
-  rows: ReturnType<typeof orderCharacters>,
-  accountSize: number,
-  query: string,
-): ReturnType<typeof orderCharacters> {
-  if (accountSize <= 10) return rows;
-  return normaliseCharacterQuery(query) === "" ? Object.freeze(rows.slice(0, 10))
-    : searchCharacters(rows, query);
+  const terms = term.split(/\s+/u);
+  return Object.freeze(rows.filter(({ character }) => {
+    const name = normaliseCharacterQuery(character.name);
+    return terms.every((candidate) => name.includes(candidate));
+  }));
 }
 
 export function numberedCharacterPosition(key: string, count: number): number | null {
@@ -185,7 +168,6 @@ export function createCharacterSwitchPalette(
   let preferencePending = false;
   let preferenceFailure = false;
   let rows: ReturnType<typeof orderCharacters> = [];
-  let allRows: ReturnType<typeof orderCharacters> = [];
   const busy = () => source.action.status === "switching";
   const modal = window.gwSurfaces.registerDialog({
     root,
@@ -210,12 +192,17 @@ export function createCharacterSwitchPalette(
   const focusSelected = () => {
     list.querySelector<HTMLButtonElement>(`button[data-row="${selected}"]`)?.focus({ preventScroll: true });
   };
+  const revealSelected = () => {
+    list.querySelector<HTMLButtonElement>(`button[data-row="${selected}"]`)
+      ?.scrollIntoView({ block: "nearest" });
+  };
   const render = () => {
     if (source.action.status === "switching" && root.open) {
       closePalette(false);
       return;
     }
     const state = source.characters;
+    const searching = state.status === "ready" && normaliseCharacterQuery(query) !== "";
     const focusedCharacterKey = document.activeElement instanceof HTMLButtonElement
       && list.contains(document.activeElement)
       ? document.activeElement.dataset.characterKey
@@ -231,11 +218,10 @@ export function createCharacterSwitchPalette(
     if (source.action.status === "complete") return;
     if (state.status === "ready") {
       const selectedKey = rows[selected]?.character.characterKey;
-      allRows = orderCharacters(state.characters, source.usage);
-      const searching = state.characters.length > 10 && normaliseCharacterQuery(query) !== "";
+      const orderedRows = orderCharacters(state.characters);
       if (searching) list.setAttribute("role", "listbox");
       else list.removeAttribute("role");
-      rows = visibleCharacterRows(allRows, state.characters.length, query);
+      rows = searchCharacters(orderedRows, query);
       const preserved = selectedKey === undefined
         ? -1
         : rows.findIndex(({ character }) => character.characterKey === selectedKey);
@@ -324,10 +310,10 @@ export function createCharacterSwitchPalette(
         list.append(item);
       });
     }
-    const largeAccount = state.status === "ready" && state.characters.length > 10;
-    const hasQuery = largeAccount && normaliseCharacterQuery(query) !== "";
     count.textContent = state.status === "ready"
-      ? hasQuery ? `${rows.length} of ${state.characters.length}` : `${state.characters.length} characters`
+      ? searching
+        ? `${rows.length} of ${state.characters.length}`
+        : `${state.characters.length} ${state.characters.length === 1 ? "character" : "characters"}`
       : "";
     const settingsMode = view.kind === "settings";
     const confirming = view.kind === "confirming";
@@ -335,7 +321,7 @@ export function createCharacterSwitchPalette(
     if (confirming) root.setAttribute("aria-describedby", "character-switch-confirm-copy");
     else root.removeAttribute("aria-describedby");
     list.hidden = settingsMode || confirming;
-    search.hidden = settingsMode || confirming || !largeAccount || busy();
+    search.hidden = settingsMode || confirming || busy();
     settingsPanel.hidden = !settingsMode;
     confirmPanel.hidden = !confirming;
     count.hidden = confirming;
@@ -351,8 +337,8 @@ export function createCharacterSwitchPalette(
     for (const checkbox of [professionCheckbox, levelCheckbox, locationCheckbox]) {
       checkbox.disabled = preferencePending;
     }
-    queryInput.setAttribute("aria-expanded", String(hasQuery && rows.length > 0));
-    if (hasQuery) queryInput.setAttribute("aria-controls", "character-switch-list");
+    queryInput.setAttribute("aria-expanded", String(searching && rows.length > 0));
+    if (searching) queryInput.setAttribute("aria-controls", "character-switch-list");
     else queryInput.removeAttribute("aria-controls");
     updateRowSelection();
     status.textContent = "";
@@ -365,20 +351,14 @@ export function createCharacterSwitchPalette(
       status.dataset.level = "warning";
       status.textContent = `${failureMessage(source.action.code)} (${source.action.code})`;
     } else if (state.status !== "ready") status.textContent = "Waiting for the account character list…";
-    else if (hasQuery && rows.length === 0) status.textContent = "No characters match that search.";
+    else if (searching && rows.length === 0) status.textContent = "No characters match that search.";
     else status.textContent = "";
     if (focusedCharacterKey !== undefined && view.kind === "characters") {
       const replacement = [...list.querySelectorAll<HTMLButtonElement>("button[data-character-key]")]
         .find((button) => button.dataset.characterKey === focusedCharacterKey);
       if (replacement && !replacement.disabled) replacement.focus({ preventScroll: true });
-      else if (largeAccount) queryInput.focus({ preventScroll: true });
-      else focusSelected();
+      else queryInput.focus({ preventScroll: true });
     }
-  };
-  const focusCharacters = () => {
-    if (source.characters.status === "ready" && source.characters.characters.length > 10) {
-      queryInput.focus({ preventScroll: true });
-    } else focusSelected();
   };
   const closePalette = (resetFailure: boolean) => {
     if (view.kind === "closed") return;
@@ -398,7 +378,7 @@ export function createCharacterSwitchPalette(
     view = Object.freeze({ kind: "characters" });
     modal.show();
     render();
-    focusCharacters();
+    queryInput.focus({ preventScroll: true });
   };
   const beginRequest = (characterKey: string) => {
     if (source.action.status === "failed") source.reset();
@@ -424,13 +404,14 @@ export function createCharacterSwitchPalette(
         if (view.kind === "confirming") source.cancelConfirmation();
         view = Object.freeze({ kind: "characters" });
         render();
-        focusCharacters();
-      } else if (query !== "") {
+        queryInput.focus({ preventScroll: true });
+      } else if (normaliseCharacterQuery(query) !== "") {
         query = "";
         queryInput.value = "";
         selected = 0;
         render();
         queryInput.focus({ preventScroll: true });
+        revealSelected();
       } else closePalette(true);
     }
     else if (view.kind !== "characters") return;
@@ -449,9 +430,10 @@ export function createCharacterSwitchPalette(
       selected = moveCharacterSelection(selected, rows.length, delta, currentRow);
       render();
       if (event.target !== queryInput) focusSelected();
+      revealSelected();
     }
     else {
-      if (query !== "") return;
+      if (normaliseCharacterQuery(query) !== "") return;
       const position = numberedCharacterPosition(event.key, Math.min(rows.length, 10));
       if (position === null) return;
       event.preventDefault();
@@ -463,9 +445,10 @@ export function createCharacterSwitchPalette(
     query = queryInput.value.slice(0, CHARACTER_SEARCH_LIMIT);
     selected = 0;
     render();
+    revealSelected();
   });
   queryInput.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && query !== "") {
+    if (event.key === "Escape" && normaliseCharacterQuery(query) !== "") {
       event.preventDefault();
       event.stopPropagation();
       query = "";
@@ -473,6 +456,7 @@ export function createCharacterSwitchPalette(
       selected = 0;
       render();
       queryInput.focus({ preventScroll: true });
+      revealSelected();
       return;
     }
     if (event.key !== "Enter" || busy()) return;
@@ -500,7 +484,7 @@ export function createCharacterSwitchPalette(
     preferenceFailure = false;
     render();
     if (view.kind === "settings") professionCheckbox.focus({ preventScroll: true });
-    else focusCharacters();
+    else queryInput.focus({ preventScroll: true });
   });
   const preferenceFields = [
     {
@@ -542,7 +526,7 @@ export function createCharacterSwitchPalette(
     source.cancelConfirmation();
     view = Object.freeze({ kind: "characters" });
     render();
-    focusCharacters();
+    queryInput.focus({ preventScroll: true });
   });
   leaveButton.addEventListener("click", () => {
     if (view.kind !== "confirming") return;

@@ -481,24 +481,22 @@ state and leaves the official client untouched.
 
 - Command-R palette and Command-Shift-R reload cutover.
 - Current-account characters from one certified, in-memory snapshot.
-- A ranked list with direct 1–9 selection and 0 for the tenth row.
-- A Travel-style bounded search only for accounts with eleven or more
-  characters. Empty search shows the ten ranked defaults; queries search the
-  full live list with prefix matches first.
+- One complete alphabetical list with direct 1–9 selection and 0 for the tenth
+  row.
+- A Travel-style bounded search for every account. Multi-term and
+  accent-insensitive matching filters the list without changing its order.
 - Primary profession icon, name, Current marker, and a default-on optional line
   for secondary profession, level, and reviewed known location.
-- Privacy-safe successful-switch ranking persisted only after exact arrival
-  confirmation.
 - Outpost-only switching through one explicit command.
+- An explorable-area confirmation before leaving the current instance.
 - Progress, refusal, timeout, empty, unsupported-build, and list-not-observed
   states.
 - Keyboard, focus, pointer, accessibility, privacy, and exact-build tests.
 
 ### Useful later additions
 
-- An explorable-area confirmation after product review.
 - A complete canonical map-name resolver if another feature also needs it.
-- Explicit favorites only after usage ranking proves insufficient.
+- Explicit favorites only if stable alphabetical browsing proves insufficient.
 - Party rejoin or return-to-map as a separate product feature with its own
   authority, failure model, and explicit scope.
 
@@ -1035,10 +1033,9 @@ Acceptance:
 | gwonmac | `src/renderer/character-switch-palette.ts`, `createCharacterSwitchPalette` | 68–240 | Compact canonical icon rows, arrows/Enter/1–9/0 keyboard behavior, Current refusal, recoverable error state, and diagnostic copy |
 | gwonmac | `src/companion-kernel/character_list.rs`, `tick` | 97–228 | ABI 2 root stability, bounded records, name/metadata validation, secondary profession, unique character keys, and selected identity |
 | gwonmac | `src/companion-kernel/character_identity.rs`, `character_key` | 6–20 | Shared one-way FNV-1a key over the bounded 16-byte character UUID; raw UUID never leaves the kernel |
-| gwonmac | `src/shared/character-switch-usage.ts`, parser and recorder | 6–131 | Exact privacy-safe document, counter/sequence saturation, recency order, and 256-key pruning |
-| gwonmac | `src/main/core/character-switch-usage.ts`, `CharacterSwitchUsageStore` | 16–61 | Serialized reads, corrupt-document quarantine, and atomic publication |
-| gwonmac | `src/renderer/character-switch-palette.ts`, ordering/search/keyboard | 104–155, 253–468 | Usage ranking, 11+ adaptive search, ten default rows, optional details, numeric gating, arrows, Return, and Escape |
-| gwonmac | `src/renderer/character-switch-controller.ts`, final confirmation | 273–290 | Usage records only after playable-outpost, exact name, and exact opaque-key confirmation |
+| gwonmac | Retired character-switch usage document | — | The original private ranking store was removed when Character Switch returned to one stable alphabetical order. |
+| gwonmac | `src/renderer/character-switch-palette.ts`, ordering/search/keyboard | 50–105, 220–470 | Stable alphabetical order, all-account search, complete scrolling, optional details, numeric gating, arrows, Return, and Escape |
+| gwonmac | `src/renderer/character-switch-controller.ts`, final confirmation | 315–335 | Playable-outpost, exact name, and exact opaque-key confirmation before completion |
 | gwonmac | `tests/integration/enhancements-kernel.test.ts`, account-list publication | 275–327 | Compiled-kernel proof for stable warmup, ABI decode, secondary profession, selected identity, and duplicate-key refusal |
 | gwonmac | `src/main/window-menu.ts`, `switch-character` / `reload-game` | 420–430 | Command-R hard cutover and Command-Shift-R reload |
 | gwonmac | `src/shared/keyboard-shortcuts.ts`, canonical action/default | 5–47 | Core `character.switch` ownership and default Command-R binding |

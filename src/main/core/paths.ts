@@ -22,7 +22,6 @@ export interface GamePaths {
   diagnosticProfile: string;
   travelPreferences: string;
   travelHistory: string;
-  characterSwitchUsage: string;
   cartographyMapKnowledge: string;
   tradeSaved: string;
   buildLibrary: string;
@@ -61,7 +60,6 @@ export function gamePaths(userData: string): GamePaths {
     diagnosticProfile: path.join(userData, "diagnostic-profile.json"),
     travelPreferences: path.join(userData, "travel-preferences.json"),
     travelHistory: path.join(userData, "travel-history.json"),
-    characterSwitchUsage: path.join(userData, "character-switch-usage.json"),
     cartographyMapKnowledge: path.join(userData, "cartography-map-knowledge.json"),
     tradeSaved: path.join(userData, "trade-saved.json"),
     buildLibrary: path.join(userData, "build-library.json"),

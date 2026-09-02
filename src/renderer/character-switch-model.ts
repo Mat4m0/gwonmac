@@ -3,7 +3,6 @@
  * palette. Presentation never receives native coordinates or open diagnostics.
  */
 import type { CompanionCharacterListState } from "./companion-character-list-snapshot.js";
-import type { CharacterSwitchUsageDocument } from "../shared/character-switch-usage.js";
 
 export type CharacterSwitchContext =
   | "outpost"
@@ -130,7 +129,6 @@ export type CharacterSwitchDiagnostics =
 export interface CharacterSwitchSource {
   readonly characters: CompanionCharacterListState;
   readonly action: CharacterSwitchActionState;
-  readonly usage: CharacterSwitchUsageDocument;
   readonly context: CharacterSwitchContext;
   request(characterKey: string): void;
   confirm(): void;

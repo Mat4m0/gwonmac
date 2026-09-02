@@ -123,13 +123,12 @@ and all layers return automatically after travel to a fully supported area.
 ## Switch Character
 
 Press **Command-R** to open **Switch Character** from a playable outpost.
-Accounts with up to ten characters need no search. Larger accounts show the ten
-most-used characters until you search the complete live account list. Press
+Search is always available, and the complete live account list stays in
+alphabetical order. Browse every character with the pointer or arrow keys;
+the number keys 1–9 and 0 switch to the first ten characters. Press
 **Command-Shift-R** to reload Guild Wars.
 
-Character names and search text are not saved. Successful switches update a
-small local ranking with only opaque keys, counts, and recency. Failed or
-cancelled attempts do not change the ranking.
+Character names and search text are not saved.
 
 ## Saved login
 
