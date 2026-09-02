@@ -6,6 +6,7 @@ import { fixtureSnapshot } from "./fixtures";
 
 function installNative(overrides: Record<string, unknown>): LauncherNativeApi {
   const native = {
+    navigation: { onRequest: () => () => undefined },
     state: { get: async () => fixtureSnapshot, onChange: () => () => undefined },
     ...overrides,
   } as unknown as LauncherNativeApi;
@@ -20,6 +21,28 @@ afterEach(() => {
 });
 
 describe("unified launcher shell", () => {
+  it("opens the destination requested by the native application menu", async () => {
+    let navigate: ((destination: "home" | "settings") => void) | undefined;
+    installNative({
+      navigation: {
+        onRequest(callback: (destination: "home" | "settings") => void) {
+          navigate = callback;
+          return () => undefined;
+        },
+      },
+    });
+    const wrapper = mount(App);
+    await flushPromises();
+
+    navigate?.("settings");
+    await wrapper.vm.$nextTick();
+    expect(wrapper.get(".settings-content h1").text()).toBe("Updates");
+
+    navigate?.("home");
+    await wrapper.vm.$nextTick();
+    expect(wrapper.get(".hero-copy h1").text()).toContain("Wayfarer’s Reverie");
+  });
+
   it("keeps funding on top and operational status only in the launch bar", () => {
     const wrapper = mount(App);
 
@@ -90,12 +113,9 @@ describe("unified launcher shell", () => {
         showMigrationNotice: false,
       },
     };
-    Object.defineProperty(window, "launcherNative", {
-      configurable: true,
-      value: {
-        state: { get: async () => fresh, onChange: () => () => undefined },
-        experience: { completeSetup },
-      } as unknown as LauncherNativeApi,
+    installNative({
+      state: { get: async () => fresh, onChange: () => () => undefined },
+      experience: { completeSetup },
     });
     const wrapper = mount(App);
     await flushPromises();
@@ -110,19 +130,15 @@ describe("unified launcher shell", () => {
 
   it("asks before replacing another Tool shortcut", async () => {
     const replaceShortcut = vi.fn(async () => undefined);
-    Object.defineProperty(window, "launcherNative", {
-      configurable: true,
-      value: {
-        state: { get: async () => fixtureSnapshot, onChange: () => () => undefined },
-        tools: {
-          captureShortcut: async () => ({
-            status: "conflict" as const,
-            tool: "quick-travel" as const,
-            binding: { key: "t", shift: false, option: false },
-          }),
-          replaceShortcut,
-        },
-      } as unknown as LauncherNativeApi,
+    installNative({
+      tools: {
+        captureShortcut: async () => ({
+          status: "conflict" as const,
+          tool: "quick-travel" as const,
+          binding: { key: "t", shift: false, option: false },
+        }),
+        replaceShortcut,
+      },
     });
     const wrapper = mount(App);
     await flushPromises();

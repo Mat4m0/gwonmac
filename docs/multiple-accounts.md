@@ -80,12 +80,17 @@ storage.
 
 ## Companion window policy
 
-The launcher remains available while games run. Focusing a game naturally
-places it in front of the launcher. Closing the launcher hides it while a game
-is open. Closing one game affects only that profile; closing the final game
-reveals the launcher. A Dock activation restores the most recently used live
-window. If that window has closed, it falls back through the previous game
-windows before revealing the launcher.
+The launcher remains visible while profiles open. After complete success, it
+hides and focuses the first selected game. **Show** also hides the launcher
+after it restores the selected game. A failure keeps the launcher visible for
+recovery. This keeps the launcher out of normal game-window switching.
+
+**Window → Show Launcher** restores it without changing a game. **Settings…**
+restores it at Settings. Closing the launcher hides it while a game is open.
+Closing one game affects only that profile; closing the final game reveals the
+launcher. A Dock activation restores the most recently used live window. If
+that window has closed, it falls back through the previous game windows before
+revealing the launcher.
 A second app launch restores the launcher explicitly. An asynchronous Play
 completion does not steal focus if the player has already moved to another app.
 

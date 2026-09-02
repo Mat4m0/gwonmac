@@ -21,6 +21,7 @@ import type {
   GameReloadCause,
   RendererInit,
 } from "../shared/contracts.js";
+import type { LauncherDestination } from "../shared/launcher-contracts.js";
 import { RENDERER_INIT_ARGUMENT } from "../shared/contracts.js";
 import type {
   EnhancementProgram,
@@ -82,7 +83,7 @@ export interface WindowHost {
   claimRelogIntent: (win: BrowserWindow) => boolean;
   requestQuit: (win: BrowserWindow) => void;
   prepareRendererRecovery: () => Promise<void>;
-  revealLauncher: () => void;
+  revealLauncher: (destination?: LauncherDestination) => void;
   gameWindowClosed?: () => void;
 }
 

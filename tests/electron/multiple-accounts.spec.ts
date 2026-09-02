@@ -356,12 +356,39 @@ test("Show never duplicates a game and companion close policy stays profile-loca
     await expect.poll(() => fixture.page.evaluate(() =>
       window.launcherNative.state.get().then((snapshot) => snapshot.profiles[0]?.state),
     )).toBe("running");
+    await expect.poll(() => fixture.app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()
+        .find((win) => win.webContents.getURL().endsWith("launcher/index.html"))
+        ?.isVisible(),
+    )).toBe(false);
 
     await fixture.app.evaluate(({ BrowserWindow }) => {
       BrowserWindow.getAllWindows()
         .find((win) => win.webContents.getURL() === "gw://app/")
         ?.minimize();
     });
+    expect(await fixture.app.evaluate(({ Menu }) => {
+      const menu = Menu.getApplicationMenu();
+      return {
+        hasWindowMenu: menu?.items.some(
+          (item) => item.role?.toLowerCase() === "windowmenu",
+        ) ?? false,
+        showLauncher: menu?.getMenuItemById("show-launcher")?.label ?? null,
+      };
+    })).toEqual({ hasWindowMenu: true, showLauncher: "Show Launcher" });
+    await fixture.app.evaluate(({ Menu }) => {
+      Menu.getApplicationMenu()?.getMenuItemById("show-launcher")?.click();
+    });
+    await expect.poll(() => fixture.app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()
+        .find((win) => win.webContents.getURL().endsWith("launcher/index.html"))
+        ?.isVisible(),
+    )).toBe(true);
+    await fixture.app.evaluate(({ Menu }) => {
+      Menu.getApplicationMenu()?.getMenuItemById("show-settings")?.click();
+    });
+    await expect(fixture.page.locator(".settings-content h1")).toHaveText("Updates");
+
     const profileId = await fixture.page.evaluate(() =>
       window.launcherNative.state.get().then((snapshot) => snapshot.profiles[0]!.id));
     await fixture.page.evaluate((id) => window.launcherNative.profiles.show(id), profileId);
@@ -371,6 +398,11 @@ test("Show never duplicates a game and companion close policy stays profile-loca
         .find((win) => win.webContents.getURL() === "gw://app/");
       return game ? { visible: game.isVisible(), minimized: game.isMinimized() } : null;
     })).toEqual({ visible: true, minimized: false });
+    await expect.poll(() => fixture.app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()
+        .find((win) => win.webContents.getURL().endsWith("launcher/index.html"))
+        ?.isVisible(),
+    )).toBe(false);
 
     await fixture.app.evaluate(({ BrowserWindow }) => {
       BrowserWindow.getAllWindows()

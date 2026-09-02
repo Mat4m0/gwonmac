@@ -18,7 +18,17 @@ test("the Vue launcher owns a narrow frozen bridge and offline subtree", async (
     }));
     expect(boundary).toEqual({
       gameBridge: "undefined",
-      launcherKeys: ["experience", "external", "gameFiles", "profiles", "settings", "state", "tools", "updates"],
+      launcherKeys: [
+        "experience",
+        "external",
+        "gameFiles",
+        "navigation",
+        "profiles",
+        "settings",
+        "state",
+        "tools",
+        "updates",
+      ],
       rootFrozen: true,
       namespacesFrozen: true,
       nodeRequire: "undefined",
