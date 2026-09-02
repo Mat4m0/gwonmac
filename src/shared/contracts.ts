@@ -88,7 +88,6 @@ import type {
   TraderPriceHistoryResult,
   TraderQuoteSnapshot,
 } from "./trade-chat.js";
-import type { CharacterSwitchUsageDocument } from "./character-switch-usage.js";
 
 export { RELEASE_REPO } from "./project-identity.js";
 export { DEFAULT_UPDATE_TRACK, UPDATE_TRACKS };
@@ -1002,8 +1001,6 @@ export const CORE_IPC = {
   settingsGet: "gw:settings:get",
   settingsSet: "gw:settings:set",
   settingsEvent: "gw:settings:event",
-  characterSwitchUsageGet: "gw:characterSwitchUsage:get",
-  characterSwitchUsageRecord: "gw:characterSwitchUsage:record",
   credentialsLoad: "gw:credentials:load",
   credentialsSave: "gw:credentials:save",
   credentialsClear: "gw:credentials:clear",
@@ -1162,10 +1159,6 @@ export interface CoreGwNativeApiBase {
     get(): Promise<AppSettings>;
     set(value: RendererSettingsPatch): Promise<AppSettings>;
     onChange(callback: (settings: AppSettings) => void): () => void;
-  };
-  characterSwitchUsage: {
-    get(): Promise<CharacterSwitchUsageDocument>;
-    record(value: { characterKey: string }): Promise<CharacterSwitchUsageDocument>;
   };
   credentials: {
     load(): Promise<StoredCredentials | null>;

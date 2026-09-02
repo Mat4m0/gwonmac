@@ -15,11 +15,6 @@ import {
   CHARACTER_SWITCH_ACTION_ABI,
   type CharacterSwitchActionKind,
 } from "../shared/character-switch-action-abi.js";
-import {
-  EMPTY_CHARACTER_SWITCH_USAGE,
-  parseCharacterSwitchUsageDocument,
-  type CharacterSwitchUsageDocument,
-} from "../shared/character-switch-usage.js";
 
 const TRANSITION_LIMIT = 32;
 const SELECTOR_READY_BUDGET_MS = 8_000;
@@ -106,7 +101,6 @@ export function createCharacterSwitchController(options: Readonly<{
   programId: number;
 }>): CharacterSwitchController {
   let action: CharacterSwitchActionState = Object.freeze({ status: "idle" });
-  let usage: CharacterSwitchUsageDocument = EMPTY_CHARACTER_SWITCH_USAGE;
   let disposed = false;
   let requestSequence = 0;
   let actionSequence = 0;
@@ -120,12 +114,6 @@ export function createCharacterSwitchController(options: Readonly<{
   const transitions: CharacterSwitchDiagnosticTransition[] = [];
   let pendingCharacterKey: string | null = null;
   const listeners = new Set<() => void>();
-
-  void window.gwNative.characterSwitchUsage.get().then((value) => {
-    if (disposed) return;
-    usage = parseCharacterSwitchUsageDocument(value);
-    emit();
-  }).catch(() => { /* Ranking remains usable with an empty convenience store. */ });
 
   const emit = () => { for (const listener of listeners) listener(); };
   const transition = (stage: CharacterSwitchTransitionStage) => {
@@ -344,11 +332,6 @@ export function createCharacterSwitchController(options: Readonly<{
       return;
     }
     publish({ status: "complete" }, "confirmation:complete");
-    void window.gwNative.characterSwitchUsage.record({ characterKey: targetKey }).then((value) => {
-      if (disposed) return;
-      usage = parseCharacterSwitchUsageDocument(value);
-      emit();
-    }).catch(() => { /* Switching succeeded; usage persistence is non-critical. */ });
   };
 
   const start = (characterKey: string, confirmedExplorable: boolean) => {
@@ -414,7 +397,6 @@ export function createCharacterSwitchController(options: Readonly<{
     payloadBytes: CHARACTER_SWITCH_ACTION_ABI.bytes,
     get characters() { return options.characters.state; },
     get action() { return action; },
-    get usage() { return usage; },
     get context() { return options.controls.switchContext(); },
     request(characterKey: string) { start(characterKey, false); },
     confirm() {

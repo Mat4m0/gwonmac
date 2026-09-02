@@ -132,7 +132,6 @@ import { createLauncherWindow } from "./accounts-window.js";
 import { MultipleAccountsController } from "./multiple-accounts-controller.js";
 import { WindowCoordinator } from "./window-coordinator.js";
 import { GameReloader } from "./game-reload.js";
-import { CharacterSwitchUsageStore } from "./core/character-switch-usage.js";
 import { CartographyMapKnowledgeStore } from "./core/cartography-map-knowledge.js";
 import { updateToolsMenuItems } from "./window-menu.js";
 import { resolveAdoptedProfileStorage } from "./core/profile-storage.js";
@@ -761,7 +760,6 @@ if (primaryInstance) void app.whenReady().then(async () => {
     : null;
   applyToolsSettings = toolsRuntime?.applySettings ?? null;
   await toolsRuntime?.applySettings(settings);
-  const characterSwitchUsage = new CharacterSwitchUsageStore(paths.characterSwitchUsage);
   const cartographyMapKnowledge = new CartographyMapKnowledgeStore(
     paths.cartographyMapKnowledge,
   );
@@ -963,8 +961,6 @@ if (primaryInstance) void app.whenReady().then(async () => {
     getSnapshotMetadata: () => clientRuntime.snapshotMetadata(),
     getSettings: () => preferences.getSettings(),
     updateSettings: (patch) => preferences.updateRendererSettings(patch),
-    getCharacterSwitchUsage: () => characterSwitchUsage.get(),
-    recordCharacterSwitchUsage: (characterKey) => characterSwitchUsage.record(characterKey),
     getCartographyMapKnowledge: (kernelSha256) => {
       const fingerprint = clientRuntime.active?.clientFingerprint;
       return fingerprint

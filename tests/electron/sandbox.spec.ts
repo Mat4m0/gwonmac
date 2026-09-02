@@ -47,7 +47,6 @@ test.describe("sandbox boundary", () => {
         keys: [
           "app",
           "cartography",
-          "characterSwitchUsage",
           "client",
           "clipboard",
           "commands",

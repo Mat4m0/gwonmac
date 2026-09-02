@@ -4,7 +4,6 @@
  */
 import type { CharacterSwitchSource } from "./character-switch-model.js";
 import { createCharacterSwitchPalette } from "./character-switch-palette.js";
-import { EMPTY_CHARACTER_SWITCH_USAGE } from "../shared/character-switch-usage.js";
 
 export interface CharacterSwitchHost {
   attach(source: CharacterSwitchSource): () => void;
@@ -20,7 +19,6 @@ export function installCharacterSwitchHost(parent: HTMLElement): CharacterSwitch
       code: "play-path-unproved",
       retryable: false,
     }),
-    usage: EMPTY_CHARACTER_SWITCH_USAGE,
     context: "unavailable",
     request() {},
     confirm() {},
@@ -34,7 +32,6 @@ export function installCharacterSwitchHost(parent: HTMLElement): CharacterSwitch
   const proxy: CharacterSwitchSource = Object.freeze({
     get characters() { return source.characters; },
     get action() { return source.action; },
-    get usage() { return source.usage; },
     get context() { return source.context; },
     request(characterKey: string) { source.request(characterKey); },
     confirm() { source.confirm(); },
