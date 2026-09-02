@@ -17,6 +17,7 @@ import type { ProfileId } from "../shared/multiple-accounts.js";
 import type { TexturePackSnapshot } from "../shared/texture-packs.js";
 import type { LauncherStateStore } from "./core/launcher-state.js";
 import { launcherToolSettings } from "./core/launcher-tools.js";
+import { resolveShortcuts } from "../shared/keyboard-shortcuts.js";
 
 interface LauncherAccountsOwner {
   state(): AccountsState;
@@ -86,6 +87,12 @@ export class LauncherOrchestrator {
         features: launcherToolSettings(settings),
       },
       settings: {
+        autoRelogAfterReload: settings.autoRelogAfterReload,
+        characterSwitchProfession: settings.characterSwitchProfession,
+        characterSwitchLevel: settings.characterSwitchLevel,
+        characterSwitchLocation: settings.characterSwitchLocation,
+        skillKeyBindings: settings.skillKeyBindings,
+        skillCooldownColor: settings.skillCooldownColor,
         autoCheckUpdates: settings.autoCheckUpdates,
         updateTrack: settings.updateTrack,
         renderScale: settings.renderScale,
@@ -99,6 +106,7 @@ export class LauncherOrchestrator {
         cartographyGridOpacity: settings.cartographyGridOpacity,
         cartographyControlIdleOpacity: settings.cartographyControlIdleOpacity,
       },
+      shortcuts: resolveShortcuts(settings.shortcutOverrides),
       texturePacks: this.options.getTexturePacks?.() ?? {
         selectedPackId: null,
         packs: [],

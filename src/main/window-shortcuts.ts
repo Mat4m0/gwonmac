@@ -66,6 +66,8 @@ class WindowShortcuts {
     "trade.toggle": null,
     "storage.open": null,
     "travel.open": null,
+    "cartography.grid.toggle": null,
+    "cartography.walkability.toggle": null,
   });
   #capture: ((result: ShortcutCaptureResult) => void) | null = null;
   #skillCapture: ((result: SkillKeyCaptureResult) => void) | null = null;
@@ -254,10 +256,13 @@ class WindowShortcuts {
     | "xunlaiStorage"
     | "travelPalette"
     | "shortcutOverrides"
+    | "characterSwitchEnabled"
+    | "cartographyEnabled"
   >): void {
     const resolved = resolveShortcuts(settings.shortcutOverrides);
     this.#shortcuts = {
-      "character.switch": resolved["character.switch"],
+      "character.switch": featureActivationRequested("characterSwitch", settings)
+        ? resolved["character.switch"] : null,
       "tools.toggle": featureActivationRequested("buildLibrary", settings)
         ? resolved["tools.toggle"]
         : null,
@@ -270,6 +275,10 @@ class WindowShortcuts {
       "travel.open": featureActivationRequested("travel", settings)
         ? resolved["travel.open"]
         : null,
+      "cartography.grid.toggle": featureActivationRequested("cartography", settings)
+        ? resolved["cartography.grid.toggle"] : null,
+      "cartography.walkability.toggle": featureActivationRequested("cartography", settings)
+        ? resolved["cartography.walkability.toggle"] : null,
     };
   }
 

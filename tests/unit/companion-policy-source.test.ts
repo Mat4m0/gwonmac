@@ -53,6 +53,8 @@ describe("companion policy source", () => {
         playRegion: "unknown",
         playRegionState: { status: "waiting", reason: "memory" },
         policy: {
+          characterSwitch: true,
+          cartography: false,
           tools: false,
           buildLibrary: false,
           tradeChat: false,

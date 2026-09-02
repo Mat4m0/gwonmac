@@ -15,10 +15,8 @@ import {
   X,
 } from "lucide-vue-next";
 import type { LauncherDestination, LauncherSnapshot } from "@shared/launcher-contracts";
-import type { GlobalTool, LauncherPreferencesPatch, LauncherSettingsPatch } from "@shared/launcher-contracts";
+import type { LauncherPreferencesPatch, LauncherSettingsPatch } from "@shared/launcher-contracts";
 import type { CacheInfo } from "@shared/contracts";
-import { shortcutDisplay } from "@shared/keyboard-shortcuts";
-import type { ShortcutBinding } from "@shared/keyboard-shortcuts";
 import type { ProfileId } from "@shared/multiple-accounts";
 import { fixtureSnapshotFor } from "./fixtures";
 import AccountsView from "./components/AccountsView.vue";
@@ -31,12 +29,13 @@ import LaunchBar from "./components/LaunchBar.vue";
 import HomeView from "./components/HomeView.vue";
 import KnownIssuesView from "./components/KnownIssuesView.vue";
 import MapsSettings from "./components/MapsSettings.vue";
+import ToolsSettings from "./components/ToolsSettings.vue";
 import TexturePacksSettings from "./components/TexturePacksSettings.vue";
 import type { LauncherRoute, SettingsRoute } from "./routes";
 
 const route = ref<LauncherRoute>("home");
 const settingsRoute = ref<SettingsRoute>("general");
-const settingsGroups: readonly {
+const allSettingsGroups: readonly {
   readonly label: string;
   readonly items: readonly { readonly id: SettingsRoute; readonly label: string }[];
 }[] = [
@@ -54,6 +53,13 @@ const settingsGroups: readonly {
   ] },
 ];
 const snapshot = ref<LauncherSnapshot>(fixtureSnapshotFor(window.location.search));
+const mapsAvailable = computed(() => snapshot.value.tools.configured && snapshot.value.tools.features.maps.enabled);
+const settingsGroups = computed(() => allSettingsGroups.map(group => ({
+  ...group, items: group.items.filter(item => item.id !== "maps" || mapsAvailable.value),
+})));
+watch(mapsAvailable, available => {
+  if (!available && settingsRoute.value === "maps") settingsRoute.value = "tools";
+});
 const selected = ref<ProfileId[]>([...snapshot.value.selectedProfileIds]);
 const addOpen = ref(false);
 const appearanceProfile = ref<ProfileId | null>(null);
@@ -66,8 +72,6 @@ const busy = ref(false);
 const setupStep = ref<1 | 2>(1);
 const introStep = ref(0);
 const introCallout = ref<HTMLElement | null>(null);
-const shortcutMessage = ref("");
-const pendingShortcutReplacement = ref<{ tool: GlobalTool; binding: ShortcutBinding } | null>(null);
 const updateBannerDismissed = ref(false);
 const operationError = ref("");
 const startupError = ref(false);
@@ -243,11 +247,6 @@ async function runGameFilesAction(message: string, action: () => Promise<void> |
   if (await runAction(message, action)) await loadGameFilesInfo();
 }
 
-const toolLabels: Readonly<Record<GlobalTool, string>> = {
-  "build-management": "Build Management",
-  "quick-travel": "Quick Travel",
-  "xunlai-storage": "Xunlai Storage",
-};
 const profileIcons = { swords: Swords, archive: Archive, map: MapIcon, scroll: ScrollText, shield: Shield, star: Star, crown: Crown, flame: Flame } as const;
 
 function checked(event: Event): boolean {
@@ -296,6 +295,11 @@ async function updateLauncherSettings(patch: LauncherSettingsPatch) {
   await runAction("This setting could not be saved.", () => native?.settings.update(patch));
 }
 
+async function saveCustomization(patch: LauncherSettingsPatch) {
+  if (native) await native.settings.update(patch);
+  else snapshot.value = { ...snapshot.value, settings: { ...snapshot.value.settings, ...patch } };
+}
+
 async function checkLauncherUpdate() {
   await runAction("Could not check for launcher updates.", () => native?.updates.check());
 }
@@ -320,40 +324,6 @@ async function resetGameFiles() {
   await runAction("Game files could not be reset.", () => native?.gameFiles.resetAndRestart());
 }
 
-async function setTool(tool: GlobalTool, enabled: boolean) {
-  await runAction("The Tool setting could not be saved.", () => native?.tools.setFeature({ tool, enabled }));
-}
-
-async function captureToolShortcut(tool: GlobalTool) {
-  pendingShortcutReplacement.value = null;
-  shortcutMessage.value = `Press a shortcut for ${toolLabels[tool]}. Escape cancels.`;
-  let result;
-  try {
-    result = await native?.tools.captureShortcut(tool);
-  } catch {
-    shortcutMessage.value = "The shortcut could not be changed. Try again.";
-    return;
-  }
-  if (!result) return;
-  if (result.status === "captured") {
-    if (await runAction("The shortcut could not be saved.", () => native?.tools.replaceShortcut({ tool, binding: result.binding }))) shortcutMessage.value = "Shortcut saved.";
-  } else if (result.status === "reserved") shortcutMessage.value = "That shortcut is used by macOS or this application.";
-  else if (result.status === "conflict") {
-    pendingShortcutReplacement.value = { tool, binding: result.binding };
-    shortcutMessage.value = `That shortcut is already used by ${toolLabels[result.tool]}.`;
-  }
-  else if (result.status === "invalid") shortcutMessage.value = "Use Command with a letter or number.";
-  else shortcutMessage.value = "Shortcut change cancelled.";
-}
-
-async function replaceToolShortcut() {
-  const replacement = pendingShortcutReplacement.value;
-  if (!replacement) return;
-  if (await runAction("The shortcut could not be replaced.", () => native?.tools.replaceShortcut(replacement))) {
-    pendingShortcutReplacement.value = null;
-    shortcutMessage.value = "Shortcut replaced.";
-  }
-}
 </script>
 
 <template>
@@ -412,22 +382,11 @@ async function replaceToolShortcut() {
             <div class="setting-group">
               <label><span><strong>Render quality</strong><small>Higher quality uses more graphics power.</small></span><select :value="snapshot.settings.renderScale" @change="updateLauncherSettings({ renderScale: Number(($event.currentTarget as HTMLSelectElement).value) as 1 | 1.5 | 2 })"><option :value="1">Standard</option><option :value="1.5">High</option><option :value="2">Very high</option></select></label>
               <label><span><strong>Extended memory</strong><small>Allow longer sessions to use more memory.</small></span><input type="checkbox" :checked="snapshot.settings.extendedMemoryEnabled" @change="updateLauncherSettings({ extendedMemoryEnabled: checked($event) })" /></label>
+              <label><span><strong>Return to character after reload</strong><small>Automatically sign in and return to the last character after reloading the game.</small></span><input type="checkbox" :checked="snapshot.settings.autoRelogAfterReload" @change="updateLauncherSettings({ autoRelogAfterReload: checked($event) })" /></label>
             </div>
           </template>
-          <template v-else-if="settingsRoute === 'tools'">
-            <h1>Tools</h1><p>Tools apply to every account.</p>
-            <div class="setting-group">
-              <label><span><strong>Enable Tools</strong><small>Build Management, Quick Travel, and Xunlai Storage.</small></span><input type="checkbox" :checked="snapshot.tools.configured" @change="runAction('The Tools setting could not be saved.', () => native?.tools.setMasterEnabled(checked($event)))" /></label>
-              <div v-for="(setting, tool) in snapshot.tools.features" :key="tool" class="tool-row">
-                <label><span><strong>{{ toolLabels[tool] }}</strong><small>{{ shortcutDisplay(setting.shortcut) }}</small></span><input type="checkbox" :checked="setting.enabled" :disabled="!snapshot.tools.configured" @change="setTool(tool, checked($event))" /></label>
-                <div><button class="secondary" @click="captureToolShortcut(tool)">Change shortcut</button><button class="text-link" @click="runAction('The default shortcut could not be restored.', () => native?.tools.restoreDefaultShortcut(tool))">Restore default</button></div>
-              </div>
-              <p v-if="shortcutMessage" class="inline-message" aria-live="polite">{{ shortcutMessage }}</p>
-              <div v-if="pendingShortcutReplacement" class="form-actions"><button class="secondary" @click="pendingShortcutReplacement = null; shortcutMessage = 'Shortcut change cancelled.'">Cancel</button><button class="primary" @click="replaceToolShortcut">Replace shortcut</button></div>
-              <div v-if="snapshot.tools.restartRequired" class="restart-row"><span><strong>Restart needed</strong><small>Your change is saved.</small></span><button v-if="!visibleProfiles.some(profile => profile.state === 'running')" class="primary" @click="runAction('The application could not restart.', () => native?.tools.restartToApply())">Restart application</button><span v-else>Applies after your next normal restart.</span></div>
-            </div>
-          </template>
-          <MapsSettings v-else-if="settingsRoute === 'maps'" :settings="snapshot.settings" :save="updateLauncherSettings" />
+          <ToolsSettings v-else-if="settingsRoute === 'tools'" :snapshot="snapshot" :api="native" :save="saveCustomization" @maps="selectSettings('maps')" />
+          <MapsSettings v-else-if="settingsRoute === 'maps' && mapsAvailable" :settings="snapshot.settings" :shortcuts="snapshot.shortcuts" :api="native?.tools" :save="saveCustomization" />
           <TexturePacksSettings v-else-if="settingsRoute === 'texture-packs'" :texture-packs="snapshot.texturePacks" />
           <GameFilesSettings
             v-else-if="settingsRoute === 'game-files'"

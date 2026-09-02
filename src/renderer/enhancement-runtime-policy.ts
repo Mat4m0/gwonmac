@@ -31,6 +31,8 @@ export function enhancementRuntimePolicy(
     featureRegionAllowsRequest(id, playRegion)
       && (developerSelected || featureActivationRequested(id, settings));
   return Object.freeze({
+    characterSwitch: selected("characterSwitch"),
+    cartography: selected("cartography"),
     // The local Tools host remains reachable without a live observation, but
     // withdraws when the certified region reports active PvP play.
     tools: selected("tools", developerToolbox),

@@ -21,7 +21,10 @@ import {
   normaliseCartographyPresetLibrary,
   type CartographyPresetLibrary,
 } from "./cartography-overlay.js";
-import type { ShortcutBinding } from "./keyboard-shortcuts.js";
+import type { ShortcutAction, ShortcutBinding } from "./keyboard-shortcuts.js";
+import type { FeatureId } from "./feature-contracts.js";
+import { cloneSkillKeyBindings, isSkillKeyBindings } from "./skill-key-bindings.js";
+import { cloneSkillCooldownColor, isSkillCooldownColor } from "./skill-cooldowns.js";
 import type { ProfileId } from "./multiple-accounts.js";
 import type {
   TexturePackImportResult,
@@ -139,14 +142,27 @@ export function parseLauncherProfileAppearance(value: unknown): LauncherProfileA
   return { icon: source.icon, color: source.color };
 }
 
-export const GLOBAL_TOOLS = ["build-management", "quick-travel", "xunlai-storage"] as const;
+export const GLOBAL_TOOLS = [
+  "character-switch", "build-management", "quick-travel", "xunlai-storage",
+  "trade-chat", "maps", "target-readout", "skill-key-labels", "skill-cooldowns",
+] as const;
 export type GlobalTool = (typeof GLOBAL_TOOLS)[number];
+export const GLOBAL_TOOL_FEATURES = Object.freeze({
+  "character-switch": "characterSwitch",
+  "build-management": "buildLibrary",
+  "quick-travel": "travel",
+  "xunlai-storage": "xunlaiStorage",
+  "trade-chat": "tradeChat",
+  maps: "cartography",
+  "target-readout": "targetReadout",
+  "skill-key-labels": "skillKeyLabels",
+  "skill-cooldowns": "skillCooldowns",
+} satisfies Record<GlobalTool, FeatureId>);
 export const LAUNCHER_EXTERNAL_LINKS = ["github", "bugReport", "featureRequest", "discord", "arenaNetSupport", "donate", "releases"] as const;
 export type LauncherExternalLink = (typeof LAUNCHER_EXTERNAL_LINKS)[number];
 
 export interface GlobalToolSetting {
   readonly enabled: boolean;
-  readonly shortcut: ShortcutBinding | null;
 }
 
 export type GlobalToolSettings = Readonly<Record<GlobalTool, GlobalToolSetting>>;
@@ -157,6 +173,12 @@ export interface LauncherSettings {
   readonly renderScale: AppSettings["renderScale"];
   readonly extendedMemoryEnabled: boolean;
   readonly showDiagnostics: boolean;
+  readonly autoRelogAfterReload: boolean;
+  readonly characterSwitchProfession: boolean;
+  readonly characterSwitchLevel: boolean;
+  readonly characterSwitchLocation: boolean;
+  readonly skillKeyBindings: AppSettings["skillKeyBindings"];
+  readonly skillCooldownColor: AppSettings["skillCooldownColor"];
   readonly cartographyOverlayEnabled: boolean;
   readonly cartographyGridEnabled: boolean;
   readonly cartographyRevealMode: AppSettings["cartographyRevealMode"];
@@ -179,13 +201,14 @@ export interface GlobalToolUpdate {
   readonly enabled: boolean;
 }
 export interface ShortcutReplacement {
-  readonly tool: GlobalTool;
-  readonly binding: ShortcutBinding;
+  readonly action: ShortcutAction;
+  readonly binding: ShortcutBinding | null;
 }
 export type LauncherShortcutCaptureResult =
   | Readonly<{ status: "captured"; binding: ShortcutBinding }>
   | Readonly<{ status: "reserved" }>
-  | Readonly<{ status: "conflict"; tool: GlobalTool; binding: ShortcutBinding }>
+  | Readonly<{ status: "conflict"; action: ShortcutAction; binding: ShortcutBinding }>
+  | Readonly<{ status: "cleared" }>
   | Readonly<{ status: "cancelled" }>
   | Readonly<{ status: "invalid" }>;
 
@@ -233,6 +256,7 @@ export interface LauncherSnapshot {
     features: GlobalToolSettings;
   }>;
   readonly settings: LauncherSettings;
+  readonly shortcuts: Readonly<Record<ShortcutAction, ShortcutBinding | null>>;
   readonly texturePacks: TexturePackSnapshot;
   readonly profiles: readonly LauncherProfileSummary[];
   readonly selectedProfileIds: readonly ProfileId[];
@@ -280,9 +304,9 @@ export interface LauncherNativeApi {
   readonly tools: {
     setMasterEnabled(enabled: boolean): Promise<void>;
     setFeature(input: GlobalToolUpdate): Promise<void>;
-    captureShortcut(tool: GlobalTool): Promise<LauncherShortcutCaptureResult>;
+    captureShortcut(action: ShortcutAction): Promise<LauncherShortcutCaptureResult>;
     replaceShortcut(input: ShortcutReplacement): Promise<void>;
-    restoreDefaultShortcut(tool: GlobalTool): Promise<void>;
+    restoreDefaultShortcut(action: ShortcutAction): Promise<void>;
     restartToApply(): Promise<void>;
   };
   readonly gameFiles: {
@@ -329,6 +353,8 @@ export function parseLauncherNewsId(value: unknown): string {
 export function parseLauncherSettingsPatch(value: unknown): LauncherSettingsPatch {
   const source = exactObject(value, [
     "autoCheckUpdates", "updateTrack", "renderScale", "extendedMemoryEnabled", "showDiagnostics",
+    "autoRelogAfterReload", "characterSwitchProfession", "characterSwitchLevel",
+    "characterSwitchLocation", "skillKeyBindings", "skillCooldownColor",
     "cartographyOverlayEnabled", "cartographyGridEnabled", "cartographyRevealMode",
     "cartographyPresetLibrary", "cartographyWalkabilityOpacity", "cartographyGridOpacity",
     "cartographyControlIdleOpacity",
@@ -339,6 +365,12 @@ export function parseLauncherSettingsPatch(value: unknown): LauncherSettingsPatc
     renderScale?: AppSettings["renderScale"];
     extendedMemoryEnabled?: boolean;
     showDiagnostics?: boolean;
+    autoRelogAfterReload?: boolean;
+    characterSwitchProfession?: boolean;
+    characterSwitchLevel?: boolean;
+    characterSwitchLocation?: boolean;
+    skillKeyBindings?: AppSettings["skillKeyBindings"];
+    skillCooldownColor?: AppSettings["skillCooldownColor"];
     cartographyOverlayEnabled?: boolean;
     cartographyGridEnabled?: boolean;
     cartographyRevealMode?: AppSettings["cartographyRevealMode"];
@@ -349,11 +381,20 @@ export function parseLauncherSettingsPatch(value: unknown): LauncherSettingsPatc
   } = {};
   for (const key of [
     "autoCheckUpdates", "extendedMemoryEnabled", "showDiagnostics",
+    "autoRelogAfterReload", "characterSwitchProfession", "characterSwitchLevel", "characterSwitchLocation",
     "cartographyOverlayEnabled", "cartographyGridEnabled",
   ] as const) {
     if (source[key] === undefined) continue;
     if (typeof source[key] !== "boolean") throw new Error(`${key} must be a boolean`);
     result[key] = source[key];
+  }
+  if (source.skillKeyBindings !== undefined) {
+    if (!isSkillKeyBindings(source.skillKeyBindings)) throw new Error("Skill key labels are invalid");
+    result.skillKeyBindings = cloneSkillKeyBindings(source.skillKeyBindings);
+  }
+  if (source.skillCooldownColor !== undefined) {
+    if (!isSkillCooldownColor(source.skillCooldownColor)) throw new Error("Cooldown color is invalid");
+    result.skillCooldownColor = cloneSkillCooldownColor(source.skillCooldownColor);
   }
   if (source.updateTrack !== undefined) {
     if (source.updateTrack !== "stable" && source.updateTrack !== "beta") throw new Error("update track is invalid");

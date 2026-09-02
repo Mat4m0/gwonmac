@@ -492,9 +492,12 @@ test("global map settings live in the launcher and survive restart", async () =>
     await first.page.getByRole("button", { name: "Not now" }).click();
     await first.page.getByRole("button", { name: "Skip" }).click();
     await first.page.getByRole("button", { name: "Settings" }).click();
-    await first.page.getByRole("button", { name: "Maps" }).click();
+    await expect(first.page.getByRole("button", { name: "Maps", exact: true })).toHaveCount(0);
+    await first.page.getByRole("button", { name: "Tools", exact: true }).click();
+    await first.page.getByRole("checkbox", { name: /^Enable Tools/ }).check();
+    await first.page.getByRole("button", { name: "Maps", exact: true }).click();
     await expect(first.page.getByRole("heading", { name: "Maps" })).toBeVisible();
-    await first.page.getByLabel("Exploration grid").check();
+    await first.page.getByRole("checkbox", { name: /^Exploration grid/ }).check();
     await first.page.getByRole("button", { name: "Customize style" }).click();
     await expect(first.page.getByText("Custom style", { exact: true })).toBeVisible();
     const beforeRestart = await first.page.evaluate(() => window.launcherNative.state.get());
@@ -506,6 +509,8 @@ test("global map settings live in the launcher and survive restart", async () =>
       GW_TEST_RETURN_LAUNCHER: "1",
     });
     const afterRestart = await restarted.page.evaluate(() => window.launcherNative.state.get());
+    expect(afterRestart.tools.configured).toBe(true);
+    expect(afterRestart.tools.features.maps.enabled).toBe(true);
     expect(afterRestart.settings.cartographyGridEnabled).toBe(true);
     expect(afterRestart.settings.cartographyPresetLibrary.activePreset).toEqual(
       beforeRestart.settings.cartographyPresetLibrary.activePreset,

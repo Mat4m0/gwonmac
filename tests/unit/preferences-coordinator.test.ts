@@ -12,6 +12,7 @@ import {
   replaceTravelShortcut,
 } from "../../src/shared/travel.js";
 import { CARTOGRAPHY_BUILTIN_PRESETS } from "../../src/shared/cartography-overlay.js";
+import { resolveShortcuts } from "../../src/shared/keyboard-shortcuts.js";
 
 type ResetOutcome = Awaited<ReturnType<PreferencesCoordinator["resetSettings"]>>;
 
@@ -67,6 +68,28 @@ async function failSync(
 
 const failNextDirectorySync = (action: () => Promise<void>) =>
   failSync("directory", 1, action);
+
+it("serializes shortcut replacement so concurrent actions keep one owner per binding", async () => {
+  const { coordinator } = await fixture();
+  const grid = { key: "g", shift: false, option: false };
+  const terrain = { key: "l", shift: false, option: false };
+  await Promise.all([
+    coordinator.replaceShortcut("cartography.grid.toggle", grid),
+    coordinator.replaceShortcut("cartography.walkability.toggle", terrain),
+  ]);
+  let shortcuts = resolveShortcuts((await coordinator.getSettings()).shortcutOverrides);
+  assert.deepEqual(shortcuts["cartography.grid.toggle"], grid);
+  assert.deepEqual(shortcuts["cartography.walkability.toggle"], terrain);
+  await Promise.all([
+    coordinator.replaceShortcut("character.switch", grid),
+    coordinator.replaceShortcut("travel.open", grid),
+  ]);
+  shortcuts = resolveShortcuts((await coordinator.getSettings()).shortcutOverrides);
+  assert.equal(shortcuts["cartography.grid.toggle"], null);
+  assert.equal(shortcuts["character.switch"], null);
+  assert.deepEqual(shortcuts["travel.open"], grid);
+  assert.deepEqual(shortcuts["cartography.walkability.toggle"], terrain);
+});
 
 async function seedNonDefaultPreferences(
   coordinator: PreferencesCoordinator,

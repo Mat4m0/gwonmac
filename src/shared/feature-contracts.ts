@@ -19,9 +19,12 @@ type FeatureBooleanSetting = BooleanSetting & (
   | "travelPalette"
   | "skillKeyLabelsEnabled"
   | "skillCooldownOverlayEnabled"
+  | "cartographyEnabled"
+  | "characterSwitchEnabled"
 );
 type FeatureActivation =
   | Readonly<{ kind: "master"; setting: FeatureBooleanSetting }>
+  | Readonly<{ kind: "independent"; setting: FeatureBooleanSetting }>
   | Readonly<{
       kind: "setting";
       setting: FeatureBooleanSetting;
@@ -46,6 +49,14 @@ function defineFeatureSelectionPolicies<
 }
 
 export const FEATURE_SELECTION_POLICIES = defineFeatureSelectionPolicies({
+  characterSwitch: {
+    activation: { kind: "independent", setting: "characterSwitchEnabled" },
+    region: "any",
+  },
+  cartography: {
+    activation: { kind: "setting", setting: "cartographyEnabled", master: "gwonmacTools" },
+    region: "pve",
+  },
   tools: {
     activation: { kind: "master", setting: "gwonmacTools" },
     region: "non-pvp",
@@ -129,7 +140,7 @@ export function featureActivationRequested(
   settings: Partial<FeatureActivationSettings>,
 ): boolean {
   const activation = FEATURE_SELECTION_POLICIES[id].activation;
-  if (activation.kind === "master") return settings[activation.setting] === true;
+  if (activation.kind !== "setting") return settings[activation.setting] === true;
   if (!settings[activation.master]) return false;
   return settings[activation.setting] === true;
 }

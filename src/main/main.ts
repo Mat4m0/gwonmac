@@ -146,22 +146,17 @@ import { LauncherOrchestrator } from "./launcher-orchestrator.js";
 import { registerLauncherIpc } from "./launcher-ipc.js";
 import { LAUNCHER_IPC } from "../shared/launcher-contracts.js";
 import type {
-  GlobalTool,
   LauncherDestination,
   LauncherSettingsPatch,
   ShortcutReplacement,
 } from "../shared/launcher-contracts.js";
 import {
   DEFAULT_SHORTCUTS,
-  shortcutReserved,
-  withShortcutOverride,
 } from "../shared/keyboard-shortcuts.js";
 import { sendIfLive } from "./ipc-channel-registry.js";
 import {
-  TOOL_ACTION,
   allGlobalToolsPatch,
   globalToolPatch,
-  shortcutOwner,
 } from "./core/launcher-tools.js";
 import { captureLauncherShortcut } from "./launcher-shortcut-capture.js";
 import { TexturePackManager } from "./core/texture-pack-manager.js";
@@ -906,29 +901,17 @@ if (primaryInstance) void app.whenReady().then(async () => {
       await preferences.updateSettings(globalToolPatch(tool, enabled));
       launcherOrchestrator!.publish();
     },
-    captureShortcut: (win, tool) => captureLauncherShortcut(
+    captureShortcut: (win, action) => captureLauncherShortcut(
       win,
-      tool,
+      action,
       () => currentSettings ?? settings,
     ),
-    replaceShortcut: async ({ tool, binding }: ShortcutReplacement) => {
-      if (shortcutReserved(binding)) throw new Error("That shortcut is reserved by macOS or the application");
-      const active = currentSettings ?? settings;
-      let overrides = active.shortcutOverrides;
-      const conflict = shortcutOwner(binding, active, tool);
-      if (conflict) overrides = withShortcutOverride(overrides, TOOL_ACTION[conflict], null);
-      overrides = withShortcutOverride(overrides, TOOL_ACTION[tool], binding);
-      await preferences.updateSettings({ shortcutOverrides: overrides });
+    replaceShortcut: async ({ action, binding }: ShortcutReplacement) => {
+      await preferences.replaceShortcut(action, binding);
       launcherOrchestrator!.publish();
     },
-    restoreDefaultShortcut: async (tool: GlobalTool) => {
-      const active = currentSettings ?? settings;
-      const binding = DEFAULT_SHORTCUTS[TOOL_ACTION[tool]];
-      let overrides = active.shortcutOverrides;
-      const conflict = shortcutOwner(binding, active, tool);
-      if (conflict) overrides = withShortcutOverride(overrides, TOOL_ACTION[conflict], null);
-      overrides = withShortcutOverride(overrides, TOOL_ACTION[tool], binding);
-      await preferences.updateSettings({ shortcutOverrides: overrides });
+    restoreDefaultShortcut: async (action) => {
+      await preferences.replaceShortcut(action, DEFAULT_SHORTCUTS[action]);
       launcherOrchestrator!.publish();
     },
     restartToApplyTools: async (_win) => {

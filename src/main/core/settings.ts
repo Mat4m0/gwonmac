@@ -244,12 +244,14 @@ export function parseSettings(raw: unknown): AppSettings {
   }
   for (const setting of [
     "gwonmacTools",
+    "cartographyEnabled",
     "cartographyOverlayEnabled",
     "cartographyGridEnabled",
     "buildLibrary",
     "tradeChat",
     "xunlaiStorage",
     "travelPalette",
+    "characterSwitchEnabled",
     "characterSwitchProfession",
     "characterSwitchLevel",
     "characterSwitchLocation",

@@ -79,9 +79,9 @@ test("the built launcher preload exposes every launcher command and nothing else
   await api.settings.reset();
   await api.tools.setMasterEnabled(true);
   await api.tools.setFeature({ tool: "quick-travel", enabled: true });
-  await api.tools.captureShortcut("quick-travel");
-  await api.tools.replaceShortcut({ tool: "quick-travel", binding });
-  await api.tools.restoreDefaultShortcut("quick-travel");
+  await api.tools.captureShortcut("travel.open");
+  await api.tools.replaceShortcut({ action: "travel.open", binding });
+  await api.tools.restoreDefaultShortcut("travel.open");
   await api.tools.restartToApply();
   await api.gameFiles.info();
   await api.gameFiles.retryPreparation();
