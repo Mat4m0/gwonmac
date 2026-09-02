@@ -99,7 +99,8 @@ export function updateToolsMenuItems(settings: ToolMenuSettings): void {
   for (const [id, { feature, action }] of Object.entries(TOOL_MENU_FEATURES)) {
     const item = menu?.getMenuItemById(id);
     if (!item) continue;
-    if ((item.accelerator ?? null) !== (shortcutAccelerator(shortcuts[action]) ?? null)) {
+    if (action === "character.switch" &&
+        (item.accelerator ?? null) !== (shortcutAccelerator(shortcuts[action]) ?? null)) {
       rebuildGameMenu?.(settings);
       return;
     }
@@ -596,7 +597,10 @@ export function installApplicationMenu(actions: ApplicationMenuActions, settings
       const selection = TOOL_MENU_FEATURES[item.id ?? ""];
       if (!selection) continue;
       item.enabled = featureActivationRequested(selection.feature, settings);
-      const accelerator = shortcutAccelerator(shortcuts[selection.action]);
+      // Tools shortcuts belong only to before-input-event, not AppKit's menu
+      // routing. Character Switch retains its existing native menu binding.
+      const accelerator = selection.action === "character.switch"
+        ? shortcutAccelerator(shortcuts[selection.action]) : undefined;
       if (accelerator) item.accelerator = accelerator;
     }
   }
