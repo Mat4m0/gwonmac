@@ -157,6 +157,7 @@ pub(crate) enum GameState {
         player_number: u32,
         play_region: u32,
         pre_searing: bool,
+        on_world_map: bool,
     },
 }
 
@@ -191,25 +192,25 @@ unsafe fn classify_play_region(
     layout: Layout,
     map_id: u32,
     instance_type: u32,
-) -> (u32, bool) {
+) -> (u32, bool, bool) {
     if layout.area_info == 0
         || layout.area_info_count == 0
         || layout.area_info_stride < 20
         || layout.area_info_flags + 4 > layout.area_info_stride
         || map_id >= layout.area_info_count
     {
-        return (PLAY_REGION_UNKNOWN, false);
+        return (PLAY_REGION_UNKNOWN, false, false);
     }
     let Some(record) = indexed(layout.area_info, map_id, layout.area_info_stride) else {
-        return (PLAY_REGION_UNKNOWN, false);
+        return (PLAY_REGION_UNKNOWN, false, false);
     };
     let mut area_region = 0;
     for (field, maximum) in [0_u32, 4, 8, 12].iter().zip([4_u32, 5, 27, 21].iter()) {
         let Some(value) = offset(record, *field).and_then(|at| unsafe { read_u32(at) }) else {
-            return (PLAY_REGION_UNKNOWN, false);
+            return (PLAY_REGION_UNKNOWN, false, false);
         };
         if value > *maximum {
-            return (PLAY_REGION_UNKNOWN, false);
+            return (PLAY_REGION_UNKNOWN, false, false);
         }
         if *field == 8 {
             area_region = value;
@@ -217,7 +218,7 @@ unsafe fn classify_play_region(
     }
     let Some(flags) = offset(record, layout.area_info_flags).and_then(|at| unsafe { read_u32(at) })
     else {
-        return (PLAY_REGION_UNKNOWN, false);
+        return (PLAY_REGION_UNKNOWN, false, false);
     };
     let play_region = if flags & (0x0004_0001 | 0x0080_0000) != 0 && instance_type == 1 {
         PLAY_REGION_PVP
@@ -227,6 +228,7 @@ unsafe fn classify_play_region(
     (
         play_region,
         area_region == 7 && play_region == PLAY_REGION_PVE,
+        flags & 0x20 == 0,
     )
 }
 
@@ -415,7 +417,7 @@ pub(crate) unsafe fn resolve_game(layout: Layout) -> GameState {
         return GameState::Unavailable;
     }
 
-    let (play_region, pre_searing) = unsafe {
+    let (play_region, pre_searing, on_world_map) = unsafe {
         classify_play_region(layout, map_id, instance_type)
     };
     GameState::Ready {
@@ -425,12 +427,13 @@ pub(crate) unsafe fn resolve_game(layout: Layout) -> GameState {
         player_number,
         play_region,
         pre_searing,
+        on_world_map,
     }
 }
 
 unsafe fn collect(layout: Layout, observe_target: bool) -> State {
     let mut state = State::empty();
-    let (game, map_id, instance_type, player_number, play_region) = match unsafe { resolve_game(layout) }
+    let (game, map_id, instance_type, player_number, play_region, on_world_map) = match unsafe { resolve_game(layout) }
     {
         GameState::Unavailable => return state,
         GameState::Loading => {
@@ -443,8 +446,9 @@ unsafe fn collect(layout: Layout, observe_target: bool) -> State {
             instance_type,
             player_number,
             play_region,
+            on_world_map,
             ..
-        } => (game, map_id, instance_type, player_number, play_region),
+        } => (game, map_id, instance_type, player_number, play_region, on_world_map),
     };
 
     if !contains(layout.agent_array, 16) {
@@ -497,7 +501,8 @@ unsafe fn collect(layout: Layout, observe_target: bool) -> State {
         let Some(player) = (unsafe { read_agent(layout, agent_buffer, size, id) }) else {
             return state;
         };
-        state.flags = FLAG_READY | FLAG_PLAYER_VALID;
+        state.flags = FLAG_READY | FLAG_PLAYER_VALID
+            | if on_world_map { FLAG_ON_WORLD_MAP } else { 0 };
         state.map_id = map_id;
         state.instance_type = instance_type;
         state.play_region = play_region;

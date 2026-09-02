@@ -5,7 +5,7 @@
 export const COMPANION_ABI = Object.freeze({
   kernel: 21,
   config: Object.freeze({ bytes: 464 }),
-  snapshot: Object.freeze({ abi: 3, bytes: 64 }),
+  snapshot: Object.freeze({ abi: 4, bytes: 64 }),
   travelUnlockWords: 28,
   cursor: Object.freeze({ abi: 1, bytes: 4_160 }),
   toolbox: Object.freeze({ abi: 4, bytes: 64 }),

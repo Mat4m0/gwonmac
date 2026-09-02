@@ -113,12 +113,12 @@ unseen marker means the loaded map has ground within reveal range. Grey hatching
 means the cell may need another map or special route. Guidance never changes
 the game's explored state. Hold Shift over a Mission Map cell to inspect its
 normal 3×3 reveal area, or Option-Shift for the Bird's Eye 7×7 area. One style
-applies to the Compass and Mission Map. Both layers hide when the current map
-projection or data cannot be certified. They also hide, together with the
-Cartography control, outside the main Tyria, Cantha, and Elona world maps. This
-includes the Battle Isles, Pre-Searing, and the Realm of Torment. Your
-Cartography settings stay unchanged and the layers return automatically after
-travel to a supported area.
+applies to the Compass and Mission Map. Pre-Searing supports both layers
+alongside Tyria, Cantha, and Elona. In dungeons, underground maps, the Battle
+Isles, and the Realm of Torment, the Grid and global progress hide while local
+Walkable terrain remains available. The Cartography control stays beside the
+Compass and explains the limitation when opened. Your settings remain intact
+and all layers return automatically after travel to a fully supported area.
 
 ## Switch Character
 

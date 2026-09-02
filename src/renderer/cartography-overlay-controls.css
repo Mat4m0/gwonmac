@@ -69,6 +69,20 @@
   font-size: var(--ui-type-caption-size);
 }
 
+.cartography-overlay-availability {
+  margin: 0 0 var(--ui-space-2);
+  padding: var(--ui-space-1) var(--ui-space-2);
+  color: var(--ui-text-muted);
+  font: var(--ui-font-weight-medium) 10px / 1.4 var(--ui-font-readable);
+  background: var(--ui-well-fill);
+  border: var(--ui-border-width) solid var(--ui-warning);
+  border-radius: var(--ui-radius-sm);
+}
+
+.cartography-overlay-availability[hidden] {
+  display: none;
+}
+
 .cartography-overlay-layers {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -197,6 +211,10 @@
 }
 
 .cartography-overlay-qa[data-tone="loading"] .cartography-overlay-qa-indicator {
+  background: var(--ui-warning);
+}
+
+.cartography-overlay-qa[data-tone="limited"] .cartography-overlay-qa-indicator {
   background: var(--ui-warning);
 }
 

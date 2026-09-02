@@ -20,38 +20,38 @@ const PANEL_HEIGHT_ESTIMATE = 230;
 const SAVE_CONFIRMATION_MS = 1_200;
 type Layer = "grid" | "walkability";
 
-export type CartographyQaStatus =
-  | Readonly<{
-      status: "unavailable";
-      reason: string;
-      worldMapObserver: WorldMapFrameSpikeDiagnostic;
-      kernel: CartographyReachabilityDiagnostic | null;
-    }>
-  | Readonly<{
-      status: "ready";
-      continentId: number;
-      exploredCreditableCells: number;
-      remainingCells: number;
-      compassReady: boolean;
-      missionMapReady: boolean;
-      worldMapReady: boolean;
-      worldMapObserver: WorldMapFrameSpikeDiagnostic;
-      currentInstance:
-        | Readonly<{ status: "unavailable"; reason: string }>
-        | Readonly<{
-            status: "ready";
-            mapId: number;
-            areaEpoch: number;
-            resourceGeneration: number;
-            terrain: Readonly<{ width: number; height: number; mapUnitsPerPixel: number }>;
-            reachableCells: number;
-            actionableCells: number;
-          }>;
-      kernel: CartographyReachabilityDiagnostic | null;
-    }>;
+export type CartographyQaStatus = Readonly<{
+  continent:
+    | Readonly<{ status: "unavailable"; reason: string }>
+    | Readonly<{
+        status: "ready";
+        continentId: number;
+        exploredCreditableCells: number;
+        remainingCells: number;
+      }>;
+  currentInstance:
+    | Readonly<{ status: "unavailable"; reason: string }>
+    | Readonly<{
+        status: "ready";
+        sequence: number;
+        mapId: number;
+        areaEpoch: number;
+        resourceGeneration: number;
+        terrain: Readonly<{ width: number; height: number; mapUnitsPerPixel: number }>;
+        reachableCells: number;
+        guidance:
+          | Readonly<{ status: "unavailable"; reason: string }>
+          | Readonly<{ status: "ready"; actionableCells: number }>;
+      }>;
+  compassReady: boolean;
+  missionMapReady: boolean;
+  worldMapReady: boolean;
+  worldMapObserver: WorldMapFrameSpikeDiagnostic;
+  kernel: CartographyReachabilityDiagnostic | null;
+}>;
 
 type QaPresentation = Readonly<{
-  tone: "ready" | "loading" | "unavailable";
+  tone: "ready" | "limited" | "loading" | "unavailable";
   summary: string;
   rows: readonly (readonly [label: string, value: string])[];
 }>;
@@ -94,13 +94,19 @@ function worldMapStatus(value: WorldMapFrameSpikeDiagnostic): string {
 }
 
 export function describeCartographyQaStatus(status: CartographyQaStatus): QaPresentation {
-  if (status.status === "unavailable") {
-    const loading = status.reason === "loading";
+  const continent = status.continent;
+  const current = status.currentInstance;
+  const limited = continent.status === "unavailable"
+    && continent.reason === "unsupported-area";
+  if (continent.status === "unavailable" && current.status === "unavailable") {
+    const reason = limited ? current.reason : continent.reason;
+    const loading = reason === "loading";
     const kernel = status.kernel;
-    const exactReason = status.reason === "kernel" && kernel !== null
+    const exactReason = reason === "kernel" && kernel !== null
       ? `kernel/${kernelStatus(kernel.status)}`
-      : status.reason;
+      : reason;
     const rows: (readonly [string, string])[] = [
+      ...(limited ? [["Grid", "Unavailable in this area"]] as const : []),
       ["Reason", exactReason],
       ["World observer", worldMapStatus(status.worldMapObserver)],
     ];
@@ -113,33 +119,43 @@ export function describeCartographyQaStatus(status: CartographyQaStatus): QaPres
     }
     return Object.freeze({
       tone: loading ? "loading" : "unavailable",
-      summary: loading ? "Loading" : `Unavailable · ${exactReason}`,
+      summary: loading ? "Loading" : limited
+        ? "Limited · Walkable unavailable"
+        : `Unavailable · ${exactReason}`,
       rows: Object.freeze(rows),
     });
   }
-  const rows: (readonly [string, string])[] = [
-    ["Continent", `${status.continentId} · ${status.remainingCells} estimated remaining`],
-    ["Coverage", `${status.exploredCreditableCells} explored creditable`],
-  ];
-  if (status.currentInstance.status === "ready") {
-    const current = status.currentInstance;
+  const rows: (readonly [string, string])[] = [];
+  if (continent.status === "ready") {
+    rows.push(
+      ["Continent", `${continent.continentId} · ${continent.remainingCells} estimated remaining`],
+      ["Coverage", `${continent.exploredCreditableCells} explored creditable`],
+    );
+  } else rows.push(["Grid", "Unavailable in this area"]);
+  if (current.status === "ready") {
     rows.push(
       ["Map", String(current.mapId)],
       ["Epoch", `${current.areaEpoch} · resource ${current.resourceGeneration}`],
-      ["Guidance", `${current.actionableCells} targets here · ${current.reachableCells} reachable cells`],
       ["Terrain", `${current.terrain.width}×${current.terrain.height} @ ${current.terrain.mapUnitsPerPixel}`],
     );
-  } else rows.push(["Current guidance", `Unavailable · ${status.currentInstance.reason}`]);
+    rows.push(current.guidance.status === "ready"
+      ? ["Guidance", `${current.guidance.actionableCells} targets here · ${current.reachableCells} reachable cells`]
+      : ["Guidance", `Unavailable · ${current.guidance.reason}`]);
+  } else rows.push(["Walkable", `Unavailable · ${current.reason}`]);
   rows.push([
     "Surfaces",
     `Compass ${status.compassReady ? "ready" : "off"} · Mission ${status.missionMapReady ? "ready" : "off"} · World ${status.worldMapReady ? "ready" : "off"}`,
   ]);
   rows.push(["World observer", worldMapStatus(status.worldMapObserver)]);
   return Object.freeze({
-    tone: "ready",
-    summary: status.currentInstance.status === "ready"
-      ? `Ready · ${status.currentInstance.actionableCells} targets here`
-      : `Continent ready · ${status.remainingCells} remaining`,
+    tone: limited ? "limited" : "ready",
+    summary: limited
+      ? "Limited · Walkable terrain ready"
+      : current.status === "ready" && current.guidance.status === "ready"
+        ? `Ready · ${current.guidance.actionableCells} targets here`
+        : continent.status === "ready"
+          ? `Continent ready · ${continent.remainingCells} remaining`
+          : "Walkable terrain ready",
     rows: Object.freeze(rows),
   });
 }
@@ -198,6 +214,9 @@ export function createCartographyOverlayControls(options: Readonly<{
   const heading = document.createElement("strong");
   heading.className = "cartography-overlay-heading";
   heading.textContent = "Map layers";
+  const availabilityNotice = document.createElement("p");
+  availabilityNotice.className = "cartography-overlay-availability";
+  availabilityNotice.hidden = true;
   const layers = document.createElement("div");
   layers.className = "cartography-overlay-layers";
   const layerButton = (label: string): HTMLButtonElement => {
@@ -264,12 +283,13 @@ export function createCartographyOverlayControls(options: Readonly<{
   exportStatus.setAttribute("role", "status");
   exportStatus.setAttribute("aria-live", "polite");
   qa.append(qaSummary, qaRows, exportButton, exportStatus);
-  panel.append(heading, layers, fields, saveStatus, qa);
+  panel.append(heading, availabilityNotice, layers, fields, saveStatus, qa);
   root.append(trigger, panel);
   options.parent.append(root);
 
   let canonical: AppSettings | null = null;
   let saving = false;
+  let gridAvailable = false;
   let exporting = false;
   let disposed = false;
   let open = false;
@@ -279,10 +299,16 @@ export function createCartographyOverlayControls(options: Readonly<{
   let renderedSettings: AppSettings | null = null;
   let panelHeight = PANEL_HEIGHT_ESTIMATE;
   const currentSettings = (): AppSettings | null => canonical;
+  const syncDisabled = (): void => {
+    gridButton.disabled = saving || !gridAvailable;
+    gridOpacity.input.disabled = saving || !gridAvailable;
+    for (const control of [walkabilityButton, walkabilityOpacity.input, preset]) {
+      control.disabled = saving;
+    }
+  };
   const setSaving = (value: boolean): void => {
     saving = value;
-    for (const control of [gridButton, walkabilityButton, gridOpacity.input,
-      walkabilityOpacity.input, preset]) control.disabled = value;
+    syncDisabled();
   };
   const renderPresetOptions = (settings: AppSettings): void => {
     if (renderedLibrary === settings.cartographyPresetLibrary) return;
@@ -476,6 +502,20 @@ export function createCartographyOverlayControls(options: Readonly<{
     },
     updateQaStatus(status) {
       const presentation = describeCartographyQaStatus(status);
+      gridAvailable = status.continent.status === "ready";
+      const limited = status.continent.status === "unavailable"
+        && status.continent.reason === "unsupported-area";
+      availabilityNotice.hidden = !limited;
+      availabilityNotice.textContent = limited
+        ? status.currentInstance.status === "ready"
+          ? "Limited in this area. Cartography progress and guidance are unavailable. Walkable terrain is still available."
+          : "Limited in this area. Cartography progress and guidance are unavailable, and walkable terrain could not be loaded."
+        : "";
+      gridButton.title = gridAvailable ? "" : limited
+        ? "Grid and progress are unavailable in this area"
+        : "Grid is temporarily unavailable";
+      gridOpacity.input.title = gridButton.title;
+      syncDisabled();
       qa.dataset.tone = presentation.tone;
       qaValue.textContent = presentation.summary;
       qaRows.replaceChildren(...presentation.rows.flatMap(([label, value]) => {

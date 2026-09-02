@@ -135,9 +135,13 @@ export function captureCartographyEvidence(
           current.reachableCells.words,
         ),
         actionable: cloneBitset(
-          current.actionableCells.width,
-          current.actionableCells.height,
-          current.actionableCells.words,
+          current.reachableCells.width,
+          current.reachableCells.height,
+          // Limited areas have terrain evidence but no progress mask, so they
+          // intentionally publish no confirmed actionable cells.
+          current.guidance.status === "ready"
+            ? current.guidance.actionableCells.words
+            : new Uint32Array(current.reachableCells.words.length),
         ),
         terrain: Object.freeze({
           mapLeft: current.walkableTerrain.mapLeft,

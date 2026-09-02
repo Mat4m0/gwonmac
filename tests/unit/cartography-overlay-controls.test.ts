@@ -79,21 +79,24 @@ test("compact Cartography panel keeps guidance progressively disclosed", () => {
   assert.match(controls, /const qa = document\.createElement\("details"\)/u);
 });
 
-test("unsupported areas hide controls while transient failures leave them available", () => {
+test("unsupported areas and transient failures leave controls available", () => {
   const unavailable = (reason: "unsupported-area" | "loading"): CartographyState => ({
     context: null,
     continent: { status: "unavailable", reason },
     currentInstance: { status: "unavailable", reason },
     surfaces: { compass: null, missionMap: null, worldMap: null },
   });
-  assert.equal(cartographyOverlayDisposition(unavailable("unsupported-area")), "hidden");
+  assert.equal(cartographyOverlayDisposition(unavailable("unsupported-area")), "controls-only");
   assert.equal(cartographyOverlayDisposition(unavailable("loading")), "controls-only");
 });
 
 test("Cartography QA status distinguishes loading from exact kernel failures", () => {
   assert.deepEqual(describeCartographyQaStatus({
-    status: "unavailable",
-    reason: "loading",
+    continent: { status: "unavailable", reason: "loading" },
+    currentInstance: { status: "unavailable", reason: "loading" },
+    compassReady: false,
+    missionMapReady: false,
+    worldMapReady: false,
     worldMapObserver: worldObserver,
     kernel: null,
   }), {
@@ -105,8 +108,11 @@ test("Cartography QA status distinguishes loading from exact kernel failures", (
     ],
   });
   const failed = describeCartographyQaStatus({
-    status: "unavailable",
-    reason: "kernel",
+    continent: { status: "unavailable", reason: "kernel" },
+    currentInstance: { status: "unavailable", reason: "kernel" },
+    compassReady: false,
+    missionMapReady: false,
+    worldMapReady: false,
     worldMapObserver: worldObserver,
     kernel: {
       status: 7,
@@ -132,22 +138,25 @@ test("Cartography QA status distinguishes loading from exact kernel failures", (
 
 test("Cartography QA ready status reports player-facing classification counts", () => {
   const ready = describeCartographyQaStatus({
-    status: "ready",
-    continentId: 1,
-    exploredCreditableCells: 4_500,
-    remainingCells: 120,
+    continent: {
+      status: "ready",
+      continentId: 1,
+      exploredCreditableCells: 4_500,
+      remainingCells: 120,
+    },
     compassReady: true,
     missionMapReady: false,
     worldMapReady: false,
     worldMapObserver: worldObserver,
     currentInstance: {
       status: "ready",
+      sequence: 4,
       mapId: 58,
       areaEpoch: 3,
       resourceGeneration: 2,
       terrain: { width: 256, height: 272, mapUnitsPerPixel: 2 },
       reachableCells: 228,
-      actionableCells: 92,
+      guidance: { status: "ready", actionableCells: 92 },
     },
     kernel: null,
   });
@@ -158,10 +167,12 @@ test("Cartography QA ready status reports player-facing classification counts", 
 
 test("Cartography QA keeps continent progress visible without current guidance", () => {
   const ready = describeCartographyQaStatus({
-    status: "ready",
-    continentId: 2,
-    exploredCreditableCells: 7_000,
-    remainingCells: 31,
+    continent: {
+      status: "ready",
+      continentId: 2,
+      exploredCreditableCells: 7_000,
+      remainingCells: 31,
+    },
     compassReady: false,
     missionMapReady: true,
     worldMapReady: true,
@@ -172,5 +183,30 @@ test("Cartography QA keeps continent progress visible without current guidance",
   assert.equal(ready.tone, "ready");
   assert.equal(ready.summary, "Continent ready · 31 remaining");
   assert.ok(ready.rows.some(([label, value]) =>
-    label === "Current guidance" && value === "Unavailable · kernel"));
+    label === "Walkable" && value === "Unavailable · kernel"));
+});
+
+test("Cartography QA explains terrain-only areas", () => {
+  const limited = describeCartographyQaStatus({
+    continent: { status: "unavailable", reason: "unsupported-area" },
+    currentInstance: {
+      status: "ready",
+      sequence: 4,
+      mapId: 495,
+      areaEpoch: 9,
+      resourceGeneration: 3,
+      terrain: { width: 128, height: 96, mapUnitsPerPixel: 2 },
+      reachableCells: 81,
+      guidance: { status: "unavailable", reason: "unsupported-area" },
+    },
+    compassReady: true,
+    missionMapReady: true,
+    worldMapReady: false,
+    worldMapObserver: worldObserver,
+    kernel: null,
+  });
+  assert.equal(limited.tone, "limited");
+  assert.equal(limited.summary, "Limited · Walkable terrain ready");
+  assert.ok(limited.rows.some(([label, value]) =>
+    label === "Grid" && value === "Unavailable in this area"));
 });

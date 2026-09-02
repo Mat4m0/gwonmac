@@ -149,7 +149,7 @@ export function snapshot(overrides: SnapshotOverrides = {}) {
   view.setUint16(4, COMPANION_SNAPSHOT_ABI, true);
   view.setUint16(6, COMPANION_SNAPSHOT_BYTES, true);
   view.setUint32(8, overrides.sequence ?? 2, true);
-  const flags = overrides.flags ?? 7;
+  const flags = overrides.flags ?? (7 | 1 << 6);
   const hasPlayer = (flags & 2) !== 0;
   const hasTarget = (flags & 4) !== 0;
   view.setUint32(12, flags, true);

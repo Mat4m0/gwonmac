@@ -63,11 +63,12 @@ the continent-scale World Map. GWonMac certifies each context independently.
 Both surfaces consume the same continent state and global grid phase. A failure
 on either map hides only that surface.
 
-Cartography is limited to the three supported campaign coordinate systems:
-Tyria, Cantha, and Elona. Pre-Searing, the Battle Isles, and the Realm of
-Torment use separate coordinate systems and hide every Cartography layer. The
-compact control hides with the layers; settings remain intact and apply again
-automatically after travel to a supported area.
+Continent progress and guidance cover Tyria, Pre-Searing, Cantha, and Elona.
+The Battle Isles, Realm of Torment, dungeons, and other maps outside a campaign
+world map keep the local walkable-terrain layer but hide the global grid,
+coverage, and guidance. The compact control remains visible and explains this
+limited mode when opened. Settings remain intact and apply again automatically
+after travel to a fully supported area.
 
 The World Map projection and visibility come from one complete native event
 context. Unrelated or incomplete events leave the last complete reading intact,
@@ -101,9 +102,9 @@ invalid scalar, excessive geometry, uncertain projection, or unsupported build
 fails the dependent evidence layer closed. Travel withdraws stale orange and
 terrain immediately without discarding a healthy continent snapshot.
 
-An unsupported area fails both evidence layers closed with the bounded
-`unsupported-area` reason. Its certified map identity remains available to the
-evidence export, but it cannot update visited-map knowledge.
+An area without continent progress fails only that evidence layer closed with
+the bounded `unsupported-area` reason. Certified local terrain can remain
+available, but limited-area reachability cannot update visited-map knowledge.
 
 Main stores visited-map knowledge atomically in
 `cartography-map-knowledge.json`. The file contains global map geometry, not

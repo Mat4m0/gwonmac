@@ -128,6 +128,15 @@ describe("Companion kernel", () => {
     assert.equal(state.targetId, 9);
     assert.ok(Math.abs(state.distance - 100) < 0.1);
     assert.equal(state.rangeName, "Adjacent");
+    assert.equal(state.onWorldMap, true);
+
+    view.setUint32(ADDRESSES.areaInfo + 133 * 0x7c + 0x10, 0x20, true);
+    kernel.tick();
+    assert.equal(
+      decoded(readCompanionSnapshot(kernel.memory.buffer, ADDRESSES.snapshot))
+        .onWorldMap,
+      false,
+    );
 
     const boundaries: [distance: number, band: number][] = [
       [166, 1],

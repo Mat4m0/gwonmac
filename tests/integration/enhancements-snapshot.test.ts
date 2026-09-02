@@ -18,6 +18,7 @@ describe("Companion snapshot ABI", () => {
     assert.equal(state.targetKind, "Living");
     assert.equal(state.rangeName, "Adjacent");
     assert.equal(state.xunlaiAccess, null);
+    assert.equal(state.onWorldMap, true);
   });
 
   it("rejects torn, incompatible, loading, and absent-target snapshots", () => {
@@ -55,6 +56,10 @@ describe("Companion snapshot ABI", () => {
   });
 
   it("rejects unknown flags, invalid identities, bands, and non-finite values", () => {
+    assert.equal(
+      rejected(readCompanionSnapshot(snapshot({ flags: 0x80 }), 0)),
+      "snapshot",
+    );
     assert.equal(
       rejected(readCompanionSnapshot(snapshot({ flags: 0x40 }), 0)),
       "snapshot",

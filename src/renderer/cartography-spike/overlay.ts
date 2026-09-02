@@ -40,7 +40,10 @@ import {
 import { captureCartographyEvidence } from "./evidence-capture.js";
 import { createContinentCoverageLayer } from "./continent-coverage-layer.js";
 import { createCurrentInstanceBoundaryLayer } from "./current-instance-boundary-layer.js";
-import { createCartographyOverlayControls } from "./overlay-controls.js";
+import {
+  createCartographyOverlayControls,
+  type CartographyQaStatus,
+} from "./overlay-controls.js";
 import {
   createWalkableTerrainSurface,
   type WalkableTerrainSurface,
@@ -58,36 +61,7 @@ export type CartographyGridStats = Readonly<{
   worldMap: CartographyGridLayerSnapshot | null;
 }>;
 
-export type CartographyModelStats =
-  | Readonly<{
-      status: "unavailable";
-      reason: string;
-      worldMapObserver: ReturnType<CartographyModelSources["worldMap"]["diagnostics"]>;
-      kernel: ReturnType<CartographyModelSources["kernel"]["diagnostic"]>;
-    }>
-  | Readonly<{
-      status: "ready";
-      continentId: number;
-      exploredCreditableCells: number;
-      remainingCells: number;
-      compassReady: boolean;
-      missionMapReady: boolean;
-      worldMapReady: boolean;
-      worldMapObserver: ReturnType<CartographyModelSources["worldMap"]["diagnostics"]>;
-      currentInstance:
-        | Readonly<{ status: "unavailable"; reason: string }>
-        | Readonly<{
-            status: "ready";
-            sequence: number;
-            mapId: number;
-            areaEpoch: number;
-            resourceGeneration: number;
-            terrain: Readonly<{ width: number; height: number; mapUnitsPerPixel: number }>;
-            reachableCells: number;
-            actionableCells: number;
-          }>;
-      kernel: ReturnType<CartographyModelSources["kernel"]["diagnostic"]>;
-    }>;
+export type CartographyModelStats = CartographyQaStatus;
 
 function countSetBits(words: Uint32Array): number {
   let count = 0;
@@ -111,7 +85,7 @@ function bitsetsEqual(
     && left.words.every((word, index) => word === right.words[index]);
 }
 
-export type CartographyOverlayDisposition = "hidden" | "controls-only" | "layers";
+export type CartographyOverlayDisposition = "controls-only" | "layers";
 
 /** Decide the whole overlay surface policy from the canonical model state. */
 export function cartographyOverlayDisposition(
@@ -120,7 +94,7 @@ export function cartographyOverlayDisposition(
   if (state.continent.status === "ready" || state.currentInstance.status === "ready") {
     return "layers";
   }
-  return state.continent.reason === "unsupported-area" ? "hidden" : "controls-only";
+  return "controls-only";
 }
 
 export function mountCartographyOverlay(options: Readonly<{
@@ -278,43 +252,45 @@ export function mountCartographyOverlay(options: Readonly<{
     });
   };
   view.gwCartographyGridStats = gridStats;
-  const modelStats = (): CartographyModelStats => state.continent.status === "unavailable"
-    ? Object.freeze({
-        status: "unavailable",
-        reason: state.continent.reason,
-        worldMapObserver: options.modelSources.worldMap.diagnostics(),
-        kernel: options.modelSources.kernel.diagnostic(),
-      })
-    : Object.freeze({
-        status: "ready",
-        continentId: state.continent.continent,
-        exploredCreditableCells: countSetBits(state.continent.exploredCreditable.words),
-        remainingCells: countSetBits(state.continent.remaining.words),
-        compassReady: presentation.compass !== null,
-        missionMapReady: missionGridLayer.snapshot() !== null,
-        worldMapReady: worldGridLayer.snapshot() !== null,
-        worldMapObserver: options.modelSources.worldMap.diagnostics(),
-        currentInstance: state.currentInstance.status === "ready"
-          ? Object.freeze({
-              status: "ready" as const,
-              sequence: state.currentInstance.sequence,
-              mapId: state.currentInstance.epoch.mapId,
-              areaEpoch: state.currentInstance.epoch.area,
-              resourceGeneration: state.currentInstance.epoch.resource,
-              terrain: Object.freeze({
-                width: state.currentInstance.walkableTerrain.width,
-                height: state.currentInstance.walkableTerrain.height,
-                mapUnitsPerPixel: state.currentInstance.walkableTerrain.mapUnitsPerPixel,
-              }),
-              reachableCells: countSetBits(state.currentInstance.reachableCells.words),
-              actionableCells: countSetBits(state.currentInstance.actionableCells.words),
-            })
-          : Object.freeze({
-              status: "unavailable" as const,
-              reason: state.currentInstance.reason,
-            }),
-        kernel: options.modelSources.kernel.diagnostic(),
-      });
+  const modelStats = (): CartographyModelStats => Object.freeze({
+    continent: state.continent.status === "ready"
+      ? Object.freeze({
+          status: "ready" as const,
+          continentId: state.continent.continent,
+          exploredCreditableCells: countSetBits(state.continent.exploredCreditable.words),
+          remainingCells: countSetBits(state.continent.remaining.words),
+        })
+      : state.continent,
+    currentInstance: state.currentInstance.status === "ready"
+      ? Object.freeze({
+          status: "ready" as const,
+          sequence: state.currentInstance.sequence,
+          mapId: state.currentInstance.epoch.mapId,
+          areaEpoch: state.currentInstance.epoch.area,
+          resourceGeneration: state.currentInstance.epoch.resource,
+          terrain: Object.freeze({
+            width: state.currentInstance.walkableTerrain.width,
+            height: state.currentInstance.walkableTerrain.height,
+            mapUnitsPerPixel: state.currentInstance.walkableTerrain.mapUnitsPerPixel,
+          }),
+          reachableCells: countSetBits(state.currentInstance.reachableCells.words),
+          guidance: state.currentInstance.guidance.status === "ready"
+            ? Object.freeze({
+                status: "ready" as const,
+                actionableCells: countSetBits(
+                  state.currentInstance.guidance.actionableCells.words,
+                ),
+              })
+            : state.currentInstance.guidance,
+        })
+      : state.currentInstance,
+    compassReady: presentation.compass !== null,
+    missionMapReady: presentation.missionMap !== null
+      && (state.continent.status === "ready" || state.currentInstance.status === "ready"),
+    worldMapReady: worldGridLayer.snapshot() !== null,
+    worldMapObserver: options.modelSources.worldMap.diagnostics(),
+    kernel: options.modelSources.kernel.diagnostic(),
+  });
   view.gwCartographyModelStats = modelStats;
 
   const safe = (surface: "compass" | "mission-map" | "world-map", render: () => void): void => {
@@ -378,16 +354,26 @@ export function mountCartographyOverlay(options: Readonly<{
         ) explorationVersion += 1;
       }
       if (next.currentInstance.status === "ready") {
+        const previousGuidance = previous.currentInstance.status === "ready"
+          ? previous.currentInstance.guidance
+          : null;
+        const nextGuidance = next.currentInstance.guidance;
         if (
-          previous.currentInstance.status !== "ready"
-          || !bitsetsEqual(
-            previous.currentInstance.reachableCells,
-            next.currentInstance.reachableCells,
-          )
+          previousGuidance === null
+          || previousGuidance.status !== nextGuidance.status
+          || previousGuidance.status === "ready" && nextGuidance.status === "ready"
+            && !bitsetsEqual(
+              previousGuidance.actionableCells,
+              nextGuidance.actionableCells,
+            )
         ) actionabilityVersion += 1;
       }
       state = next;
-      if (state.currentInstance.status === "ready") {
+      if (
+        state.continent.status === "ready"
+        && state.currentInstance.status === "ready"
+        && state.currentInstance.guidance.status === "ready"
+      ) {
         rememberCurrentMap(
           state.currentInstance,
           options.settings().cartographyRevealMode === "birds-eye" ? 3 : 1,
@@ -402,10 +388,6 @@ export function mountCartographyOverlay(options: Readonly<{
       terrainKey = "";
       terrain = null;
       hideAllLayers();
-      if (disposition === "hidden") {
-        controls.hide();
-        return;
-      }
       const compass = options.modelSources.compass.snapshot();
       const box = compass === null
         ? null
@@ -482,7 +464,10 @@ export function mountCartographyOverlay(options: Readonly<{
       return bitsetHasCell(state.continent.remaining, { x, y });
     };
     const canCurrentMapReveal = (x: number, y: number): boolean | null => {
-      if (state.currentInstance.status !== "ready") return null;
+      if (
+        state.currentInstance.status !== "ready"
+        || state.currentInstance.guidance.status !== "ready"
+      ) return null;
       return bitsetHasCell(state.currentInstance.reachableCells, { x, y });
     };
     const canVisitedMapReveal = (x: number, y: number): boolean | null => {
@@ -490,6 +475,11 @@ export function mountCartographyOverlay(options: Readonly<{
       return bitsetHasCell(rememberedReachable, { x, y });
     };
     const canvasBox = options.canvas.getBoundingClientRect();
+    const controlBox = presentation.compass === null
+      ? null
+      : projectNativeFrame(presentation.compass, canvasBox);
+    if (controlBox === null) controls.hide();
+    else controls.update(controlBox, settings);
 
     safe("compass", () => {
       if (
@@ -510,7 +500,7 @@ export function mountCartographyOverlay(options: Readonly<{
         + presentation.player.x / GAME_UNITS_PER_MAP_UNIT;
       const playerMapY = state.currentInstance.worldAnchor.y
         - presentation.player.y / GAME_UNITS_PER_MAP_UNIT;
-      if (settings.cartographyGridEnabled) {
+      if (settings.cartographyGridEnabled && state.continent.status === "ready") {
         const projection = projectCartographyGridToCompass({
           frame: { generation: state.currentInstance.epoch.area, playerMapX, playerMapY },
           compass,
@@ -549,14 +539,12 @@ export function mountCartographyOverlay(options: Readonly<{
           opacity: walkabilityOpacity,
         });
       } else compassTerrainLayer.hide();
-      controls.update(box, settings);
     });
 
     safe("mission-map", () => {
       if (
         presentation.compass === null
         || presentation.missionMap === null
-        || state.continent.status !== "ready"
       ) {
         hideMission();
         return;
@@ -573,7 +561,7 @@ export function mountCartographyOverlay(options: Readonly<{
         return;
       }
       const mapProjection = projectCartographyGridToMissionMap({ frame: mission, box });
-      if (settings.cartographyGridEnabled) {
+      if (settings.cartographyGridEnabled && state.continent.status === "ready") {
         if (mapProjection === null) {
           missionGridLayer.hide();
           missionCoverageLayer.hide();
@@ -612,7 +600,7 @@ export function mountCartographyOverlay(options: Readonly<{
           } else missionBoundaryLayer.hide();
         }
       } else missionGridLayer.hide();
-      if (!settings.cartographyGridEnabled) {
+      if (!settings.cartographyGridEnabled || state.continent.status !== "ready") {
         missionCoverageLayer.hide();
         missionBoundaryLayer.hide();
       }

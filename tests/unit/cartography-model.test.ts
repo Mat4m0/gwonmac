@@ -11,6 +11,7 @@ import {
   bitsetHasCell,
   readCartographyState,
   readCartographyPresentation,
+  isCartographyProgressSupported,
   type CartographyModelSources,
   type GridCell,
 } from "../../src/renderer/cartography-spike/cartography-model.js";
@@ -87,6 +88,8 @@ const COMPANION = Object.freeze({
   playerId: 123,
   playerX: 10,
   playerY: 20,
+  playRegion: "pve",
+  onWorldMap: true,
 }) as PublishedCompanionState;
 
 function sources(
@@ -100,6 +103,7 @@ function sources(
     worldAnchorX: 100, worldAnchorY: 200,
     mapMinX: 0, mapMinY: 0, mapMaxX: 1_000, mapMaxY: 1_000,
   }),
+  companionState: PublishedCompanionState = COMPANION,
 ): CartographyModelSources {
   let contextIndex = 0;
   const context = {
@@ -150,7 +154,7 @@ function sources(
     exploration,
     anchor,
     kernel,
-    companion: () => COMPANION,
+    companion: () => companionState,
     revealRadius: () => 1,
   };
 }
@@ -165,7 +169,12 @@ test("publishes independent continent and current-instance state for one epoch",
   });
   assert.equal(bitsetHasCell(state.continent.remaining, CREDITABLE_CELL), true);
   assert.equal(bitsetHasCell(state.currentInstance.reachableCells, CREDITABLE_CELL), true);
-  assert.equal(bitsetHasCell(state.currentInstance.actionableCells, CREDITABLE_CELL), true);
+  assert.equal(state.currentInstance.guidance.status, "ready");
+  if (state.currentInstance.guidance.status !== "ready") return;
+  assert.equal(bitsetHasCell(
+    state.currentInstance.guidance.actionableCells,
+    CREDITABLE_CELL,
+  ), true);
   assert.equal(state.surfaces.compass, null);
   assert.equal(state.surfaces.missionMap, null);
   assert.equal(state.surfaces.worldMap, null);
@@ -216,29 +225,62 @@ test("withdraws immediately while the certified context is loading", () => {
   );
 });
 
-test("hides Cartography throughout unsupported world-map coordinate systems", () => {
+test("keeps local terrain in the Realm of Torment without global guidance", () => {
   const current = sources(undefined, undefined, Object.freeze({
     status: 1, generation: AREA_EPOCH, continent: 5,
     worldAnchorX: 100, worldAnchorY: 200,
     mapMinX: 0, mapMinY: 0, mapMaxX: 1_000, mapMaxY: 1_000,
   }));
   const state = readCartographyState(current);
-  assert.deepEqual(state, {
-    context: {
-      sequence: READY_CONTEXT.sequence,
-      mapId: MAP_ID,
-      areaEpoch: AREA_EPOCH,
-      layoutId: READY_CONTEXT.layoutId,
-    },
-    continent: { status: "unavailable", reason: "unsupported-area" },
-    currentInstance: { status: "unavailable", reason: "unsupported-area" },
-    surfaces: { compass: null, missionMap: null, worldMap: null },
+  assert.deepEqual(state.continent, { status: "unavailable", reason: "unsupported-area" });
+  assert.equal(state.currentInstance.status, "ready");
+  if (state.currentInstance.status !== "ready") return;
+  assert.deepEqual(state.currentInstance.guidance, {
+    status: "unavailable",
+    reason: "unsupported-area",
   });
+  assert.equal(state.currentInstance.walkableTerrain.width, 2);
   const evidence = captureCartographyEvidence(state, current);
-  assert.equal(evidence.currentInstance.status, "unavailable");
-  if (evidence.currentInstance.status === "unavailable") {
-    assert.equal(evidence.currentInstance.reason, "unsupported-area");
-    assert.equal(evidence.currentInstance.mapId, MAP_ID);
+  assert.equal(evidence.continent.status, "unavailable");
+  assert.equal(evidence.currentInstance.status, "ready");
+  if (evidence.currentInstance.status !== "ready") return;
+  assert.ok(evidence.currentInstance.actionable.words.every((word) => word === 0));
+});
+
+test("enables full Cartography in Pre-Searing", () => {
+  const preSearing = Object.freeze({
+    status: 1, generation: AREA_EPOCH, continent: 1,
+    worldAnchorX: 100, worldAnchorY: 200,
+    mapMinX: 0, mapMinY: 0, mapMaxX: 1_000, mapMaxY: 1_000,
+  });
+  const state = readCartographyState(sources(undefined, undefined, preSearing));
+  assert.equal(isCartographyProgressSupported(1, true), true);
+  assert.equal(state.continent.status, "ready");
+  assert.equal(state.currentInstance.status, "ready");
+  if (state.currentInstance.status === "ready") {
+    assert.equal(state.currentInstance.guidance.status, "ready");
+  }
+});
+
+test("keeps local terrain in off-world-map dungeons", () => {
+  const dungeonCompanion = Object.freeze({
+    ...COMPANION,
+    onWorldMap: false,
+  }) as PublishedCompanionState;
+  const state = readCartographyState(sources(
+    undefined,
+    undefined,
+    undefined,
+    dungeonCompanion,
+  ));
+  assert.equal(isCartographyProgressSupported(CONTINENT, false), false);
+  assert.deepEqual(state.continent, { status: "unavailable", reason: "unsupported-area" });
+  assert.equal(state.currentInstance.status, "ready");
+  if (state.currentInstance.status === "ready") {
+    assert.deepEqual(state.currentInstance.guidance, {
+      status: "unavailable",
+      reason: "unsupported-area",
+    });
   }
 });
 
@@ -304,8 +346,8 @@ test("semantic bitsets are not interchangeable", () => {
   const terrain: typeof state.currentInstance.walkableTerrain = state.currentInstance.reachableCells;
   assert.notEqual(terrain, state.currentInstance.walkableTerrain);
   // @ts-expect-error Reachable input cannot masquerade as derived actionability.
-  const actionable: typeof state.currentInstance.actionableCells = state.currentInstance.reachableCells;
-  assert.notEqual(actionable, state.currentInstance.actionableCells);
+  const actionable: typeof state.currentInstance.guidance = state.currentInstance.reachableCells;
+  assert.notEqual(actionable, state.currentInstance.guidance);
 });
 
 test("refreshes frame-sensitive presentation without rerunning classification", () => {
