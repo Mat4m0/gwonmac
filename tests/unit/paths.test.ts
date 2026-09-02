@@ -32,6 +32,7 @@ describe("resolved profile paths", () => {
       buildLibrary: `${root}/build-library.json`,
       windowState: `${root}/window-state.json`,
       launcherState: `${root}/launcher-state.json`,
+      launcherNewsCache: `${root}/launcher-news-cache.json`,
       launcherMode: `${root}/launcher-mode.json`,
       multiRoot: `${root}/multi`,
       multiWorkspace: `${root}/multi/workspace.json`,

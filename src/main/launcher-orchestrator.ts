@@ -34,6 +34,7 @@ export interface LauncherOrchestratorOptions {
   readonly getProgress: () => DownloadProgress;
   readonly getAppUpdate: () => AppUpdateState;
   readonly getSettings: () => AppSettings;
+  readonly getNews: (track: AppSettings["updateTrack"], preferences: LauncherSnapshot["preferences"]) => LauncherSnapshot["news"];
   readonly toolsLoaded: () => boolean;
   readonly developmentFixtures: boolean;
   /** Unpackaged Electron tests only: lets renderer-focused suites bypass client preparation. */
@@ -106,6 +107,7 @@ export class LauncherOrchestrator {
       })),
       selectedProfileIds,
       preferences: document.preferences,
+      news: this.options.getNews(settings.updateTrack, document.preferences),
       contentAvailability: {
         news: fixture,
         dailies: fixture,

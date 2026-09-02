@@ -56,6 +56,8 @@ export const DEFAULT_LAUNCHER_PREFERENCES: LauncherPreferences = Object.freeze({
     first: "news" as const,
     officialNews: true,
     reforgedNews: true,
+    eventNews: true,
+    autoRotateNews: true,
   }),
 });
 
@@ -155,6 +157,8 @@ export function parseLauncherState(value: unknown): LauncherStateDocument {
         first: parseContentKind(content.first),
         officialNews: boolean(content.officialNews, "official News visibility"),
         reforgedNews: boolean(content.reforgedNews, "Reforged News visibility"),
+        eventNews: content.eventNews === undefined ? true : boolean(content.eventNews, "event News visibility"),
+        autoRotateNews: content.autoRotateNews === undefined ? true : boolean(content.autoRotateNews, "News rotation"),
       },
     },
     appearances: parsedAppearances,

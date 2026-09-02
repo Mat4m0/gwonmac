@@ -57,6 +57,7 @@ export const LAUNCHER_IPC = Object.freeze({
   gameFilesPauseDownload: "gw:launcher:gameFiles:pauseDownload",
   gameFilesResumeDownload: "gw:launcher:gameFiles:resumeDownload",
   gameFilesResetAndRestart: "gw:launcher:gameFiles:resetAndRestart",
+  newsOpen: "gw:launcher:news:open",
   externalOpen: "gw:launcher:external:open",
   externalRevealLogs: "gw:launcher:external:revealLogs",
   updatesCheck: "gw:launcher:updates:check",
@@ -80,8 +81,39 @@ export interface LauncherPreferences {
     first: LauncherContentKind;
     officialNews: boolean;
     reforgedNews: boolean;
+    eventNews: boolean;
+    autoRotateNews: boolean;
   }>;
 }
+
+export type LauncherNewsSource = "game" | "event" | "launcher";
+export type LauncherNewsInline = Readonly<{
+  text: string;
+  emphasis?: "strong" | "code";
+  actionId?: string;
+}>;
+export type LauncherNewsBlock =
+  | Readonly<{ type: "paragraph"; content: readonly LauncherNewsInline[] }>
+  | Readonly<{ type: "heading"; text: string }>
+  | Readonly<{ type: "list"; items: readonly (readonly LauncherNewsInline[])[] }>
+  | Readonly<{ type: "image"; src: string; alt: string }>;
+export interface LauncherNewsStory {
+  readonly id: string;
+  readonly source: LauncherNewsSource;
+  readonly channel: "all" | "stable" | "beta";
+  readonly title: string;
+  readonly summary: string;
+  readonly publishedAt: string;
+  readonly featured: boolean;
+  readonly action: "article" | "external";
+  readonly startsAt?: string;
+  readonly endsAt?: string;
+  readonly body: readonly LauncherNewsBlock[];
+}
+export type LauncherNewsState =
+  | Readonly<{ status: "loading"; stories: readonly LauncherNewsStory[] }>
+  | Readonly<{ status: "ready"; stories: readonly LauncherNewsStory[]; refreshedAt: string }>
+  | Readonly<{ status: "offline"; stories: readonly LauncherNewsStory[] }>;
 
 export interface LauncherPreferencesPatch {
   readonly content?: Partial<LauncherPreferences["content"]>;
@@ -197,6 +229,7 @@ export interface LauncherSnapshot {
   readonly profiles: readonly LauncherProfileSummary[];
   readonly selectedProfileIds: readonly ProfileId[];
   readonly preferences: LauncherPreferences;
+  readonly news: LauncherNewsState;
   readonly contentAvailability: Readonly<{
     news: "fixture" | "placeholder";
     dailies: "fixture" | "placeholder";
@@ -260,6 +293,9 @@ export interface LauncherNativeApi {
     open(kind: LauncherExternalLink): Promise<void>;
     revealLogs(): Promise<void>;
   };
+  readonly news: {
+    open(id: string): Promise<void>;
+  };
 }
 
 export function parseGlobalTool(value: unknown): GlobalTool {
@@ -270,6 +306,11 @@ export function parseGlobalTool(value: unknown): GlobalTool {
 export function parseLauncherExternalLink(value: unknown): LauncherExternalLink {
   if (typeof value === "string" && LAUNCHER_EXTERNAL_LINKS.includes(value as LauncherExternalLink)) return value as LauncherExternalLink;
   throw new Error("external link is invalid");
+}
+
+export function parseLauncherNewsId(value: unknown): string {
+  if (typeof value === "string" && /^[a-z0-9][a-z0-9-]{0,79}$/u.test(value)) return value;
+  throw new Error("news id is invalid");
 }
 
 export function parseLauncherSettingsPatch(value: unknown): LauncherSettingsPatch {
@@ -346,7 +387,7 @@ export function parseLauncherPreferencesPatch(value: unknown): LauncherPreferenc
   if (source.content === undefined) return {};
   const content = exactObject(
     source.content,
-    ["news", "dailies", "first", "officialNews", "reforgedNews"],
+    ["news", "dailies", "first", "officialNews", "reforgedNews", "eventNews", "autoRotateNews"],
     "launcher content patch",
   );
   const patch: {
@@ -355,8 +396,10 @@ export function parseLauncherPreferencesPatch(value: unknown): LauncherPreferenc
     first?: LauncherContentKind;
     officialNews?: boolean;
     reforgedNews?: boolean;
+    eventNews?: boolean;
+    autoRotateNews?: boolean;
   } = {};
-  for (const field of ["news", "dailies", "officialNews", "reforgedNews"] as const) {
+  for (const field of ["news", "dailies", "officialNews", "reforgedNews", "eventNews", "autoRotateNews"] as const) {
     const candidate = content[field];
     if (candidate === undefined) continue;
     if (typeof candidate !== "boolean") throw new Error(`${field} must be a boolean`);

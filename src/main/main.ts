@@ -14,6 +14,7 @@ import {
   dialog,
   Menu,
   Notification,
+  net,
   powerMonitor,
   session,
   shell,
@@ -43,6 +44,7 @@ import { AUTOMATION_COMMAND } from "../shared/automation.js";
 import { ClientRuntime } from "./client-runtime.js";
 import { RendererClientSessions } from "./renderer-client-sessions.js";
 import { loadSettings } from "./core/settings.js";
+import { LauncherNewsService } from "./core/launcher-news.js";
 import {
   loadDiagnosticProfile,
   saveDiagnosticProfile,
@@ -554,6 +556,12 @@ if (primaryInstance) void app.whenReady().then(async () => {
     paths.launcherState,
     loadedLauncherState.document,
   );
+  const launcherNews = new LauncherNewsService({
+    cachePath: paths.launcherNewsCache,
+    fetch: (url, init) => net.fetch(url, init),
+    openExternal: (url) => shell.openExternal(url),
+  });
+  await launcherNews.loadCache();
   let accountWorkspace;
   for (;;) {
     try {
@@ -724,6 +732,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
   const protocolDeps = {
     getActiveClient: () => clientRuntime.active,
     diagnosticOwnerId: () => SINGLE_DIAGNOSTIC_OWNER_ID,
+    launcherNewsImage: (key: string) => launcherNews.image(key),
   };
   const host = buildWindowHost(
     clientRuntime,
@@ -771,6 +780,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     getProgress: () => clientRuntime.progress,
     getAppUpdate: () => appUpdaterController!.getState(),
     getSettings: () => currentSettings ?? settings,
+    getNews: (track, contentPreferences) => launcherNews.snapshot(track, contentPreferences),
     toolsLoaded: () => enhancementSelection.tools,
     developmentFixtures: !app.isPackaged || process.env.GW_LAUNCHER_FIXTURES === "1",
     allowUnreadyLaunch,
@@ -810,7 +820,10 @@ if (primaryInstance) void app.whenReady().then(async () => {
 
   registerLauncherIpc({
     windows: windowRegistry,
-    connected: () => logEvent({ k: "launcher.connected" }),
+    connected: () => {
+      logEvent({ k: "launcher.connected" });
+      void launcherNews.refresh().then(() => launcherOrchestrator!.publish());
+    },
     snapshot: () => launcherOrchestrator!.snapshot(),
     create: async ({ name, appearance }) => {
       const previousIds = new Set(accounts.state().profiles.map((profile) => profile.id));
@@ -851,6 +864,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     completeIntroduction: () => launcherOrchestrator!.completeIntroduction(),
     replayIntroduction: () => launcherOrchestrator!.replayIntroduction(),
     updatePreferences: (patch) => launcherOrchestrator!.updatePreferences(patch),
+    openNews: (id) => launcherNews.open(id),
     updateSettings: async (patch: LauncherSettingsPatch) => {
       await preferences.updateSettings(patch);
       launcherOrchestrator!.publish();

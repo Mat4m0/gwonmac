@@ -90,6 +90,7 @@ async function fixture(options: { allowUnreadyLaunch?: boolean } = {}) {
     getProgress: () => progress,
     getAppUpdate: () => ({ phase: "idle", currentVersion: "1.0.0" }),
     getSettings: () => DEFAULT_SETTINGS,
+    getNews: () => ({ status: "loading", stories: [] }),
     toolsLoaded: () => false,
     developmentFixtures: true,
     ...(options.allowUnreadyLaunch === undefined

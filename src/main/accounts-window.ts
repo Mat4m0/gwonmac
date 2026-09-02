@@ -75,7 +75,7 @@ export function createLauncherWindow(
   const owner = session.fromPartition("persist:gw-launcher", { cache: false });
   if (BACKGROUND_LAUNCH) app.dock?.hide();
   if (!protocolInstalled) {
-    installLauncherProtocolHandlerForSession(owner);
+    installLauncherProtocolHandlerForSession(owner, deps);
     protocolInstalled = true;
   }
   owner.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));

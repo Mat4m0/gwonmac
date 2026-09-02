@@ -63,6 +63,8 @@ describe("launcher presentation state", () => {
       first: "news",
       officialNews: true,
       reforgedNews: true,
+      eventNews: true,
+      autoRotateNews: true,
     });
     assert.deepEqual(second.document, first.document);
   });

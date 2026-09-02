@@ -40,7 +40,7 @@ describe("unified launcher shell", () => {
 
     navigate?.("home");
     await wrapper.vm.$nextTick();
-    expect(wrapper.get(".hero-copy h1").text()).toContain("Wayfarer’s Reverie");
+    expect(wrapper.get(".hero-copy h1").text()).toContain("Seven skill fixes");
   });
 
   it("keeps funding on top and operational status only in the launch bar", () => {
@@ -55,7 +55,7 @@ describe("unified launcher shell", () => {
 
   it("keeps Home focused on content and moves account management to Accounts", async () => {
     const wrapper = mount(App);
-    expect(wrapper.get("h1").text()).toContain("Wayfarer’s Reverie");
+    expect(wrapper.get("h1").text()).toContain("Seven skill fixes");
     await wrapper.get('button[aria-label="Settings"]').trigger("click");
     expect(wrapper.get(".settings-content h1").text()).toBe("Updates");
     await wrapper.findAll("nav button")[1]!.trigger("click");
@@ -71,6 +71,64 @@ describe("unified launcher shell", () => {
     expect(wrapper.text()).toContain("Nicholas Sandford");
     expect(wrapper.text()).not.toContain("Daily activity");
     expect(wrapper.get(".load-more").text()).toBe("Show full week");
+  });
+
+  it("persists featured-news pause and opens only an opaque story id", async () => {
+    const updatePreferences = vi.fn(async () => undefined);
+    const open = vi.fn(async () => undefined);
+    installNative({
+      experience: { updatePreferences },
+      news: { open },
+    });
+    const wrapper = mount(App);
+    await flushPromises();
+    await wrapper.get('button[aria-label="Pause automatic story rotation"]').trigger("click");
+    expect(updatePreferences).toHaveBeenCalledWith({ content: { autoRotateNews: false } });
+    await wrapper.findAll(".news-row")[0]!.trigger("click");
+    expect(open).toHaveBeenCalledWith("guild-wars-update-2026-09-01");
+  });
+
+  it("renders GWonMac notes as native article elements and opens opaque inline actions", async () => {
+    const open = vi.fn(async () => undefined);
+    installNative({ news: { open } });
+    const wrapper = mount(App);
+    await flushPromises();
+    await wrapper.findAll(".news-row")[2]!.trigger("click");
+    expect(document.querySelector(".news-article h1")?.textContent).toContain("2026.8.10");
+    expect(document.querySelectorAll(".news-article li")).toHaveLength(2);
+    expect(document.querySelector(".news-article")?.innerHTML).not.toContain("v-html");
+    document.querySelector<HTMLButtonElement>(".news-article .article-link")!.click();
+    expect(open).toHaveBeenCalledWith("news-link-deadbeef");
+  });
+
+  it("uses a neutral home hero when both optional content sections are hidden", async () => {
+    installNative({
+      state: {
+        get: async () => ({
+          ...fixtureSnapshot,
+          preferences: { content: { ...fixtureSnapshot.preferences.content, news: false, dailies: false } },
+        }),
+        onChange: () => () => undefined,
+      },
+    });
+    const wrapper = mount(App);
+    await flushPromises();
+    expect(wrapper.get(".hero-copy h1").text()).toBe("Your accounts. One launcher.");
+    expect(wrapper.find("#news-panel").exists()).toBe(false);
+  });
+
+  it("labels automatic rotation truthfully when Reduced Motion is active", async () => {
+    const matchMedia = vi.spyOn(window, "matchMedia").mockReturnValue({
+      matches: true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    } as unknown as MediaQueryList);
+    const wrapper = mount(App);
+    await wrapper.vm.$nextTick();
+    const control = wrapper.get('button[aria-label="Automatic story rotation paused for Reduced Motion"]');
+    expect(control.attributes("disabled")).toBeDefined();
+    expect(wrapper.get(".motion-note").text()).toBe("Reduced Motion");
+    matchMedia.mockRestore();
   });
 
   it("uses truthful production wording for feedback submission", async () => {
@@ -154,12 +212,13 @@ describe("unified launcher shell", () => {
     });
   });
 
-  it("uses truthful production content until feeds are connected", async () => {
+  it("uses saved news honestly when production is offline", async () => {
     installNative({
       state: {
         get: async () => ({
           ...fixtureSnapshot,
           experience: { ...fixtureSnapshot.experience, showMigrationNotice: false },
+          news: { status: "offline", stories: fixtureSnapshot.news.stories },
           contentAvailability: { news: "placeholder", dailies: "placeholder", knownIssues: "placeholder", feedback: "placeholder" },
         }),
         onChange: () => () => undefined,
@@ -167,8 +226,8 @@ describe("unified launcher shell", () => {
     });
     const wrapper = mount(App);
     await flushPromises();
-    expect(wrapper.get(".hero-copy h1").text()).toBe("Your accounts. One launcher.");
-    expect(wrapper.get("#news-panel").text()).toContain("News is not connected yet.");
+    expect(wrapper.get(".hero-copy h1").text()).toContain("Seven skill fixes");
+    expect(wrapper.get("#news-panel").text()).toContain("Saved news · offline");
     expect(wrapper.get(".segmented").text()).toContain("Dailies");
     expect(wrapper.text()).not.toContain("Wayfarer’s Reverie");
     await wrapper.findAll("nav button")[3]!.trigger("click");

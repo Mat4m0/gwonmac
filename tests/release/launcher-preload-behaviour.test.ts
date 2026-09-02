@@ -89,6 +89,7 @@ test("the built launcher preload exposes every launcher command and nothing else
   await api.gameFiles.pauseDownload();
   await api.gameFiles.resumeDownload();
   await api.gameFiles.resetAndRestart();
+  await api.news.open("gwonmac-2026-8-10");
   await api.updates.check();
   await api.updates.restartAndInstall();
   await api.external.open("github");

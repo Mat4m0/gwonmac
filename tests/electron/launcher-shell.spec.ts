@@ -23,6 +23,7 @@ test("the Vue launcher owns a narrow frozen bridge and offline subtree", async (
         "external",
         "gameFiles",
         "navigation",
+        "news",
         "profiles",
         "settings",
         "state",
