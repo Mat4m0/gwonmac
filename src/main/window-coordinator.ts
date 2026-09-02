@@ -14,6 +14,7 @@ interface PresentableWindow extends RegisteredWindow {
   show(): void;
   hide(): void;
   focus(): void;
+  blur(): void;
 }
 
 interface ApplicationPresentation {
@@ -123,9 +124,12 @@ export class WindowCoordinator<Window extends PresentableWindow> {
    * has moved on. Game windows stay hidden until their first submitted frame,
    * then appear inactive before this explicit launch-owner check may focus one.
    */
-  revealAsyncGameIfLauncherFocused(win: Window): boolean {
-    if (!this.#registry.launcherWindow()?.isFocused()) return false;
-    return this.revealGame(win);
+  completeAsyncGameLaunch(win: Window): boolean {
+    const shouldFocusGame = this.#registry.launcherWindow()?.isFocused() ?? false;
+    if (shouldFocusGame) this.revealGame(win);
+    this.hideLauncher();
+    if (!shouldFocusGame && !win.isDestroyed()) win.blur();
+    return shouldFocusGame;
   }
 
   private present(win: Window, activateApp: boolean): void {

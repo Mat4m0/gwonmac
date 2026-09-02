@@ -308,8 +308,7 @@ export class MultipleAccountsController {
       throw firstFailure;
     }
     if (firstSelectedWindow && !firstSelectedWindow.isDestroyed()) {
-      this.options.windows.revealAsyncGameIfLauncherFocused(firstSelectedWindow);
-      this.options.windows.hideLauncher();
+      this.options.windows.completeAsyncGameLaunch(firstSelectedWindow);
     }
     this.publish();
   }
