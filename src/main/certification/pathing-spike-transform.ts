@@ -72,7 +72,7 @@ declare const WebAssembly: {
   Module: new (bytes: Uint8Array) => object;
 };
 
-export const CARTOGRAPHY_SPIKE_TRANSFORM_ABI = 30;
+export const CARTOGRAPHY_SPIKE_TRANSFORM_ABI = 31;
 export type CartographyMemoryLayoutId = keyof typeof CARTOGRAPHY_MEMORY_LAYOUTS;
 
 const mutableI32 = () => Uint8Array.of(0x7f, 0x01, 0x41, 0x00, 0x0b);
@@ -169,12 +169,13 @@ function globalsFor(
       status: firstAnchor,
       generation: firstAnchor + 1,
       continent: firstAnchor + 2,
-      worldAnchorX: firstAnchor + 3,
-      worldAnchorY: firstAnchor + 4,
-      mapMinX: firstAnchor + 5,
-      mapMinY: firstAnchor + 6,
-      mapMaxX: firstAnchor + 7,
-      mapMaxY: firstAnchor + 8,
+      onWorldMap: firstAnchor + 3,
+      worldAnchorX: firstAnchor + 4,
+      worldAnchorY: firstAnchor + 5,
+      mapMinX: firstAnchor + 6,
+      mapMinY: firstAnchor + 7,
+      mapMaxX: firstAnchor + 8,
+      mapMaxY: firstAnchor + 9,
     }),
     world: Object.freeze({
       status: firstWorld,
@@ -408,7 +409,7 @@ export function transformCartographySpikeWasm(
     ...EXPLORATION_SPIKE_SCALARS.map(mutableI32),
     mutableI32(),
     ...WORLD_MAP_ANCHOR_SPIKE_SCALARS.map((_, index) =>
-      index < 3 ? mutableI32() : mutableF32()
+      index < 4 ? mutableI32() : mutableF32()
     ),
     ...WORLD_MAP_FRAME_SPIKE_SCALARS.map((_, index) =>
       index < 5 || index === 11 ? mutableI32() : mutableF32()

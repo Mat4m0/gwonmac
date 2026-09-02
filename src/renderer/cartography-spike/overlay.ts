@@ -389,6 +389,13 @@ export function mountCartographyOverlay(options: Readonly<{
       terrainKey = "";
       terrain = null;
       hideAllLayers();
+      if (
+        state.continent.reason === "unsupported-area"
+        || state.currentInstance.reason === "unsupported-area"
+      ) {
+        controls.hide();
+        return;
+      }
       const compass = options.modelSources.compass.snapshot();
       const box = compass === null
         ? null

@@ -94,6 +94,7 @@ export const WORLD_MAP_ANCHOR_CERTIFICATE = Object.freeze({
   areaInfoCount: 883,
   areaInfoStride: 0x7c,
   continent: 0x04,
+  flags: 0x10,
   iconStartX: 0x48,
   iconStartY: 0x4c,
   iconEndX: 0x50,
@@ -244,6 +245,7 @@ export type WorldMapAnchorGlobals = Readonly<{
   status: number;
   generation: number;
   continent: number;
+  onWorldMap: number;
   worldAnchorX: number;
   worldAnchorY: number;
   mapMinX: number;
@@ -656,6 +658,9 @@ export function worldMapAnchorObserver(
     endY: number,
   ) => concat(
     local(2), i32Load(certificate.continent), globalSet(globals.continent),
+    // AreaInfo::GetIsOnWorldMap is true when the 0x20 exclusion bit is clear.
+    local(2), i32Load(certificate.flags), i32(0x20), Uint8Array.of(0x71, 0x45),
+    globalSet(globals.onWorldMap),
     local(2), i32Load(startX), Uint8Array.of(0xb3, 0x22), uleb(6),
     globalSet(globals.mapMinX),
     local(2), i32Load(startY), Uint8Array.of(0xb3, 0x22), uleb(7),

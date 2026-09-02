@@ -55,6 +55,14 @@ test("compact Cartography controls avoid frame-loop layout reads and static inli
   assert.match(controls, /boxChanged \|\| becameVisible/u);
 });
 
+test("unsupported areas hide the Cartography control with every overlay layer", () => {
+  const overlay = readFileSync("src/renderer/cartography-spike/overlay.ts", "utf8");
+  assert.match(
+    overlay,
+    /state\.continent\.reason === "unsupported-area"[\s\S]*controls\.hide\(\);[\s\S]*return;/u,
+  );
+});
+
 test("Cartography QA status distinguishes loading from exact kernel failures", () => {
   assert.deepEqual(describeCartographyQaStatus({
     status: "unavailable",
