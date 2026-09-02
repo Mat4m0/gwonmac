@@ -4,9 +4,11 @@
   "type": "module",
   "scripts": {
     "dev": "vp exec nuxt dev",
-    "build": "vp exec nuxt build",
+    "build": "vp run generate:launcher-news && vp exec nuxt build",
     "certify": "vp run check && vp run build && node scripts/assert-release-output.mjs",
-    "check": "vp lint && vp run typecheck",
+    "check": "vp lint && vp run typecheck && vp run check:launcher-news",
+    "generate:launcher-news": "node scripts/generate-launcher-news.mjs",
+    "check:launcher-news": "node scripts/generate-launcher-news.mjs --check",
     "typecheck": "vp exec nuxi typecheck",
     "prepare": "vp exec nuxt prepare"
   },
