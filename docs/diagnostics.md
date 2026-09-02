@@ -120,7 +120,8 @@ When automatic return does not run, `relog.skipped` is the terminal row. Its
 reason is one of `disabled`, `saved-login-unavailable`,
 `pre-game-controls-unavailable`, or `intent-expired`. A plain reload still
 records `gameReload.loaded`, which proves that the replacement renderer loaded
-even when automatic return is disabled.
+even when automatic return is disabled. No relog stage event follows a terminal
+`relog.finished` or `relog.skipped` row.
 
 The trace contains only closed stages, outcomes, and bounded native-control
 state. It contains no Guild Wars UI text, dispatcher parameters, pointers,
