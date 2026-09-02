@@ -135,6 +135,10 @@ jobs:
             > "$RUNNER_TEMP/double-click.raw.json" \
             2> "$RUNNER_TEMP/double-click.txt"
           double_click_exit=$?
+          node build/tools/certification.js cartography "$WASM" \
+            > "$RUNNER_TEMP/cartography.raw.json" \
+            2> "$RUNNER_TEMP/cartography.txt"
+          cartography_exit=$?
           node --import ./scripts/ts-hook.mjs scripts/qualify-extended-memory.ts \
             "$JS" "$WASM" > "$RUNNER_TEMP/extended-memory.raw.json" \
             2> "$RUNNER_TEMP/extended-memory.txt"
@@ -148,6 +152,15 @@ jobs:
             jq -n --argjson exitCode "$double_click_exit" \
               '{status: "refused", exitCode: $exitCode}' \
               > "$EVIDENCE/double-click.json"
+          fi
+          if [ "$cartography_exit" -eq 0 ]; then
+            jq '. + {status: "proved", exitCode: 0}' \
+              "$RUNNER_TEMP/cartography.raw.json" \
+              > "$EVIDENCE/cartography.json"
+          else
+            jq -n --argjson exitCode "$cartography_exit" \
+              '{status: "refused", exitCode: $exitCode}' \
+              > "$EVIDENCE/cartography.json"
           fi
           if [ "$extended_memory_exit" -eq 0 ]; then
             jq '. + {status: "proved", exitCode: 0}' \
@@ -192,6 +205,7 @@ jobs:
             "$EVIDENCE/runtime-verdicts.json" \
             "$EVIDENCE/client-artifact.json" \
             "$EVIDENCE/double-click.json" \
+            "$EVIDENCE/cartography.json" \
             "$EVIDENCE/extended-memory.json" \
             > "$EVIDENCE/generation.json"
           {

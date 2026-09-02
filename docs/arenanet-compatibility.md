@@ -56,6 +56,7 @@ official JS/WASM generation
   -> isolated template semantic proof and transform
   -> isolated per-feature semantic proofs
   -> typed manifest containing only proved capabilities
+  -> isolated Cartography layout and transform proof
   -> Main repeats transforms and checks output hashes
   -> renderer validates the instantiated manifest
 ```
@@ -115,6 +116,7 @@ unwitnessed field must fail TypeScript compilation or boundary validation.
 | Xunlai | Three readers, player/area layouts, fixed DataWindow action, handler, bounded drain, and fresh tri-state lifecycle | Disable Xunlai; aliases may retain only independently available Travel commands |
 | Chat aliases | Exact parser relation, bounded comparisons, handled result, original-parser preservation, and at least one proved local action | Rewrite only aliases for proved actions; otherwise preserve the original parser |
 | Team Apply | Seven named builders, exact opcodes/payloads, sender, bounded drain, fresh complete Party proof, and runtime confirmations | Disable Team Apply only; Builds and Teams remain editable |
+| Cartography | Exact frame, game-context, area-table, agent-array, pathing-function, call-site, and surface-dispatch relationships, followed by an independently reproduced output hash | Disable Cartography observers only; the official client and independently proved Tools remain available |
 | 4 GB mode | Manifest-bound JS/WASM pair, normalized Emscripten glue, every audited pointer-conversion site, one memory shape, and memory-only rewrite | Retain safe 2 GB mode |
 
 Chat aliases never own a dispatcher or mailbox. The transform specializes the
@@ -143,7 +145,11 @@ locator already meets the final relocation-resistant bar. At verifier ABI 7:
 - parts of Core and Tools certification still use raw body digests or common
   relocation checks while selecting a candidate; and
 - native double-click verifies the complete known route, but exact body binding
-  can still refuse after a harmless call-index change.
+  can still refuse after a harmless call-index change; and
+- Cartography no longer uses a whole-client hash, but its pathing and surface
+  roles still contain exact function-index and body bindings. Unrelated client
+  changes recover locally; a reindex or equivalent body rewrite can still
+  require a stronger semantic locator.
 
 These checks fail closed. They can therefore disable a feature after an
 equivalent ArenaNet rebuild even when game behavior did not change. A refusal
@@ -165,7 +171,7 @@ For an equivalent rebuild:
 3. Record each feature verdict, invariant, input hash, verifier ABI, and derived
    output hash.
 4. Transform every effective capability profile and validate each output.
-5. Run native double-click and 4 GB pair qualification independently.
+5. Run Cartography, native double-click, and 4 GB pair qualification independently.
 6. Store the signed machine-readable report and mark the generation as already
    processed. The report remains evidence only.
 7. Open no source PR. Players use the locally proved features immediately.
