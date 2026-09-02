@@ -77,6 +77,10 @@ export type CartographyContinentState =
       remaining: RemainingCellBitset;
     }>;
 
+export type CartographyGuidanceState =
+  | Readonly<{ status: "unavailable"; reason: CartographyUnavailableReason }>
+  | Readonly<{ status: "ready"; actionableCells: ActionableCellBitset }>;
+
 export type CartographyCurrentInstanceState =
   | Readonly<{ status: "unavailable"; reason: CartographyUnavailableReason }>
   | Readonly<{
@@ -89,7 +93,7 @@ export type CartographyCurrentInstanceState =
       player: GamePoint;
       walkableTerrain: WalkableTerrainRaster;
       reachableCells: ReachableCellBitset;
-      actionableCells: ActionableCellBitset;
+      guidance: CartographyGuidanceState;
     }>;
 
 export type CartographyState = Readonly<{
@@ -169,26 +173,14 @@ function emptyState(reason: CartographyUnavailableReason): CartographyState {
   });
 }
 
-function unavailableStateWithContext(
-  context: NonNullable<ReturnType<CartographyContextController["snapshot"]>>,
-  reason: CartographyUnavailableReason,
-): CartographyState {
-  return Object.freeze({
-    context: Object.freeze({
-      sequence: context.sequence,
-      mapId: context.mapId,
-      areaEpoch: context.areaEpoch,
-      layoutId: context.layoutId,
-    }),
-    continent: unavailable(reason),
-    currentInstance: unavailable(reason),
-    surfaces: Object.freeze({ compass: null, missionMap: null, worldMap: null }),
-  });
-}
-
-/** Cartography masks cover only the three main campaign world-map coordinate systems. */
-export function isCartographyAreaSupported(continent: number): boolean {
-  return continent === 0 || continent === 2 || continent === 4;
+/** Progress masks are meaningful on the campaign and Pre-Searing world maps. */
+export function isCartographyProgressSupported(
+  continent: number,
+  onWorldMap: boolean,
+): boolean {
+  return onWorldMap && (
+    continent === 0 || continent === 1 || continent === 2 || continent === 4
+  );
 }
 
 /** Build one continent partition. Every creditable cell is exactly explored or remaining. */
@@ -282,6 +274,27 @@ function deriveContinentCached(
   return value;
 }
 
+function deriveGuidance(
+  continent: CartographyContinentState,
+  reachableCells: ReachableCellBitset,
+): CartographyGuidanceState {
+  if (continent.status === "unavailable") return unavailable(continent.reason);
+  const actionableWords = new Uint32Array(reachableCells.words.length);
+  for (let index = 0; index < reachableCells.width * reachableCells.height; index += 1) {
+    if (bit(continent.remaining.words, index) && bit(reachableCells.words, index)) {
+      set(actionableWords, index);
+    }
+  }
+  return Object.freeze({
+    status: "ready",
+    actionableCells: Object.freeze({
+      width: reachableCells.width,
+      height: reachableCells.height,
+      words: actionableWords,
+    }) as ActionableCellBitset,
+  });
+}
+
 /**
  * Read one immutable state or fail the affected evidence level closed. Native
  * context, exploration, and anchor observations must share one even epoch.
@@ -297,41 +310,29 @@ export function readCartographyState(sources: CartographyModelSources): Cartogra
     anchor === null || anchor.status !== 1
     || anchor.generation !== contextA.areaEpoch
   ) return emptyState("anchor");
-  if (!isCartographyAreaSupported(anchor.continent)) {
-    const contextB = sources.context.snapshot();
-    if (contextB === null || contextB.status !== 1 || !contextEqual(contextA, contextB)) {
-      return emptyState("epoch-mismatch");
-    }
-    return unavailableStateWithContext(contextA, "unsupported-area");
-  }
   const exploration = sources.exploration.readBitmap();
   if (
     exploration === null || exploration.snapshot.status !== 1
     || exploration.snapshot.generation !== contextA.areaEpoch
   ) return emptyState("exploration");
 
-  const continent = deriveContinentCached(
-    sources.exploration,
-    anchor.continent,
-    contextA.areaEpoch,
-    exploration.snapshot.sequence,
-    exploration.snapshot.width,
-    exploration.snapshot.height,
-    exploration.words,
-  );
-  if (continent.status === "unavailable") return Object.freeze({
-    context: Object.freeze({
-      sequence: contextA.sequence,
-      mapId: contextA.mapId,
-      areaEpoch: contextA.areaEpoch,
-      layoutId: contextA.layoutId,
-    }),
-    continent,
-    currentInstance: unavailable(continent.reason),
-    surfaces: Object.freeze({ compass: null, missionMap: null, worldMap: null }),
-  });
-
   const companion = sources.companion();
+  const continent: CartographyContinentState = companion?.status !== "ready"
+    || companion.playRegion === "unknown"
+    ? unavailable("companion")
+    : companion.mapId !== contextA.mapId
+      ? unavailable("map-mismatch")
+      : !isCartographyProgressSupported(anchor.continent, companion.onWorldMap)
+        ? unavailable("unsupported-area")
+        : deriveContinentCached(
+            sources.exploration,
+            anchor.continent,
+            contextA.areaEpoch,
+            exploration.snapshot.sequence,
+            exploration.snapshot.width,
+            exploration.snapshot.height,
+            exploration.words,
+          );
   let current: CartographyCurrentInstanceState = unavailable("companion");
   if (companion?.status === "ready") {
     if (companion.mapId !== contextA.mapId) current = unavailable("map-mismatch");
@@ -360,12 +361,11 @@ export function readCartographyState(sources: CartographyModelSources): Cartogra
         || kernel.height !== exploration.snapshot.height
       ) current = unavailable("kernel");
       else {
-        const actionableWords = new Uint32Array(kernel.reachableCells.words.length);
-        for (let index = 0; index < kernel.width * kernel.height; index += 1) {
-          if (bit(continent.remaining.words, index) && bit(kernel.reachableCells.words, index)) {
-            set(actionableWords, index);
-          }
-        }
+        const reachableCells = Object.freeze({
+          width: kernel.width,
+          height: kernel.height,
+          words: kernel.reachableCells.words,
+        }) as ReachableCellBitset;
         current = Object.freeze({
           status: "ready",
           sequence: contextA.sequence,
@@ -382,16 +382,8 @@ export function readCartographyState(sources: CartographyModelSources): Cartogra
           }),
           player: Object.freeze({ x: companion.playerX, y: companion.playerY }),
           walkableTerrain: Object.freeze(kernel.walkableTerrain) as WalkableTerrainRaster,
-          reachableCells: Object.freeze({
-            width: kernel.width,
-            height: kernel.height,
-            words: kernel.reachableCells.words,
-          }) as ReachableCellBitset,
-          actionableCells: Object.freeze({
-            width: kernel.width,
-            height: kernel.height,
-            words: actionableWords,
-          }) as ActionableCellBitset,
+          reachableCells,
+          guidance: deriveGuidance(continent, reachableCells),
         });
       }
     }

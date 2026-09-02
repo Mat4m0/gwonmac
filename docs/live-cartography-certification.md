@@ -98,11 +98,13 @@ only from complete records with the current matching generation. Include one
 map with bridges, islands, or multiple pathing layers.
 
 Travel to Gate of Madness or another Realm of Torment area. Confirm that the
-Grid, Walkable terrain, World Map guidance, and compact Cartography control are
-all hidden. Export evidence and confirm the current-instance reason is
-`unsupported-area`. Then travel back to a supported Tyria, Cantha, or Elona
-area. The prior settings must still be selected and the eligible layers must
-return without restarting gwonmac.
+Cartography control remains visible, its panel explains the limited area, and
+only enabled Walkable terrain is drawn. Grid, coverage, and guidance must stay
+hidden, while exported evidence reports the continent as `unsupported-area`
+and retains ready current-instance terrain. Repeat in an off-world-map dungeon.
+Then travel to Pre-Searing and confirm both Grid and Walkable terrain work.
+Finally, return to Tyria, Cantha, or Elona and confirm the prior settings and
+eligible layers return without restarting gwonmac.
 
 Stop and fail closed if:
 

@@ -15,7 +15,7 @@ use core::mem::size_of;
 pub(crate) const SNAPSHOT_BYTES: u32 = size_of::<Snapshot>() as u32;
 pub(crate) const CONFIG_BYTES: u32 = size_of::<Layout>() as u32;
 pub(crate) const MAGIC: u32 = 0x4254_5747;
-pub(crate) const ABI_AND_SIZE: u32 = (SNAPSHOT_BYTES << 16) | 3;
+pub(crate) const ABI_AND_SIZE: u32 = (SNAPSHOT_BYTES << 16) | 4;
 
 pub(crate) const FLAG_READY: u32 = 1 << 0;
 pub(crate) const FLAG_PLAYER_VALID: u32 = 1 << 1;
@@ -25,6 +25,8 @@ pub(crate) const FLAG_LOADING: u32 = 1 << 3;
 pub(crate) const FLAG_XUNLAI_ACCESS_OBSERVED: u32 = 1 << 4;
 /// Storage access is positively allowed. Meaningful only with the observed bit.
 pub(crate) const FLAG_XUNLAI_ACCESS_ALLOWED: u32 = 1 << 5;
+/// The current AreaInfo record participates in a native world-map projection.
+pub(crate) const FLAG_ON_WORLD_MAP: u32 = 1 << 6;
 
 pub(crate) const FEATURE_NATIVE_CURSOR: u32 = 1 << 0;
 pub(crate) const FEATURE_GAME_SNAPSHOT: u32 = 1 << 1;
