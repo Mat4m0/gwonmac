@@ -10,6 +10,7 @@ import type {
   RelogInputStage,
   RelogTerminalOutcome,
 } from "../shared/diagnostics.js";
+import type { LoginStatus } from "./login-status.js";
 import {
   isRelogCharacterEntryState,
   isRelogPostCharacterState,
@@ -18,6 +19,7 @@ import {
 
 const AUTHORITY_BUDGET_MS = 30_000;
 const STATUS_REVEAL_DELAY_MS = 350;
+const FAILURE_STATUS_DURATION_MS = 8_000;
 
 type RecordMilestone = <Name extends RendererMilestone>(
   name: Name,
@@ -49,6 +51,7 @@ type Dependencies = Readonly<{
   claimIntent(): Promise<boolean>;
   input(): GameInputController | null;
   record: RecordMilestone;
+  status: Pick<LoginStatus, "clear" | "show">;
 }>;
 
 const didAdvance = (outcome: AutomaticEnterOutcome): boolean =>
@@ -72,7 +75,6 @@ export function installAutomaticCharacterReturn(
   let disposed = false;
   let run: ActiveRun | null = null;
   let revealTimer: ReturnType<typeof setTimeout> | null = null;
-  let statusVisible = false;
 
   const cancelReveal = () => {
     if (revealTimer === null) return;
@@ -82,19 +84,12 @@ export function installAutomaticCharacterReturn(
 
   const clearStatus = () => {
     cancelReveal();
-    if (!statusVisible) return;
-    statusVisible = false;
-    const status = document.getElementById("login-status");
-    if (status) status.hidden = true;
+    dependencies.status.clear();
   };
 
-  const showStatus = (text: string) => {
+  const showStatus = (text: string, durationMs?: number) => {
     cancelReveal();
-    const status = document.getElementById("login-status");
-    if (!status) return;
-    statusVisible = true;
-    status.textContent = text;
-    status.hidden = false;
+    dependencies.status.show(text, durationMs);
   };
 
   const deferStatus = (text: string) => {
@@ -125,7 +120,8 @@ export function installAutomaticCharacterReturn(
     dependencies.record("relog.finished", { outcome });
     if (outcome === "timed-out") {
       showStatus(
-        `Automatic return stopped while ${candidate.lastStep}. Press Return to continue.`,
+        `Automatic return stopped while ${candidate.lastStep}. You can continue manually.`,
+        FAILURE_STATUS_DURATION_MS,
       );
     } else {
       clearStatus();
@@ -263,6 +259,7 @@ export function installAutomaticCharacterReturn(
         ? await sendWhenFocused(candidate, () => input.playSelectedCharacter())
         : "cancelled"
       : "progressed";
+    if (!isActive(candidate)) return;
     recordInput("character", characterOutcome);
     if (!didAdvance(characterOutcome) || !isActive(candidate)) {
       candidate.lastStep = characterOutcome === "unfocused"
@@ -288,6 +285,7 @@ export function installAutomaticCharacterReturn(
         ? await sendWhenFocused(candidate, () => input.acceptReconnect())
         : "cancelled"
       : "progressed";
+    if (!isActive(candidate)) return;
     recordInput("reconnect", restoreOutcome);
     if (!didAdvance(restoreOutcome) || !isActive(candidate)) {
       candidate.lastStep = restoreOutcome === "unfocused"
@@ -365,6 +363,7 @@ export function installAutomaticCharacterReturn(
         candidate,
         () => input.submitSavedLogin(candidate.expiresAt),
       );
+      if (!isActive(candidate)) return;
       recordInput("login", outcome);
       if (didAdvance(outcome) && isActive(candidate)) {
         step(
@@ -415,17 +414,17 @@ export function installAutomaticCharacterReturn(
     tokenRequested,
     clearStatus,
     cancelForCharacterSwitch() {
+      clearStatus();
       if (run && !run.ended) {
         run.ended = true;
         if (run.deadlineTimer !== null) clearTimeout(run.deadlineTimer);
         run.deadlineTimer = null;
-        clearStatus();
       }
       dependencies.input()?.cancelAutomaticEnter();
     },
     dispose() {
       disposed = true;
-      cancelReveal();
+      clearStatus();
       if (run && !run.ended) {
         run.ended = true;
         if (run.deadlineTimer !== null) clearTimeout(run.deadlineTimer);

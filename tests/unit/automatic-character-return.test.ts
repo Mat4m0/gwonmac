@@ -2,13 +2,149 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { installAutomaticCharacterReturn } from "../../src/renderer/automatic-character-return.js";
+import { installLoginStatus } from "../../src/renderer/login-status.js";
 import type { RendererMilestone } from "../../src/shared/diagnostics.js";
+
+test("a timed-out return notice clears itself", async (context) => {
+  const status = { hidden: true, textContent: "" };
+  const loginStatus = installLoginStatus(status as unknown as HTMLElement);
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+
+  const controller = installAutomaticCharacterReturn({
+    claimIntent: async () => true,
+    input: () => null,
+    record() {},
+    status: loginStatus,
+  });
+
+  try {
+    await Promise.resolve();
+    context.mock.timers.tick(30_000);
+
+    assert.equal(status.hidden, false);
+    assert.match(status.textContent, /You can continue manually\./);
+
+    context.mock.timers.tick(7_999);
+    assert.equal(status.hidden, false);
+
+    context.mock.timers.tick(1);
+    assert.equal(status.hidden, true);
+  } finally {
+    controller.dispose();
+    context.mock.timers.reset();
+  }
+});
+
+test("manual character switching clears an elapsed return notice", async (context) => {
+  const status = { hidden: true, textContent: "" };
+  const loginStatus = installLoginStatus(status as unknown as HTMLElement);
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+  const controller = installAutomaticCharacterReturn({
+    claimIntent: async () => true,
+    input: () => null,
+    record() {},
+    status: loginStatus,
+  });
+
+  try {
+    await Promise.resolve();
+    context.mock.timers.tick(30_000);
+    assert.equal(status.hidden, false);
+
+    controller.cancelForCharacterSwitch();
+    assert.equal(status.hidden, true);
+  } finally {
+    controller.dispose();
+    context.mock.timers.reset();
+  }
+});
+
+test("a pending login cannot record input after its terminal timeout", async (context) => {
+  const originalDocument = globalThis.document;
+  const originalWindow = globalThis.window;
+  const originalAnimationFrame = globalThis.requestAnimationFrame;
+  const browserWindow = new EventTarget() as EventTarget & {
+    gwPreGameControls: PreGameControls;
+  };
+  browserWindow.gwPreGameControls = {
+    state: () => "unknown",
+    switchContext: () => "unavailable",
+    diagnosticMask: () => 0,
+  };
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: browserWindow,
+  });
+  Object.defineProperty(globalThis, "document", {
+    configurable: true,
+    value: {
+      visibilityState: "visible",
+      hasFocus: () => true,
+    },
+  });
+  globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+    queueMicrotask(() => callback(performance.now()));
+    return 1;
+  });
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+
+  let settleLogin: ((outcome: AutomaticEnterOutcome) => void) | null = null;
+  const records: Array<{ name: RendererMilestone; fields: unknown }> = [];
+  const input: GameInputController = {
+    releaseAll() {},
+    traceState() {},
+    cancelAutomaticEnter() {
+      settleLogin?.("cancelled");
+      settleLogin = null;
+    },
+    setLoginProviderChooser() {},
+    expectCharacterSelection() {},
+    submitSavedLogin: () => new Promise((resolve) => { settleLogin = resolve; }),
+    playSelectedCharacter: async () => "sent",
+    acceptReconnect: async () => "sent",
+  };
+  const controller = installAutomaticCharacterReturn({
+    claimIntent: async () => true,
+    input: () => input,
+    record(name, ...fields) {
+      records.push({ name, fields: fields[0] });
+    },
+    status: installLoginStatus(null),
+  });
+
+  try {
+    await Promise.resolve();
+    controller.savedCredentialsLoaded();
+    for (let index = 0; index < 6; index += 1) await Promise.resolve();
+    assert.notEqual(settleLogin, null);
+
+    context.mock.timers.tick(30_000);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    assert.equal(records.at(-1)?.name, "relog.finished");
+    assert.equal(records.some(({ name }) => name === "relog.inputSettled"), false);
+  } finally {
+    controller.dispose();
+    context.mock.timers.reset();
+    Object.defineProperty(globalThis, "document", {
+      configurable: true,
+      value: originalDocument,
+    });
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: originalWindow,
+    });
+    globalThis.requestAnimationFrame = originalAnimationFrame;
+  }
+});
 
 test("transient loading cannot skip character selection", async () => {
   const originalDocument = globalThis.document;
   const originalWindow = globalThis.window;
   const originalAnimationFrame = globalThis.requestAnimationFrame;
   const status = { hidden: true, textContent: "" };
+  const loginStatus = installLoginStatus(status as unknown as HTMLElement);
   let screen: "loading" | "character" | "playable" = "loading";
   let characterSubmissions = 0;
   const records: Array<{ name: RendererMilestone; fields: unknown }> = [];
@@ -61,6 +197,7 @@ test("transient loading cannot skip character selection", async () => {
     record(name, ...fields) {
       records.push({ name, fields: fields[0] });
     },
+    status: loginStatus,
   });
 
   try {

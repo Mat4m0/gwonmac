@@ -234,6 +234,7 @@ if (developerProgram !== 'none') {
 let automaticCharacterReturn:
   | import('./automatic-character-return.js').AutomaticCharacterReturn
   | null = null;
+let loginStatus: import('./login-status.js').LoginStatus | null = null;
 let characterSwitchHost:
   | import('./character-switch-host.js').CharacterSwitchHost
   | null = null;
@@ -617,27 +618,15 @@ async function fetchSnapshotRange(
   return new Uint8Array(await res.arrayBuffer());
 }
 
-// The one explanation the host draws beside the client's login screen: why an
-// interactive Steam sign-in produced no login. Transient and non-blocking —
-// the login screen itself stays entirely the client's.
-let loginStatusTimer: ReturnType<typeof setTimeout> | null = null;
-
 function showLoginStatus(
   reason: import('../shared/contracts.js').SteamRefusalReason,
 ): void {
   void (async () => {
     const { describeSteamRefusal } = await import('./failure-messages.js');
     const text = describeSteamRefusal(reason);
-    const status = document.getElementById('login-status');
-    if (!text || !status) return;
+    if (!text) return;
     automaticCharacterReturn?.clearStatus();
-    status.textContent = text;
-    status.hidden = false;
-    if (loginStatusTimer) clearTimeout(loginStatusTimer);
-    loginStatusTimer = setTimeout(() => {
-      status.hidden = true;
-      loginStatusTimer = null;
-    }, 12_000);
+    loginStatus?.show(text, 12_000);
   })();
 }
 
@@ -653,6 +642,7 @@ addEventListener('beforeunload', () => {
   controllerPrompts = null;
   disposeMemoryWarningSettings();
   automaticCharacterReturn?.dispose();
+  loginStatus?.dispose();
   characterSwitchHost?.dispose();
   characterSwitchHost = null;
   delete window.gwCharacterSwitchHost;
@@ -1283,13 +1273,19 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
     );
     return;
   }
-  const { installAutomaticCharacterReturn } = await import(
-    './automatic-character-return.js'
-  );
+  const [
+    { installAutomaticCharacterReturn },
+    { installLoginStatus },
+  ] = await Promise.all([
+    import('./automatic-character-return.js'),
+    import('./login-status.js'),
+  ]);
+  loginStatus = installLoginStatus(document.getElementById('login-status'));
   automaticCharacterReturn = installAutomaticCharacterReturn({
     claimIntent: () => native().app.claimRelogIntent(),
     input: () => inputHost,
     record: milestone,
+    status: loginStatus,
   });
   milestone('renderer.loaded');
   let isProxyRouteLabel: (route: string) => boolean;
