@@ -97,6 +97,13 @@ available. All derived geometry must disappear during loading. It may return
 only from complete records with the current matching generation. Include one
 map with bridges, islands, or multiple pathing layers.
 
+Travel to Gate of Madness or another Realm of Torment area. Confirm that the
+Grid, Walkable terrain, World Map guidance, and compact Cartography control are
+all hidden. Export evidence and confirm the current-instance reason is
+`unsupported-area`. Then travel back to a supported Tyria, Cantha, or Elona
+area. The prior settings must still be selected and the eligible layers must
+return without restarting gwonmac.
+
 Stop and fail closed if:
 
 - cell phase differs between Compass and Mission Map;

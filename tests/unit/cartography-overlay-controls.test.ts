@@ -10,6 +10,11 @@ import {
   parseCartographyPresetRef,
 } from "../../src/renderer/cartography-preset-select.js";
 import { describeCartographyQaStatus } from "../../src/renderer/cartography-spike/overlay-controls.js";
+import {
+  cartographyOverlayDisposition,
+} from "../../src/renderer/cartography-spike/overlay.js";
+import type { CartographyState } from
+  "../../src/renderer/cartography-spike/cartography-model.js";
 
 const library: CartographyPresetLibrary = {
   activePreset: { kind: "builtin", id: "cartographer" },
@@ -53,6 +58,17 @@ test("compact Cartography controls avoid frame-loop layout reads and static inli
   assert.doesNotMatch(controls, /offsetHeight|style\.cssText/u);
   assert.match(controls, /canonical !== settings/u);
   assert.match(controls, /boxChanged \|\| becameVisible/u);
+});
+
+test("unsupported areas hide controls while transient failures leave them available", () => {
+  const unavailable = (reason: "unsupported-area" | "loading"): CartographyState => ({
+    context: null,
+    continent: { status: "unavailable", reason },
+    currentInstance: { status: "unavailable", reason },
+    surfaces: { compass: null, missionMap: null, worldMap: null },
+  });
+  assert.equal(cartographyOverlayDisposition(unavailable("unsupported-area")), "hidden");
+  assert.equal(cartographyOverlayDisposition(unavailable("loading")), "controls-only");
 });
 
 test("Cartography QA status distinguishes loading from exact kernel failures", () => {

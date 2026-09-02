@@ -111,6 +111,18 @@ function bitsetsEqual(
     && left.words.every((word, index) => word === right.words[index]);
 }
 
+export type CartographyOverlayDisposition = "hidden" | "controls-only" | "layers";
+
+/** Decide the whole overlay surface policy from the canonical model state. */
+export function cartographyOverlayDisposition(
+  state: CartographyState,
+): CartographyOverlayDisposition {
+  if (state.continent.status === "ready" || state.currentInstance.status === "ready") {
+    return "layers";
+  }
+  return state.continent.reason === "unsupported-area" ? "hidden" : "controls-only";
+}
+
 export function mountCartographyOverlay(options: Readonly<{
   parent: HTMLElement;
   canvas: HTMLCanvasElement;
@@ -385,10 +397,15 @@ export function mountCartographyOverlay(options: Readonly<{
       nextModelPoll = now + MODEL_POLL_MS;
     }
     presentation = readCartographyPresentation(state, options.modelSources);
-    if (state.continent.status !== "ready" && state.currentInstance.status !== "ready") {
+    const disposition = cartographyOverlayDisposition(state);
+    if (disposition !== "layers") {
       terrainKey = "";
       terrain = null;
       hideAllLayers();
+      if (disposition === "hidden") {
+        controls.hide();
+        return;
+      }
       const compass = options.modelSources.compass.snapshot();
       const box = compass === null
         ? null

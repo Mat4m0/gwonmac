@@ -55,6 +55,7 @@ export type WalkableTerrainRaster = Readonly<{
 export type CartographyUnavailableReason =
   | "context"
   | "loading"
+  | "unsupported-area"
   | "companion"
   | "map-mismatch"
   | "anchor"
@@ -168,6 +169,28 @@ function emptyState(reason: CartographyUnavailableReason): CartographyState {
   });
 }
 
+function unavailableStateWithContext(
+  context: NonNullable<ReturnType<CartographyContextController["snapshot"]>>,
+  reason: CartographyUnavailableReason,
+): CartographyState {
+  return Object.freeze({
+    context: Object.freeze({
+      sequence: context.sequence,
+      mapId: context.mapId,
+      areaEpoch: context.areaEpoch,
+      layoutId: context.layoutId,
+    }),
+    continent: unavailable(reason),
+    currentInstance: unavailable(reason),
+    surfaces: Object.freeze({ compass: null, missionMap: null, worldMap: null }),
+  });
+}
+
+/** Cartography masks cover only the three main campaign world-map coordinate systems. */
+export function isCartographyAreaSupported(continent: number): boolean {
+  return continent === 0 || continent === 2 || continent === 4;
+}
+
 /** Build one continent partition. Every creditable cell is exactly explored or remaining. */
 function deriveContinent(
   continent: number,
@@ -274,6 +297,13 @@ export function readCartographyState(sources: CartographyModelSources): Cartogra
     anchor === null || anchor.status !== 1
     || anchor.generation !== contextA.areaEpoch
   ) return emptyState("anchor");
+  if (!isCartographyAreaSupported(anchor.continent)) {
+    const contextB = sources.context.snapshot();
+    if (contextB === null || contextB.status !== 1 || !contextEqual(contextA, contextB)) {
+      return emptyState("epoch-mismatch");
+    }
+    return unavailableStateWithContext(contextA, "unsupported-area");
+  }
   const exploration = sources.exploration.readBitmap();
   if (
     exploration === null || exploration.snapshot.status !== 1
