@@ -253,6 +253,7 @@ test("the launcher preload exposes only its frozen launcher bridge", async () =>
     "experience",
     "external",
     "gameFiles",
+    "navigation",
     "profiles",
     "settings",
     "state",

@@ -54,6 +54,10 @@ test("the built launcher preload exposes every launcher command and nothing else
   assert.equal(listeners.get(LAUNCHER_IPC.stateEvent)?.length, 1);
   stop();
   assert.equal(listeners.get(LAUNCHER_IPC.stateEvent)?.length, 0);
+  const stopNavigation = api.navigation.onRequest(() => undefined);
+  assert.equal(listeners.get(LAUNCHER_IPC.navigationEvent)?.length, 1);
+  stopNavigation();
+  assert.equal(listeners.get(LAUNCHER_IPC.navigationEvent)?.length, 0);
 
   await api.state.get();
   await api.profiles.create({ name: "Second account" });
@@ -92,6 +96,9 @@ test("the built launcher preload exposes every launcher command and nothing else
 
   assert.deepEqual(
     new Set(invoked.map(({ channel }) => channel)),
-    new Set(Object.values(LAUNCHER_IPC).filter((channel) => channel !== LAUNCHER_IPC.stateEvent)),
+    new Set(Object.values(LAUNCHER_IPC).filter((channel) => (
+      channel !== LAUNCHER_IPC.stateEvent
+      && channel !== LAUNCHER_IPC.navigationEvent
+    ))),
   );
 });

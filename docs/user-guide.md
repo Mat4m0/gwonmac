@@ -42,10 +42,13 @@ When updating from the old Single Account experience, **Main account** continues
 to use the existing saved login, builds, templates, game files, and window
 position in place. The cutover does not copy, move, or delete that data.
 
-Closing the launcher hides it while games run. Closing one game affects only
-that account. Closing the last game leaves the launcher available. Clicking the
-Dock icon restores the most recent launcher or game window that you used. If
-that window has closed, the next most recent game window is restored.
+The launcher hides after every selected account opens successfully. It stays
+visible if an account needs attention. Use **Window → Show Launcher** to open
+another account. **Settings…** opens launcher Settings directly. Closing one
+game affects only that account. Closing the last game shows the launcher.
+Clicking the Dock icon restores the most recent launcher or game window that
+you used. If that window has closed, the next most recent game window is
+restored.
 
 ## Home content
 
@@ -111,7 +114,11 @@ means the cell may need another map or special route. Guidance never changes
 the game's explored state. Hold Shift over a Mission Map cell to inspect its
 normal 3×3 reveal area, or Option-Shift for the Bird's Eye 7×7 area. One style
 applies to the Compass and Mission Map. Both layers hide when the current map
-projection or data cannot be certified.
+projection or data cannot be certified. They also hide, together with the
+Cartography control, outside the main Tyria, Cantha, and Elona world maps. This
+includes the Battle Isles, Pre-Searing, and the Realm of Torment. Your
+Cartography settings stay unchanged and the layers return automatically after
+travel to a supported area.
 
 ## Switch Character
 

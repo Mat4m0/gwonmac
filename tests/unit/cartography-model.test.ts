@@ -3,6 +3,7 @@ import test from "node:test";
 import type {
   CartographyContextSnapshot,
   ExplorationSpikeController,
+  WorldMapAnchorSpikeSnapshot,
   WorldMapAnchorSpikeController,
 } from "../../src/shared/cartography-spike.js";
 import type { PublishedCompanionState } from "../../src/renderer/companion-snapshot.js";
@@ -25,7 +26,7 @@ import {
 
 const MAP_ID = 650;
 const AREA_EPOCH = 7;
-const CONTINENT = 3;
+const CONTINENT = 2;
 const WIDTH = TOOLBOX_CARTOGRAPHY_CONTINENTS[CONTINENT]!.creditable.x0
   + TOOLBOX_CARTOGRAPHY_CONTINENTS[CONTINENT]!.creditable.width;
 const HEIGHT = TOOLBOX_CARTOGRAPHY_CONTINENTS[CONTINENT]!.creditable.y0
@@ -94,6 +95,11 @@ function sources(
     READY_CONTEXT,
   ],
   kernelResult: CartographyReachabilitySnapshot | null = READY_KERNEL,
+  anchorSnapshot: WorldMapAnchorSpikeSnapshot = Object.freeze({
+    status: 1, generation: AREA_EPOCH, continent: CONTINENT,
+    worldAnchorX: 100, worldAnchorY: 200,
+    mapMinX: 0, mapMinY: 0, mapMaxX: 1_000, mapMaxY: 1_000,
+  }),
 ): CartographyModelSources {
   let contextIndex = 0;
   const context = {
@@ -117,11 +123,7 @@ function sources(
     }),
   };
   const anchor: WorldMapAnchorSpikeController = {
-    snapshot: () => ({
-      status: 1, generation: AREA_EPOCH, continent: CONTINENT,
-      worldAnchorX: 100, worldAnchorY: 200,
-      mapMinX: 0, mapMinY: 0, mapMaxX: 1_000, mapMaxY: 1_000,
-    }),
+    snapshot: () => anchorSnapshot,
   };
   const kernel: CartographyReachabilityController = {
     sha256: "0".repeat(64),
@@ -209,6 +211,50 @@ test("withdraws immediately while the certified context is loading", () => {
       context: null,
       continent: { status: "unavailable", reason: "loading" },
       currentInstance: { status: "unavailable", reason: "loading" },
+      surfaces: { compass: null, missionMap: null, worldMap: null },
+    },
+  );
+});
+
+test("hides Cartography throughout unsupported world-map coordinate systems", () => {
+  const current = sources(undefined, undefined, Object.freeze({
+    status: 1, generation: AREA_EPOCH, continent: 5,
+    worldAnchorX: 100, worldAnchorY: 200,
+    mapMinX: 0, mapMinY: 0, mapMaxX: 1_000, mapMaxY: 1_000,
+  }));
+  const state = readCartographyState(current);
+  assert.deepEqual(state, {
+    context: {
+      sequence: READY_CONTEXT.sequence,
+      mapId: MAP_ID,
+      areaEpoch: AREA_EPOCH,
+      layoutId: READY_CONTEXT.layoutId,
+    },
+    continent: { status: "unavailable", reason: "unsupported-area" },
+    currentInstance: { status: "unavailable", reason: "unsupported-area" },
+    surfaces: { compass: null, missionMap: null, worldMap: null },
+  });
+  const evidence = captureCartographyEvidence(state, current);
+  assert.equal(evidence.currentInstance.status, "unavailable");
+  if (evidence.currentInstance.status === "unavailable") {
+    assert.equal(evidence.currentInstance.reason, "unsupported-area");
+    assert.equal(evidence.currentInstance.mapId, MAP_ID);
+  }
+});
+
+test("does not publish unsupported-area evidence across a map transition", () => {
+  const next = Object.freeze({ ...READY_CONTEXT, sequence: 14, areaEpoch: 8, mapId: 651 });
+  const unsupported = Object.freeze({
+    status: 1, generation: AREA_EPOCH, continent: 5,
+    worldAnchorX: 100, worldAnchorY: 200,
+    mapMinX: 0, mapMinY: 0, mapMaxX: 1_000, mapMaxY: 1_000,
+  });
+  assert.deepEqual(
+    readCartographyState(sources([READY_CONTEXT, next], undefined, unsupported)),
+    {
+      context: null,
+      continent: { status: "unavailable", reason: "epoch-mismatch" },
+      currentInstance: { status: "unavailable", reason: "epoch-mismatch" },
       surfaces: { compass: null, missionMap: null, worldMap: null },
     },
   );

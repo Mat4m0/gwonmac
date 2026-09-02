@@ -13,10 +13,12 @@ import {
   clipboard,
   dialog,
   Menu,
+  MenuItem,
   shell,
   type BaseWindow,
   type MenuItemConstructorOptions,
 } from "electron";
+import type { LauncherDestination } from "../shared/launcher-contracts.js";
 import {
   EXTERNAL_URLS,
   type AppSettings,
@@ -50,7 +52,29 @@ export interface ApplicationMenuActions {
   host: WindowHost;
   /** Window state stays window.ts's; the menu only asks for the reset. */
   resetWindowState: (win: BrowserWindow) => Promise<void>;
-  revealLauncher: () => void;
+  revealLauncher: LauncherReveal;
+}
+
+export type LauncherReveal = (destination?: LauncherDestination) => void;
+
+/** Install one native Window menu and add the launcher's explicit recovery. */
+export function installNativeApplicationMenu(
+  template: MenuItemConstructorOptions[],
+  revealLauncher: LauncherReveal,
+): void {
+  const menu = Menu.buildFromTemplate(template);
+  const windowMenu = menu.items.find(
+    (item) => item.role?.toLowerCase() === "windowmenu",
+  )?.submenu;
+  if (windowMenu) {
+    windowMenu.insert(0, new MenuItem({
+      id: "show-launcher",
+      label: "Show Launcher",
+      click: () => revealLauncher("home"),
+    }));
+    windowMenu.insert(1, new MenuItem({ type: "separator" }));
+  }
+  Menu.setApplicationMenu(menu);
 }
 
 /** Keep optional commands visible while removing every disabled action. */
@@ -320,13 +344,15 @@ export function installApplicationMenu({
               { role: "about" as const },
               { type: "separator" as const },
               {
+                id: "check-for-updates",
                 label: "Check for Updates…",
-                click: revealLauncher,
+                click: () => revealLauncher("settings"),
               },
               {
+                id: "show-settings",
                 label: "Settings…",
                 accelerator: "CmdOrCtrl+,",
-                click: revealLauncher,
+                click: () => revealLauncher("settings"),
               },
               { type: "separator" as const },
               { role: "hide" as const },
@@ -429,6 +455,7 @@ export function installApplicationMenu({
           : []),
       ],
     },
+    { role: "windowMenu" },
     {
       label: "Help",
       submenu: [
@@ -555,5 +582,5 @@ export function installApplicationMenu({
     },
   ];
 
-  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+  installNativeApplicationMenu(template, revealLauncher);
 }

@@ -13,6 +13,7 @@ export const CARTOGRAPHY_UNAVAILABLE_REASONS = Object.freeze([
   "not-observed",
   "context",
   "loading",
+  "unsupported-area",
   "companion",
   "map-mismatch",
   "anchor",
