@@ -96,7 +96,7 @@ function sources(
   ],
   kernelResult: CartographyReachabilitySnapshot | null = READY_KERNEL,
   anchorSnapshot: WorldMapAnchorSpikeSnapshot = Object.freeze({
-    status: 1, generation: AREA_EPOCH, continent: CONTINENT, onWorldMap: true,
+    status: 1, generation: AREA_EPOCH, continent: CONTINENT,
     worldAnchorX: 100, worldAnchorY: 200,
     mapMinX: 0, mapMinY: 0, mapMaxX: 1_000, mapMaxY: 1_000,
   }),
@@ -218,7 +218,7 @@ test("withdraws immediately while the certified context is loading", () => {
 
 test("hides Cartography throughout unsupported world-map coordinate systems", () => {
   const current = sources(undefined, undefined, Object.freeze({
-    status: 1, generation: AREA_EPOCH, continent: 5, onWorldMap: true,
+    status: 1, generation: AREA_EPOCH, continent: 5,
     worldAnchorX: 100, worldAnchorY: 200,
     mapMinX: 0, mapMinY: 0, mapMaxX: 1_000, mapMaxY: 1_000,
   }));
@@ -242,29 +242,15 @@ test("hides Cartography throughout unsupported world-map coordinate systems", ()
   }
 });
 
-test("hides off-world areas inside a supported continent", () => {
-  const current = sources(undefined, undefined, Object.freeze({
-    status: 1, generation: AREA_EPOCH, continent: CONTINENT, onWorldMap: false,
-    worldAnchorX: 100, worldAnchorY: 200,
-    mapMinX: 0, mapMinY: 0, mapMaxX: 1_000, mapMaxY: 1_000,
-  }));
-  const state = readCartographyState(current);
-  assert.deepEqual(state.continent, { status: "unavailable", reason: "unsupported-area" });
-  assert.deepEqual(
-    state.currentInstance,
-    { status: "unavailable", reason: "unsupported-area" },
-  );
-});
-
 test("does not publish unsupported-area evidence across a map transition", () => {
   const next = Object.freeze({ ...READY_CONTEXT, sequence: 14, areaEpoch: 8, mapId: 651 });
-  const offWorld = Object.freeze({
-    status: 1, generation: AREA_EPOCH, continent: CONTINENT, onWorldMap: false,
+  const unsupported = Object.freeze({
+    status: 1, generation: AREA_EPOCH, continent: 5,
     worldAnchorX: 100, worldAnchorY: 200,
     mapMinX: 0, mapMinY: 0, mapMaxX: 1_000, mapMaxY: 1_000,
   });
   assert.deepEqual(
-    readCartographyState(sources([READY_CONTEXT, next], undefined, offWorld)),
+    readCartographyState(sources([READY_CONTEXT, next], undefined, unsupported)),
     {
       context: null,
       continent: { status: "unavailable", reason: "epoch-mismatch" },

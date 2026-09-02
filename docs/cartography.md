@@ -63,13 +63,11 @@ the continent-scale World Map. GWonMac certifies each context independently.
 Both surfaces consume the same continent state and global grid phase. A failure
 on either map hides only that surface.
 
-Cartography is limited to areas that ArenaNet marks for the world map within
-the three supported campaign coordinate systems: Tyria, Cantha, and Elona.
-Underground and other off-world areas therefore hide every Cartography layer.
-Pre-Searing, the Battle Isles, and the Realm of Torment use separate coordinate
-systems and hide Cartography as well. The compact control hides with the layers;
-settings remain intact and apply again automatically after travel to a supported
-area.
+Cartography is limited to the three supported campaign coordinate systems:
+Tyria, Cantha, and Elona. Pre-Searing, the Battle Isles, and the Realm of
+Torment use separate coordinate systems and hide every Cartography layer. The
+compact control hides with the layers; settings remain intact and apply again
+automatically after travel to a supported area.
 
 The World Map projection and visibility come from one complete native event
 context. Unrelated or incomplete events leave the last complete reading intact,

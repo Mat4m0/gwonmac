@@ -187,8 +187,8 @@ function unavailableStateWithContext(
 }
 
 /** Cartography masks cover only the three main campaign world-map coordinate systems. */
-export function isCartographyAreaSupported(continent: number, onWorldMap: boolean): boolean {
-  return onWorldMap && (continent === 0 || continent === 2 || continent === 4);
+export function isCartographyAreaSupported(continent: number): boolean {
+  return continent === 0 || continent === 2 || continent === 4;
 }
 
 /** Build one continent partition. Every creditable cell is exactly explored or remaining. */
@@ -297,7 +297,7 @@ export function readCartographyState(sources: CartographyModelSources): Cartogra
     anchor === null || anchor.status !== 1
     || anchor.generation !== contextA.areaEpoch
   ) return emptyState("anchor");
-  if (!isCartographyAreaSupported(anchor.continent, anchor.onWorldMap)) {
+  if (!isCartographyAreaSupported(anchor.continent)) {
     const contextB = sources.context.snapshot();
     if (contextB === null || contextB.status !== 1 || !contextEqual(contextA, contextB)) {
       return emptyState("epoch-mismatch");

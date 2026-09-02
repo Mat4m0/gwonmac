@@ -45,7 +45,6 @@ export const WORLD_MAP_ANCHOR_SPIKE_GLOBALS = Object.freeze({
   status: "gwonmac_world_map_anchor_spike_status",
   generation: "gwonmac_world_map_anchor_spike_generation",
   continent: "gwonmac_world_map_anchor_spike_continent",
-  onWorldMap: "gwonmac_world_map_anchor_spike_on_world_map",
   worldAnchorX: "gwonmac_world_map_anchor_spike_x",
   worldAnchorY: "gwonmac_world_map_anchor_spike_y",
   mapMinX: "gwonmac_world_map_anchor_spike_map_min_x",
@@ -59,7 +58,6 @@ export const WORLD_MAP_ANCHOR_SPIKE_SCALARS = Object.freeze([
   WORLD_MAP_ANCHOR_SPIKE_GLOBALS.status,
   WORLD_MAP_ANCHOR_SPIKE_GLOBALS.generation,
   WORLD_MAP_ANCHOR_SPIKE_GLOBALS.continent,
-  WORLD_MAP_ANCHOR_SPIKE_GLOBALS.onWorldMap,
   WORLD_MAP_ANCHOR_SPIKE_GLOBALS.worldAnchorX,
   WORLD_MAP_ANCHOR_SPIKE_GLOBALS.worldAnchorY,
   WORLD_MAP_ANCHOR_SPIKE_GLOBALS.mapMinX,
@@ -314,7 +312,6 @@ export type WorldMapAnchorSpikeSnapshot = Readonly<{
   status: number;
   generation: number;
   continent: number;
-  onWorldMap: boolean;
   worldAnchorX: number;
   worldAnchorY: number;
   mapMinX: number;

@@ -14,7 +14,6 @@ function exportsFor(): WebAssembly.Exports {
     [WORLD_MAP_ANCHOR_SPIKE_GLOBALS.status]: scalar("i32", 1),
     [WORLD_MAP_ANCHOR_SPIKE_GLOBALS.generation]: scalar("i32", 7),
     [WORLD_MAP_ANCHOR_SPIKE_GLOBALS.continent]: scalar("i32", 0),
-    [WORLD_MAP_ANCHOR_SPIKE_GLOBALS.onWorldMap]: scalar("i32", 1),
     [WORLD_MAP_ANCHOR_SPIKE_GLOBALS.worldAnchorX]: scalar("f32", 4_776),
     [WORLD_MAP_ANCHOR_SPIKE_GLOBALS.worldAnchorY]: scalar("f32", 4_682),
     [WORLD_MAP_ANCHOR_SPIKE_GLOBALS.mapMinX]: scalar("f32", 4_000),
@@ -32,7 +31,6 @@ test("reads a bounded pointer-free world-map anchor", () => {
     status: 1,
     generation: 7,
     continent: 0,
-    onWorldMap: true,
     worldAnchorX: 4_776,
     worldAnchorY: 4_682,
     mapMinX: 4_000,
@@ -51,7 +49,6 @@ test("refuses an unavailable or implausible world-map anchor", () => {
     status: 4,
     generation: 7,
     continent: 0,
-    onWorldMap: true,
     worldAnchorX: 4_776,
     worldAnchorY: 4_682,
     mapMinX: 4_000,
@@ -61,15 +58,5 @@ test("refuses an unavailable or implausible world-map anchor", () => {
   });
   (exports[WORLD_MAP_ANCHOR_SPIKE_GLOBALS.status] as WebAssembly.Global).value = 1;
   (exports[WORLD_MAP_ANCHOR_SPIKE_GLOBALS.worldAnchorX] as WebAssembly.Global).value = Infinity;
-  assert.equal(reader.snapshot(), null);
-});
-
-test("publishes the closed world-map eligibility flag", () => {
-  const exports = exportsFor();
-  const reader = createWorldMapAnchorSpikeReader(exports);
-  assert.ok(reader);
-  (exports[WORLD_MAP_ANCHOR_SPIKE_GLOBALS.onWorldMap] as WebAssembly.Global).value = 0;
-  assert.equal(reader.snapshot()?.onWorldMap, false);
-  (exports[WORLD_MAP_ANCHOR_SPIKE_GLOBALS.onWorldMap] as WebAssembly.Global).value = 2;
   assert.equal(reader.snapshot(), null);
 });

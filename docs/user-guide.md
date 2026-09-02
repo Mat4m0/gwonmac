@@ -113,9 +113,9 @@ normal 3×3 reveal area, or Option-Shift for the Bird's Eye 7×7 area. One style
 applies to the Compass and Mission Map. Both layers hide when the current map
 projection or data cannot be certified. They also hide, together with the
 Cartography control, outside the main Tyria, Cantha, and Elona world maps. This
-includes underground and off-world areas, the Battle Isles, Pre-Searing, and
-the Realm of Torment. Your Cartography settings stay unchanged and the layers
-return automatically after travel to a supported area.
+includes the Battle Isles, Pre-Searing, and the Realm of Torment. Your
+Cartography settings stay unchanged and the layers return automatically after
+travel to a supported area.
 
 ## Switch Character
 
