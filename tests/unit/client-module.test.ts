@@ -756,6 +756,7 @@ describe("client module preparation", () => {
       requestedCapabilities: CURSOR_TOOLBOX,
       effectiveCapabilities: NO_CAPABILITIES,
       cartography: false,
+      cartographyError: null,
       // An unrecognised client is served exactly as downloaded, so it receives
       // neither the double-click transform nor substitute touch input.
       nativeDoubleClick: false,

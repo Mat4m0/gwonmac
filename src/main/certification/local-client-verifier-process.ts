@@ -30,6 +30,10 @@ import {
   deriveExtendedMemoryStructuralProof,
   isExtendedMemoryStructuralProof,
 } from "./extended-memory.js";
+import {
+  deriveCartographySpikeBuild,
+  isCartographySpikeBuild,
+} from "./cartography-spike-verifier.js";
 
 interface ParentPort {
   postMessage(value: unknown): void;
@@ -112,6 +116,16 @@ async function main(): Promise<void> {
   if (mode === "native-double-click") {
     const result = deriveNativeDoubleClickBuild(bytes);
     if (!isDerivedNativeDoubleClickBuild(result, expectedSha256)) {
+      parentPort.postMessage(null);
+      process.exitCode = 4;
+      return;
+    }
+    parentPort.postMessage(result);
+    return;
+  }
+  if (mode === "cartography") {
+    const result = deriveCartographySpikeBuild(bytes);
+    if (!isCartographySpikeBuild(result, expectedSha256)) {
       parentPort.postMessage(null);
       process.exitCode = 4;
       return;

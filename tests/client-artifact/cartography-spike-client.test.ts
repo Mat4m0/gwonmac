@@ -7,6 +7,8 @@ import { join } from "node:path";
 import test from "node:test";
 import { prepareCartographySpike } from
   "../../src/main/certification/cartography-spike-client.js";
+import { deriveCartographySpikeBuild } from
+  "../../src/main/certification/cartography-spike-verifier.js";
 import { verifyLocalClientBytes } from
   "../../src/main/certification/local-client-verifier.js";
 import { rewriteTemplateSaveWasm } from
@@ -15,6 +17,15 @@ import { rewriteTemplateSaveWasm } from
 const sha256 = (bytes: Uint8Array): string =>
   createHash("sha256").update(bytes).digest("hex");
 
+const verifyCartography = async ({ wasmPath, inputSha256 }: {
+  wasmPath: string;
+  inputSha256: string;
+}) => {
+  const input = new Uint8Array(await readFile(wasmPath));
+  assert.equal(sha256(input), inputSha256);
+  return deriveCartographySpikeBuild(input);
+};
+
 test("prepares and reuses the certified cartography client", async () => {
   const artifact = process.env.GW_CLIENT_WASM;
   assert.ok(artifact, "GW_CLIENT_WASM must name the retained official artifact");
@@ -22,12 +33,16 @@ test("prepares and reuses the certified cartography client", async () => {
   const inputSha256 = sha256(official);
   const cacheRoot = await mkdtemp(join(tmpdir(), "gwonmac-cartography-spike-"));
   try {
-    const first = await prepareCartographySpike(artifact, inputSha256, cacheRoot);
+    const first = await prepareCartographySpike(
+      artifact, inputSha256, cacheRoot, verifyCartography,
+    );
     assert.equal(first.error, null);
     assert.notEqual(first.wasmPath, artifact);
     assert.equal(sha256(new Uint8Array(await readFile(first.wasmPath))), first.wasmSha256);
 
-    const second = await prepareCartographySpike(artifact, inputSha256, cacheRoot);
+    const second = await prepareCartographySpike(
+      artifact, inputSha256, cacheRoot, verifyCartography,
+    );
     assert.deepEqual(second, first);
   } finally {
     await rm(cacheRoot, { recursive: true, force: true });
@@ -49,6 +64,7 @@ test("prepares the sealed template-only fallback chain", async () => {
       templatePath,
       sha256(template),
       join(root, "cache"),
+      verifyCartography,
     );
     assert.equal(prepared.error, null);
     assert.equal(sha256(await readFile(prepared.wasmPath)), prepared.wasmSha256);

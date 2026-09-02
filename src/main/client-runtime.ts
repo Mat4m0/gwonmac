@@ -95,6 +95,7 @@ import {
 } from "./diagnostics.js";
 import type { GamePaths } from "./paths.js";
 import {
+  verifyCartographyLocally,
   verifyClientLocally,
   verifyExtendedMemoryLocally,
   verifyNativeDoubleClickLocally,
@@ -367,7 +368,12 @@ export class ClientRuntime {
       compatibilityCacheRoot: this.options.paths.compatibility,
       enhancementCacheRoot: this.options.paths.enhancements,
       ...(this.options.cartographySpike
-        ? { cartographySpike: { cacheRoot: this.options.paths.cartographySpike } }
+        ? {
+            cartographySpike: {
+              cacheRoot: this.options.paths.cartographySpike,
+              verifyLocally: verifyCartographyLocally,
+            },
+          }
         : {}),
       nativeDoubleClickCacheRoot: this.options.paths.nativeDoubleClick,
       extendedMemoryCacheRoot: this.options.paths.extendedMemory,
@@ -466,6 +472,7 @@ export class ClientRuntime {
       },
     };
     gauge("wasm.templateSaveCompatible", prepared.gameFileSaving.status === "available");
+    gauge("wasm.cartographyPrepared", prepared.cartography);
     gauge("enhancement.effectiveCursor", effective.nativeCursor);
     gauge("enhancement.effectiveTargetObservation", effective.targetObservation);
     gauge("enhancement.effectivePartyObservation", effective.partyObservation);
@@ -500,6 +507,14 @@ export class ClientRuntime {
       logEvent({ k: "wasm.nativeDoubleClickPrepareFailed",
         code: errorCode(prepared.failure.error),
       });
+    }
+    if (prepared.cartographyError !== null) {
+      logEvent({
+        k: "wasm.cartographyPrepareFailed",
+        code: errorCode(prepared.cartographyError),
+      });
+    } else if (this.options.cartographySpike) {
+      logEvent({ k: "wasm.cartographyPrepared" });
     }
     if (prepared.enhancementBuild) {
       logEvent({ k: "enhancement.clientPrepared",

@@ -29,6 +29,10 @@ import {
   isExtendedMemoryStructuralProof,
   type ExtendedMemoryStructuralProof,
 } from "./extended-memory.js";
+import {
+  isCartographySpikeBuild,
+  type CartographySpikeBuild,
+} from "./cartography-spike-verifier.js";
 
 const VERIFIER_TIMEOUT_MS = 5_000;
 
@@ -100,6 +104,35 @@ function runNativeDoubleClickVerifierProcess(
   });
 }
 
+function runCartographyVerifierProcess(
+  wasmPath: string,
+  inputSha256: string,
+): Promise<CartographySpikeBuild | null> {
+  return new Promise((resolve) => {
+    const entry = fileURLToPath(
+      new URL("./local-client-verifier-process.js", import.meta.url),
+    );
+    const child = utilityProcess.fork(
+      entry,
+      ["cartography", wasmPath, inputSha256],
+      { serviceName: "Guild Wars Cartography compatibility verifier" },
+    );
+    let settled = false;
+    const finish = (value: CartographySpikeBuild | null): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      child.kill();
+      resolve(value);
+    };
+    const timeout = setTimeout(() => finish(null), VERIFIER_TIMEOUT_MS);
+    child.once("message", (value: unknown) => {
+      finish(isCartographySpikeBuild(value, inputSha256) ? value : null);
+    });
+    child.once("exit", () => finish(null));
+  });
+}
+
 function runExtendedMemoryVerifierProcess(options: {
   jsPath: string;
   jsInputSha256: string;
@@ -164,6 +197,17 @@ export async function verifyNativeDoubleClickLocally(options: {
   inputSha256: string;
 }): Promise<NativeDoubleClickBuild | null> {
   return runNativeDoubleClickVerifierProcess(
+    options.wasmPath,
+    options.inputSha256,
+  ).catch(() => null);
+}
+
+/** Qualifies Cartography layout and output without parsing client bytes in Main. */
+export async function verifyCartographyLocally(options: {
+  wasmPath: string;
+  inputSha256: string;
+}): Promise<CartographySpikeBuild | null> {
+  return runCartographyVerifierProcess(
     options.wasmPath,
     options.inputSha256,
   ).catch(() => null);

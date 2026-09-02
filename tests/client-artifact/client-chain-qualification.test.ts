@@ -21,6 +21,8 @@ import {
   isDerivedNativeDoubleClickBuild,
   rewriteNativeDoubleClickWasm,
 } from "../../src/main/certification/native-double-click.js";
+import { deriveCartographySpikeBuild } from
+  "../../src/main/certification/cartography-spike-verifier.js";
 import {
   deriveExtendedMemoryStructuralProof,
   rewriteExtendedMemoryWasm,
@@ -89,7 +91,14 @@ test("every shipped runtime profile reproduces the real client chain", async () 
       enhancementCapabilities: capabilities,
       compatibilityCacheRoot: join(cacheRoot, "file"),
       enhancementCacheRoot: join(cacheRoot, "enhancement"),
-      cartographySpike: { cacheRoot: join(cacheRoot, "cartography") },
+      cartographySpike: {
+        cacheRoot: join(cacheRoot, "cartography"),
+        verifyLocally: async ({ wasmPath, inputSha256 }) => {
+          const input = new Uint8Array(await readFile(wasmPath));
+          assert.equal(sha256(input), inputSha256);
+          return deriveCartographySpikeBuild(input);
+        },
+      },
       nativeDoubleClickCacheRoot: join(cacheRoot, "double-click"),
       extendedMemoryCacheRoot: join(cacheRoot, "memory"),
       extendedMemoryEnabled: true,

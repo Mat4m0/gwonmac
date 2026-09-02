@@ -44,6 +44,7 @@ import {
 } from "./enhancement-builds.js";
 import { transformEnhancementWasm } from "./enhancement-transform.js";
 import { prepareCartographySpike } from "./cartography-spike-client.js";
+import type { CartographySpikeBuild } from "./cartography-spike-verifier.js";
 import { SEMANTIC_VERIFIER_ABI } from "./semantic-proof.js";
 import {
   nativeDoubleClickOutputSha256,
@@ -94,6 +95,8 @@ interface PreparedWasmClientModule {
   readonly nativeDoubleClick: boolean;
   /** Whether the served module carries the certified Cartography observers. */
   readonly cartography: boolean;
+  /** Independent refusal detail; an earlier transform failure must not hide it. */
+  readonly cartographyError: unknown | null;
 }
 
 function productCapabilityCount(capabilities: EnhancementCapabilities): number {
@@ -157,7 +160,13 @@ export interface PrepareClientModuleOptions {
   readonly compatibilityCacheRoot: string;
   readonly enhancementCacheRoot: string;
   /** Omitted only for diagnostic profiles that require the untouched client. */
-  readonly cartographySpike?: Readonly<{ cacheRoot: string }>;
+  readonly cartographySpike?: Readonly<{
+    cacheRoot: string;
+    verifyLocally: (options: {
+      wasmPath: string;
+      inputSha256: string;
+    }) => Promise<CartographySpikeBuild | null>;
+  }>;
   readonly nativeDoubleClickCacheRoot: string;
   readonly extendedMemoryCacheRoot: string;
   readonly extendedMemoryEnabled: boolean;
@@ -310,6 +319,7 @@ export async function prepareClientModule(
         certified.wasmPath,
         certified.wasmSha256,
         options.cartographySpike.cacheRoot,
+        options.cartographySpike.verifyLocally,
       )
     : null;
   const cartographyPrepared: PreparedWasmClientModule = cartography === null
@@ -319,6 +329,7 @@ export async function prepareClientModule(
         wasmPath: cartography.wasmPath,
         wasmSha256: cartography.wasmSha256,
         cartography: cartography.error === null,
+        cartographyError: cartography.error,
         failure: cartography.error === null
           ? certified.failure
           : certified.failure ?? { stage: "cartography", error: cartography.error },
@@ -443,6 +454,7 @@ async function prepareCertifiedChain(
       requestedCapabilities,
       effectiveCapabilities: NO_ENHANCEMENT_CAPABILITIES,
       cartography: false,
+      cartographyError: null,
       nativeDoubleClick: false,
       failure: fileFailure ?? cleanupFailure,
     };
@@ -458,6 +470,7 @@ async function prepareCertifiedChain(
       requestedCapabilities,
       effectiveCapabilities: NO_ENHANCEMENT_CAPABILITIES,
       cartography: false,
+      cartographyError: null,
       nativeDoubleClick: false,
       failure: {
         stage: "enhancement",
@@ -475,6 +488,7 @@ async function prepareCertifiedChain(
       requestedCapabilities,
       effectiveCapabilities: NO_ENHANCEMENT_CAPABILITIES,
       cartography: false,
+      cartographyError: null,
       nativeDoubleClick: false,
       failure: await discardEnhancementCache(enhancementCacheRoot),
     };
@@ -499,6 +513,7 @@ async function prepareCertifiedChain(
         requestedCapabilities,
         effectiveCapabilities: candidate,
         cartography: false,
+        cartographyError: null,
         nativeDoubleClick: false,
         failure: firstFailure === null
           ? fileFailure
@@ -516,6 +531,7 @@ async function prepareCertifiedChain(
     requestedCapabilities,
     effectiveCapabilities: NO_ENHANCEMENT_CAPABILITIES,
     cartography: false,
+    cartographyError: null,
     nativeDoubleClick: false,
     failure: firstFailure === null
       ? null
