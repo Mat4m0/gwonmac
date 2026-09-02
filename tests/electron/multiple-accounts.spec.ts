@@ -361,6 +361,17 @@ test("Show never duplicates a game and companion close policy stays profile-loca
         .find((win) => win.webContents.getURL().endsWith("launcher/index.html"))
         ?.isVisible(),
     )).toBe(false);
+    expect(await fixture.app.evaluate(({ app }) =>
+      app.dock?.getMenu()?.getMenuItemById("show-launcher")?.label ?? null,
+    )).toBe("Show Launcher");
+    await fixture.app.evaluate(({ app }) => {
+      app.dock?.getMenu()?.getMenuItemById("show-launcher")?.click();
+    });
+    await expect.poll(() => fixture.app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()
+        .find((win) => win.webContents.getURL().endsWith("launcher/index.html"))
+        ?.isVisible(),
+    )).toBe(true);
 
     await fixture.app.evaluate(({ BrowserWindow }) => {
       BrowserWindow.getAllWindows()

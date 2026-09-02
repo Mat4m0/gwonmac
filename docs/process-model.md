@@ -390,10 +390,10 @@ falls back through its recent-window order. Neither action creates another
 game window.
 
 Complete profile launch success hides the launcher. A launch failure keeps it
-visible. The native Window menu and Settings command can restore it while games
-run. Closing the launcher also hides it while games run. Closing one game
-window closes only that profile. Closing the final game leaves the launcher
-available.
+visible. The native Window menu, Dock menu, and Settings command can restore it
+while games run. Closing the launcher also hides it while games run. Closing
+one game window closes only that profile. Closing the final game leaves the
+launcher available.
 Application quit saves
 all live renderer filesystems in parallel, closes sockets, stops background
 work, flushes diagnostics, and exits through one bounded cleanup path.
