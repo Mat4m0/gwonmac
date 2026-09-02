@@ -84,6 +84,18 @@ function transformed(bytes: Uint8Array, width: number, height: number, mode: Atl
   return output;
 }
 
+function replacementTransform(matchTransform: AtlasTransform): AtlasTransform {
+  /*
+   * TexMod hashes Direct3D colour bytes, while the browser consumes decoded
+   * RGBA. A red/blue swap can therefore identify the source, but applying it
+   * again to the replacement would visibly exchange red and blue. Row order
+   * is still part of the WebGL upload orientation and must be preserved.
+   */
+  return matchTransform === "flip-y" || matchTransform === "flip-y-swap-red-blue"
+    ? "flip-y"
+    : "direct";
+}
+
 export async function prepareTexturePack(
   generation: string,
   log: (...values: unknown[]) => void,
@@ -169,7 +181,12 @@ export function installTexturePack({
       const match = value as Match;
       const bytes = match.entry.levels[level];
       return bytes
-        ? transformed(bytes, Math.max(1, match.entry.width >> level), Math.max(1, match.entry.height >> level), match.mode)
+        ? transformed(
+            bytes,
+            Math.max(1, match.entry.width >> level),
+            Math.max(1, match.entry.height >> level),
+            replacementTransform(match.mode),
+          )
         : null;
     },
     compressedReplacement: (value, level, format) => {
