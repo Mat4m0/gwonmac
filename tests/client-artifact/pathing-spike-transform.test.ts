@@ -5,6 +5,8 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { transformCartographySpikeWasm } from
   "../../src/main/certification/pathing-spike-transform.js";
+import { deriveCartographySpikeBuild } from
+  "../../src/main/certification/cartography-spike-verifier.js";
 import { wasmEvidence } from "../../src/main/certification/wasm-evidence.js";
 import {
   CARTOGRAPHY_CONTEXT_GLOBALS,
@@ -25,9 +27,11 @@ test("the certified context is added without intercepting native pathing", {
   const artifact = process.env.GW_CLIENT_WASM;
   assert.ok(artifact, "GW_CLIENT_WASM must name the exact official artifact");
   const official = new Uint8Array(await readFile(artifact));
-  assert.equal(sha256(official), "e00e8368a1d0e1003bf1882dce2d4b3cd8e2e8b6c4acc72474c8b56e2e35c6bb");
   const before = official.slice();
-  const transformed = transformCartographySpikeWasm(official, "official");
+  const build = deriveCartographySpikeBuild(official);
+  assert.ok(build, "the current client must prove its Cartography layout");
+  const transformed = transformCartographySpikeWasm(official, build.memoryLayout);
+  assert.equal(sha256(transformed), build.outputSha256);
   assert.deepEqual(official, before, "the predecessor module was mutated");
 
   const evidence = wasmEvidence(transformed);

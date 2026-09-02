@@ -35,6 +35,8 @@ import { transformEnhancementWasm } from "../main/certification/enhancement-tran
 import {
   deriveNativeDoubleClickBuild,
 } from "../main/certification/native-double-click.js";
+import { deriveCartographySpikeBuild } from
+  "../main/certification/cartography-spike-verifier.js";
 import { preparePostTemplateSaveModule } from "../main/certification/template-save-verifier.js";
 import {
   isLocalClientVerification,
@@ -77,7 +79,8 @@ const USAGE =
   + "  template [PATH/Gw.jspi.wasm] [--emit-ts] [--write] [--expect-certified]\n"
   + "                                       re-derive the template-save build entry\n"
   + "  transform INPUT.wasm OUTPUT.wasm     write the derived Enhancement module\n"
-  + "  double-click [PATH/Gw.jspi.wasm]     prove the native double-click route\n";
+  + "  double-click [PATH/Gw.jspi.wasm]     prove the native double-click route\n"
+  + "  cartography [PATH/Gw.jspi.wasm]      prove every Cartography runtime input\n";
 
 /**
  * The one fixed profile the command line emits. The other certified profiles
@@ -322,16 +325,17 @@ async function transform(argv: readonly string[]): Promise<void> {
   })}\n`);
 }
 
-/**
- * Proves the native double-click route against each output of the whole chain.
- * Each result is one exact input/output transaction; there is no Cartesian
- * predecessor table to update when an unrelated capability profile changes.
- */
-async function doubleClick(argv: readonly string[]): Promise<void> {
-  const [filename] = positionalArguments(argv);
-  const official = new Uint8Array(
-    await readFile(filename ?? installedClientArtifact()),
-  );
+interface RuntimePredecessor {
+  readonly profile: string;
+  readonly bytes: Uint8Array;
+  readonly enhancementInputSha256?: string;
+}
+
+/** One canonical enumeration of every module the runtime can serve. */
+function runtimePredecessors(official: Uint8Array): Readonly<{
+  officialSha256: string;
+  predecessors: readonly RuntimePredecessor[];
+}> {
   const officialSha256 = createHash("sha256").update(official).digest("hex");
   const verification = verifyLocalClientBytes(official);
   const templateBuild = verification.templateSaveBuild;
@@ -341,11 +345,7 @@ async function doubleClick(argv: readonly string[]): Promise<void> {
   const enhancementInputSha256 = createHash("sha256")
     .update(selectedInput)
     .digest("hex");
-  const predecessors: Array<Readonly<{
-    profile: string;
-    bytes: Uint8Array;
-    enhancementInputSha256?: string;
-  }>> = [
+  const predecessors: RuntimePredecessor[] = [
     { profile: templateBuild ? "file-compatible" : "official", bytes: selectedInput },
   ];
   for (const [launch, capabilities] of Object.entries(
@@ -361,6 +361,20 @@ async function doubleClick(argv: readonly string[]): Promise<void> {
       enhancementInputSha256,
     });
   }
+  return Object.freeze({ officialSha256, predecessors: Object.freeze(predecessors) });
+}
+
+/**
+ * Proves the native double-click route against each output of the whole chain.
+ * Each result is one exact input/output transaction; there is no Cartesian
+ * predecessor table to update when an unrelated capability profile changes.
+ */
+async function doubleClick(argv: readonly string[]): Promise<void> {
+  const [filename] = positionalArguments(argv);
+  const official = new Uint8Array(
+    await readFile(filename ?? installedClientArtifact()),
+  );
+  const { officialSha256, predecessors } = runtimePredecessors(official);
   const chains: Array<Readonly<{
     profile: string;
     inputSha256: string;
@@ -399,6 +413,36 @@ async function doubleClick(argv: readonly string[]): Promise<void> {
   }
 }
 
+/** Proves Cartography against every predecessor the release can serve. */
+async function cartography(argv: readonly string[]): Promise<void> {
+  const [filename] = positionalArguments(argv);
+  const official = new Uint8Array(
+    await readFile(filename ?? installedClientArtifact()),
+  );
+  const { officialSha256, predecessors } = runtimePredecessors(official);
+  const chains = predecessors.flatMap(({ profile, bytes }) => {
+    const build = deriveCartographySpikeBuild(bytes);
+    return build ? [{
+      profile,
+      inputSha256: build.inputSha256,
+      outputSha256: build.outputSha256,
+      memoryLayout: build.memoryLayout,
+    }] : [];
+  });
+  const completeProof = chains.length === predecessors.length;
+  process.stdout.write(`${JSON.stringify({
+    officialSha256,
+    chains,
+    completeProof,
+  }, null, 2)}\n`);
+  if (!completeProof) {
+    process.stderr.write(
+      "certification cartography: one or more runtime inputs did not prove\n",
+    );
+    process.exitCode = 1;
+  }
+}
+
 const COMMANDS = Object.freeze({
   doctor,
   recertify,
@@ -407,6 +451,7 @@ const COMMANDS = Object.freeze({
   template,
   transform,
   "double-click": doubleClick,
+  cartography,
 });
 
 // The subcommand name is argv, so the lookup has to be closed over own

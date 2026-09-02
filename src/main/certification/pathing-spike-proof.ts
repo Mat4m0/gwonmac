@@ -11,8 +11,6 @@ import {
 } from "./wasm-evidence.js";
 import type { DecodedFunction, MemoryOperandSite } from "./enhancement-evidence-types.js";
 
-const OFFICIAL_SHA256 =
-  "e00e8368a1d0e1003bf1882dce2d4b3cd8e2e8b6c4acc72474c8b56e2e35c6bb";
 const ANCHORS = Object.freeze({
   bound: "def->trapezoidCount < 1024",
   index: "index < pathMap.trapezoidCount",
@@ -158,12 +156,13 @@ function exactHash(
 }
 
 /**
- * Proves the exact official client's pathing record shape. A null result means
- * no authority, including for an equivalent-looking rebuild.
+ * Proves the exact pathing record shape. Whole-module identity is deliberately
+ * not an invariant: unrelated ArenaNet changes may alter the client hash while
+ * every pathing function and relation below remains byte-for-byte identical.
  */
 export function certifyPathingShape(input: Uint8Array): PathingShapeProof | null {
   const evidence = wasmEvidence(input);
-  if (!evidence || evidence.inputSha256 !== OFFICIAL_SHA256) return null;
+  if (!evidence) return null;
   const decoded = evidence.decodeFunctions([0x30, 1024]);
   const converter = decodedAt(decoded, EXPECTED_FUNCTIONS.converter);
   const loader = decodedAt(decoded, EXPECTED_FUNCTIONS.loader);

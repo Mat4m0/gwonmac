@@ -95,6 +95,7 @@ import {
 } from "./diagnostics.js";
 import type { GamePaths } from "./paths.js";
 import {
+  verifyCartographyLocally,
   verifyClientLocally,
   verifyExtendedMemoryLocally,
   verifyNativeDoubleClickLocally,
@@ -367,7 +368,12 @@ export class ClientRuntime {
       compatibilityCacheRoot: this.options.paths.compatibility,
       enhancementCacheRoot: this.options.paths.enhancements,
       ...(this.options.cartographySpike
-        ? { cartographySpike: { cacheRoot: this.options.paths.cartographySpike } }
+        ? {
+            cartographySpike: {
+              cacheRoot: this.options.paths.cartographySpike,
+              verifyLocally: verifyCartographyLocally,
+            },
+          }
         : {}),
       nativeDoubleClickCacheRoot: this.options.paths.nativeDoubleClick,
       extendedMemoryCacheRoot: this.options.paths.extendedMemory,
@@ -466,6 +472,8 @@ export class ClientRuntime {
       },
     };
     gauge("wasm.templateSaveCompatible", prepared.gameFileSaving.status === "available");
+    const cartographyPrepared = prepared.cartography.status === "active";
+    gauge("wasm.cartographyPrepared", cartographyPrepared);
     gauge("enhancement.effectiveCursor", effective.nativeCursor);
     gauge("enhancement.effectiveTargetObservation", effective.targetObservation);
     gauge("enhancement.effectivePartyObservation", effective.partyObservation);
@@ -500,6 +508,14 @@ export class ClientRuntime {
       logEvent({ k: "wasm.nativeDoubleClickPrepareFailed",
         code: errorCode(prepared.failure.error),
       });
+    }
+    if (prepared.cartography.status === "unavailable") {
+      logEvent({
+        k: "wasm.cartographyPrepareFailed",
+        code: errorCode(prepared.cartography.error),
+      });
+    } else if (prepared.cartography.status === "active") {
+      logEvent({ k: "wasm.cartographyPrepared" });
     }
     if (prepared.enhancementBuild) {
       logEvent({ k: "enhancement.clientPrepared",
@@ -544,7 +560,7 @@ export class ClientRuntime {
       extendedMemory,
       transforms: {
         templateSave: prepared.gameFileSaving.status === "available",
-        cartography: prepared.cartography,
+        cartography: cartographyPrepared,
         nativeDoubleClick: prepared.nativeDoubleClick,
       },
       enhancementVerification: {

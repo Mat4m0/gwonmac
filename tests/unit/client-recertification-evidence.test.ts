@@ -35,6 +35,7 @@ test("retains bounded generation evidence without paths or raw addresses", async
     runtime: path.join(root, "runtime.json"),
     qualification: path.join(root, "qualification.json"),
     doubleClick: path.join(root, "double-click.json"),
+    cartography: path.join(root, "cartography.json"),
     extendedMemory: path.join(root, "extended-memory.json"),
   };
   const doubleClick = {
@@ -84,6 +85,28 @@ test("retains bounded generation evidence without paths or raw addresses", async
     crossed3GiB: true,
     freedBlockReusedWithoutGrowth: true,
   };
+  const cartography = {
+    status: "proved",
+    exitCode: 0,
+    officialSha256: wasmDigest,
+    chains: [{
+      profile: "file-compatible",
+      inputSha256: fileOutputDigest,
+      outputSha256: sha256("cartography-file"),
+      memoryLayout: "relocated",
+    }, {
+      profile: "features-e01",
+      inputSha256: feature601Input,
+      outputSha256: sha256("cartography-e01"),
+      memoryLayout: "relocated",
+    }, {
+      profile: "features-fff",
+      inputSha256: feature7ffInput,
+      outputSha256: sha256("cartography-fff"),
+      memoryLayout: "relocated",
+    }],
+    completeProof: true,
+  };
   const args = [
     generation,
     files.wasm,
@@ -91,6 +114,7 @@ test("retains bounded generation evidence without paths or raw addresses", async
     files.runtime,
     files.qualification,
     files.doubleClick,
+    files.cartography,
     files.extendedMemory,
   ];
   const environment = {
@@ -136,6 +160,7 @@ test("retains bounded generation evidence without paths or raw addresses", async
         log: "must not survive",
       })),
       writeFile(files.doubleClick, JSON.stringify(doubleClick)),
+      writeFile(files.cartography, JSON.stringify(cartography)),
       writeFile(files.extendedMemory, JSON.stringify(extendedMemory)),
     ]);
     const evidence = await createClientRecertificationEvidence(args, environment);
@@ -341,6 +366,7 @@ test("rejects poison strings and contradictory proved states", async () => {
     runtime: path.join(root, "runtime.json"),
     qualification: path.join(root, "qualification.json"),
     doubleClick: path.join(root, "double-click.json"),
+    cartography: path.join(root, "cartography.json"),
     extendedMemory: path.join(root, "extended-memory.json"),
   };
   try {
@@ -379,6 +405,18 @@ test("rejects poison strings and contradictory proved states", async () => {
         }],
         completeRouteProved: false,
       })),
+      writeFile(files.cartography, JSON.stringify({
+        status: "proved",
+        exitCode: 0,
+        officialSha256: wasmDigest,
+        chains: [{
+          profile: poison,
+          inputSha256: wasmDigest,
+          outputSha256: outputDigest,
+          memoryLayout: poison,
+        }],
+        completeProof: false,
+      })),
       writeFile(files.extendedMemory, JSON.stringify({
         status: "proved",
         exitCode: 0,
@@ -402,6 +440,7 @@ test("rejects poison strings and contradictory proved states", async () => {
       files.runtime,
       files.qualification,
       files.doubleClick,
+      files.cartography,
       files.extendedMemory,
     ], {
       GITHUB_REPOSITORY: "lupinum-dev/gwonmac",
@@ -415,6 +454,7 @@ test("rejects poison strings and contradictory proved states", async () => {
       evidence.runtime,
       evidence.qualification,
       evidence.nativeDoubleClick,
+      evidence.cartography,
       evidence.extendedMemory,
     ]) {
       assert.deepEqual(section, {
@@ -435,7 +475,9 @@ test("retains artifact identities when a detailed evidence tool crashes", async 
   const root = await mkdtemp(path.join(tmpdir(), "gwonmac-client-evidence-"));
   const wasm = Uint8Array.of(0, 97, 115, 109, 1, 0, 0, 0);
   const js = "const client = true;";
-  const paths = ["runtime", "qualification", "double-click", "extended-memory"]
+  const paths = [
+    "runtime", "qualification", "double-click", "cartography", "extended-memory",
+  ]
     .map((name) => path.join(root, `${name}.json`));
   try {
     const wasmPath = path.join(root, "Gw.jspi.wasm");

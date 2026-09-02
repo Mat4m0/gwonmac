@@ -67,4 +67,8 @@ test("both native owners agree on the exact finite layout roots", async () => {
     assert.equal(transform.match(new RegExp(root, "g"))?.length, 1, root);
     assert.equal(kernel.match(new RegExp(root, "g"))?.length, 1, root);
   }
+  for (const agentArray of ["0x5a4de8", "0x5a6928"]) {
+    assert.equal(transform.match(new RegExp(agentArray, "g"))?.length, 1, agentArray);
+    assert.equal(kernel.match(new RegExp(agentArray, "g"))?.length, 1, agentArray);
+  }
 });

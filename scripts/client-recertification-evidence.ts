@@ -323,6 +323,54 @@ function doubleClickEvidence(value: JsonRecord): JsonRecord {
   });
 }
 
+function cartographyEvidence(value: JsonRecord): JsonRecord {
+  const status = string(value.status, "cartography.status");
+  const exitCode = integer(value.exitCode, "cartography.exitCode");
+  if (status === "refused") {
+    if (exitCode === 0) throw new Error("Cartography refusal must fail");
+    return Object.freeze({ status: "refused", exitCode });
+  }
+  if (status !== "proved" || exitCode !== 0 || value.completeProof !== true) {
+    throw new Error("Cartography status is not a complete proof");
+  }
+  const rawChains = value.chains;
+  if (!Array.isArray(rawChains) || rawChains.length === 0) {
+    throw new Error("cartography.chains must be non-empty");
+  }
+  const chains = rawChains.map((raw, index) => {
+    const chain = record(raw, `cartography.chains[${index}]`);
+    const profile = string(chain.profile, `cartography.chains[${index}].profile`);
+    if (profile !== "official" && profile !== "file-compatible"
+      && !isEnhancementCapabilityProfile(profile)) {
+      throw new Error("Cartography chain profile is not closed");
+    }
+    const memoryLayout = string(
+      chain.memoryLayout,
+      `cartography.chains[${index}].memoryLayout`,
+    );
+    if (memoryLayout !== "official" && memoryLayout !== "relocated") {
+      throw new Error("Cartography memory layout is not closed");
+    }
+    return Object.freeze({
+      profile,
+      inputSha256: digest(chain.inputSha256, "Cartography chain input"),
+      outputSha256: digest(chain.outputSha256, "Cartography chain output"),
+      memoryLayout,
+    });
+  });
+  if (new Set(chains.map(({ profile }) => profile)).size !== chains.length
+    || new Set(chains.map(({ inputSha256 }) => inputSha256)).size !== chains.length) {
+    throw new Error("Cartography chains must have unique profiles and inputs");
+  }
+  return Object.freeze({
+    status: "proved",
+    exitCode,
+    officialSha256: digest(value.officialSha256, "cartography.officialSha256"),
+    chains: Object.freeze(chains),
+    completeProof: true,
+  });
+}
+
 function extendedMemoryEvidence(value: JsonRecord): JsonRecord {
   const status = string(value.status, "extendedMemory.status");
   const exitCode = integer(value.exitCode, "extendedMemory.exitCode");
@@ -386,9 +434,10 @@ function generationOutcome(
   runtime: JsonRecord,
   qualification: JsonRecord,
   doubleClick: JsonRecord,
+  cartography: JsonRecord,
   extendedMemory: JsonRecord,
 ): JsonRecord {
-  if ([runtime, qualification, doubleClick, extendedMemory].some(unavailable)) {
+  if ([runtime, qualification, doubleClick, cartography, extendedMemory].some(unavailable)) {
     return Object.freeze({ status: "investigation", reason: "evidence-collection-failed" });
   }
   const features = runtime.features;
@@ -412,6 +461,9 @@ function generationOutcome(
   }
   if (doubleClick.status !== "proved") {
     return Object.freeze({ status: "investigation", reason: "native-double-click-refused" });
+  }
+  if (cartography.status !== "proved") {
+    return Object.freeze({ status: "investigation", reason: "cartography-refused" });
   }
   if (extendedMemory.status !== "proved") {
     return Object.freeze({ status: "investigation", reason: "extended-memory-refused" });
@@ -474,12 +526,13 @@ export async function createClientRecertificationEvidence(
   environment: NodeJS.ProcessEnv = process.env,
 ): Promise<JsonRecord> {
   const [generation, wasmPath, jsPath, runtimePath, qualificationPath,
-    doubleClickPath, extendedMemoryPath] = argv;
+    doubleClickPath, cartographyPath, extendedMemoryPath] = argv;
   if (!generation || !wasmPath || !jsPath || !runtimePath || !qualificationPath
-    || !doubleClickPath || !extendedMemoryPath || argv.length !== 7) {
-    throw new Error("usage: client-recertification-evidence GENERATION WASM JS RUNTIME QUALIFICATION DOUBLE_CLICK EXTENDED_MEMORY");
+    || !doubleClickPath || !cartographyPath || !extendedMemoryPath
+    || argv.length !== 8) {
+    throw new Error("usage: client-recertification-evidence GENERATION WASM JS RUNTIME QUALIFICATION DOUBLE_CLICK CARTOGRAPHY EXTENDED_MEMORY");
   }
-  const [wasm, js, safeRuntime, safeQualification, safeDoubleClick,
+  const [wasm, js, safeRuntime, safeQualification, safeDoubleClick, safeCartography,
     safeExtendedMemory] =
     await Promise.all([
       artifact(wasmPath),
@@ -491,6 +544,7 @@ export async function createClientRecertificationEvidence(
         qualificationEvidence,
       ),
       collectedEvidence(doubleClickPath, "doubleClick", doubleClickEvidence),
+      collectedEvidence(cartographyPath, "cartography", cartographyEvidence),
       collectedEvidence(
         extendedMemoryPath,
         "extendedMemory",
@@ -503,6 +557,8 @@ export async function createClientRecertificationEvidence(
       && safeQualification.officialSha256 !== wasm.sha256)
     || (safeDoubleClick.status === "proved"
       && safeDoubleClick.officialSha256 !== wasm.sha256)
+    || (safeCartography.status === "proved"
+      && safeCartography.officialSha256 !== wasm.sha256)
     || (safeExtendedMemory.status === "proved"
       && safeExtendedMemory.jsInputSha256 !== js.sha256)) {
     throw new Error("evidence files do not describe the supplied official artifacts");
@@ -526,11 +582,13 @@ export async function createClientRecertificationEvidence(
       safeRuntime,
       safeQualification,
       safeDoubleClick,
+      safeCartography,
       safeExtendedMemory,
     ),
     runtime: safeRuntime,
     qualification: safeQualification,
     nativeDoubleClick: safeDoubleClick,
+    cartography: safeCartography,
     extendedMemory: safeExtendedMemory,
   });
 }

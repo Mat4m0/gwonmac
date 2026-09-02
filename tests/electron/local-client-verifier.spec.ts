@@ -101,6 +101,42 @@ test("refuses an unknown native callback inside the isolated process", async () 
   }
 });
 
+test("refuses changed Cartography input inside the isolated process", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "gw-cartography-verifier-"));
+  const wasmPath = path.join(root, "unknown.wasm");
+  const wasm = Uint8Array.of(0, 97, 115, 109, 1, 0, 0, 0);
+  const sha256 = createHash("sha256").update(wasm).digest("hex");
+  await writeFile(wasmPath, wasm);
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(
+      (entry): entry is [string, string] =>
+        entry[1] !== undefined && entry[0] !== "ELECTRON_RUN_AS_NODE",
+    ),
+  );
+  const run = async () => {
+    const application = await electron.launch({
+      cwd: path.resolve("."),
+      args: [fixture, "cartography", wasmPath, sha256],
+      executablePath: electronPath,
+      env,
+    });
+    try {
+      await expect.poll(() => completed(application), { timeout: 10_000 }).toBe(true);
+      return await outcome(application);
+    } finally {
+      await application.close();
+    }
+  };
+
+  try {
+    expect(await run()).toBeNull();
+    await writeFile(wasmPath, Uint8Array.of(0, 97, 115, 109, 1, 0, 0, 1));
+    expect(await run()).toBeNull();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("refuses changed 4 GB glue inside the isolated process", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "gw-extended-memory-verifier-"));
   const jsPath = path.join(root, "Gw.jspi.js");
