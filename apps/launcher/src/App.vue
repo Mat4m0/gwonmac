@@ -281,6 +281,10 @@ async function openExternal(kind: Parameters<NonNullable<typeof native>["externa
   await runAction("The link could not be opened.", () => native?.external.open(kind));
 }
 
+async function openNews(id: string) {
+  await runAction("The news item could not be opened.", () => native?.news.open(id));
+}
+
 async function updateContent(content: NonNullable<LauncherPreferencesPatch["content"]>) {
   await runAction("Content settings could not be saved.", () => native?.experience.updatePreferences({ content }));
   if (!native) snapshot.value = { ...snapshot.value, preferences: { content: { ...snapshot.value.preferences.content, ...content } } };
@@ -365,7 +369,7 @@ async function replaceToolShortcut() {
     </section>
 
     <main :class="{ 'artwork-only': route === 'home' && !snapshot.preferences.content.news && !snapshot.preferences.content.dailies }">
-      <HomeView v-if="route === 'home'" :snapshot="snapshot" @settings="openSettings('content')" @issues="route = 'issues'" @external="openExternal" />
+      <HomeView v-if="route === 'home'" :snapshot="snapshot" @settings="openSettings('content')" @preferences="updateContent" @news="openNews" />
 
       <AccountsView
         v-else-if="route === 'accounts'"
@@ -400,7 +404,7 @@ async function replaceToolShortcut() {
             :restart="restartAndInstallUpdate"
             :open-releases="() => openExternal('releases')"
           />
-          <template v-else-if="settingsRoute === 'content'"><h1>Content</h1><div class="setting-group"><label><span><strong>News</strong><small>Official Guild Wars and Reforged updates.</small></span><input type="checkbox" :checked="snapshot.preferences.content.news" @change="updateContent({ news: checked($event) })" /></label><label><span><strong>Dailies</strong><small>Daily activities and the weekly schedule.</small></span><input type="checkbox" :checked="snapshot.preferences.content.dailies" @change="updateContent({ dailies: checked($event) })" /></label><label v-if="snapshot.preferences.content.news && snapshot.preferences.content.dailies"><span><strong>First Home tab</strong></span><select :value="snapshot.preferences.content.first" @change="updateContent({ first: ($event.currentTarget as HTMLSelectElement).value as 'news' | 'dailies' })"><option value="news">News</option><option value="dailies">Dailies</option></select></label><label v-if="snapshot.preferences.content.news"><span><strong>Official Guild Wars news</strong></span><input type="checkbox" :checked="snapshot.preferences.content.officialNews" @change="updateContent({ officialNews: checked($event) })" /></label><label v-if="snapshot.preferences.content.news"><span><strong>Guild Wars Reforged news</strong></span><input type="checkbox" :checked="snapshot.preferences.content.reforgedNews" @change="updateContent({ reforgedNews: checked($event) })" /></label></div></template>
+          <template v-else-if="settingsRoute === 'content'"><h1>Content</h1><p>Choose what appears on Home. Beta release notes appear only while the Beta update track is selected.</p><div class="setting-group"><label><span><strong>News</strong><small>Game, event, and GWonMac updates.</small></span><input type="checkbox" :checked="snapshot.preferences.content.news" @change="updateContent({ news: checked($event) })" /></label><label><span><strong>Dailies</strong><small>Daily activities and the weekly schedule.</small></span><input type="checkbox" :checked="snapshot.preferences.content.dailies" @change="updateContent({ dailies: checked($event) })" /></label><label v-if="snapshot.preferences.content.news && snapshot.preferences.content.dailies"><span><strong>First Home tab</strong></span><select :value="snapshot.preferences.content.first" @change="updateContent({ first: ($event.currentTarget as HTMLSelectElement).value as 'news' | 'dailies' })"><option value="news">News</option><option value="dailies">Dailies</option></select></label><label v-if="snapshot.preferences.content.news"><span><strong>Guild Wars updates</strong><small>Official game update notes from the Guild Wars Wiki.</small></span><input type="checkbox" :checked="snapshot.preferences.content.officialNews" @change="updateContent({ officialNews: checked($event) })" /></label><label v-if="snapshot.preferences.content.news"><span><strong>Upcoming events</strong><small>Important seasonal events and their dates.</small></span><input type="checkbox" :checked="snapshot.preferences.content.eventNews" @change="updateContent({ eventNews: checked($event) })" /></label><label v-if="snapshot.preferences.content.news"><span><strong>GWonMac releases</strong><small>Player-focused release notes for your update track.</small></span><input type="checkbox" :checked="snapshot.preferences.content.reforgedNews" @change="updateContent({ reforgedNews: checked($event) })" /></label><label v-if="snapshot.preferences.content.news"><span><strong>Rotate featured news</strong><small>Change the featured story every 12 seconds. Reduced Motion always disables rotation.</small></span><input type="checkbox" :checked="snapshot.preferences.content.autoRotateNews" @change="updateContent({ autoRotateNews: checked($event) })" /></label></div></template>
           <template v-else-if="settingsRoute === 'game'">
             <h1>Game settings</h1>
             <div class="setting-group">

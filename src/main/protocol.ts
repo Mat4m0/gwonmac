@@ -100,6 +100,7 @@ export interface ProtocolDeps {
     jsPath: string;
   } | null;
   diagnosticOwnerId?: () => number;
+  launcherNewsImage?: (key: string) => Promise<Response>;
 }
 
 /**
@@ -180,12 +181,17 @@ export function installGwProtocolHandlerForSession(
 }
 
 /** The launcher partition can serve only its compiled offline Vue subtree. */
-export function installLauncherProtocolHandlerForSession(owner: Session): void {
+export function installLauncherProtocolHandlerForSession(owner: Session, deps: ProtocolDeps): void {
   owner.protocol.handle("gw", async (request) => {
     if (request.method !== "GET" && request.method !== "HEAD") {
       return new Response("method not allowed", { status: 405 });
     }
     const url = new URL(request.url);
+    const newsImage = /^\/launcher-media\/([a-z0-9][a-z0-9-]{0,79}\/\d{1,2})$/u.exec(url.pathname);
+    if (url.hostname === "app" && newsImage && deps.launcherNewsImage) {
+      try { return await deps.launcherNewsImage(newsImage[1]!); }
+      catch { return new Response("not found", { status: 404, headers: launcherHeaders() }); }
+    }
     if (url.hostname !== "app" || !url.pathname.startsWith("/launcher/")) {
       return new Response("not found", { status: 404, headers: launcherHeaders() });
     }

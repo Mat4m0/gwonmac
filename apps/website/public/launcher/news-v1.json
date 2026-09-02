@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "stories": [
+    {
+      "id": "guild-wars-pirate-week-2026",
+      "source": "event",
+      "channel": "all",
+      "title": "Pirate Week begins September 13",
+      "summary": "Talk Like a Pirate Day brings pirate NPCs and Bottle of Grog drops to Guild Wars for one week.",
+      "publishedAt": "2026-09-01T12:00:00Z",
+      "featured": true,
+      "url": "https://wiki.guildwars.com/wiki/Pirate_Week",
+      "startsAt": "2026-09-13T19:00:00Z",
+      "endsAt": "2026-09-20T19:00:00Z",
+      "body": "Pirate Week returns from **September 13 at 19:00 UTC** until **September 20 at 19:00 UTC**.\n\nDuring the event, several NPCs dress like pirates and creatures can drop **Bottles of Grog**. The celebration takes place around International Talk Like a Pirate Day.\n\n[Check Pirate Week on the Guild Wars Wiki](https://wiki.guildwars.com/wiki/Pirate_Week){target=\"_blank\"}"
+    },
+    {
+      "id": "gwonmac-2026-9-0-beta-4",
+      "source": "launcher",
+      "channel": "beta",
+      "title": "Beta 4 improves cartography guidance",
+      "summary": "Beta testers can now see clearer useful-cell guidance while GWonMac keeps its Tools transform compatible with the current client.",
+      "publishedAt": "2026-08-30T12:00:00Z",
+      "featured": true,
+      "url": "https://gwonmac.vercel.app/blog/gwonmac-2026-9-0-beta-4",
+      "body": "GWonMac `2026.9.0-beta.4` is available to players on the **Beta** update track.\n\n## What to test\n\n- Cartography now gives clearer guidance about cells that can still contribute to exploration.\n- The Tools transform is sealed against the current Guild Wars client build.\n\nBeta releases are for early testing. You can switch back to Stable under **Settings → Updates** if you prefer fewer changes.\n\n[Read the technical release record](https://github.com/Mat4m0/gwonmac/releases/tag/v2026.9.0-beta.4){target=\"_blank\"}"
+    },
+    {
+      "id": "gwonmac-2026-8-10",
+      "source": "launcher",
+      "channel": "stable",
+      "title": "GWonMac 2026.8.10 is ready",
+      "summary": "This maintenance release keeps GWonMac compatible with the latest Guild Wars client and restores the Tools overlays.",
+      "publishedAt": "2026-08-27T12:00:00Z",
+      "featured": true,
+      "url": "https://gwonmac.vercel.app/blog/gwonmac-2026-8-10",
+      "body": "GWonMac `2026.8.10` keeps the launcher and optional Tools working with the latest Guild Wars client.\n\n## What changed\n\n- Restored the GWonMac Tools overlays after the Guild Wars client update.\n- Kept PlayStation controller prompts working across client rebuilds.\n- Improved diagnostics for client compatibility problems.\n\nThis is a maintenance release. Your accounts, builds, templates, and preferences are not changed.\n\n## Before you play\n\nInstall the update when the launcher offers it. If Guild Wars is already open, finish your session first and let the launcher restart when you are ready.\n\n[Read the technical release record](https://github.com/Mat4m0/gwonmac/releases/tag/v2026.8.10){target=\"_blank\"}"
+    },
+    {
+      "id": "gwonmac-tools-2026-8-5",
+      "source": "launcher",
+      "channel": "stable",
+      "title": "GWonMac Tools Beta is here",
+      "summary": "Release 2026.8.5 adds local build and team management, template import and export, an experimental 4 GB memory limit, and two interface styles.",
+      "publishedAt": "2026-08-10T12:00:00Z",
+      "featured": true,
+      "url": "https://gwonmac.vercel.app/blog/gwonmac-tools-is-here",
+      "body": "Release `2026.8.5` introduces **GWonMac Tools Beta**: a local build and team manager made specifically for Guild Wars on Mac.\n\nYou can capture your current party, create player and hero builds, reorder heroes and skills, share complete teams, and apply a saved setup from a supported PvE outpost. The release also adds template import and export, an experimental 4 GB memory limit, and two interface styles.\n\n![A saved player-and-hero team open in GWonMac Tools](/blog/2026-8-5/tools.jpeg)\n\nGWToolbox++ itself still cannot run because it depends on the Windows client. GWonMac Tools is not a Toolbox replacement, but it brings some of its most-requested quality-of-life features to Mac players.\n\n## A local home for builds and teams\n\nGWonMac Tools adds a build library designed around the way people actually prepare a Guild Wars party.\n\nYou can:\n\n- Save and edit player and hero builds\n- Capture your current party as a reusable team\n- Keep related variants without duplicating everything by hand\n- Edit professions, attributes, skill bars, and hero behavior\n- Reorder heroes and skills with drag and drop or the keyboard\n- Search skills and browse them in attribute groups\n- Filter for skills that fit the active slot or are currently unlocked\n- Delete builds and teams with confirmation and Undo\n\nIndividual builds can be shared with standard Guild Wars template codes. Complete teams can be imported and exported with a GWonMac team code, keeping the player, heroes, builds, attributes, behavior, difficulty, and notes together.\n\n## Apply a saved team\n\nFrom a supported PvE outpost, **Apply team** can configure:\n\n- Normal or Hard Mode\n- The player's build\n- Hero roster and order\n- Player and hero professions\n- Skill bars and attributes\n- Hero behavior\n\nTeam Management is a **Beta** feature. Hard Mode support is included, but additional live tester coverage is welcome.\n\n## Templates work without Tools\n\nBuild-template migration is a Core feature and does not require enabling GWonMac Tools.\n\nUnder **Settings → Templates**, you can:\n\n- Import an old Windows Guild Wars template folder\n- Import templates from files\n- Import one or many template codes from the clipboard\n- Export your templates\n- Recover templates stored in unexpected subfolders\n\nSign in to Guild Wars before opening the Templates pane. If you opened Templates\nwhile the game was still starting, reopen the pane after signing in so the\ncontrols can connect to the game's storage.\n\nYou can also publish a build from Tools into Guild Wars. The Tools library and the game's Templates folder remain separate, so editing one never unexpectedly rewrites the other.\n\nRead the [template migration guide](/docs/guides/templates) for the complete workflow.\n\n## More memory headroom for long sessions\n\nGuild Wars normally has a 2 GB memory limit. Very long sessions can eventually approach it and may need a reload.\n\nYou can now opt into an experimental 4 GB limit under:\n\n**Settings → Advanced → Experimental 4 GB memory limit**\n\nThe option is off by default and requires restarting Guild Wars. Settings shows whether the current session is using 2 GB or 4 GB.\n\nThe larger limit provides more headroom and may help during long sessions. It does **not** stop memory from continuing to grow. If 4 GB mode is unavailable for the current Guild Wars version, GWonMac safely starts in normal 2 GB mode instead.\n\nThe new memory warning stays out of the way and lets you reload Guild Wars directly when the current session is running low.\n\n## Choose your interface\n\nThe in-game interface has been redesigned with two styles:\n\n- **Guild Wars** remains the default and closely follows the original game's ornamental interface.\n- **Obsidian** offers a quieter, borderless charcoal design with restrained gold accents.\n\nChoose between them under:\n\n**Settings → Display → Interface style**\n\nBoth styles provide the same features, responsive layouts, profession colors, and adjustable panel visibility.\n\n![The Guild Wars interface style in GWonMac Settings](/blog/2026-8-5/ui_guild-wars.png)\n\n![The borderless Obsidian interface style in GWonMac Settings](/blog/2026-8-5/ui_obsidian.png)\n\n## What Beta means\n\nGWonMac Tools is optional and off by default. Enable it under:\n\n**Settings → Controls → GWonMac Tools Beta**\n\n![Enable GWonMac Tools Beta under Settings and Controls](/blog/2026-8-5/enable_tools.png)\n\nThe first enable requires restarting Guild Wars. After that restart, individual tool settings can be changed while the game is running.\n\nTools is unavailable in PvP, guild halls, and unsupported regions. Core features such as the native cursor and template import/export continue to work independently.\n\nAfter a Guild Wars update, Tools may be temporarily unavailable until a compatible GWonMac update is ready. You can always continue playing normally.\n\nBuilds, teams, and preferences stay on this Mac. GWonMac does not upload your library, account, or gameplay data.\n\n## Help test the release\n\nThe most useful feedback now is:\n\n- Repeated Team Apply runs with different hero professions and skill bars\n- Normal and Hard Mode application\n- Larger or unusual hero rosters\n- Long sessions using the experimental 4 GB limit\n- Interface and layout behavior on smaller Mac displays\n\nIf something fails, tell us what you expected, what Guild Wars showed afterward, and which Mac you use.\n\n[Download GWonMac](/download){target=\"_blank\"} · [Report a problem](https://github.com/Mat4m0/gwonmac/issues/new?template=bug-report.yml) · [Join Discord](https://discord.gg/Z9ft52RBD3)"
+    }
+  ]
+}

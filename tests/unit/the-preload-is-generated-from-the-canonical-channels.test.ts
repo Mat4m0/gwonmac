@@ -254,6 +254,7 @@ test("the launcher preload exposes only its frozen launcher bridge", async () =>
     "external",
     "gameFiles",
     "navigation",
+    "news",
     "profiles",
     "settings",
     "state",
@@ -264,5 +265,6 @@ test("the launcher preload exposes only its frozen launcher bridge", async () =>
   assert.equal(Object.values(launcher).every(Object.isFrozen), true);
   await launcher.state.get();
   await launcher.profiles.play([]);
-  assert.deepEqual(invoked, [LAUNCHER_IPC.stateGet, LAUNCHER_IPC.profilesPlay]);
+  await launcher.news.open("release-stable");
+  assert.deepEqual(invoked, [LAUNCHER_IPC.stateGet, LAUNCHER_IPC.profilesPlay, LAUNCHER_IPC.newsOpen]);
 });

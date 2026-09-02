@@ -27,6 +27,7 @@ export interface GamePaths {
   buildLibrary: string;
   windowState: string;
   launcherState: string;
+  launcherNewsCache: string;
   launcherMode: string;
   multiRoot: string;
   multiWorkspace: string;
@@ -65,6 +66,7 @@ export function gamePaths(userData: string): GamePaths {
     buildLibrary: path.join(userData, "build-library.json"),
     windowState: path.join(userData, "window-state.json"),
     launcherState: path.join(userData, "launcher-state.json"),
+    launcherNewsCache: path.join(userData, "launcher-news-cache.json"),
     launcherMode: path.join(userData, "launcher-mode.json"),
     multiRoot,
     multiWorkspace: path.join(multiRoot, "workspace.json"),

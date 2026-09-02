@@ -64,6 +64,9 @@ const launcherApi = {
     resumeDownload: () => ipcRenderer.invoke(LAUNCHER_IPC.gameFilesResumeDownload),
     resetAndRestart: () => ipcRenderer.invoke(LAUNCHER_IPC.gameFilesResetAndRestart),
   },
+  news: {
+    open: (id) => ipcRenderer.invoke(LAUNCHER_IPC.newsOpen, id),
+  },
   external: {
     open: (kind) => ipcRenderer.invoke(LAUNCHER_IPC.externalOpen, kind),
     revealLogs: () => ipcRenderer.invoke(LAUNCHER_IPC.externalRevealLogs),

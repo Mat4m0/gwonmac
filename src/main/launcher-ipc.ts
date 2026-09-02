@@ -19,6 +19,7 @@ import {
   LAUNCHER_IPC,
   parseGlobalTool,
   parseLauncherExternalLink,
+  parseLauncherNewsId,
   parseLauncherProfileAppearance,
   parseLauncherPreferencesPatch,
   parseLauncherSettingsPatch,
@@ -72,6 +73,7 @@ export interface LauncherIpcContext {
   readonly resumeDownload: () => Promise<void>;
   readonly resetGameFiles: (win: BrowserWindow) => Promise<void>;
   readonly openExternal: (kind: LauncherExternalLink) => Promise<void>;
+  readonly openNews: (id: string) => Promise<void>;
   readonly revealLogs: () => void;
   readonly checkUpdates: () => Promise<void>;
   readonly restartAndInstall: (win: BrowserWindow) => Promise<void>;
@@ -165,6 +167,7 @@ export function registerLauncherIpc(ctx: LauncherIpcContext): void {
     gameFilesPauseDownload: channel(nothing, () => ctx.pauseDownload(), "launcher"),
     gameFilesResumeDownload: channel(nothing, () => ctx.resumeDownload(), "launcher"),
     gameFilesResetAndRestart: channel(nothing, (win) => ctx.resetGameFiles(win), "launcher"),
+    newsOpen: channel(one(parseLauncherNewsId), (_win, id) => ctx.openNews(id), "launcher"),
     externalOpen: channel(one(parseLauncherExternalLink), (_win, kind) => ctx.openExternal(kind), "launcher"),
     externalRevealLogs: channel(nothing, () => ctx.revealLogs(), "launcher"),
     updatesCheck: channel(nothing, () => ctx.checkUpdates(), "launcher"),

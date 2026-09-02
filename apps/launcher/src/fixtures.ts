@@ -52,7 +52,20 @@ export const fixtureSnapshot: LauncherSnapshot = {
   ],
   selectedProfileIds: [LEGACY_PRIMARY_PROFILE_ID],
   preferences: {
-    content: { news: true, dailies: true, first: "news", officialNews: true, reforgedNews: true },
+    content: { news: true, dailies: true, first: "news", officialNews: true, reforgedNews: true, eventNews: true, autoRotateNews: true },
+  },
+  news: {
+    status: "ready",
+    refreshedAt: "2026-09-02T08:00:00Z",
+    stories: [
+      { id: "guild-wars-update-2026-09-01", source: "game", channel: "all", title: "Seven skill fixes in the latest update", summary: "Mirage Cloak, Focused Shot, Soul Twisting, and four more skills were corrected.", publishedAt: "2026-09-01T12:00:00Z", featured: true, action: "external", body: [] },
+      { id: "guild-wars-pirate-week-2026", source: "event", channel: "all", title: "Pirate Week begins September 13", summary: "Pirate NPCs and Bottle of Grog drops return for one week.", publishedAt: "2026-09-01T11:00:00Z", featured: true, action: "external", startsAt: "2026-09-13T19:00:00Z", endsAt: "2026-09-20T19:00:00Z", body: [] },
+      { id: "gwonmac-2026-8-10", source: "launcher", channel: "stable", title: "GWonMac 2026.8.10 is ready", summary: "Compatibility with the latest Guild Wars client and restored Tools overlays.", publishedAt: "2026-08-27T12:00:00Z", featured: true, action: "article", body: [
+        { type: "paragraph", content: [{ text: "This maintenance release keeps GWonMac compatible with the latest Guild Wars client. " }, { text: "Technical record", actionId: "news-link-deadbeef" }, { text: "." }] },
+        { type: "heading", text: "What changed" },
+        { type: "list", items: [[{ text: "Restored the GWonMac Tools overlays." }], [{ text: "Improved client compatibility diagnostics." }]] },
+      ] },
+    ],
   },
   contentAvailability: { news: "fixture", dailies: "fixture", knownIssues: "fixture", feedback: "fixture" },
 };
@@ -94,6 +107,7 @@ export function fixtureSnapshotFor(search: string): LauncherSnapshot {
         ...fixtureSnapshot,
         experience: { ...fixtureSnapshot.experience, showMigrationNotice: false },
         readiness: { state: "playable", backgroundDownload: null },
+        news: { status: "offline", stories: fixtureSnapshot.news.stories },
         contentAvailability: { news: "placeholder", dailies: "placeholder", knownIssues: "placeholder", feedback: "placeholder" },
       };
     default:
