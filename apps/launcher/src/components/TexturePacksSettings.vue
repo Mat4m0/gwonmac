@@ -8,23 +8,23 @@ defineProps<{ texturePacks: TexturePackSnapshot }>();
 const busy = ref(false);
 const status = ref("");
 const failureCopy: Record<TexturePackFailureCode, string> = {
-  not_tpf: "That file is not a supported TexMod TPF.",
-  tpf_corrupt: "The TPF is damaged or its checksum is invalid.",
-  unsupported_tpf_variant: "This TPF uses a container variant that is not supported yet.",
-  unsafe_archive: "The TPF contains an unsafe file path.",
-  limit_exceeded: "The TPF is too large or contains too many textures.",
-  definition_missing: "The TPF has no texmod.def mapping file.",
-  definition_invalid: "The TPF mapping file is invalid.",
-  mapping_missing_image: "The TPF mapping file references an image that is missing.",
-  duplicate_target: "The TPF maps one game texture to different images.",
-  unsupported_hash_width: "64-bit uMod hashes are not supported yet.",
-  unsupported_image: "The TPF contains an image format that is not supported.",
-  unsupported_dimensions: "A texture has unsupported dimensions.",
-  source_missing: "The managed TPF copy is missing.",
-  disk_full: "There is not enough free disk space to import this TPF.",
-  permission_denied: "The launcher cannot read or store this TPF.",
-  cancelled: "Import cancelled.",
-  unknown: "The TPF could not be imported.",
+  not_tpf: "This is not a supported .tpf file. Choose another file.",
+  tpf_corrupt: "This file is damaged. Download it again and try again.",
+  unsupported_tpf_variant: "This type of .tpf file is not supported yet. Choose another texture pack.",
+  unsafe_archive: "For your safety, this file was not added. Choose another texture pack.",
+  limit_exceeded: "This texture pack is too large to add. Choose a smaller one.",
+  definition_missing: "This texture pack is incomplete. Download it again or choose another one.",
+  definition_invalid: "This texture pack is incomplete. Download it again or choose another one.",
+  mapping_missing_image: "This texture pack is incomplete. Download it again or choose another one.",
+  duplicate_target: "This texture pack contains conflicting images. Choose another one.",
+  unsupported_hash_width: "This texture pack was made for uMod, which is not supported yet. Choose a TexMod pack.",
+  unsupported_image: "This texture pack contains images that are not supported. Choose another one.",
+  unsupported_dimensions: "This texture pack contains an image that is too large. Choose another one.",
+  source_missing: "The saved file is missing. Remove this texture pack, then add the .tpf file again.",
+  disk_full: "There is not enough storage space. Free some space, then try again.",
+  permission_denied: "The launcher could not open or save this file. Check the file, then try again.",
+  cancelled: "Adding the texture pack was cancelled.",
+  unknown: "Could not add this texture pack. Try again or choose another file.",
 };
 
 function size(bytes: number): string {
@@ -39,19 +39,19 @@ async function importPack() {
   const native = window.launcherNative;
   if (!native || busy.value) return;
   busy.value = true;
-  status.value = "Checking TPF…";
+  status.value = "Adding texture pack…";
   try {
     const result = await native.texturePacks.import();
-    if (result.status === "imported") status.value = "Texture pack imported. Select it to use it in new game windows.";
+    if (result.status === "imported") status.value = "Texture pack added. Select it below to use it the next time you open Guild Wars.";
     else if (result.status === "duplicate") {
-      status.value = "This exact TPF is already installed.";
+      status.value = "This texture pack is already in your list.";
       await nextTick();
       document.getElementById(`texture-pack-${result.packId}`)?.focus();
     }
     else if (result.status === "cancelled") status.value = "";
     else status.value = failureCopy[result.reason];
   } catch {
-    status.value = "The TPF could not be imported.";
+    status.value = "Could not add this texture pack. Try again or choose another file.";
   } finally {
     busy.value = false;
   }
@@ -61,12 +61,14 @@ async function select(id: string | null) {
   const native = window.launcherNative;
   if (!native || busy.value) return;
   busy.value = true;
-  status.value = "Saving…";
+  status.value = "Saving your choice…";
   try {
     await native.texturePacks.select(id);
-    status.value = id ? "Selected. New game windows will use this texture pack." : "Official textures selected.";
+    status.value = id
+      ? "Selected. You will see this texture pack the next time you open Guild Wars."
+      : "Selected. You will see the original Guild Wars look the next time you open the game.";
   } catch {
-    status.value = "The texture pack selection could not be saved.";
+    status.value = "Could not select this texture pack. Try again.";
   } finally {
     busy.value = false;
   }
@@ -80,7 +82,7 @@ async function remove(id: string) {
   try {
     await native.texturePacks.remove(id);
   } catch {
-    status.value = "The texture pack could not be removed.";
+    status.value = "Could not remove this texture pack. Try again.";
   } finally {
     busy.value = false;
   }
@@ -89,25 +91,25 @@ async function remove(id: string) {
 
 <template>
   <div class="settings-heading-row">
-    <div><h1>Texture packs</h1><p>Import classic TexMod TPF designs. Packs change local textures only and apply to every account.</p></div>
-    <button class="primary" :disabled="busy" @click="importPack"><Upload />Import TPF</button>
+    <div><h1>Texture packs</h1><p>Give Guild Wars a different look. Add a .tpf file you downloaded, then choose it below.</p></div>
+    <button class="primary" :disabled="busy" @click="importPack"><Upload />Add .tpf file</button>
   </div>
-  <p class="texture-pack-note">A selection applies when you open a new game window. Windows already open keep the textures they started with.</p>
+  <p class="texture-pack-note">Your choice is used for every account. If the game is open, close it and open it again to see the change.</p>
   <fieldset class="texture-pack-list" :disabled="busy">
     <legend class="visually-hidden">Active texture pack</legend>
     <div class="texture-pack-card" :class="{ selected: texturePacks.selectedPackId === null }">
       <label><input type="radio" name="texture-pack" :checked="texturePacks.selectedPackId === null" @change="select(null)" />
-      <span><strong>Official textures</strong><small>The original Guild Wars appearance.</small></span></label>
+      <span><strong>Original Guild Wars</strong><small>Use the game’s original look.</small></span></label>
       <span class="pack-ready">Ready</span>
     </div>
     <div v-for="pack in texturePacks.packs" :id="`texture-pack-${pack.id}`" :key="pack.id" tabindex="-1" class="texture-pack-card" :class="{ selected: texturePacks.selectedPackId === pack.id, unavailable: pack.status !== 'ready' }">
       <label><input type="radio" name="texture-pack" :checked="texturePacks.selectedPackId === pack.id" :disabled="pack.status !== 'ready'" @change="select(pack.id)" />
-      <span class="texture-pack-copy"><strong>{{ pack.name }}</strong><small>{{ pack.mappings }} textures · {{ size(pack.sourceBytes) }} TPF · imported {{ new Date(pack.importedAt).toLocaleDateString() }}</small><small class="pack-hash">SHA-256 {{ pack.sourceSha256.slice(0, 12) }}…</small></span>
+      <span class="texture-pack-copy"><strong>{{ pack.name }}</strong><small>{{ pack.mappings }} changed images · {{ size(pack.sourceBytes) }} · Added {{ new Date(pack.importedAt).toLocaleDateString() }}</small></span>
       </label>
-      <span :class="pack.status === 'ready' ? 'pack-ready' : 'pack-warning'">{{ pack.status === 'ready' ? 'Ready' : 'Missing source' }}</span>
+      <span :class="pack.status === 'ready' ? 'pack-ready' : 'pack-warning'">{{ pack.status === 'ready' ? 'Ready' : 'File missing' }}</span>
       <button type="button" class="icon-button" :aria-label="`Remove ${pack.name}`" @click="remove(pack.id)"><Trash2 /></button>
     </div>
   </fieldset>
   <p v-if="status" class="inline-message texture-pack-status" role="status" aria-live="polite">{{ status }}</p>
-  <details class="texture-pack-help"><summary>Compatibility and safety</summary><p>Version 1 accepts original 32-bit TexMod TPF files with DDS or PNG images. It does not run DLLs, scripts, or executable mods. Files with 64-bit uMod hashes or unsupported images are refused as a whole.</p><p>The launcher keeps a private managed copy, so you can delete the downloaded file after a successful import.</p></details>
+  <details class="texture-pack-help"><summary>Which files can I use?</summary><p>Choose a .tpf texture pack made for TexMod. Files made for uMod and other kinds of mods are not supported yet.</p><p>A texture pack only changes how the game looks. It cannot run programs or scripts.</p><p>The launcher saves its own copy. After the texture pack has been added, you can delete the original file from Downloads.</p></details>
 </template>

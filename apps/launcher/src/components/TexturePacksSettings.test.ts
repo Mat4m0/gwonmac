@@ -41,10 +41,24 @@ describe("texture pack settings", () => {
     await wrapper.get(".settings-heading-row button").trigger("click");
     await flushPromises();
 
-    expect(wrapper.get('[role="status"]').text()).toContain("already installed");
+    expect(wrapper.get('[role="status"]').text()).toBe("This texture pack is already in your list.");
     expect(document.activeElement?.id).toBe(`texture-pack-${pack.id}`);
     expect(select).not.toHaveBeenCalled();
     wrapper.unmount();
+  });
+
+  it("explains the flow without developer terminology", () => {
+    installTexturePackNative({
+      import: vi.fn(async () => ({ status: "cancelled" } as const)),
+      select: vi.fn(async () => undefined),
+      remove: vi.fn(async () => undefined),
+    });
+    const wrapper = mount(TexturePacksSettings, { props: { texturePacks: snapshot } });
+
+    expect(wrapper.get(".settings-heading-row").text()).toContain("Add a .tpf file you downloaded");
+    expect(wrapper.get(".settings-heading-row button").text()).toBe("Add .tpf file");
+    expect(wrapper.text()).not.toContain("SHA-256");
+    expect(wrapper.text()).not.toContain("mapping file");
   });
 
   it("selects a pack and removes it through the narrow launcher bridge", async () => {
