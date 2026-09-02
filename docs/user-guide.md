@@ -42,10 +42,13 @@ When updating from the old Single Account experience, **Main account** continues
 to use the existing saved login, builds, templates, game files, and window
 position in place. The cutover does not copy, move, or delete that data.
 
-Closing the launcher hides it while games run. Closing one game affects only
-that account. Closing the last game leaves the launcher available. Clicking the
-Dock icon restores the most recent launcher or game window that you used. If
-that window has closed, the next most recent game window is restored.
+The launcher hides after every selected account opens successfully. It stays
+visible if an account needs attention. Use **Window → Show Launcher** to open
+another account. **Settings…** opens launcher Settings directly. Closing one
+game affects only that account. Closing the last game shows the launcher.
+Clicking the Dock icon restores the most recent launcher or game window that
+you used. If that window has closed, the next most recent game window is
+restored.
 
 ## Home content
 

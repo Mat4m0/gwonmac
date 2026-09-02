@@ -18,6 +18,9 @@ function listen(channel, callback) {
 
 /** @type {import("../shared/launcher-contracts.js").LauncherNativeApi} */
 const launcherApi = {
+  navigation: {
+    onRequest: (callback) => listen(LAUNCHER_IPC.navigationEvent, callback),
+  },
   state: {
     get: () => ipcRenderer.invoke(LAUNCHER_IPC.stateGet),
     onChange: (callback) => listen(LAUNCHER_IPC.stateEvent, callback),

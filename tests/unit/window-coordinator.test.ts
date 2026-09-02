@@ -37,6 +37,10 @@ function fakeWindow(id: number) {
       calls.push("focus");
       focused = true;
     },
+    blur() {
+      calls.push("blur");
+      focused = false;
+    },
     setDestroyed(value: boolean) { destroyed = value; },
     setFocused(value: boolean) { focused = value; },
     setMinimized(value: boolean) { minimized = value; },
@@ -180,6 +184,18 @@ describe("window coordinator", () => {
     assert.equal(coordinator.revealGame(game), false);
   });
 
+  it("hides the launcher after its launch task completes", () => {
+    const { coordinator, registry } = setup();
+    const launcher = fakeWindow(1);
+    launcher.setVisible(true);
+    registry.register(launcher, { role: "launcher" });
+
+    assert.equal(coordinator.hideLauncher(), true);
+    assert.deepEqual(launcher.calls, ["hide"]);
+    assert.equal(coordinator.hideLauncher(), false);
+    assert.deepEqual(launcher.calls, ["hide"]);
+  });
+
   it("hides a closed launcher only while games remain", () => {
     const { coordinator, registry } = setup();
     const launcher = fakeWindow(1);
@@ -220,22 +236,32 @@ describe("window coordinator", () => {
     assert.deepEqual(launcher.calls, ["show", "focus"]);
   });
 
-  it("focuses an asynchronous game only while the launcher remains focused", () => {
+  it("completes an asynchronous launch without stealing focus", () => {
     const { coordinator, registry } = setup();
     const launcher = fakeWindow(1);
     const game = fakeWindow(2);
     launcher.setVisible(true);
+    game.setVisible(true);
+    game.setFocused(true);
     registry.register(launcher, { role: "launcher" });
     registry.register(game, { role: "game", profileId: FIRST }, 2);
 
-    assert.equal(coordinator.revealAsyncGameIfLauncherFocused(game), false);
-    assert.deepEqual(game.calls, []);
+    assert.equal(coordinator.completeAsyncGameLaunch(game), false);
+    assert.deepEqual(launcher.calls, ["hide"]);
+    assert.deepEqual(game.calls, ["blur"]);
+  });
 
+  it("focuses an asynchronous game when the launcher remains focused", () => {
+    const { coordinator, registry } = setup();
+    const launcher = fakeWindow(1);
+    const game = fakeWindow(2);
+    launcher.setVisible(true);
     launcher.setFocused(true);
-    assert.equal(coordinator.revealAsyncGameIfLauncherFocused(game), true);
-    assert.deepEqual(game.calls, ["show", "focus"]);
+    registry.register(launcher, { role: "launcher" });
+    registry.register(game, { role: "game", profileId: FIRST }, 2);
 
-    registry.unregister(launcher);
-    assert.equal(coordinator.revealAsyncGameIfLauncherFocused(game), false);
+    assert.equal(coordinator.completeAsyncGameLaunch(game), true);
+    assert.deepEqual(launcher.calls, ["hide"]);
+    assert.deepEqual(game.calls, ["show", "focus"]);
   });
 });

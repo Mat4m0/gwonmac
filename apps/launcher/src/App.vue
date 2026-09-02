@@ -14,7 +14,7 @@ import {
   Crown,
   X,
 } from "lucide-vue-next";
-import type { LauncherSnapshot } from "@shared/launcher-contracts";
+import type { LauncherDestination, LauncherSnapshot } from "@shared/launcher-contracts";
 import type { GlobalTool, LauncherPreferencesPatch, LauncherSettingsPatch } from "@shared/launcher-contracts";
 import type { CacheInfo } from "@shared/contracts";
 import { shortcutDisplay } from "@shared/keyboard-shortcuts";
@@ -73,6 +73,7 @@ const gameFilesInfo = ref<CacheInfo | null>(null);
 const gameFilesLoading = ref(false);
 const MIGRATION_NOTICE_DURATION_MS = 8_000;
 let unsubscribe: (() => void) | undefined;
+let unsubscribeNavigation: (() => void) | undefined;
 let migrationNoticeTimer: ReturnType<typeof setTimeout> | undefined;
 
 const native = window.launcherNative;
@@ -80,6 +81,7 @@ const synchronized = ref(!native);
 const fixtureContent = computed(() => snapshot.value.contentAvailability.news === "fixture");
 onMounted(async () => {
   if (!native) return;
+  unsubscribeNavigation = native.navigation.onRequest(navigateFromMain);
   try {
     const initial = await native.state.get();
     snapshot.value = initial;
@@ -96,6 +98,7 @@ onMounted(async () => {
 });
 onBeforeUnmount(() => {
   unsubscribe?.();
+  unsubscribeNavigation?.();
   clearTimeout(migrationNoticeTimer);
 });
 watch([synchronized, () => snapshot.value.experience.introduction], async ([ready, introduction]) => {
@@ -195,6 +198,11 @@ function openSettings(section: SettingsRoute = "general") {
   settingsRoute.value = section;
   route.value = "settings";
   if (section === "game-files") void loadGameFilesInfo();
+}
+
+function navigateFromMain(destination: LauncherDestination) {
+  if (destination === "settings") openSettings();
+  else route.value = "home";
 }
 
 function selectSettings(section: SettingsRoute) {

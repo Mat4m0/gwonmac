@@ -27,6 +27,7 @@ import type { ProfileId } from "./multiple-accounts.js";
 export const LAUNCHER_IPC = Object.freeze({
   stateGet: "gw:launcher:state:get",
   stateEvent: "gw:launcher:state:event",
+  navigationEvent: "gw:launcher:navigation:event",
   profilesCreate: "gw:launcher:profiles:create",
   profilesUpdateAppearance: "gw:launcher:profiles:updateAppearance",
   profilesSetSelection: "gw:launcher:profiles:setSelection",
@@ -61,6 +62,8 @@ export const LAUNCHER_IPC = Object.freeze({
   updatesCheck: "gw:launcher:updates:check",
   updatesRestartAndInstall: "gw:launcher:updates:restartAndInstall",
 } as const);
+
+export type LauncherDestination = "home" | "settings";
 
 export type LauncherInstallationKind =
   | "fresh"
@@ -203,6 +206,9 @@ export interface LauncherSnapshot {
 }
 
 export interface LauncherNativeApi {
+  readonly navigation: {
+    onRequest(callback: (destination: LauncherDestination) => void): () => void;
+  };
   readonly state: {
     get(): Promise<LauncherSnapshot>;
     onChange(callback: (snapshot: LauncherSnapshot) => void): () => void;

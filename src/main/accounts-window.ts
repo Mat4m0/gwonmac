@@ -5,7 +5,7 @@
  * coordinator. This module owns only construction, trust, and local renderer
  * recovery so a launcher failure never closes a running game.
  */
-import { app, BrowserWindow, Menu, session } from "electron";
+import { app, BrowserWindow, session } from "electron";
 import { BACKGROUND_LAUNCH } from "./background-launch.js";
 import { isQuitting } from "./lifecycle.js";
 import { launcherPreloadPath } from "./paths.js";
@@ -13,17 +13,33 @@ import type { ProtocolDeps } from "./protocol.js";
 import { installLauncherProtocolHandlerForSession } from "./protocol.js";
 import type { WindowCoordinator } from "./window-coordinator.js";
 import { windowRegistry } from "./window-registry.js";
+import {
+  installNativeApplicationMenu,
+  type LauncherReveal,
+} from "./window-menu.js";
 
 const LAUNCHER_URL = "gw://app/launcher/index.html";
 let protocolInstalled = false;
 
-function installLauncherMenu(): void {
-  Menu.setApplicationMenu(Menu.buildFromTemplate([
+function installLauncherMenu(revealLauncher: LauncherReveal): void {
+  installNativeApplicationMenu([
     ...(process.platform === "darwin"
       ? [{
           label: app.name,
           submenu: [
             { role: "about" as const },
+            { type: "separator" as const },
+            {
+              id: "check-for-updates",
+              label: "Check for Updates…",
+              click: () => revealLauncher("settings"),
+            },
+            {
+              id: "show-settings",
+              label: "Settings…",
+              accelerator: "CmdOrCtrl+,",
+              click: () => revealLauncher("settings"),
+            },
             { type: "separator" as const },
             { role: "hide" as const },
             { role: "hideOthers" as const },
@@ -42,12 +58,14 @@ function installLauncherMenu(): void {
         { role: "selectAll" as const },
       ],
     },
-  ]));
+    { role: "windowMenu" },
+  ], revealLauncher);
 }
 
 export function createLauncherWindow(
   deps: ProtocolDeps,
   coordinator: WindowCoordinator<BrowserWindow>,
+  revealLauncher: LauncherReveal,
 ): BrowserWindow {
   const existing = windowRegistry.launcherWindow();
   if (existing) {
@@ -95,9 +113,9 @@ export function createLauncherWindow(
   });
   win.on("focus", () => {
     coordinator.recordFocused(win);
-    installLauncherMenu();
+    installLauncherMenu(revealLauncher);
   });
-  installLauncherMenu();
+  installLauncherMenu(revealLauncher);
   win.on("close", (event) => {
     if (!isQuitting()) coordinator.handleLauncherClose(event);
   });
@@ -114,7 +132,7 @@ export function createLauncherWindow(
       return;
     }
     windowRegistry.unregister(win);
-    const replacement = createLauncherWindow(deps, coordinator);
+    const replacement = createLauncherWindow(deps, coordinator, revealLauncher);
     if (!win.isDestroyed()) win.destroy();
     coordinator.revealLauncher();
     replacement.focus();
