@@ -55,6 +55,14 @@ export class WindowCoordinator<Window extends PresentableWindow> {
     return true;
   }
 
+  /** Remove the completed launch surface from normal game-window switching. */
+  hideLauncher(): boolean {
+    const launcher = this.#registry.launcherWindow();
+    if (!launcher || !launcher.isVisible()) return false;
+    launcher.hide();
+    return true;
+  }
+
   /** Keep a most-recently-used order for every launcher and game window. */
   recordFocused(win: Window): void {
     const context = this.#registry.contextForWebContents(win.webContents.id);
@@ -100,7 +108,7 @@ export class WindowCoordinator<Window extends PresentableWindow> {
     const launcher = this.#registry.launcherWindow();
     if (!launcher) return false;
     event.preventDefault();
-    launcher.hide();
+    this.hideLauncher();
     return true;
   }
 

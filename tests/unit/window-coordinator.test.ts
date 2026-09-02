@@ -180,6 +180,18 @@ describe("window coordinator", () => {
     assert.equal(coordinator.revealGame(game), false);
   });
 
+  it("hides the launcher after its launch task completes", () => {
+    const { coordinator, registry } = setup();
+    const launcher = fakeWindow(1);
+    launcher.setVisible(true);
+    registry.register(launcher, { role: "launcher" });
+
+    assert.equal(coordinator.hideLauncher(), true);
+    assert.deepEqual(launcher.calls, ["hide"]);
+    assert.equal(coordinator.hideLauncher(), false);
+    assert.deepEqual(launcher.calls, ["hide"]);
+  });
+
   it("hides a closed launcher only while games remain", () => {
     const { coordinator, registry } = setup();
     const launcher = fakeWindow(1);

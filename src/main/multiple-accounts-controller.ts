@@ -251,6 +251,7 @@ export class MultipleAccountsController {
     const win = windowRegistry.profileWindow(profileId);
     if (!win) return false;
     this.options.windows.revealGame(win, { activateApp: true });
+    this.options.windows.hideLauncher();
     return true;
   }
 
@@ -308,6 +309,7 @@ export class MultipleAccountsController {
     }
     if (firstSelectedWindow && !firstSelectedWindow.isDestroyed()) {
       this.options.windows.revealAsyncGameIfLauncherFocused(firstSelectedWindow);
+      this.options.windows.hideLauncher();
     }
     this.publish();
   }

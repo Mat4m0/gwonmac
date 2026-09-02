@@ -143,7 +143,12 @@ import {
 import { LauncherOrchestrator } from "./launcher-orchestrator.js";
 import { registerLauncherIpc } from "./launcher-ipc.js";
 import { LAUNCHER_IPC } from "../shared/launcher-contracts.js";
-import type { GlobalTool, LauncherSettingsPatch, ShortcutReplacement } from "../shared/launcher-contracts.js";
+import type {
+  GlobalTool,
+  LauncherDestination,
+  LauncherSettingsPatch,
+  ShortcutReplacement,
+} from "../shared/launcher-contracts.js";
 import {
   DEFAULT_SHORTCUTS,
   shortcutReserved,
@@ -215,8 +220,19 @@ const windowCoordinator = new WindowCoordinator(
 const INJECT_STARTUP_FAILURE =
   !app.isPackaged && process.env.GW_TEST_STARTUP_FAILURE === "1";
 
+function revealLauncher(destination?: LauncherDestination): boolean {
+  if (!windowCoordinator.revealLauncher({ activateApp: true })) return false;
+  if (destination) {
+    windowRegistry.launcherWindow()?.webContents.send(
+      LAUNCHER_IPC.navigationEvent,
+      destination,
+    );
+  }
+  return true;
+}
+
 function revealMainWindow(): void {
-  if (!windowCoordinator.revealLauncher({ activateApp: true })) {
+  if (!revealLauncher()) {
     secondInstanceRequested = true;
   }
   else secondInstanceRequested = false;
@@ -467,8 +483,8 @@ function buildWindowHost(
     prepareRendererRecovery: async () => {
       await clientRuntime.recoverRendererCrash();
     },
-    revealLauncher: () => {
-      windowCoordinator.revealLauncher({ activateApp: true });
+    revealLauncher: (destination) => {
+      revealLauncher(destination);
     },
     gameWindowClosed: () => {
       windowCoordinator.afterGameClosed();
@@ -1021,7 +1037,11 @@ if (primaryInstance) void app.whenReady().then(async () => {
     await stopDiagnostics();
   });
 
-  const win = createLauncherWindow(protocolDeps, windowCoordinator);
+  const win = createLauncherWindow(
+    protocolDeps,
+    windowCoordinator,
+    revealLauncher,
+  );
   let automaticUpdateCheckInFlight = false;
   const maybeCheckForAppUpdates = async (): Promise<void> => {
     if (automaticUpdateCheckInFlight) return;
@@ -1118,7 +1138,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
   });
   app.on("activate", () => {
     if (!windowCoordinator.restoreMostRecentWindow()) {
-      createLauncherWindow(protocolDeps, windowCoordinator);
+      createLauncherWindow(protocolDeps, windowCoordinator, revealLauncher);
     }
   });
   app.on("child-process-gone", (_event, details) => {
