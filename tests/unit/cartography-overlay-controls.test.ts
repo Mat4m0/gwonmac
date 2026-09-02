@@ -60,6 +60,25 @@ test("compact Cartography controls avoid frame-loop layout reads and static inli
   assert.match(controls, /boxChanged \|\| becameVisible/u);
 });
 
+test("Cartography controls open only by click and remain open after pointer movement", () => {
+  const controls = readFileSync(
+    "src/renderer/cartography-spike/overlay-controls.ts",
+    "utf8",
+  );
+  assert.match(controls, /trigger\.addEventListener\("click", \(\) => setOpen\(!open\)\)/u);
+  assert.doesNotMatch(controls, /pointerenter|pointerleave|matches\(":hover"\)|transient|collapseTimer/u);
+  assert.match(controls, /if \(open && event\.target instanceof Node/u);
+});
+
+test("compact Cartography panel keeps guidance progressively disclosed", () => {
+  const controls = readFileSync(
+    "src/renderer/cartography-spike/overlay-controls.ts",
+    "utf8",
+  );
+  assert.doesNotMatch(controls, /cartography-overlay-hint|Hold <kbd>|Numbers: solid/u);
+  assert.match(controls, /const qa = document\.createElement\("details"\)/u);
+});
+
 test("unsupported areas hide controls while transient failures leave them available", () => {
   const unavailable = (reason: "unsupported-area" | "loading"): CartographyState => ({
     context: null,
