@@ -14,11 +14,10 @@ import {
 import type { CartographyReachabilityDiagnostic } from "./reachability-kernel.js";
 import type { ScreenBox } from "./frame-placement.js";
 
-const COLLAPSE_DELAY_MS = 700;
 const CONTROL_SIZE = 30;
-const PANEL_WIDTH = 232;
-const PANEL_HEIGHT_ESTIMATE = 330;
-type OpenMode = "closed" | "transient" | "pinned";
+const PANEL_WIDTH = 204;
+const PANEL_HEIGHT_ESTIMATE = 230;
+const SAVE_CONFIRMATION_MS = 1_200;
 type Layer = "grid" | "walkability";
 
 export type CartographyQaStatus =
@@ -187,9 +186,11 @@ export function createCartographyOverlayControls(options: Readonly<{
   trigger.className = "cartography-overlay-trigger";
   trigger.setAttribute("aria-label", "Cartography layers");
   trigger.setAttribute("aria-expanded", "false");
+  trigger.setAttribute("aria-controls", "cartography-overlay-panel");
   trigger.title = "Cartography layers";
   trigger.append(layerIcon(document));
   const panel = document.createElement("div");
+  panel.id = "cartography-overlay-panel";
   panel.className = "cartography-overlay-panel";
   panel.hidden = true;
   panel.setAttribute("role", "group");
@@ -235,13 +236,6 @@ export function createCartographyOverlayControls(options: Readonly<{
   preset.setAttribute("aria-label", "Cartography preset");
   presetRow.append(presetLabel, preset);
   fields.append(presetRow);
-  const hint = document.createElement("p");
-  hint.className = "cartography-overlay-hint";
-  hint.innerHTML = [
-    "Hold <kbd>Shift</kbd> to inspect 3×3. Add <kbd>Option</kbd> for 7×7.",
-    "Numbers: solid is reachable now, outline is remembered, and ≈ is estimated.",
-    "Walkable terrain appears on Compass and Mission Map only.",
-  ].join("<br>");
   const saveStatus = document.createElement("p");
   saveStatus.className = "cartography-overlay-status";
   saveStatus.setAttribute("role", "status");
@@ -270,7 +264,7 @@ export function createCartographyOverlayControls(options: Readonly<{
   exportStatus.setAttribute("role", "status");
   exportStatus.setAttribute("aria-live", "polite");
   qa.append(qaSummary, qaRows, exportButton, exportStatus);
-  panel.append(heading, layers, fields, hint, saveStatus, qa);
+  panel.append(heading, layers, fields, saveStatus, qa);
   root.append(trigger, panel);
   options.parent.append(root);
 
@@ -278,8 +272,8 @@ export function createCartographyOverlayControls(options: Readonly<{
   let saving = false;
   let exporting = false;
   let disposed = false;
-  let mode: OpenMode = "closed";
-  let collapseTimer = 0;
+  let open = false;
+  let saveStatusTimer = 0;
   let latestBox: ScreenBox | null = null;
   let renderedLibrary: AppSettings["cartographyPresetLibrary"] | null = null;
   let renderedSettings: AppSettings | null = null;
@@ -313,20 +307,20 @@ export function createCartographyOverlayControls(options: Readonly<{
     root.style.setProperty("--cartography-trigger-color", style.grid.current.color);
   };
   const positionPanel = (): void => {
-    if (latestBox === null || mode === "closed") return;
+    if (latestBox === null || !open) return;
     const margin = 6;
     const rootTop = Number.parseFloat(root.style.top) || margin;
     panel.style.top = `${Math.round(Math.max(margin, Math.min(view.innerHeight - panelHeight - margin, rootTop + (CONTROL_SIZE - panelHeight) / 2)) - rootTop)}px`;
   };
-  const setMode = (next: OpenMode): void => {
-    mode = next;
-    panel.hidden = next === "closed";
-    trigger.setAttribute("aria-expanded", String(next !== "closed"));
-    if (next === "closed") {
+  const setOpen = (next: boolean): void => {
+    open = next;
+    panel.hidden = !next;
+    trigger.setAttribute("aria-expanded", String(next));
+    if (!next) {
       options.previewOpacity("grid", null);
       options.previewOpacity("walkability", null);
     } else positionPanel();
-    root.style.opacity = next === "closed"
+    root.style.opacity = !next
       ? String((currentSettings()?.cartographyControlIdleOpacity ?? 35) / 100) : "1";
   };
   const panelResizeObserver = typeof view.ResizeObserver === "function"
@@ -341,27 +335,24 @@ export function createCartographyOverlayControls(options: Readonly<{
     })
     : null;
   panelResizeObserver?.observe(panel);
-  const cancelCollapse = (): void => {
-    if (collapseTimer !== 0) view.clearTimeout(collapseTimer);
-    collapseTimer = 0;
-  };
-  const scheduleCollapse = (): void => {
-    if (mode !== "transient") return;
-    cancelCollapse();
-    collapseTimer = view.setTimeout(() => {
-      collapseTimer = 0;
-      if (!root.matches(":hover") && !root.contains(document.activeElement)) setMode("closed");
-    }, COLLAPSE_DELAY_MS);
+  const clearSaveStatusTimer = (): void => {
+    if (saveStatusTimer !== 0) view.clearTimeout(saveStatusTimer);
+    saveStatusTimer = 0;
   };
   const apply = (patch: RendererSettingsPatch): void => {
     const current = currentSettings();
     if (current === null || saving) return;
+    clearSaveStatusTimer();
     setSaving(true);
     saveStatus.textContent = "Saving…";
     void options.persist(patch).then((saved) => {
       if (disposed) return;
       canonical = saved;
       saveStatus.textContent = "Saved";
+      saveStatusTimer = view.setTimeout(() => {
+        saveStatusTimer = 0;
+        saveStatus.textContent = "";
+      }, SAVE_CONFIRMATION_MS);
       setSaving(false);
       sync(true);
     }, () => {
@@ -374,25 +365,15 @@ export function createCartographyOverlayControls(options: Readonly<{
   for (const type of ["pointerdown", "pointerup", "click", "wheel", "keydown", "keyup"]) {
     root.addEventListener(type, (event) => event.stopPropagation());
   }
-  root.addEventListener("pointerenter", () => {
-    cancelCollapse();
-    if (mode === "closed") setMode("transient");
-  });
-  root.addEventListener("pointerleave", scheduleCollapse);
-  root.addEventListener("focusin", () => {
-    cancelCollapse();
-    if (mode === "closed") setMode("transient");
-  });
-  root.addEventListener("focusout", scheduleCollapse);
-  trigger.addEventListener("click", () => setMode(mode === "pinned" ? "closed" : "pinned"));
+  trigger.addEventListener("click", () => setOpen(!open));
   root.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape" || mode === "closed") return;
+    if (event.key !== "Escape" || !open) return;
     event.preventDefault();
-    setMode("closed");
+    setOpen(false);
     trigger.focus();
   });
   const outsidePointerDown = (event: Event): void => {
-    if (mode === "pinned" && event.target instanceof Node && !root.contains(event.target)) setMode("closed");
+    if (open && event.target instanceof Node && !root.contains(event.target)) setOpen(false);
   };
   document.addEventListener("pointerdown", outsidePointerDown);
   gridButton.addEventListener("click", () => {
@@ -444,8 +425,7 @@ export function createCartographyOverlayControls(options: Readonly<{
     });
   });
   const hide = (): void => {
-    cancelCollapse();
-    setMode("closed");
+    setOpen(false);
     root.hidden = true;
     latestBox = null;
     canonical = null;
@@ -486,7 +466,7 @@ export function createCartographyOverlayControls(options: Readonly<{
       if (canonical !== settings) {
         canonical = settings;
         sync();
-        if (mode === "closed") {
+        if (!open) {
           root.style.opacity = String(settings.cartographyControlIdleOpacity / 100);
         }
       }
@@ -509,7 +489,7 @@ export function createCartographyOverlayControls(options: Readonly<{
     hide,
     dispose() {
       disposed = true;
-      cancelCollapse();
+      clearSaveStatusTimer();
       panelResizeObserver?.disconnect();
       document.removeEventListener("pointerdown", outsidePointerDown);
       view.removeEventListener("resize", viewportResize);
