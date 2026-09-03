@@ -10,9 +10,15 @@ import { signatureMatches, wasmEvidence } from "./wasm-evidence.js";
 import type { WasmDataEvidence } from "./wasm-data-evidence.js";
 
 const ROLE_SPECS = Object.freeze({
+  eventDispatcher: [708, ["i32", "i32", "i32", "i32", "i32", "i32"], [], "d05e5d09bdbfdadbdcf36806642669ee6906ce4fd462dec626eb22f3d3e0df69"],
+  callbackListInsert: [510, ["i32", "i32", "i32", "i32"], [], "ac639836d43e92dcd33a5c65fa8d94fa088f402fb62681650f71a3bd2d101f26"],
+  eventRegistration: [303, ["i32", "i32", "i32"], [], "129c49c7ab0d84f1c428c978cfd9f761b76048af02efc096a2c36d925eab2656"],
+  rosterRegistration: [30, [], [], "b8024524e056042190a6d68b20eb390a4a890c3f696c881aa69f3bf5cec995bc"],
+  queueDispatcher: [568, ["i32", "i32", "i32", "i32", "i32", "i32"], [], "5f4b679e850cdbf5273bdcd51b73e4f0a0397b5465faf1747b90b99bf8839963"],
+  queueDrain: [154, ["i32", "i32"], [], "7f75809bb1414cfbdfc9aa39218133cf48428088fb6f11712fd6432ed60ba521"],
   queueAppend: [644, ["i32", "i32", "i32", "i32", "i32", "i32"], ["i32"], "87376639db6c8e1fd2e72a7489ca737d83086d673f03930eed09d062bde70994"],
   queueFacade: [179, ["i32", "i32", "i32", "i32", "i32"], ["i32"], "13b9c7743346ddc37f8cdd42b58c2914e6596e36139f12584a3670db116b73f5"],
-  friendCallback: [872, ["i32", "i32"], [], "6660fdb5b02f1dc6c3a235b6be081bb52f2e148a60ddedb377cdd88153d0a4e2"],
+  rosterCallback: [872, ["i32", "i32"], [], "6660fdb5b02f1dc6c3a235b6be081bb52f2e148a60ddedb377cdd88153d0a4e2"],
   clear: [18, ["i32"], [], "d94f5f3480655bff618e0a910472d906ab7e9ec2264a85d2e8a469c896113a6a"],
   teardown: [47, [], [], "01ade3d374bc0a833931e9327eeca3b2582529f44c62755b52fc3ca9444a1d03"],
   requestPump: [566, ["i32"], [], "9102b2ab141f8c21c4e1ff39ad511ea5d785f4573dfe477f20ddb97de3bbce10"],
@@ -29,13 +35,15 @@ const ROLE_SPECS = Object.freeze({
 
 export const FRIEND_LIFECYCLE_SEMANTIC_SHA256 = createHash("sha256").update(JSON.stringify({
   roles: ROLE_SPECS,
-  contract: "request-roster-completion-exact-queue-friend-callback-five-connection-stores-v1",
+  contract: "request-roster-completion-user-event-envelope-dispatch-five-connection-stores-v2",
 })).digest("hex");
 
 type FriendLifecycleRole = keyof typeof ROLE_SPECS;
 
 export type FriendLifecycleCandidate = Readonly<{
   roles: Readonly<Record<FriendLifecycleRole, number>>;
+  rosterCallbackTableSlot: number;
+  eventContextPointer: number;
   connectionPointer: number;
   connectionStoreOffsets: Readonly<{
     connectionEvent: readonly number[];
@@ -108,14 +116,36 @@ export function inspectFriendLifecycle(input: Uint8Array): FriendLifecycleEviden
       || roles.rosterEntry.calls.get(roles.queueFacade.functionIndex) !== 1
       || roles.requestPump.calls.get(roles.queueFacade.functionIndex) !== 1
       || roles.teardown.calls.get(roles.clear.functionIndex) !== 1
-      || callbackCalls.some((target) => !roles.friendCallback.calls.has(target))
+      || roles.eventRegistration.calls.get(roles.callbackListInsert.functionIndex) !== 1
+      || roles.rosterRegistration.calls.get(roles.eventRegistration.functionIndex) !== 1
+      || roles.rosterRegistration.calls.get(roles.clear.functionIndex) !== 1
+      || roles.queueDispatcher.calls.get(roles.eventDispatcher.functionIndex) !== 2
+      || roles.queueDrain.calls.get(roles.queueDispatcher.functionIndex) !== 1
+      || callbackCalls.some((target) => !roles.rosterCallback.calls.has(target))
       || !hasConstant(roles.loginCompleted, 14) || !hasConstant(roles.loginCompleted, 352)
       || !hasConstant(roles.loginStart, 14) || !hasConstant(roles.loginStart, 352)
       || !hasConstant(roles.rosterEntry, 38) || !hasConstant(roles.rosterEntry, 104)
+      || !hasConstant(roles.rosterRegistration, 36) || !hasConstant(roles.queueAppend, 36)
       || !hasConstant(roles.requestPump, 28)
       || !roles.requestSent.memorySites.some((site) => site.opcode === 0x28 && site.value === 32)
       || !roles.requestCompleted.memorySites.some((site) => site.opcode === 0x28 && site.value === 32)) {
       return unavailable("friend-lifecycle-relationships-changed");
+    }
+
+    const rosterCallbackSlots = evidence.tableRelations.get(
+      roles.rosterCallback.functionIndex,
+    ) ?? [];
+    if (rosterCallbackSlots.length !== 1
+      || !hasConstant(roles.rosterRegistration, rosterCallbackSlots[0]!)) {
+      return unavailable("user-event-roster-callback-binding-changed");
+    }
+    const contextAddresses = roles.loginCompleted.memorySites.filter((site) =>
+      site.opcode === 0x28 && site.value >= evidence.data.zeroInitializedBase
+      && roles.loginStart.memorySites.some((other) => other.opcode === 0x28 && other.value === site.value)
+      && roles.rosterEntry.memorySites.some((other) => other.opcode === 0x28 && other.value === site.value)
+    ).map((site) => site.value);
+    if (contextAddresses.length !== 1) {
+      return unavailable("friend-event-context-not-unique");
     }
 
     const connectionWriters = ["connectionEvent", "disconnect", "connected"] as const;
@@ -148,6 +178,8 @@ export function inspectFriendLifecycle(input: Uint8Array): FriendLifecycleEviden
       inputSha256, runtimeAuthority: false, status: "candidate",
       candidate: {
         roles: roleIndices,
+        rosterCallbackTableSlot: rosterCallbackSlots[0]!,
+        eventContextPointer: contextAddresses[0]!,
         connectionPointer,
         connectionStoreOffsets: {
           connectionEvent: stores.connectionEvent

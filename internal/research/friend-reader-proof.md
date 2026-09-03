@@ -180,7 +180,8 @@ The [private session gate](../../src/companion-kernel/friend_session.rs) binds
 that boundary to one request ID, connection ID, and session epoch. It withdraws
 acceptance synchronously on invalidation and admits only after one matching
 successful completion queued exactly one event `14` and that event was later
-processed by the Friends callback. The gate keeps ordinals, not a second roster.
+delivered to the native roster callback. The gate keeps ordinals, not a
+second roster.
 Counter exhaustion or an impossible notification order reaches terminal epoch
 `0` and cannot admit again.
 
@@ -282,8 +283,13 @@ readiness flag.
 
 The inspectors now identify the complete bounded record layout, name copying,
 UUID writer, allocation growth, removal, sparse-slot ownership, status/map
-writers, login request capture, completion and exact queue path, Friends callback,
-and every direct invalidation site. The
+writers, login request capture, completion and exact queue path, roster callback,
+generic event dispatcher, roster registration, and every direct invalidation
+site. The queue wraps inner user-event `14` in outer category `36`; the roster
+callback is registered for that outer category. It changes records for inner
+events `38`, `39`, `40`, and `44`, and returns without changes for inner event
+`14`. A hook after that return can establish delivery. The outer event `14`
+consumer is unrelated and must not be used for friend-session admission. The
 [closed certificate](../../src/main/certification/friend-observer-certificate.ts)
 binds both reports to the exact input hash, semantic verifier ABI, and two
 semantic proof digests. The utility-process verifier derives it and the main
@@ -320,6 +326,7 @@ friend names, UUIDs, rosters, or search text in persisted diagnostics.
 | Private invalidation mechanism | Twelve additional scenarios passed on the retained input; runtime hook certification remains open |
 | Structural lifecycle proof | One candidate; role movement passes and changed calls, stores, or duplicates are refused |
 | Isolated verifier certificate | Closed input- and ABI-bound record implemented; production does not consume it yet |
+| Real transform predecessors | Template-save, Core Enhancement, and Tools Enhancement each retain one observer candidate |
 | Processed native completion | Eight queue scenarios passed |
 | Current-session correlation | Private ordinal gate passes four scenarios; production hooks remain unproved |
 | Bounded record decoding | Rust implementation and fourteen reader/session scenarios pass; not installed |

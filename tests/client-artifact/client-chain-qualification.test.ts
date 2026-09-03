@@ -12,6 +12,8 @@ import {
 } from "../../src/main/certification/enhancement-builds.js";
 import { transformEnhancementWasm } from
   "../../src/main/certification/enhancement-transform.js";
+import { deriveFriendObserverCertificate } from
+  "../../src/main/certification/friend-observer-certificate.js";
 import {
   isLocalClientVerification,
   verifyLocalClientBytes,
@@ -49,6 +51,10 @@ test("every shipped runtime profile reproduces the real client chain", async () 
   const templateBuild = verified.templateSaveBuild;
   assert.ok(templateBuild, "the real client must pass file compatibility proof");
   const template = rewriteTemplateSaveWasm(official, templateBuild);
+  assert.ok(
+    deriveFriendObserverCertificate(template),
+    "friend observation must prove against the template-save predecessor",
+  );
   const enhancementBuild = verified.enhancementBuild;
   assert.ok(enhancementBuild, "the file output must pass feature proof");
   const templateDoubleClick = deriveNativeDoubleClickBuild(template);
@@ -67,6 +73,10 @@ test("every shipped runtime profile reproduces the real client chain", async () 
     const profileBuild = profileVerification.enhancementBuild;
     assert.ok(profileBuild, `profile ${profile} must prove independently`);
     const enhanced = transformEnhancementWasm(template, profileBuild, capabilities);
+    assert.ok(
+      deriveFriendObserverCertificate(enhanced),
+      `friend observation must prove against the ${profile} predecessor`,
+    );
     assert.equal(
       sha256(enhanced),
       enhancementOutputSha256(profileBuild, capabilities),

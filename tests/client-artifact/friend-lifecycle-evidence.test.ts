@@ -106,6 +106,19 @@ test("friend lifecycle roles survive movement and refuse changed notification pa
     assert.equal(inspect(changed).status, "unavailable");
   });
 
+  await t.test("a changed user-event roster callback binding is refused", () => {
+    const source = candidate.roles.rosterRegistration;
+    const changed = mutate((bodies) => {
+      const fn = functions.find((entry) => entry.functionIndex === source)!;
+      const site = fn.constantSites.find((constant) =>
+        constant.value === candidate.rosterCallbackTableSlot
+      )!;
+      const body = bodies[local(source)]!;
+      body[site.operandStart] = body[site.operandStart]! + 1;
+    });
+    assert.equal(inspect(changed).status, "unavailable");
+  });
+
   await t.test("a duplicate lifecycle role is refused", () => {
     const source = candidate.roles.logout;
     const duplicated = mutate((bodies) => {
@@ -122,6 +135,10 @@ test("friend lifecycle roles survive movement and refuse changed notification pa
     assert.equal(isFriendObserverCertificate({
       ...certificate,
       lifecycle: { ...certificate.lifecycle, connectionPointer: -1 },
+    }, original.inputSha256), false);
+    assert.equal(isFriendObserverCertificate({
+      ...certificate,
+      lifecycle: { ...certificate.lifecycle, rosterCallbackTableSlot: -1 },
     }, original.inputSha256), false);
     assert.equal(isFriendObserverCertificate({
       ...certificate,

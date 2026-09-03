@@ -21,7 +21,9 @@ const RECORD_ROLE_KEYS = Object.freeze([
   "characterWriter", "aliasWriter", "uuidWriter", "nameCopy",
 ] as const);
 const LIFECYCLE_ROLE_KEYS = Object.freeze([
-  "queueAppend", "queueFacade", "friendCallback", "clear", "teardown",
+  "eventDispatcher", "callbackListInsert", "eventRegistration",
+  "rosterRegistration", "queueDispatcher", "queueDrain",
+  "queueAppend", "queueFacade", "rosterCallback", "clear", "teardown",
   "requestPump", "requestSent", "requestCompleted", "rosterEntry",
   "loginCompleted", "loginStart", "connectionEvent", "disconnect", "logout", "connected",
 ] as const);
@@ -91,9 +93,14 @@ export function isFriendObserverCertificate(
     })
     || !indexRecord(record.recordRoles, RECORD_ROLE_KEYS)
     || new Set(Object.values(record.recordRoles)).size !== RECORD_ROLE_KEYS.length) return false;
-  if (!exactKeys(lifecycle, ["roles", "connectionPointer", "connectionStoreOffsets"])
+  if (!exactKeys(lifecycle, [
+    "roles", "rosterCallbackTableSlot", "eventContextPointer",
+    "connectionPointer", "connectionStoreOffsets",
+  ])
     || !indexRecord(lifecycle.roles, LIFECYCLE_ROLE_KEYS)
     || new Set(Object.values(lifecycle.roles)).size !== LIFECYCLE_ROLE_KEYS.length
+    || !index(lifecycle.rosterCallbackTableSlot)
+    || !index(lifecycle.eventContextPointer)
     || !index(lifecycle.connectionPointer)
     || !exactKeys(lifecycle.connectionStoreOffsets, ["connectionEvent", "disconnect", "connected"])
     || !Array.isArray(lifecycle.connectionStoreOffsets.connectionEvent)
