@@ -283,8 +283,10 @@ region. It is cleared before logout, disconnect, login, and feature withdrawal.
 
 A friend row can authorize only the map ID shown by the ordinary reviewed
 Travel catalogue. The existing context, unlock, and dispatch checks run again
-when the player selects it. Offline friends, unknown maps, and positively
-locked maps do not appear as travel results. Friend data is never persisted.
+when the player selects it. Matching friends remain visible when they are
+offline, their map is unknown, or their destination is locked or outside the
+current travel context; the row is disabled and explains why. Friend data is
+never persisted.
 
 ## Command boundary
 

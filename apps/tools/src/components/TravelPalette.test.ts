@@ -430,7 +430,7 @@ describe("TravelPalette", () => {
     await wrapper.get('[role="combobox"]').setValue("zzzz-no-such-outpost");
 
     expect(traceSearch).toHaveBeenLastCalledWith("zzzz-no-such-outpost", []);
-    expect(wrapper.text()).toContain("No destinations for “zzzz-no-such-outpost”");
+    expect(wrapper.text()).toContain("No destinations or friends for “zzzz-no-such-outpost”");
     expect(wrapper.text()).toContain("Clear search");
     wrapper.unmount();
   });
@@ -600,8 +600,59 @@ describe("TravelPalette", () => {
     expect(wrapper.text()).toContain("Romi");
     expect(wrapper.text()).toContain("Example Ranger");
     expect(wrapper.text()).toContain("Kamadan, Jewel of Istan");
+    expect(wrapper.get(".travel-player-icon").attributes("aria-hidden")).toBe("true");
     await wrapper.get(".travel-result").trigger("click");
     expect(travel).toHaveBeenCalledWith({ mapId: 449 });
+    wrapper.unmount();
+  });
+
+  it("shows an offline friend as a disabled player result", async () => {
+    const { wrapper, travel } = fixture({ friends: {
+      status: "ready", sequence: 2, generation: 1,
+      friends: [{ key: "0123456789abcdef", status: "offline", mapId: 449,
+        alias: "Romi", character: "Example Ranger" }],
+    } });
+    await flushPromises();
+    await wrapper.get('[role="combobox"]').setValue("romi");
+
+    const result = wrapper.get(".travel-result");
+    expect(result.text()).toContain("Romi");
+    expect(result.text()).toContain("Offline");
+    expect(result.attributes()).toHaveProperty("disabled");
+    await result.trigger("click");
+    await wrapper.get('[role="combobox"]').trigger("keydown", { key: "Enter" });
+    expect(travel).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it("shows friends in unknown and locked locations with the reason they cannot be selected", async () => {
+    const { wrapper, state, travel } = fixture({ friends: {
+      status: "ready", sequence: 2, generation: 1,
+      friends: [
+        { key: "0123456789abcdef", status: "online", mapId: 9999,
+          alias: "Unknown Friend", character: "Hidden Character" },
+        { key: "fedcba9876543210", status: "away", mapId: 449,
+          alias: "Locked Friend", character: "Istan Character" },
+      ],
+    } });
+    const unlockedMapWords = Array.from({ length: 28 }, () => 0);
+    unlockedMapWords[Math.floor(55 / 32)] = 1 << (55 % 32);
+    state.value = {
+      status: "ready",
+      mapId: 55,
+      travelContext: "world",
+      characterKey: travelCharacterKey("0123456789abcdef"),
+      unlockedMapWords,
+    };
+    await flushPromises();
+
+    await wrapper.get('[role="combobox"]').setValue("friend");
+    const results = wrapper.findAll(".travel-result");
+    expect(results).toHaveLength(2);
+    expect(results[0]!.text()).toContain("Location unavailable");
+    expect(results[1]!.text()).toContain("Locked");
+    expect(results.every((result) => Object.hasOwn(result.attributes(), "disabled"))).toBe(true);
+    expect(travel).not.toHaveBeenCalled();
     wrapper.unmount();
   });
 

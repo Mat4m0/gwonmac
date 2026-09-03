@@ -61,7 +61,23 @@ let visibilityLoad = 0;
 
 const hasQuery = computed(() => normaliseTravelTerm(query.value).length > 0);
 const travelPending = computed(() => props.host.attempt.value.status !== "idle");
-type SearchResult = TravelDestination & Readonly<{ friend: TravelFriend | null; resultKey: string }>;
+type DestinationSearchResult = Readonly<{
+  kind: "destination";
+  resultKey: string;
+  mapId: number;
+  destination: TravelDestination;
+  friend: null;
+  disabledReason: null;
+}>;
+type FriendSearchResult = Readonly<{
+  kind: "friend";
+  resultKey: string;
+  mapId: number;
+  destination: TravelDestination | null;
+  friend: TravelFriend;
+  disabledReason: string | null;
+}>;
+type SearchResult = DestinationSearchResult | FriendSearchResult;
 const catalogueResults = computed(() => hasQuery.value
   ? searchTravelDestinations(query.value, synonyms.value)
   : []
@@ -72,26 +88,51 @@ const isAvailable = (mapId: number) => {
   const result = availability(mapId);
   return result === "available" || result === "unknown";
 };
-const friendResults = computed<SearchResult[]>(() => {
+const currentMapId = computed(() =>
+  props.host.state.value.status === "ready" ? props.host.state.value.mapId : null
+);
+function friendDisabledReason(friend: TravelFriend, destination: TravelDestination | null): string | null {
+  if (friend.status === "offline") return "Offline";
+  if (destination === null) return "Location unavailable";
+  const result = availability(friend.mapId);
+  if (result === "locked") return "Locked";
+  if (result === "outside-context") return "Unavailable here";
+  if (friend.mapId === currentMapId.value) return "Current location";
+  return null;
+}
+const friendResults = computed<FriendSearchResult[]>(() => {
   const observed = props.host.friends.value;
   if (!hasQuery.value || observed.status !== "ready") return [];
   const term = normaliseTravelTerm(query.value);
   return observed.friends.flatMap((friend) => {
-    if (friend.status === "offline"
-      || !normaliseTravelTerm(`${friend.alias} ${friend.character}`).includes(term)) return [];
+    if (!normaliseTravelTerm(`${friend.alias} ${friend.character}`).includes(term)) return [];
     const destination = travelDestination(friend.mapId);
-    return destination === null || !isAvailable(destination.mapId) ? [] : [{
-      ...destination, friend, resultKey: `friend-${friend.key}`,
+    return [{
+      kind: "friend",
+      resultKey: `friend-${friend.key}`,
+      mapId: friend.mapId,
+      destination,
+      friend,
+      disabledReason: friendDisabledReason(friend, destination),
     }];
   });
 });
 const results = computed<SearchResult[]>(() => {
-  const friendMaps = new Set(friendResults.value.map(({ mapId }) => mapId));
+  const friendMaps = new Set(friendResults.value
+    .filter(({ disabledReason }) => disabledReason === null)
+    .map(({ mapId }) => mapId));
   return [
     ...friendResults.value,
     ...catalogueResults.value
       .filter((destination) => isAvailable(destination.mapId) && !friendMaps.has(destination.mapId))
-      .map((destination) => ({ ...destination, friend: null, resultKey: `map-${destination.mapId}` })),
+      .map((destination): DestinationSearchResult => ({
+        kind: "destination",
+        resultKey: `map-${destination.mapId}`,
+        mapId: destination.mapId,
+        destination,
+        friend: null,
+        disabledReason: null,
+      })),
   ];
 });
 const contextExcludedResults = computed(() => catalogueResults.value.filter(
@@ -104,9 +145,6 @@ const shortcutRows = computed(() => Array.from({ length: TRAVEL_SHORTCUT_LIMIT }
 const assignedShortcuts = computed(() => shortcutRows.value.filter(
   (row) => row.destination !== null && row.request !== null && isAvailable(row.request.mapId),
 ));
-const currentMapId = computed(() =>
-  props.host.state.value.status === "ready" ? props.host.state.value.mapId : null
-);
 const browseUnlocksKnown = computed(() =>
   props.host.state.value.status === "ready"
   && props.host.state.value.unlockedMapWords !== null
@@ -156,13 +194,13 @@ const searchStatusText = computed(() => {
       ? "No destinations are available outside Pre-Searing."
       : "Pre-Searing destinations are unavailable after the Searing.";
   }
-  if (results.value.length === 0) return "No destinations match your search.";
-  return `${results.value.length} ${results.value.length === 1 ? "destination" : "destinations"} found.`;
+  if (results.value.length === 0) return "No destinations or friends match your search.";
+  return `${results.value.length} ${results.value.length === 1 ? "result" : "results"} found.`;
 });
 const emptySearchTitle = computed(() =>
   contextExcludedResults.value.length > 0
     ? "Destination unavailable here"
-    : `No destinations for “${query.value}”`
+    : `No destinations or friends for “${query.value}”`
 );
 const emptySearchHelp = computed(() => {
   const excluded = contextExcludedResults.value[0];
@@ -170,7 +208,7 @@ const emptySearchHelp = computed(() => {
     return travelContextRefusal(props.host.state.value, excluded.mapId)
       ?? "This destination is unavailable from the current location.";
   }
-  return "Try a destination, campaign, official shortcut, or your own search phrase.";
+  return "Try a friend, destination, campaign, official shortcut, or your own search phrase.";
 });
 
 function setFeedback(message: string, level: typeof feedbackLevel.value): void {
@@ -183,7 +221,6 @@ function inputValue(event: Event): string {
 }
 
 function queryMatchLabel(destination: TravelDestination): string {
-  if ("friend" in destination && destination.friend !== null) return destination.name;
   const normalized = normaliseTravelTerm(query.value);
   const tokens = normalized.split(" ").filter(Boolean);
   if (tokens.length === 0) return destination.campaign;
@@ -191,6 +228,29 @@ function queryMatchLabel(destination: TravelDestination): string {
     entry.mapId === destination.mapId
     && tokens.every((token) => normaliseTravelTerm(entry.term).includes(token))
   ) ? "Search phrase" : destination.campaign;
+}
+
+function searchResultLocation(result: SearchResult): string {
+  return result.destination?.name ?? "Location unavailable";
+}
+
+function friendResultLabel(result: FriendSearchResult): string {
+  const location = searchResultLocation(result);
+  return result.disabledReason === null || result.destination === null
+    ? location
+    : `${location}, ${result.disabledReason}`;
+}
+
+function searchResultDisabled(result: SearchResult): boolean {
+  return result.disabledReason !== null || travelPending.value || props.host.unavailable !== null;
+}
+
+function selectable(entry: TravelDestination | SearchResult): boolean {
+  return !("resultKey" in entry) || entry.disabledReason === null;
+}
+
+function resultDestination(entry: TravelDestination | SearchResult): TravelDestination | null {
+  return "resultKey" in entry ? entry.destination : entry;
 }
 
 function favoriteLabel(destination: TravelDestination): string {
@@ -230,7 +290,9 @@ watch(query, () => {
   if (hasQuery.value) mode.value = "travel";
 });
 watch(results, (next) => {
-  props.host.traceSearch(query.value, next.map((destination) => destination.mapId));
+  const firstAvailable = next.findIndex((result) => result.disabledReason === null);
+  active.value = firstAvailable < 0 ? 0 : firstAvailable;
+  props.host.traceSearch(query.value, next.map((result) => result.mapId));
 });
 watch(() => props.visible, async (visible) => {
   if (!visible) return;
@@ -421,10 +483,12 @@ async function removePhrase(index: number): Promise<void> {
 }
 
 async function moveActive(direction: 1 | -1): Promise<void> {
-  if (selectableDestinations.value.length === 0) return;
-  active.value = (
-    active.value + direction + selectableDestinations.value.length
-  ) % selectableDestinations.value.length;
+  const entries = selectableDestinations.value;
+  if (!entries.some(selectable)) return;
+  let next = active.value;
+  do next = (next + direction + entries.length) % entries.length;
+  while (!selectable(entries[next]!));
+  active.value = next;
   await nextTick();
   palette.value?.querySelector<HTMLElement>(`#travel-${activeResultId.value}`)?.scrollIntoView({ block: "nearest" });
 }
@@ -446,15 +510,17 @@ function onKeydown(event: KeyboardEvent): void {
     return;
   }
   if (event.target === input.value && event.key === "Enter") {
-    if (activeDestination.value !== null) {
+    if (activeDestination.value !== null && selectable(activeDestination.value)) {
       event.preventDefault();
       void travel({ mapId: activeDestination.value.mapId });
     }
     return;
   }
   if (/^Digit[1-9]$/u.test(event.code) && event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && activeDestination.value) {
+    const destination = resultDestination(activeDestination.value);
+    if (destination === null || !selectable(activeDestination.value)) return;
     event.preventDefault();
-    void saveShortcut(Number(event.code.slice(5)) - 1, activeDestination.value);
+    void saveShortcut(Number(event.code.slice(5)) - 1, destination);
     return;
   }
   if (/^Digit[1-9]$/u.test(event.code) && mode.value === "travel" && !hasQuery.value && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
@@ -485,7 +551,13 @@ function onKeydown(event: KeyboardEvent): void {
     <section v-if="hasQuery" id="travel-results-panel" class="ui-scroll travel-body" role="region" aria-label="Travel search results">
       <div v-if="results.length" class="travel-result-heading">{{ results.length === 1 ? 'Best match for' : 'Matches for' }} <strong>{{ query }}</strong></div>
       <div v-if="results.length" id="travel-results" class="travel-results" role="listbox">
-        <button v-for="(destination, index) in results" :id="`travel-${destination.resultKey}`" :key="destination.resultKey" type="button" class="travel-result ui-row" role="option" tabindex="-1" :aria-selected="index === active" :disabled="travelPending || host.unavailable !== null" @mouseenter="active = index" @click="active = index; travel({ mapId: destination.mapId })"><span><strong v-if="destination.friend">{{ destination.friend.alias }}</strong><strong v-else><template v-for="(part, partIndex) in highlightTravelDestinationName(destination, query)" :key="partIndex"><mark v-if="part.match">{{ part.text }}</mark><template v-else>{{ part.text }}</template></template></strong><small>{{ destination.friend?.character || destination.campaign }}</small></span><span class="travel-match">{{ queryMatchLabel(destination) }}</span></button>
+        <button v-for="(result, index) in results" :id="`travel-${result.resultKey}`" :key="result.resultKey" type="button" class="travel-result ui-row" role="option" tabindex="-1" :aria-selected="index === active" :aria-label="result.kind === 'friend' ? `${result.friend.alias}, ${result.friend.character}, ${friendResultLabel(result)}` : undefined" :disabled="searchResultDisabled(result)" @mouseenter="active = index" @click="active = index; travel({ mapId: result.mapId })">
+          <span class="travel-result-identity">
+            <svg v-if="result.kind === 'friend'" class="travel-player-icon" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="6.5" r="3" /><path d="M4.5 17c.6-3.1 2.4-4.7 5.5-4.7s4.9 1.6 5.5 4.7" /></svg>
+            <span><strong v-if="result.kind === 'friend'">{{ result.friend.alias }}</strong><strong v-else><template v-for="(part, partIndex) in highlightTravelDestinationName(result.destination, query)" :key="partIndex"><mark v-if="part.match">{{ part.text }}</mark><template v-else>{{ part.text }}</template></template></strong><small>{{ result.kind === 'friend' ? result.friend.character : result.destination.campaign }}</small></span>
+          </span>
+          <span class="travel-result-context"><span class="travel-match" :data-unavailable="result.disabledReason !== null || undefined">{{ result.kind === 'friend' ? searchResultLocation(result) : queryMatchLabel(result.destination) }}</span><small v-if="result.disabledReason !== null && result.destination !== null" class="travel-unavailable-reason">{{ result.disabledReason }}</small></span>
+        </button>
       </div>
       <div v-else class="ui-empty travel-empty"><strong>{{ emptySearchTitle }}</strong><p>{{ emptySearchHelp }}</p><button type="button" class="ui-button" @click="query = ''">Clear search</button></div>
     </section>
