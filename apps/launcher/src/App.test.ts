@@ -205,6 +205,7 @@ describe("unified launcher shell", () => {
     expect(wrapper.get('.settings-content h1').text()).toBe('Tools');
     expect(wrapper.get('.restart-row button').attributes('disabled')).toBeDefined();
     expect(wrapper.get('.restart-row').text()).toContain('Close every game window');
+    expect(wrapper.get('.restart-row').text()).toContain('Restart the launcher to load Tools');
     update({ ...fixtureSnapshot, profiles: fixtureSnapshot.profiles.map(profile => ({ ...profile, state: 'ready' })), tools: { ...fixtureSnapshot.tools, configured: true, loaded: false, restartRequired: true } });
     await wrapper.vm.$nextTick();
     expect(wrapper.get('.restart-row button').attributes('disabled')).toBeUndefined();
@@ -214,6 +215,9 @@ describe("unified launcher shell", () => {
     update({ ...fixtureSnapshot, tools: { ...fixtureSnapshot.tools, configured: true, loaded: true, restartRequired: false } });
     await wrapper.vm.$nextTick();
     expect(wrapper.text()).toContain("Maps enabled");
+    update({ ...fixtureSnapshot, tools: { ...fixtureSnapshot.tools, configured: false, loaded: true, restartRequired: true } });
+    await wrapper.findAll('.settings-page aside button').find(button => button.text() === 'Tools')!.trigger('click');
+    expect(wrapper.get('.restart-row').text()).toContain('Tools are off in every game window. Restart the launcher to finish unloading them.');
   });
 
   it("keeps Discord and GitHub in the global header", async () => {

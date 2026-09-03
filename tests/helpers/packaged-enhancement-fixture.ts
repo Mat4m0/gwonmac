@@ -817,9 +817,16 @@ export async function assertPackagedHostOnlyToolsSession() {
         };
       }),
       { configured: false, loaded: true, restartRequired: true },
-      "disabling Tools while a game is open did not defer the change safely",
+      "disabling Tools did not retain the loaded runtime until restart",
     );
-    await fixture.page.waitForSelector("#toolbox-foundation");
+    await fixture.page.waitForSelector("#toolbox-foundation", { state: "detached" });
+    assert.equal(
+      await fixture.page.evaluate(() => window.dispatchEvent(
+        new CustomEvent("gw:tools-toggle", { cancelable: true }),
+      )),
+      true,
+      "disabled Tools still claimed its open command",
+    );
     await setToolsEnabled(true);
     assert.equal(
       await fixture.launcher.evaluate(async () =>

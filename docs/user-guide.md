@@ -116,8 +116,11 @@ application shortcuts such as Command-C, Command-V, Command-Q, and Command-W
 remain reserved. If a new or restored shortcut conflicts with any feature,
 the launcher asks before replacing it. This includes disabled features.
 
-Changing **Enable Tools** requires restarting the entire app, including the
-launcher. Reopening only a game window does not load or unload Tools. Close all
+Enabling Tools for the first time requires restarting the entire app, including
+the launcher. Turning Tools off removes its features from every game window
+immediately. Restart the launcher to finish unloading the Tools runtime.
+Re-enabling Tools before that restart restores its features immediately.
+Reopening only a game window does not load or unload the runtime. Close all
 game windows, then select **Restart launcher** in **Settings → Tools**. You can
 also quit the app with Command-Q and reopen it. Individual Tool switches and
 shortcuts apply to all running profiles when the Tools runtime is already loaded.
