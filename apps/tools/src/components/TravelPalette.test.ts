@@ -712,12 +712,14 @@ describe("TravelPalette", () => {
     wrapper.unmount();
   });
 
-  it("shows friends in unknown and locked locations with the reason they cannot be selected", async () => {
+  it("shows every friend location with the reason it cannot be selected", async () => {
     const { wrapper, state, travel } = fixture({ friends: {
       status: "ready", sequence: 2, generation: 1,
       friends: [
         { key: "0123456789abcdef", status: "online", mapId: 9999,
           alias: "Unknown Friend", character: "Hidden Character" },
+        { key: "1111111111111111", status: "online", mapId: 33,
+          alias: "Exploring Friend", character: "Ascalon Character" },
         { key: "fedcba9876543210", status: "away", mapId: 449,
           alias: "Locked Friend", character: "Istan Character" },
       ],
@@ -735,9 +737,12 @@ describe("TravelPalette", () => {
 
     await wrapper.get('[role="combobox"]').setValue("friend");
     const results = wrapper.findAll(".travel-result");
-    expect(results).toHaveLength(2);
-    expect(results[0]!.text()).toContain("Location unavailable");
-    expect(results[1]!.text()).toContain("Locked");
+    expect(results).toHaveLength(3);
+    expect(results[0]!.text()).toContain("Unknown map (ID 9999)");
+    expect(results[0]!.text()).toContain("Unavailable for travel");
+    expect(results[1]!.text()).toContain("Old Ascalon");
+    expect(results[1]!.text()).toContain("Unavailable for travel");
+    expect(results[2]!.text()).toContain("Locked");
     expect(results.every((result) => Object.hasOwn(result.attributes(), "disabled"))).toBe(true);
     expect(travel).not.toHaveBeenCalled();
     wrapper.unmount();

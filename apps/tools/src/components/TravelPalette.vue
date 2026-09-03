@@ -19,6 +19,7 @@ import {
   travelDestinationAvailability,
 } from "../../../../src/shared/travel-command";
 import { TRAVEL_HISTORY_VISIBLE_LIMIT } from "../../../../src/shared/travel-history";
+import { guildWarsMapName } from "../../../../src/shared/guild-wars-map-names";
 import { useTravelPreferences } from "../travel-preferences";
 import TravelDestinationPicker from "./TravelDestinationPicker.vue";
 
@@ -75,6 +76,7 @@ type FriendSearchResult = Readonly<{
   generation: number;
   mapId: number;
   destination: TravelDestination | null;
+  location: string;
   friend: TravelFriend;
   disabledReason: string | null;
 }>;
@@ -95,7 +97,7 @@ const currentMapId = computed(() =>
 function friendDisabledReason(friend: TravelFriend, destination: TravelDestination | null): string | null {
   if (friend.status === "offline") return "Offline";
   if (friend.status === "unknown") return "Status unavailable";
-  if (destination === null) return "Location unavailable";
+  if (destination === null) return "Unavailable for travel";
   const result = availability(friend.mapId);
   if (result === "locked") return "Locked";
   if (result === "outside-context") return "Unavailable here";
@@ -116,6 +118,7 @@ const friendResults = computed<FriendSearchResult[]>(() => {
       generation: observed.generation,
       mapId: friend.mapId,
       destination,
+      location: destination?.name ?? guildWarsMapName(friend.mapId),
       friend,
       disabledReason: friendDisabledReason(friend, destination),
     }];
@@ -246,12 +249,12 @@ function queryMatchLabel(destination: TravelDestination): string {
 }
 
 function searchResultLocation(result: SearchResult): string {
-  return result.destination?.name ?? "Location unavailable";
+  return result.kind === "friend" ? result.location : result.destination.name;
 }
 
 function friendResultLabel(result: FriendSearchResult): string {
   const location = searchResultLocation(result);
-  return result.disabledReason === null || result.destination === null
+  return result.disabledReason === null
     ? location
     : `${location}, ${result.disabledReason}`;
 }
@@ -598,7 +601,7 @@ function onKeydown(event: KeyboardEvent): void {
             <svg v-if="result.kind === 'friend'" class="travel-player-icon" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="6.5" r="3" /><path d="M4.5 17c.6-3.1 2.4-4.7 5.5-4.7s4.9 1.6 5.5 4.7" /></svg>
             <span><strong v-if="result.kind === 'friend'">{{ result.friend.alias }}</strong><strong v-else><template v-for="(part, partIndex) in highlightTravelDestinationName(result.destination, query)" :key="partIndex"><mark v-if="part.match">{{ part.text }}</mark><template v-else>{{ part.text }}</template></template></strong><small>{{ result.kind === 'friend' ? result.friend.character : result.destination.campaign }}</small></span>
           </span>
-          <span class="travel-result-context"><span class="travel-match" :data-unavailable="result.disabledReason !== null || undefined">{{ result.kind === 'friend' ? searchResultLocation(result) : queryMatchLabel(result.destination) }}</span><small v-if="result.disabledReason !== null && result.destination !== null" class="travel-unavailable-reason">{{ result.disabledReason }}</small></span>
+          <span class="travel-result-context"><span class="travel-match" :data-unavailable="result.disabledReason !== null || undefined">{{ result.kind === 'friend' ? searchResultLocation(result) : queryMatchLabel(result.destination) }}</span><small v-if="result.disabledReason !== null" class="travel-unavailable-reason">{{ result.disabledReason }}</small></span>
         </button>
       </div>
       <div v-else class="ui-empty travel-empty"><strong>{{ emptySearchTitle }}</strong><p>{{ emptySearchHelp }}</p><button type="button" class="ui-button" @click="query = ''">Clear search</button></div>
