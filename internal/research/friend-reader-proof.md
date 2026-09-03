@@ -58,6 +58,41 @@ the inspector identifies one candidate:
 
 Those values are regression evidence, not production constants.
 
+## Executed native lifecycle experiments
+
+The [native lifecycle fixture](../../tests/native/friend-lifecycle-evidence.test.ts)
+extracts the inspected functions into a small, temporary WASM module. It changes
+only direct-call indices. It retains native control flow, loads, stores, and
+the request pump's indirect calls. Synthetic memory supplies names, requests,
+and connection records. Explicit substitutes own copying, event collection,
+network requests, completion notification, and request removal.
+
+This fixture executes no game startup, socket, login, or live account access.
+It refuses another input hash until its native roles are reviewed. It is an
+explicit research command under `tests/native`, not a new fixed-build condition
+in the automatic qualification of future ArenaNet clients.
+
+Eleven scenarios pass (12 TAP tests including the parent):
+
+| Executed native behavior | Consequence for the reader |
+| --- | --- |
+| `10084` accepts roster entries only for matching request ID `+32` and pending state `+20 == 3`. | A pending request is a useful relationship; it is not yet proof of a particular account or completed roster. |
+| `10068` marks a matching request completed and records its result. Later entries are ignored. | Request completion provides a boundary to investigate for initial roster admission. |
+| `9988` checks a pending request's captured connection ID `+28` against the current connection. It finishes with error `7` on replacement or disconnect in the fixture. | Connection identity matters independently of the memory address. |
+| Once a request has been marked completed, `9988` does not perform that same connection comparison. | A completion result alone must not authorize a new accepted session. |
+| `10084` does not itself compare the request's connection ID; `10085` and `10086` do not check authentication. | Upstream dispatch and ordering remain required evidence. |
+| `8851` writes own status even when `10144` cannot send it. | Own status cannot establish connectivity or freshness. |
+| `10244` sends logout and clears connection flag `+28 & 4`, while retaining the pointer and friend storage. `10243` then returns false. | The native authentication getter is stronger than pointer presence. |
+| `10281` and `10073` can process a later login reply and restore the flag on the same connection. The sampled roster values remain unchanged in this fixture. | Polling those values alone cannot record an intervening logout/login transition. |
+| `8834` changes status without clearing `+108`; `8835` changes the last reported map. | Re-reading a map does not prove that the server refreshed it. |
+| `8839` and `8821` preserve allocated slots when clearing an already empty table. | Allocated empty storage is not a synchronization marker. |
+
+The fixtures establish function-local behavior. They do **not** prove that
+every supplied ordering is reachable in the full client. In particular, event
+delivery, the real request destructor, the full login completion callback,
+nonempty table clearing, and server ordering are not executed. Do not report
+these counterexamples as witnessed cross-account leaks or live client bugs.
+
 ## Named blockers and their evidence
 
 ### An allocated empty table is not proof of a synchronized roster
@@ -93,10 +128,19 @@ Connection establishment and removal paths include `10278`, `10236`, and
 `10240`. These are useful candidates; a connection pointer by itself does not
 prove that retained friend locations were refreshed after reconnect.
 
-Still required: establish the callback ordering and a structurally identified
-signal that withdraws previous-session records and admits current-session
-records, including reconnect without an observed intervening game tick.
-Do not replace that proof with the host's current character key.
+The native request pump and authentication getter are now exercised above.
+Still required: establish callback ordering and structurally identify a
+transition signal that withdraws previous-session records and admits
+current-session records. Do not replace this with the host's current character
+key, own status, connection pointer, or a sampled authentication flag alone.
+
+The inspected login completion callback `9998` commits login data and emits
+auth event `14`. Its success path writes account and character UUID fields
+and copies the selected character name. The request pump calls completion
+through vtable `+16`. These relationships identify the next narrow experiment:
+prove how login start, table clear, successful completion, and disconnect relate
+to one accepted roster generation. A generic pending request can also represent
+another operation; state `3` is not a friend-list request type.
 
 ### Record semantics and update survival remain incomplete
 
@@ -116,6 +160,7 @@ these commands from the worktree; no game window or network request is needed:
 mkdir -p build/friend-evidence
 node --import ./scripts/ts-hook.mjs scripts/friend-table-evidence.ts "$GW_CLIENT_WASM" > build/friend-evidence/table.json
 node --import ./scripts/ts-hook.mjs --test --test-reporter=tap --test-timeout=120000 tests/client-artifact/friend-table-evidence.test.ts > build/friend-evidence/mutations.tap 2>&1
+node --import ./scripts/ts-hook.mjs --test --test-reporter=tap --test-timeout=120000 tests/native/friend-lifecycle-evidence.test.ts > build/friend-evidence/lifecycle.tap 2>&1
 pnpm check > build/friend-evidence/check.log 2>&1
 ```
 
@@ -128,6 +173,7 @@ friend names, UUIDs, rosters, or search text in persisted diagnostics.
 | --- | --- |
 | Candidate identification | One candidate on the inspected cached input |
 | Complete structural reader proof | Incomplete |
+| Native lifecycle function experiments | Eleven synthetic scenarios passed; full dispatch ordering remains unproved |
 | Bounded live-record decoding | Not implemented |
 | Account/disconnect/reconnect invalidation | Unproved |
 | Companion observation installed | No |
@@ -137,7 +183,15 @@ friend names, UUIDs, rosters, or search text in persisted diagnostics.
 
 ## Resume here
 
-Resolve the lifecycle signal above before adding a runtime layout or UI.
+Resolve the transition signal above before adding a runtime layout or UI.
+The preferred tick-only reader is not yet sufficient: its proposed sampled
+values can return to their previous values after a transition. Investigate a
+narrow, certified lifecycle notification that invalidates the companion's
+accepted generation synchronously. Keep that notification internal to the
+derived client and companion. It must not add a generic renderer callback or
+another roster store. A native monotonic session marker would be simpler if
+one can be proved; none is identified by the current experiment.
+
 Turn empty/unavailable, disconnect, account switch, reconnect, and slot reuse
 into executable refusal tests. Then add the Rust companion reader and reuse
 the existing region installation and sequence feed.
