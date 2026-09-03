@@ -42,7 +42,8 @@ export type FriendObserverCertificate = Readonly<{
   lifecycle: FriendLifecycleCandidate;
 }>;
 
-function exactKeys(value: object, expected: readonly string[]): boolean {
+function exactKeys(value: unknown, expected: readonly string[]): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const actual = Object.keys(value).sort();
   const sorted = [...expected].sort();
   return actual.length === sorted.length && actual.every((key, index) => key === sorted[index]);

@@ -34,9 +34,9 @@ import {
   type CartographySpikeBuild,
 } from "./cartography-spike-verifier.js";
 import {
-  isFriendObserverCertificate,
-  type FriendObserverCertificate,
-} from "./friend-observer-certificate.js";
+  isFriendObserverBuild,
+  type FriendObserverBuild,
+} from "./friend-observer-transform.js";
 
 const VERIFIER_TIMEOUT_MS = 5_000;
 
@@ -126,11 +126,11 @@ export async function verifyCartographyLocally(options: {
 export async function verifyFriendObserverLocally(options: {
   wasmPath: string;
   inputSha256: string;
-}): Promise<FriendObserverCertificate | null> {
+}): Promise<FriendObserverBuild | null> {
   return runIsolatedVerifier({
     args: ["friend-observer", options.wasmPath, options.inputSha256],
     serviceName: "Guild Wars friend observer verifier",
-    accept: (value) => isFriendObserverCertificate(value, options.inputSha256)
+    accept: (value) => isFriendObserverBuild(value, options.inputSha256)
       ? value
       : null,
   }).catch(() => null);

@@ -128,6 +128,12 @@ test("friend lifecycle roles survive movement and refuse changed notification pa
   });
 
   await t.test("the IPC certificate refuses altered semantic and hook facts", () => {
+    for (const record of [
+      { ...certificate.record, recordLayout: null },
+      { ...certificate.record, scalarWriters: [null, null] },
+    ]) {
+      assert.equal(isFriendObserverCertificate({ ...certificate, record }, original.inputSha256), false);
+    }
     assert.equal(isFriendObserverCertificate({
       ...certificate,
       semanticSha256: "0".repeat(64),

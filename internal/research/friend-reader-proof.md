@@ -279,7 +279,7 @@ have reached the callback. Bind processed completion to the current session
 before allowing publication. Do not turn the invalidation counter into a
 readiness flag.
 
-### The certified runtime transform remains incomplete
+### The certified observer rewrite
 
 The inspectors now identify the complete bounded record layout, name copying,
 UUID writer, allocation growth, removal, sparse-slot ownership, status/map
@@ -293,9 +293,18 @@ consumer is unrelated and must not be used for friend-session admission. The
 [closed certificate](../../src/main/certification/friend-observer-certificate.ts)
 binds both reports to the exact input hash, semantic verifier ABI, and two
 semantic proof digests. The utility-process verifier derives it and the main
-process accepts only its closed schema. The remaining work is for the production
-transform to re-run the proof and install only those certified notifications.
-Until then, the session gate and reader remain test-only components.
+process accepts only its closed schema. The
+[observer transform](../../src/main/certification/friend-observer-transform.ts)
+now re-runs that certificate, preserves all imports, exports and table entries,
+and adds eight native-preserving wrappers plus the five connection-store
+notifications. The isolated verifier returns the exact derived output hash.
+
+The production wrappers execute in an offline capsule, including the real queue
+append, login completion, copied user-event envelope and drain. Disabled and
+closed queues never produce an accepted-completion notification. The real
+disconnect body notifies before clearing its pointer, and an absent connection
+does not notify again. No runtime cache stage, companion region or renderer
+consumer is installed yet; the session gate and reader remain test-only.
 
 ## Exact local evidence
 
@@ -307,6 +316,7 @@ mkdir -p build/friend-evidence
 node --import ./scripts/ts-hook.mjs scripts/friend-table-evidence.ts "$GW_CLIENT_WASM" > build/friend-evidence/table.json
 node --import ./scripts/ts-hook.mjs --test --test-reporter=tap --test-timeout=120000 tests/client-artifact/friend-table-evidence.test.ts > build/friend-evidence/mutations.tap 2>&1
 node --import ./scripts/ts-hook.mjs --test --test-reporter=tap --test-timeout=120000 tests/client-artifact/friend-lifecycle-evidence.test.ts > build/friend-evidence/lifecycle-mutations.tap 2>&1
+node --import ./scripts/ts-hook.mjs --test --test-reporter=tap --test-timeout=120000 tests/client-artifact/friend-observer-transform.test.ts > build/friend-evidence/observer-transform.tap 2>&1
 node --import ./scripts/ts-hook.mjs --test --test-reporter=tap --test-timeout=120000 tests/native/friend-lifecycle-evidence.test.ts > build/friend-evidence/lifecycle.tap 2>&1
 node --import ./scripts/ts-hook.mjs --test --test-reporter=tap --test-timeout=120000 tests/native/friend-lifecycle-evidence.test.ts tests/native/friend-invalidation-evidence.test.ts > build/friend-evidence/invalidation.tap 2>&1
 node --import ./scripts/ts-hook.mjs --test --test-reporter=tap --test-timeout=120000 tests/native/friend-*.test.ts > build/friend-evidence/native.tap 2>&1
@@ -327,6 +337,7 @@ friend names, UUIDs, rosters, or search text in persisted diagnostics.
 | Structural lifecycle proof | One candidate; role movement passes and changed calls, stores, or duplicates are refused |
 | Isolated verifier certificate | Closed input- and ABI-bound record implemented; production does not consume it yet |
 | Real transform predecessors | Template-save, Core Enhancement, and Tools Enhancement each retain one observer candidate |
+| Production observer rewrite | Deterministic output; ten offline scenarios execute its actual wrappers and native queue path |
 | Processed native completion | Eight queue scenarios passed |
 | Current-session correlation | Private ordinal gate passes four scenarios; production hooks remain unproved |
 | Bounded record decoding | Rust implementation and fourteen reader/session scenarios pass; not installed |
@@ -340,9 +351,9 @@ friend names, UUIDs, rosters, or search text in persisted diagnostics.
 
 The next milestone is one certified read-only observer, ready to compare with
 the native Friends panel. Do not start another broad implementation survey.
-One concrete gate remains before live activation: have the production transform
-re-run and consume the isolated-verifier certificate, then install the certified
-lifecycle notifications, session gate, bounded reader, and snapshot region. The
+One concrete gate remains before live activation: add the certified transform
+stage to client preparation, then install the lifecycle notifications, session
+gate, bounded reader, and snapshot region. The
 record layout and private current-session admission mechanism pass their offline
 mutations and native execution scenarios; neither grants runtime authority by
 itself.

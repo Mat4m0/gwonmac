@@ -1,8 +1,9 @@
 /** Execute retained event delivery to distinguish queued login completion from processed updates. */
 import assert from "node:assert/strict";
+import type { FriendObserverCertificate } from "../../src/main/certification/friend-observer-certificate.js";
 import { wasmEvidence } from "../../src/main/certification/wasm-evidence.js";
 import {
-  concat, encodeCode, encodeIndexVector, encodeSection, paddedIndex,
+  concat, encodeCode, encodeIndexVector, encodeSection, parseExports,
   sectionById, sleb, splitSections, uleb, WASM_HEADER,
 } from "../../src/main/core/wasm-binary.js";
 
@@ -23,12 +24,26 @@ const NATIVE = {
   queuedBytes: 497,
 } as const;
 
-export async function queueFixture(input: Uint8Array) {
-  const evidence = wasmEvidence(input);
+export async function queueFixture(input: Uint8Array, observer?: Readonly<{
+  bytes: Uint8Array;
+  certificate: FriendObserverCertificate;
+}>) {
+  const originalEvidence = wasmEvidence(input);
+  assert.ok(originalEvidence);
+  assert.equal(originalEvidence.inputSha256, INPUT_SHA256, "reinspect queue roles for another retained client");
+  const evidence = observer ? wasmEvidence(observer.bytes) : originalEvidence;
   assert.ok(evidence);
-  assert.equal(evidence.inputSha256, INPUT_SHA256, "reinspect queue roles for another retained client");
   const module = evidence.moduleView();
   const decoded = new Map(evidence.decodeFunctions([]).map((fn) => [fn.functionIndex, fn]));
+  const clone = (role: "queueAppend" | "loginCompleted" | "rosterCallback"): number => {
+    assert.ok(observer);
+    const calls = [...decoded.get(observer.certificate.lifecycle.roles[role])!.calls.keys()]
+      .filter((index) => index >= originalEvidence.moduleView().functionTypeIndices.length);
+    assert.equal(calls.length, 1);
+    return calls[0]!;
+  };
+  const callbackIndex = observer ? clone("rosterCallback") : 8849;
+  const observerNotifications: number[][] = [];
   const memory = new WebAssembly.Memory({ initial: 256, maximum: 256 });
   const view = new DataView(memory.buffer);
   const delivered: { id: number; value: number; size: number }[] = [];
@@ -59,7 +74,7 @@ export async function queueFixture(input: Uint8Array) {
       new Uint8Array(memory.buffer, destination, size).set(new Uint8Array(memory.buffer, source, size).slice());
       return destination;
     }],
-    [8849, (metadata, event) => {
+    [callbackIndex, (metadata, event) => {
       assert.ok(metadata !== undefined && event !== undefined);
       assert.equal(view.getUint32(metadata + 4, true), 36, "native user-event callback category");
       const id = view.getUint32(event, true);
@@ -67,7 +82,7 @@ export async function queueFixture(input: Uint8Array) {
       assert.equal(view.getUint32(metadata + 8, true), size + 12);
       delivered.push({ id, size, value: size >= 4 ? view.getUint32(event + 12, true) : 0 });
       duringDelivery?.(id);
-      if (id === 14) sessionHooks?.completionProcessed();
+      if (id === 14 && !observer) sessionHooks?.completionProcessed();
     }],
     [17809, (address, size) => {
       assert.ok(address !== undefined && address >= 0x800000 && address < allocated);
@@ -93,37 +108,56 @@ export async function queueFixture(input: Uint8Array) {
   for (const [index, stub] of stubs) {
     if (stub === unsupported) stubs.set(index, () => { throw new Error(`unmodeled queue dependency ${index}`); });
   }
-  const nativeIndices = Object.values(NATIVE);
+  if (observer) stubs.set(-1, (...args) => { observerNotifications.push(args); });
+  const nativeIndices: number[] = [
+    ...Object.values(NATIVE),
+    ...(observer ? [observer.certificate.lifecycle.roles.rosterCallback,
+      clone("queueAppend"), clone("loginCompleted")] : []),
+  ];
   const remap = new Map([...stubs.keys(), ...nativeIndices].map((index, ordinal) => [index, ordinal]));
   const string = (value: string) => {
     const bytes = new TextEncoder().encode(value);
     return concat(uleb(bytes.length), bytes);
   };
   const imports = [...stubs.keys()].map((index) => concat(
-    string("fixture"), string(String(index)), Uint8Array.of(0), uleb(module.functionTypeIndices[index]!),
+    string("fixture"), string(String(index)), Uint8Array.of(0), uleb(index === -1
+      ? module.types.findIndex((type) => type.params.length === 6
+        && type.params.every((value) => value === 0x7f) && type.results.length === 0)
+      : module.functionTypeIndices[index]!),
   ));
   imports.push(concat(string("fixture"), string("memory"), Uint8Array.of(2, 1), uleb(256), uleb(256)));
   const bodies = nativeIndices.map((index) => {
-    const body = module.bodies[index - module.functionImportCount]!.slice();
-    for (const [callee, sites] of decoded.get(index)!.callSites) {
+    const body = module.bodies[index - module.functionImportCount]!;
+    const calls = [...decoded.get(index)!.callSites].flatMap(([callee, sites]) =>
+      sites.map((site) => ({ callee, site }))).sort((a, b) => a.site.offset - b.site.offset);
+    const parts: Uint8Array[] = [];
+    let cursor = 0;
+    for (const { callee, site } of calls) {
       const target = remap.get(callee);
       assert.ok(target !== undefined, `dependency ${callee} must be modeled explicitly`);
-      for (const site of sites) {
-        assert.equal(site.operandEnd - site.offset - 1, 5);
-        body.set(paddedIndex(target), site.offset + 1);
-      }
+      parts.push(body.subarray(cursor, site.offset + 1), uleb(target));
+      cursor = site.operandEnd;
     }
-    return body;
+    parts.push(body.subarray(cursor));
+    return concat(...parts);
   });
+  const sourceSections = splitSections(observer?.bytes ?? input);
+  const hookIndex = observer ? parseExports(sectionById(sourceSections, 7))
+    .find((entry) => entry.name === "enhancement_hook_slot")!.index : 0;
   const sections = [
-    { id: 1, body: sectionById(splitSections(input), 1) },
+    { id: 1, body: sectionById(sourceSections, 1) },
     { id: 2, body: concat(uleb(imports.length), ...imports) },
     { id: 3, body: encodeIndexVector(nativeIndices.map((index) => module.functionTypeIndices[index]!)) },
-    { id: 4, body: Uint8Array.of(1, 0x70, 0, 1) },
-    { id: 6, body: concat(Uint8Array.of(1, 0x7f, 1, 0x41), sleb(0x600000), Uint8Array.of(0x0b)) },
-    { id: 7, body: concat(uleb(nativeIndices.length), ...Object.entries(NATIVE).map(([name, index]) =>
+    { id: 4, body: Uint8Array.of(1, 0x70, 0, observer ? 2 : 1) },
+    { id: 6, body: concat(uleb(hookIndex + 1), ...Array.from({ length: hookIndex + 1 }, (_, index) =>
+      concat(Uint8Array.of(0x7f, 1, 0x41), sleb(index === 0 ? 0x600000 : index === hookIndex ? 2 : 0),
+        Uint8Array.of(0x0b)))) },
+    { id: 7, body: concat(uleb(Object.keys(NATIVE).length), ...Object.entries(NATIVE).map(([name, index]) =>
       concat(string(name), Uint8Array.of(0), uleb(remap.get(index)!)))) },
-    { id: 9, body: concat(Uint8Array.of(1, 0, 0x41, 0, 0x0b), encodeIndexVector([remap.get(8849)!])) },
+    { id: 9, body: concat(Uint8Array.of(1, 0, 0x41, 0, 0x0b), encodeIndexVector([
+      remap.get(observer ? observer.certificate.lifecycle.roles.rosterCallback : callbackIndex)!,
+      ...(observer ? [remap.get(-1)!] : []),
+    ])) },
     { id: 10, body: encodeCode(bodies) },
   ];
   const capsule = new Uint8Array(concat(WASM_HEADER, ...sections.map(encodeSection)));
@@ -160,7 +194,7 @@ export async function queueFixture(input: Uint8Array) {
   call("initQueue", CONTEXT + 592);
   call("register", CONTEXT + 28, 36, 0, 0);
   return {
-    delivered, write, memory,
+    delivered, write, memory, observerNotifications,
     friendTable() {
       const root = 0x7b0000;
       write(root, 0x7c0000);
@@ -191,7 +225,7 @@ export async function queueFixture(input: Uint8Array) {
     completeLogin(error: number) {
       const requestId = view.getUint32(REQUEST + 32, true);
       const connection = view.getUint32(REQUEST + 28, true);
-      sessionHooks?.completionStarted(requestId, connection, error === 0);
+      if (!observer) sessionHooks?.completionStarted(requestId, connection, error === 0);
       const before = call("queuedBytes", CONTEXT + 592);
       call("completeRequest", requestId, error);
       call("loginComplete", REQUEST);
@@ -201,9 +235,11 @@ export async function queueFixture(input: Uint8Array) {
       if (typeof before !== "number" || typeof after !== "number") {
         throw new Error("native queue byte count is unavailable");
       }
-      if (after - before === 368) sessionHooks?.completionQueued();
+      if (after - before === 368) {
+        if (!observer) sessionHooks?.completionQueued();
+      }
       else assert.equal(after, before, "login completion appends either one complete event or none");
-      sessionHooks?.completionFinished();
+      if (!observer) sessionHooks?.completionFinished();
     },
     enqueue(id: number, value = 0, size = 4) {
       write(PAYLOAD, value);
