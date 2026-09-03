@@ -3,14 +3,33 @@
 GWonMac has two independent native-map layers:
 
 - **Cartography grid** draws Guild Wars' fixed 32×32 map-unit exploration cells
-  over the Compass, Mission Map, and World Map.
+  over the Mission Map and World Map. **Grid on Compass** includes the Compass
+  only when explicitly enabled. It defaults to off, including existing profiles
+  that do not yet have this preference.
 - **Walkable terrain** shades the current instance's certified pathing geometry
   on the Compass and Mission Map while preserving the native map artwork.
 
 The layers can be enabled separately. Cartographer, Synthwave, and Monochrome
-styles are included. **Customize style…** creates an editable copy of a built-in
-style. Custom colors, line patterns, widths, and cell markers can be copied and
-imported as versioned text.
+styles are included. **Customize style** creates an editable copy of a built-in
+style. **Terrain border thickness** is available beside the main controls for
+both built-in and custom styles; 0 hides the border. Changing a built-in style
+creates a custom copy automatically. Custom colors, line patterns, widths, and
+cell markers can be copied and
+imported as versioned text. Each color has a picker and a six-digit hex field.
+Opacity and line width have a slider and a numeric field. Slider values preview
+while dragging and save on release. Saved changes update every open game window
+without a reload when Tools and Maps are active.
+
+Maps settings remain available when Tools are off. The page explains how to
+enable Maps and whether an application restart is needed. An illustrative
+preview shows the selected colors, border, grid, and markers without a game
+session. Advanced grid lines and Compass inspection options are disclosed
+separately. **Use Cartographer defaults** selects the built-in style without
+deleting custom styles. Deletion requires confirmation with the style name.
+
+Failed saves remain visibly unsaved. **Retry save** repeats the intended change;
+**Revert change** restores the confirmed settings. Other edits are blocked until
+the player resolves the failure, preventing a stale whole-preset overwrite.
 
 ## One evidence pipeline
 

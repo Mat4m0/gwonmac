@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import {
   AlertTriangle,
   Archive,
@@ -28,6 +28,8 @@ import LauncherHeader from "./components/LauncherHeader.vue";
 import LaunchBar from "./components/LaunchBar.vue";
 import HomeView from "./components/HomeView.vue";
 import KnownIssuesView from "./components/KnownIssuesView.vue";
+import AppearanceSettings from "./components/AppearanceSettings.vue";
+import ColorControl from "./components/ColorControl.vue";
 import MapsSettings from "./components/MapsSettings.vue";
 import ToolsSettings from "./components/ToolsSettings.vue";
 import TexturePacksSettings from "./components/TexturePacksSettings.vue";
@@ -52,14 +54,69 @@ const allSettingsGroups: readonly {
     { id: "game-files", label: "Game files" },
   ] },
 ];
-const snapshot = ref<LauncherSnapshot>(fixtureSnapshotFor(window.location.search));
-const mapsAvailable = computed(() => snapshot.value.tools.configured && snapshot.value.tools.features.maps.enabled);
-const settingsGroups = computed(() => allSettingsGroups.map(group => ({
-  ...group, items: group.items.filter(item => item.id !== "maps" || mapsAvailable.value),
-})));
-watch(mapsAvailable, available => {
-  if (!available && settingsRoute.value === "maps") settingsRoute.value = "tools";
-});
+// Native snapshots are replaced as a whole. Deep Vue proxies cannot cross
+// Electron's context bridge when a saved preset is reused in an edit.
+const snapshot = shallowRef<LauncherSnapshot>(fixtureSnapshotFor(window.location.search));
+const settingsGroups = allSettingsGroups;
+const settingsContent = ref<HTMLElement | null>(null);
+const settingsSaveState = ref<"idle" | "saving" | "failed" | "saved">("idle");
+const settingsFormVersion = ref(0);
+const settingsSaveLabel = ref("Settings");
+let editedSetting = "Settings";
+let retrySettingsSave: (() => Promise<unknown>) | undefined;
+const settingsLocked = computed(() => settingsSaveState.value === "saving" || settingsSaveState.value === "failed");
+
+function identifySetting(event: Event) {
+  const control = event.target;
+  if (!(control instanceof HTMLElement) || settingsLocked.value) return;
+  editedSetting = control.getAttribute("aria-label")
+    ?? control.closest("label")?.querySelector("strong")?.textContent
+    ?? control.closest(".setting-row")?.querySelector("span")?.textContent
+    ?? control.textContent?.trim()
+    ?? "Settings";
+}
+
+// One pending operation prevents stale whole-preset edits. On failure, retain
+// the visible draft and the exact operation until the player retries or reverts.
+async function performSettingsSave(action: () => Promise<unknown>) {
+  if (settingsLocked.value) throw new Error("Finish the pending settings change first.");
+  settingsSaveLabel.value = editedSetting || "Settings";
+  settingsSaveState.value = "saving";
+  retrySettingsSave = action;
+  try {
+    await action();
+    settingsSaveState.value = "saved";
+    retrySettingsSave = undefined;
+  } catch (error) {
+    settingsSaveState.value = "failed";
+    throw error;
+  }
+}
+
+async function retrySetting() {
+  const action = retrySettingsSave;
+  if (!action) return;
+  settingsSaveState.value = "idle";
+  try { await performSettingsSave(action); settingsFormVersion.value += 1; await focusSettingsHeading(); }
+  catch { /* The persistent settings feedback owns this failure. */ }
+}
+
+function revertSetting() {
+  retrySettingsSave = undefined;
+  settingsSaveState.value = "idle";
+  settingsFormVersion.value += 1;
+  void focusSettingsHeading();
+}
+
+async function focusSettingsHeading() {
+  await nextTick();
+  const content = settingsContent.value;
+  if (!content) return;
+  content.scrollTop = 0;
+  const heading = content.querySelector("h1");
+  heading?.setAttribute("tabindex", "-1");
+  heading?.focus({ preventScroll: true });
+}
 const selected = ref<ProfileId[]>([...snapshot.value.selectedProfileIds]);
 const addOpen = ref(false);
 const appearanceProfile = ref<ProfileId | null>(null);
@@ -200,10 +257,11 @@ async function archiveAppearanceProfile() {
   }
 }
 
-function openSettings(section: SettingsRoute = "general") {
+function openSettings(section: SettingsRoute = settingsRoute.value) {
   settingsRoute.value = section;
   route.value = "settings";
   if (section === "game-files") void loadGameFilesInfo();
+  void focusSettingsHeading();
 }
 
 function navigateFromMain(destination: LauncherDestination) {
@@ -214,6 +272,7 @@ function navigateFromMain(destination: LauncherDestination) {
 function selectSettings(section: SettingsRoute) {
   settingsRoute.value = section;
   if (section === "game-files") void loadGameFilesInfo();
+  void focusSettingsHeading();
 }
 
 function retryStartup() {
@@ -287,17 +346,25 @@ async function openNews(id: string) {
 }
 
 async function updateContent(content: NonNullable<LauncherPreferencesPatch["content"]>) {
-  await runAction("Content settings could not be saved.", () => native?.experience.updatePreferences({ content }));
-  if (!native) snapshot.value = { ...snapshot.value, preferences: { content: { ...snapshot.value.preferences.content, ...content } } };
+  const save = async () => {
+    if (native) await native.experience.updatePreferences({ content });
+    else snapshot.value = { ...snapshot.value, preferences: { content: { ...snapshot.value.preferences.content, ...content } } };
+  };
+  if (route.value !== "settings") { await runAction("Content settings could not be saved.", save); return; }
+  try { await performSettingsSave(save); }
+  catch { /* Settings feedback retains the operation for retry. */ }
 }
 
 async function updateLauncherSettings(patch: LauncherSettingsPatch) {
-  await runAction("This setting could not be saved.", () => native?.settings.update(patch));
+  try { await saveCustomization(patch); }
+  catch { /* Settings feedback retains the operation for retry. */ }
 }
 
 async function saveCustomization(patch: LauncherSettingsPatch) {
-  if (native) await native.settings.update(patch);
-  else snapshot.value = { ...snapshot.value, settings: { ...snapshot.value.settings, ...patch } };
+  await performSettingsSave(async () => {
+    if (native) await native.settings.update(patch);
+    else snapshot.value = { ...snapshot.value, settings: { ...snapshot.value.settings, ...patch } };
+  });
 }
 
 async function checkLauncherUpdate() {
@@ -329,10 +396,10 @@ async function resetGameFiles() {
 <template>
   <div v-if="startupError" class="launcher-boot launcher-error" role="alert"><AlertTriangle /><h1>The launcher could not open</h1><p>Your accounts and game files were not changed.</p><button class="primary" @click="retryStartup">Try again</button></div>
   <div v-else-if="!synchronized" class="launcher-boot" role="status">Opening launcher…</div>
-  <div v-else class="app-shell" :data-intro-step="snapshot.experience.introduction === 'pending' ? introStep : undefined">
+  <div v-else class="app-shell" :class="{ 'settings-shell': route === 'settings' }" :data-intro-step="snapshot.experience.introduction === 'pending' ? introStep : undefined">
     <LauncherHeader :route="route" @navigate="route = $event" @settings="openSettings()" @external="openExternal" />
 
-    <section class="funding-banner" aria-label="Project funding">
+    <section v-if="route !== 'settings'" class="funding-banner" aria-label="Project funding">
       <div><strong>Support gwonmac</strong></div>
       <div class="funding-progress" :aria-label="fixtureContent ? '€42 of €125 funded' : '€125 yearly cost'">
         <span>{{ fixtureContent ? '€42' : 'Yearly costs' }}</span><div><i :style="{ width: fixtureContent ? '34%' : '0%' }" /></div><span>€125</span>
@@ -366,7 +433,15 @@ async function resetGameFiles() {
             <button v-for="item in group.items" :key="item.id" :aria-current="settingsRoute === item.id ? 'page' : undefined" :class="{ active: settingsRoute === item.id }" @click="selectSettings(item.id)">{{ item.label }}</button>
           </div>
         </aside>
-        <div class="settings-content">
+        <div ref="settingsContent" class="settings-content">
+          <div v-if="settingsSaveState !== 'idle'" class="settings-feedback" :class="{ 'save-failed': settingsSaveState === 'failed', 'save-quiet': settingsSaveState !== 'failed' }" :role="settingsSaveState === 'failed' ? 'alert' : 'status'">
+            <span v-if="settingsSaveState === 'saving'">Saving…</span>
+            <span v-else-if="settingsSaveState === 'failed'"><strong>{{ settingsSaveLabel }} could not be saved.</strong> The displayed change is unsaved.</span>
+            <span v-else>Saved.</span>
+            <div v-if="settingsSaveState === 'failed'" class="save-actions"><button class="secondary" @click="retrySetting">Retry save</button><button class="secondary" @click="revertSetting">Revert change</button></div>
+          </div>
+          <fieldset :key="settingsFormVersion" class="settings-fields" :disabled="settingsLocked" :aria-busy="settingsSaveState === 'saving'" @change.capture="identifySetting" @click.capture="identifySetting">
+          <legend class="visually-hidden">Settings for every account</legend>
           <GeneralUpdateSettings
             v-if="settingsRoute === 'general'"
             :settings="snapshot.settings"
@@ -376,17 +451,20 @@ async function resetGameFiles() {
             :restart="restartAndInstallUpdate"
             :open-releases="() => openExternal('releases')"
           />
-          <template v-else-if="settingsRoute === 'content'"><h1>Content</h1><p>Choose what appears on Home. Beta release notes appear only while the Beta update track is selected.</p><div class="setting-group"><label><span><strong>News</strong><small>Game, event, and GWonMac updates.</small></span><input type="checkbox" :checked="snapshot.preferences.content.news" @change="updateContent({ news: checked($event) })" /></label><label><span><strong>Dailies</strong><small>Daily activities and the weekly schedule.</small></span><input type="checkbox" :checked="snapshot.preferences.content.dailies" @change="updateContent({ dailies: checked($event) })" /></label><label v-if="snapshot.preferences.content.news && snapshot.preferences.content.dailies"><span><strong>First Home tab</strong></span><select :value="snapshot.preferences.content.first" @change="updateContent({ first: ($event.currentTarget as HTMLSelectElement).value as 'news' | 'dailies' })"><option value="news">News</option><option value="dailies">Dailies</option></select></label><label v-if="snapshot.preferences.content.news"><span><strong>Guild Wars updates</strong><small>Official game update notes from the Guild Wars Wiki.</small></span><input type="checkbox" :checked="snapshot.preferences.content.officialNews" @change="updateContent({ officialNews: checked($event) })" /></label><label v-if="snapshot.preferences.content.news"><span><strong>Upcoming events</strong><small>Important seasonal events and their dates.</small></span><input type="checkbox" :checked="snapshot.preferences.content.eventNews" @change="updateContent({ eventNews: checked($event) })" /></label><label v-if="snapshot.preferences.content.news"><span><strong>GWonMac releases</strong><small>Player-focused release notes for your update track.</small></span><input type="checkbox" :checked="snapshot.preferences.content.reforgedNews" @change="updateContent({ reforgedNews: checked($event) })" /></label><label v-if="snapshot.preferences.content.news"><span><strong>Rotate featured news</strong><small>Change the featured story every 12 seconds. Reduced Motion always disables rotation.</small></span><input type="checkbox" :checked="snapshot.preferences.content.autoRotateNews" @change="updateContent({ autoRotateNews: checked($event) })" /></label></div></template>
+          <template v-else-if="settingsRoute === 'content'"><h1>Content</h1><p>Choose what appears on Home. Beta release notes appear only while the Beta update track is selected.</p><div class="setting-group"><label><span><strong>News</strong><small>Game, event, and GWonMac updates.</small></span><input type="checkbox" :checked="snapshot.preferences.content.news" @change="updateContent({ news: checked($event) })" /></label><label><span><strong>Dailies</strong><small>Daily activities and the weekly schedule.</small></span><input type="checkbox" :checked="snapshot.preferences.content.dailies" @change="updateContent({ dailies: checked($event) })" /></label><label v-if="snapshot.preferences.content.news && snapshot.preferences.content.dailies"><span><strong>First Home tab</strong></span><select :value="snapshot.preferences.content.first" @change="updateContent({ first: ($event.currentTarget as HTMLSelectElement).value as 'news' | 'dailies' })"><option value="news">News</option><option value="dailies">Dailies</option></select></label></div><h2 v-if="snapshot.preferences.content.news" class="settings-subheading">News sources</h2><div v-if="snapshot.preferences.content.news" class="setting-group"><label><span><strong>Guild Wars updates</strong><small>Official game update notes from the Guild Wars Wiki.</small></span><input type="checkbox" :checked="snapshot.preferences.content.officialNews" @change="updateContent({ officialNews: checked($event) })" /></label><label v-if="snapshot.preferences.content.news"><span><strong>Upcoming events</strong><small>Important seasonal events and their dates.</small></span><input type="checkbox" :checked="snapshot.preferences.content.eventNews" @change="updateContent({ eventNews: checked($event) })" /></label><label v-if="snapshot.preferences.content.news"><span><strong>GWonMac releases</strong><small>Player-focused release notes for your update track.</small></span><input type="checkbox" :checked="snapshot.preferences.content.reforgedNews" @change="updateContent({ reforgedNews: checked($event) })" /></label><label v-if="snapshot.preferences.content.news"><span><strong>Rotate featured news</strong><small>Change the featured story every 12 seconds. Reduced Motion always disables rotation.</small></span><input type="checkbox" :checked="snapshot.preferences.content.autoRotateNews" @change="updateContent({ autoRotateNews: checked($event) })" /></label></div></template>
           <template v-else-if="settingsRoute === 'game'">
             <h1>Game settings</h1>
+            <p class="section-intro">Applies to every account. Graphics, audio, and key bindings inside Guild Wars are changed in the game.</p>
             <div class="setting-group">
-              <label><span><strong>Render quality</strong><small>Higher quality uses more graphics power.</small></span><select :value="snapshot.settings.renderScale" @change="updateLauncherSettings({ renderScale: Number(($event.currentTarget as HTMLSelectElement).value) as 1 | 1.5 | 2 })"><option :value="1">Standard</option><option :value="1.5">High</option><option :value="2">Very high</option></select></label>
-              <label><span><strong>Extended memory</strong><small>Allow longer sessions to use more memory.</small></span><input type="checkbox" :checked="snapshot.settings.extendedMemoryEnabled" @change="updateLauncherSettings({ extendedMemoryEnabled: checked($event) })" /></label>
+              <label><span><strong>Render quality</strong><small>Higher quality uses more graphics power. Updates open game windows immediately.</small></span><select :value="snapshot.settings.renderScale" @change="updateLauncherSettings({ renderScale: Number(($event.currentTarget as HTMLSelectElement).value) as 1 | 1.5 | 2 })"><option :value="1">Standard · 1×</option><option :value="1.5">High · 1.5×</option><option :value="2">Very high · 2×</option></select></label>
+              <label><span><strong>Extended memory</strong><small>Allow longer sessions to use more memory. Applies after an application restart.</small></span><input type="checkbox" :checked="snapshot.settings.extendedMemoryEnabled" @change="updateLauncherSettings({ extendedMemoryEnabled: checked($event) })" /></label>
               <label><span><strong>Return to character after reload</strong><small>Automatically sign in and return to the last character after reloading the game.</small></span><input type="checkbox" :checked="snapshot.settings.autoRelogAfterReload" @change="updateLauncherSettings({ autoRelogAfterReload: checked($event) })" /></label>
+              <label><span><strong>Controller symbols</strong><small>Applies when you next open or reload a game window.</small></span><select :value="snapshot.settings.controllerPromptStyle" @change="updateLauncherSettings({ controllerPromptStyle: ($event.currentTarget as HTMLSelectElement).value as 'game-default' | 'playstation' })"><option value="game-default">Game default</option><option value="playstation">PlayStation</option></select></label>
             </div>
+            <AppearanceSettings :settings="snapshot.settings" :save="saveCustomization" />
           </template>
-          <ToolsSettings v-else-if="settingsRoute === 'tools'" :snapshot="snapshot" :api="native" :save="saveCustomization" @maps="selectSettings('maps')" />
-          <MapsSettings v-else-if="settingsRoute === 'maps' && mapsAvailable" :settings="snapshot.settings" :shortcuts="snapshot.shortcuts" :api="native?.tools" :save="saveCustomization" />
+          <ToolsSettings v-else-if="settingsRoute === 'tools'" :snapshot="snapshot" :api="native" :save="saveCustomization" :perform-save="performSettingsSave" @maps="selectSettings('maps')" />
+          <MapsSettings v-else-if="settingsRoute === 'maps'" :settings="snapshot.settings" :shortcuts="snapshot.shortcuts" :tools="snapshot.tools" :api="native?.tools" :save="saveCustomization" :perform-save="performSettingsSave" @tools="selectSettings('tools')" />
           <TexturePacksSettings v-else-if="settingsRoute === 'texture-packs'" :texture-packs="snapshot.texturePacks" />
           <GameFilesSettings
             v-else-if="settingsRoute === 'game-files'"
@@ -401,11 +479,12 @@ async function resetGameFiles() {
           <template v-else>
             <h1>Advanced</h1>
             <div class="setting-group">
-              <label><span><strong>Diagnostics</strong><small>Collect more local troubleshooting data.</small></span><input type="checkbox" :checked="snapshot.settings.showDiagnostics" @change="updateLauncherSettings({ showDiagnostics: checked($event) })" /></label>
+              <label><span><strong>Diagnostics</strong><small>Show the diagnostics overlay in open game windows.</small></span><input type="checkbox" :checked="snapshot.settings.showDiagnostics" @change="updateLauncherSettings({ showDiagnostics: checked($event) })" /></label>
               <button class="secondary" @click="runAction('Logs could not be opened.', () => native?.external.revealLogs())"><FileText />Open logs</button>
-              <button class="danger-button" @click="runAction('Launcher settings could not be reset.', () => native?.settings.reset())">Reset launcher settings</button>
             </div>
+            <details class="settings-reset"><summary>Reset all app settings</summary><p>Restores launcher and game preferences, Tools, shortcuts, custom map styles, and panel colors. Original textures will be selected. Accounts and game files are kept.</p><button class="danger-button" @click="runAction('Settings could not be reset.', () => native?.settings.reset())">Reset all app settings…</button></details>
           </template>
+          </fieldset>
         </div>
       </section>
     </main>
@@ -416,6 +495,7 @@ async function resetGameFiles() {
       :busy="busy"
       :operation-error="operationError"
       :update-dismissed="updateBannerDismissed"
+      :viewing-game-files="route === 'settings' && settingsRoute === 'game-files'"
       @toggle="toggleProfile"
       @show="showProfile"
       @action="primaryAction"
@@ -427,11 +507,11 @@ async function resetGameFiles() {
     />
 
     <BaseModal v-if="addOpen" labelledby="add-account-title" @close="addOpen = false">
-      <form @submit.prevent="createProfile"><div class="modal-head"><h2 id="add-account-title">Add account</h2><button type="button" class="icon-button" aria-label="Close" @click="addOpen = false"><X /></button></div><p>This opens another separate Guild Wars window. Sign-in stays inside the game.</p><label>Name<input v-model="newName" autofocus maxlength="48" placeholder="Second account" /></label><details><summary>Appearance</summary><fieldset class="icon-options"><legend>Icon</legend><button v-for="(component, icon) in profileIcons" :key="icon" type="button" :aria-label="icon" :aria-pressed="newIcon === icon" :class="{ selected: newIcon === icon }" @click="newIcon = icon"><component :is="component" /></button></fieldset><fieldset class="color-options"><legend>Color</legend><button v-for="color in ['#9a6638', '#496b58', '#46658a', '#76558b', '#9a4f4f', '#76703c', '#4c777d', '#6f6258']" :key="color" type="button" :aria-label="`Use ${color}`" :aria-pressed="newColor === color" :class="{ selected: newColor === color }" :style="{ background: color }" @click="newColor = color" /><label>Custom color<input v-model="newColor" type="color" /></label></fieldset></details><div class="form-actions"><button type="button" class="secondary" @click="addOpen = false">Cancel</button><button class="primary" :disabled="!newName.trim()">Add account</button></div></form>
+      <form @submit.prevent="createProfile"><div class="modal-head"><h2 id="add-account-title">Add account</h2><button type="button" class="icon-button" aria-label="Close" @click="addOpen = false"><X /></button></div><p>This opens another separate Guild Wars window. Sign-in stays inside the game.</p><label>Name<input v-model="newName" autofocus maxlength="48" placeholder="Second account" /></label><details><summary>Appearance</summary><fieldset class="icon-options"><legend>Icon</legend><button v-for="(component, icon) in profileIcons" :key="icon" type="button" :aria-label="icon" :aria-pressed="newIcon === icon" :class="{ selected: newIcon === icon }" @click="newIcon = icon"><component :is="component" /></button></fieldset><fieldset class="color-options"><legend>Color</legend><button v-for="color in ['#9a6638', '#496b58', '#46658a', '#76558b', '#9a4f4f', '#76703c', '#4c777d', '#6f6258']" :key="color" type="button" :aria-label="`Use ${color}`" :aria-pressed="newColor === color" :class="{ selected: newColor === color }" :style="{ background: color }" @click="newColor = color" /><ColorControl label="Custom account color" :value="newColor" @change="newColor = $event" /></fieldset></details><div class="form-actions"><button type="button" class="secondary" @click="addOpen = false">Cancel</button><button class="primary" :disabled="!newName.trim()">Add account</button></div></form>
     </BaseModal>
 
     <BaseModal v-if="appearanceProfile" labelledby="appearance-title" @close="appearanceProfile = null">
-      <form @submit.prevent="saveAppearance"><div class="modal-head"><h2 id="appearance-title">Edit account</h2><button type="button" class="icon-button" aria-label="Close" @click="appearanceProfile = null"><X /></button></div><p>Choose how this account appears in the launcher.</p><fieldset class="icon-options"><legend>Icon</legend><button v-for="(component, icon) in profileIcons" :key="icon" type="button" :aria-label="icon" :aria-pressed="appearanceIcon === icon" :class="{ selected: appearanceIcon === icon }" @click="appearanceIcon = icon"><component :is="component" /></button></fieldset><fieldset class="color-options"><legend>Color</legend><button v-for="color in ['#9a6638', '#496b58', '#46658a', '#76558b', '#9a4f4f', '#76703c', '#4c777d', '#6f6258']" :key="color" type="button" :aria-label="`Use ${color}`" :aria-pressed="appearanceColor === color" :class="{ selected: appearanceColor === color }" :style="{ background: color }" @click="appearanceColor = color" /><label>Custom color<input v-model="appearanceColor" type="color" /></label></fieldset><div v-if="canArchiveAppearanceProfile" class="archive-account-row"><span><strong>Archive account</strong><small>Hide this account without deleting its data.</small></span><button type="button" class="archive-button" @click="archiveAppearanceProfile"><Archive />Archive</button></div><div class="form-actions"><button type="button" class="secondary" @click="appearanceProfile = null">Cancel</button><button class="primary">Save</button></div></form>
+      <form @submit.prevent="saveAppearance"><div class="modal-head"><h2 id="appearance-title">Edit account</h2><button type="button" class="icon-button" aria-label="Close" @click="appearanceProfile = null"><X /></button></div><p>Choose how this account appears in the launcher.</p><fieldset class="icon-options"><legend>Icon</legend><button v-for="(component, icon) in profileIcons" :key="icon" type="button" :aria-label="icon" :aria-pressed="appearanceIcon === icon" :class="{ selected: appearanceIcon === icon }" @click="appearanceIcon = icon"><component :is="component" /></button></fieldset><fieldset class="color-options"><legend>Color</legend><button v-for="color in ['#9a6638', '#496b58', '#46658a', '#76558b', '#9a4f4f', '#76703c', '#4c777d', '#6f6258']" :key="color" type="button" :aria-label="`Use ${color}`" :aria-pressed="appearanceColor === color" :class="{ selected: appearanceColor === color }" :style="{ background: color }" @click="appearanceColor = color" /><ColorControl label="Custom account color" :value="appearanceColor" @change="appearanceColor = $event" /></fieldset><div v-if="canArchiveAppearanceProfile" class="archive-account-row"><span><strong>Archive account</strong><small>Hide this account without deleting its data.</small></span><button type="button" class="archive-button" @click="archiveAppearanceProfile"><Archive />Archive</button></div><div class="form-actions"><button type="button" class="secondary" @click="appearanceProfile = null">Cancel</button><button class="primary">Save</button></div></form>
     </BaseModal>
 
     <div v-if="snapshot.experience.preferencesReset" class="toast"><AlertTriangle /><div><strong>Launcher preferences were reset.</strong><span>Your accounts, saved login, game files, builds, and templates were not changed.</span></div><button class="icon-button" aria-label="Dismiss" @click="dismissPreferencesReset"><X /></button></div>

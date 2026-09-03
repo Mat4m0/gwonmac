@@ -14,6 +14,7 @@ import {
   parseLauncherProfileAppearance,
   parseLauncherSettingsPatch,
 } from "../../src/shared/launcher-contracts.ts";
+import { DEFAULT_CUSTOM_UI_THEME } from "../../src/shared/ui-theme.js";
 
 const roots: string[] = [];
 
@@ -39,6 +40,25 @@ describe("launcher presentation state", () => {
       renderScale: 1.5,
     });
     assert.throws(() => parseLauncherSettingsPatch({ renderScale: 3 }));
+  });
+  it("accepts only a boolean for the independent Compass grid setting", () => {
+    assert.deepEqual(parseLauncherSettingsPatch({ cartographyCompassGridEnabled: true }), { cartographyCompassGridEnabled: true });
+    assert.throws(() => parseLauncherSettingsPatch({ cartographyCompassGridEnabled: 1 }));
+  });
+  it("validates restored appearance controls through the launcher boundary", () => {
+    const patch = {
+      uiStyle: "custom", uiFont: "inter", uiPanelOpacity: 80,
+      controllerPromptStyle: "playstation", uiCustomTheme: DEFAULT_CUSTOM_UI_THEME,
+    };
+    assert.deepEqual(parseLauncherSettingsPatch(patch), patch);
+    for (const invalid of [
+      { uiStyle: "unknown" }, { uiFont: "url(https://example.com)" },
+      { controllerPromptStyle: "unknown" }, { uiPanelOpacity: 64 },
+      { uiPanelOpacity: 101 }, { uiPanelOpacity: 80.5 },
+      { uiPanelOpacity: "80" }, { uiCustomTheme: {} },
+      { uiCustomTheme: { ...DEFAULT_CUSTOM_UI_THEME, accent: "red" } },
+      { uiCustomTheme: { ...DEFAULT_CUSTOM_UI_THEME, extra: true } },
+    ]) assert.throws(() => parseLauncherSettingsPatch(invalid));
   });
   it("accepts the official support destination on the launcher boundary", () => {
     assert.equal(parseLauncherExternalLink("arenaNetSupport"), "arenaNetSupport");

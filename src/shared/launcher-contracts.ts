@@ -11,7 +11,8 @@ import type {
   FullDownloadState,
   NoticeCode,
 } from "./contracts.js";
-import { RENDER_SCALES } from "./contracts.js";
+import { RENDER_SCALES, UI_STYLES, UI_FONTS, CONTROLLER_PROMPT_STYLES, UI_PANEL_OPACITY_MIN, UI_PANEL_OPACITY_MAX } from "./contracts.js";
+import { normaliseCustomUiTheme } from "./ui-theme.js";
 import type { ErrorCode } from "./errors.js";
 import {
   CARTOGRAPHY_CONTROL_IDLE_OPACITY_MAX,
@@ -168,6 +169,11 @@ export interface GlobalToolSetting {
 export type GlobalToolSettings = Readonly<Record<GlobalTool, GlobalToolSetting>>;
 
 export interface LauncherSettings {
+  readonly uiStyle: AppSettings["uiStyle"];
+  readonly uiFont: AppSettings["uiFont"];
+  readonly uiCustomTheme: AppSettings["uiCustomTheme"];
+  readonly uiPanelOpacity: AppSettings["uiPanelOpacity"];
+  readonly controllerPromptStyle: AppSettings["controllerPromptStyle"];
   readonly autoCheckUpdates: boolean;
   readonly updateTrack: AppSettings["updateTrack"];
   readonly renderScale: AppSettings["renderScale"];
@@ -181,6 +187,7 @@ export interface LauncherSettings {
   readonly skillCooldownColor: AppSettings["skillCooldownColor"];
   readonly cartographyOverlayEnabled: boolean;
   readonly cartographyGridEnabled: boolean;
+  readonly cartographyCompassGridEnabled: boolean;
   readonly cartographyRevealMode: AppSettings["cartographyRevealMode"];
   readonly cartographyPresetLibrary: CartographyPresetLibrary;
   readonly cartographyWalkabilityOpacity: number;
@@ -352,37 +359,41 @@ export function parseLauncherNewsId(value: unknown): string {
 
 export function parseLauncherSettingsPatch(value: unknown): LauncherSettingsPatch {
   const source = exactObject(value, [
+    "uiStyle", "uiFont", "uiCustomTheme", "uiPanelOpacity", "controllerPromptStyle",
     "autoCheckUpdates", "updateTrack", "renderScale", "extendedMemoryEnabled", "showDiagnostics",
     "autoRelogAfterReload", "characterSwitchProfession", "characterSwitchLevel",
     "characterSwitchLocation", "skillKeyBindings", "skillCooldownColor",
-    "cartographyOverlayEnabled", "cartographyGridEnabled", "cartographyRevealMode",
+    "cartographyOverlayEnabled", "cartographyGridEnabled", "cartographyCompassGridEnabled", "cartographyRevealMode",
     "cartographyPresetLibrary", "cartographyWalkabilityOpacity", "cartographyGridOpacity",
     "cartographyControlIdleOpacity",
   ], "launcher settings patch");
-  const result: {
-    autoCheckUpdates?: boolean;
-    updateTrack?: AppSettings["updateTrack"];
-    renderScale?: AppSettings["renderScale"];
-    extendedMemoryEnabled?: boolean;
-    showDiagnostics?: boolean;
-    autoRelogAfterReload?: boolean;
-    characterSwitchProfession?: boolean;
-    characterSwitchLevel?: boolean;
-    characterSwitchLocation?: boolean;
-    skillKeyBindings?: AppSettings["skillKeyBindings"];
-    skillCooldownColor?: AppSettings["skillCooldownColor"];
-    cartographyOverlayEnabled?: boolean;
-    cartographyGridEnabled?: boolean;
-    cartographyRevealMode?: AppSettings["cartographyRevealMode"];
-    cartographyPresetLibrary?: CartographyPresetLibrary;
-    cartographyWalkabilityOpacity?: number;
-    cartographyGridOpacity?: number;
-    cartographyControlIdleOpacity?: number;
-  } = {};
+  const result: { -readonly [K in keyof LauncherSettings]?: LauncherSettings[K] } = {};
+  if (source.uiStyle !== undefined) {
+    if (!UI_STYLES.includes(source.uiStyle as AppSettings["uiStyle"])) throw new Error("Panel style is invalid");
+    result.uiStyle = source.uiStyle as AppSettings["uiStyle"];
+  }
+  if (source.uiFont !== undefined) {
+    if (!UI_FONTS.includes(source.uiFont as AppSettings["uiFont"])) throw new Error("Panel font is invalid");
+    result.uiFont = source.uiFont as AppSettings["uiFont"];
+  }
+  if (source.controllerPromptStyle !== undefined) {
+    if (!CONTROLLER_PROMPT_STYLES.includes(source.controllerPromptStyle as AppSettings["controllerPromptStyle"])) throw new Error("Controller symbols are invalid");
+    result.controllerPromptStyle = source.controllerPromptStyle as AppSettings["controllerPromptStyle"];
+  }
+  if (source.uiCustomTheme !== undefined) {
+    const theme = normaliseCustomUiTheme(source.uiCustomTheme);
+    if (!theme) throw new Error("Custom panel colors are invalid");
+    result.uiCustomTheme = theme;
+  }
+  if (source.uiPanelOpacity !== undefined) {
+    if (typeof source.uiPanelOpacity !== "number" || !Number.isInteger(source.uiPanelOpacity)
+      || source.uiPanelOpacity < UI_PANEL_OPACITY_MIN || source.uiPanelOpacity > UI_PANEL_OPACITY_MAX) throw new Error("Panel opacity is invalid");
+    result.uiPanelOpacity = source.uiPanelOpacity;
+  }
   for (const key of [
     "autoCheckUpdates", "extendedMemoryEnabled", "showDiagnostics",
     "autoRelogAfterReload", "characterSwitchProfession", "characterSwitchLevel", "characterSwitchLocation",
-    "cartographyOverlayEnabled", "cartographyGridEnabled",
+    "cartographyOverlayEnabled", "cartographyGridEnabled", "cartographyCompassGridEnabled",
   ] as const) {
     if (source[key] === undefined) continue;
     if (typeof source[key] !== "boolean") throw new Error(`${key} must be a boolean`);

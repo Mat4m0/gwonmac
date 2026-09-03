@@ -35,7 +35,7 @@ function performAction(): Promise<void> {
   <div class="setting-group">
     <label>
       <span>
-        <strong>Automatically update this launcher</strong>
+        <strong>Automatically check for launcher updates</strong>
         <small>Checks for Guild Wars Reforged app updates. Guild Wars game files update separately.</small>
       </span>
       <input type="checkbox" :checked="settings.autoCheckUpdates" @change="save({ autoCheckUpdates: checked($event) })" />

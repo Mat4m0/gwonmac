@@ -21,6 +21,41 @@ afterEach(() => {
 });
 
 describe("unified launcher shell", () => {
+  it("retains a refused save for an exact retry and locks conflicting edits", async () => {
+    const update = vi.fn().mockRejectedValueOnce(new Error("disk")).mockResolvedValueOnce(undefined);
+    installNative({ settings: { update } });
+    const wrapper = mount(App);
+    await flushPromises();
+    await wrapper.get('button[aria-label="Settings"]').trigger("click");
+    await wrapper.get('.settings-fields input[type="checkbox"]').setValue(false);
+    await flushPromises();
+    expect(wrapper.get('.settings-feedback[role="alert"]').text()).toContain("displayed change is unsaved");
+    expect(wrapper.get('.settings-fields').attributes("disabled")).toBeDefined();
+    await wrapper.get('.save-actions .secondary').trigger("click");
+    await flushPromises();
+    expect(update.mock.calls).toEqual([[{ autoCheckUpdates: false }], [{ autoCheckUpdates: false }]]);
+    expect(wrapper.get('.settings-fields').attributes("disabled")).toBeUndefined();
+    expect(wrapper.find('.settings-feedback[role="alert"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("reverts unsaved native control state to the canonical snapshot", async () => {
+    const update = vi.fn(async () => { throw new Error("disk"); });
+    installNative({ settings: { update } });
+    const wrapper = mount(App);
+    await flushPromises();
+    await wrapper.get('button[aria-label="Settings"]').trigger("click");
+    const original = fixtureSnapshot.settings.autoCheckUpdates;
+    await wrapper.get('.settings-fields input[type="checkbox"]').setValue(!original);
+    await flushPromises();
+    await wrapper.findAll('.save-actions button').find(button => button.text() === 'Revert change')!.trigger("click");
+    await flushPromises();
+    expect(wrapper.get<HTMLInputElement>('.settings-fields input[type="checkbox"]').element.checked).toBe(original);
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(wrapper.find('.settings-feedback').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
   it("opens the destination requested by the native application menu", async () => {
     let navigate: ((destination: "home" | "settings") => void) | undefined;
     installNative({
@@ -143,7 +178,7 @@ describe("unified launcher shell", () => {
     await wrapper.get('button[aria-label="Settings"]').trigger("click");
     await wrapper.findAll(".settings-page aside button").find((button) => button.text() === "Tools")!.trigger("click");
     expect(wrapper.text()).toContain("Settings and shortcuts apply to every account");
-    expect(wrapper.text()).toContain("Build Management");
+    expect(wrapper.text()).toContain("Build Library");
     expect(wrapper.text()).toContain("⌘B");
     expect(wrapper.text()).toContain("Quick Travel");
     expect(wrapper.text()).toContain("Xunlai Storage");
@@ -152,24 +187,33 @@ describe("unified launcher shell", () => {
     expect(wrapper.text()).toContain("Skill Cooldowns");
   });
 
-  it("shows Maps only when both its feature and Tools are enabled, and leaves a hidden route", async () => {
+  it("keeps Maps discoverable and explains disabled and restart states", async () => {
     let update!: (snapshot: typeof fixtureSnapshot) => void;
-    installNative({ state: { get: async () => fixtureSnapshot, onChange: (listener: typeof update) => { update = listener; return () => undefined; } } });
+    const restart = vi.fn(async () => undefined);
+    installNative({ tools: { restartToApply: restart }, state: { get: async () => fixtureSnapshot, onChange: (listener: typeof update) => { update = listener; return () => undefined; } } });
     const wrapper = mount(App);
     await flushPromises();
     await wrapper.get('button[aria-label="Settings"]').trigger("click");
-    const maps = () => wrapper.findAll(".settings-page aside button").find(button => button.text() === "Maps");
-    expect(maps()).toBeUndefined();
-    const enabled = { ...fixtureSnapshot, tools: { ...fixtureSnapshot.tools, configured: true } };
-    update(enabled);
-    await wrapper.vm.$nextTick();
-    await maps()!.trigger("click");
+    await wrapper.findAll(".settings-page aside button").find(button => button.text() === "Maps")!.trigger("click");
     expect(wrapper.get(".settings-content h1").text()).toBe("Maps");
-    expect(wrapper.text()).toContain("Unassigned by default");
-    update({ ...enabled, tools: { ...enabled.tools, features: { ...enabled.tools.features, maps: { enabled: false } } } });
+    expect(wrapper.text()).toContain("Tools are off");
+    update({ ...fixtureSnapshot, tools: { ...fixtureSnapshot.tools, configured: true, loaded: false, restartRequired: true } });
     await wrapper.vm.$nextTick();
-    expect(maps()).toBeUndefined();
-    expect(wrapper.get(".settings-content h1").text()).toBe("Tools");
+    expect(wrapper.text()).toContain("Restart the launcher to enable Maps");
+    expect(wrapper.text()).toContain("Restarting only a game window does not load Tools");
+    await wrapper.findAll('button').find(button => button.text() === 'Open restart options')!.trigger('click');
+    expect(wrapper.get('.settings-content h1').text()).toBe('Tools');
+    expect(wrapper.get('.restart-row button').attributes('disabled')).toBeDefined();
+    expect(wrapper.get('.restart-row').text()).toContain('Close every game window');
+    update({ ...fixtureSnapshot, profiles: fixtureSnapshot.profiles.map(profile => ({ ...profile, state: 'ready' })), tools: { ...fixtureSnapshot.tools, configured: true, loaded: false, restartRequired: true } });
+    await wrapper.vm.$nextTick();
+    expect(wrapper.get('.restart-row button').attributes('disabled')).toBeUndefined();
+    await wrapper.get('.restart-row button').trigger('click');
+    expect(restart).toHaveBeenCalledOnce();
+    await wrapper.findAll('.settings-page aside button').find(button => button.text() === 'Maps')!.trigger('click');
+    update({ ...fixtureSnapshot, tools: { ...fixtureSnapshot.tools, configured: true, loaded: true, restartRequired: false } });
+    await wrapper.vm.$nextTick();
+    expect(wrapper.text()).toContain("Maps enabled");
   });
 
   it("keeps Discord and GitHub in the global header", async () => {

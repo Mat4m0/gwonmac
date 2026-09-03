@@ -49,6 +49,7 @@ describe("settings", () => {
       characterSwitchEnabled: true,
       cartographyOverlayEnabled: false,
       cartographyGridEnabled: false,
+      cartographyCompassGridEnabled: false,
       cartographyRevealMode: "off",
       cartographyPresetLibrary: DEFAULT_SETTINGS.cartographyPresetLibrary,
       cartographyWalkabilityOpacity: 55,
@@ -83,6 +84,12 @@ describe("settings", () => {
     });
   });
 
+  it("defaults the Compass grid off for existing settings and validates its opt-in", () => {
+    assert.equal(parseSettings({ cartographyGridEnabled: true }).cartographyCompassGridEnabled, false);
+    assert.deepEqual(parseSettingsPatch({ cartographyCompassGridEnabled: true }), { cartographyCompassGridEnabled: true });
+    assert.throws(() => parseSettingsPatch({ cartographyCompassGridEnabled: "true" }), AppError);
+  });
+
   it("drops retired cursor fields from an alpha profile", () => {
     // A profile written before the cursor became a boolean carries
     // `cursorTheme` and a selectable input mode. They are unknown fields now,
@@ -111,6 +118,7 @@ describe("settings", () => {
       characterSwitchEnabled: true,
       cartographyOverlayEnabled: false,
       cartographyGridEnabled: false,
+      cartographyCompassGridEnabled: false,
       cartographyRevealMode: "off",
       cartographyPresetLibrary: DEFAULT_SETTINGS.cartographyPresetLibrary,
       cartographyWalkabilityOpacity: 55,
@@ -510,6 +518,7 @@ describe("settings", () => {
       "autoCheckUpdates",
       "autoRelogAfterReload",
       "buildLibrary",
+      "cartographyCompassGridEnabled",
       "cartographyControlIdleOpacity",
       "cartographyEnabled",
       "cartographyGridEnabled",
@@ -623,6 +632,7 @@ describe("settings", () => {
       characterSwitchEnabled: true,
       cartographyOverlayEnabled: false,
       cartographyGridEnabled: false,
+      cartographyCompassGridEnabled: false,
       cartographyRevealMode: "off",
       cartographyPresetLibrary: DEFAULT_SETTINGS.cartographyPresetLibrary,
       cartographyWalkabilityOpacity: 55,
