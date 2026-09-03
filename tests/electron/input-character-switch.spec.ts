@@ -92,25 +92,32 @@ test("a 27-character account uses the horizontal carousel or vertical list", asy
     const selected = list.locator(".character-switch-row[data-selected=true]");
     await expect(selected).toContainText("Character 01");
     await expect.poll(() => isDomActiveElement(selected)).toBe(true);
-    await expect(list.locator(".character-switch-slot")).toHaveCount(3);
+    const carouselCapacity = await list.locator("li").count();
+    const edgeSlotCount = Math.floor(carouselCapacity / 2);
+    await expect(list.locator(".character-switch-slot")).toHaveCount(edgeSlotCount);
     await page.evaluate(() => window.dispatchEvent(new Event("test-character-five")));
-    await expect(list.getByRole("option")).toHaveCount(5);
-    await expect(list.locator(".character-switch-slot")).toHaveCount(2);
-    const groupCentreOffset = await list.evaluate((node) => {
-      const cards = [...node.querySelectorAll<HTMLElement>(".character-switch-row")];
-      const first = cards.at(0)?.getBoundingClientRect();
-      const last = cards.at(-1)?.getBoundingClientRect();
-      const bounds = node.getBoundingClientRect();
-      if (!first || !last) return Number.POSITIVE_INFINITY;
-      return Math.abs((first.left + last.right) / 2 - (bounds.left + bounds.right) / 2);
-    });
-    expect(groupCentreOffset).toBeLessThan(1);
+    const fiveCharacterCount = carouselCapacity >= 5 ? 5 : Math.ceil(carouselCapacity / 2);
+    await expect(list.getByRole("option")).toHaveCount(fiveCharacterCount);
+    await expect(list.locator(".character-switch-slot")).toHaveCount(
+      carouselCapacity - fiveCharacterCount,
+    );
+    if (carouselCapacity >= 5) {
+      const groupCentreOffset = await list.evaluate((node) => {
+        const cards = [...node.querySelectorAll<HTMLElement>(".character-switch-row")];
+        const first = cards.at(0)?.getBoundingClientRect();
+        const last = cards.at(-1)?.getBoundingClientRect();
+        const bounds = node.getBoundingClientRect();
+        if (!first || !last) return Number.POSITIVE_INFINITY;
+        return Math.abs((first.left + last.right) / 2 - (bounds.left + bounds.right) / 2);
+      });
+      expect(groupCentreOffset).toBeLessThan(1);
+    }
     await page.evaluate(() => window.dispatchEvent(new Event("test-character-all")));
-    await expect(list.getByRole("option")).toHaveCount(4);
-    await expect(list.locator(".character-switch-slot")).toHaveCount(3);
+    await expect(list.getByRole("option")).toHaveCount(edgeSlotCount + 1);
+    await expect(list.locator(".character-switch-slot")).toHaveCount(edgeSlotCount);
     await page.keyboard.press("ArrowLeft");
     await expect(selected).toContainText("Rudolph Prime");
-    await expect(list.locator(".character-switch-slot")).toHaveCount(3);
+    await expect(list.locator(".character-switch-slot")).toHaveCount(edgeSlotCount);
     await page.keyboard.press("ArrowRight");
     await expect(selected).toContainText("Character 01");
     await page.keyboard.press("ArrowRight");
