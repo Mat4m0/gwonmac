@@ -101,7 +101,7 @@ export function characterActionEnqueue(
   );
 }
 
-/** Publishes the private fixed action packet and current focus/policy gate. */
+/** Publishes the private fixed action packet and transaction policy gate. */
 export function characterActionConfigure(
   pendingGlobal: number,
   payloadGlobal: number,

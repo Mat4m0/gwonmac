@@ -154,6 +154,10 @@ the number keys 1–9 and 0 switch to the first ten characters. Press
 
 Character names and search text are not saved.
 
+Start the switch while Guild Wars is focused. Once accepted, it continues if
+you switch to another app or minimize the game. Guild Wars does not take focus
+back. Closing or reloading that game window stops the switch.
+
 ## Saved login
 
 Guild Wars owns sign-in inside each game window. The launcher does not ask for

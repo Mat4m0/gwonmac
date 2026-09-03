@@ -169,6 +169,14 @@ fixed logout/Selector/Play state machine, and is absent from the reconnect
 profile. A read-only pre-game observer therefore cannot enqueue a native
 action.
 
+Character Switch requires focus when a request or explorable confirmation is
+accepted. That one window-local transaction then owns the native action channel
+through Logout, Selector, and Play, including while the window is unfocused or
+hidden. Completion, failure, timeout, and disposal disable the channel and clear
+pending native work. Focus alone never enables it. The existing context, target
+identity, selection proof, and deadline checks still apply; automatic return
+after reload retains its separate focus policy.
+
 Run the unpackaged developer probe with:
 
 ```sh
