@@ -116,8 +116,11 @@ at these reviewed sites in the retained input:
 | Connection events `10236` | Before each active-connection pointer store on close, destruction, or failed data dispatch |
 | Connection publication `10278` | Before the active-connection pointer store |
 
-These are test-bound sites, not structurally certified runtime hooks. The
-unmodified input remains unchanged. Both native and instrumented variants run
+The [lifecycle inspector](../../src/main/certification/friend-lifecycle-evidence.ts)
+now identifies these function bodies, the request and queue path, and all five
+direct stores to the active-connection pointer by semantic shape and required
+relationships. They remain uninstalled candidate hooks with
+`runtimeAuthority: false`. The unmodified input remains unchanged. Both native and instrumented variants run
 against the same synthetic inputs. The comparison checks native return values,
 complete fixture-memory hashes, queued payload copies, and modeled effects
 after each operation. Only the private counter differs.
@@ -138,9 +141,9 @@ an accepted generation again. A changed counter invalidates a previous selection
 it does not establish authentication, table readiness, or fresh server data.
 
 **Result:** the private counter preserves the tested transitions that sampling
-alone missed. No runtime capability, companion region, or Travel integration is
-installed. Coverage of all relevant paths and relocation-safe hook derivation
-remain unproved.
+alone missed. The retained input has one relocation-aware lifecycle candidate,
+including complete direct-store coverage for the active connection pointer.
+No runtime capability, companion region, or Travel integration is installed.
 
 Production integration must withdraw the companion's accepted snapshot at the
 notification, not merely remember a counter until the next reader tick. The
@@ -275,15 +278,15 @@ have reached the callback. Bind processed completion to the current session
 before allowing publication. Do not turn the invalidation counter into a
 readiness flag.
 
-### Runtime hook semantics remain incomplete
+### The certified runtime transform remains incomplete
 
-The inspector now identifies the complete bounded record layout, name copying,
+The inspectors now identify the complete bounded record layout, name copying,
 UUID writer, allocation growth, removal, sparse-slot ownership, status/map
-writers, and their required relationships. The remaining structural work is the
-production notification path: login request capture, completion start and queue
-acceptance, Friends callback processing, and every invalidation site. Until
-those hooks are derived and wired through the isolated verifier, the session
-gate and reader remain test-only components.
+writers, login request capture, completion and exact queue path, Friends callback,
+and every direct invalidation site. The remaining work is to make this proof an
+isolated-verifier certificate and have the production transform install only
+those certified notifications. Until then, the session gate and reader remain
+test-only components.
 
 ## Exact local evidence
 
@@ -294,6 +297,7 @@ these commands from the worktree; no game window or network request is needed:
 mkdir -p build/friend-evidence
 node --import ./scripts/ts-hook.mjs scripts/friend-table-evidence.ts "$GW_CLIENT_WASM" > build/friend-evidence/table.json
 node --import ./scripts/ts-hook.mjs --test --test-reporter=tap --test-timeout=120000 tests/client-artifact/friend-table-evidence.test.ts > build/friend-evidence/mutations.tap 2>&1
+node --import ./scripts/ts-hook.mjs --test --test-reporter=tap --test-timeout=120000 tests/client-artifact/friend-lifecycle-evidence.test.ts > build/friend-evidence/lifecycle-mutations.tap 2>&1
 node --import ./scripts/ts-hook.mjs --test --test-reporter=tap --test-timeout=120000 tests/native/friend-lifecycle-evidence.test.ts > build/friend-evidence/lifecycle.tap 2>&1
 node --import ./scripts/ts-hook.mjs --test --test-reporter=tap --test-timeout=120000 tests/native/friend-lifecycle-evidence.test.ts tests/native/friend-invalidation-evidence.test.ts > build/friend-evidence/invalidation.tap 2>&1
 node --import ./scripts/ts-hook.mjs --test --test-reporter=tap --test-timeout=120000 tests/native/friend-*.test.ts > build/friend-evidence/native.tap 2>&1
@@ -311,10 +315,11 @@ friend names, UUIDs, rosters, or search text in persisted diagnostics.
 | Complete structural record-layout proof | One candidate; changed roles, sizes, and offsets are refused |
 | Native lifecycle function experiments | Eleven synthetic scenarios passed; full-client scheduling remains unproved |
 | Private invalidation mechanism | Twelve additional scenarios passed on the retained input; runtime hook certification remains open |
+| Structural lifecycle proof | One candidate; role movement passes and changed calls, stores, or duplicates are refused |
 | Processed native completion | Eight queue scenarios passed |
 | Current-session correlation | Private ordinal gate passes four scenarios; production hooks remain unproved |
 | Bounded record decoding | Rust implementation and fourteen reader/session scenarios pass; not installed |
-| Account/disconnect/reconnect invalidation | Unproved |
+| Account/disconnect/reconnect invalidation | Structurally identified and executed in isolation; not installed |
 | Companion observation installed | No |
 | Palette integration | No |
 | Live behavior witnessed | No |
@@ -324,12 +329,12 @@ friend names, UUIDs, rosters, or search text in persisted diagnostics.
 
 The next milestone is one certified read-only observer, ready to compare with
 the native Friends panel. Do not start another broad implementation survey.
-One concrete gate remains before live activation: structurally identify and
-install the production lifecycle notifications in the isolated verifier. This
-includes login request capture, completion start, exact queue acceptance,
-Friends callback processing, and all invalidation sites. The record layout and
-private current-session admission mechanism now pass their offline mutations
-and native execution scenarios; neither grants runtime authority by itself.
+One concrete gate remains before live activation: turn the two input-bound
+candidate reports into one isolated-verifier certificate, then install the
+certified lifecycle notifications, session gate, bounded reader, and snapshot
+region in the production transform. The record layout and private
+current-session admission mechanism pass their offline mutations and native
+execution scenarios; neither grants runtime authority by itself.
 
 After those gates pass, link the existing Rust reader into the companion and
 reuse region installation and the sequence feed. No second roster store or
