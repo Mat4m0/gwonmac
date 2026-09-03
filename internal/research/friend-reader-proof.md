@@ -60,7 +60,8 @@ Those values are regression evidence, not production constants.
 
 ## Executed native lifecycle experiments
 
-The [native lifecycle fixture](../../tests/native/friend-lifecycle-evidence.test.ts)
+The [shared native fixture](../../tests/fixtures/native-friends.ts), used by the
+[lifecycle experiments](../../tests/native/friend-lifecycle-evidence.test.ts),
 extracts the inspected functions into a small, temporary WASM module. It changes
 only direct-call indices. It retains native control flow, loads, stores, and
 the request pump's indirect calls. Synthetic memory supplies names, requests,
@@ -92,6 +93,54 @@ every supplied ordering is reachable in the full client. In particular, event
 delivery, the real request destructor, the full login completion callback,
 nonempty table clearing, and server ordering are not executed. Do not report
 these counterexamples as witnessed cross-account leaks or live client bugs.
+
+## Private invalidation experiment
+
+The [invalidation experiments](../../tests/native/friend-invalidation-evidence.test.ts)
+add one private unsigned counter to the temporary module. The counter changes
+at these reviewed sites in the retained input:
+
+| Site | Notification point |
+| --- | --- |
+| Friend table clear `8839` | Function entry, before record clearing |
+| Login start `10116` | Function entry, before provider dispatch |
+| Logout `10244` | Function entry, before the logout request |
+| Friend teardown `8850` | Function entry, before callback removal |
+| Connection change `10240` | Before the active-connection pointer store |
+| Connection events `10236` | Before each active-connection pointer store on close, destruction, or failed data dispatch |
+| Connection publication `10278` | Before the active-connection pointer store |
+
+These are test-bound sites, not structurally certified runtime hooks. The
+unmodified input remains unchanged. Both native and instrumented variants run
+against the same synthetic inputs. The comparison checks native return values,
+complete fixture-memory hashes, queued payload copies, and modeled effects
+after each operation. Only the private counter differs.
+
+Twelve new scenarios pass. They cover a transition between observer ticks,
+clear followed by reuse of a slot, all three exercised connection-loss branches,
+replacement, teardown, counter exhaustion, behavior preservation, and refusal
+of another module. Counter changes are observed before provider dispatch,
+disconnect notification, callback removal, and connection storage release.
+Ordinary successful data dispatch does not change the counter.
+The static coverage check finds all five immediate stores overlapping the
+active-connection pointer in exactly those three connection functions. It also
+finds no materialization of that exact address as an `i32.const`. This covers
+the inspected direct stores; it is not a general alias-analysis proof.
+
+The counter starts at `1`. Exhaustion reaches terminal `0`, which cannot become
+an accepted generation again. A changed counter invalidates a previous selection;
+it does not establish authentication, table readiness, or fresh server data.
+
+**Result:** the private counter preserves the tested transitions that sampling
+alone missed. No runtime capability, companion region, or Travel integration is
+installed. Coverage of all relevant paths and relocation-safe hook derivation
+remain unproved.
+
+Production integration must withdraw the companion's accepted snapshot at the
+notification, not merely remember a counter until the next reader tick. The
+selection handler must validate the current companion region before resolving
+the friend. A cached renderer row alone is insufficient. The existing map-only
+Travel command remains the action after that resolution.
 
 ## Named blockers and their evidence
 
@@ -142,6 +191,13 @@ prove how login start, table clear, successful completion, and disconnect relate
 to one accepted roster generation. A generic pending request can also represent
 another operation; state `3` is not a friend-list request type.
 
+Queueing is also relevant: `876` submits the event through `493`, which copies
+the payload into the native queue. `872` schedules work. The lifecycle fixture
+substitutes event collection for that queue; it does not run event delivery.
+Thus observing `9998` return is not yet proof that earlier roster events have
+updated the friend table. Identify the processed login/roster boundary before
+allowing publication. Do not turn the invalidation counter into a readiness flag.
+
 ### Record semantics and update survival remain incomplete
 
 The inspector identifies only the accessor and two scalar fields. Name copying,
@@ -161,6 +217,7 @@ mkdir -p build/friend-evidence
 node --import ./scripts/ts-hook.mjs scripts/friend-table-evidence.ts "$GW_CLIENT_WASM" > build/friend-evidence/table.json
 node --import ./scripts/ts-hook.mjs --test --test-reporter=tap --test-timeout=120000 tests/client-artifact/friend-table-evidence.test.ts > build/friend-evidence/mutations.tap 2>&1
 node --import ./scripts/ts-hook.mjs --test --test-reporter=tap --test-timeout=120000 tests/native/friend-lifecycle-evidence.test.ts > build/friend-evidence/lifecycle.tap 2>&1
+node --import ./scripts/ts-hook.mjs --test --test-reporter=tap --test-timeout=120000 tests/native/friend-lifecycle-evidence.test.ts tests/native/friend-invalidation-evidence.test.ts > build/friend-evidence/invalidation.tap 2>&1
 pnpm check > build/friend-evidence/check.log 2>&1
 ```
 
@@ -174,6 +231,7 @@ friend names, UUIDs, rosters, or search text in persisted diagnostics.
 | Candidate identification | One candidate on the inspected cached input |
 | Complete structural reader proof | Incomplete |
 | Native lifecycle function experiments | Eleven synthetic scenarios passed; full dispatch ordering remains unproved |
+| Private invalidation mechanism | Twelve additional scenarios passed on the retained input; runtime hook certification remains open |
 | Bounded live-record decoding | Not implemented |
 | Account/disconnect/reconnect invalidation | Unproved |
 | Companion observation installed | No |
@@ -183,14 +241,12 @@ friend names, UUIDs, rosters, or search text in persisted diagnostics.
 
 ## Resume here
 
-Resolve the transition signal above before adding a runtime layout or UI.
-The preferred tick-only reader is not yet sufficient: its proposed sampled
-values can return to their previous values after a transition. Investigate a
-narrow, certified lifecycle notification that invalidates the companion's
-accepted generation synchronously. Keep that notification internal to the
-derived client and companion. It must not add a generic renderer callback or
-another roster store. A native monotonic session marker would be simpler if
-one can be proved; none is identified by the current experiment.
+The counter experiment answers how to preserve the tested invalidations between
+ticks. Next, derive the notification sites structurally and prove when queued
+roster updates have been processed for the current login. Keep notification
+internal to the derived client and companion. Do not add a generic renderer
+callback or another roster store. A native monotonic session marker would be
+simpler if one can be proved; none is identified by the current experiment.
 
 Turn empty/unavailable, disconnect, account switch, reconnect, and slot reuse
 into executable refusal tests. Then add the Rust companion reader and reuse
