@@ -22,7 +22,7 @@ const SELECTOR_READY_POLL_MS = 100;
 
 type Enqueue = (action: number, argument: number) => number;
 type Configure = (payload: number, enabled: number) => number;
-type NativeSend = "sent" | "refused" | "invalid" | "timeout" | "focus"
+type NativeSend = "sent" | "refused" | "invalid" | "timeout"
   | "selector-frame" | "selector-child" | "selector-index"
   | "selector-context" | "selector-target"
   | "selector-array"
@@ -61,7 +61,6 @@ function classifySelectorResult(result: NativeSend): SelectorOutcome {
     case "selector-target": return {
       kind: "retryable", readiness: "target", terminalCode: "selector-target-missing",
     };
-    case "focus": return { kind: "terminal", code: "focus-lost" };
     case "refused": return { kind: "terminal", code: "selector-refused" };
     case "invalid": return { kind: "terminal", code: "selector-invalid" };
     case "selector-parent": return { kind: "terminal", code: "selector-parent-invalid" };
@@ -125,21 +124,22 @@ export function createCharacterSwitchController(options: Readonly<{
     if (transitions.length > TRANSITION_LIMIT) transitions.shift();
   };
   const publish = (next: CharacterSwitchActionState, stage: CharacterSwitchTransitionStage) => {
+    if (disposed) return;
     action = Object.freeze(next);
+    // Revoke the channel before a listener can start another transaction.
+    if (next.status !== "switching") options.configure(0, 0);
     transition(stage);
     emit();
   };
   const fail = (code: CharacterSwitchFailureCode, retryable = false) => {
+    if (disposed) return;
     pendingCharacterKey = null;
     lastCode = code;
     publish({ status: "failed", code, retryable }, `failed:${code}`);
   };
   const focused = () => !disposed && document.visibilityState === "visible"
     && document.hasFocus();
-  const configure = () => options.configure(
-    focused() ? options.payloadPointer : 0,
-    focused() ? 1 : 0,
-  );
+  const switching = () => !disposed && action.status === "switching";
   const view = () => new DataView(options.memory.buffer);
   const validPayload = () => options.payloadPointer > 0
     && options.payloadPointer + CHARACTER_SWITCH_ACTION_ABI.bytes
@@ -151,8 +151,7 @@ export function createCharacterSwitchController(options: Readonly<{
     pollMilliseconds = 25,
   ): Promise<boolean> => {
     const deadline = performance.now() + timeoutMs;
-    while (!disposed && performance.now() < deadline) {
-      if (!focused()) return false;
+    while (switching() && performance.now() < deadline) {
       if (accept()) return true;
       await delay(pollMilliseconds);
     }
@@ -163,8 +162,8 @@ export function createCharacterSwitchController(options: Readonly<{
     kind: CharacterSwitchActionKind,
     argument: number,
   ): NativeEnqueue => {
-    if (!validPayload() || !focused()) return "focus";
-    configure();
+    if (!switching()) return "refused";
+    if (!validPayload()) return "invalid";
     view().setUint32(
       options.payloadPointer + CHARACTER_SWITCH_ACTION_ABI.fields.result,
       0,
@@ -188,10 +187,7 @@ export function createCharacterSwitchController(options: Readonly<{
       ) !== 0,
       timeoutMs,
     );
-    if (!settled) {
-      options.configure(0, 0);
-      return focused() ? "timeout" : "focus";
-    }
+    if (!settled || !switching()) return "timeout";
     const result = view().getUint32(
       options.payloadPointer + CHARACTER_SWITCH_ACTION_ABI.fields.result,
       true,
@@ -247,8 +243,7 @@ export function createCharacterSwitchController(options: Readonly<{
     publish({ status: "switching", stage: "logout" }, "logout:queued");
     const logout = await settle("logout", 2_000);
     if (logout !== "sent") {
-      fail(logout === "focus" ? "focus-lost"
-        : logout === "refused" ? "logout-refused"
+      fail(logout === "refused" ? "logout-refused"
           : logout === "invalid" ? "logout-invalid" : "logout-timeout");
       return;
     }
@@ -258,7 +253,7 @@ export function createCharacterSwitchController(options: Readonly<{
       return state.status === "ready" && state.sequence !== snapshotSequence;
     }, 3_000, 50);
     if (!selectorSettled) {
-      fail(focused() ? "selector-timeout" : "focus-lost");
+      fail("selector-timeout");
       return;
     }
     const fresh = options.characters.state;
@@ -282,7 +277,7 @@ export function createCharacterSwitchController(options: Readonly<{
     let selection: SelectorOutcome = classifySelectorResult("selector-frame");
     while (performance.now() < selectorDeadline) {
       const settledList = options.characters.state;
-      if (!focused()) { fail("focus-lost"); return; }
+      if (!switching()) return;
       if (settledList.status !== "ready" || accountSignature(settledList) !== initialSignature) {
         fail("target-missing");
         return;
@@ -307,12 +302,11 @@ export function createCharacterSwitchController(options: Readonly<{
     // its selected index. The list's selected name describes the entered
     // character, so it must not be misused as carousel confirmation here.
     await delay(300);
-    if (!focused()) { fail("focus-lost"); return; }
+    if (!switching()) return;
     publish({ status: "switching", stage: "play" }, "selection:sent");
     const play = await send("play", 0, 2_000);
     if (play !== "sent") {
-      fail(play === "focus" ? "focus-lost"
-        : play === "refused" ? "play-refused"
+      fail(play === "refused" ? "play-refused"
           : play === "play-frame" ? "play-frame-missing"
             : play === "play-parent" ? "play-parent-invalid"
           : play === "invalid" ? "play-invalid" : "play-timeout");
@@ -328,16 +322,18 @@ export function createCharacterSwitchController(options: Readonly<{
         && state.characters[state.selectedIndex]?.characterKey === targetKey;
     }, 30_000);
     if (!confirmed) {
-      fail(focused() ? "confirmation-timeout" : "focus-lost");
+      fail("confirmation-timeout");
       return;
     }
     publish({ status: "complete" }, "confirmation:complete");
   };
 
   const start = (characterKey: string, confirmedExplorable: boolean) => {
+    if (disposed) return;
     if (action.status === "switching" || (action.status === "confirming" && !confirmedExplorable)) {
       return;
     }
+    if (!focused()) { fail("focus-lost", true); return; }
     const state = options.characters.state;
     if (state.status !== "ready") { fail("list-unavailable", true); return; }
     const matches = state.characters
@@ -356,7 +352,6 @@ export function createCharacterSwitchController(options: Readonly<{
       publish({ status: "confirming" }, "confirmation:required");
       return;
     }
-    if (!focused()) { fail("focus-lost", true); return; }
     const targetName = state.characters[targetIndex]!.name;
     started = performance.now();
     requestSequence = state.sequence;
@@ -374,24 +369,34 @@ export function createCharacterSwitchController(options: Readonly<{
         : drainContext === "loading" ? "game-loading" : "logout-refused");
       return;
     }
-    const logout = queue("logout", 0);
-    if (logout !== "queued") {
-      fail(logout === "focus" ? "focus-lost" : "logout-refused");
+    if (!validPayload()) { fail("logout-invalid"); return; }
+    // Focus authorizes this one bounded transaction, not each later stage.
+    // Claim ownership before enabling or enqueueing; blur cannot revoke it.
+    action = Object.freeze({ status: "switching", stage: "logout" });
+    let logout: NativeEnqueue;
+    try {
+      options.configure(options.payloadPointer, 1);
+      logout = queue("logout", 0);
+    } catch {
+      fail("logout-invalid");
       return;
     }
+    if (logout !== "queued") {
+      fail(logout === "invalid" ? "logout-invalid" : "logout-refused");
+      return;
+    }
+    const sequence = actionSequence;
     void run(
       state.sequence,
       targetName,
       characterKey,
       accountSignature(state),
-    );
+    ).catch(() => {
+      if (switching() && actionSequence === sequence) fail("state-unavailable");
+    });
   };
 
-  const onFocusPolicyChanged = () => { configure(); };
-  window.addEventListener("focus", onFocusPolicyChanged);
-  window.addEventListener("blur", onFocusPolicyChanged);
-  document.addEventListener("visibilitychange", onFocusPolicyChanged);
-  configure();
+  options.configure(0, 0);
 
   return Object.freeze({
     payloadBytes: CHARACTER_SWITCH_ACTION_ABI.bytes,
@@ -406,6 +411,7 @@ export function createCharacterSwitchController(options: Readonly<{
       start(characterKey, true);
     },
     cancelConfirmation() {
+      if (disposed) return;
       if (action.status !== "confirming") return;
       pendingCharacterKey = null;
       action = Object.freeze({ status: "idle" });
@@ -413,6 +419,7 @@ export function createCharacterSwitchController(options: Readonly<{
       emit();
     },
     reset() {
+      if (disposed) return;
       if (action.status === "switching") return;
       pendingCharacterKey = null;
       action = Object.freeze({ status: "idle" });
@@ -443,7 +450,7 @@ export function createCharacterSwitchController(options: Readonly<{
         requestSequence: requestSequence >>> 0,
         actionSequence: actionSequence >>> 0,
         focused: focused(),
-        policyEnabled: focused() && validPayload(),
+        policyEnabled: switching() && validPayload(),
         stage: "stage" in action ? action.stage : action.status,
         lastCode,
         elapsedBucketMs: started === 0 ? 0 : elapsedBucket(started),
@@ -493,10 +500,8 @@ export function createCharacterSwitchController(options: Readonly<{
     },
     dispose() {
       disposed = true;
+      pendingCharacterKey = null;
       options.configure(0, 0);
-      window.removeEventListener("focus", onFocusPolicyChanged);
-      window.removeEventListener("blur", onFocusPolicyChanged);
-      document.removeEventListener("visibilitychange", onFocusPolicyChanged);
       listeners.clear();
     },
   });
