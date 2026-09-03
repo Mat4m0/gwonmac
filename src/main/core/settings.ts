@@ -247,6 +247,7 @@ export function parseSettings(raw: unknown): AppSettings {
     "cartographyEnabled",
     "cartographyOverlayEnabled",
     "cartographyGridEnabled",
+    "cartographyCompassGridEnabled",
     "buildLibrary",
     "tradeChat",
     "xunlaiStorage",

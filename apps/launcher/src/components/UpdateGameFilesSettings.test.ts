@@ -19,7 +19,7 @@ describe("launcher update settings", () => {
         openReleases: noOp,
       },
     });
-    expect(wrapper.text()).toContain("Automatically update this launcher");
+    expect(wrapper.text()).toContain("Automatically check for launcher updates");
     expect(wrapper.text()).toContain("Guild Wars game files update separately");
   });
 

@@ -511,6 +511,7 @@ const STARTUP_LABELS = {
 
 const SNAPSHOT_URL = 'Gw.snapshot';
 let appSettings: import('../shared/contracts.js').AppSettings | null = null;
+let disposeSettings = () => {};
 let clientResizeFrame = 0;
 
 function currentRenderScale(): import('../shared/contracts.js').AppSettings['renderScale'] {
@@ -654,6 +655,7 @@ addEventListener('beforeunload', () => {
   texturePack?.dispose();
   texturePack = null;
   disposeMemoryWarningSettings();
+  disposeSettings();
   automaticCharacterReturn?.dispose();
   loginStatus?.dispose();
   characterSwitchHost?.dispose();
@@ -794,11 +796,7 @@ Module = {
             if (appSettings === null) throw new Error('cartography installed before settings');
             return appSettings;
           },
-          persist: async (patch) => {
-            const saved = await native().settings.set(patch);
-            window.gwApplySettings?.(saved);
-            return saved;
-          },
+          persist: (patch) => native().settings.set(patch),
           exportEvidence: (capture) => native().cartography.exportEvidence(capture),
           getMapKnowledge: (kernelSha256) =>
             native().cartography.getMapKnowledge(kernelSha256),
@@ -1293,6 +1291,11 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
     );
     return;
   }
+  // Subscribe before reading the initial snapshot so a concurrent launcher
+  // change cannot be lost while the game host is starting.
+  disposeSettings = native().settings.onChange((settings) => {
+    window.gwApplySettings?.(settings);
+  });
   const [
     { installAutomaticCharacterReturn },
     { installLoginStatus },
@@ -1421,10 +1424,11 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
   window.gwLoading.set('Starting Guild Wars…', null);
 
   try {
-    const [settings, session] = await Promise.all([
+    const [loadedSettings, session] = await Promise.all([
       native().settings.get(),
       native().client.session(),
     ]);
+    const settings = appSettings ?? loadedSettings;
     appSettings = settings;
     const texturePackGeneration = window.gwNative.init.texturePackGeneration;
     if (texturePackGeneration) {
@@ -1453,7 +1457,7 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
     templatePublishingAvailable =
       session.compatibility?.features.gameFileSaving.status === 'available';
     applyAppearance(
-      settings,
+      appSettings,
       document.documentElement,
       session.compatibility?.clientSha256
         ?? String(session.healthToken?.generation ?? "active"),

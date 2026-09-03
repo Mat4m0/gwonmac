@@ -344,6 +344,7 @@ async function publishSettings(settings: AppSettings): Promise<void> {
     updateWindowShortcuts(win, settings);
   }
   sendToRenderer(IPC.settingsEvent, settings);
+  launcherOrchestrator?.publish();
 }
 
 function packagedDistributionChannel(): DistributionChannel | null {
@@ -876,7 +877,6 @@ if (primaryInstance) void app.whenReady().then(async () => {
     openNews: (id) => launcherNews.open(id),
     updateSettings: async (patch: LauncherSettingsPatch) => {
       await preferences.updateSettings(patch);
-      launcherOrchestrator!.publish();
     },
     resetSettings: async (win) => {
       const { response } = await dialog.showMessageBox(win, {
@@ -884,8 +884,8 @@ if (primaryInstance) void app.whenReady().then(async () => {
         buttons: ["Reset Settings", "Cancel"],
         defaultId: 1,
         cancelId: 1,
-        message: "Reset launcher settings?",
-        detail: "Accounts, saved logins, game files, builds, templates, screenshots, and chat logs are kept.",
+        message: "Reset all app settings?",
+        detail: "This resets launcher and game preferences, Tools, shortcuts, custom map styles, and custom panel colors. Original textures will be selected. Accounts, saved logins, game files, imported texture packs, builds, templates, screenshots, and chat logs are kept.",
       });
       if (response !== 0) return;
       await (toolsRuntime?.resetSettings() ?? preferences.resetCoreSettings());
@@ -895,11 +895,9 @@ if (primaryInstance) void app.whenReady().then(async () => {
     },
     setToolsMaster: async (enabled) => {
       await preferences.updateSettings({ gwonmacTools: enabled });
-      launcherOrchestrator!.publish();
     },
     setToolFeature: async ({ tool, enabled }) => {
       await preferences.updateSettings(globalToolPatch(tool, enabled));
-      launcherOrchestrator!.publish();
     },
     captureShortcut: (win, action) => captureLauncherShortcut(
       win,
@@ -908,11 +906,9 @@ if (primaryInstance) void app.whenReady().then(async () => {
     ),
     replaceShortcut: async ({ action, binding }: ShortcutReplacement) => {
       await preferences.replaceShortcut(action, binding);
-      launcherOrchestrator!.publish();
     },
     restoreDefaultShortcut: async (action) => {
       await preferences.replaceShortcut(action, DEFAULT_SHORTCUTS[action]);
-      launcherOrchestrator!.publish();
     },
     restartToApplyTools: async (_win) => {
       if (windowRegistry.gameWindows().length > 0) return;

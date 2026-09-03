@@ -61,7 +61,7 @@ async function capture(input: SkillKeyInput, event: KeyboardEvent | MouseEvent |
 </template>
 
 <style scoped>
-.skill-label-settings { padding: 0 24px 20px; }
+.skill-label-settings { padding: 4px 18px 20px; }
 .skill-label-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-block: 12px; }
 .skill-label-row span { flex: 1; min-width: 160px; }
 .capture-target { padding: 20px; margin-block: 16px; border: 1px solid currentColor; border-radius: 8px; }

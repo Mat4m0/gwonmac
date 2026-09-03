@@ -12,6 +12,7 @@ const props = defineProps<{
   busy: boolean;
   operationError?: string;
   updateDismissed?: boolean;
+  viewingGameFiles?: boolean;
 }>();
 const emit = defineEmits<{
   toggle: [id: ProfileId];
@@ -229,6 +230,6 @@ onBeforeUnmount(() => {
         <button class="manage" @click="manage"><Settings />Manage accounts</button>
       </div>
     </div>
-    <button class="primary launch" :disabled="disabled" @click="emit('action')"><X v-if="waiting" /><Play v-else />{{ label }}</button>
+    <button v-if="!viewingGameFiles || snapshot.readiness.state !== 'repair-required'" class="primary launch" :disabled="disabled" @click="emit('action')"><X v-if="waiting" /><Play v-else />{{ label }}</button>
   </footer>
 </template>

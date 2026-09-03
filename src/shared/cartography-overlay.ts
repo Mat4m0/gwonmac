@@ -214,7 +214,7 @@ export const CARTOGRAPHY_BUILTIN_PRESETS: Readonly<Record<
 >> = Object.freeze({
   cartographer: Object.freeze({ name: "Cartographer", style: presetStyle({
     walkability: {
-      veilColor: "#081014", boundaryColor: "#F2A900", boundaryWidth: 3,
+      veilColor: "#081014", boundaryColor: "#F2A900", boundaryWidth: 1,
       boundaryCasingColor: "#050709",
     },
     grid: {
@@ -228,7 +228,7 @@ export const CARTOGRAPHY_BUILTIN_PRESETS: Readonly<Record<
   }) }),
   synthwave: Object.freeze({ name: "Synthwave", style: presetStyle({
     walkability: {
-      veilColor: "#080516", boundaryColor: "#FF4FD8", boundaryWidth: 3,
+      veilColor: "#080516", boundaryColor: "#FF4FD8", boundaryWidth: 1,
       boundaryCasingColor: "#070A12",
     },
     grid: {
@@ -242,7 +242,7 @@ export const CARTOGRAPHY_BUILTIN_PRESETS: Readonly<Record<
   }) }),
   monochrome: Object.freeze({ name: "Monochrome", style: presetStyle({
     walkability: {
-      veilColor: "#080A0C", boundaryColor: "#F2F4F5", boundaryWidth: 2,
+      veilColor: "#080A0C", boundaryColor: "#F2F4F5", boundaryWidth: 1,
       boundaryCasingColor: "#050607",
     },
     grid: {

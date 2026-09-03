@@ -26,6 +26,7 @@ describe("cartography appearance", () => {
       const { style } = CARTOGRAPHY_BUILTIN_PRESETS[id];
       assert.equal(Object.isFrozen(style), true);
       assert.equal(Object.isFrozen(style.walkability), true);
+      assert.equal(style.walkability.boundaryWidth, 1);
       assert.equal(Object.isFrozen(style.grid), true);
       assert.equal(Object.isFrozen(style.grid.lattice), true);
       assert.equal(Object.isFrozen(style.grid.unseen), true);
@@ -42,7 +43,7 @@ describe("cartography appearance", () => {
     assert.deepEqual(grid.birdsEyeRange, {
       color: "#FF4FD8", width: 4, pattern: "dash-dot",
     });
-    assert.equal(walkability.boundaryWidth, 3);
+    assert.equal(walkability.boundaryWidth, 1);
   });
 
   it("exposes every supported line pattern and unseen-cell marker", () => {

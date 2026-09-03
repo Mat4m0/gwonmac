@@ -1,13 +1,10 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
-  accessibleForeground,
   appearanceVariables,
   applyAppearance,
-  contrastRatio,
-  readableForeground,
-  readableSharedForeground,
 } from "../../src/renderer/appearance.js";
+import { accessibleForeground, contrastRatio, readableForeground, readableSharedForeground } from "../../src/shared/ui-color.js";
 import {
   DEFAULT_SETTINGS,
   type AppSettings,

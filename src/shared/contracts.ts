@@ -388,6 +388,8 @@ export interface AppSettings {
   cartographyOverlayEnabled: boolean;
   /** Draw the game's fixed cartography cells over both native map surfaces. */
   cartographyGridEnabled: boolean;
+  /** Include the Compass in exploration-grid presentation; off by default. */
+  cartographyCompassGridEnabled: boolean;
   /** Persistent Compass footprint; Mission Map hover uses Shift or Option+Shift. */
   cartographyRevealMode: "off" | "normal" | "birds-eye";
   /** Active built-in or player-owned appearance and all custom presets. */
@@ -536,6 +538,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   cartographyEnabled: true,
   cartographyOverlayEnabled: false,
   cartographyGridEnabled: false,
+  cartographyCompassGridEnabled: false,
   cartographyRevealMode: "off",
   cartographyPresetLibrary: DEFAULT_CARTOGRAPHY_PRESET_LIBRARY,
   cartographyWalkabilityOpacity: 55,

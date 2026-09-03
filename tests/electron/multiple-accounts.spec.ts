@@ -20,6 +20,7 @@ declare global {
   var __healthTokenDescriptor: PropertyDescriptor | undefined;
   interface Window {
     __concurrentProfileOpen?: Promise<void>;
+    __appliedSettings?: import("../../src/shared/contracts.js").AppSettings;
   }
 }
 
@@ -265,7 +266,7 @@ test("serializes concurrent profile launches behind one client canary", async ()
   }
 });
 
-test("publishes global Tool changes to every open profile", async () => {
+test("applies launcher settings to every open profile and reflects in-game changes", async () => {
   const fixture = await launchCachedClient(
     "gw-launcher-settings-broadcast-",
     { GW_TEST_RETURN_LAUNCHER: "1" },
@@ -283,6 +284,18 @@ test("publishes global Tool changes to every open profile", async () => {
     ).length).toBe(2);
     const games = fixture.app.windows().filter((page) => page.url() === "gw://app/");
     await Promise.all(games.map((game) => game.waitForLoadState("domcontentloaded")));
+    // Observe actual application calls. Checking only current values can pass
+    // through the initial read even when the live subscription is missing.
+    await Promise.all(games.map(async game => {
+      await game.waitForFunction(() => typeof window.gwApplySettings === "function");
+      await game.evaluate(() => {
+        const apply = window.gwApplySettings!;
+        window.gwApplySettings = settings => {
+          apply(settings);
+          window.__appliedSettings = settings;
+        };
+      });
+    }));
 
     await fixture.page.evaluate(async () => {
       await window.launcherNative.tools.setMasterEnabled(true);
@@ -290,11 +303,70 @@ test("publishes global Tool changes to every open profile", async () => {
         tool: "quick-travel",
         enabled: true,
       });
+      await window.launcherNative.settings.update({
+        cartographyGridEnabled: true,
+        cartographyCompassGridEnabled: true,
+        cartographyOverlayEnabled: true,
+        cartographyGridOpacity: 42,
+        cartographyWalkabilityOpacity: 63,
+        cartographyControlIdleOpacity: 75,
+        cartographyRevealMode: "birds-eye",
+        renderScale: 1.5,
+        uiStyle: "obsidian",
+        uiFont: "inter",
+        uiPanelOpacity: 80,
+        showDiagnostics: true,
+        skillCooldownColor: { kind: "custom", value: "#123456" },
+      });
     });
 
     await expect.poll(() => Promise.all(games.map((game) =>
       game.evaluate(() => window.gwToolsSettings().travelPalette),
     ))).toEqual([true, true]);
+    for (const game of games) {
+      await expect.poll(() => game.evaluate(() => window.__appliedSettings)).toMatchObject({
+        cartographyGridEnabled: true,
+        cartographyCompassGridEnabled: true,
+        cartographyOverlayEnabled: true,
+        cartographyGridOpacity: 42,
+        cartographyWalkabilityOpacity: 63,
+        cartographyControlIdleOpacity: 75,
+        cartographyRevealMode: "birds-eye",
+        renderScale: 1.5,
+        uiStyle: "obsidian",
+        uiFont: "inter",
+        uiPanelOpacity: 80,
+        showDiagnostics: true,
+        skillCooldownColor: { kind: "custom", value: "#123456" },
+      });
+      expect(await game.evaluate(() => window.gwToolsSettings().cartographyGridEnabled)).toBe(true);
+      await expect(game.locator("html")).toHaveAttribute("data-ui-style", "obsidian");
+      await expect(game.locator("html")).toHaveAttribute("data-ui-font", "inter");
+      await expect.poll(() => game.evaluate(() => document.documentElement.style.getPropertyValue("--ui-panel-opacity"))).toBe("0.8");
+    }
+
+    await fixture.page.evaluate(() => window.launcherNative.settings.update({ cartographyCompassGridEnabled: false }));
+    for (const game of games) {
+      await expect.poll(() => game.evaluate(() => window.__appliedSettings)).toMatchObject({ cartographyGridEnabled: true, cartographyCompassGridEnabled: false });
+    }
+    await games[0]!.evaluate(() => window.gwNative.settings.set({ cartographyGridEnabled: false }));
+    await expect.poll(() => fixture.page.evaluate(() => window.launcherNative.state.get())).toMatchObject({
+      settings: { cartographyGridEnabled: false },
+    });
+    // Assert the subscribed launcher UI too, not only its fresh snapshot API.
+    await fixture.page.evaluate(async () => {
+      await window.launcherNative.experience.completeSetup({ enableTools: false });
+      await window.launcherNative.experience.completeIntroduction();
+    });
+    await fixture.page.getByRole("button", { name: "Settings", exact: true }).click();
+    await fixture.page.getByRole("button", { name: "Maps", exact: true }).click();
+    const grid = fixture.page.getByRole("checkbox", { name: /Exploration grid/ });
+    await expect(grid).not.toBeChecked();
+    await games[0]!.evaluate(() => window.gwNative.settings.set({ cartographyGridEnabled: true }));
+    await expect(grid).toBeChecked();
+    await Promise.all(games.map(async game => {
+      await expect.poll(() => game.evaluate(() => window.gwToolsSettings().cartographyGridEnabled)).toBe(true);
+    }));
   } finally {
     await closeOffline(fixture);
   }
@@ -492,14 +564,16 @@ test("global map settings live in the launcher and survive restart", async () =>
     await first.page.getByRole("button", { name: "Not now" }).click();
     await first.page.getByRole("button", { name: "Skip" }).click();
     await first.page.getByRole("button", { name: "Settings" }).click();
-    await expect(first.page.getByRole("button", { name: "Maps", exact: true })).toHaveCount(0);
-    await first.page.getByRole("button", { name: "Tools", exact: true }).click();
+    await first.page.getByRole("button", { name: "Maps", exact: true }).click();
+    await expect(first.page.getByText("Tools are off", { exact: true })).toBeVisible();
+    await first.page.getByRole("checkbox", { name: /^Exploration grid/ }).check();
+    await first.page.getByRole("button", { name: "Customize style" }).click();
+    await expect(first.page.getByRole("region", { name: "Edit Cartographer custom" })).toBeVisible();
+    await first.page.getByRole("button", { name: "Open Tools settings" }).click();
     await first.page.getByRole("checkbox", { name: /^Enable Tools/ }).check();
     await first.page.getByRole("button", { name: "Maps", exact: true }).click();
     await expect(first.page.getByRole("heading", { name: "Maps" })).toBeVisible();
-    await first.page.getByRole("checkbox", { name: /^Exploration grid/ }).check();
-    await first.page.getByRole("button", { name: "Customize style" }).click();
-    await expect(first.page.getByText("Custom style", { exact: true })).toBeVisible();
+    await expect(first.page.getByText("Restart the launcher to enable Maps", { exact: true })).toBeVisible();
     const beforeRestart = await first.page.evaluate(() => window.launcherNative.state.get());
     expect(beforeRestart.settings.cartographyGridEnabled).toBe(true);
     expect(beforeRestart.settings.cartographyPresetLibrary.activePreset.kind).toBe("custom");

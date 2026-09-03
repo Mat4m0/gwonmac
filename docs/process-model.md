@@ -76,6 +76,13 @@ All profiles use the same verified client generation, chunk store, derived
 client artifacts, application updater, general settings, and Tools installation.
 These shared stores contain infrastructure, not profile login state.
 
+`PreferencesCoordinator` publishes each saved settings snapshot to the launcher
+and every open game window. The game host subscribes before its initial settings
+read and applies changes to its existing presentation and Tools consumers.
+A newer settings event takes precedence over the initial read. Closing the game
+window removes the subscription. Map controls in a game window use this same
+publication path, so the launcher stays current too.
+
 The main-process window registry owns the launcher and every profile game
 window. The window coordinator owns show, hide, restore, focus, and Dock
 activation. Native code resolves a renderer only through the registry; it does

@@ -500,7 +500,8 @@ export function mountCartographyOverlay(options: Readonly<{
         + presentation.player.x / GAME_UNITS_PER_MAP_UNIT;
       const playerMapY = state.currentInstance.worldAnchor.y
         - presentation.player.y / GAME_UNITS_PER_MAP_UNIT;
-      if (settings.cartographyGridEnabled && state.continent.status === "ready") {
+      if (settings.cartographyGridEnabled && settings.cartographyCompassGridEnabled
+        && state.continent.status === "ready") {
         const projection = projectCartographyGridToCompass({
           frame: { generation: state.currentInstance.epoch.area, playerMapX, playerMapY },
           compass,

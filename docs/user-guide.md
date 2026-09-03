@@ -95,7 +95,7 @@ safety limits, storage, and troubleshooting.
 Tools are global. The same master switch, Tool switches, and shortcuts apply to
 every account. The launcher exposes:
 
-- **Build Management** — save and organize builds and teams;
+- **Build Library** — save and organize builds and teams;
 - **Quick Travel** — search reviewed Guild Wars destinations;
 - **Xunlai Storage** — open storage in supported PvE outposts;
 - **Trade Chat** — browse the trade feed;
@@ -105,7 +105,8 @@ every account. The launcher exposes:
 - **Skill Cooldowns** — show numeric recharge timers with a preset or custom color.
 
 Open **Settings → Tools** to configure them. Features with shortcuts have
-**Change shortcut**, **Clear**, and **Restore default** controls.
+an editable shortcut value. Select **Change** to capture a shortcut. Open
+the three-dot shortcut menu for **Clear** and **Restore default**.
 Skill labels only change the displayed labels, not Guild Wars key bindings.
 Character Switch has its own switch, shortcut, and display settings here.
 It is a Core feature and does not require **Enable Tools**.
@@ -115,20 +116,25 @@ application shortcuts such as Command-C, Command-V, Command-Q, and Command-W
 remain reserved. If a new or restored shortcut conflicts with any feature,
 the launcher asks before replacing it. This includes disabled features.
 
-Enabling the Tools runtime can require a restart. With no games open, the
-launcher offers to restart. With games open, it saves the change for the next
-normal restart and does not close them. Individual Tool switches and shortcuts
-apply to all running profiles when the Tools runtime is already loaded.
+Enabling Tools for the first time requires restarting the entire app, including
+the launcher. Turning Tools off removes its features from every game window
+immediately. Restart the launcher to finish unloading the Tools runtime.
+Re-enabling Tools before that restart restores its features immediately.
+Reopening only a game window does not load or unload the runtime. Close all
+game windows, then select **Restart launcher** in **Settings → Tools**. You can
+also quit the app with Command-Q and reopen it. Individual Tool switches and
+shortcuts apply to all running profiles when the Tools runtime is already loaded.
 
 ## Maps and cartography
 
-Enable **Tools** and **Maps** in **Settings → Tools** to show **Settings → Maps**.
-Disabling Maps hides its controls and overlays without clearing your preferences.
+**Settings → Maps** is always available. Enable **Tools** and **Maps** in
+**Settings → Tools** to show the overlays. The Maps page explains when Tools
+are off or an application restart is needed. Disabling Maps keeps your preferences.
 The **Exploration grid** and **Walkable terrain** shortcuts are unassigned by
 default. Assign them in Maps settings to toggle each layer independently.
 **Grid** marks the game's
 exploration cells and highlights the cell containing your character.
-**Walkable terrain** shades terrain outside certified pathing geometry while it
+**Walkable terrain** shades areas you cannot walk on while it
 keeps the native map artwork visible.
 
 Choose Cartographer, Synthwave, or Monochrome. Custom styles can change colors,
@@ -143,6 +149,12 @@ Isles, and the Realm of Torment, the Grid and global progress hide while local
 Walkable terrain remains available. The Cartography control stays beside the
 Compass and explains the limitation when opened. Your settings remain intact
 and all layers return automatically after travel to a fully supported area.
+
+The style preview shows representative terrain, colors, borders, and grid lines.
+It does not reproduce the current game map. Common appearance controls are
+always visible. **Advanced grid lines** contains the individual line settings.
+**Use Cartographer defaults** selects that built-in without deleting custom
+styles. Deleting a custom style requires confirmation.
 
 ## Switch Character
 
@@ -172,9 +184,30 @@ application does not broadcast input between profiles. Main letters, the number
 row, and ANSI punctuation keep the same physical game binding when the macOS
 input source changes. Text fields still use the active input source.
 
-Open **Settings → Advanced** to enable extended memory or local diagnostics and
-to reveal logs. The in-game memory warning remains available during long
-sessions and can reload only the affected profile.
+Open **Settings → Game** to change render quality, extended memory, or automatic
+character return after reload. Render quality updates open windows immediately.
+Extended memory takes effect after an application restart. Controller symbols
+apply when you next open or reload a game window.
+
+The **In-game panels** section restores control of panel style, font, opacity,
+and custom colors. Each color accepts a picker or six-digit hex value. These
+changes apply to gwonmac panels in every open game window. Custom themes can be
+shared as text; switching to a built-in style keeps the saved custom palette.
+An illustrative panel preview shows the selected palette. Low-contrast text
+colors produce an explanation of the game's readability correction.
+
+Settings save automatically. If a save fails, the settings feedback identifies
+the unsaved change. Choose **Retry save** to repeat it or **Revert change** to
+restore the confirmed values. Further edits wait until that change is resolved.
+Switching sections starts at the new heading. Reopening Settings returns to the
+last section.
+
+Open **Settings → Advanced** to show the diagnostics overlay or reveal logs.
+The in-game memory warning remains available during long sessions and can reload
+only the affected profile.
+**Reset all app settings** also resets game preferences, Tools, shortcuts,
+custom map styles, and panel colors. The confirmation lists affected and kept
+data. It is separate from resetting downloaded game files.
 
 ## Updates
 
