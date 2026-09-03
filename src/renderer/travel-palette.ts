@@ -40,12 +40,17 @@ export function createTravelPalette(
   let requested = false;
   let disposed = false;
   let state: TravelGameState = { status: "waiting", reason: "game" };
+  let friends: TravelFriends = { status: "waiting", reason: "unavailable" };
   let app: TravelPaletteHandle | null = null;
   function setOpen(next: boolean): void {
     if (!enabled && next) throw new Error(command.unavailable() ?? "Travel is turned off");
     if (root.open === next) return;
     if (next) modal.show();
-    else modal.close();
+    else {
+      modal.close();
+      friends = { status: "waiting", reason: "unavailable" };
+      app?.updateFriends(friends);
+    }
     if (next && !requested) {
       requested = true;
       ensureToolsStylesheet(parent.ownerDocument);
@@ -60,6 +65,7 @@ export function createTravelPalette(
           onVisibilityChange: (visible) => setOpen(visible),
         });
         app.update(state);
+        app.updateFriends(friends);
       }).catch((cause: unknown) => {
         console.error("[travel] the Travel palette failed to load", cause);
         modal.close();
@@ -96,7 +102,10 @@ export function createTravelPalette(
       enabled = next;
       if (!next && root.open) setOpen(false);
     },
-    updateFriends(next: TravelFriends) { app?.updateFriends(next); },
+    updateFriends(next: TravelFriends) {
+      friends = next;
+      app?.updateFriends(next);
+    },
     update(next: TravelGameState) {
       state = next;
       app?.update(next);

@@ -27,6 +27,8 @@ test("friend lifecycle roles survive movement and refuse changed notification pa
   assert.equal(original.status, "candidate");
   assert.equal(original.runtimeAuthority, false);
   const candidate = original.candidate!;
+  assert.equal(candidate.eventContextPointer % 4, 0);
+  assert.ok(candidate.eventContextPointer + 4 <= evidence.data.initialMemoryBytes);
   const certificate = deriveFriendObserverCertificate(input);
   assert.ok(certificate);
   assert.equal(isFriendObserverCertificate(certificate, original.inputSha256), true);

@@ -335,41 +335,35 @@ friend names, UUIDs, rosters, or search text in persisted diagnostics.
 | Native lifecycle function experiments | Eleven synthetic scenarios passed; full-client scheduling remains unproved |
 | Private invalidation mechanism | Twelve additional scenarios passed on the retained input; runtime hook certification remains open |
 | Structural lifecycle proof | One candidate; role movement passes and changed calls, stores, or duplicates are refused |
-| Isolated verifier certificate | Closed input- and ABI-bound record implemented; production does not consume it yet |
+| Isolated verifier certificate | Closed input- and ABI-bound record consumed only after production reproduces it |
 | Real transform predecessors | Template-save, Core Enhancement, and Tools Enhancement each retain one observer candidate |
 | Production observer rewrite | Deterministic output; ten offline scenarios execute its actual wrappers and native queue path |
 | Processed native completion | Eight queue scenarios passed |
-| Current-session correlation | Private ordinal gate passes four scenarios; production hooks remain unproved |
-| Bounded record decoding | Rust implementation and fourteen reader/session scenarios pass; not installed |
-| Account/disconnect/reconnect invalidation | Structurally identified and executed in isolation; not installed |
-| Companion observation installed | No |
-| Palette integration | No |
-| Live behavior witnessed | No |
-| Friend Travel requested / destination reached | No / no |
+| Current-session correlation | Private ordinal gate installed after offline wrapper and queue scenarios |
+| Bounded record decoding | Rust implementation installed; malformed or oversized rosters withdraw atomically |
+| Account/disconnect/reconnect invalidation | Certified wrappers withdraw the snapshot before native invalidation runs |
+| Companion observation installed | Yes; bounded ABI v1 snapshot in companion ABI 22 |
+| Palette integration | Yes; alias and character search with disabled refusal states |
+| Live behavior witnessed | Yes; friend name, character, and reported outpost observed in the development client |
+| Friend Travel requested / destination reached | Yes / yes |
 
-## Resume here
+## Implemented boundary
 
-The next milestone is one certified read-only observer, ready to compare with
-the native Friends panel. Do not start another broad implementation survey.
-One concrete gate remains before live activation: add the certified transform
-stage to client preparation, then install the lifecycle notifications, session
-gate, bounded reader, and snapshot region. The
-record layout and private current-session admission mechanism pass their offline
-mutations and native execution scenarios; neither grants runtime authority by
-itself.
-
-After those gates pass, link the existing Rust reader into the companion and
-reuse region installation and the sequence feed. No second roster store or
-generic renderer callback is needed. Keep reported location separate from
-freshness: these experiments do not establish that a retained map was refreshed
-by the server after reconnect.
+The certified transform, lifecycle notifications, private session gate, bounded
+Rust reader, and fixed snapshot region now form the production observation path.
+The renderer uses the common sequence feed, so stopped native updates withdraw
+friend results after 500 ms without treating identical fresh publications as UI
+changes. Reported location remains separate from freshness: a fresh record says
+what the client currently reports, not that the friend will still be there when
+network travel completes.
 
 Observe only while Tools, Travel, the open palette, and supported-region policy
 permit it. Friend certification refusal must leave ordinary Travel available.
 Successful unchanged reads remain fresh; stopped observation withdraws state.
 Use a session-local identity that cannot become another friend after slot reuse.
-At selection, re-resolve identity and the displayed map. A changed map requires
-a new selection. Keep all game commands in the existing Travel owner.
+At selection, the palette re-resolves the session generation, identity, presence,
+and displayed map. A changed value requires a new selection. The existing Travel
+owner still rechecks the reviewed map, current context, unlock, and command gate.
 
 Follow [Core and Tools development](../../docs/enhancement-development.md) and
 [WASM host and certification](../../docs/wasm-host.md) for integration.

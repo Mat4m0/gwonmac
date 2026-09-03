@@ -113,6 +113,7 @@ unwitnessed field must fail TypeScript compilation or boundary validation.
 | Target Distance | Complete observation base, target-field ledger, precedence, and bounded finite snapshot behavior | Disable Target Distance only |
 | Party capture | Complete roster, ownership, profession, unlock, flag, skill, attribute, dirty-message, and transition lifecycle | Disable party observation and dependent Team Apply |
 | Travel | Exact four-field producer, unique current-region resolver with complete call/content witnesses, Travel message role, dispatcher, reviewed-map allowlist, bounded mailbox/drain, and transition confirmation | Disable Travel; aliases may retain only independently available Xunlai commands |
+| Friend locations | Complete friend-table layout, login request/completion correlation, queue acceptance and processing, all invalidation paths, bounded pointer-free snapshot, and fresh sequence feed | Disable friend results only; ordinary destination Travel remains available |
 | Xunlai | Three readers, player/area layouts, fixed DataWindow action, handler, bounded drain, and fresh tri-state lifecycle | Disable Xunlai; aliases may retain only independently available Travel commands |
 | Chat aliases | Exact parser relation, bounded comparisons, handled result, original-parser preservation, and at least one proved local action | Rewrite only aliases for proved actions; otherwise preserve the original parser |
 | Team Apply | Seven named builders, exact opcodes/payloads, sender, bounded drain, fresh complete Party proof, and runtime confirmations | Disable Team Apply only; Builds and Teams remain editable |
@@ -149,7 +150,10 @@ locator already meets the final relocation-resistant bar. At verifier ABI 7:
 - Cartography no longer uses a whole-client hash, but its pathing and surface
   roles still contain exact function-index and body bindings. Unrelated client
   changes recover locally; a reindex or equivalent body rewrite can still
-  require a stronger semantic locator.
+  require a stronger semantic locator; and
+- friend observation accepts relocated functions and static addresses when all
+  semantic relationships still reproduce, but its exact role shapes can refuse
+  after an equivalent compiler rewrite.
 
 These checks fail closed. They can therefore disable a feature after an
 equivalent ArenaNet rebuild even when game behavior did not change. A refusal
@@ -171,7 +175,7 @@ For an equivalent rebuild:
 3. Record each feature verdict, invariant, input hash, verifier ABI, and derived
    output hash.
 4. Transform every effective capability profile and validate each output.
-5. Run Cartography, native double-click, and 4 GB pair qualification independently.
+5. Run friend observation, Cartography, native double-click, and 4 GB pair qualification independently.
 6. Store the signed machine-readable report and mark the generation as already
    processed. The report remains evidence only.
 7. Open no source PR. Players use the locally proved features immediately.

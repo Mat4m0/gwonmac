@@ -6,4 +6,4 @@ export const FRIEND_OBSERVER_TRANSFORM_ABI = 1;
 export const FRIEND_OBSERVER_MANIFEST_SECTION = "friend_observer_manifest";
 
 export const FRIEND_OBSERVER_SEMANTIC_SHA256 =
-  "e72f3f12a682341a5bfe59c1ee8d7d3c8cc6c2e7f5ff59a3c9bc4c6ad9b8a62c";
+  "d22216f8595bb1604f9d2d7f95a63b0c41e0fa874bf369338f7c7ca9ab5d0a8c";

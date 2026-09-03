@@ -9,7 +9,14 @@ import type { TravelFriend as CompanionFriend, TravelFriends as CompanionFriends
 const MAGIC = 0x5246_5747;
 const HEADER_BYTES = 24;
 const RECORD_BYTES = 96;
-const STATUS = ["offline", "online", "away", "do-not-disturb", "unknown"] as const;
+const STATUS = ["offline", "online", "do-not-disturb", "away", "unknown"] as const;
+
+/** Identifies user-visible roster content while ignoring the seqlock revision. */
+export function companionFriendsSignature(observation: CompanionFriends): string {
+  return observation.status === "ready"
+    ? JSON.stringify([observation.status, observation.generation, observation.friends])
+    : `${observation.status}:${observation.reason}`;
+}
 
 function name(view: DataView, offset: number): string | null {
   const units: number[] = [];

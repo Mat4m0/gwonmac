@@ -5,10 +5,15 @@
 import { COMPANION_ABI, COMPANION_DISPATCH_KINDS, COMPANION_FEATURE_BITS } from "../shared/companion-abi.js";
 import type { EnhancementCapabilities, EnhancementProgram } from "../shared/enhancement-contracts.js";
 import type { ToolboxObservation } from "../shared/builds/live-party.js";
-import { readCompanionFriends } from "./companion-friend-snapshot.js";
+import type { TravelFriends } from "../shared/friends.js";
+import {
+  companionFriendsSignature,
+  readCompanionFriends,
+} from "./companion-friend-snapshot.js";
 import { decodeFriendObserverManifest } from "./friend-observer-manifest.js";
 import type { CompanionSnapshot } from "./companion-snapshot.js";
 import type { CompanionSkillSlotState } from "./companion-skill-snapshot.js";
+import { createCompanionSequenceFeed } from "./companion-sequence-feed.js";
 import type { EnhancementCommandEnqueue } from "./enhancement-team-commands.js";
 import type * as TeamCommandsModule from "./enhancement-team-commands.js";
 import type { ProfessionCommandTraceReader } from "./profession-command-trace.js";
@@ -228,22 +233,28 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
   let professionTrace: ReturnType<typeof tools.createProfessionCommandTrace> | null = null;
   let aliasEnabled: boolean | null = null;
   let lastTrace = "";
-  let lastFriendSignature = "";
   let observingFriends = false;
+  const waitingFriends = Object.freeze({
+    status: "waiting" as const,
+    reason: "unavailable" as const,
+  });
+  const friendFeed = activeFriendPointer === 0 || travel === null
+    ? null
+    : createCompanionSequenceFeed<TravelFriends>(waitingFriends, waitingFriends, {
+      sameReadyState: (previous, next) =>
+        companionFriendsSignature(previous) === companionFriendsSignature(next),
+    });
+  const unsubscribeFriends = friendFeed?.subscribe((friends) => travel?.updateFriends(friends));
   const pollFriends = () => {
-    if (activeFriendPointer === 0 || travel === null) return;
+    if (activeFriendPointer === 0 || travel === null || friendFeed === null) return;
     const nextObservation = policy().travel && travel.observingFriends();
     if (nextObservation !== observingFriends) {
       observingFriends = nextObservation;
+      if (!observingFriends) friendFeed.withdraw();
       syncObservers();
     }
     if (!observingFriends) return;
-    const next = readCompanionFriends(memory.buffer, activeFriendPointer);
-    const signature = next.status === "ready" ? `ready:${next.sequence}:${next.generation}`
-      : `${next.status}:${next.reason}`;
-    if (signature === lastFriendSignature) return;
-    lastFriendSignature = signature;
-    travel.updateFriends(next);
+    friendFeed.update(readCompanionFriends(memory.buffer, activeFriendPointer));
   };
   const disposePresentation = () => runCleanupSteps(
     "Companion Tools presentation cleanup failed",
@@ -255,6 +266,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
       () => cooldowns?.dispose(),
       () => { configureTrade?.(0); },
       () => professionTrace?.dispose(),
+      () => { unsubscribeFriends?.(); friendFeed?.dispose(); },
     ],
   );
   const abortActivation = (cause: unknown): never => {
@@ -336,7 +348,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
       | (policy().targetReadout || cartographyActive()
         ? COMPANION_FEATURE_BITS.targetObservation : 0)
       | skills.activeFeatureFlags
-      | (activeFriendPointer !== 0 && policy().travel && observingFriends
+      | (activeFriendPointer !== 0 && policy().travel && travel?.observingFriends() === true
         ? COMPANION_FEATURE_BITS.friendObservation : 0),
     0, 0, 0, 0,
   );
@@ -393,7 +405,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
   return Object.freeze({
     observer: {
       pollers: [
-        ...(activeFriendPointer === 0 ? [] : [{ poll: pollFriends, enabled: () => policy().travel }]),
+        ...(activeFriendPointer === 0 ? [] : [{ poll: pollFriends, enabled: () => true }]),
         ...(travel === null ? [] : [{
           poll: () => travel.poll(),
           enabled: () => policy().travel,

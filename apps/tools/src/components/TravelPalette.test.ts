@@ -24,6 +24,7 @@ function fixture(options: Readonly<{
   synonyms?: TravelSynonyms;
   history?: readonly number[];
   friends?: TravelFriends;
+  unavailable?: string | null;
 }> = {}, attachTo?: Element) {
   const state = ref<TravelHost["state"]["value"]>({
     status: "ready", mapId: 55, travelContext: "world", characterKey: null, unlockedMapWords: null,
@@ -55,7 +56,7 @@ function fixture(options: Readonly<{
     attempt,
     notice,
     history,
-    unavailable: null,
+    unavailable: options.unavailable ?? null,
     async loadPreferences() { return preferences; },
     savePreferences,
     async loadHistory() { return history.value; },
@@ -596,7 +597,7 @@ describe("TravelPalette", () => {
         alias: "Romi", character: "Example Ranger" }],
     } });
     await flushPromises();
-    await wrapper.get('[role="combobox"]').setValue("romi");
+    await wrapper.get('[role="combobox"]').setValue("rom ranger");
     expect(wrapper.text()).toContain("Romi");
     expect(wrapper.text()).toContain("Example Ranger");
     expect(wrapper.text()).toContain("Kamadan, Jewel of Istan");
@@ -619,8 +620,94 @@ describe("TravelPalette", () => {
     expect(result.text()).toContain("Romi");
     expect(result.text()).toContain("Offline");
     expect(result.attributes()).toHaveProperty("disabled");
+    expect(result.attributes("aria-disabled")).toBe("true");
+    expect(wrapper.get('[role="combobox"]').attributes("aria-activedescendant")).toBeUndefined();
+    expect(wrapper.text()).not.toContain("returntravel");
     await result.trigger("click");
     await wrapper.get('[role="combobox"]').trigger("keydown", { key: "Enter" });
+    expect(travel).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it("does not travel when an observed friend becomes unavailable before selection", async () => {
+    const { wrapper, host, travel } = fixture({ friends: {
+      status: "ready", sequence: 2, generation: 1,
+      friends: [{ key: "0123456789abcdef", status: "online", mapId: 449,
+        alias: "Romi", character: "Example Ranger" }],
+    } });
+    await flushPromises();
+    await wrapper.get('[role="combobox"]').setValue("romi");
+    const result = wrapper.get(".travel-result");
+
+    host.updateFriends({
+      status: "ready", sequence: 4, generation: 1,
+      friends: [{ key: "0123456789abcdef", status: "offline", mapId: 449,
+        alias: "Romi", character: "Example Ranger" }],
+    });
+    await result.trigger("click");
+
+    expect(travel).not.toHaveBeenCalled();
+    expect(wrapper.text()).toContain("This friend’s location changed. Select them again.");
+    wrapper.unmount();
+  });
+
+  it("shows an unknown friend status as unavailable", async () => {
+    const { wrapper, travel } = fixture({ friends: {
+      status: "ready", sequence: 2, generation: 1,
+      friends: [{ key: "0123456789abcdef", status: "unknown", mapId: 449,
+        alias: "Romi", character: "Example Ranger" }],
+    } });
+    await flushPromises();
+    await wrapper.get('[role="combobox"]').setValue("romi");
+
+    const result = wrapper.get(".travel-result");
+    expect(result.text()).toContain("Status unavailable");
+    expect(result.attributes()).toHaveProperty("disabled");
+    expect(travel).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it("keeps the selected friend when an unchanged roster is republished", async () => {
+    const roster = [
+      { key: "0123456789abcdef", status: "online" as const, mapId: 449,
+        alias: "First Friend", character: "First Character" },
+      { key: "fedcba9876543210", status: "away" as const, mapId: 194,
+        alias: "Second Friend", character: "Second Character" },
+    ];
+    const { wrapper, host } = fixture({ friends: {
+      status: "ready", sequence: 2, generation: 1, friends: roster,
+    } });
+    await flushPromises();
+    const search = wrapper.get('[role="combobox"]');
+    await search.setValue("friend");
+    await search.trigger("keydown", { key: "ArrowDown" });
+    expect(wrapper.findAll(".travel-result")[1]!.attributes("aria-selected")).toBe("true");
+
+    host.updateFriends({ status: "ready", sequence: 4, generation: 1, friends: roster });
+    await flushPromises();
+
+    expect(wrapper.findAll(".travel-result")[1]!.attributes("aria-selected")).toBe("true");
+    wrapper.unmount();
+  });
+
+  it("explains when friend locations are unavailable without hiding destination search", async () => {
+    const { wrapper } = fixture();
+    await flushPromises();
+    await wrapper.get('[role="combobox"]').setValue("zzzz-no-such-outpost");
+
+    expect(wrapper.text()).toContain("Friend locations are unavailable right now.");
+    expect(wrapper.text()).toContain("You can still search for a destination.");
+    wrapper.unmount();
+  });
+
+  it("does not submit a visually disabled result with Enter", async () => {
+    const { wrapper, travel } = fixture({ unavailable: "Travel is unavailable while loading." });
+    await flushPromises();
+    const search = wrapper.get('[role="combobox"]');
+    await search.setValue("kamadan");
+    await search.trigger("keydown", { key: "Enter" });
+
+    expect(wrapper.get(".travel-result").attributes()).toHaveProperty("disabled");
     expect(travel).not.toHaveBeenCalled();
     wrapper.unmount();
   });

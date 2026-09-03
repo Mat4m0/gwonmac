@@ -72,6 +72,7 @@ type DestinationSearchResult = Readonly<{
 type FriendSearchResult = Readonly<{
   kind: "friend";
   resultKey: string;
+  generation: number;
   mapId: number;
   destination: TravelDestination | null;
   friend: TravelFriend;
@@ -93,6 +94,7 @@ const currentMapId = computed(() =>
 );
 function friendDisabledReason(friend: TravelFriend, destination: TravelDestination | null): string | null {
   if (friend.status === "offline") return "Offline";
+  if (friend.status === "unknown") return "Status unavailable";
   if (destination === null) return "Location unavailable";
   const result = availability(friend.mapId);
   if (result === "locked") return "Locked";
@@ -103,13 +105,15 @@ function friendDisabledReason(friend: TravelFriend, destination: TravelDestinati
 const friendResults = computed<FriendSearchResult[]>(() => {
   const observed = props.host.friends.value;
   if (!hasQuery.value || observed.status !== "ready") return [];
-  const term = normaliseTravelTerm(query.value);
+  const tokens = normaliseTravelTerm(query.value).split(" ").filter(Boolean);
   return observed.friends.flatMap((friend) => {
-    if (!normaliseTravelTerm(`${friend.alias} ${friend.character}`).includes(term)) return [];
+    const names = normaliseTravelTerm(`${friend.alias} ${friend.character}`);
+    if (!tokens.every((token) => names.includes(token))) return [];
     const destination = travelDestination(friend.mapId);
     return [{
       kind: "friend",
       resultKey: `friend-${friend.key}`,
+      generation: observed.generation,
       mapId: friend.mapId,
       destination,
       friend,
@@ -171,6 +175,7 @@ const selectableDestinations = computed(() => showingSmallCatalogue.value
   ? browseDestinations.value.filter(({ mapId }) => mapId !== currentMapId.value)
   : results.value);
 const activeDestination = computed(() => selectableDestinations.value[active.value] ?? null);
+const hasSelectableDestination = computed(() => selectableDestinations.value.some(selectable));
 const activeResultId = computed(() => activeDestination.value === null ? null
   : "resultKey" in activeDestination.value
     ? activeDestination.value.resultKey : `map-${activeDestination.value.mapId}`);
@@ -194,6 +199,11 @@ const searchStatusText = computed(() => {
       ? "No destinations are available outside Pre-Searing."
       : "Pre-Searing destinations are unavailable after the Searing.";
   }
+  if (results.value.length === 0 && props.host.friends.value.status === "waiting") {
+    return props.host.friends.value.reason === "invalid"
+      ? "Friend locations could not be read safely. Destination search still works."
+      : "Friend locations are unavailable right now. Destination search still works.";
+  }
   if (results.value.length === 0) return "No destinations or friends match your search.";
   return `${results.value.length} ${results.value.length === 1 ? "result" : "results"} found.`;
 });
@@ -207,6 +217,11 @@ const emptySearchHelp = computed(() => {
   if (excluded !== undefined) {
     return travelContextRefusal(props.host.state.value, excluded.mapId)
       ?? "This destination is unavailable from the current location.";
+  }
+  if (props.host.friends.value.status === "waiting") {
+    return props.host.friends.value.reason === "invalid"
+      ? "Friend locations could not be read safely. You can still search for a destination."
+      : "Friend locations are unavailable right now. You can still search for a destination.";
   }
   return "Try a friend, destination, campaign, official shortcut, or your own search phrase.";
 });
@@ -289,9 +304,13 @@ watch(query, () => {
   active.value = 0;
   if (hasQuery.value) mode.value = "travel";
 });
-watch(results, (next) => {
+watch(results, (next, previous) => {
+  const selectedKey = previous[active.value]?.resultKey;
+  const retained = selectedKey === undefined ? -1 : next.findIndex(
+    (result) => result.resultKey === selectedKey && result.disabledReason === null,
+  );
   const firstAvailable = next.findIndex((result) => result.disabledReason === null);
-  active.value = firstAvailable < 0 ? 0 : firstAvailable;
+  active.value = retained >= 0 ? retained : firstAvailable;
   props.host.traceSearch(query.value, next.map((result) => result.mapId));
 });
 watch(() => props.visible, async (visible) => {
@@ -341,6 +360,25 @@ async function travel(request: TravelRequest): Promise<void> {
     await props.host.travel(request);
     emit("close");
   } catch { /* The host owns the refusal notice and resets its transaction. */ }
+}
+
+async function travelToResult(result: SearchResult): Promise<void> {
+  if (result.kind === "friend") {
+    const observed = props.host.friends.value;
+    const current = observed.status === "ready"
+      ? observed.friends.find(({ key }) => key === result.friend.key)
+      : undefined;
+    const destination = current === undefined ? null : travelDestination(current.mapId);
+    if (current === undefined
+      || observed.status !== "ready"
+      || observed.generation !== result.generation
+      || current.mapId !== result.mapId
+      || friendDisabledReason(current, destination) !== null) {
+      setFeedback("This friend’s location changed. Select them again.", "warning");
+      return;
+    }
+  }
+  await travel({ mapId: result.mapId });
 }
 
 async function saveShortcut(slot: number, destination: TravelDestination): Promise<void> {
@@ -485,7 +523,7 @@ async function removePhrase(index: number): Promise<void> {
 async function moveActive(direction: 1 | -1): Promise<void> {
   const entries = selectableDestinations.value;
   if (!entries.some(selectable)) return;
-  let next = active.value;
+  let next = active.value < 0 ? (direction === 1 ? entries.length - 1 : 0) : active.value;
   do next = (next + direction + entries.length) % entries.length;
   while (!selectable(entries[next]!));
   active.value = next;
@@ -510,9 +548,13 @@ function onKeydown(event: KeyboardEvent): void {
     return;
   }
   if (event.target === input.value && event.key === "Enter") {
-    if (activeDestination.value !== null && selectable(activeDestination.value)) {
+    if (activeDestination.value !== null
+      && selectable(activeDestination.value)
+      && !travelPending.value
+      && props.host.unavailable === null) {
       event.preventDefault();
-      void travel({ mapId: activeDestination.value.mapId });
+      if ("resultKey" in activeDestination.value) void travelToResult(activeDestination.value);
+      else void travel({ mapId: activeDestination.value.mapId });
     }
     return;
   }
@@ -551,7 +593,7 @@ function onKeydown(event: KeyboardEvent): void {
     <section v-if="hasQuery" id="travel-results-panel" class="ui-scroll travel-body" role="region" aria-label="Travel search results">
       <div v-if="results.length" class="travel-result-heading">{{ results.length === 1 ? 'Best match for' : 'Matches for' }} <strong>{{ query }}</strong></div>
       <div v-if="results.length" id="travel-results" class="travel-results" role="listbox">
-        <button v-for="(result, index) in results" :id="`travel-${result.resultKey}`" :key="result.resultKey" type="button" class="travel-result ui-row" role="option" tabindex="-1" :aria-selected="index === active" :aria-label="result.kind === 'friend' ? `${result.friend.alias}, ${result.friend.character}, ${friendResultLabel(result)}` : undefined" :disabled="searchResultDisabled(result)" @mouseenter="active = index" @click="active = index; travel({ mapId: result.mapId })">
+        <button v-for="(result, index) in results" :id="`travel-${result.resultKey}`" :key="result.resultKey" type="button" class="travel-result ui-row" role="option" tabindex="-1" :aria-selected="index === active" :aria-disabled="searchResultDisabled(result)" :aria-label="result.kind === 'friend' ? `${result.friend.alias}, ${result.friend.character}, ${friendResultLabel(result)}` : undefined" :disabled="searchResultDisabled(result)" @mouseenter="active = index" @click="active = index; travelToResult(result)">
           <span class="travel-result-identity">
             <svg v-if="result.kind === 'friend'" class="travel-player-icon" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="6.5" r="3" /><path d="M4.5 17c.6-3.1 2.4-4.7 5.5-4.7s4.9 1.6 5.5 4.7" /></svg>
             <span><strong v-if="result.kind === 'friend'">{{ result.friend.alias }}</strong><strong v-else><template v-for="(part, partIndex) in highlightTravelDestinationName(result.destination, query)" :key="partIndex"><mark v-if="part.match">{{ part.text }}</mark><template v-else>{{ part.text }}</template></template></strong><small>{{ result.kind === 'friend' ? result.friend.character : result.destination.campaign }}</small></span>
@@ -601,7 +643,7 @@ function onKeydown(event: KeyboardEvent): void {
         <p v-if="phraseError" id="travel-phrase-error" class="ui-field-error travel-phrase-error">{{ phraseError }}</p>
       </section>
     </section>
-    <footer class="travel-footer"><span v-if="statusText && !urgentNoticeVisible" :data-level="statusLevel" aria-hidden="true">{{ statusText }}</span><span v-if="hasQuery" class="travel-key-hints"><kbd class="ui-kbd">↑↓</kbd> choose <kbd class="ui-kbd">return</kbd> travel <kbd class="ui-kbd">⌘1–9</kbd> save</span><span v-else-if="showingSmallCatalogue" class="travel-key-hints"><kbd class="ui-kbd">↑↓</kbd> choose <kbd class="ui-kbd">return</kbd> travel <kbd class="ui-kbd">⌘1–9</kbd> save</span><span v-else-if="mode === 'travel'" class="travel-key-hints"><kbd class="ui-kbd">1–9</kbd> travel</span><span v-else class="travel-key-hints"><kbd class="ui-kbd">esc</kbd> back</span></footer>
+    <footer class="travel-footer"><span v-if="statusText && !urgentNoticeVisible" :data-level="statusLevel" aria-hidden="true">{{ statusText }}</span><span v-if="hasQuery && hasSelectableDestination" class="travel-key-hints"><kbd class="ui-kbd">↑↓</kbd> choose <kbd class="ui-kbd">return</kbd> travel <kbd class="ui-kbd">⌘1–9</kbd> save</span><span v-else-if="showingSmallCatalogue" class="travel-key-hints"><kbd class="ui-kbd">↑↓</kbd> choose <kbd class="ui-kbd">return</kbd> travel <kbd class="ui-kbd">⌘1–9</kbd> save</span><span v-else-if="mode === 'travel' && !hasQuery" class="travel-key-hints"><kbd class="ui-kbd">1–9</kbd> travel</span><span v-else-if="mode === 'customize'" class="travel-key-hints"><kbd class="ui-kbd">esc</kbd> back</span></footer>
     <div class="travel-header-actions">
       <button ref="settingsButton" type="button" class="ui-button travel-close" data-icon aria-label="Customize Travel" title="Customize Travel" :aria-pressed="mode === 'customize'" aria-controls="travel-customize-panel" :disabled="preferenceControlsDisabled" @click="toggleCustomize"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z" /><circle cx="12" cy="12" r="3" /></svg></button>
       <button type="button" class="ui-button travel-close" data-icon aria-label="Close Quick Travel" @click="emit('close')"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 3 10 10M13 3 3 13" /></svg></button>

@@ -4,7 +4,10 @@
  */
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { readCompanionFriends } from "../../src/renderer/companion-friend-snapshot.ts";
+import {
+  companionFriendsSignature,
+  readCompanionFriends,
+} from "../../src/renderer/companion-friend-snapshot.ts";
 import { COMPANION_ABI } from "../../src/shared/companion-abi.ts";
 
 function snapshot(): ArrayBuffer {
@@ -47,6 +50,31 @@ describe("companion friend snapshot", () => {
     ]) {
       const buffer = snapshot(); mutate(new DataView(buffer));
       assert.notEqual(readCompanionFriends(buffer, 0).status, "ready");
+    }
+  });
+
+  it("changes its presentation signature only when visible friend data changes", () => {
+    const first = readCompanionFriends(snapshot(), 0);
+    const republishedBuffer = snapshot();
+    new DataView(republishedBuffer).setUint32(8, 8, true);
+    const republished = readCompanionFriends(republishedBuffer, 0);
+    assert.equal(companionFriendsSignature(first), companionFriendsSignature(republished));
+
+    const movedBuffer = snapshot();
+    new DataView(movedBuffer).setUint32(36, 55, true);
+    const moved = readCompanionFriends(movedBuffer, 0);
+    assert.notEqual(companionFriendsSignature(first), companionFriendsSignature(moved));
+  });
+
+  it("decodes every native presence value in GWCA order", () => {
+    for (const [value, status] of [
+      [0, "offline"], [1, "online"], [2, "do-not-disturb"], [3, "away"], [4, "unknown"],
+    ] as const) {
+      const buffer = snapshot();
+      new DataView(buffer).setUint32(32, value, true);
+      const observation = readCompanionFriends(buffer, 0);
+      assert.equal(observation.status, "ready");
+      if (observation.status === "ready") assert.equal(observation.friends[0]?.status, status);
     }
   });
 });

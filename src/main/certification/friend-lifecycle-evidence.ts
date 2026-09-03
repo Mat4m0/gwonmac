@@ -35,7 +35,7 @@ const ROLE_SPECS = Object.freeze({
 
 export const FRIEND_LIFECYCLE_SEMANTIC_SHA256 = createHash("sha256").update(JSON.stringify({
   roles: ROLE_SPECS,
-  contract: "request-roster-completion-user-event-envelope-dispatch-five-connection-stores-v2",
+  contract: "request-roster-completion-user-event-envelope-dispatch-five-connection-stores-bounded-context-v3",
 })).digest("hex");
 
 type FriendLifecycleRole = keyof typeof ROLE_SPECS;
@@ -141,6 +141,8 @@ export function inspectFriendLifecycle(input: Uint8Array): FriendLifecycleEviden
     }
     const contextAddresses = roles.loginCompleted.memorySites.filter((site) =>
       site.opcode === 0x28 && site.value >= evidence.data.zeroInitializedBase
+      && site.value % 4 === 0
+      && site.value + 4 <= evidence.data.initialMemoryBytes
       && roles.loginStart.memorySites.some((other) => other.opcode === 0x28 && other.value === site.value)
       && roles.rosterEntry.memorySites.some((other) => other.opcode === 0x28 && other.value === site.value)
     ).map((site) => site.value);
