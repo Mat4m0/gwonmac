@@ -142,6 +142,64 @@ selection handler must validate the current companion region before resolving
 the friend. A cached renderer row alone is insufficient. The existing map-only
 Travel command remains the action after that resolution.
 
+## Processed completion and bounded decoding
+
+The [queue fixture](../../tests/fixtures/native-friend-queue.ts) now executes
+native `10084`, `10068`, and `9998` through the original queue and callback
+machinery: `876`, `493`, `491`, `494`, `499`, `501`, `502`, `503`, `222`,
+`889`, `888`, `474`, and `475`. Native string comparison and bounded copying
+also execute. Allocation, locks, scheduling, account-property updates, and
+logging have explicit substitutes. A recording callback replaces the real
+Friends event handler. No game startup, socket, or live account executes.
+
+Eight [queue scenarios](../../tests/native/friend-queue-evidence.test.ts) pass:
+
+- Initial entries precede the successful login completion when the callback
+  receives them. Wrong-request and already-completed entries are ignored.
+- A successful completion with no entries differs from an undrained or empty
+  queue. Failed completion uses the same event ID but carries an error.
+- FIFO order and copied payloads survive a block boundary with 100 entries.
+- An event queued inside a callback waits for the next drain.
+- A disabled context can return enqueue success while dropping the event.
+- A closed queue refuses the event.
+
+This establishes a processed completion boundary in the tested context. It
+**does not bind a queued completion to the current login generation**, execute
+the real Friends callback, or establish server freshness. In particular, an
+old successful completion already queued before reconnect must not admit the
+next session. Completion at enqueue time or at the end of an arbitrary drain
+is insufficient.
+
+The [Rust record reader](../../src/companion-kernel/friend_records.rs) is now
+implemented and compiled in a
+[standalone harness](../../tests/fixtures/friend-records-kernel.rs). It uses the
+companion's real bounded memory helpers. It is not yet linked into the shipped
+kernel: certification and session admission must precede live activation.
+
+The reader traverses at most 4096 sparse slots and returns at most 128 friend
+records. These are work limits, not claimed game limits. Exceeding either
+refuses the complete result instead of truncating it. It validates pointers,
+capacity, the null sentinel, slot ownership, categories, status, terminated
+UTF-16 names, and nonzero unique identity keys. Alias equality does not merge
+friends. Keys include the supplied session generation and UUID, and exclude
+the slot number. Raw UUIDs and pointers do not leave the reader. A decoded
+empty table is not itself an accepted or synchronized snapshot.
+
+Ten [reader scenarios](../../tests/native/friend-records-evidence.test.ts) pass.
+One instantiates the reader with the native fixture's memory, then reads records
+created by `8822`, updated by `8834` and `8835`, removed by `8820`, and replaced
+through the native free-slot path. The reader observes the native alias copy,
+empty-character fallback, status, and map. A replacement gets a different key.
+The experiment reserves array capacity and substitutes hash insertion and
+allocator release; it does not prove the complete native hash ownership or
+allocation lifecycle. The other cases exercise malformed memory, sparse slots,
+output overflow, duplicate aliases and identities, slot movement, session-key
+changes, and UTF-16 refusal.
+
+The reader's field constants are pending layout proof. These execution results
+are evidence for that proof, not a substitute for independently deriving each
+field in the isolated verifier. No live observer or Travel authority is added.
+
 ## Named blockers and their evidence
 
 ### An allocated empty table is not proof of a synchronized roster
@@ -178,25 +236,25 @@ Connection establishment and removal paths include `10278`, `10236`, and
 prove that retained friend locations were refreshed after reconnect.
 
 The native request pump and authentication getter are now exercised above.
-Still required: establish callback ordering and structurally identify a
-transition signal that withdraws previous-session records and admits
-current-session records. Do not replace this with the host's current character
+The queue experiment establishes ordering in one synthetic context. Still
+required: structurally identify a transition signal that withdraws previous
+session records and admits current-session records. Do not replace this with the host's current character
 key, own status, connection pointer, or a sampled authentication flag alone.
 
 The inspected login completion callback `9998` commits login data and emits
 auth event `14`. Its success path writes account and character UUID fields
 and copies the selected character name. The request pump calls completion
-through vtable `+16`. These relationships identify the next narrow experiment:
-prove how login start, table clear, successful completion, and disconnect relate
-to one accepted roster generation. A generic pending request can also represent
-another operation; state `3` is not a friend-list request type.
+through vtable `+16`. The completion and queue now execute together. The
+remaining admission proof must relate that processed completion to one accepted
+roster generation. A generic pending request can also represent another operation; state `3` is not a friend-list request type.
 
 Queueing is also relevant: `876` submits the event through `493`, which copies
-the payload into the native queue. `872` schedules work. The lifecycle fixture
-substitutes event collection for that queue; it does not run event delivery.
-Thus observing `9998` return is not yet proof that earlier roster events have
-updated the friend table. Identify the processed login/roster boundary before
-allowing publication. Do not turn the invalidation counter into a readiness flag.
+the payload into the native queue. `872` schedules work. The earlier lifecycle
+fixture substitutes event collection, while the new queue fixture executes delivery.
+It confirms that observing `9998` return does not mean earlier roster events
+have reached the callback. Bind processed completion to the current session
+before allowing publication. Do not turn the invalidation counter into a
+readiness flag.
 
 ### Record semantics and update survival remain incomplete
 
@@ -218,6 +276,7 @@ node --import ./scripts/ts-hook.mjs scripts/friend-table-evidence.ts "$GW_CLIENT
 node --import ./scripts/ts-hook.mjs --test --test-reporter=tap --test-timeout=120000 tests/client-artifact/friend-table-evidence.test.ts > build/friend-evidence/mutations.tap 2>&1
 node --import ./scripts/ts-hook.mjs --test --test-reporter=tap --test-timeout=120000 tests/native/friend-lifecycle-evidence.test.ts > build/friend-evidence/lifecycle.tap 2>&1
 node --import ./scripts/ts-hook.mjs --test --test-reporter=tap --test-timeout=120000 tests/native/friend-lifecycle-evidence.test.ts tests/native/friend-invalidation-evidence.test.ts > build/friend-evidence/invalidation.tap 2>&1
+node --import ./scripts/ts-hook.mjs --test --test-reporter=tap --test-timeout=120000 tests/native/friend-*.test.ts > build/friend-evidence/native.tap 2>&1
 pnpm check > build/friend-evidence/check.log 2>&1
 ```
 
@@ -230,9 +289,10 @@ friend names, UUIDs, rosters, or search text in persisted diagnostics.
 | --- | --- |
 | Candidate identification | One candidate on the inspected cached input |
 | Complete structural reader proof | Incomplete |
-| Native lifecycle function experiments | Eleven synthetic scenarios passed; full dispatch ordering remains unproved |
+| Native lifecycle function experiments | Eleven synthetic scenarios passed; full-client scheduling remains unproved |
 | Private invalidation mechanism | Twelve additional scenarios passed on the retained input; runtime hook certification remains open |
-| Bounded live-record decoding | Not implemented |
+| Processed native completion | Eight queue scenarios passed; current-login correlation remains open |
+| Bounded record decoding | Rust implementation and ten scenarios passed, including native-created records; not installed |
 | Account/disconnect/reconnect invalidation | Unproved |
 | Companion observation installed | No |
 | Palette integration | No |
@@ -241,16 +301,25 @@ friend names, UUIDs, rosters, or search text in persisted diagnostics.
 
 ## Resume here
 
-The counter experiment answers how to preserve the tested invalidations between
-ticks. Next, derive the notification sites structurally and prove when queued
-roster updates have been processed for the current login. Keep notification
-internal to the derived client and companion. Do not add a generic renderer
-callback or another roster store. A native monotonic session marker would be
-simpler if one can be proved; none is identified by the current experiment.
+The next milestone is one certified read-only observer, ready to compare with
+the native Friends panel. Do not start another broad implementation survey.
+Two concrete gates remain before live activation:
 
-Turn empty/unavailable, disconnect, account switch, reconnect, and slot reuse
-into executable refusal tests. Then add the Rust companion reader and reuse
-the existing region installation and sequence feed.
+1. Derive the full reader layout and invalidation sites independently in the
+   isolated verifier. The current inspector proves only the accessor and two
+   scalar writers. Use the executed constructor, update, and removal paths as
+   the field witnesses; reject changed or ambiguous relationships.
+2. Bind a processed successful login completion to its originating generation.
+   The smallest next lifecycle experiment queues a successful completion,
+   invalidates the session before draining, then checks that the old completion
+   cannot admit retained records. Also cover a completion produced while a drain
+   is already running. Do not infer readiness from a private counter alone.
+
+After those gates pass, link the existing Rust reader into the companion and
+reuse region installation and the sequence feed. No second roster store or
+generic renderer callback is needed. Keep reported location separate from
+freshness: these experiments do not establish that a retained map was refreshed
+by the server after reconnect.
 
 Observe only while Tools, Travel, the open palette, and supported-region policy
 permit it. Friend certification refusal must leave ordinary Travel available.
