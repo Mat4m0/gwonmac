@@ -24,6 +24,26 @@ test("bounded companion friend decoding", async (t) => {
       "-C", "link-arg=--import-memory", "-C", "link-arg=--initial-memory=16777216", "-C", "link-arg=--max-memory=16777216", "-o", wasm,
     ], { timeout: 30_000, stdio: "pipe" });
     const module = await WebAssembly.compile(new Uint8Array(await readFile(wasm)));
+    function session(memory: WebAssembly.Memory) {
+      const exports = new WebAssembly.Instance(module, { env: { memory } }).exports;
+      const call = (name: string, ...args: number[]) => {
+        const fn = exports[name];
+        assert.ok(typeof fn === "function", `missing ${name}`);
+        return fn(...args);
+      };
+      call("session_initialize");
+      return {
+        invalidate: () => call("session_invalidate"),
+        requestSent: (requestId: number, connection: number) =>
+          call("session_request_sent", requestId, connection),
+        completionStarted: (requestId: number, connection: number, success: boolean) =>
+          call("session_completion_started", requestId, connection, Number(success)),
+        completionQueued: () => call("session_completion_queued"),
+        completionFinished: () => call("session_completion_finished"),
+        completionProcessed: () => call("session_completion_processed"),
+        generation: () => call("session_generation") as number,
+      };
+    }
     function fixture(count = 3) {
       const memory = new WebAssembly.Memory({ initial: 256, maximum: 256 });
       const instance = new WebAssembly.Instance(module, { env: { memory } });
@@ -93,6 +113,73 @@ test("bounded companion friend decoding", async (t) => {
       assert.equal(decode(table.root, 1, OUTPUT), 1);
       assert.equal(view.getUint32(OUTPUT, true), 1);
       assert.notEqual(view.getBigUint64(OUTPUT + 4, true), key);
+    });
+
+    await t.test("accepts only the matching processed login completion", async () => {
+      const path = process.env.GW_CLIENT_WASM;
+      assert.ok(path, "GW_CLIENT_WASM must name the retained official artifact");
+      const native = await queueFixture(new Uint8Array(await readFile(path)));
+      const gate = session(native.memory);
+      native.onSession(gate);
+      gate.requestSent(42, 7);
+      native.completeLogin(0);
+      assert.equal(gate.generation(), 0, "enqueue is not processing");
+      native.drain();
+      assert.equal(gate.generation(), 1);
+      gate.invalidate();
+      assert.equal(gate.generation(), 0, "invalidation withdraws synchronously");
+    });
+
+    await t.test("an old queued completion cannot admit the replacement login", async () => {
+      const path = process.env.GW_CLIENT_WASM;
+      assert.ok(path, "GW_CLIENT_WASM must name the retained official artifact");
+      const native = await queueFixture(new Uint8Array(await readFile(path)));
+      const gate = session(native.memory);
+      native.onSession(gate);
+      gate.requestSent(42, 7);
+      native.completeLogin(0);
+      gate.invalidate();
+      native.prepareLogin(43);
+      gate.requestSent(43, 7);
+      native.completeLogin(0);
+      let processed = 0;
+      native.onDelivery((id) => {
+        if (id !== 14) return;
+        processed += 1;
+        // The fixture invokes completionProcessed after this callback returns.
+        if (processed === 1) assert.equal(gate.generation(), 0);
+      });
+      native.drain();
+      assert.equal(processed, 2);
+      assert.equal(gate.generation(), 2);
+    });
+
+    await t.test("failed, mismatched, and dropped completions do not admit a session", async () => {
+      const path = process.env.GW_CLIENT_WASM;
+      assert.ok(path, "GW_CLIENT_WASM must name the retained official artifact");
+      const input = new Uint8Array(await readFile(path));
+      for (const scenario of ["failed", "mismatched", "dropped"] as const) {
+        const native = await queueFixture(input);
+        const gate = session(native.memory);
+        native.onSession(gate);
+        gate.requestSent(scenario === "mismatched" ? 43 : 42, 7);
+        if (scenario === "dropped") native.write(0x700000 + 20, 4);
+        native.completeLogin(scenario === "failed" ? 7 : 0);
+        native.drain();
+        assert.equal(gate.generation(), 0, scenario);
+      }
+    });
+
+    await t.test("impossible delivery order permanently refuses the session gate", () => {
+      const memory = new WebAssembly.Memory({ initial: 256, maximum: 256 });
+      const gate = session(memory);
+      gate.completionProcessed();
+      gate.requestSent(42, 7);
+      gate.completionStarted(42, 7, true);
+      gate.completionQueued();
+      gate.completionFinished();
+      gate.completionProcessed();
+      assert.equal(gate.generation(), 0);
     });
 
     await t.test("allocated empty and uninitialized storage have different decoding results", () => {

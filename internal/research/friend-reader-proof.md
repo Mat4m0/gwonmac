@@ -27,10 +27,12 @@ when a required reader fact remains unproved. This work has reached that gate.
 ## Completed experiment
 
 The [offline inspector](../../src/main/certification/friend-table-evidence.ts)
-finds a candidate through the indexed accessor, direct root wrapper, two scalar
-writers, and native Friends UI consumers. It checks complete normalized accessor
-and writer bodies. It treats assertion string addresses and assertion call
-indices as relocation operands. The root is derived from participating calls.
+finds a candidate through the indexed accessor, direct root wrapper, record
+constructor and remover, field writers, bounded UTF-16 copy, two scalar writers,
+and native Friends UI consumers. It checks complete normalized bodies and the
+constructor's direct relationships to array growth and name copying. Relocatable
+function indices and static addresses receive semantic roles. The table root is
+derived from participating calls.
 
 Input SHA-256 identifies the tested bytes. It does not authorize the reader.
 Every result has `runtimeAuthority: false`, including `status: candidate`.
@@ -38,9 +40,10 @@ The inspector is imported only by its offline command and tests. It neither
 changes a client artifact nor adds a runtime capability.
 
 The [artifact experiments](../../tests/client-artifact/friend-table-evidence.test.ts)
-exercise unrelated body changes, root relocation, independent accessor/writer
-reindexing, changed index checks, changed scalar fields, duplicate root wrappers,
-and broken root relationships. The changed modules must remain valid WASM.
+exercise unrelated body changes, root relocation, independent accessor/writer,
+constructor, and name-copy reindexing, changed index checks, record size and
+field offsets, duplicate record roles and root wrappers, and broken root
+relationships. The changed modules must remain valid WASM.
 These are targeted candidate-identification experiments, not a runnable rebuild
 qualification or a proof that all unrelated client updates will survive.
 
@@ -55,6 +58,9 @@ the inspector identifies one candidate:
 | Root wrapper | function `8853` |
 | Scalar writers | function `8834` stores `+4`; function `8835` stores `+108` |
 | Native UI consumer | function `15250` reads both scalar fields |
+| Record lifecycle | constructor `8822`; remover `8820`; array growth `8818` |
+| Identity and names | UUID writer `8833`; alias writer `8832`; character writer `8831`; bounded copy `358` |
+| Derived record layout | 172 bytes; category `+0`; status `+4`; UUID `+8`; alias `+24`; character `+64`; slot `+104`; map `+108` |
 
 Those values are regression evidence, not production constants.
 
@@ -164,11 +170,24 @@ Eight [queue scenarios](../../tests/native/friend-queue-evidence.test.ts) pass:
 - A closed queue refuses the event.
 
 This establishes a processed completion boundary in the tested context. It
-**does not bind a queued completion to the current login generation**, execute
-the real Friends callback, or establish server freshness. In particular, an
-old successful completion already queued before reconnect must not admit the
-next session. Completion at enqueue time or at the end of an arbitrary drain
-is insufficient.
+does not execute the real Friends callback or establish server freshness.
+Completion at enqueue time or at the end of an arbitrary drain is insufficient.
+
+The [private session gate](../../src/companion-kernel/friend_session.rs) binds
+that boundary to one request ID, connection ID, and session epoch. It withdraws
+acceptance synchronously on invalidation and admits only after one matching
+successful completion queued exactly one event `14` and that event was later
+processed by the Friends callback. The gate keeps ordinals, not a second roster.
+Counter exhaustion or an impossible notification order reaches terminal epoch
+`0` and cannot admit again.
+
+Four additional reader-harness scenarios cover admission after drain,
+synchronous invalidation, a previously queued completion across replacement
+login, failed and mismatched completions, a queue context that reports success
+while dropping, and processed-before-queued ordering. The old queued completion
+has a lower ordinal and cannot unlock the replacement login. These tests prove
+the private mechanism; its notification sites are not yet installed or
+structurally certified in the production transform.
 
 The [Rust record reader](../../src/companion-kernel/friend_records.rs) is now
 implemented and compiled in a
@@ -185,7 +204,7 @@ friends. Keys include the supplied session generation and UUID, and exclude
 the slot number. Raw UUIDs and pointers do not leave the reader. A decoded
 empty table is not itself an accepted or synchronized snapshot.
 
-Ten [reader scenarios](../../tests/native/friend-records-evidence.test.ts) pass.
+Fourteen [reader and session scenarios](../../tests/native/friend-records-evidence.test.ts) pass.
 One instantiates the reader with the native fixture's memory, then reads records
 created by `8822`, updated by `8834` and `8835`, removed by `8820`, and replaced
 through the native free-slot path. The reader observes the native alias copy,
@@ -196,9 +215,9 @@ allocation lifecycle. The other cases exercise malformed memory, sparse slots,
 output overflow, duplicate aliases and identities, slot movement, session-key
 changes, and UTF-16 refusal.
 
-The reader's field constants are pending layout proof. These execution results
-are evidence for that proof, not a substitute for independently deriving each
-field in the isolated verifier. No live observer or Travel authority is added.
+The offline inspector now derives and mutation-tests the reader's complete
+record layout from those native roles. This is still input-bound evidence with
+`runtimeAuthority: false`; no live observer or Travel authority is added.
 
 ## Named blockers and their evidence
 
@@ -256,14 +275,15 @@ have reached the callback. Bind processed completion to the current session
 before allowing publication. Do not turn the invalidation counter into a
 readiness flag.
 
-### Record semantics and update survival remain incomplete
+### Runtime hook semantics remain incomplete
 
-The inspector identifies only the accessor and two scalar fields. Name copying,
-UUID ownership, allocation, removal, sparse slots, and lifecycle need their own
-complete semantic relationships before a bounded runtime reader can use them.
-The assertion callee itself and the complete UI consumer are not certified.
-Source-string relocation and independent callback table-slot movement have not
-been qualified by these experiments.
+The inspector now identifies the complete bounded record layout, name copying,
+UUID writer, allocation growth, removal, sparse-slot ownership, status/map
+writers, and their required relationships. The remaining structural work is the
+production notification path: login request capture, completion start and queue
+acceptance, Friends callback processing, and every invalidation site. Until
+those hooks are derived and wired through the isolated verifier, the session
+gate and reader remain test-only components.
 
 ## Exact local evidence
 
@@ -288,11 +308,12 @@ friend names, UUIDs, rosters, or search text in persisted diagnostics.
 | Acceptance boundary | Current result |
 | --- | --- |
 | Candidate identification | One candidate on the inspected cached input |
-| Complete structural reader proof | Incomplete |
+| Complete structural record-layout proof | One candidate; changed roles, sizes, and offsets are refused |
 | Native lifecycle function experiments | Eleven synthetic scenarios passed; full-client scheduling remains unproved |
 | Private invalidation mechanism | Twelve additional scenarios passed on the retained input; runtime hook certification remains open |
-| Processed native completion | Eight queue scenarios passed; current-login correlation remains open |
-| Bounded record decoding | Rust implementation and ten scenarios passed, including native-created records; not installed |
+| Processed native completion | Eight queue scenarios passed |
+| Current-session correlation | Private ordinal gate passes four scenarios; production hooks remain unproved |
+| Bounded record decoding | Rust implementation and fourteen reader/session scenarios pass; not installed |
 | Account/disconnect/reconnect invalidation | Unproved |
 | Companion observation installed | No |
 | Palette integration | No |
@@ -303,17 +324,12 @@ friend names, UUIDs, rosters, or search text in persisted diagnostics.
 
 The next milestone is one certified read-only observer, ready to compare with
 the native Friends panel. Do not start another broad implementation survey.
-Two concrete gates remain before live activation:
-
-1. Derive the full reader layout and invalidation sites independently in the
-   isolated verifier. The current inspector proves only the accessor and two
-   scalar writers. Use the executed constructor, update, and removal paths as
-   the field witnesses; reject changed or ambiguous relationships.
-2. Bind a processed successful login completion to its originating generation.
-   The smallest next lifecycle experiment queues a successful completion,
-   invalidates the session before draining, then checks that the old completion
-   cannot admit retained records. Also cover a completion produced while a drain
-   is already running. Do not infer readiness from a private counter alone.
+One concrete gate remains before live activation: structurally identify and
+install the production lifecycle notifications in the isolated verifier. This
+includes login request capture, completion start, exact queue acceptance,
+Friends callback processing, and all invalidation sites. The record layout and
+private current-session admission mechanism now pass their offline mutations
+and native execution scenarios; neither grants runtime authority by itself.
 
 After those gates pass, link the existing Rust reader into the companion and
 reuse region installation and the sequence feed. No second roster store or

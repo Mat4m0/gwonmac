@@ -29,6 +29,7 @@ test("friend candidate survives address and function movement and refuses change
     candidate.accessor, candidate.rootAccessor,
     ...candidate.scalarWriters.map((writer) => writer.functionIndex),
     ...candidate.uiConsumers,
+    ...Object.values(candidate.recordRoles),
   ]);
   const destination = (source: number): number => {
     const found = functions.find((fn) =>
@@ -104,6 +105,77 @@ test("friend candidate survives address and function movement and refuses change
       if (source === candidate.accessor) assert.equal(result.candidates[0]?.accessor, target);
       else assert.ok(result.candidates[0]?.scalarWriters.some((writer) => writer.functionIndex === target));
     }
+  });
+
+  await t.test("record constructor and bounded name copy can move independently", () => {
+    for (const role of ["recordConstructor", "nameCopy"] as const) {
+      const source = candidate.recordRoles[role];
+      assert.equal(evidence.tableRelations.has(source), false);
+      const target = destination(source);
+      const moved = mutate((bodies) => {
+        for (const fn of functions) {
+          for (const [callee, sites] of fn.callSites) {
+            if (callee !== source && callee !== target) continue;
+            for (const site of sites) {
+              assert.equal(site.operandEnd - site.offset - 1, 5);
+              bodies[local(fn.functionIndex)]!.set(
+                paddedIndex(callee === source ? target : source), site.offset + 1,
+              );
+            }
+          }
+        }
+        [bodies[local(source)], bodies[local(target)]] = [
+          bodies[local(target)]!, bodies[local(source)]!,
+        ];
+      });
+      const result = inspect(moved);
+      assert.equal(result.status, "candidate");
+      assert.equal(result.candidates[0]?.recordRoles[role], target);
+    }
+  });
+
+  await t.test("changed record size is refused", () => {
+    const source = candidate.recordRoles.recordConstructor;
+    const changed = mutate((bodies) => {
+      const fn = functions.find((candidateFn) => candidateFn.functionIndex === source)!;
+      const site = fn.constantSites.find((constant) => constant.value === candidate.recordLayout.recordBytes)!;
+      assert.equal(site.operandEnd - site.operandStart, 2);
+      const body = bodies[local(source)]!;
+      body[site.operandStart] = body[site.operandStart]! + 1;
+    });
+    assert.equal(inspect(changed).status, "unavailable");
+  });
+
+  await t.test("changed identity, name, or slot offsets are refused", () => {
+    const fields = [
+      ["aliasWriter", "aliasOffset"],
+      ["characterWriter", "characterOffset"],
+      ["uuidWriter", "uuidOffset"],
+      ["recordConstructor", "slotOffset"],
+    ] as const;
+    for (const [role, layoutKey] of fields) {
+      const source = candidate.recordRoles[role];
+      const expected = candidate.recordLayout[layoutKey];
+      const changed = mutate((bodies) => {
+        const fn = functions.find((candidateFn) => candidateFn.functionIndex === source)!;
+        const site = role === "recordConstructor"
+          ? fn.memorySites.find((memory) => memory.opcode === 0x36 && memory.value === expected)
+          : fn.constantSites.find((constant) => constant.value === expected);
+        assert.ok(site);
+        assert.ok(site.operandEnd - site.operandStart <= 2);
+        const body = bodies[local(source)]!;
+        body[site.operandStart] = body[site.operandStart]! + 1;
+      });
+      assert.equal(inspect(changed).status, "unavailable", `${layoutKey} must stay exact`);
+    }
+  });
+
+  await t.test("a duplicate record role refuses unique identification", () => {
+    const source = candidate.recordRoles.aliasWriter;
+    const duplicated = mutate((bodies) => {
+      bodies[local(destination(source))] = bodies[local(source)]!.slice();
+    });
+    assert.equal(inspect(duplicated).status, "unavailable");
   });
 
   await t.test("a valid but changed index check is refused", () => {

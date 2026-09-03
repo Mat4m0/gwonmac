@@ -20,6 +20,7 @@ const NATIVE = {
   rosterEntry: 10084, completeRequest: 10068, loginComplete: 9998,
   createFriend: 8822, growArray: 8818, hashName: 363, removeFriend: 8820,
   growFreeSlots: 874, setFriendLocation: 8835, setFriendStatus: 8834,
+  queuedBytes: 497,
 } as const;
 
 export async function queueFixture(input: Uint8Array) {
@@ -34,6 +35,12 @@ export async function queueFixture(input: Uint8Array) {
   let allocated = 0x800000;
   let scheduled = 0;
   let duringDelivery: ((id: number) => void) | undefined;
+  let sessionHooks: Readonly<{
+    completionStarted(requestId: number, connection: number, success: boolean): void;
+    completionQueued(): void;
+    completionFinished(): void;
+    completionProcessed(): void;
+  }> | undefined;
   const unsupported = () => { throw new Error("unmodeled event queue dependency"); };
   const stubs = new Map<number, (...args: number[]) => number | void>([
     [322, (expression, source, line) => { throw new Error(`native assertion ${expression}/${source}:${line}`); }],
@@ -60,6 +67,7 @@ export async function queueFixture(input: Uint8Array) {
       assert.equal(view.getUint32(metadata + 8, true), size + 12);
       delivered.push({ id, size, value: size >= 4 ? view.getUint32(event + 12, true) : 0 });
       duringDelivery?.(id);
+      if (id === 14) sessionHooks?.completionProcessed();
     }],
     [17809, (address, size) => {
       assert.ok(address !== undefined && address >= 0x800000 && address < allocated);
@@ -175,9 +183,27 @@ export async function queueFixture(input: Uint8Array) {
       };
     },
     rosterEntry: (requestId = 42) => call("rosterEntry", requestId, 1, UUID, ALIAS),
+    prepareLogin(requestId: number) {
+      write(REQUEST + 20, 3);
+      write(REQUEST + 24, 0);
+      write(REQUEST + 32, requestId);
+    },
     completeLogin(error: number) {
-      call("completeRequest", 42, error);
+      const requestId = view.getUint32(REQUEST + 32, true);
+      const connection = view.getUint32(REQUEST + 28, true);
+      sessionHooks?.completionStarted(requestId, connection, error === 0);
+      const before = call("queuedBytes", CONTEXT + 592);
+      call("completeRequest", requestId, error);
       call("loginComplete", REQUEST);
+      const after = call("queuedBytes", CONTEXT + 592);
+      assert.equal(typeof before, "number");
+      assert.equal(typeof after, "number");
+      if (typeof before !== "number" || typeof after !== "number") {
+        throw new Error("native queue byte count is unavailable");
+      }
+      if (after - before === 368) sessionHooks?.completionQueued();
+      else assert.equal(after, before, "login completion appends either one complete event or none");
+      sessionHooks?.completionFinished();
     },
     enqueue(id: number, value = 0, size = 4) {
       write(PAYLOAD, value);
@@ -185,6 +211,7 @@ export async function queueFixture(input: Uint8Array) {
     },
     drain: () => call("drain", CONTEXT, 0),
     onDelivery: (callback: (id: number) => void) => { duringDelivery = callback; },
+    onSession: (hooks: NonNullable<typeof sessionHooks>) => { sessionHooks = hooks; },
     scheduled: () => scheduled,
     allocatedBytes: () => allocated - 0x800000,
   };

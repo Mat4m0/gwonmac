@@ -18,6 +18,29 @@ const WRITER_SHAPES = new Set([
   "717a24547951672cc0ae6e8fcbb0f96045adafe78ab808e9929ab44eed4dbc88",
   "3b220a2557bbdf56e7221240b76b543735a0f9202c7b456bf7115df64317312a",
 ]);
+const RECORD_ROLE_SPECS = Object.freeze({
+  arrayGrowth: [235, "9062b0fd4d9ee84f7428e3b2fddb4f86948e4770f78b0c4d5b0c4aebc908ab6c"],
+  recordRemoval: [635, "2251934fb29e53d95c226adacafecf1d07cbdce592d8986b22181f8e0ee7a0a6"],
+  recordConstructor: [788, "cc85ec7ea2b660c7cf2a5997bc8f7a35bd2a8f774b4d23424faa07d71bb1c8e0"],
+  categoryWriter: [220, "6ef7710518737db22ee2a9b6263f2911a5eaae871ddc59ccd01843954494bc4f"],
+  characterWriter: [383, "5fbe4aacc43c7053062cce9e294ba9cf146931e27d42f1df4909b849639dcc88"],
+  aliasWriter: [375, "ae5bf01dd7d419675852463cc9fd170273ceaad5718a17791b43b69fca052a5f"],
+  uuidWriter: [494, "6a7c73afac4742f9d1dc3a2ecbbfb5b20b4c2b49fdb6e049cce9c497fbc1a263"],
+} as const);
+const NAME_COPY_BYTES = 80;
+const NAME_COPY_SHAPE = "1c87ab4b0831420341935898d106c902d85897a116b4beb7492bf4ab3b1ea9c7";
+
+export type FriendRecordLayout = Readonly<{
+  capacityOffset: number;
+  recordBytes: number;
+  categoryOffset: number;
+  statusOffset: number;
+  uuidOffset: number;
+  aliasOffset: number;
+  characterOffset: number;
+  slotOffset: number;
+  mapOffset: number;
+}>;
 
 export type FriendTableCandidate = Readonly<{
   root: number;
@@ -27,6 +50,8 @@ export type FriendTableCandidate = Readonly<{
   countOffset: number;
   scalarWriters: readonly Readonly<{ functionIndex: number; offset: number }>[];
   uiConsumers: readonly number[];
+  recordLayout: FriendRecordLayout;
+  recordRoles: Readonly<Record<keyof typeof RECORD_ROLE_SPECS | "nameCopy", number>>;
 }>;
 
 export type FriendTableEvidence = Readonly<{
@@ -43,6 +68,65 @@ function i32Loads(fn: DecodedFunction): readonly number[] {
 
 function hasConstant(fn: DecodedFunction, value: number): boolean {
   return fn.constantSites.some((site) => site.value === value);
+}
+
+function signatureRole(module: ModuleShape, functionIndex: number): string {
+  const type = module.types[module.functionTypeIndices[functionIndex] ?? -1];
+  return type ? `${type.params.join(",")}->${type.results.join(",")}` : "missing";
+}
+
+function semanticBodyShape(
+  module: ModuleShape,
+  data: WasmDataEvidence,
+  fn: DecodedFunction,
+): string | null {
+  const body = module.bodies[fn.functionIndex - module.functionImportCount];
+  if (!body) return null;
+  const spans: RelocationSpan[] = [];
+  const calleeRoles = new Map<number, number>();
+  const calls = [...fn.callSites].flatMap(([target, sites]) =>
+    sites.map((site) => ({ target, site }))).sort((left, right) => left.site.offset - right.site.offset);
+  for (const { target, site } of calls) {
+    if (!calleeRoles.has(target)) calleeRoles.set(target, calleeRoles.size);
+    spans.push({
+      start: site.offset + 1, end: site.operandEnd,
+      addressClass: "function-index",
+      role: `callee-${calleeRoles.get(target)}:${signatureRole(module, target)}`,
+    });
+  }
+  const operands = [...fn.constantSites, ...fn.memorySites];
+  const mutableRoles = new Map<number, number>();
+  for (const site of operands) {
+    if (site.value >= data.zeroInitializedBase && site.value < data.initialMemoryBytes) {
+      if (!mutableRoles.has(site.value)) mutableRoles.set(site.value, mutableRoles.size);
+      spans.push({
+        start: site.operandStart, end: site.operandEnd,
+        addressClass: "mutable-static", role: `state-${mutableRoles.get(site.value)}`,
+      });
+    } else if (data.contains(site.value)) {
+      const text = data.readCString(site.value);
+      if (text) {
+        spans.push({
+          start: site.operandStart, end: site.operandEnd,
+          addressClass: "immutable-data", role: text,
+        });
+      }
+    }
+  }
+  return relocationAwareFingerprint(body, spans);
+}
+
+function uniqueRole(
+  module: ModuleShape,
+  data: WasmDataEvidence,
+  functions: readonly DecodedFunction[],
+  spec: readonly [number, string],
+): DecodedFunction | null {
+  const matches = functions.filter((fn) => {
+    const body = module.bodies[fn.functionIndex - module.functionImportCount];
+    return body?.byteLength === spec[0] && semanticBodyShape(module, data, fn) === spec[1];
+  });
+  return matches.length === 1 ? matches[0]! : null;
 }
 
 function assertionBodyShape(
@@ -124,6 +208,52 @@ export function inspectFriendTable(input: Uint8Array): FriendTableEvidence {
       && fn.memorySites.every((site) => site.opcode === 0x28)
       && assertionBodyShape(module, context.data, fn) === ACCESSOR_SHAPE
     );
+    const nameCopies = decoded.filter((fn) => {
+      const body = module.bodies[fn.functionIndex - module.functionImportCount];
+      return body?.byteLength === NAME_COPY_BYTES
+        && signatureMatches(module, fn.functionIndex, ["i32", "i32", "i32"], [])
+        && fn.calls.size === 0
+        && semanticBodyShape(module, context.data, fn) === NAME_COPY_SHAPE;
+    });
+    const tableRoles = Object.fromEntries(Object.entries(RECORD_ROLE_SPECS)
+      .filter(([role]) => role !== "arrayGrowth")
+      .map(([role, spec]) => [role, uniqueRole(module, context.data, table, spec)])) as Record<
+        Exclude<keyof typeof RECORD_ROLE_SPECS, "arrayGrowth">, DecodedFunction | null
+      >;
+    const constructor = tableRoles.recordConstructor;
+    const arrayGrowthMatches = decoded.filter((fn) => {
+      const body = module.bodies[fn.functionIndex - module.functionImportCount];
+      return body?.byteLength === RECORD_ROLE_SPECS.arrayGrowth[0]
+        && semanticBodyShape(module, context.data, fn) === RECORD_ROLE_SPECS.arrayGrowth[1]
+        && constructor?.calls.get(fn.functionIndex) === 1;
+    });
+    const recordRoles: Record<keyof typeof RECORD_ROLE_SPECS, DecodedFunction | null> = {
+      ...tableRoles,
+      arrayGrowth: arrayGrowthMatches.length === 1 ? arrayGrowthMatches[0]! : null,
+    };
+    const nameCopy = nameCopies.length === 1 ? nameCopies[0]! : null;
+    if (!nameCopy || Object.values(recordRoles).some((fn) => fn === null)) {
+      return unavailable("complete-friend-record-roles-not-found");
+    }
+    const completeConstructor = recordRoles.recordConstructor!;
+    if (!signatureMatches(module, recordRoles.arrayGrowth!.functionIndex, ["i32", "i32", "i32"], [])
+      || !signatureMatches(module, recordRoles.recordRemoval!.functionIndex, ["i32", "i32"], [])
+      || !signatureMatches(module, completeConstructor.functionIndex,
+        ["i32", "i32", "i32", "i32", "i32", "i32"], ["i32"])
+      || ![recordRoles.categoryWriter, recordRoles.characterWriter, recordRoles.aliasWriter,
+        recordRoles.uuidWriter].every((fn) =>
+        signatureMatches(module, fn!.functionIndex, ["i32", "i32", "i32"], []))
+      || completeConstructor.calls.get(nameCopy.functionIndex) !== 2
+      || completeConstructor.calls.get(recordRoles.arrayGrowth!.functionIndex) !== 1
+      || recordRoles.aliasWriter!.calls.get(nameCopy.functionIndex) !== 1
+      || recordRoles.characterWriter!.calls.get(nameCopy.functionIndex) !== 1
+      || !hasConstant(completeConstructor, 172) || !hasConstant(recordRoles.recordRemoval!, 172)
+      || !hasConstant(recordRoles.aliasWriter!, 24)
+      || !hasConstant(recordRoles.characterWriter!, 64)
+      || !hasConstant(recordRoles.uuidWriter!, 8)
+      || !completeConstructor.memorySites.some((site) => site.opcode === 0x36 && site.value === 104)) {
+      return unavailable("friend-record-role-relationships-changed");
+    }
     const candidates: FriendTableCandidate[] = [];
     for (const accessor of accessors) {
       const loads = i32Loads(accessor);
@@ -159,6 +289,18 @@ export function inspectFriendTable(input: Uint8Array): FriendTableEvidence {
         candidates.push({
           root, accessor: accessor.functionIndex, rootAccessor: wrapper.functionIndex,
           arrayOffset: 0, countOffset: loads[0]!, scalarWriters, uiConsumers,
+          recordLayout: {
+            capacityOffset: 4, recordBytes: 172, categoryOffset: 0,
+            statusOffset: 4,
+            uuidOffset: 8, aliasOffset: 24, characterOffset: 64,
+            slotOffset: 104,
+            mapOffset: 108,
+          },
+          recordRoles: {
+            ...Object.fromEntries(Object.entries(recordRoles).map(([role, value]) =>
+              [role, value!.functionIndex])) as Record<keyof typeof RECORD_ROLE_SPECS, number>,
+            nameCopy: nameCopy.functionIndex,
+          },
         });
       }
     }
@@ -169,7 +311,6 @@ export function inspectFriendTable(input: Uint8Array): FriendTableEvidence {
         : candidates.length > 1 ? "ambiguous" : "unavailable",
       candidates,
       unresolved: candidates.length === 0 ? ["friend-table-relationships-not-found"] : [
-        "complete-reader-writer-and-allocation-semantics",
         "friend-service-initialization-and-disconnect",
         "account-session-invalidation",
         "reconnect-location-refresh",
