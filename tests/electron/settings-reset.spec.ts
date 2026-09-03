@@ -54,10 +54,11 @@ test("Tools reset promises and clears both Travel preference owners", async () =
 
     expect(await page.evaluate(() => window.launcherNative.settings.reset()))
       .toBeUndefined();
-    expect(await app.evaluate(() => globalThis.__resetRestart.options?.detail))
-      .toBe(
-        "Accounts, saved logins, game files, builds, templates, screenshots, and chat logs are kept.",
-      );
+    expect(await app.evaluate(() => globalThis.__resetRestart.options))
+      .toMatchObject({
+        message: "Reset all app settings?",
+        detail: "This resets launcher and game preferences, Tools, shortcuts, custom map styles, and custom panel colors. Original textures will be selected. Accounts, saved logins, game files, imported texture packs, builds, templates, screenshots, and chat logs are kept.",
+      });
     const settings = JSON.parse(
       await readFile(path.join(userData, "settings.json"), "utf8"),
     ) as { travelShortcuts: unknown[] };
