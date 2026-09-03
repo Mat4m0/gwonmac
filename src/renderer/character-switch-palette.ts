@@ -104,6 +104,31 @@ export function moveCharacterSelection(
   return current;
 }
 
+export function characterCarouselRows(
+  selected: number,
+  count: number,
+  radius = 3,
+): readonly (number | null)[] {
+  const capacity = radius * 2 + 1;
+  if (count <= capacity) {
+    const leadingSlots = Math.floor((capacity - count) / 2);
+    return Object.freeze(Array.from(
+      { length: capacity },
+      (_, offset) => {
+        const row = offset - leadingSlots;
+        return row >= 0 && row < count ? row : null;
+      },
+    ));
+  }
+  return Object.freeze(Array.from(
+    { length: capacity },
+    (_, offset) => {
+      const row = selected + offset - radius;
+      return row >= 0 && row < count ? row : null;
+    },
+  ));
+}
+
 export function createCharacterSwitchPalette(
   parent: HTMLElement,
   source: CharacterSwitchSource,
@@ -115,8 +140,10 @@ export function createCharacterSwitchPalette(
   root.id = "character-switch-root";
   root.className = "ui-modal ui-modal-layer";
   root.setAttribute("aria-labelledby", "character-switch-title");
-  root.innerHTML = `<div class="ui-frame character-switch-panel"><header class="character-switch-head"><h2 id="character-switch-title">Switch Character</h2><span class="character-switch-count" aria-live="polite" aria-atomic="true"></span><button class="ui-button character-switch-head-action character-switch-settings-toggle" type="button" aria-label="Character Switch settings" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="ui-button character-switch-head-action character-switch-close" type="button" aria-label="Close Switch Character"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 3 10 10M13 3 3 13" /></svg></button></header><ul id="character-switch-list" class="character-switch-list" aria-label="Characters"></ul><section class="character-switch-settings" aria-label="Character Switch settings" hidden><label class="character-switch-setting" for="character-switch-show-profession"><span><strong>Show profession</strong><small>Icon, primary, and secondary profession</small></span><input id="character-switch-show-profession" type="checkbox"></label><label class="character-switch-setting" for="character-switch-show-level"><span><strong>Show level</strong><small>Character level</small></span><input id="character-switch-show-level" type="checkbox"></label><label class="character-switch-setting" for="character-switch-show-location"><span><strong>Show known location</strong><small>Locations from the reviewed Travel catalogue</small></span><input id="character-switch-show-location" type="checkbox"></label></section><section class="character-switch-confirm" aria-describedby="character-switch-confirm-copy" hidden><p id="character-switch-confirm-copy">Switching characters will leave this explorable area. You may lose progress in this instance.</p><div class="character-switch-confirm-actions"><button type="button" class="ui-button character-switch-stay">Stay here</button><button type="button" class="ui-button character-switch-leave" data-variant="primary">Leave and switch</button></div></section><p class="character-switch-status" role="status" aria-live="polite" aria-atomic="true"></p><details class="character-switch-details"><summary>Technical details</summary><pre></pre><button type="button" class="ui-button character-switch-copy">Copy diagnostics</button></details><footer class="character-switch-footer"><span class="character-switch-hints character-switch-list-hints"><kbd class="ui-kbd">tab</kbd> or <kbd class="ui-kbd">↑↓</kbd> choose <kbd class="ui-kbd">return</kbd> switch <kbd class="ui-kbd">esc</kbd> close</span><span class="character-switch-hints character-switch-settings-hints" hidden><kbd class="ui-kbd">esc</kbd> back</span><span class="character-switch-hints character-switch-confirm-hints" hidden><kbd class="ui-kbd">esc</kbd> back</span></footer></div>`;
+  root.innerHTML = `<div class="ui-frame character-switch-panel"><header class="character-switch-head"><h2 id="character-switch-title">Switch Character</h2><span class="character-switch-count" aria-live="polite" aria-atomic="true"></span><button class="ui-button character-switch-head-action character-switch-settings-toggle" type="button" aria-label="Character Switch settings" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="ui-button character-switch-head-action character-switch-close" type="button" aria-label="Close Switch Character"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 3 10 10M13 3 3 13" /></svg></button></header><div class="character-switch-carousel"><button class="ui-button character-switch-arrow character-switch-previous" type="button" aria-label="Previous character"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m10.5 2.5-5 5 5 5"/></svg></button><ul id="character-switch-list" class="character-switch-list" aria-label="Characters"></ul><button class="ui-button character-switch-arrow character-switch-next" type="button" aria-label="Next character"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m5.5 2.5 5 5-5 5"/></svg></button></div><section class="character-switch-settings" aria-label="Character Switch settings" hidden><fieldset class="character-switch-layout-setting"><legend>Layout</legend><div><label class="ui-choice-row"><input type="radio" name="character-switch-layout" value="horizontal"><span><strong>Horizontal</strong><small>Selection-screen order</small></span></label><label class="ui-choice-row"><input type="radio" name="character-switch-layout" value="vertical"><span><strong>Vertical</strong><small>Alphabetical list</small></span></label></div></fieldset><label class="character-switch-setting" for="character-switch-enable-search"><span><strong>Enable search</strong><small>Search characters by name</small></span><input id="character-switch-enable-search" type="checkbox"></label><label class="character-switch-setting" for="character-switch-show-profession"><span><strong>Show profession</strong><small>Icon, primary, and secondary profession</small></span><input id="character-switch-show-profession" type="checkbox"></label><label class="character-switch-setting" for="character-switch-show-level"><span><strong>Show level</strong><small>Character level</small></span><input id="character-switch-show-level" type="checkbox"></label><label class="character-switch-setting" for="character-switch-show-location"><span><strong>Show known location</strong><small>Locations from the reviewed Travel catalogue</small></span><input id="character-switch-show-location" type="checkbox"></label></section><section class="character-switch-confirm" aria-describedby="character-switch-confirm-copy" hidden><p id="character-switch-confirm-copy">Switching characters will leave this explorable area. You may lose progress in this instance.</p><div class="character-switch-confirm-actions"><button type="button" class="ui-button character-switch-stay">Stay here</button><button type="button" class="ui-button character-switch-leave" data-variant="primary">Leave and switch</button></div></section><p class="character-switch-status" role="status" aria-live="polite" aria-atomic="true"></p><details class="character-switch-details"><summary>Technical details</summary><pre></pre><button type="button" class="ui-button character-switch-copy">Copy diagnostics</button></details><footer class="character-switch-footer"><span class="character-switch-hints character-switch-list-hints"></span><span class="character-switch-hints character-switch-settings-hints" hidden><kbd class="ui-kbd">esc</kbd> back</span><span class="character-switch-hints character-switch-confirm-hints" hidden><kbd class="ui-kbd">esc</kbd> back</span></footer></div>`;
   parent.append(root);
+  const panel = root.querySelector<HTMLElement>(".character-switch-panel")!;
+  const carousel = root.querySelector<HTMLElement>(".character-switch-carousel")!;
   const list = root.querySelector<HTMLUListElement>(".character-switch-list")!;
   list.classList.add("ui-scroll");
   const search = document.createElement("label");
@@ -124,7 +151,7 @@ export function createCharacterSwitchPalette(
   search.htmlFor = "character-switch-query";
   search.hidden = true;
   search.innerHTML = `<span class="ui-sr-only">Search characters</span><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.25"/><path d="m12.4 12.4 4.1 4.1"/></svg><input id="character-switch-query" class="ui-input" type="search" role="combobox" aria-controls="character-switch-list" aria-autocomplete="list" autocomplete="off" spellcheck="false" maxlength="${CHARACTER_SEARCH_LIMIT}" placeholder="Search characters…">`;
-  list.before(search);
+  carousel.before(search);
   const queryInput = search.querySelector<HTMLInputElement>("#character-switch-query")!;
   const status = root.querySelector<HTMLElement>(".character-switch-status")!;
   const title = root.querySelector<HTMLElement>("#character-switch-title")!;
@@ -134,9 +161,13 @@ export function createCharacterSwitchPalette(
   const stayButton = root.querySelector<HTMLButtonElement>(".character-switch-stay")!;
   const leaveButton = root.querySelector<HTMLButtonElement>(".character-switch-leave")!;
   const settingsToggle = root.querySelector<HTMLButtonElement>(".character-switch-settings-toggle")!;
+  const searchCheckbox = root.querySelector<HTMLInputElement>("#character-switch-enable-search")!;
   const professionCheckbox = root.querySelector<HTMLInputElement>("#character-switch-show-profession")!;
   const levelCheckbox = root.querySelector<HTMLInputElement>("#character-switch-show-level")!;
   const locationCheckbox = root.querySelector<HTMLInputElement>("#character-switch-show-location")!;
+  const layoutInputs = [...root.querySelectorAll<HTMLInputElement>('input[name="character-switch-layout"]')];
+  const previousButton = root.querySelector<HTMLButtonElement>(".character-switch-previous")!;
+  const nextButton = root.querySelector<HTMLButtonElement>(".character-switch-next")!;
   const listHints = root.querySelector<HTMLElement>(".character-switch-list-hints")!;
   const settingsHints = root.querySelector<HTMLElement>(".character-switch-settings-hints")!;
   const confirmHints = root.querySelector<HTMLElement>(".character-switch-confirm-hints")!;
@@ -150,6 +181,8 @@ export function createCharacterSwitchPalette(
   let view: ViewState = Object.freeze({ kind: "closed" });
   let selected = 0;
   let query = "";
+  let layout: "horizontal" | "vertical" = "horizontal";
+  let searchEnabled = false;
   type DisplayPreferences = Readonly<{
     characterSwitchProfession: boolean;
     characterSwitchLevel: boolean;
@@ -170,6 +203,7 @@ export function createCharacterSwitchPalette(
   let enabled = false;
   let rows: ReturnType<typeof orderCharacters> = [];
   const busy = () => source.action.status === "switching";
+  const carouselRadius = () => window.innerWidth <= 680 ? 1 : window.innerWidth <= 1050 ? 2 : 3;
   const modal = window.gwSurfaces.registerDialog({
     root,
     priority: 7,
@@ -197,7 +231,7 @@ export function createCharacterSwitchPalette(
     list.querySelector<HTMLButtonElement>(`button[data-row="${selected}"]`)
       ?.scrollIntoView({ block: "nearest" });
   };
-  const render = () => {
+  const render = (preserveCharacterFocus = true) => {
     if (!enabled) {
       closePalette(true);
       return;
@@ -208,7 +242,11 @@ export function createCharacterSwitchPalette(
     }
     const state = source.characters;
     const searching = state.status === "ready" && normaliseCharacterQuery(query) !== "";
-    const focusedCharacterKey = document.activeElement instanceof HTMLButtonElement
+    const horizontal = layout === "horizontal";
+    root.dataset.layout = layout;
+    panel.dataset.layout = layout;
+    const focusedCharacterKey = preserveCharacterFocus
+      && document.activeElement instanceof HTMLButtonElement
       && list.contains(document.activeElement)
       ? document.activeElement.dataset.characterKey
       : undefined;
@@ -223,8 +261,10 @@ export function createCharacterSwitchPalette(
     if (source.action.status === "complete") return;
     if (state.status === "ready") {
       const selectedKey = rows[selected]?.character.characterKey;
-      const orderedRows = orderCharacters(state.characters);
-      if (searching) list.setAttribute("role", "listbox");
+      const orderedRows = horizontal
+        ? state.characters.map((character, index) => Object.freeze({ character, index }))
+        : orderCharacters(state.characters);
+      if (horizontal || searching) list.setAttribute("role", "listbox");
       else list.removeAttribute("role");
       rows = searchCharacters(orderedRows, query);
       const preserved = selectedKey === undefined
@@ -232,21 +272,33 @@ export function createCharacterSwitchPalette(
         : rows.findIndex(({ character }) => character.characterKey === selectedKey);
       if (preserved >= 0) selected = preserved;
       selected = Math.min(selected, Math.max(0, rows.length - 1));
-      const currentRow = rows.findIndex(({ index }) => index === state.selectedIndex);
-      if (selected === currentRow) {
-        selected = rows.findIndex(({ index }) => index !== state.selectedIndex);
-        if (selected < 0) selected = 0;
-      }
-      rows.forEach(({ character, index }, rowIndex) => {
+      const renderedRows = horizontal
+        ? characterCarouselRows(selected, rows.length, carouselRadius())
+        : rows.map((_row, rowIndex) => rowIndex);
+      renderedRows.forEach((rowIndex) => {
+        const item = document.createElement("li");
+        item.setAttribute("role", "presentation");
+        if (rowIndex === null) {
+          item.className = "character-switch-slot";
+          item.setAttribute("aria-hidden", "true");
+          list.append(item);
+          return;
+        }
+        const row = rows[rowIndex];
+        if (!row) {
+          item.className = "character-switch-slot";
+          item.setAttribute("aria-hidden", "true");
+          list.append(item);
+          return;
+        }
+        const { character, index } = row;
         const profession = professionPresentation(character.primaryProfession);
         const current = index === state.selectedIndex;
-        const item = document.createElement("li");
-        if (searching) item.setAttribute("role", "presentation");
         const button = document.createElement("button");
         button.type = "button";
         button.id = `character-switch-option-${index}`;
         button.className = "character-switch-row";
-        if (searching) {
+        if (horizontal || searching) {
           button.setAttribute("role", "option");
           button.tabIndex = -1;
         }
@@ -254,9 +306,11 @@ export function createCharacterSwitchPalette(
         button.dataset.row = String(rowIndex);
         button.dataset.characterKey = character.characterKey;
         button.dataset.selected = String(rowIndex === selected);
-        if (searching) button.setAttribute("aria-selected", String(rowIndex === selected));
-        button.disabled = current || busy();
-        if (current) button.setAttribute("aria-current", "true");
+        if (horizontal || searching) button.setAttribute("aria-selected", String(rowIndex === selected));
+        button.disabled = busy();
+        if (current) {
+          button.setAttribute("aria-current", "true");
+        }
         const shortcut = !searching && rowIndex < 9 ? rowIndex + 1
           : !searching && rowIndex === 9 ? 0 : null;
         const secondaryProfession = professionPresentation(character.secondaryProfession);
@@ -326,7 +380,12 @@ export function createCharacterSwitchPalette(
     if (confirming) root.setAttribute("aria-describedby", "character-switch-confirm-copy");
     else root.removeAttribute("aria-describedby");
     list.hidden = settingsMode || confirming;
-    search.hidden = settingsMode || confirming || busy();
+    carousel.hidden = settingsMode || confirming;
+    previousButton.hidden = !horizontal || settingsMode || confirming;
+    nextButton.hidden = !horizontal || settingsMode || confirming;
+    previousButton.disabled = busy() || rows.length < 2;
+    nextButton.disabled = busy() || rows.length < 2;
+    search.hidden = !searchEnabled || settingsMode || confirming || busy();
     settingsPanel.hidden = !settingsMode;
     confirmPanel.hidden = !confirming;
     count.hidden = confirming;
@@ -336,12 +395,24 @@ export function createCharacterSwitchPalette(
     confirmHints.hidden = !confirming;
     settingsToggle.setAttribute("aria-pressed", String(settingsMode));
     settingsToggle.disabled = busy();
+    searchCheckbox.checked = searchEnabled;
     professionCheckbox.checked = displayPreferences.characterSwitchProfession;
     levelCheckbox.checked = displayPreferences.characterSwitchLevel;
     locationCheckbox.checked = displayPreferences.characterSwitchLocation;
-    for (const checkbox of [professionCheckbox, levelCheckbox, locationCheckbox]) {
-      checkbox.disabled = preferencePending;
+    for (const input of [
+      ...layoutInputs,
+      searchCheckbox,
+      professionCheckbox,
+      levelCheckbox,
+      locationCheckbox,
+    ]) {
+      input.disabled = preferencePending;
     }
+    for (const input of layoutInputs) input.checked = input.value === layout;
+    const searchHint = searchEnabled ? ' <kbd class="ui-kbd">↑</kbd> search' : "";
+    listHints.innerHTML = `${horizontal
+      ? '<kbd class="ui-kbd">←→</kbd>'
+      : '<kbd class="ui-kbd">↑↓</kbd>'} choose${searchHint} <kbd class="ui-kbd">return</kbd> switch <kbd class="ui-kbd">esc</kbd> close`;
     queryInput.setAttribute("aria-expanded", String(searching && rows.length > 0));
     if (searching) queryInput.setAttribute("aria-controls", "character-switch-list");
     else queryInput.removeAttribute("aria-controls");
@@ -361,8 +432,9 @@ export function createCharacterSwitchPalette(
     if (focusedCharacterKey !== undefined && view.kind === "characters") {
       const replacement = [...list.querySelectorAll<HTMLButtonElement>("button[data-character-key]")]
         .find((button) => button.dataset.characterKey === focusedCharacterKey);
-      if (replacement && !replacement.disabled) replacement.focus({ preventScroll: true });
-      else queryInput.focus({ preventScroll: true });
+      if (replacement) replacement.focus({ preventScroll: true });
+      else if (searchEnabled) queryInput.focus({ preventScroll: true });
+      else focusSelected();
     }
   };
   const closePalette = (resetFailure: boolean) => {
@@ -376,14 +448,22 @@ export function createCharacterSwitchPalette(
     if (source.action.status === "switching") return;
     if (source.action.status === "complete") source.reset();
     if (source.context === "character-select" && source.action.status !== "failed") return;
-    selected = 0;
     query = "";
     queryInput.value = "";
     preferenceFailure = false;
     view = Object.freeze({ kind: "characters" });
+    const state = source.characters;
+    if (state.status === "ready") {
+      const openingRows = layout === "horizontal"
+        ? state.characters.map((character, index) => Object.freeze({ character, index }))
+        : orderCharacters(state.characters);
+      const current = openingRows.findIndex(({ index }) => index === state.selectedIndex);
+      selected = current < 0 ? 0 : current;
+    } else selected = 0;
     modal.show();
     render();
-    queryInput.focus({ preventScroll: true });
+    focusSelected();
+    revealSelected();
   };
   const beginRequest = (characterKey: string) => {
     if (source.action.status === "failed") source.reset();
@@ -409,7 +489,7 @@ export function createCharacterSwitchPalette(
         if (view.kind === "confirming") source.cancelConfirmation();
         view = Object.freeze({ kind: "characters" });
         render();
-        queryInput.focus({ preventScroll: true });
+        focusSelected();
       } else if (normaliseCharacterQuery(query) !== "") {
         query = "";
         queryInput.value = "";
@@ -420,21 +500,9 @@ export function createCharacterSwitchPalette(
       } else closePalette(true);
     }
     else if (view.kind !== "characters") return;
-    else if ((event.key === "ArrowDown" || event.key === "ArrowUp")
-      && (event.target === queryInput
-        || (event.target instanceof Node && list.contains(event.target)))) {
+    else if (event.key === "ArrowDown" && event.target === queryInput) {
       event.preventDefault();
-      if (event.target instanceof HTMLButtonElement && event.target.dataset.row !== undefined) {
-        selected = Number(event.target.dataset.row);
-      }
-      const delta = event.key === "ArrowDown" ? 1 : -1;
-      const characterState = source.characters;
-      const currentRow = characterState.status === "ready"
-        ? rows.findIndex(({ index }) => index === characterState.selectedIndex)
-        : -1;
-      selected = moveCharacterSelection(selected, rows.length, delta, currentRow);
-      render();
-      if (event.target !== queryInput) focusSelected();
+      focusSelected();
       revealSelected();
     }
     else {
@@ -468,6 +536,47 @@ export function createCharacterSwitchPalette(
     event.preventDefault();
     requestSelected();
   });
+  list.addEventListener("keydown", (event) => {
+    const button = (event.target as Element).closest<HTMLButtonElement>("button[data-row]");
+    if (!button || view.kind !== "characters") return;
+    selected = Number(button.dataset.row);
+    const horizontal = root.dataset.layout === "horizontal";
+    const horizontalMove = horizontal
+      && (event.key === "ArrowLeft" || event.key === "ArrowRight");
+    const verticalMove = !horizontal
+      && (event.key === "ArrowUp" || event.key === "ArrowDown");
+    if (horizontalMove || verticalMove) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!horizontal && searchEnabled && event.key === "ArrowUp" && selected === 0) {
+        queryInput.focus({ preventScroll: true });
+        return;
+      }
+      const backwards = event.key === "ArrowLeft" || event.key === "ArrowUp";
+      selected = moveCharacterSelection(selected, rows.length, backwards ? -1 : 1);
+      render(false);
+      focusSelected();
+      revealSelected();
+      return;
+    }
+    if (horizontal && searchEnabled && event.key === "ArrowUp") {
+      event.preventDefault();
+      event.stopPropagation();
+      queryInput.focus({ preventScroll: true });
+      return;
+    }
+    if (horizontal && searchEnabled && event.key.length === 1
+      && !event.metaKey && !event.ctrlKey && !event.altKey) {
+      event.preventDefault();
+      event.stopPropagation();
+      query = event.key.slice(0, CHARACTER_SEARCH_LIMIT);
+      queryInput.value = query;
+      selected = 0;
+      render(false);
+      queryInput.focus({ preventScroll: true });
+      revealSelected();
+    }
+  });
   list.addEventListener("focusin", (event) => {
     const button = event.target instanceof Element
       ? event.target.closest<HTMLButtonElement>("button[data-row]")
@@ -482,14 +591,42 @@ export function createCharacterSwitchPalette(
     selected = rows.findIndex(({ index }) => index === Number(button.dataset.index));
     requestSelected();
   });
+  previousButton.addEventListener("click", () => {
+    selected = moveCharacterSelection(selected, rows.length, -1);
+    render();
+    focusSelected();
+  });
+  nextButton.addEventListener("click", () => {
+    selected = moveCharacterSelection(selected, rows.length, 1);
+    render();
+    focusSelected();
+  });
   root.querySelector(".character-switch-close")!.addEventListener("click", () => closePalette(true));
   settingsToggle.addEventListener("click", () => {
     if (busy()) return;
     view = Object.freeze({ kind: view.kind === "settings" ? "characters" : "settings" });
     preferenceFailure = false;
     render();
-    if (view.kind === "settings") professionCheckbox.focus({ preventScroll: true });
-    else queryInput.focus({ preventScroll: true });
+    if (view.kind === "settings") {
+      layoutInputs.find((input) => input.checked)?.focus({ preventScroll: true });
+    }
+    else focusSelected();
+  });
+  for (const input of layoutInputs) input.addEventListener("change", () => {
+    if (!input.checked) return;
+    layout = input.value === "vertical" ? "vertical" : "horizontal";
+    preferenceFailure = false;
+    render();
+    input.focus({ preventScroll: true });
+  });
+  searchCheckbox.addEventListener("change", () => {
+    searchEnabled = searchCheckbox.checked;
+    if (!searchEnabled) {
+      query = "";
+      queryInput.value = "";
+    }
+    render();
+    searchCheckbox.focus({ preventScroll: true });
   });
   const preferenceFields = [
     {
@@ -531,7 +668,7 @@ export function createCharacterSwitchPalette(
     source.cancelConfirmation();
     view = Object.freeze({ kind: "characters" });
     render();
-    queryInput.focus({ preventScroll: true });
+    focusSelected();
   });
   leaveButton.addEventListener("click", () => {
     if (view.kind !== "confirming") return;
@@ -565,11 +702,18 @@ export function createCharacterSwitchPalette(
     render();
   }).catch(() => { /* Keep the surface closed until its enable setting is known. */ });
   const unsubscribe = source.subscribe(render);
+  const resize = () => {
+    if (!root.open || layout !== "horizontal" || view.kind !== "characters") return;
+    render(false);
+    focusSelected();
+  };
+  window.addEventListener("resize", resize);
   return Object.freeze({ dispose() {
     unsubscribe();
     unsubscribeSettings();
     modal.dispose();
     window.removeEventListener("gw:character-toggle", onToggle);
+    window.removeEventListener("resize", resize);
     root.remove();
   } });
 }

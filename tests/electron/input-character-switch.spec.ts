@@ -12,7 +12,7 @@ import {
 } from "./fixtures.mjs";
 import { startGameInput } from "./input-helpers.js";
 
-test("a 27-character account browses and searches the complete alphabetical list", async () => {
+test("a 27-character account uses the horizontal carousel or vertical list", async () => {
   const fixture = await launchPlayableClient("gw-character-switch-e2e-");
   try {
     const { page } = fixture;
@@ -40,12 +40,20 @@ test("a 27-character account browses and searches the complete alphabetical list
       window.addEventListener("test-character-refresh", () => {
         for (const listener of listeners) listener();
       }, { once: true });
+      window.addEventListener("test-character-five", () => {
+        characterState = { ...characterState, sequence: 9, characters: characters.slice(0, 5) };
+        for (const listener of listeners) listener();
+      }, { once: true });
+      window.addEventListener("test-character-all", () => {
+        characterState = { ...characterState, sequence: 10, characters };
+        for (const listener of listeners) listener();
+      }, { once: true });
       window.addEventListener("test-character-remove-focused", () => {
-        characterState = { ...characterState, sequence: 9, characters: characters.filter((_, index) => index !== 1) };
+        characterState = { ...characterState, sequence: 11, characters: characters.filter((_, index) => index !== 1) };
         for (const listener of listeners) listener();
       }, { once: true });
       window.addEventListener("test-character-restore", () => {
-        characterState = { ...characterState, sequence: 10, characters };
+        characterState = { ...characterState, sequence: 12, characters };
         for (const listener of listeners) listener();
       }, { once: true });
       window.gwCharacterSwitchHost?.attach({
@@ -80,13 +88,75 @@ test("a 27-character account browses and searches the complete alphabetical list
     const search = page.getByRole("combobox", { name: "Search characters" });
     const list = dialog.locator("#character-switch-list");
     await expect(dialog).toBeVisible();
+    await expect(search).toBeHidden();
+    const selected = list.locator(".character-switch-row[data-selected=true]");
+    await expect(selected).toContainText("Character 01");
+    await expect.poll(() => isDomActiveElement(selected)).toBe(true);
+    const carouselCapacity = await list.locator("li").count();
+    const edgeSlotCount = Math.floor(carouselCapacity / 2);
+    await expect(list.locator(".character-switch-slot")).toHaveCount(edgeSlotCount);
+    await page.evaluate(() => window.dispatchEvent(new Event("test-character-five")));
+    const fiveCharacterCount = carouselCapacity >= 5 ? 5 : Math.ceil(carouselCapacity / 2);
+    await expect(list.getByRole("option")).toHaveCount(fiveCharacterCount);
+    await expect(list.locator(".character-switch-slot")).toHaveCount(
+      carouselCapacity - fiveCharacterCount,
+    );
+    if (carouselCapacity >= 5) {
+      const groupCentreOffset = await list.evaluate((node) => {
+        const cards = [...node.querySelectorAll<HTMLElement>(".character-switch-row")];
+        const first = cards.at(0)?.getBoundingClientRect();
+        const last = cards.at(-1)?.getBoundingClientRect();
+        const bounds = node.getBoundingClientRect();
+        if (!first || !last) return Number.POSITIVE_INFINITY;
+        return Math.abs((first.left + last.right) / 2 - (bounds.left + bounds.right) / 2);
+      });
+      expect(groupCentreOffset).toBeLessThan(1);
+    }
+    await page.evaluate(() => window.dispatchEvent(new Event("test-character-all")));
+    await expect(list.getByRole("option")).toHaveCount(edgeSlotCount + 1);
+    await expect(list.locator(".character-switch-slot")).toHaveCount(edgeSlotCount);
+    await page.keyboard.press("ArrowLeft");
+    await expect(selected).toContainText("Rudolph Prime");
+    await expect(list.locator(".character-switch-slot")).toHaveCount(edgeSlotCount);
+    await page.keyboard.press("ArrowRight");
+    await expect(selected).toContainText("Character 01");
+    await page.keyboard.press("ArrowRight");
+    await expect(selected).toContainText("Character 02");
+    await page.keyboard.press("ArrowLeft");
+    await expect(selected).toContainText("Character 01");
+    await page.keyboard.press("ArrowUp");
+    await expect.poll(() => isDomActiveElement(selected)).toBe(true);
+
+    await dialog.getByRole("button", { name: "Character Switch settings" }).click();
+    const horizontalLayout = dialog.getByRole("radio", { name: /Horizontal/u });
+    const verticalLayout = dialog.getByRole("radio", { name: /Vertical/u });
+    const searchSetting = dialog.getByRole("checkbox", { name: /Enable search/u });
+    await expect(horizontalLayout).toBeChecked();
+    await expect(searchSetting).not.toBeChecked();
+    await searchSetting.check();
+    await page.keyboard.press("Escape");
+    await expect(search).toBeVisible();
+    await page.keyboard.press("ArrowUp");
     await expect.poll(() => isDomActiveElement(search)).toBe(true);
+    await search.press("ArrowDown");
+    await expect.poll(() => isDomActiveElement(selected)).toBe(true);
+    await page.keyboard.type("u");
+    await expect(search).toHaveValue("u");
+    await expect(list.getByRole("option")).toHaveCount(1);
+    await expect(selected).toContainText("Rudolph Prime");
+    await search.press("Escape");
+
+    await dialog.getByRole("button", { name: "Character Switch settings" }).click();
+    await verticalLayout.check();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveAttribute("data-layout", "vertical");
     await expect(list.getByRole("button")).toHaveCount(27);
     await expect(list.locator("img")).toHaveCount(27);
     await expect.poll(() => list.evaluate((node) => node.scrollHeight > node.clientHeight)).toBe(true);
-    for (let index = 0; index < 10; index += 1) await search.press("ArrowDown");
+    await expect.poll(() => isDomActiveElement(selected)).toBe(true);
+    for (let index = 0; index < 10; index += 1) await selected.press("ArrowDown");
     await expect(list.locator(".character-switch-row[data-selected=true]")).toContainText(
-      "Character 12",
+      "Character 10",
     );
     await expect.poll(() => list.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
     await expect(list.locator(".character-switch-meta").first()).toContainText("Level 20");
@@ -173,7 +243,8 @@ test("a 27-character account browses and searches the complete alphabetical list
     await page.evaluate(() => window.dispatchEvent(
       new CustomEvent("gw:character-toggle", { cancelable: true }),
     ));
-    await expect.poll(() => isDomActiveElement(search)).toBe(true);
+    await expect(selected).toContainText("Character 01");
+    await expect.poll(() => isDomActiveElement(selected)).toBe(true);
     await search.press("0");
     await expect(page.locator("body")).toHaveAttribute("data-character-switch-request", "9");
     await expect(dialog).toBeHidden();
@@ -266,8 +337,10 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
       new CustomEvent("gw:character-toggle", { cancelable: true }),
     ));
     await expect(dialog).toBeVisible();
-    await expect(search).toBeVisible();
-    await expect.poll(() => isDomActiveElement(search)).toBe(true);
+    await expect(search).toBeHidden();
+    await expect.poll(() => isDomActiveElement(
+      dialog.getByRole("option", { name: /Private Alpha/u }),
+    )).toBe(true);
     await page.locator("#character-switch-root").click({ position: { x: 8, y: 8 } });
     await expect(dialog).toBeHidden();
     await expect(page.locator("body")).not.toHaveAttribute("data-game-clicks", /.*/u);
@@ -275,7 +348,7 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
     await page.evaluate(() => window.dispatchEvent(
       new CustomEvent("gw:character-toggle", { cancelable: true }),
     ));
-    await page.getByRole("button", { name: /Switch to Private Beta/u }).click();
+    await dialog.getByRole("option", { name: /Switch to Private Beta/u }).click();
     await expect(page.getByRole("heading", { name: "Leave this area?" })).toBeVisible();
     await expect(page.locator("#character-switch-root")).toHaveAttribute(
       "aria-describedby",
@@ -286,12 +359,12 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
     await expect(page.getByRole("heading", { name: "Switch Character" })).toBeVisible();
     await expect(page.locator("body")).not.toHaveAttribute("data-character-switch-request", /.*/u);
 
-    await page.getByRole("button", { name: /Switch to Private Beta/u }).click();
+    await dialog.getByRole("option", { name: /Switch to Private Beta/u }).click();
     await page.getByRole("button", { name: "Stay here" }).click();
     await expect(dialog).toBeVisible();
     await expect(page.locator("body")).not.toHaveAttribute("data-character-switch-request", /.*/u);
 
-    await page.getByRole("button", { name: /Switch to Private Beta/u }).click();
+    await dialog.getByRole("option", { name: /Switch to Private Beta/u }).click();
     await page.evaluate(() => {
       const target = window as typeof window & {
         __characterSwitchTestRefreshCharacters(): void;

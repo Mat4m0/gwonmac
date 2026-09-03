@@ -19,11 +19,14 @@ Core is required and has no player switch. Optional Tools are off by default.
 The first enable selects a Tools-capable module and requires a restart. The
 Current integrated features are:
 
-- **Character Switch** (Core): Command-R opens a compact account-character
-  palette independently of Tools. Every account gets bounded name search and a
-  complete alphabetical list; direct 1–9 and 0 shortcuts select its first ten
-  characters. The exact companion projection owns the live records. Reload
-  Guild Wars uses Command-Shift-R.
+- **Character Switch** (Core): Command-R opens an account-character palette
+  independently of Tools. Its default horizontal layout follows Guild Wars'
+  character-selection order, opens on the current character, and wraps only
+  after navigation reaches a visible end. Its alternative vertical layout is
+  alphabetical. Accounts that fit inside the visible carousel are centered and
+  shown in full. Optional bounded name search is off by default; direct 1–9 and
+  0 shortcuts select the first ten characters. The exact companion projection
+  owns the live records. Reload Guild Wars uses Command-Shift-R.
 
 - **Build Library** (Beta): host-owned build and team authoring. Command-B
   opens it when both Tools Beta and Build Library are enabled, and its Apply

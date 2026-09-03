@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  characterCarouselRows,
   moveCharacterSelection,
   numberedCharacterPosition,
   orderCharacters,
@@ -48,6 +49,19 @@ describe("character switch ordering", () => {
     assert.equal(moveCharacterSelection(3, 4, 1, 0), 1);
     assert.equal(moveCharacterSelection(0, 4, -1, 3), 2);
     assert.equal(moveCharacterSelection(0, 1, 1, 0), 0);
+  });
+
+  it("shows finite carousel ends before navigation wraps", () => {
+    assert.deepEqual(characterCarouselRows(0, 20), [null, null, null, 0, 1, 2, 3]);
+    assert.deepEqual(characterCarouselRows(10, 20), [7, 8, 9, 10, 11, 12, 13]);
+    assert.deepEqual(characterCarouselRows(19, 20), [16, 17, 18, 19, null, null, null]);
+  });
+
+  it("centres every character when the account fits in the visible slots", () => {
+    assert.deepEqual(characterCarouselRows(0, 5), [null, 0, 1, 2, 3, 4, null]);
+    assert.deepEqual(characterCarouselRows(4, 5), [null, 0, 1, 2, 3, 4, null]);
+    assert.deepEqual(characterCarouselRows(0, 5, 2), [0, 1, 2, 3, 4]);
+    assert.deepEqual(characterCarouselRows(0, 1), [null, null, null, 0, null, null, null]);
   });
 
   it("searches all 27 characters without changing their alphabetical order", () => {

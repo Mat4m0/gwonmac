@@ -110,6 +110,10 @@ the three-dot shortcut menu for **Clear** and **Restore default**.
 Skill labels only change the displayed labels, not Guild Wars key bindings.
 Character Switch has its own switch, shortcut, and display settings here.
 It is a Core feature and does not require **Enable Tools**.
+The in-game Character Switch settings also select a horizontal or vertical
+layout. Horizontal is the default and follows the character-selection order.
+Search can be enabled there and is off by default. The layout and search choices
+last for the current app session.
 
 Shortcuts use macOS Command combinations such as Command-T. Normal editing and
 application shortcuts such as Command-C, Command-V, Command-Q, and Command-W
