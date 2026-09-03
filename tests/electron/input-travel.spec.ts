@@ -88,7 +88,7 @@ test.describe("renderer Travel input", () => {
       const canvas = page.locator("#canvas");
       const palette = page.getByRole("dialog", { name: "Quick Travel" });
       const search = page.getByRole("combobox", {
-        name: "Destination or search phrase",
+        name: "Destination, phrase, or friend",
       });
       await page.evaluate(() => {
         const gameCanvas = document.getElementById("canvas");
@@ -132,7 +132,7 @@ test.describe("renderer Travel input", () => {
         "data-travel-canvas-blurs",
         "0",
       );
-      await expect(search).toHaveAccessibleName("Destination or search phrase");
+      await expect(search).toHaveAccessibleName("Destination, phrase, or friend");
       await expect(palette.getByRole("listbox")).toHaveCount(0);
       await expect(palette.getByRole("heading", { name: "Favorites" })).toBeVisible();
       await expect(palette.locator(".travel-favorite-grid .travel-favorite")).toHaveCount(6);

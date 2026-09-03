@@ -51,7 +51,7 @@ test("offers destination autocomplete and numbered Travel shortcuts", async ({ p
   await expect(palette.locator('label[for="travel-search-input"] > span')).toHaveCount(0);
   await expect(palette.getByRole("status")).toHaveCount(2);
   await expect.poll(async () => (await palette.boundingBox())?.y).toBeGreaterThanOrEqual(160);
-  const search = page.getByRole("combobox", { name: "Destination or search phrase" });
+  const search = page.getByRole("combobox", { name: "Destination, phrase, or friend" });
   const header = palette.locator(".travel-search");
   const searchControl = palette.locator('label[for="travel-search-input"]');
   await expect(header).toHaveCSS("box-shadow", "none");
@@ -68,13 +68,13 @@ test("offers destination autocomplete and numbered Travel shortcuts", async ({ p
   )).not.toBe(focusedSearchShadow);
   await search.fill("not a real destination");
   await expect(palette.getByRole("status").nth(1)).toHaveText(
-    "No destinations match your search.",
+    "Friend locations are unavailable right now. Destination search still works.",
   );
   await search.fill("kama");
   await expect(page.getByRole("option", { name: /Kamadan, Jewel of Istan/ })).toBeVisible();
   await page.keyboard.press("Meta+9");
   await expect(palette.getByRole("status").first()).toContainText("shortcut 9");
-  await page.getByRole("combobox", { name: "Destination or search phrase" }).fill("");
+  await page.getByRole("combobox", { name: "Destination, phrase, or friend" }).fill("");
   await expect(page.getByRole("button", {
     name: /Travel to Kamadan, Jewel of Istan, shortcut 9/,
   })).toBeVisible();
@@ -89,7 +89,7 @@ test("keeps map-only Travel controls and status visible in a short window", asyn
   await expect.poll(async () => (await palette.boundingBox())?.y).toBeGreaterThanOrEqual(8);
   await expect(page.locator(".travel-footer")).toBeInViewport();
   await expect(page.getByRole("combobox", {
-    name: "Destination or search phrase",
+    name: "Destination, phrase, or friend",
   })).toBeInViewport();
   await expect(page.getByRole("spinbutton", { name: "District number" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Customize Travel" })).toBeVisible();
