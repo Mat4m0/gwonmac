@@ -273,6 +273,10 @@ buffers, so a missing or broken roster cannot enable or disable storage.
 Do not add a generic hook registry, plugin loader, raw memory API, arbitrary
 function call, shared-memory packet bus, or second game model.
 
+The friend observer work adds a separately certified preparation stage after
+Enhancements. It preserves the preceding module if its proof refuses. The
+current branch has not yet connected that stage to a player-facing feature.
+
 ## Command boundary
 
 Team Apply, Travel, Xunlai, and chat aliases are separate certified

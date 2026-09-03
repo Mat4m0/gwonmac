@@ -45,6 +45,12 @@ import {
 import { transformEnhancementWasm } from "./enhancement-transform.js";
 import { prepareCartographySpike } from "./cartography-spike-client.js";
 import type { CartographySpikeBuild } from "./cartography-spike-verifier.js";
+import {
+  FRIEND_OBSERVER_TRANSFORM_ABI,
+  isFriendObserverBuild,
+  rewriteFriendObserverWasm,
+  type FriendObserverBuild,
+} from "./friend-observer-transform.js";
 import { SEMANTIC_VERIFIER_ABI } from "./semantic-proof.js";
 import {
   nativeDoubleClickOutputSha256,
@@ -82,6 +88,11 @@ export type CartographyPreparationMode =
   | { readonly status: "active" }
   | { readonly status: "unavailable"; readonly error: unknown };
 
+export type FriendObserverPreparationMode =
+  | { readonly status: "disabled" }
+  | { readonly status: "active" }
+  | { readonly status: "unavailable"; readonly error: unknown };
+
 interface PreparedWasmClientModule {
   readonly wasmPath: string;
   /** Authoritative output hash of the last certified stage, never re-derived from the cache. */
@@ -99,6 +110,7 @@ interface PreparedWasmClientModule {
   readonly nativeDoubleClick: boolean;
   /** The single authority for Cartography preparation and its refusal reason. */
   readonly cartography: CartographyPreparationMode;
+  readonly friendObserver: FriendObserverPreparationMode;
 }
 
 function productCapabilityCount(capabilities: EnhancementCapabilities): number {
@@ -161,6 +173,13 @@ export interface PrepareClientModuleOptions {
   readonly enhancementCapabilities: EnhancementCapabilities;
   readonly compatibilityCacheRoot: string;
   readonly enhancementCacheRoot: string;
+  readonly friendObserver?: Readonly<{
+    cacheRoot: string;
+    verifyLocally: (options: {
+      wasmPath: string;
+      inputSha256: string;
+    }) => Promise<FriendObserverBuild | null>;
+  }>;
   /** Omitted only for diagnostic profiles that require the untouched client. */
   readonly cartographySpike?: Readonly<{
     cacheRoot: string;
@@ -302,6 +321,43 @@ async function withNativeDoubleClick(
   }
 }
 
+async function withFriendObserver(
+  prepared: PreparedWasmClientModule,
+  options: PrepareClientModuleOptions["friendObserver"],
+): Promise<PreparedWasmClientModule> {
+  if (!options) return prepared;
+  if (!prepared.effectiveCapabilities.travelAction) {
+    await discardDerivedWasm(options.cacheRoot).catch(() => undefined);
+    return prepared;
+  }
+  try {
+    const inputSha256 = await sha256File(prepared.wasmPath);
+    if (inputSha256 !== prepared.wasmSha256) {
+      throw new Error("friend observer predecessor no longer matches its certified hash");
+    }
+    const build = await options.verifyLocally({ wasmPath: prepared.wasmPath, inputSha256 });
+    if (!isFriendObserverBuild(build, inputSha256)) {
+      await discardDerivedWasm(options.cacheRoot).catch(() => undefined);
+      throw new Error("friend observer semantic proof is unavailable");
+    }
+    const wasmPath = await prepareDerivedWasm(prepared.wasmPath, {
+      inputSha256,
+      cacheRoot: options.cacheRoot,
+      transformAbi: FRIEND_OBSERVER_TRANSFORM_ABI,
+      buildFingerprint: buildFingerprint(build),
+      expectedOutputSha256: build.outputSha256,
+    }, (input) => rewriteFriendObserverWasm(input, build.certificate));
+    return {
+      ...prepared,
+      wasmPath,
+      wasmSha256: build.outputSha256,
+      friendObserver: { status: "active" },
+    };
+  } catch (error) {
+    return { ...prepared, friendObserver: { status: "unavailable", error } };
+  }
+}
+
 export async function prepareClientModule(
   options: PrepareClientModuleOptions,
   verifyNativeDoubleClick: (options: {
@@ -316,25 +372,26 @@ export async function prepareClientModule(
   }) => Promise<ExtendedMemoryStructuralProof | null> = async () => null,
 ): Promise<PreparedClientModule> {
   const certified = await prepareCertifiedChain(options);
+  const friendsPrepared = await withFriendObserver(certified, options.friendObserver);
   const cartography = options.cartographySpike
       ? await prepareCartographySpike(
-        certified.wasmPath,
-        certified.wasmSha256,
+        friendsPrepared.wasmPath,
+        friendsPrepared.wasmSha256,
         options.cartographySpike.cacheRoot,
         options.cartographySpike.verifyLocally,
       )
     : null;
-  let cartographyPrepared: PreparedWasmClientModule = certified;
+  let cartographyPrepared: PreparedWasmClientModule = friendsPrepared;
   if (cartography?.status === "active") {
     cartographyPrepared = {
-      ...certified,
+      ...friendsPrepared,
       wasmPath: cartography.wasmPath,
       wasmSha256: cartography.wasmSha256,
       cartography: { status: "active" },
     };
   } else if (cartography?.status === "unavailable") {
     cartographyPrepared = {
-      ...certified,
+      ...friendsPrepared,
       cartography: { status: "unavailable", error: cartography.error },
     };
   }
@@ -397,7 +454,7 @@ export async function prepareClientModule(
  * Select and prepare the one client module this launch serves.
  *
  * The product chain is fixed: official -> template-save -> optional
- * Enhancement. The certified Cartography stage is appended afterward by
+ * Enhancement. Optional friend observation and certified Cartography follow in
  * `prepareClientModule`. Unknown and disabled stages delete caches they
  * cannot use. A transform failure is graceful and leaves the last good cache
  * intact, but never serves it for a different input.
@@ -458,6 +515,7 @@ async function prepareCertifiedChain(
       requestedCapabilities,
       effectiveCapabilities: NO_ENHANCEMENT_CAPABILITIES,
       cartography: { status: "disabled" },
+      friendObserver: { status: "disabled" },
       nativeDoubleClick: false,
       failure: fileFailure ?? cleanupFailure,
     };
@@ -473,6 +531,7 @@ async function prepareCertifiedChain(
       requestedCapabilities,
       effectiveCapabilities: NO_ENHANCEMENT_CAPABILITIES,
       cartography: { status: "disabled" },
+      friendObserver: { status: "disabled" },
       nativeDoubleClick: false,
       failure: {
         stage: "enhancement",
@@ -490,6 +549,7 @@ async function prepareCertifiedChain(
       requestedCapabilities,
       effectiveCapabilities: NO_ENHANCEMENT_CAPABILITIES,
       cartography: { status: "disabled" },
+      friendObserver: { status: "disabled" },
       nativeDoubleClick: false,
       failure: await discardEnhancementCache(enhancementCacheRoot),
     };
@@ -514,6 +574,7 @@ async function prepareCertifiedChain(
         requestedCapabilities,
         effectiveCapabilities: candidate,
         cartography: { status: "disabled" },
+        friendObserver: { status: "disabled" },
         nativeDoubleClick: false,
         failure: firstFailure === null
           ? fileFailure
@@ -531,6 +592,7 @@ async function prepareCertifiedChain(
     requestedCapabilities,
     effectiveCapabilities: NO_ENHANCEMENT_CAPABILITIES,
     cartography: { status: "disabled" },
+    friendObserver: { status: "disabled" },
     nativeDoubleClick: false,
     failure: firstFailure === null
       ? null
