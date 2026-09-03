@@ -756,6 +756,7 @@ describe("client module preparation", () => {
       requestedCapabilities: CURSOR_TOOLBOX,
       effectiveCapabilities: NO_CAPABILITIES,
       cartography: { status: "disabled" },
+      friendObserver: { status: "disabled" },
       // An unrecognised client is served exactly as downloaded, so it receives
       // neither the double-click transform nor substitute touch input.
       nativeDoubleClick: false,
@@ -791,6 +792,25 @@ describe("client module preparation", () => {
     if (prepared.cartography.status === "unavailable") {
       assert.match(String(prepared.cartography.error), /semantic proof refused/);
     }
+  });
+
+  it("skips friend proof and discards its cache when Travel is unavailable", async () => {
+    const value = await fixture();
+    const cacheRoot = join(value.root, "friends");
+    await seedCache(cacheRoot);
+    const prepared = await prepareClientModule({
+      ...options(value, {
+        templateSaveBuild: value.templateSaveBuild,
+        enhancementBuild: value.enhancementBuild,
+      }, CURSOR_TOOLBOX),
+      friendObserver: {
+        cacheRoot,
+        verifyLocally: async () => { throw new Error("disabled friend proof must not run"); },
+      },
+    });
+    assert.equal(prepared.friendObserver.status, "disabled");
+    assert.deepEqual(prepared.effectiveCapabilities, CURSOR_TOOLBOX);
+    await assertMissing(cacheRoot);
   });
 
   it("serves independently certified enhancements when file proof refuses", async () => {

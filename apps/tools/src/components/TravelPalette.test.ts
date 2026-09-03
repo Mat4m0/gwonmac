@@ -6,6 +6,7 @@ import {
   type TravelShortcuts,
   type TravelSynonyms,
 } from "../../../../src/shared/travel";
+import type { TravelFriends } from "../../../../src/shared/friends";
 import type {
   TravelHost,
   TravelPreferencePatch,
@@ -22,6 +23,8 @@ function fixture(options: Readonly<{
   shortcuts?: TravelShortcuts;
   synonyms?: TravelSynonyms;
   history?: readonly number[];
+  friends?: TravelFriends;
+  unavailable?: string | null;
 }> = {}, attachTo?: Element) {
   const state = ref<TravelHost["state"]["value"]>({
     status: "ready", mapId: 55, travelContext: "world", characterKey: null, unlockedMapWords: null,
@@ -30,6 +33,7 @@ function fixture(options: Readonly<{
     shortcuts: options.shortcuts ?? DEFAULT_TRAVEL_SHORTCUTS,
     synonyms: options.synonyms ?? Object.freeze([]),
   });
+  const friends = ref<TravelFriends>(options.friends ?? { status: "waiting", reason: "unavailable" });
   const attempt = ref<TravelHost["attempt"]["value"]>({ status: "idle" });
   const notice = ref<TravelHost["notice"]["value"]>(null);
   const history = ref(options.history ?? EMPTY_TRAVEL_HISTORY);
@@ -48,14 +52,16 @@ function fixture(options: Readonly<{
   const traceSearch = vi.fn<TravelHost["traceSearch"]>();
   const host: TravelHost = {
     state,
+    friends,
     attempt,
     notice,
     history,
-    unavailable: null,
+    unavailable: options.unavailable ?? null,
     async loadPreferences() { return preferences; },
     savePreferences,
     async loadHistory() { return history.value; },
     travel,
+    updateFriends(next) { friends.value = next; },
     updateGameState(next) {
       state.value = next;
       const current = attempt.value;
@@ -102,10 +108,10 @@ describe("TravelPalette", () => {
     expect(wrapper.text()).not.toContain("Travel is the default");
     expect(wrapper.find('label[for="travel-search-input"] > span').exists()).toBe(false);
     expect(wrapper.get("#travel-search-input").attributes("aria-label")).toBe(
-      "Destination or search phrase",
+      "Destination, phrase, or friend",
     );
     expect(wrapper.get("#travel-search-input").attributes("placeholder")).toBe(
-      "Search destinations or phrases…",
+      "Search destinations or friends…",
     );
     expect(wrapper.get('[aria-label="Close Quick Travel"]').element.closest("label")).toBeNull();
     expect(wrapper.find('[role="tablist"]').exists()).toBe(false);
@@ -180,7 +186,7 @@ describe("TravelPalette", () => {
       && element.getAttribute("tabindex") !== "-1"
     );
 
-    expect(controls[0]?.attributes("aria-label")).toBe("Destination or search phrase");
+    expect(controls[0]?.attributes("aria-label")).toBe("Destination, phrase, or friend");
     expect(controls[1]?.classes()).toContain("travel-recent");
     expect(controls.slice(2, -2).every((control) =>
       control.classes().includes("travel-favorite"))).toBe(true);
@@ -425,7 +431,7 @@ describe("TravelPalette", () => {
     await wrapper.get('[role="combobox"]').setValue("zzzz-no-such-outpost");
 
     expect(traceSearch).toHaveBeenLastCalledWith("zzzz-no-such-outpost", []);
-    expect(wrapper.text()).toContain("No destinations for “zzzz-no-such-outpost”");
+    expect(wrapper.text()).toContain("No destinations or friends for “zzzz-no-such-outpost”");
     expect(wrapper.text()).toContain("Clear search");
     wrapper.unmount();
   });
@@ -582,6 +588,164 @@ describe("TravelPalette", () => {
     expect(rejected.wrapper.emitted("close")).toBeUndefined();
     rejected.wrapper.unmount();
 
+  });
+
+  it("searches an online friend by alias and travels to the reported outpost", async () => {
+    const { wrapper, travel } = fixture({ friends: {
+      status: "ready", sequence: 2, generation: 1,
+      friends: [{ key: "0123456789abcdef", status: "online", mapId: 449,
+        alias: "Romi", character: "Example Ranger" }],
+    } });
+    await flushPromises();
+    await wrapper.get('[role="combobox"]').setValue("rom ranger");
+    expect(wrapper.text()).toContain("Romi");
+    expect(wrapper.text()).toContain("Example Ranger");
+    expect(wrapper.text()).toContain("Kamadan, Jewel of Istan");
+    expect(wrapper.get(".travel-player-icon").attributes("aria-hidden")).toBe("true");
+    await wrapper.get(".travel-result").trigger("click");
+    expect(travel).toHaveBeenCalledWith({ mapId: 449 });
+    wrapper.unmount();
+  });
+
+  it("shows an offline friend as a disabled player result", async () => {
+    const { wrapper, travel } = fixture({ friends: {
+      status: "ready", sequence: 2, generation: 1,
+      friends: [{ key: "0123456789abcdef", status: "offline", mapId: 449,
+        alias: "Romi", character: "Example Ranger" }],
+    } });
+    await flushPromises();
+    await wrapper.get('[role="combobox"]').setValue("romi");
+
+    const result = wrapper.get(".travel-result");
+    expect(result.text()).toContain("Romi");
+    expect(result.text()).toContain("Offline");
+    expect(result.attributes()).toHaveProperty("disabled");
+    expect(result.attributes("aria-disabled")).toBe("true");
+    expect(wrapper.get('[role="combobox"]').attributes("aria-activedescendant")).toBeUndefined();
+    expect(wrapper.text()).not.toContain("returntravel");
+    await result.trigger("click");
+    await wrapper.get('[role="combobox"]').trigger("keydown", { key: "Enter" });
+    expect(travel).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it("does not travel when an observed friend becomes unavailable before selection", async () => {
+    const { wrapper, host, travel } = fixture({ friends: {
+      status: "ready", sequence: 2, generation: 1,
+      friends: [{ key: "0123456789abcdef", status: "online", mapId: 449,
+        alias: "Romi", character: "Example Ranger" }],
+    } });
+    await flushPromises();
+    await wrapper.get('[role="combobox"]').setValue("romi");
+    const result = wrapper.get(".travel-result");
+
+    host.updateFriends({
+      status: "ready", sequence: 4, generation: 1,
+      friends: [{ key: "0123456789abcdef", status: "offline", mapId: 449,
+        alias: "Romi", character: "Example Ranger" }],
+    });
+    await result.trigger("click");
+
+    expect(travel).not.toHaveBeenCalled();
+    expect(wrapper.text()).toContain("This friend’s location changed. Select them again.");
+    wrapper.unmount();
+  });
+
+  it("shows an unknown friend status as unavailable", async () => {
+    const { wrapper, travel } = fixture({ friends: {
+      status: "ready", sequence: 2, generation: 1,
+      friends: [{ key: "0123456789abcdef", status: "unknown", mapId: 449,
+        alias: "Romi", character: "Example Ranger" }],
+    } });
+    await flushPromises();
+    await wrapper.get('[role="combobox"]').setValue("romi");
+
+    const result = wrapper.get(".travel-result");
+    expect(result.text()).toContain("Status unavailable");
+    expect(result.attributes()).toHaveProperty("disabled");
+    expect(travel).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it("keeps the selected friend when an unchanged roster is republished", async () => {
+    const roster = [
+      { key: "0123456789abcdef", status: "online" as const, mapId: 449,
+        alias: "First Friend", character: "First Character" },
+      { key: "fedcba9876543210", status: "away" as const, mapId: 194,
+        alias: "Second Friend", character: "Second Character" },
+    ];
+    const { wrapper, host } = fixture({ friends: {
+      status: "ready", sequence: 2, generation: 1, friends: roster,
+    } });
+    await flushPromises();
+    const search = wrapper.get('[role="combobox"]');
+    await search.setValue("friend");
+    await search.trigger("keydown", { key: "ArrowDown" });
+    expect(wrapper.findAll(".travel-result")[1]!.attributes("aria-selected")).toBe("true");
+
+    host.updateFriends({ status: "ready", sequence: 4, generation: 1, friends: roster });
+    await flushPromises();
+
+    expect(wrapper.findAll(".travel-result")[1]!.attributes("aria-selected")).toBe("true");
+    wrapper.unmount();
+  });
+
+  it("explains when friend locations are unavailable without hiding destination search", async () => {
+    const { wrapper } = fixture();
+    await flushPromises();
+    await wrapper.get('[role="combobox"]').setValue("zzzz-no-such-outpost");
+
+    expect(wrapper.text()).toContain("Friend locations are unavailable right now.");
+    expect(wrapper.text()).toContain("You can still search for a destination.");
+    wrapper.unmount();
+  });
+
+  it("does not submit a visually disabled result with Enter", async () => {
+    const { wrapper, travel } = fixture({ unavailable: "Travel is unavailable while loading." });
+    await flushPromises();
+    const search = wrapper.get('[role="combobox"]');
+    await search.setValue("kamadan");
+    await search.trigger("keydown", { key: "Enter" });
+
+    expect(wrapper.get(".travel-result").attributes()).toHaveProperty("disabled");
+    expect(travel).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it("shows every friend location with the reason it cannot be selected", async () => {
+    const { wrapper, state, travel } = fixture({ friends: {
+      status: "ready", sequence: 2, generation: 1,
+      friends: [
+        { key: "0123456789abcdef", status: "online", mapId: 9999,
+          alias: "Unknown Friend", character: "Hidden Character" },
+        { key: "1111111111111111", status: "online", mapId: 33,
+          alias: "Exploring Friend", character: "Ascalon Character" },
+        { key: "fedcba9876543210", status: "away", mapId: 449,
+          alias: "Locked Friend", character: "Istan Character" },
+      ],
+    } });
+    const unlockedMapWords = Array.from({ length: 28 }, () => 0);
+    unlockedMapWords[Math.floor(55 / 32)] = 1 << (55 % 32);
+    state.value = {
+      status: "ready",
+      mapId: 55,
+      travelContext: "world",
+      characterKey: travelCharacterKey("0123456789abcdef"),
+      unlockedMapWords,
+    };
+    await flushPromises();
+
+    await wrapper.get('[role="combobox"]').setValue("friend");
+    const results = wrapper.findAll(".travel-result");
+    expect(results).toHaveLength(3);
+    expect(results[0]!.text()).toContain("Unknown map (ID 9999)");
+    expect(results[0]!.text()).toContain("Unavailable for travel");
+    expect(results[1]!.text()).toContain("Old Ascalon");
+    expect(results[1]!.text()).toContain("Unavailable for travel");
+    expect(results[2]!.text()).toContain("Locked");
+    expect(results.every((result) => Object.hasOwn(result.attributes(), "disabled"))).toBe(true);
+    expect(travel).not.toHaveBeenCalled();
+    wrapper.unmount();
   });
 
   it("keeps a delayed host failure visible when Travel reopens", async () => {

@@ -41,7 +41,10 @@ Current integrated features are:
   autocomplete and 1–9 shortcuts. Search filters positively locked maps from
   the current character's bounded unlock set, and Recent persists certified map
   observations per privacy-safe character key. A named, bounded Travel action
-  rechecks the unlock at the game-thread drain. It has a separate Settings opt-in.
+  rechecks the unlock at the game-thread drain. While the palette is open,
+  certified friend results show current reported outposts; unavailable rows stay
+  visible with a reason. Friend data expires when native updates stop and clears
+  when Travel closes. It has a separate Settings opt-in.
 - **Skill Key Labels**: show player-authored keyboard, mouse-button, and wheel
   labels over certified skill-slot rectangles. The feature is display-only and
   never changes or forwards game input.

@@ -82,6 +82,8 @@ export type PreparedCompanionExtension = Readonly<{
   kernelRegions: Readonly<{
     skillSlots: KernelRegion;
     skillCooldowns: KernelRegion;
+    friends: KernelRegion;
+    friendRoot: number;
   }>;
   activate(context: CompanionExtensionActivation): CompanionExtensionSession;
   rollback(free: (pointer: number) => void): void;
@@ -89,6 +91,7 @@ export type PreparedCompanionExtension = Readonly<{
 
 export type PrepareCompanionExtension = (
   exports: WebAssembly.Exports,
+  module: WebAssembly.Module,
   capabilities: EnhancementCapabilities,
   program: EnhancementProgram,
 ) => Promise<PreparedCompanionExtension>;

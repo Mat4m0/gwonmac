@@ -2,6 +2,7 @@
  * Feature-local ownership of Travel exports, memory, policy, palette, and
  * teardown. The shared companion installer only composes this lifecycle.
  */
+import type { TravelFriends } from "../shared/friends.js";
 import type { TravelCommand } from "../shared/travel-command.js";
 import type {
   EnhancementTravelConfigure,
@@ -23,6 +24,8 @@ export interface TravelInstallation {
   mount(parent: HTMLElement): void;
   update(availability: TravelAvailability): void;
   poll(): void;
+  observingFriends(): boolean;
+  updateFriends(friends: TravelFriends): void;
   command(): TravelCommand | null;
   dispose(free: (pointer: number) => void): void;
 }
@@ -67,6 +70,8 @@ export function createTravelInstallation(
       palette?.setEnabled(availability.enabled);
       if (availability.state !== null) palette?.update(availability.state);
     },
+    updateFriends(friends) { palette?.updateFriends(friends); },
+    observingFriends() { return palette?.observingFriends() ?? false; },
     poll() {
       if (takeToggle() === 1 && controller?.command.unavailable() === null) {
         window.dispatchEvent(new CustomEvent("gw:travel-toggle"));

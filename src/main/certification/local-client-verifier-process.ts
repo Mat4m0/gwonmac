@@ -34,6 +34,10 @@ import {
   deriveCartographySpikeBuild,
   isCartographySpikeBuild,
 } from "./cartography-spike-verifier.js";
+import {
+  deriveFriendObserverBuild,
+  isFriendObserverBuild,
+} from "./friend-observer-transform.js";
 
 interface ParentPort {
   postMessage(value: unknown): void;
@@ -126,6 +130,16 @@ async function main(): Promise<void> {
   if (mode === "cartography") {
     const result = deriveCartographySpikeBuild(bytes);
     if (!isCartographySpikeBuild(result, expectedSha256)) {
+      parentPort.postMessage(null);
+      process.exitCode = 4;
+      return;
+    }
+    parentPort.postMessage(result);
+    return;
+  }
+  if (mode === "friend-observer") {
+    const result = deriveFriendObserverBuild(bytes);
+    if (!isFriendObserverBuild(result, expectedSha256)) {
       parentPort.postMessage(null);
       process.exitCode = 4;
       return;

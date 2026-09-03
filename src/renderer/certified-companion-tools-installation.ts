@@ -2,11 +2,18 @@
  * Prepares the optional half of a certified companion installation. Core owns
  * the shared kernel transaction and calls this extension only in Tools mode.
  */
-import { COMPANION_DISPATCH_KINDS, COMPANION_FEATURE_BITS } from "../shared/companion-abi.js";
+import { COMPANION_ABI, COMPANION_DISPATCH_KINDS, COMPANION_FEATURE_BITS } from "../shared/companion-abi.js";
 import type { EnhancementCapabilities, EnhancementProgram } from "../shared/enhancement-contracts.js";
 import type { ToolboxObservation } from "../shared/builds/live-party.js";
+import type { TravelFriends } from "../shared/friends.js";
+import {
+  companionFriendsSignature,
+  readCompanionFriends,
+} from "./companion-friend-snapshot.js";
+import { decodeFriendObserverManifest } from "./friend-observer-manifest.js";
 import type { CompanionSnapshot } from "./companion-snapshot.js";
 import type { CompanionSkillSlotState } from "./companion-skill-snapshot.js";
+import { createCompanionSequenceFeed } from "./companion-sequence-feed.js";
 import type { EnhancementCommandEnqueue } from "./enhancement-team-commands.js";
 import type * as TeamCommandsModule from "./enhancement-team-commands.js";
 import type { ProfessionCommandTraceReader } from "./profession-command-trace.js";
@@ -65,10 +72,13 @@ function reportSkillGeometry(state: CompanionSkillSlotState): void {
 
 export async function prepareToolsCompanionExtension(
   exports: WebAssembly.Exports,
+  module: WebAssembly.Module,
   capabilities: EnhancementCapabilities,
   program: EnhancementProgram,
 ): Promise<PreparedCompanionExtension> {
   const foundation = capabilities.partyObservation;
+  const friendManifest = capabilities.travelAction ? decodeFriendObserverManifest(module) : null;
+  let friendPointer = 0;
   const observeState = capabilities.targetObservation || capabilities.xunlaiAction;
   const skills = tools.createSkillOverlaysInstallation(capabilities);
   const slots = skills.geometry;
@@ -109,7 +119,8 @@ export async function prepareToolsCompanionExtension(
       (observeState ? COMPANION_FEATURE_BITS.gameSnapshot : 0)
       | (foundation ? COMPANION_FEATURE_BITS.toolboxFoundation : 0)
       | (capabilities.targetObservation ? COMPANION_FEATURE_BITS.targetObservation : 0)
-      | skills.certifiedFeatureFlags,
+      | skills.certifiedFeatureFlags
+      | (friendManifest === null ? 0 : COMPANION_FEATURE_BITS.friendObservation),
     memoryNeeds: {
       snapshot: observeState,
       toolbox: foundation,
@@ -120,25 +131,34 @@ export async function prepareToolsCompanionExtension(
     },
     allocate(malloc) {
       allocated = true;
+      if (friendManifest !== null) friendPointer = Number(malloc(COMPANION_ABI.friends.bytes));
       slots?.allocate(malloc);
       cooldowns?.allocate(malloc);
       storage?.allocate(malloc);
       travel?.allocate(malloc);
-      if ((slots !== null && !slots.allocated)
+      if ((friendManifest !== null && (!Number.isInteger(friendPointer) || friendPointer <= 0))
+        || (slots !== null && !slots.allocated)
         || (cooldowns !== null && !cooldowns.allocated)
         || (storage !== null && !storage.region().pointer)
         || (travel !== null && !travel.region().pointer)) {
         throw new Error("Companion Tools allocation failed");
       }
     },
-    initialize(memory) { storage?.initialize(memory); travel?.initialize(); },
+    initialize(memory) {
+      if (friendPointer !== 0) new Uint8Array(memory.buffer, friendPointer, COMPANION_ABI.friends.bytes).fill(0);
+      storage?.initialize(memory); travel?.initialize();
+    },
     ownedRegions: () => [
+      ...(friendPointer === 0 ? [] : [{ name: "friend snapshot", pointer: friendPointer,
+        size: COMPANION_ABI.friends.bytes, align: 4 as const }]),
       ...(slots?.region == null ? [] : [slots.region]),
       ...(cooldowns?.region == null ? [] : [cooldowns.region]),
       ...(storage === null ? [] : [storage.region()]),
       ...(travel === null ? [] : [travel.region()]),
     ],
     kernelRegions: {
+      get friends() { return friendPointer === 0 ? EMPTY_REGION : { pointer: friendPointer, bytes: COMPANION_ABI.friends.bytes }; },
+      friendRoot: friendManifest?.root ?? 0,
       get skillSlots() {
         return slots === null ? EMPTY_REGION : { pointer: slots.pointer, bytes: slots.bytes };
       },
@@ -150,13 +170,14 @@ export async function prepareToolsCompanionExtension(
     activate(context) {
       const session = activateTools({ context, capabilities, program, foundation, observeState,
         skills, slots, cooldowns, enqueue, traceReader, teamCommands, storage,
-        travel, configureTrade, takeTrade });
+        travel, configureTrade, takeTrade, friendPointer });
       activated = true;
       return session;
     },
     rollback(free) {
       if (!allocated || activated) return;
       runCleanupSteps("Companion Tools allocation rollback failed", [
+        () => { if (friendPointer !== 0) free(friendPointer); friendPointer = 0; },
         () => slots?.release(free),
         () => cooldowns?.release(free),
         () => storage?.dispose(free),
@@ -182,12 +203,14 @@ type ToolsInput = Readonly<{
   travel: TravelInstallation | null;
   configureTrade: ((enabled: number) => number) | null;
   takeTrade: (() => number) | null;
+  friendPointer: number;
 }>;
 
 function activateTools(input: ToolsInput): CompanionExtensionSession {
   const { context, capabilities, program, foundation, observeState, skills,
     slots, cooldowns, enqueue, traceReader, teamCommands, storage, travel,
     configureTrade, takeTrade } = input;
+  let activeFriendPointer = input.friendPointer;
   const { memory, core, kernel, playRegions } = context;
   const source = tools.createCompanionPolicySource({
     program,
@@ -210,6 +233,29 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
   let professionTrace: ReturnType<typeof tools.createProfessionCommandTrace> | null = null;
   let aliasEnabled: boolean | null = null;
   let lastTrace = "";
+  let observingFriends = false;
+  const waitingFriends = Object.freeze({
+    status: "waiting" as const,
+    reason: "unavailable" as const,
+  });
+  const friendFeed = activeFriendPointer === 0 || travel === null
+    ? null
+    : createCompanionSequenceFeed<TravelFriends>(waitingFriends, waitingFriends, {
+      sameReadyState: (previous, next) =>
+        companionFriendsSignature(previous) === companionFriendsSignature(next),
+    });
+  const unsubscribeFriends = friendFeed?.subscribe((friends) => travel?.updateFriends(friends));
+  const pollFriends = () => {
+    if (activeFriendPointer === 0 || travel === null || friendFeed === null) return;
+    const nextObservation = policy().travel && travel.observingFriends();
+    if (nextObservation !== observingFriends) {
+      observingFriends = nextObservation;
+      if (!observingFriends) friendFeed.withdraw();
+      syncObservers();
+    }
+    if (!observingFriends) return;
+    friendFeed.update(readCompanionFriends(memory.buffer, activeFriendPointer));
+  };
   const disposePresentation = () => runCleanupSteps(
     "Companion Tools presentation cleanup failed",
     [
@@ -220,6 +266,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
       () => cooldowns?.dispose(),
       () => { configureTrade?.(0); },
       () => professionTrace?.dispose(),
+      () => { unsubscribeFriends?.(); friendFeed?.dispose(); },
     ],
   );
   const abortActivation = (cause: unknown): never => {
@@ -300,7 +347,9 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
       | (capabilities.playRegionObservation ? COMPANION_FEATURE_BITS.playRegionObservation : 0)
       | (policy().targetReadout || cartographyActive()
         ? COMPANION_FEATURE_BITS.targetObservation : 0)
-      | skills.activeFeatureFlags,
+      | skills.activeFeatureFlags
+      | (activeFriendPointer !== 0 && policy().travel && travel?.observingFriends() === true
+        ? COMPANION_FEATURE_BITS.friendObservation : 0),
     0, 0, 0, 0,
   );
   const syncStorage = () => storage?.update({
@@ -356,6 +405,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
   return Object.freeze({
     observer: {
       pollers: [
+        ...(activeFriendPointer === 0 ? [] : [{ poll: pollFriends, enabled: () => true }]),
         ...(travel === null ? [] : [{
           poll: () => travel.poll(),
           enabled: () => policy().travel,
@@ -429,6 +479,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
     },
     releaseObserverMemory(free) {
       runCleanupSteps("Companion Tools observer memory cleanup failed", [
+        () => { if (activeFriendPointer !== 0) free(activeFriendPointer); activeFriendPointer = 0; },
         () => slots?.release(free),
         () => cooldowns?.release(free),
       ]);

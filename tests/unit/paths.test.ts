@@ -48,6 +48,7 @@ describe("resolved profile paths", () => {
       compatibility: `${root}/game/compatibility`,
       enhancements: `${root}/game/enhancements`,
       cartographySpike: `${root}/game/cartography-spike`,
+      friendObserver: `${root}/game/friend-observer`,
       nativeDoubleClick: `${root}/game/double-click`,
       extendedMemory: `${root}/game/extended-memory`,
       texturePacks: `${root}/texture-packs`,

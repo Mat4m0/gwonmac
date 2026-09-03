@@ -239,6 +239,24 @@
 
 .travel-result small { color: var(--ui-text-faint); }
 
+.travel-result-identity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--ui-space-3);
+}
+
+.travel-result-identity > span { min-width: 0; }
+.travel-player-icon {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-width: 1.5;
+}
+
 .travel-favorite-grid {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
@@ -287,6 +305,22 @@
   color: var(--ui-text-bright);
   font-size: var(--ui-font-size-sm);
   white-space: nowrap;
+}
+
+.travel-match[data-unavailable] {
+  background: var(--ui-well-fill);
+  color: var(--ui-text-muted);
+}
+
+.travel-result-context {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+}
+
+.travel-result-context .travel-unavailable-reason {
+  color: var(--ui-text-faint);
+  font-size: var(--ui-font-size-sm);
 }
 
 .travel-result-heading {

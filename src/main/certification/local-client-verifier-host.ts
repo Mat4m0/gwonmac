@@ -33,6 +33,10 @@ import {
   isCartographySpikeBuild,
   type CartographySpikeBuild,
 } from "./cartography-spike-verifier.js";
+import {
+  isFriendObserverBuild,
+  type FriendObserverBuild,
+} from "./friend-observer-transform.js";
 
 const VERIFIER_TIMEOUT_MS = 5_000;
 
@@ -113,6 +117,20 @@ export async function verifyCartographyLocally(options: {
     args: ["cartography", options.wasmPath, options.inputSha256],
     serviceName: "Guild Wars Cartography compatibility verifier",
     accept: (value) => isCartographySpikeBuild(value, options.inputSha256)
+      ? value
+      : null,
+  }).catch(() => null);
+}
+
+/** Qualifies the bounded friend reader and its complete session notification graph. */
+export async function verifyFriendObserverLocally(options: {
+  wasmPath: string;
+  inputSha256: string;
+}): Promise<FriendObserverBuild | null> {
+  return runIsolatedVerifier({
+    args: ["friend-observer", options.wasmPath, options.inputSha256],
+    serviceName: "Guild Wars friend observer verifier",
+    accept: (value) => isFriendObserverBuild(value, options.inputSha256)
       ? value
       : null,
   }).catch(() => null);

@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import {
+  COMPANION_ABI,
   COMPANION_DISPATCH_KINDS,
   COMPANION_FEATURE_BITS,
 } from "../../src/shared/companion-abi.ts";
@@ -25,6 +26,7 @@ import {
   readCompanionSkillCooldowns,
   COMPANION_SKILL_SLOT_BYTES,
 } from "../../src/renderer/companion-skill-snapshot.ts";
+import { readCompanionFriends } from "../../src/renderer/companion-friend-snapshot.ts";
 import {
   COMPANION_PLAY_REGION_BYTES,
   readCompanionPlayRegion,
@@ -290,6 +292,10 @@ export const ADDRESSES = Object.freeze({
   skillCooldowns: 0xc100,
   playRegion: 0xc200,
   characterList: 0xc300,
+  friends: 0x5_0000,
+  friendRoot: 0x5_4000,
+  friendArray: 0x5_4100,
+  friendRecord: 0x5_4200,
   characterArrayPointer: 0xd600,
   characterArrayCount: 0xd604,
   selectedCharacterName: 0xd608,
@@ -444,6 +450,9 @@ export interface KernelOverrides {
   playRegionSize?: number;
   characterListPointer?: number;
   characterListSize?: number;
+  friendPointer?: number;
+  friendSize?: number;
+  friendRoot?: number;
   toolboxSize?: number;
 }
 
@@ -474,6 +483,9 @@ export type KernelInit = (
   playRegionSize: number,
   characterListPointer: number,
   characterListSize: number,
+  friendPointer: number,
+  friendSize: number,
+  friendRoot: number,
   features: number,
 ) => number;
 export type KernelDispatch = (
@@ -656,6 +668,11 @@ export async function createKernel(
             : 0),
         overrides.characterListPointer ?? 0,
         overrides.characterListSize ?? 0,
+        overrides.friendPointer
+          ?? ((features & COMPANION_FEATURE_BITS.friendObservation) !== 0 ? ADDRESSES.friends : 0),
+        overrides.friendSize
+          ?? ((features & COMPANION_FEATURE_BITS.friendObservation) !== 0 ? COMPANION_ABI.friends.bytes : 0),
+        overrides.friendRoot ?? 0,
         features,
       );
     },
@@ -685,6 +702,9 @@ export async function createKernel(
         0,
         0,
       ),
+    friendLifecycle: (event: number, request = 0, connection = 0, success = 0) =>
+      exports.dispatch(COMPANION_DISPATCH_KINDS.friendLifecycle, event, request, connection, success, 0),
+    friends: () => readCompanionFriends(memory.buffer, ADDRESSES.friends),
     activeFeatures: (features: number) =>
       exports.dispatch(
         COMPANION_DISPATCH_KINDS.activeFeatures,

@@ -12,6 +12,10 @@ import {
 } from "../../src/main/certification/enhancement-builds.js";
 import { transformEnhancementWasm } from
   "../../src/main/certification/enhancement-transform.js";
+import { deriveFriendObserverCertificate } from
+  "../../src/main/certification/friend-observer-certificate.js";
+import { deriveFriendObserverBuild } from
+  "../../src/main/certification/friend-observer-transform.js";
 import {
   isLocalClientVerification,
   verifyLocalClientBytes,
@@ -49,6 +53,10 @@ test("every shipped runtime profile reproduces the real client chain", async () 
   const templateBuild = verified.templateSaveBuild;
   assert.ok(templateBuild, "the real client must pass file compatibility proof");
   const template = rewriteTemplateSaveWasm(official, templateBuild);
+  assert.ok(
+    deriveFriendObserverCertificate(template),
+    "friend observation must prove against the template-save predecessor",
+  );
   const enhancementBuild = verified.enhancementBuild;
   assert.ok(enhancementBuild, "the file output must pass feature proof");
   const templateDoubleClick = deriveNativeDoubleClickBuild(template);
@@ -67,6 +75,10 @@ test("every shipped runtime profile reproduces the real client chain", async () 
     const profileBuild = profileVerification.enhancementBuild;
     assert.ok(profileBuild, `profile ${profile} must prove independently`);
     const enhanced = transformEnhancementWasm(template, profileBuild, capabilities);
+    assert.ok(
+      deriveFriendObserverCertificate(enhanced),
+      `friend observation must prove against the ${profile} predecessor`,
+    );
     assert.equal(
       sha256(enhanced),
       enhancementOutputSha256(profileBuild, capabilities),
@@ -80,7 +92,7 @@ test("every shipped runtime profile reproduces the real client chain", async () 
     rewriteExtendedMemoryWasm(rewriteNativeDoubleClickWasm(enhanced));
 
     const cacheRoot = await mkdtemp(join(tmpdir(), `gwonmac-${launch}-chain-`));
-    const prepare = async (): Promise<PreparedClientModule> => prepareClientModule({
+    const prepare = async (friendProof = true): Promise<PreparedClientModule> => prepareClientModule({
       officialWasmPath: artifact,
       officialJsPath: glue,
       officialSha256: sha256(official),
@@ -91,6 +103,14 @@ test("every shipped runtime profile reproduces the real client chain", async () 
       enhancementCapabilities: capabilities,
       compatibilityCacheRoot: join(cacheRoot, "file"),
       enhancementCacheRoot: join(cacheRoot, "enhancement"),
+      friendObserver: {
+        cacheRoot: join(cacheRoot, "friends"),
+        verifyLocally: async ({ wasmPath, inputSha256 }) => {
+          const input = new Uint8Array(await readFile(wasmPath));
+          assert.equal(sha256(input), inputSha256);
+          return friendProof ? deriveFriendObserverBuild(input) : null;
+        },
+      },
       cartographySpike: {
         cacheRoot: join(cacheRoot, "cartography"),
         verifyLocally: async ({ wasmPath, inputSha256 }) => {
@@ -118,6 +138,7 @@ test("every shipped runtime profile reproduces the real client chain", async () 
     try {
       const prepared = await prepare();
       assert.equal(prepared.failure, null);
+      assert.equal(prepared.friendObserver.status, capabilities.travelAction ? "active" : "disabled");
       assert.deepEqual(prepared.cartography, { status: "active" });
       assert.equal(prepared.nativeDoubleClick, true);
       assert.equal(prepared.extendedMemory.status, "active");
@@ -134,6 +155,14 @@ test("every shipped runtime profile reproduces the real client chain", async () 
       assert.equal(rebuilt.extendedMemory.status, "active");
       assert.equal(rebuilt.wasmSha256, prepared.wasmSha256);
       assert.equal(sha256(await readFile(rebuilt.wasmPath)), rebuilt.wasmSha256);
+      if (capabilities.travelAction) {
+        const refused = await prepare(false);
+        assert.equal(refused.friendObserver.status, "unavailable");
+        assert.equal(refused.failure, null);
+        assert.deepEqual(refused.effectiveCapabilities, capabilities);
+        assert.equal(refused.nativeDoubleClick, true);
+        assert.equal(refused.extendedMemory.status, "active");
+      }
     } finally {
       await rm(cacheRoot, { recursive: true, force: true });
     }

@@ -273,6 +273,21 @@ buffers, so a missing or broken roster cannot enable or disable storage.
 Do not add a generic hook registry, plugin loader, raw memory API, arbitrary
 function call, shared-memory packet bus, or second game model.
 
+Quick Travel friend search uses a separately certified stage after
+Enhancements. It preserves the preceding module if its proof refuses. The
+companion follows the proved login request, queue, callback, and invalidation
+sequence before it reads the native friend table. It publishes only a
+session-local key, presence, reported map ID, alias, and current character name.
+The snapshot exists only while the Travel palette is open in a supported
+region. It is cleared before logout, disconnect, login, and feature withdrawal.
+
+A friend row can authorize only the map ID shown by the ordinary reviewed
+Travel catalogue. The existing context, unlock, and dispatch checks run again
+when the player selects it. Matching friends remain visible when they are
+offline, their map is unknown, or their destination is locked or outside the
+current travel context; the row is disabled and explains why. Friend data is
+never persisted.
+
 ## Command boundary
 
 Team Apply, Travel, Xunlai, and chat aliases are separate certified
