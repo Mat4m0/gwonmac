@@ -50,6 +50,9 @@ type CompanionKernelInit = (
   playRegionBytes: number,
   characterListPointer: number,
   characterListBytes: number,
+  friendPointer: number,
+  friendBytes: number,
+  friendRoot: number,
   featureFlags: number,
 ) => number;
 
@@ -73,6 +76,7 @@ type CompanionKernelRequest = Readonly<{
   memory: WebAssembly.Memory;
   runtimePointer: number;
   featureFlags: number;
+  friendRoot?: number;
   regions: Readonly<{
     snapshot: KernelRegion;
     config: KernelRegion;
@@ -83,6 +87,7 @@ type CompanionKernelRequest = Readonly<{
     skillCooldowns: KernelRegion;
     playRegion: KernelRegion;
     characterList?: KernelRegion;
+    friends?: KernelRegion;
   }>;
 }>;
 
@@ -149,7 +154,9 @@ function bindCompanionKernel(
   const skillCooldownBytes = exports.companion_skill_cooldown_bytes as () => number;
   const playRegionBytes = exports.companion_play_region_bytes as () => number;
   const characterListBytes = exports.companion_character_list_bytes as () => number;
+  const friendBytes = exports.companion_friend_bytes as () => number;
   const { regions } = request;
+  const friends = regions.friends ?? { pointer: 0, bytes: 0 };
   const characterList = regions.characterList ?? { pointer: 0, bytes: 0 };
   if (
     companionAbi() !== COMPANION_ABI.kernel
@@ -162,6 +169,7 @@ function bindCompanionKernel(
     || skillCooldownBytes() !== COMPANION_SKILL_COOLDOWN_BYTES
     || playRegionBytes() !== COMPANION_PLAY_REGION_BYTES
     || characterListBytes() !== COMPANION_CHARACTER_LIST_BYTES
+    || friendBytes() !== COMPANION_ABI.friends.bytes
   ) {
     throw new Error("Companion kernel rejected its ABI");
   }
@@ -185,6 +193,9 @@ function bindCompanionKernel(
     regions.playRegion.bytes,
     characterList.pointer,
     characterList.bytes,
+    friends.pointer,
+    friends.bytes,
+    request.friendRoot ?? 0,
     request.featureFlags,
   ) !== 1) {
     throw new Error("Companion kernel rejected its ABI");

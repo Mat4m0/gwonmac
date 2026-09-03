@@ -96,6 +96,7 @@ import {
 import type { GamePaths } from "./paths.js";
 import {
   verifyCartographyLocally,
+  verifyFriendObserverLocally,
   verifyClientLocally,
   verifyExtendedMemoryLocally,
   verifyNativeDoubleClickLocally,
@@ -367,6 +368,10 @@ export class ClientRuntime {
       enhancementCapabilities: this.options.enhancementCapabilities,
       compatibilityCacheRoot: this.options.paths.compatibility,
       enhancementCacheRoot: this.options.paths.enhancements,
+      friendObserver: {
+        cacheRoot: this.options.paths.friendObserver,
+        verifyLocally: verifyFriendObserverLocally,
+      },
       ...(this.options.cartographySpike
         ? {
             cartographySpike: {

@@ -53,20 +53,23 @@ unsafe fn name(address: u32, allow_empty: bool) -> Option<[u16; NAME_UNITS]> {
     None // Native bounded copies reserve a terminating unit.
 }
 
-unsafe fn friend_key(uuid: u32, session: u32) -> Option<u64> {
-    let mut hash = 0xcbf2_9ce4_8422_2325_u64;
+unsafe fn friend_key(uuid: u32, session: u32) -> Option<(u32, u32)> {
+    let mut low = 0x811c_9dc5_u32;
+    let mut high = 0x9e37_79b9_u32;
     for byte in session.to_le_bytes() {
-        hash = (hash ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3);
+        low = (low ^ u32::from(byte)).wrapping_mul(0x0100_0193);
+        high = high.rotate_left(5) ^ u32::from(byte);
     }
     let mut nonzero = 0;
     for index in 0..4 {
         let word = unsafe { read_u32(indexed(uuid, index, 4)?)? };
         nonzero |= word;
         for byte in word.to_le_bytes() {
-            hash = (hash ^ u64::from(byte)).wrapping_mul(0x100_0000_01b3);
+            low = (low ^ u32::from(byte)).wrapping_mul(0x0100_0193);
+            high = high.rotate_left(5) ^ u32::from(byte);
         }
     }
-    (nonzero != 0 && hash != 0).then_some(hash)
+    (nonzero != 0 && (low != 0 || high != 0)).then_some((low, high))
 }
 
 /// Decode the complete bounded table or return unavailable. A decoded empty
@@ -120,15 +123,17 @@ pub(crate) unsafe fn read_records(root: u32, session: u32) -> Option<DecodedFrie
             return None;
         }
         let key = unsafe { friend_key(address + 8, session)? };
-        if result.records[..index]
-            .iter()
-            .any(|record| (u64::from(record.key_low) | (u64::from(record.key_high) << 32)) == key)
-        {
-            return None;
+        let mut previous = 0;
+        while previous < index {
+            let record = unsafe { result.records.get_unchecked(previous) };
+            if record.key_low == key.0 && record.key_high == key.1 {
+                return None;
+            }
+            previous += 1;
         }
-        result.records[index] = FriendRecord {
-            key_low: key as u32,
-            key_high: (key >> 32) as u32,
+        *result.records.get_mut(index)? = FriendRecord {
+            key_low: key.0,
+            key_high: key.1,
             status,
             map_id: unsafe { read_u32(address + 108)? },
             alias: unsafe { name(address + 24, false)? },

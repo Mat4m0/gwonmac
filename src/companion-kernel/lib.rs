@@ -42,6 +42,9 @@ mod abi;
 mod character_identity;
 mod character_list;
 mod cursor;
+mod friend_records;
+mod friend_session;
+mod friends;
 mod memory;
 mod party;
 mod play_region;
@@ -718,6 +721,9 @@ pub unsafe extern "C" fn companion_init(
     play_region_size: u32,
     character_list_ptr: u32,
     character_list_size: u32,
+    friend_ptr: u32,
+    friend_size: u32,
+    friend_root: u32,
     features: u32,
 ) -> u32 {
     if features == 0
@@ -732,6 +738,12 @@ pub unsafe extern "C" fn companion_init(
             && features & FEATURE_PLAY_REGION_OBSERVATION == 0
         || features & FEATURE_SKILL_COOLDOWN_OBSERVATION != 0
             && features & FEATURE_PLAY_REGION_OBSERVATION == 0
+        || features & FEATURE_FRIEND_OBSERVATION != 0
+            && (features & FEATURE_PLAY_REGION_OBSERVATION == 0
+                || friend_root == 0 || friend_root & 3 != 0 || !contains(friend_root, 12))
+        || features & FEATURE_FRIEND_OBSERVATION == 0 && friend_root != 0
+        || !valid_region(features & FEATURE_FRIEND_OBSERVATION != 0,
+            friend_ptr, friend_size, friends::SNAPSHOT_BYTES)
         || config_size != CONFIG_BYTES
         || config_ptr & 3 != 0
         || !contains(config_ptr, config_size)
@@ -831,6 +843,9 @@ pub unsafe extern "C" fn companion_init(
         if features & FEATURE_PLAY_REGION_OBSERVATION != 0 {
             play_region::initialize(play_region_ptr);
         }
+        if features & FEATURE_FRIEND_OBSERVATION != 0 {
+            friends::initialize(friend_ptr, friend_root);
+        }
         if features & FEATURE_CHARACTER_LIST != 0 {
             character_list::initialize(character_list_ptr);
         }
@@ -839,7 +854,7 @@ pub unsafe extern "C" fn companion_init(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, c: u32, _d: u32, _e: u32) {
+pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, c: u32, d: u32, _e: u32) {
     match kind {
         DISPATCH_TICK => {
             if !unsafe { INITIALIZED } {
@@ -873,6 +888,9 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, c: u32, _
             if active & FEATURE_PLAY_REGION_OBSERVATION != 0 {
                 unsafe { play_region::tick(layout) };
             }
+            if active & FEATURE_FRIEND_OBSERVATION != 0 {
+                unsafe { friends::tick(layout) };
+            }
             if active & FEATURE_CHARACTER_LIST != 0 {
                 unsafe { character_list::tick(layout) };
             }
@@ -898,6 +916,12 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, c: u32, _
                 }
             }
         }
+        DISPATCH_FRIEND_LIFECYCLE => {
+            if unsafe { INITIALIZED } && unsafe { FEATURES } & FEATURE_FRIEND_OBSERVATION != 0 {
+                // Session ordering remains observed while palette reads are disabled.
+                unsafe { friends::lifecycle(a, b, c, d) };
+            }
+        }
         DISPATCH_ACTIVE_FEATURES => {
             if !unsafe { INITIALIZED } {
                 return;
@@ -909,6 +933,8 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, c: u32, _
                     != available & FEATURE_PLAY_REGION_OBSERVATION
                 || a & FEATURE_CHARACTER_LIST
                     != available & FEATURE_CHARACTER_LIST
+                || a & FEATURE_FRIEND_OBSERVATION != 0
+                    && a & FEATURE_PLAY_REGION_OBSERVATION == 0
                 || a & FEATURE_TOOLBOX_FOUNDATION != 0
                     && a & FEATURE_PLAY_REGION_OBSERVATION == 0
                 || a & FEATURE_SKILL_SLOT_GEOMETRY != 0
@@ -920,6 +946,9 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, c: u32, _
             }
             let previous = unsafe { ACTIVE_FEATURES };
             unsafe { ACTIVE_FEATURES = a };
+            if previous & FEATURE_FRIEND_OBSERVATION != 0 && a & FEATURE_FRIEND_OBSERVATION == 0 {
+                unsafe { friends::withdraw() };
+            }
             if previous & FEATURE_TOOLBOX_FOUNDATION == 0 && a & FEATURE_TOOLBOX_FOUNDATION != 0 {
                 unsafe {
                     toolbox::mark_dirty();
@@ -933,7 +962,7 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, c: u32, _
 
 #[no_mangle]
 pub extern "C" fn companion_abi() -> u32 {
-    21
+    22
 }
 
 #[no_mangle]
@@ -979,6 +1008,11 @@ pub extern "C" fn companion_play_region_bytes() -> u32 {
 #[no_mangle]
 pub extern "C" fn companion_character_list_bytes() -> u32 {
     CHARACTER_LIST_BYTES
+}
+
+#[no_mangle]
+pub extern "C" fn companion_friend_bytes() -> u32 {
+    friends::SNAPSHOT_BYTES
 }
 
 #[no_mangle]

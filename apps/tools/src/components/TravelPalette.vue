@@ -13,6 +13,7 @@ import {
   type TravelRequest,
 } from "../../../../src/shared/travel";
 import type { TravelHost } from "../travel-host";
+import type { TravelFriend } from "../../../../src/shared/friends";
 import {
   travelContextRefusal,
   travelDestinationAvailability,
@@ -60,6 +61,7 @@ let visibilityLoad = 0;
 
 const hasQuery = computed(() => normaliseTravelTerm(query.value).length > 0);
 const travelPending = computed(() => props.host.attempt.value.status !== "idle");
+type SearchResult = TravelDestination & Readonly<{ friend: TravelFriend | null; resultKey: string }>;
 const catalogueResults = computed(() => hasQuery.value
   ? searchTravelDestinations(query.value, synonyms.value)
   : []
@@ -70,9 +72,28 @@ const isAvailable = (mapId: number) => {
   const result = availability(mapId);
   return result === "available" || result === "unknown";
 };
-const results = computed(() => catalogueResults.value.filter(
-  (destination) => isAvailable(destination.mapId),
-));
+const friendResults = computed<SearchResult[]>(() => {
+  const observed = props.host.friends.value;
+  if (!hasQuery.value || observed.status !== "ready") return [];
+  const term = normaliseTravelTerm(query.value);
+  return observed.friends.flatMap((friend) => {
+    if (friend.status === "offline"
+      || !normaliseTravelTerm(`${friend.alias} ${friend.character}`).includes(term)) return [];
+    const destination = travelDestination(friend.mapId);
+    return destination === null || !isAvailable(destination.mapId) ? [] : [{
+      ...destination, friend, resultKey: `friend-${friend.key}`,
+    }];
+  });
+});
+const results = computed<SearchResult[]>(() => {
+  const friendMaps = new Set(friendResults.value.map(({ mapId }) => mapId));
+  return [
+    ...friendResults.value,
+    ...catalogueResults.value
+      .filter((destination) => isAvailable(destination.mapId) && !friendMaps.has(destination.mapId))
+      .map((destination) => ({ ...destination, friend: null, resultKey: `map-${destination.mapId}` })),
+  ];
+});
 const contextExcludedResults = computed(() => catalogueResults.value.filter(
   (destination) => availability(destination.mapId) === "outside-context",
 ));
@@ -112,6 +133,9 @@ const selectableDestinations = computed(() => showingSmallCatalogue.value
   ? browseDestinations.value.filter(({ mapId }) => mapId !== currentMapId.value)
   : results.value);
 const activeDestination = computed(() => selectableDestinations.value[active.value] ?? null);
+const activeResultId = computed(() => activeDestination.value === null ? null
+  : "resultKey" in activeDestination.value
+    ? activeDestination.value.resultKey : `map-${activeDestination.value.mapId}`);
 const statusText = computed(() =>
   feedback.value
   || props.host.notice.value?.message
@@ -159,6 +183,7 @@ function inputValue(event: Event): string {
 }
 
 function queryMatchLabel(destination: TravelDestination): string {
+  if ("friend" in destination && destination.friend !== null) return destination.name;
   const normalized = normaliseTravelTerm(query.value);
   const tokens = normalized.split(" ").filter(Boolean);
   if (tokens.length === 0) return destination.campaign;
@@ -401,7 +426,7 @@ async function moveActive(direction: 1 | -1): Promise<void> {
     active.value + direction + selectableDestinations.value.length
   ) % selectableDestinations.value.length;
   await nextTick();
-  palette.value?.querySelector<HTMLElement>(`#travel-${activeDestination.value?.mapId}`)?.scrollIntoView({ block: "nearest" });
+  palette.value?.querySelector<HTMLElement>(`#travel-${activeResultId.value}`)?.scrollIntoView({ block: "nearest" });
 }
 
 function onKeydown(event: KeyboardEvent): void {
@@ -450,7 +475,7 @@ function onKeydown(event: KeyboardEvent): void {
 <template>
   <section ref="palette" v-show="visible" class="ui-frame travel-palette" :role="nativeDialog ? undefined : 'dialog'" :aria-label="nativeDialog ? undefined : 'Quick Travel'" :aria-busy="preferenceWritePending" @keydown="onKeydown">
     <div class="travel-search">
-      <label for="travel-search-input"><svg class="travel-search-icon" viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.25" /><path d="m12.4 12.4 4.1 4.1" /></svg><input id="travel-search-input" ref="input" v-model="query" role="combobox" aria-label="Destination or search phrase" :aria-controls="hasQuery ? 'travel-results' : undefined" aria-autocomplete="list" aria-haspopup="listbox" :aria-activedescendant="hasQuery && activeDestination ? `travel-${activeDestination.mapId}` : undefined" :aria-expanded="hasQuery && selectableDestinations.length > 0" autocomplete="off" spellcheck="false" :maxlength="TRAVEL_SEARCH_QUERY_LIMIT" placeholder="Search destinations or phrases…"></label>
+      <label for="travel-search-input"><svg class="travel-search-icon" viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.25" /><path d="m12.4 12.4 4.1 4.1" /></svg><input id="travel-search-input" ref="input" v-model="query" role="combobox" aria-label="Destination, phrase, or friend" :aria-controls="hasQuery ? 'travel-results' : undefined" aria-autocomplete="list" aria-haspopup="listbox" :aria-activedescendant="hasQuery && activeResultId ? `travel-${activeResultId}` : undefined" :aria-expanded="hasQuery && selectableDestinations.length > 0" autocomplete="off" spellcheck="false" :maxlength="TRAVEL_SEARCH_QUERY_LIMIT" placeholder="Search destinations or friends…"></label>
     </div>
 
     <span class="ui-sr-only" role="status" aria-live="polite" aria-atomic="true">{{ statusText }}</span>
@@ -460,7 +485,7 @@ function onKeydown(event: KeyboardEvent): void {
     <section v-if="hasQuery" id="travel-results-panel" class="ui-scroll travel-body" role="region" aria-label="Travel search results">
       <div v-if="results.length" class="travel-result-heading">{{ results.length === 1 ? 'Best match for' : 'Matches for' }} <strong>{{ query }}</strong></div>
       <div v-if="results.length" id="travel-results" class="travel-results" role="listbox">
-        <button v-for="(destination, index) in results" :id="`travel-${destination.mapId}`" :key="destination.mapId" type="button" class="travel-result ui-row" role="option" tabindex="-1" :aria-selected="index === active" :disabled="travelPending || host.unavailable !== null" @mouseenter="active = index" @click="active = index; travel({ mapId: destination.mapId })"><span><strong><template v-for="(part, partIndex) in highlightTravelDestinationName(destination, query)" :key="partIndex"><mark v-if="part.match">{{ part.text }}</mark><template v-else>{{ part.text }}</template></template></strong><small>{{ destination.campaign }}</small></span><span class="travel-match">{{ queryMatchLabel(destination) }}</span></button>
+        <button v-for="(destination, index) in results" :id="`travel-${destination.resultKey}`" :key="destination.resultKey" type="button" class="travel-result ui-row" role="option" tabindex="-1" :aria-selected="index === active" :disabled="travelPending || host.unavailable !== null" @mouseenter="active = index" @click="active = index; travel({ mapId: destination.mapId })"><span><strong v-if="destination.friend">{{ destination.friend.alias }}</strong><strong v-else><template v-for="(part, partIndex) in highlightTravelDestinationName(destination, query)" :key="partIndex"><mark v-if="part.match">{{ part.text }}</mark><template v-else>{{ part.text }}</template></template></strong><small>{{ destination.friend?.character || destination.campaign }}</small></span><span class="travel-match">{{ queryMatchLabel(destination) }}</span></button>
       </div>
       <div v-else class="ui-empty travel-empty"><strong>{{ emptySearchTitle }}</strong><p>{{ emptySearchHelp }}</p><button type="button" class="ui-button" @click="query = ''">Clear search</button></div>
     </section>

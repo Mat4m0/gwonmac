@@ -50,6 +50,7 @@ function initArguments(): readonly number[] {
     409_600, COMPANION_SKILL_COOLDOWN_BYTES,
     425_984, COMPANION_PLAY_REGION_BYTES,
     450_560, COMPANION_ABI.characterList.bytes,
+    0, 0, 0,
     FEATURE_FLAGS,
   ];
 }

@@ -14,6 +14,7 @@ import {
 } from "../../src/main/certification/friend-observer-transform.js";
 import { RELEASE_ENHANCEMENT_CAPABILITIES } from "../../src/shared/enhancement-contracts.js";
 import { sectionById, splitSections } from "../../src/main/core/wasm-binary.js";
+import { decodeFriendObserverManifest } from "../../src/renderer/friend-observer-manifest.ts";
 import { observerTransformFixture } from "../fixtures/friend-observer-transform.js";
 import { queueFixture } from "../fixtures/native-friend-queue.js";
 
@@ -41,6 +42,11 @@ test("production friend observer preserves native behavior and emits closed life
 
   await t.test("the rewrite is deterministic and preserves imports, table, and exports", () => {
     assert.deepEqual(rewriteFriendObserverWasm(input, build.certificate), output);
+    assert.deepEqual(decodeFriendObserverManifest(new WebAssembly.Module(output.slice().buffer as ArrayBuffer)), {
+      root: build.certificate.record.root,
+      inputSha256: build.certificate.inputSha256,
+      semanticSha256: build.certificate.semanticSha256,
+    });
     for (const id of [2, 4, 7]) {
       assert.deepEqual(sectionById(splitSections(output), id), sectionById(splitSections(input), id));
     }

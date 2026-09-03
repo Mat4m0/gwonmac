@@ -2,6 +2,7 @@
  * Renderer boundary for the Cmd+T Travel palette. It owns visibility, focus,
  * event isolation, lazy Vue loading, and nothing about destination search.
  */
+import type { TravelFriends } from "../shared/friends.js";
 import type {
   TravelCommand,
   TravelGameState,
@@ -90,10 +91,12 @@ export function createTravelPalette(
   window.addEventListener("gw:travel-toggle", onCommand);
 
   return Object.freeze({
+    observingFriends: () => root.open,
     setEnabled(next: boolean) {
       enabled = next;
       if (!next && root.open) setOpen(false);
     },
+    updateFriends(next: TravelFriends) { app?.updateFriends(next); },
     update(next: TravelGameState) {
       state = next;
       app?.update(next);

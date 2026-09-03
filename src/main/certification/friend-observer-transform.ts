@@ -31,8 +31,10 @@ declare const WebAssembly: {
   validate(bytes: Uint8Array): boolean;
 };
 
-export const FRIEND_OBSERVER_TRANSFORM_ABI = 1;
-export const FRIEND_OBSERVER_MANIFEST_SECTION = "friend_observer_manifest";
+export { FRIEND_OBSERVER_TRANSFORM_ABI, FRIEND_OBSERVER_MANIFEST_SECTION } from
+  "../../shared/friend-observer-contract.js";
+import { FRIEND_OBSERVER_TRANSFORM_ABI, FRIEND_OBSERVER_MANIFEST_SECTION } from
+  "../../shared/friend-observer-contract.js";
 
 const ENHANCEMENT_HOOK_EXPORT = "enhancement_hook_slot";
 const DISPATCH_PARAM_COUNT = 6;
@@ -261,6 +263,7 @@ function manifest(certificate: FriendObserverCertificate): Section {
     transformAbi: FRIEND_OBSERVER_TRANSFORM_ABI,
     inputSha256: certificate.inputSha256,
     semanticSha256: certificate.semanticSha256,
+    root: certificate.record.root,
   }));
   return { id: 0, body: concat(encodeName(FRIEND_OBSERVER_MANIFEST_SECTION), value) };
 }

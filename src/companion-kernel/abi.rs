@@ -36,6 +36,7 @@ pub(crate) const FEATURE_SKILL_SLOT_GEOMETRY: u32 = 1 << 4;
 pub(crate) const FEATURE_SKILL_COOLDOWN_OBSERVATION: u32 = 1 << 5;
 pub(crate) const FEATURE_PLAY_REGION_OBSERVATION: u32 = 1 << 6;
 pub(crate) const FEATURE_CHARACTER_LIST: u32 = 1 << 7;
+pub(crate) const FEATURE_FRIEND_OBSERVATION: u32 = 1 << 8;
 pub(crate) const KNOWN_FEATURES: u32 = FEATURE_NATIVE_CURSOR
     | FEATURE_GAME_SNAPSHOT
     | FEATURE_TOOLBOX_FOUNDATION
@@ -43,7 +44,8 @@ pub(crate) const KNOWN_FEATURES: u32 = FEATURE_NATIVE_CURSOR
     | FEATURE_SKILL_SLOT_GEOMETRY
     | FEATURE_SKILL_COOLDOWN_OBSERVATION
     | FEATURE_PLAY_REGION_OBSERVATION
-    | FEATURE_CHARACTER_LIST;
+    | FEATURE_CHARACTER_LIST
+    | FEATURE_FRIEND_OBSERVATION;
 
 pub(crate) const CHARACTER_LIST_BYTES: u32 = size_of::<CharacterListSnapshot>() as u32;
 pub(crate) const CHARACTER_LIST_MAGIC: u32 = 0x4843_5747;
@@ -94,6 +96,7 @@ pub(crate) const DISPATCH_TICK: u32 = 0;
 pub(crate) const DISPATCH_CURSOR: u32 = 1;
 pub(crate) const DISPATCH_UI: u32 = 2;
 pub(crate) const DISPATCH_ACTIVE_FEATURES: u32 = 3;
+pub(crate) const DISPATCH_FRIEND_LIFECYCLE: u32 = 4;
 pub(crate) const PARTY_DIRTY_MESSAGE_COUNT: usize = 10;
 
 pub(crate) const PARTY_BYTES: u32 = size_of::<PartySnapshot>() as u32;

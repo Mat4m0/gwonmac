@@ -32,9 +32,8 @@ export function mountTravelPalette(
     show: () => setVisible(true),
     hide: () => setVisible(false),
     toggle: () => setVisible(!visible.value),
-    update(state) {
-      options.host.updateGameState(state);
-    },
+    update(state) { options.host.updateGameState(state); },
+    updateFriends(friends) { options.host.updateFriends(friends); },
     dispose: () => {
       options.host.dispose();
       app.unmount();

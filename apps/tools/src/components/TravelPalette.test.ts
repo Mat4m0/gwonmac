@@ -6,6 +6,7 @@ import {
   type TravelShortcuts,
   type TravelSynonyms,
 } from "../../../../src/shared/travel";
+import type { TravelFriends } from "../../../../src/shared/friends";
 import type {
   TravelHost,
   TravelPreferencePatch,
@@ -22,6 +23,7 @@ function fixture(options: Readonly<{
   shortcuts?: TravelShortcuts;
   synonyms?: TravelSynonyms;
   history?: readonly number[];
+  friends?: TravelFriends;
 }> = {}, attachTo?: Element) {
   const state = ref<TravelHost["state"]["value"]>({
     status: "ready", mapId: 55, travelContext: "world", characterKey: null, unlockedMapWords: null,
@@ -30,6 +32,7 @@ function fixture(options: Readonly<{
     shortcuts: options.shortcuts ?? DEFAULT_TRAVEL_SHORTCUTS,
     synonyms: options.synonyms ?? Object.freeze([]),
   });
+  const friends = ref<TravelFriends>(options.friends ?? { status: "waiting", reason: "unavailable" });
   const attempt = ref<TravelHost["attempt"]["value"]>({ status: "idle" });
   const notice = ref<TravelHost["notice"]["value"]>(null);
   const history = ref(options.history ?? EMPTY_TRAVEL_HISTORY);
@@ -48,6 +51,7 @@ function fixture(options: Readonly<{
   const traceSearch = vi.fn<TravelHost["traceSearch"]>();
   const host: TravelHost = {
     state,
+    friends,
     attempt,
     notice,
     history,
@@ -56,6 +60,7 @@ function fixture(options: Readonly<{
     savePreferences,
     async loadHistory() { return history.value; },
     travel,
+    updateFriends(next) { friends.value = next; },
     updateGameState(next) {
       state.value = next;
       const current = attempt.value;
@@ -102,10 +107,10 @@ describe("TravelPalette", () => {
     expect(wrapper.text()).not.toContain("Travel is the default");
     expect(wrapper.find('label[for="travel-search-input"] > span').exists()).toBe(false);
     expect(wrapper.get("#travel-search-input").attributes("aria-label")).toBe(
-      "Destination or search phrase",
+      "Destination, phrase, or friend",
     );
     expect(wrapper.get("#travel-search-input").attributes("placeholder")).toBe(
-      "Search destinations or phrases…",
+      "Search destinations or friends…",
     );
     expect(wrapper.get('[aria-label="Close Quick Travel"]').element.closest("label")).toBeNull();
     expect(wrapper.find('[role="tablist"]').exists()).toBe(false);
@@ -180,7 +185,7 @@ describe("TravelPalette", () => {
       && element.getAttribute("tabindex") !== "-1"
     );
 
-    expect(controls[0]?.attributes("aria-label")).toBe("Destination or search phrase");
+    expect(controls[0]?.attributes("aria-label")).toBe("Destination, phrase, or friend");
     expect(controls[1]?.classes()).toContain("travel-recent");
     expect(controls.slice(2, -2).every((control) =>
       control.classes().includes("travel-favorite"))).toBe(true);
@@ -582,6 +587,22 @@ describe("TravelPalette", () => {
     expect(rejected.wrapper.emitted("close")).toBeUndefined();
     rejected.wrapper.unmount();
 
+  });
+
+  it("searches an online friend by alias and travels to the reported outpost", async () => {
+    const { wrapper, travel } = fixture({ friends: {
+      status: "ready", sequence: 2, generation: 1,
+      friends: [{ key: "0123456789abcdef", status: "online", mapId: 449,
+        alias: "Romi", character: "Example Ranger" }],
+    } });
+    await flushPromises();
+    await wrapper.get('[role="combobox"]').setValue("romi");
+    expect(wrapper.text()).toContain("Romi");
+    expect(wrapper.text()).toContain("Example Ranger");
+    expect(wrapper.text()).toContain("Kamadan, Jewel of Istan");
+    await wrapper.get(".travel-result").trigger("click");
+    expect(travel).toHaveBeenCalledWith({ mapId: 449 });
+    wrapper.unmount();
   });
 
   it("keeps a delayed host failure visible when Travel reopens", async () => {

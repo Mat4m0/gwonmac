@@ -14,6 +14,7 @@ import {
   inspectFriendTable,
   type FriendTableCandidate,
 } from "./friend-table-evidence.js";
+import { FRIEND_OBSERVER_SEMANTIC_SHA256 } from "../../shared/friend-observer-contract.js";
 import { SEMANTIC_VERIFIER_ABI } from "./semantic-proof.js";
 
 const RECORD_ROLE_KEYS = Object.freeze([
@@ -28,11 +29,14 @@ const LIFECYCLE_ROLE_KEYS = Object.freeze([
   "loginCompleted", "loginStart", "connectionEvent", "disconnect", "logout", "connected",
 ] as const);
 
-export const FRIEND_OBSERVER_SEMANTIC_SHA256 = createHash("sha256").update(JSON.stringify({
-  record: FRIEND_RECORD_SEMANTIC_SHA256,
-  lifecycle: FRIEND_LIFECYCLE_SEMANTIC_SHA256,
+const derivedSemanticSha256 = createHash("sha256").update(JSON.stringify({
+  record: FRIEND_RECORD_SEMANTIC_SHA256, lifecycle: FRIEND_LIFECYCLE_SEMANTIC_SHA256,
   contract: "isolated-input-bound-friend-observer-v1",
 })).digest("hex");
+if (derivedSemanticSha256 !== FRIEND_OBSERVER_SEMANTIC_SHA256) {
+  throw new Error("friend observer semantic contract digest is stale");
+}
+export { FRIEND_OBSERVER_SEMANTIC_SHA256 };
 
 export type FriendObserverCertificate = Readonly<{
   inputSha256: string;

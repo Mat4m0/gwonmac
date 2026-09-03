@@ -134,7 +134,7 @@ export async function installCoreCertifiedCompanion(
   }
   extension = prepareExtension === undefined
     ? null
-    : await prepareExtension(exports, capabilities, program);
+    : await prepareExtension(exports, module, capabilities, program);
   const featureFlags = coreFeatureFlags | characterListFeature | (extension?.featureFlags ?? 0);
   if (featureFlags === 0) return null;
 
@@ -304,6 +304,7 @@ export async function installCoreCertifiedCompanion(
       memory,
       runtimePointer: core.runtimePointer,
       featureFlags,
+      friendRoot: extension?.kernelRegions.friendRoot ?? 0,
       regions: {
         snapshot: core.snapshot,
         config: core.config,
@@ -312,6 +313,7 @@ export async function installCoreCertifiedCompanion(
         party: core.party,
         skillSlots: extension?.kernelRegions.skillSlots ?? { pointer: 0, bytes: 0 },
         skillCooldowns: extension?.kernelRegions.skillCooldowns ?? { pointer: 0, bytes: 0 },
+        friends: extension?.kernelRegions.friends ?? { pointer: 0, bytes: 0 },
         playRegion: { pointer: playRegions.pointer, bytes: playRegions.bytes },
         characterList: core.characterList,
       },

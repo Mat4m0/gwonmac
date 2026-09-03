@@ -28,6 +28,7 @@ const FEATURE_NAMES = Object.freeze({
   skillCooldownObservation: "FEATURE_SKILL_COOLDOWN_OBSERVATION",
   playRegionObservation: "FEATURE_PLAY_REGION_OBSERVATION",
   characterList: "FEATURE_CHARACTER_LIST",
+  friendObservation: "FEATURE_FRIEND_OBSERVATION",
 } as const);
 
 const DISPATCH_NAMES = Object.freeze({
@@ -35,6 +36,7 @@ const DISPATCH_NAMES = Object.freeze({
   cursor: "DISPATCH_CURSOR",
   ui: "DISPATCH_UI",
   activeFeatures: "DISPATCH_ACTIVE_FEATURES",
+  friendLifecycle: "DISPATCH_FRIEND_LIFECYCLE",
 } as const);
 
 function withoutComments(source: string): string {

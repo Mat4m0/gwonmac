@@ -3,6 +3,7 @@
  * Tools bundle. The runtime import uses a generated file name, so both builds
  * import these shapes directly instead of restating them on either side.
  */
+import type { TravelFriends } from "./friends.js";
 import type { ToolboxObservation } from "./builds/live-party.js";
 import type { TeamApplyCommands } from "./builds/team-apply-runner.js";
 import type { StorageCommand } from "./storage-command.js";
@@ -46,6 +47,7 @@ export type TravelPaletteHandle = Readonly<{
   hide: () => void;
   toggle: () => void;
   update: (state: TravelGameState) => void;
+  updateFriends: (friends: TravelFriends) => void;
   dispose: () => void;
 }>;
 

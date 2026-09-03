@@ -43,6 +43,7 @@ export interface GamePaths {
   compatibility: string;
   enhancements: string;
   cartographySpike: string;
+  friendObserver: string;
   nativeDoubleClick: string;
   extendedMemory: string;
   texturePacks: string;
@@ -87,6 +88,7 @@ export function gamePaths(userData: string): GamePaths {
     compatibility: path.join(game, "compatibility"),
     enhancements: path.join(game, "enhancements"),
     cartographySpike: path.join(game, "cartography-spike"),
+    friendObserver: path.join(game, "friend-observer"),
     nativeDoubleClick: path.join(game, "double-click"),
     extendedMemory: path.join(game, "extended-memory"),
     texturePacks,

@@ -4,6 +4,7 @@
  * durable preference write and stale-window refusal.
  */
 import { ref, type Ref } from "vue";
+import type { TravelFriends } from "../../../src/shared/friends";
 import type { GwNativeApi } from "../../../src/shared/contracts";
 import type {
   TravelCommand,
@@ -41,12 +42,14 @@ export interface TravelHost {
   readonly attempt: Ref<TravelAttempt>;
   readonly notice: Ref<TravelNotice | null>;
   readonly history: Ref<TravelHistory>;
+  readonly friends: Ref<TravelFriends>;
   readonly unavailable: string | null;
   loadPreferences(): Promise<TravelPreferences>;
   savePreferences(patch: TravelPreferencePatch): Promise<TravelPreferences>;
   loadHistory(): Promise<TravelHistory>;
   travel(request: TravelRequest): Promise<void>;
   updateGameState(state: TravelGameState): void;
+  updateFriends(friends: TravelFriends): void;
   dispose(): void;
   traceSearch(query: string, resultMapIds: readonly number[]): void;
 }
@@ -57,6 +60,7 @@ export function createNativeTravelHost(
   development = false,
 ): TravelHost {
   const state = ref<TravelGameState>({ status: "waiting", reason: "game" });
+  const friends = ref<TravelFriends>({ status: "waiting", reason: "unavailable" });
   const attempt = ref<TravelAttempt>({ status: "idle" });
   const notice = ref<TravelNotice | null>(null);
   const historyObservation = createTravelHistoryObservation(
@@ -103,6 +107,7 @@ export function createNativeTravelHost(
     remember(await api.travelPreferences.get());
   return {
     state,
+    friends,
     attempt,
     notice,
     history: historyObservation.history,
@@ -160,6 +165,7 @@ export function createNativeTravelHost(
         throw error;
       }
     },
+    updateFriends(next) { friends.value = next; },
     updateGameState(next) {
       state.value = next;
       const current = attempt.value;
@@ -242,6 +248,7 @@ export function createDemoTravelHost(): TravelHost {
   const state = ref<TravelGameState>({
     status: "ready", mapId: 55, travelContext: "world", characterKey, unlockedMapWords,
   });
+  const friends = ref<TravelFriends>({ status: "waiting", reason: "unavailable" });
   const attempt = ref<TravelAttempt>({ status: "idle" });
   const notice = ref<TravelNotice | null>(null);
   const history = ref<TravelHistory>(Object.freeze([449, 194, 642, 857, 81, 248]));
@@ -258,6 +265,7 @@ export function createDemoTravelHost(): TravelHost {
   };
   return {
     state,
+    friends,
     attempt,
     notice,
     history,
@@ -282,6 +290,7 @@ export function createDemoTravelHost(): TravelHost {
         attempt.value = { status: "idle" };
       }, 600);
     },
+    updateFriends(next) { friends.value = next; },
     updateGameState(next) {
       state.value = next;
     },
