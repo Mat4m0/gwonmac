@@ -3,6 +3,10 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { inspectFriendLifecycle } from "../../src/main/certification/friend-lifecycle-evidence.js";
+import {
+  deriveFriendObserverCertificate,
+  isFriendObserverCertificate,
+} from "../../src/main/certification/friend-observer-certificate.js";
 import { wasmEvidence } from "../../src/main/certification/wasm-evidence.js";
 import {
   concat, encodeCode, encodeSection, paddedIndex, parseCode,
@@ -23,6 +27,9 @@ test("friend lifecycle roles survive movement and refuse changed notification pa
   assert.equal(original.status, "candidate");
   assert.equal(original.runtimeAuthority, false);
   const candidate = original.candidate!;
+  const certificate = deriveFriendObserverCertificate(input);
+  assert.ok(certificate);
+  assert.equal(isFriendObserverCertificate(certificate, original.inputSha256), true);
   const participating = new Set(Object.values(candidate.roles));
   const local = (index: number): number => index - module.functionImportCount;
   const destination = (source: number): number => {
@@ -105,5 +112,26 @@ test("friend lifecycle roles survive movement and refuse changed notification pa
       bodies[local(destination(source))] = bodies[local(source)]!.slice();
     });
     assert.equal(inspect(duplicated).status, "unavailable");
+  });
+
+  await t.test("the IPC certificate refuses altered semantic and hook facts", () => {
+    assert.equal(isFriendObserverCertificate({
+      ...certificate,
+      semanticSha256: "0".repeat(64),
+    }, original.inputSha256), false);
+    assert.equal(isFriendObserverCertificate({
+      ...certificate,
+      lifecycle: { ...certificate.lifecycle, connectionPointer: -1 },
+    }, original.inputSha256), false);
+    assert.equal(isFriendObserverCertificate({
+      ...certificate,
+      lifecycle: {
+        ...certificate.lifecycle,
+        connectionStoreOffsets: {
+          ...certificate.lifecycle.connectionStoreOffsets,
+          connectionEvent: certificate.lifecycle.connectionStoreOffsets.connectionEvent.slice(1),
+        },
+      },
+    }, original.inputSha256), false);
   });
 });

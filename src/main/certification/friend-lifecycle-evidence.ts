@@ -27,6 +27,11 @@ const ROLE_SPECS = Object.freeze({
   connected: [342, ["i32", "i32"], ["i32"], "f2fa4fca9b49b2646a53a99b66468a01bad47b42827f9c99730451eea87efb6a"],
 } as const);
 
+export const FRIEND_LIFECYCLE_SEMANTIC_SHA256 = createHash("sha256").update(JSON.stringify({
+  roles: ROLE_SPECS,
+  contract: "request-roster-completion-exact-queue-friend-callback-five-connection-stores-v1",
+})).digest("hex");
+
 type FriendLifecycleRole = keyof typeof ROLE_SPECS;
 
 export type FriendLifecycleCandidate = Readonly<{

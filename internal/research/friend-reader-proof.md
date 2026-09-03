@@ -283,10 +283,13 @@ readiness flag.
 The inspectors now identify the complete bounded record layout, name copying,
 UUID writer, allocation growth, removal, sparse-slot ownership, status/map
 writers, login request capture, completion and exact queue path, Friends callback,
-and every direct invalidation site. The remaining work is to make this proof an
-isolated-verifier certificate and have the production transform install only
-those certified notifications. Until then, the session gate and reader remain
-test-only components.
+and every direct invalidation site. The
+[closed certificate](../../src/main/certification/friend-observer-certificate.ts)
+binds both reports to the exact input hash, semantic verifier ABI, and two
+semantic proof digests. The utility-process verifier derives it and the main
+process accepts only its closed schema. The remaining work is for the production
+transform to re-run the proof and install only those certified notifications.
+Until then, the session gate and reader remain test-only components.
 
 ## Exact local evidence
 
@@ -316,6 +319,7 @@ friend names, UUIDs, rosters, or search text in persisted diagnostics.
 | Native lifecycle function experiments | Eleven synthetic scenarios passed; full-client scheduling remains unproved |
 | Private invalidation mechanism | Twelve additional scenarios passed on the retained input; runtime hook certification remains open |
 | Structural lifecycle proof | One candidate; role movement passes and changed calls, stores, or duplicates are refused |
+| Isolated verifier certificate | Closed input- and ABI-bound record implemented; production does not consume it yet |
 | Processed native completion | Eight queue scenarios passed |
 | Current-session correlation | Private ordinal gate passes four scenarios; production hooks remain unproved |
 | Bounded record decoding | Rust implementation and fourteen reader/session scenarios pass; not installed |
@@ -329,12 +333,12 @@ friend names, UUIDs, rosters, or search text in persisted diagnostics.
 
 The next milestone is one certified read-only observer, ready to compare with
 the native Friends panel. Do not start another broad implementation survey.
-One concrete gate remains before live activation: turn the two input-bound
-candidate reports into one isolated-verifier certificate, then install the
-certified lifecycle notifications, session gate, bounded reader, and snapshot
-region in the production transform. The record layout and private
-current-session admission mechanism pass their offline mutations and native
-execution scenarios; neither grants runtime authority by itself.
+One concrete gate remains before live activation: have the production transform
+re-run and consume the isolated-verifier certificate, then install the certified
+lifecycle notifications, session gate, bounded reader, and snapshot region. The
+record layout and private current-session admission mechanism pass their offline
+mutations and native execution scenarios; neither grants runtime authority by
+itself.
 
 After those gates pass, link the existing Rust reader into the companion and
 reuse region installation and the sequence feed. No second roster store or
