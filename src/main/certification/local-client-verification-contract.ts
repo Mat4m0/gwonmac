@@ -123,6 +123,13 @@ export const LOCAL_FEATURE_INVARIANTS = Object.freeze({
     ...SHARED_FEATURE_INVARIANTS,
     "character-switch.exact-action-path",
   ] as const),
+  chatFiltering: Object.freeze([
+    ...SHARED_FEATURE_INVARIANTS,
+    "local.ui-dispatcher",
+    "chat.log-packet-anchor",
+    "chat.player-number-layout",
+    "chat.current-player-name-layout",
+  ] as const),
   quickItemMove: Object.freeze([
     ...SHARED_FEATURE_INVARIANTS,
     "quick-item-move.inventory-actions",
@@ -214,6 +221,8 @@ export interface LocalFeatureCertificateMap {
     & RequiredBuildFact<"preGameControls">;
   readonly characterSwitchAction: Readonly<{ core: EnhancementProofCore }>
     & RequiredBuildFact<"preGameControls">;
+  readonly chatFiltering: Readonly<{ core: EnhancementProofCore }>
+    & RequiredBuildFact<"observationBase" | "uiDispatcher" | "chatFiltering">;
   readonly quickItemMove: Readonly<{ core: EnhancementProofCore }>
     & RequiredBuildFact<
       "playRegionObservation" | "preGameControls" | "uiDispatcher" | "quickItemMove"
@@ -460,6 +469,17 @@ export function localFeatureVerdictsForBuild(
       && core !== null && build?.preGameControls?.characterSwitchAction !== undefined
     ? Object.freeze({ core, preGameControls: build.preGameControls })
     : null;
+  const chatFiltering = effective?.chatFiltering && core !== null
+      && build?.observationBase !== undefined
+      && build.uiDispatcher !== undefined
+      && build.chatFiltering !== undefined
+    ? Object.freeze({
+        core,
+        observationBase: build.observationBase,
+        uiDispatcher: build.uiDispatcher,
+        chatFiltering: build.chatFiltering,
+      })
+    : null;
   const quickItemMove = effective?.quickItemMove
       && core !== null
       && build?.playRegionObservation !== undefined
@@ -558,6 +578,13 @@ export function localFeatureVerdictsForBuild(
       characterSwitchAction,
       failures.characterSwitchAction,
       "character-switch.exact-action-path",
+    ),
+    chatFiltering: featureVerdict<"chatFiltering">(
+      inputSha256,
+      requested.chatFiltering,
+      chatFiltering,
+      failures.chatFiltering,
+      "chat.log-packet-anchor",
     ),
     quickItemMove: featureVerdict<"quickItemMove">(
       inputSha256,

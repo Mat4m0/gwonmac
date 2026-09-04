@@ -17,6 +17,7 @@ const base: ClientSession = {
       travelAction: { status: "available" },
       xunlaiAction: { status: "available" },
       chatAliases: { status: "available" },
+      chatFiltering: { status: "off" },
       skillSlotGeometry: { status: "available" },
       skillCooldownObservation: { status: "off" },
       playRegionObservation: { status: "off" },

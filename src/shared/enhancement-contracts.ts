@@ -128,6 +128,13 @@ const CAPABILITY_DEFINITIONS = Object.freeze([
     hooks: [],
   },
   {
+    id: "chatFiltering",
+    requiresAll: ["playRegionObservation"],
+    requiresAny: [],
+    configOwners: [],
+    hooks: [],
+  },
+  {
     id: "quickItemMove",
     requiresAll: ["playRegionObservation", "preGameControls"],
     requiresAny: [],
@@ -223,6 +230,7 @@ export const NO_ENHANCEMENT_CAPABILITIES: EnhancementCapabilities = Object.freez
   playRegionObservation: false,
   preGameControls: false,
   characterSwitchAction: false,
+  chatFiltering: false,
   quickItemMove: false,
 });
 
@@ -260,6 +268,7 @@ export function parseEnhancementCapabilities(
     playRegionObservation: value.playRegionObservation,
     preGameControls: value.preGameControls,
     characterSwitchAction: value.characterSwitchAction,
+    chatFiltering: value.chatFiltering,
     quickItemMove: value.quickItemMove,
   });
 }
@@ -293,7 +302,7 @@ export const ENHANCEMENT_CAPABILITY_PRESETS = Object.freeze({
   cursorParty: capabilitiesFromMask(0x285),
   storage: capabilitiesFromMask(0x270),
   partyCommandsStorage: capabilitiesFromMask(0x2fc),
-  all: capabilitiesFromMask(0x1fff),
+  all: capabilitiesFromMask(0x3fff),
 });
 
 /** The two capability sets shipped by Core and Tools release launches. */
@@ -307,7 +316,14 @@ export {
   ENHANCEMENT_LAYOUT_WORD_COUNT,
   ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT,
 } from "./enhancement-config.js";
-export const ENHANCEMENT_TRANSFORM_ABI = 50;
+export const ENHANCEMENT_TRANSFORM_ABI = 51;
+
+export const ENHANCEMENT_CHAT_FILTER_MASKS = Object.freeze({
+  allyDrops: 1,
+  hallOfHeroes: 2,
+  titleAchievements: 4,
+  all: 7,
+});
 
 export function enhancementConfigWordActive(
   capabilities: EnhancementCapabilities,

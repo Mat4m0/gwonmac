@@ -387,6 +387,29 @@ export interface KnownEnhancementBuild {
       bodySha256: string;
     }>;
   }>;
+  /** Exact native chat-log event and packet layout for fixed system filters. */
+  chatFiltering?: Readonly<{
+    writeToChatLogMessage: number;
+    packetChannelOffset: number;
+    packetMessageOffset: number;
+    allyDropTemplate: number;
+    numericSegment: number;
+    encodedNumberBase: number;
+    playerNameToken: number;
+    encodedStringStart: number;
+    encodedStringEnd: number;
+    maxPlayerNameUnits: number;
+    currentPlayerNameOffset: number;
+    systemPrefix: number;
+    hallOfHeroesTemplate: number;
+    titleTemplates: readonly [number, number, number, number];
+    producer: Readonly<{
+      functionIndex: number;
+      params: readonly ["i32", "i32"];
+      results: readonly [];
+      bodySha256: string;
+    }>;
+  }>;
   /** Exact party-observation authority beyond the shared UI dispatcher. */
   partyObservation?: Readonly<{
     partyDirtyMessages: EnhancementPartyDirtyMessages;
@@ -542,6 +565,8 @@ export function supportedEnhancementCapabilities(
     characterSwitchAction: build.preGameControls?.characterSwitchAction !== undefined
       && build.uiDispatcher !== undefined
       && gameThread,
+    chatFiltering: observationBase && build.uiDispatcher !== undefined
+      && build.chatFiltering !== undefined,
     quickItemMove: build.quickItemMove !== undefined
       && build.preGameControls !== undefined
       && build.uiDispatcher !== undefined
@@ -624,6 +649,10 @@ export function hasValidEnhancementProfileHashes(
   if (
     build.chatAliases !== undefined
     && build.uiDispatcher === undefined
+  ) return false;
+  if (
+    build.chatFiltering !== undefined
+    && (build.observationBase === undefined || build.uiDispatcher === undefined)
   ) return false;
   if (
     build.quickItemMove !== undefined

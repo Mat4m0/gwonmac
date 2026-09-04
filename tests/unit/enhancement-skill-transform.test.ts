@@ -17,6 +17,7 @@ const capabilities: EnhancementCapabilities = Object.freeze({
   travelAction: false,
   xunlaiAction: false,
   chatAliases: false,
+  chatFiltering: false,
   skillSlotGeometry: true,
   skillCooldownObservation: true,
   playRegionObservation: true,

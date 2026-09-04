@@ -116,6 +116,7 @@ unwitnessed field must fail TypeScript compilation or boundary validation.
 | Friend locations | Complete friend-table layout, login request/completion correlation, queue acceptance and processing, all invalidation paths, bounded pointer-free snapshot, and fresh sequence feed | Disable friend results only; ordinary destination Travel remains available |
 | Xunlai | Three readers, player/area layouts, fixed DataWindow action, handler, bounded drain, and fresh tri-state lifecycle | Disable Xunlai; aliases may retain only independently available Travel commands |
 | Chat aliases | Exact parser relation, bounded comparisons, handled result, original-parser preservation, and at least one proved local action | Rewrite only aliases for proved actions; otherwise preserve the original parser |
+| Chat Filters | Exact write-to-log producer and UI dispatcher relation, packet offsets, encoded templates, bounded UTF-16 scan, and certified local player-number layout | Disable Chat Filters only and pass every message to the original game handler |
 | Team Apply | Seven named builders, exact opcodes/payloads, sender, bounded drain, fresh complete Party proof, and runtime confirmations | Disable Team Apply only; Builds and Teams remain editable |
 | Cartography | Exact frame, game-context, area-table, agent-array, pathing-function, call-site, and surface-dispatch relationships, followed by an independently reproduced output hash | Disable Cartography observers only; the official client and independently proved Tools remain available |
 | 4 GB mode | Manifest-bound JS/WASM pair, normalized Emscripten glue, every audited pointer-conversion site, one memory shape, and memory-only rewrite | Retain safe 2 GB mode |
@@ -123,6 +124,11 @@ unwitnessed field must fail TypeScript compilation or boundary validation.
 Chat aliases never own a dispatcher or mailbox. The transform specializes the
 parser to the effective Travel and Xunlai capabilities. It must not read or
 write an official client global when an action is absent.
+
+Chat Filters runs as a small pre-handler inside the transformed game module.
+The renderer can set only a three-bit category mask. Chat text, pointers, and
+patterns never cross into Electron. Invalid or unknown data always continues
+to the original handler, and disposing Tools clears the mask.
 
 Team Apply depends on complete fresh Party proof. Travel and Xunlai do not
 depend on Party. Host-owned authoring, accounts, settings, updater behavior, and

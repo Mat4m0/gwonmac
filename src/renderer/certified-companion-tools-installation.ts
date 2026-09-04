@@ -3,7 +3,12 @@
  * the shared kernel transaction and calls this extension only in Tools mode.
  */
 import { COMPANION_ABI, COMPANION_DISPATCH_KINDS, COMPANION_FEATURE_BITS } from "../shared/companion-abi.js";
-import type { EnhancementCapabilities, EnhancementProgram } from "../shared/enhancement-contracts.js";
+import {
+  ENHANCEMENT_CHAT_FILTER_MASKS,
+  type EnhancementCapabilities,
+  type EnhancementProgram,
+} from "../shared/enhancement-contracts.js";
+import type { AppSettings } from "../shared/contracts.js";
 import type { ToolboxObservation } from "../shared/builds/live-party.js";
 import type { TravelFriends } from "../shared/friends.js";
 import {
@@ -41,6 +46,19 @@ import {
 } from "./quick-item-move-installation.js";
 
 const EMPTY_REGION = Object.freeze({ pointer: 0, bytes: 0 });
+
+export function configuredChatFilterMask(
+  settings: Pick<AppSettings,
+    "chatFilterAllyDrops" | "chatFilterHallOfHeroes" | "chatFilterTitleAchievements">,
+  enabled: boolean,
+): number {
+  if (!enabled) return 0;
+  return (settings.chatFilterAllyDrops ? ENHANCEMENT_CHAT_FILTER_MASKS.allyDrops : 0)
+    | (settings.chatFilterHallOfHeroes ? ENHANCEMENT_CHAT_FILTER_MASKS.hallOfHeroes : 0)
+    | (settings.chatFilterTitleAchievements
+      ? ENHANCEMENT_CHAT_FILTER_MASKS.titleAchievements
+      : 0);
+}
 
 function runCleanupSteps(
   message: string,
@@ -120,8 +138,15 @@ export async function prepareToolsCompanionExtension(
   const takeTrade = capabilities.chatAliases
     && typeof exports.enhancement_take_trade_toggle === "function"
     ? exports.enhancement_take_trade_toggle as () => number : null;
+  const configureChatFilters = capabilities.chatFiltering
+    && typeof exports.enhancement_configure_chat_filters === "function"
+    ? exports.enhancement_configure_chat_filters as (mask: number) => number
+    : null;
   if (capabilities.chatAliases && (!configureTrade || !takeTrade)) {
     throw new Error("the aliases profile derived a module with no Trade Chat toggle");
+  }
+  if (capabilities.chatFiltering && configureChatFilters === null) {
+    throw new Error("the chat filtering profile derived a module with no filter configuration");
   }
   let allocated = false;
   let activated = false;
@@ -188,7 +213,8 @@ export async function prepareToolsCompanionExtension(
     activate(context) {
       const session = activateTools({ context, capabilities, program, foundation, observeState,
         skills, slots, cooldowns, enqueue, traceReader, teamCommands, storage,
-        travel, configureTrade, takeTrade, friendPointer, quickItemMove, quickItemMovePointer });
+        travel, configureTrade, takeTrade, configureChatFilters, friendPointer,
+        quickItemMove, quickItemMovePointer });
       activated = true;
       return session;
     },
@@ -222,6 +248,7 @@ type ToolsInput = Readonly<{
   travel: TravelInstallation | null;
   configureTrade: ((enabled: number) => number) | null;
   takeTrade: (() => number) | null;
+  configureChatFilters: ((mask: number) => number) | null;
   friendPointer: number;
   quickItemMove: ReturnType<typeof quickItemMoveExports>;
   quickItemMovePointer: number;
@@ -230,7 +257,7 @@ type ToolsInput = Readonly<{
 function activateTools(input: ToolsInput): CompanionExtensionSession {
   const { context, capabilities, program, foundation, observeState, skills,
     slots, cooldowns, enqueue, traceReader, teamCommands, storage, travel,
-    configureTrade, takeTrade } = input;
+    configureTrade, takeTrade, configureChatFilters } = input;
   let activeFriendPointer = input.friendPointer;
   let activeQuickItemMovePointer = input.quickItemMovePointer;
   const { memory, core, kernel, playRegions } = context;
@@ -288,6 +315,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
       () => slots?.dispose(),
       () => cooldowns?.dispose(),
       () => { configureTrade?.(0); },
+      () => { configureChatFilters?.(0); },
       () => { quickItemMoveInstallation?.dispose(); quickItemMoveInstallation = null; },
       () => professionTrace?.dispose(),
       () => { unsubscribeFriends?.(); friendFeed?.dispose(); },
@@ -367,6 +395,17 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
       window.dispatchEvent(new CustomEvent("gw:trade-toggle"));
     }
   };
+  let chatFilterMask: number | null = null;
+  const syncChatFilters = () => {
+    if (configureChatFilters === null) return;
+    const settings = snapshot().settings;
+    const mask = configuredChatFilterMask(settings, policy().chatFilters);
+    if (mask === chatFilterMask) return;
+    if (configureChatFilters(mask) !== 1) {
+      throw new Error("the chat filter rejected its configuration");
+    }
+    chatFilterMask = mask;
+  };
   const syncTarget = () => {
     if (!observeState) return;
     if (policy().targetReadout) readout ??= tools.createTargetReadout(document.body);
@@ -415,7 +454,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
     quickItemMoveInstallation?.update(policy().quickItemMove);
   };
   const syncPolicy = (reason: "region" | "settings") => {
-    tracePolicy(reason); syncToolbox(); syncConsumers(); syncAlias();
+    tracePolicy(reason); syncToolbox(); syncConsumers(); syncAlias(); syncChatFilters();
   };
 
   prepare(() => storage?.mount());
@@ -481,7 +520,9 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
     },
     beforeHook() {
       source.subscribe(({ reason }) => {
-        if (reason === "launch") { tracePolicy(reason); syncConsumers(); syncAlias(); }
+        if (reason === "launch") {
+          tracePolicy(reason); syncConsumers(); syncAlias(); syncChatFilters();
+        }
         else syncPolicy(reason);
       });
     },

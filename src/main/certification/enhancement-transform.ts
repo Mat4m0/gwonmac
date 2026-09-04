@@ -6,7 +6,7 @@
  * The input hash is checked against the build entry before a byte is read, and
  * every hook's function signature is re-verified against the certified one, so
  * a table entry that has gone stale fails loudly instead of producing a module
- * that traps at runtime. Capability selection is exact — seven fields, no
+ * that traps at runtime. Capability selection is exact, with no
  * extra keys, and a profile that has no certified output hash is refused rather
  * than derived.
  *
@@ -16,7 +16,6 @@
  *
  */
 import { createHash } from "node:crypto";
-import { COMPANION_DISPATCH_KINDS } from "../../shared/companion-abi.js";
 import {
   enhancementCapabilityProfile,
   enhancementCapabilitiesCover,
@@ -30,6 +29,15 @@ import {
   applyFeatureContributions,
   featureExportNames,
 } from "./enhancement-transform-features.js";
+import {
+  chatFilterConfigure,
+  chatFilterDecision,
+} from "./enhancement-chat-filter-transform.js";
+import {
+  createEnhancementHookBody,
+  ENHANCEMENT_DISPATCH_PARAMS,
+  resolveEnhancementHooks,
+} from "./enhancement-hook-transform.js";
 import {
   resolveEnhancementSkillTransform,
   rewriteSkillBarConstructorCapture,
@@ -61,7 +69,6 @@ import {
   parseExports,
   parseTypes,
   sectionById,
-  sleb,
   splitSections,
   uleb,
   valueTypeName,
@@ -85,7 +92,6 @@ declare const WebAssembly: {
 
 export const ENHANCEMENT_HOOK_EXPORT = "enhancement_hook_slot";
 
-const DISPATCH_PARAMS = 6;
 /** `(opcode, a0, a1, a2, a3) -> i32`. Four arguments covers every certified
  *  command; the widest builder we have takes four scalars. */
 const COMMAND_PARAMS = 5;
@@ -100,57 +106,6 @@ function encodeName(value: string): Uint8Array {
   return concat(uleb(bytes.byteLength), bytes);
 }
 
-
-function dispatcher(
-  paramCount: number,
-  dispatchKind: number,
-  dispatchTypeIndex: number,
-  originalIndex: number,
-  hookGlobalIndex: number,
-  extraArgumentGlobal: number | null = null,
-  extraArgumentFunction: number | null = null,
-): Uint8Array {
-  const args = Array.from({ length: paramCount }, (_, index) =>
-    concat(Uint8Array.of(0x20), uleb(index)),
-  );
-  const dispatchArgs = [
-    ...args,
-    ...(extraArgumentGlobal === null
-      ? []
-      : [concat(Uint8Array.of(0x23), uleb(extraArgumentGlobal))]),
-    ...(extraArgumentFunction === null
-      ? []
-      : [concat(Uint8Array.of(0x10), uleb(extraArgumentFunction))]),
-  ];
-  return concat(
-    uleb(0),
-    // The game-owned function always runs in the game module and on the
-    // game-owned call stack. The optional companion is a passive observer;
-    // normal game execution must never depend on crossing into a side module
-    // and then re-entering this clone.
-    ...args,
-    Uint8Array.of(0x10),
-    uleb(originalIndex),
-    Uint8Array.of(0x23),
-    uleb(hookGlobalIndex),
-    Uint8Array.of(0x45, 0x04, 0x40),
-    Uint8Array.of(0x0f, 0x0b),
-    Uint8Array.of(0x41),
-    sleb(dispatchKind),
-    ...dispatchArgs,
-    ...Array.from({ length: DISPATCH_PARAMS - 1 - dispatchArgs.length }, () =>
-      concat(Uint8Array.of(0x41), sleb(0)),
-    ),
-    Uint8Array.of(0x23),
-    uleb(hookGlobalIndex),
-    Uint8Array.of(0x41),
-    sleb(1),
-    Uint8Array.of(0x6b, 0x11),
-    uleb(dispatchTypeIndex),
-    uleb(0),
-    Uint8Array.of(0x0b),
-  );
-}
 
 function assertSignature(
   label: string,
@@ -213,6 +168,7 @@ function resolveEnhancementTransform(
     : null;
   const travelAction = build.travelAction!;
   const chatAliases = build.chatAliases!;
+  const chatFiltering = build.chatFiltering!;
   const hasActionQueue = capabilities.teamApply
     || capabilities.travelAction
     || capabilities.xunlaiAction
@@ -244,50 +200,16 @@ function resolveEnhancementTransform(
     assertSignature(label, type, expectedParams, expectedResults);
     return { localIndex, typeIndex, type };
   };
-  type ResolvedHook = ReturnType<typeof resolveHook> & Readonly<{
-    dispatchKind: number;
-  }>;
   // This is the transform's one ordering rule. It controls relocated-original
   // indices and output bytes, so capability selection can never inherit object
   // iteration order or the order in which a caller happened to request hooks.
-  const selected: ResolvedHook[] = [];
-  if (selectedHooks.tick) {
-    selected.push({
-      ...resolveHook(
-        "tick",
-        build.hookFunction,
-        build.hookParams,
-        build.hookResults,
-      ),
-      dispatchKind: COMPANION_DISPATCH_KINDS.tick,
-    });
-  }
-  if (selectedHooks.cursor) {
-    selected.push({
-      ...resolveHook(
-        "cursor",
-        cursorEvent.functionIndex,
-        cursorEvent.params,
-        cursorEvent.results,
-      ),
-      dispatchKind: COMPANION_DISPATCH_KINDS.cursor,
-    });
-  }
-  const uiDispatcherHook = selectedHooks.ui || capabilities.travelAction
-      || capabilities.characterSwitchAction || capabilities.quickItemMove
-    ? resolveHook(
-        "UI dispatcher",
-        uiDispatcher.functionIndex,
-        uiDispatcher.params,
-        uiDispatcher.results,
-      )
-    : null;
-  if (selectedHooks.ui) {
-    selected.push({
-      ...uiDispatcherHook!,
-      dispatchKind: COMPANION_DISPATCH_KINDS.ui,
-    });
-  }
+  const hookResolution = resolveEnhancementHooks(
+    capabilities,
+    build,
+    resolveHook,
+  );
+  const selected = hookResolution.selected;
+  const uiDispatcherHook = hookResolution.uiDispatcher;
   const bodyHash = (functionIndex: number): string => {
     const body = bodies[functionIndex - importCount];
     if (!body) fail(`function ${functionIndex} has no body`);
@@ -462,6 +384,21 @@ function resolveEnhancementTransform(
         chatAliases.parser.results,
       )
     : null;
+  const chatLogProducerHook = capabilities.chatFiltering
+    ? resolveHook(
+        "chat log producer",
+        chatFiltering.producer.functionIndex,
+        chatFiltering.producer.params,
+        chatFiltering.producer.results,
+      )
+    : null;
+  if (
+    chatLogProducerHook
+    && bodyHash(chatFiltering.producer.functionIndex)
+      !== chatFiltering.producer.bodySha256
+  ) {
+    fail("chat log producer body does not match its semantic fingerprint");
+  }
   if (
     storageSlashParserHook
     && bodyHash(chatAliases.parser.functionIndex)
@@ -535,7 +472,7 @@ function resolveEnhancementTransform(
 
   const exclusiveRoles = [
     ...selected.map((hook) => ({
-      name: `dispatch hook ${hook.dispatchKind}`,
+      name: `${hook.role} hook`,
       functionIndex: hook.localIndex + importCount,
     })),
     ...commands.map((entry) => ({
@@ -558,11 +495,15 @@ function resolveEnhancementTransform(
       name: "storage slash parser",
       functionIndex: storageSlashParserHook.localIndex + importCount,
     }] : []),
+    ...(chatLogProducerHook ? [{
+      name: "chat log producer",
+      functionIndex: chatLogProducerHook.localIndex + importCount,
+    }] : []),
     ...(travelProducer ? [{
       name: "travel payload producer",
       functionIndex: travelProducer.localIndex + importCount,
     }] : []),
-    ...(uiDispatcherHook && !selectedHooks.ui ? [{
+    ...(uiDispatcherHook && !selected.some(({ role }) => role === "ui") ? [{
       name: "native action UI dispatcher",
       functionIndex: uiDispatcherHook.localIndex + importCount,
     }] : []),
@@ -650,6 +591,7 @@ function resolveEnhancementTransform(
     travelAction,
     gameThread,
     chatAliases,
+    chatFiltering,
     quickItemMoveResolution,
     skillResolution,
     preGameResolution,
@@ -676,7 +618,6 @@ function assembleEnhancementTransform(
 ): Uint8Array {
   const {
     capabilities,
-    selectedHooks,
     sections,
     types,
     importCount,
@@ -720,6 +661,7 @@ function assembleEnhancementTransform(
   const travelToggleGlobalIndex = capabilities.travelAction ? allocateGlobals(1) : 0;
   const tradeEnabledGlobalIndex = capabilities.chatAliases ? allocateGlobals(1) : 0;
   const tradeToggleGlobalIndex = capabilities.chatAliases ? allocateGlobals(1) : 0;
+  const chatFilterMaskGlobalIndex = capabilities.chatFiltering ? allocateGlobals(1) : 0;
   const characterPayloadGlobalIndex = capabilities.characterSwitchAction ? allocateGlobals(1) : 0;
   const characterEnabledGlobalIndex = capabilities.characterSwitchAction ? allocateGlobals(1) : 0;
   const characterExpectedIndexGlobalIndex = capabilities.characterSwitchAction ? allocateGlobals(1) : 0;
@@ -740,7 +682,7 @@ function assembleEnhancementTransform(
     return nextTypes.length - 1;
   };
   const dispatchTypeIndex = appendType({
-    params: Array<number>(DISPATCH_PARAMS).fill(0x7f),
+    params: Array<number>(ENHANCEMENT_DISPATCH_PARAMS).fill(0x7f),
     results: [],
   });
   const commandTypeIndex = capabilities.teamApply
@@ -773,6 +715,12 @@ function assembleEnhancementTransform(
   const tradeToggleTypeIndex = capabilities.chatAliases
     ? appendType({ params: [], results: [0x7f] })
     : null;
+  const chatFilterDecisionTypeIndex = capabilities.chatFiltering
+    ? appendType({ params: [0x7f, 0x7f], results: [0x7f] })
+    : null;
+  const chatFilterConfigureTypeIndex = capabilities.chatFiltering
+    ? appendType({ params: [0x7f], results: [0x7f] })
+    : null;
   const preGameStateTypeIndex = capabilities.preGameControls
     ? appendType({ params: [], results: [0x7f] })
     : null;
@@ -798,31 +746,39 @@ function assembleEnhancementTransform(
     nextBodies.push(body);
     return functionIndex;
   };
+  const chatFilterDecisionIndex = capabilities.chatFiltering
+    ? appendFunction(
+        chatFilterDecisionTypeIndex!,
+        chatFilterDecision(
+          resolution.chatFiltering,
+          build.observationBase!.layout,
+          chatFilterMaskGlobalIndex,
+        ),
+      )
+    : null;
   const selectedOriginalIndices = selected.map((hook) =>
     appendFunction(hook.typeIndex, bodies[hook.localIndex]!));
   const skillTimerFunctionIndex = skillResolution.cooldown
     ?.certificate.timer.functionIndex ?? null;
-  const uiHookIndex = selected.findIndex((hook) =>
-    hook.dispatchKind === COMPANION_DISPATCH_KINDS.ui);
-  const uiOriginalIndex = selectedHooks.ui
+  const uiHookIndex = selected.findIndex(({ role }) => role === "ui");
+  const uiOriginalIndex = uiHookIndex >= 0
     ? selectedOriginalIndices[uiHookIndex]!
     : null;
   selected.forEach((hook, index) => {
-    nextBodies[hook.localIndex] = dispatcher(
-      hook.type.params.length,
-      hook.dispatchKind,
+    nextBodies[hook.localIndex] = createEnhancementHookBody({
+      paramCount: hook.type.params.length,
+      observerKind: hook.observerKind,
       dispatchTypeIndex,
-      selectedOriginalIndices[index]!,
+      originalIndex: selectedOriginalIndices[index]!,
       hookGlobalIndex,
-      capabilities.skillSlotGeometry
-        && hook.dispatchKind === COMPANION_DISPATCH_KINDS.tick
+      preFilterFunction: hook.role === "ui" ? chatFilterDecisionIndex : null,
+      extraArgumentGlobal: capabilities.skillSlotGeometry && hook.role === "tick"
         ? skillBarFrameGlobalIndex
         : null,
-      capabilities.skillCooldownObservation
-        && hook.dispatchKind === COMPANION_DISPATCH_KINDS.tick
+      extraArgumentFunction: capabilities.skillCooldownObservation && hook.role === "tick"
         ? skillTimerFunctionIndex
         : null,
-    );
+    });
   });
 
   rewriteSkillBarConstructorCapture({
@@ -833,6 +789,15 @@ function assembleEnhancementTransform(
   });
 
   const addedFunctionExports: Array<Readonly<{ name: string; index: number }>> = [];
+  if (capabilities.chatFiltering) {
+    addedFunctionExports.push({
+      name: "enhancement_configure_chat_filters",
+      index: appendFunction(
+        chatFilterConfigureTypeIndex!,
+        chatFilterConfigure(chatFilterMaskGlobalIndex),
+      ),
+    });
+  }
   if (preGameResolution) {
     addedFunctionExports.push(...appendPreGameReaders({
       resolution: preGameResolution,

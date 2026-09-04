@@ -38,6 +38,7 @@ import {
   characterActionEnqueue,
   characterActionExecute,
 } from "./enhancement-character-switch-transform.js";
+import { ENHANCEMENT_CHAT_FILTER_CONFIGURE_EXPORT } from "./enhancement-chat-filter-transform.js";
 import {
   quickItemMoveDrain,
   type QuickItemMoveGlobals,
@@ -85,6 +86,9 @@ export function featureExportNames(
       : []),
     ...(capabilities.chatAliases
       ? ["enhancement_configure_trade_toggle", "enhancement_take_trade_toggle"]
+      : []),
+    ...(capabilities.chatFiltering
+      ? [ENHANCEMENT_CHAT_FILTER_CONFIGURE_EXPORT]
       : []),
     ...(quick ? [quick.configureExport, quick.modifierExport] : []),
   ]);

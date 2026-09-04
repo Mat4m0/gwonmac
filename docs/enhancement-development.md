@@ -60,6 +60,10 @@ Current integrated features are:
 - **Skill Cooldowns**: show Guild Wars' existing recharge state over the
   same certified player skill slots. The companion publishes bounded recharge
   timestamps; the renderer owns formatting, color, and presentation.
+- **Chat Filters**: prevent selected item-drop, Hall of Heroes, and title
+  announcements from entering the game chat log. A certified game-module
+  pre-handler owns the fixed template checks; Electron receives no chat text.
+  The feature and its three categories change live outside active PvP play.
 
 These features then change live. Live observers and commands stop when disabled
 or when map policy refuses them. Host-only authoring remains available without

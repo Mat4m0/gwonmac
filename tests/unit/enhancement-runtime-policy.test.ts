@@ -16,6 +16,7 @@ const off = Object.freeze({
   travelPalette: false,
   skillKeyLabelsEnabled: false,
   skillCooldownOverlayEnabled: false,
+  chatFiltersEnabled: false,
   quickItemMove: false,
 });
 
@@ -32,6 +33,7 @@ test("developer programs replace saved optional-tool selection in PvE", () => {
     travel: false,
     skillKeyLabels: false,
     skillCooldowns: false,
+    chatFilters: false,
     quickItemMove: false,
   });
   assert.deepEqual(enhancementRuntimePolicy("toolbox-commands", off, "pve"), {
@@ -46,6 +48,7 @@ test("developer programs replace saved optional-tool selection in PvE", () => {
     travel: true,
     skillKeyLabels: false,
     skillCooldowns: false,
+    chatFilters: false,
     quickItemMove: false,
   });
   assert.deepEqual(enhancementRuntimePolicy("xunlai-storage", off, "pve"), {
@@ -60,6 +63,7 @@ test("developer programs replace saved optional-tool selection in PvE", () => {
     travel: true,
     skillKeyLabels: false,
     skillCooldowns: false,
+    chatFilters: false,
     quickItemMove: false,
   });
   assert.deepEqual(enhancementRuntimePolicy("target-observer", off, "pve"), {
@@ -74,6 +78,7 @@ test("developer programs replace saved optional-tool selection in PvE", () => {
     travel: false,
     skillKeyLabels: false,
     skillCooldowns: false,
+    chatFilters: false,
     quickItemMove: false,
   });
 });
@@ -88,6 +93,7 @@ test("unknown regions keep local Tools while live PvE features fail closed", () 
     targetReadout: true,
     xunlaiStorage: true,
     travelPalette: true,
+    chatFiltersEnabled: true,
     skillKeyLabelsEnabled: false,
     skillCooldownOverlayEnabled: false,
     quickItemMove: false,
@@ -104,6 +110,7 @@ test("unknown regions keep local Tools while live PvE features fail closed", () 
     travel: false,
     skillKeyLabels: false,
     skillCooldowns: false,
+    chatFilters: true,
     quickItemMove: false,
   });
 });
@@ -120,6 +127,7 @@ test("confirmed active PvP play disables every product and developer tool", () =
     travelPalette: true,
     skillKeyLabelsEnabled: true,
     skillCooldownOverlayEnabled: true,
+    chatFiltersEnabled: true,
     quickItemMove: false,
   });
   for (const program of [
@@ -141,6 +149,7 @@ test("confirmed active PvP play disables every product and developer tool", () =
       travel: false,
       skillKeyLabels: false,
       skillCooldowns: false,
+      chatFilters: false,
       quickItemMove: false,
     }, program);
   }
@@ -158,6 +167,7 @@ test("product tool settings remain live once the capability is present", () => {
     travelPalette: true,
     skillKeyLabelsEnabled: false,
     skillCooldownOverlayEnabled: true,
+    chatFiltersEnabled: false,
     quickItemMove: false,
   }, "pve"), {
     characterSwitch: false,
@@ -171,6 +181,7 @@ test("product tool settings remain live once the capability is present", () => {
     travel: true,
     skillKeyLabels: false,
     skillCooldowns: true,
+    chatFilters: false,
     quickItemMove: false,
   });
 });

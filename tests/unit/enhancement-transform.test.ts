@@ -46,6 +46,7 @@ const PARTY_ONLY: EnhancementCapabilities = Object.freeze({
   travelAction: false,
   xunlaiAction: false,
   chatAliases: false,
+  chatFiltering: false,
   skillSlotGeometry: false,
   skillCooldownObservation: false,
 });
@@ -302,6 +303,7 @@ describe("targeted Enhancement WebAssembly transform", () => {
           travelAction: false,
           xunlaiAction: false,
           chatAliases: false,
+          chatFiltering: false,
           skillSlotGeometry: false,
           skillCooldownObservation: false,
         },

@@ -20,6 +20,7 @@ type FeatureBooleanSetting = BooleanSetting & (
   | "travelPalette"
   | "skillKeyLabelsEnabled"
   | "skillCooldownOverlayEnabled"
+  | "chatFiltersEnabled"
   | "cartographyEnabled"
   | "characterSwitchEnabled"
 );
@@ -135,6 +136,14 @@ export const FEATURE_SELECTION_POLICIES = defineFeatureSelectionPolicies({
       master: "gwonmacTools",
     },
     region: "pve",
+  },
+  chatFilters: {
+    activation: {
+      kind: "setting",
+      setting: "chatFiltersEnabled",
+      master: "gwonmacTools",
+    },
+    region: "non-pvp",
   },
 });
 

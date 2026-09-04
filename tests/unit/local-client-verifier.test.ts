@@ -26,6 +26,7 @@ const NONE: EnhancementCapabilities = Object.freeze({
   travelAction: false,
   xunlaiAction: false,
   chatAliases: false,
+  chatFiltering: false,
   skillSlotGeometry: false,
   skillCooldownObservation: false,
   playRegionObservation: false,
@@ -42,12 +43,17 @@ const ALL: EnhancementCapabilities = Object.freeze({
   travelAction: true,
   xunlaiAction: true,
   chatAliases: true,
+  chatFiltering: false,
   skillSlotGeometry: true,
   skillCooldownObservation: true,
   playRegionObservation: true,
   preGameControls: true,
   characterSwitchAction: true,
   quickItemMove: false,
+});
+const ALL_WITH_FILTER: EnhancementCapabilities = Object.freeze({
+  ...ALL,
+  chatFiltering: true,
 });
 const CURSOR: EnhancementCapabilities = Object.freeze({
   ...NONE,
@@ -77,6 +83,7 @@ const STORAGE: EnhancementCapabilities = Object.freeze({
   travelAction: true,
   xunlaiAction: true,
   chatAliases: true,
+  chatFiltering: false,
   skillSlotGeometry: false,
   skillCooldownObservation: false,
 });
@@ -424,6 +431,28 @@ describe("local client verification boundary", () => {
   });
   it("accepts the verifier's complete baseline proof", () => {
     assert.equal(isLocalClientVerification(valid(), TEMPLATE.sha256, ALL), true);
+  });
+
+  it("accepts the chat filter certificate and rejects changed template facts", () => {
+    const verification = verificationFor({
+      ...ENHANCEMENT,
+      outputSha256: { "features-1fff": "9".repeat(64) },
+    }, ALL_WITH_FILTER);
+    assert.equal(
+      isLocalClientVerification(verification, TEMPLATE.sha256, ALL_WITH_FILTER),
+      true,
+    );
+    assert.equal(isLocalClientVerification({
+      ...verification,
+      enhancementBuild: {
+        ...verification.enhancementBuild,
+        chatFiltering: {
+          ...verification.enhancementBuild.chatFiltering!,
+          hallOfHeroesTemplate:
+            verification.enhancementBuild.chatFiltering!.hallOfHeroesTemplate + 1,
+        },
+      },
+    }, TEMPLATE.sha256, ALL_WITH_FILTER), false);
   });
 
   it("rejects an exact authored row that did not cross semantic proof", () => {

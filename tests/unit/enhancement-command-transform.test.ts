@@ -66,6 +66,7 @@ describe("Enhancement command transform", () => {
       travelAction: false,
       xunlaiAction: false,
       chatAliases: false,
+      chatFiltering: false,
       skillSlotGeometry: false,
       skillCooldownObservation: false,
     };
@@ -134,6 +135,7 @@ describe("Enhancement command transform", () => {
           travelAction: false,
           xunlaiAction: false,
           chatAliases: false,
+          chatFiltering: false,
           skillSlotGeometry: false,
           skillCooldownObservation: false,
         }),
@@ -151,6 +153,7 @@ describe("Enhancement command transform", () => {
         travelAction: false,
         xunlaiAction: false,
         chatAliases: false,
+        chatFiltering: false,
         skillSlotGeometry: false,
         skillCooldownObservation: false,
       }),
@@ -166,6 +169,7 @@ describe("Enhancement command transform", () => {
         travelAction: true,
         xunlaiAction: true,
         chatAliases: true,
+        chatFiltering: false,
         skillSlotGeometry: false,
         skillCooldownObservation: false,
       }),
@@ -227,6 +231,7 @@ describe("Enhancement command transform", () => {
       travelAction: false,
       xunlaiAction: false,
       chatAliases: true,
+      chatFiltering: false,
       skillSlotGeometry: false,
       skillCooldownObservation: false,
     } as const;
@@ -829,7 +834,7 @@ describe("Enhancement command transform", () => {
         },
         CURSOR_TOOLBOX_COMMANDS,
       ),
-      /traced packet sender must be distinct from dispatch hook 2/u,
+      /traced packet sender must be distinct from ui hook/u,
     );
   });
 
@@ -901,7 +906,7 @@ describe("Enhancement command transform", () => {
         },
         CURSOR_TARGET_TOOLBOX_COMMANDS,
       ),
-      /travel payload producer must be distinct from dispatch hook 1/u,
+      /travel payload producer must be distinct from cursor hook/u,
     );
   });
 

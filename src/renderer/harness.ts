@@ -558,6 +558,10 @@ window.gwToolsSettings = () => Object.freeze({
   skillKeyBindings: appSettings?.skillKeyBindings ?? emptySkillKeyBindings,
   skillKeyLabelsEnabled: appSettings?.skillKeyLabelsEnabled ?? false,
   skillCooldownOverlayEnabled: appSettings?.skillCooldownOverlayEnabled ?? true,
+  chatFiltersEnabled: appSettings?.chatFiltersEnabled ?? false,
+  chatFilterAllyDrops: appSettings?.chatFilterAllyDrops ?? false,
+  chatFilterHallOfHeroes: appSettings?.chatFilterHallOfHeroes ?? false,
+  chatFilterTitleAchievements: appSettings?.chatFilterTitleAchievements ?? false,
   quickItemMove: appSettings?.quickItemMove ?? false,
   skillCooldownColor: appSettings?.skillCooldownColor
     ?? Object.freeze({ kind: 'preset', preset: 'red' }),

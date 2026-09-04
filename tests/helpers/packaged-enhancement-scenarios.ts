@@ -457,6 +457,10 @@ export async function assertCleanupSafetyGates() {
             skillCooldownOverlayEnabled: true,
             quickItemMove: false,
             skillCooldownColor: { kind: "preset", preset: "red" } as const,
+            chatFiltersEnabled: false,
+            chatFilterAllyDrops: false,
+            chatFilterHallOfHeroes: false,
+            chatFilterTitleAchievements: false,
           });
         });
       }
@@ -845,6 +849,10 @@ export async function assertToolboxFoundationLifecycle() {
         skillKeyBindings: [null, null, null, null, null, null, null, null] as const,
         skillKeyLabelsEnabled: false,
         skillCooldownOverlayEnabled: true,
+        chatFiltersEnabled: false,
+        chatFilterAllyDrops: false,
+        chatFilterHallOfHeroes: false,
+        chatFilterTitleAchievements: false,
         quickItemMove: false,
         skillCooldownColor: { kind: "preset", preset: "red" } as const,
       });
@@ -1409,6 +1417,10 @@ export async function assertRollbackAfterTablePublication() {
           skillCooldownOverlayEnabled: true,
           quickItemMove: false,
           skillCooldownColor: { kind: "preset", preset: "red" } as const,
+          chatFiltersEnabled: false,
+          chatFilterAllyDrops: false,
+          chatFilterHallOfHeroes: false,
+          chatFilterTitleAchievements: false,
         });
         globalThis.requestAnimationFrame = () => {
           installedCursorStatePublished = typeof window.gwCursorState === "function";

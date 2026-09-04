@@ -137,6 +137,7 @@ export const TARGET_ONLY: EnhancementCapabilities = Object.freeze({
   travelAction: false,
   xunlaiAction: false,
   chatAliases: false,
+  chatFiltering: false,
   skillSlotGeometry: false,
   skillCooldownObservation: false,
 });
@@ -152,6 +153,7 @@ export const TOOLBOX_PROGRAM_CAPABILITIES: EnhancementCapabilities = Object.free
   travelAction: false,
   xunlaiAction: false,
   chatAliases: false,
+  chatFiltering: false,
   skillSlotGeometry: false,
   skillCooldownObservation: false,
 });
@@ -167,6 +169,7 @@ export const PRODUCT_TOOLS_CAPABILITIES: EnhancementCapabilities = Object.freeze
   travelAction: true,
   xunlaiAction: true,
   chatAliases: true,
+  chatFiltering: true,
   skillSlotGeometry: false,
   skillCooldownObservation: false,
 });
@@ -182,6 +185,7 @@ export const TARGET_OFF_PRODUCT_CAPABILITIES: EnhancementCapabilities = Object.f
   travelAction: true,
   xunlaiAction: true,
   chatAliases: true,
+  chatFiltering: true,
   skillSlotGeometry: false,
   skillCooldownObservation: false,
 });

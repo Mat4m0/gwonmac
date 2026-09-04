@@ -36,13 +36,17 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
       // ENHANCEMENT_TRANSFORM_ABI or any config word changes.
       outputSha256: Object.freeze({
         "features-601":
-          "63b063bf51fd690d434ab3a60fce04cfae1caa4ac56421c765db320be1b2b4c0",
+          "4a7317c9df48f49c87459fe8db4e8c6647e0b10209f8c665894b493b6621c186",
         "features-e01":
-          "58934fd0e4b7756413016f0d2cc67f37fb65cffbb675d7d62da6b5005e385e03",
+          "31118fac219c22c14b7f2025f7e3bf72802a5fda9376b0fbd03c070b99b0424c",
         "features-fff":
-          "9d676b10c93179641c8324b8b133b1df5092cac225045f32edc7ac1e23b79226",
+          "5c67e7859b14b93c09d807199daffc73a76c8fe683c6c3a9f8c06c8115361098",
         "features-1fff":
-          "abb464a6b3e7e6864b6c9ce2dd89ae917b2f046b07e97cad6f144d765fc4ca71",
+          "d8a048527d569c829870d79a5bdd59dd8e6e547e315533465b38cdefbf363ec6",
+        "features-2fff":
+          "08227b5388c9fad57309cc891f2164c28c1c38806ed292391f2d2b68317455b5",
+        "features-3fff":
+          "a81546a534d0a93b23fac9d65407b35a2b77d6a83385e7c0a1ed3dd276084cfd",
       }),
       programId: 1,
       // The verifier derives this bounded identity from the exact module; it is
@@ -309,6 +313,34 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
           results: Object.freeze(["i32"] as const),
           bodySha256:
             "fcff05250c935e92337fee53cd9f086b22d1ba02a4ff051bd94165f61833a713",
+        }),
+      }),
+      chatFiltering: Object.freeze({
+        writeToChatLogMessage: 0x1000_007f,
+        packetChannelOffset: 0,
+        packetMessageOffset: 4,
+        allyDropTemplate: 0x07f1,
+        numericSegment: 0x010f,
+        encodedNumberBase: 0x0100,
+        // Encoded-name markers consumed by the native chat path.
+        playerNameToken: 0x0ba9,
+        encodedStringStart: 0x0107,
+        encodedStringEnd: 0x0001,
+        maxPlayerNameUnits: 20,
+        // Fixed UTF-16 CharContext::player_name[20]. The adjacent UUID and
+        // player-number fields are owned by the shared observation layout.
+        currentPlayerNameOffset: 0x74,
+        systemPrefix: 0x8102,
+        hallOfHeroesTemplate: 0x223b,
+        titleTemplates: Object.freeze([
+          0x1443, 0x23e2, 0x23e5, 0x23e6,
+        ] as const),
+        producer: Object.freeze({
+          functionIndex: 7880,
+          params: Object.freeze(["i32", "i32"] as const),
+          results: Object.freeze([] as const),
+          bodySha256:
+            "27de9130f902e343143030751962177d77853da9e841eb7afbfd3c6c494e556d",
         }),
       }),
       gameThread: Object.freeze({

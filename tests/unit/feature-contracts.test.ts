@@ -115,6 +115,13 @@ test("the capability registry is the ordered wire vocabulary", () => {
       hooks: [],
     },
     {
+      id: "chatFiltering",
+      requiresAll: ["playRegionObservation"],
+      requiresAny: [],
+      configOwners: [],
+      hooks: [],
+    },
+    {
       id: "quickItemMove",
       requiresAll: ["playRegionObservation", "preGameControls"],
       requiresAny: [],
@@ -126,7 +133,7 @@ test("the capability registry is the ordered wire vocabulary", () => {
     ENHANCEMENT_CAPABILITY_CONTRACTS.map(({ id }) => id),
     ENHANCEMENT_CAPABILITY_FIELDS,
   );
-  assert.equal(new Set(ENHANCEMENT_CAPABILITY_FIELDS).size, 13);
+  assert.equal(new Set(ENHANCEMENT_CAPABILITY_FIELDS).size, 14);
   for (const contract of ENHANCEMENT_CAPABILITY_CONTRACTS) {
     assert.equal(Object.isFrozen(contract), true, contract.id);
     assert.equal(Object.isFrozen(contract.requiresAll), true, contract.id);

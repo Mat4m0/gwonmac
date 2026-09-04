@@ -25,8 +25,8 @@ test("retains bounded generation evidence without paths or raw addresses", async
   const fileOutputDigest = sha256("file-output");
   const feature601Input = sha256("features-e01-input");
   const feature601DoubleClick = sha256("features-e01-double-click");
-  const feature7ffInput = sha256("features-1fff-input");
-  const feature7ffDoubleClick = sha256("features-1fff-double-click");
+  const feature7ffInput = sha256("features-3fff-input");
+  const feature7ffDoubleClick = sha256("features-3fff-double-click");
   const generation = sha256("generation");
   const commit = "a".repeat(40);
   const files = {
@@ -52,7 +52,7 @@ test("retains bounded generation evidence without paths or raw addresses", async
       outputSha256: feature601DoubleClick,
       enhancementInputSha256: fileOutputDigest,
     }, {
-      profile: "features-1fff",
+      profile: "features-3fff",
       inputSha256: feature7ffInput,
       outputSha256: feature7ffDoubleClick,
       enhancementInputSha256: fileOutputDigest,
@@ -76,7 +76,7 @@ test("retains bounded generation evidence without paths or raw addresses", async
       inputSha256: feature601DoubleClick,
       outputSha256: outputDigest,
     }, {
-      profile: "features-1fff",
+      profile: "features-3fff",
       inputSha256: feature7ffDoubleClick,
       outputSha256: outputDigest,
     }],
@@ -100,7 +100,7 @@ test("retains bounded generation evidence without paths or raw addresses", async
       outputSha256: sha256("cartography-e01"),
       memoryLayout: "relocated",
     }, {
-      profile: "features-1fff",
+      profile: "features-3fff",
       inputSha256: feature7ffInput,
       outputSha256: sha256("cartography-fff"),
       memoryLayout: "relocated",
