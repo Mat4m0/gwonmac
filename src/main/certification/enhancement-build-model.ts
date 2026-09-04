@@ -377,7 +377,7 @@ export interface KnownEnhancementBuild {
         results: readonly [];
         bodySha256: string;
       }>;
-    }> | undefined;
+    }>;
   }>;
   chatAliases?: Readonly<{
     parser: Readonly<{

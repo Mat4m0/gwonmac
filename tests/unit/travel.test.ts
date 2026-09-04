@@ -135,6 +135,8 @@ describe("Travel", () => {
       travelContext: "pre-searing" as const,
       characterKey: null,
       unlockedMapWords,
+      guildHall: false,
+      hasGuildHall: false,
     };
     const world = { ...preSearing, mapId: 81, travelContext: "world" as const };
 

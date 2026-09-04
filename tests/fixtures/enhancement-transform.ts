@@ -235,10 +235,13 @@ export function fixture(hookParamType = 0x7f): Uint8Array {
     ...env, 1, 99, 0, 1,
     ...env, 1, 117, 0, 2,
   ]);
-  // Sixteen defined functions: three hooks, three commands, the recurring
+  // Nineteen defined functions: three hooks, three commands, the recurring
   // game-thread callback, packet sender, DataWindow, slash parser, and Travel
-  // producer, plus three exact-signature Xunlai fact readers.
-  const functions = section(3, [16, 0, 1, 2, 0, 2, 3, 3, 2, 0, 4, 1, 5, 5, 5, 6, 5]);
+  // producer, three exact-signature Xunlai fact readers, and the three Guild
+  // Hall certificate functions.
+  const functions = section(3, [
+    19, 0, 1, 2, 0, 2, 3, 3, 2, 0, 4, 1, 5, 5, 5, 6, 5, 6, 6, 3,
+  ]);
   const table = section(4, [1, 0x70, 1, 5, 5]);
   const memory = section(5, [1, 1, 1, 1]);
   const globals = section(6, [0]);
@@ -305,8 +308,13 @@ export function fixture(hookParamType = 0x7f): Uint8Array {
   const slash = [0, 0x20, 0, 0x10, 0, 0x41, 0, 0x0b];
   const reader = [0, 0x20, 0, 0x0b];
   const unlockAccessor = [0, 0x41, ...sleb(256), 0x0b];
+  const guildKeyAccessor = [0, 0x41, ...sleb(512), 0x0b];
+  const guildAreaTypeAccessor = [
+    0, 0x41, ...sleb(600), 0x28, 2, 0, 0x0b,
+  ];
+  const guildProducer = [0, 0x20, 0, 0x1a, 0x20, 1, 0x1a, 0x0b];
   const code = section(10, [
-    16,
+    19,
     ...uleb(tick.length), ...tick,
     ...uleb(cursor.length), ...cursor,
     ...uleb(ui.length), ...ui,
@@ -323,6 +331,9 @@ export function fixture(hookParamType = 0x7f): Uint8Array {
     ...uleb(reader.length), ...reader,
     ...uleb(unlockAccessor.length), ...unlockAccessor,
     ...uleb(reader.length), ...reader,
+    ...uleb(guildKeyAccessor.length), ...guildKeyAccessor,
+    ...uleb(guildAreaTypeAccessor.length), ...guildAreaTypeAccessor,
+    ...uleb(guildProducer.length), ...guildProducer,
   ]);
   const unlockData = [
     0x20, 0x01, 0, 0,
@@ -386,6 +397,30 @@ export function manifest(bytes: Uint8Array): KnownEnhancementBuild {
       configureExport: "enhancement_configure_travel",
       toggleExport: "enhancement_take_travel_toggle",
       messageId: 0x1000_0183,
+      guildHall: {
+        enqueueExport: "enhancement_guild_hall",
+        enterMessageId: 0x1000_0180,
+        leaveMessageId: 0x1000_0182,
+        layout: { guildContextSlot: 15, guildHallKey: 0x64 },
+        keyAccessor: {
+          functionIndex: 19,
+          params: [],
+          results: ["i32"],
+          bodySha256: createHash("sha256").update(commandBody(bytes, 16)).digest("hex"),
+        },
+        areaTypeAccessor: {
+          functionIndex: 20,
+          params: [],
+          results: ["i32"],
+          bodySha256: createHash("sha256").update(commandBody(bytes, 17)).digest("hex"),
+        },
+        producer: {
+          functionIndex: 21,
+          params: ["i32", "i32"],
+          results: [],
+          bodySha256: createHash("sha256").update(commandBody(bytes, 18)).digest("hex"),
+        },
+      },
       unlockProof: {
         layout: { worldUnlockedMaps: 0x60c },
         accessor: {

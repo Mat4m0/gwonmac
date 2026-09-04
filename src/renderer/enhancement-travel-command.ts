@@ -33,8 +33,7 @@ export function createTravelCommand(
       }
     },
     guildHall() {
-      const refusal = unavailable()
-        ?? (sendGuildHall === null ? "Guild Hall travel is unavailable for this client" : null);
+      const refusal = unavailable();
       if (refusal !== null) throw new Error(refusal);
       if (sendGuildHall === null) throw new Error("Guild Hall travel is unavailable for this client");
       if (sendGuildHall() !== 1) throw new Error("Guild Wars command queue is busy");

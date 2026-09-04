@@ -369,6 +369,54 @@ describe("Enhancement command transform", () => {
     assert.deepEqual(dispatches, [[build.travelAction!.messageId, payload, 0]]);
   });
 
+  it("enters and leaves the Guild Hall through the bounded Travel mailbox", () => {
+    const input = fixture();
+    const build = manifest(input);
+    const guildHall = build.travelAction!.guildHall!;
+    const output = transformEnhancementWasm(input, build, CURSOR_TOOLBOX_STORAGE);
+    const dispatches: number[][] = [];
+    const instance = new WebAssembly.Instance(
+      new WebAssembly.Module(new Uint8Array(output)),
+      {
+        env: {
+          t: () => {},
+          c: () => {},
+          u: (...args: number[]) => { dispatches.push(args); },
+          tbl: new WebAssembly.Table({ initial: 6, maximum: 6, element: "anyfunc" }),
+        },
+      },
+    );
+    const memory = instance.exports.memory as WebAssembly.Memory;
+    const words = new Uint32Array(memory.buffer);
+    const frame = instance.exports.frame as (value: number, context: number) => void;
+    const configure = instance.exports[build.travelAction!.configureExport] as
+      (payload: number, enabled: number) => number;
+    const enqueue = instance.exports[guildHall.enqueueExport] as () => number;
+    const payload = 128;
+    const key = [0x1122_3344, 0x5566_7788, 0x99aa_bbcc, 0xddee_ff00];
+    words.set(key, 512 / 4);
+
+    assert.equal(enqueue(), 0, "Guild Hall travel refuses before installation");
+    assert.equal(configure(payload, 1), 1);
+    assert.equal(enqueue(), 1);
+    assert.equal(enqueue(), 0, "one queued Guild Hall action owns the mailbox");
+    assert.deepEqual(dispatches, [], "enqueue never calls client code re-entrantly");
+    frame(70, 700);
+    assert.deepEqual([...new Uint32Array(memory.buffer, payload, 4)], key);
+    assert.deepEqual(dispatches, [[guildHall.enterMessageId, payload, 0]]);
+
+    new DataView(memory.buffer).setUint32(600, 4, true);
+    assert.equal(enqueue(), 1);
+    frame(80, 800);
+    assert.deepEqual(dispatches.at(-1), [guildHall.leaveMessageId, 0, 0]);
+
+    new DataView(memory.buffer).setUint32(600, 0, true);
+    words.fill(0, 512 / 4, 512 / 4 + 4);
+    assert.equal(enqueue(), 1);
+    frame(90, 900);
+    assert.equal(dispatches.length, 2, "an empty guild key must fail closed");
+  });
+
   it("consumes /trade, /tp and exact storage commands at their named boundaries", () => {
     const input = fixture();
     const build = manifest(input);

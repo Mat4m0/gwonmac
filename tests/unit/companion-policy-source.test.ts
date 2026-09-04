@@ -101,6 +101,8 @@ describe("companion policy source", () => {
       travelContext: "world" as const,
       characterKey: null,
       unlockedMapWords: null,
+      guildHall: false,
+      hasGuildHall: false,
     });
     test.publishRegion(pve);
     test.publishRegion({ ...pve, sequence: 4 });
@@ -128,6 +130,8 @@ describe("companion policy source", () => {
       instanceType: 0,
       playRegion: "pve" as const,
       travelContext: "world" as const,
+      guildHall: false,
+      hasGuildHall: false,
     };
     test.publishRegion(Object.freeze({
       ...ready,
@@ -152,6 +156,38 @@ describe("companion policy source", () => {
     assert.deepEqual(unlocks, [1, 1, 3]);
   });
 
+  it("publishes same-map Guild Hall availability changes", () => {
+    const test = fixture();
+    const guildStates: Array<[boolean, boolean]> = [];
+    test.source.subscribe(({ snapshot }) => {
+      if (snapshot.playRegionState.status !== "ready") return;
+      guildStates.push([
+        snapshot.playRegionState.guildHall,
+        snapshot.playRegionState.hasGuildHall,
+      ]);
+    });
+    const ready = {
+      status: "ready" as const,
+      mapId: 55,
+      instanceType: 0,
+      playRegion: "pve" as const,
+      travelContext: "world" as const,
+      characterKey: null,
+      unlockedMapWords: null,
+    };
+    test.publishRegion(Object.freeze({
+      ...ready, sequence: 2, guildHall: false, hasGuildHall: false,
+    }));
+    test.publishRegion(Object.freeze({
+      ...ready, sequence: 4, guildHall: false, hasGuildHall: true,
+    }));
+    test.publishRegion(Object.freeze({
+      ...ready, sequence: 6, guildHall: true, hasGuildHall: true,
+    }));
+
+    assert.deepEqual(guildStates, [[false, false], [false, true], [true, true]]);
+  });
+
   it("withdraws local Tools only for positively identified active PvP play", () => {
     const test = fixture();
     test.setSettings({ ...DEFAULT_SETTINGS, gwonmacTools: true });
@@ -168,6 +204,8 @@ describe("companion policy source", () => {
       travelContext: "world",
       characterKey: null,
       unlockedMapWords: null,
+      guildHall: false,
+      hasGuildHall: false,
     }));
     test.publishRegion(Object.freeze({ status: "waiting", reason: "loading" }));
 
@@ -191,6 +229,8 @@ describe("companion policy source", () => {
       travelContext: "world",
       characterKey: null,
       unlockedMapWords: null,
+      guildHall: false,
+      hasGuildHall: false,
     }));
 
     assert.equal(publications, 1);

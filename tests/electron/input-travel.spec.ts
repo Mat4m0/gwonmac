@@ -50,6 +50,8 @@ test.describe("renderer Travel input", () => {
             travelContext: "world",
             characterKey: null,
             unlockedMapWords: Array.from({ length: 28 }, () => 0xffff_ffff),
+            guildHall: false,
+            hasGuildHall: false,
           },
         });
         installation.poll();
@@ -80,6 +82,8 @@ test.describe("renderer Travel input", () => {
           typeof import("../../src/renderer/travel-palette.js");
         const palette = module.createTravelPalette(document.body, {
           travel: () => undefined,
+          guildHall: () => undefined,
+          guildHallUnavailable: () => null,
           unavailable: () => null,
         });
         palette.setEnabled(true);

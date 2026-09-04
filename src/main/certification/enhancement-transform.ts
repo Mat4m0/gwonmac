@@ -347,6 +347,22 @@ function resolveEnhancementTransform(
     if (!body) fail(`function ${functionIndex} has no body`);
     return createHash("sha256").update(body).digest("hex");
   };
+  const resolveCertifiedHook = (
+    label: string,
+    fact: Readonly<{
+      functionIndex: number;
+      params: readonly string[];
+      results: readonly string[];
+      bodySha256: string;
+    }>,
+    identity: "semantic fingerprint" | "certified identity",
+  ) => {
+    const hook = resolveHook(label, fact.functionIndex, fact.params, fact.results);
+    if (bodyHash(fact.functionIndex) !== fact.bodySha256) {
+      fail(`${label} body does not match its ${identity}`);
+    }
+    return hook;
+  };
   const skillResolution = resolveEnhancementSkillTransform({
     build,
     capabilities,
@@ -501,73 +517,27 @@ function resolveEnhancementTransform(
     fail("storage slash parser body does not match its semantic fingerprint");
   }
   const travelProducer = capabilities.travelAction
-    ? resolveHook(
-        "travel payload producer",
-        travelAction.producer.functionIndex,
-        travelAction.producer.params,
-        travelAction.producer.results,
-      )
-    : null;
-  if (
-    travelProducer
-    && bodyHash(travelAction.producer.functionIndex)
-      !== travelAction.producer.bodySha256
-  ) {
-    fail("travel payload producer body does not match its semantic fingerprint");
-  }
-  const travelContextResolver = capabilities.travelAction
-    ? resolveHook(
-        "travel context resolver",
-        travelAction.contextResolver.functionIndex,
-        travelAction.contextResolver.params,
-        travelAction.contextResolver.results,
-      )
-    : null;
-  if (
-    travelContextResolver
-    && bodyHash(travelAction.contextResolver.functionIndex)
-      !== travelAction.contextResolver.bodySha256
-  ) {
-    fail("travel context resolver body does not match its semantic fingerprint");
-  }
-  const travelUnlockAccessor = capabilities.travelAction
-    ? resolveHook(
-        "travel unlock array accessor",
-        travelAction.unlockProof.accessor.functionIndex,
-        travelAction.unlockProof.accessor.params,
-        travelAction.unlockProof.accessor.results,
-      )
-    : null;
-  if (
-    travelUnlockAccessor
-    && bodyHash(travelAction.unlockProof.accessor.functionIndex)
-      !== travelAction.unlockProof.accessor.bodySha256
-  ) fail("travel unlock accessor body does not match its certified identity");
-  if (capabilities.travelAction && travelAction.guildHall) {
-    for (const [label, fact] of [
-      ["Guild Hall key accessor", travelAction.guildHall.keyAccessor],
-      ["Guild Hall area type accessor", travelAction.guildHall.areaTypeAccessor],
-      ["Guild Hall native producer", travelAction.guildHall.producer],
+    ? resolveCertifiedHook(
+        "travel payload producer", travelAction.producer, "semantic fingerprint",
+      ) : null;
+  if (capabilities.travelAction) {
+    for (const [label, fact, identity] of [
+      ["travel context resolver", travelAction.contextResolver, "semantic fingerprint"],
+      ["travel unlock array accessor", travelAction.unlockProof.accessor, "certified identity"],
+      ["travel unlock bitset consumer", travelAction.unlockProof.consumer, "certified identity"],
     ] as const) {
-      resolveHook(label, fact.functionIndex, fact.params, fact.results);
-      if (bodyHash(fact.functionIndex) !== fact.bodySha256) {
-        fail(`${label} body does not match its certified identity`);
+      resolveCertifiedHook(label, fact, identity);
+    }
+    if (travelAction.guildHall) {
+      for (const [label, fact] of [
+        ["Guild Hall key accessor", travelAction.guildHall.keyAccessor],
+        ["Guild Hall area type accessor", travelAction.guildHall.areaTypeAccessor],
+        ["Guild Hall native producer", travelAction.guildHall.producer],
+      ] as const) {
+        resolveCertifiedHook(label, fact, "certified identity");
       }
     }
   }
-  const travelUnlockConsumer = capabilities.travelAction
-    ? resolveHook(
-        "travel unlock bitset consumer",
-        travelAction.unlockProof.consumer.functionIndex,
-        travelAction.unlockProof.consumer.params,
-        travelAction.unlockProof.consumer.results,
-      )
-    : null;
-  if (
-    travelUnlockConsumer
-    && bodyHash(travelAction.unlockProof.consumer.functionIndex)
-      !== travelAction.unlockProof.consumer.bodySha256
-  ) fail("travel unlock consumer body does not match its certified identity");
   const packetSender = capabilities.teamApply
     ? resolveHook(
         "traced packet sender",

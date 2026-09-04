@@ -407,6 +407,8 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
         typeof import("../../src/renderer/travel-palette.js");
       const palette = module.createTravelPalette(document.body, {
         travel: () => undefined,
+        guildHall: () => undefined,
+        guildHallUnavailable: () => null,
         unavailable: () => null,
       });
       palette.setEnabled(true);

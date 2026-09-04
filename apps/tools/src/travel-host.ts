@@ -28,8 +28,12 @@ import { createTravelHistoryObservation } from "./travel-history-observation";
 
 export type TravelAttempt =
   | Readonly<{ status: "idle" }>
-  | Readonly<{ status: "queued" | "loading"; mapId: number }>
-  | Readonly<{ status: "queued" | "loading"; guildHall: boolean; mapId: 0 }>;
+  | Readonly<{ status: "queued" | "loading"; kind: "map"; mapId: number }>
+  | Readonly<{
+      status: "queued" | "loading";
+      kind: "guild-hall";
+      target: "inside" | "outside";
+    }>;
 export type TravelNotice = Readonly<{
   message: string;
   level: "info" | "success" | "warning" | "danger";
@@ -45,12 +49,12 @@ export interface TravelHost {
   readonly history: Ref<TravelHistory>;
   readonly friends: Ref<TravelFriends>;
   readonly unavailable: string | null;
-  readonly guildHallUnavailable?: string | null;
+  readonly guildHallUnavailable: string | null;
   loadPreferences(): Promise<TravelPreferences>;
   savePreferences(patch: TravelPreferencePatch): Promise<TravelPreferences>;
   loadHistory(): Promise<TravelHistory>;
   travel(request: TravelRequest): Promise<void>;
-  guildHall?: () => Promise<void>;
+  guildHall(): Promise<void>;
   updateGameState(state: TravelGameState): void;
   updateFriends(friends: TravelFriends): void;
   dispose(): void;
@@ -90,10 +94,12 @@ export function createNativeTravelHost(
   const beginLoading = (mapId: number) => {
     window.clearTimeout(attemptTimer);
     settledAttempt = null;
-    attempt.value = { status: "loading", mapId };
+    attempt.value = { status: "loading", kind: "map", mapId };
     notice.value = { message: "Travel started.", level: "success" };
     attemptTimer = window.setTimeout(() => {
-      if (attempt.value.status !== "loading" || attempt.value.mapId !== mapId) return;
+      if (attempt.value.status !== "loading"
+        || attempt.value.kind !== "map"
+        || attempt.value.mapId !== mapId) return;
       settleAttempt(mapId, "loading");
       notice.value = {
         message: "Guild Wars did not confirm arrival. Travel is ready to try again.",
@@ -118,7 +124,7 @@ export function createNativeTravelHost(
       return command.unavailable();
     },
     get guildHallUnavailable() {
-      return command.guildHallUnavailable?.() ?? "Guild Hall travel is unavailable for this client";
+      return command.guildHallUnavailable();
     },
     loadPreferences,
     async savePreferences(patch) {
@@ -138,7 +144,7 @@ export function createNativeTravelHost(
         && state.value.characterKey === null
         ? state.value.mapId
         : null;
-      attempt.value = { status: "queued", mapId: request.mapId };
+      attempt.value = { status: "queued", kind: "map", mapId: request.mapId };
       notice.value = {
         message: `Travelling to ${travelDestination(request.mapId)?.name ?? "destination"}…`,
         level: "info",
@@ -146,7 +152,9 @@ export function createNativeTravelHost(
       try {
         command.travel(request);
         attemptTimer = window.setTimeout(() => {
-          if (attempt.value.status !== "queued" || attempt.value.mapId !== request.mapId) return;
+          if (attempt.value.status !== "queued"
+            || attempt.value.kind !== "map"
+            || attempt.value.mapId !== request.mapId) return;
           settleAttempt(request.mapId, "queued");
           notice.value = {
             message: "Travel did not start. Check that this destination is unlocked, then try again.",
@@ -181,21 +189,17 @@ export function createNativeTravelHost(
         notice.value = { message, level: "warning" };
         throw new Error(message);
       }
-      const destination = !ready.guildHall;
-      attempt.value = { status: "queued", guildHall: destination, mapId: 0 };
+      const target = ready.guildHall ? "outside" : "inside";
+      attempt.value = { status: "queued", kind: "guild-hall", target };
       notice.value = {
-        message: destination ? "Travelling to your Guild Hall…" : "Leaving Guild Hall…",
+        message: target === "inside" ? "Travelling to your Guild Hall…" : "Leaving Guild Hall…",
         level: "info",
       };
       try {
-        const guildHall = command.guildHall;
-        if (guildHall === undefined) {
-          throw new Error("Guild Hall travel is unavailable for this client");
-        }
-        guildHall();
+        command.guildHall();
         attemptTimer = window.setTimeout(() => {
           const current = attempt.value;
-          if (current.status !== "queued" || !("guildHall" in current)) return;
+          if (current.status !== "queued" || current.kind !== "guild-hall") return;
           clearAttempt();
           notice.value = {
             message: "Guild Wars did not start Guild Hall travel. Try again.",
@@ -212,24 +216,28 @@ export function createNativeTravelHost(
     updateGameState(next) {
       state.value = next;
       const current = attempt.value;
-      if (current.status !== "idle" && "guildHall" in current) {
-        if (next.status === "ready" && next.guildHall === current.guildHall) {
+      if (current.status !== "idle" && current.kind === "guild-hall") {
+        const arrived = next.status === "ready"
+          && next.guildHall === (current.target === "inside");
+        if (arrived) {
           clearAttempt();
           notice.value = null;
         } else if (next.status === "waiting" && next.reason === "loading") {
-          window.clearTimeout(attemptTimer);
-          attempt.value = { status: "loading", guildHall: current.guildHall, mapId: 0 };
-          notice.value = { message: "Travel started.", level: "success" };
-          attemptTimer = window.setTimeout(() => {
-            const active = attempt.value;
-            if (active.status === "loading" && "guildHall" in active) {
-              clearAttempt();
-              notice.value = {
-                message: "Guild Wars did not confirm Guild Hall travel. Try again.",
-                level: "warning",
-              };
-            }
-          }, 30_000);
+          if (current.status === "queued") {
+            window.clearTimeout(attemptTimer);
+            attempt.value = { ...current, status: "loading" };
+            notice.value = { message: "Travel started.", level: "success" };
+            attemptTimer = window.setTimeout(() => {
+              const active = attempt.value;
+              if (active.status === "loading" && active.kind === "guild-hall") {
+                clearAttempt();
+                notice.value = {
+                  message: "Guild Wars did not confirm Guild Hall travel. Try again.",
+                  level: "warning",
+                };
+              }
+            }, 30_000);
+          }
         } else if (current.status === "loading" && next.status !== "ready") {
           clearAttempt();
           notice.value = { message: "Guild Hall travel was interrupted.", level: "warning" };
@@ -237,6 +245,7 @@ export function createNativeTravelHost(
         return;
       }
       const arrived = current.status !== "idle"
+        && current.kind === "map"
         && next.status === "ready"
         && next.mapId === current.mapId;
       if (arrived
@@ -270,7 +279,7 @@ export function createNativeTravelHost(
         return;
       }
       if (next.status === "waiting" && next.reason === "loading") {
-        beginLoading(current.mapId);
+        if (current.status === "queued") beginLoading(current.mapId);
         return;
       }
       if (current.status !== "loading") return;
@@ -314,6 +323,7 @@ export function createDemoTravelHost(): TravelHost {
   const characterKey = travelCharacterKey("0123456789abcdef");
   const state = ref<TravelGameState>({
     status: "ready", mapId: 55, travelContext: "world", characterKey, unlockedMapWords,
+    guildHall: false, hasGuildHall: true,
   });
   const friends = ref<TravelFriends>({ status: "waiting", reason: "unavailable" });
   const attempt = ref<TravelAttempt>({ status: "idle" });
@@ -346,14 +356,14 @@ export function createDemoTravelHost(): TravelHost {
     },
     async loadHistory() { return history.value; },
     async travel(request) {
-      attempt.value = { status: "queued", mapId: request.mapId };
+      attempt.value = { status: "queued", kind: "map", mapId: request.mapId };
       state.value = { status: "waiting", reason: "loading" };
-      attempt.value = { status: "loading", mapId: request.mapId };
+      attempt.value = { status: "loading", kind: "map", mapId: request.mapId };
       window.setTimeout(() => {
         history.value = recordVisitedTravel(history.value, request.mapId);
         state.value = {
           status: "ready", mapId: request.mapId, travelContext: "world",
-          characterKey, unlockedMapWords,
+          characterKey, unlockedMapWords, guildHall: false, hasGuildHall: true,
         };
         attempt.value = { status: "idle" };
       }, 600);
@@ -361,11 +371,11 @@ export function createDemoTravelHost(): TravelHost {
     async guildHall() {
       const ready = state.value.status === "ready" ? state.value : null;
       if (ready === null) return;
-      const destination = !ready.guildHall;
-      attempt.value = { status: "loading", guildHall: destination, mapId: 0 };
+      const target = ready.guildHall ? "outside" : "inside";
+      attempt.value = { status: "loading", kind: "guild-hall", target };
       state.value = { status: "waiting", reason: "loading" };
       window.setTimeout(() => {
-        state.value = { ...ready, guildHall: destination, hasGuildHall: true };
+        state.value = { ...ready, guildHall: target === "inside", hasGuildHall: true };
         attempt.value = { status: "idle" };
       }, 600);
     },
