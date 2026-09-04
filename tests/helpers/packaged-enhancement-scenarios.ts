@@ -651,6 +651,7 @@ export async function assertToolboxFoundationLifecycle() {
       const storageConfigurations: number[][] = [];
       const travelConfigurations: number[][] = [];
       const tradeConfigurations: number[] = [];
+      const chatFilterConfigurations: number[] = [];
       let pendingTradeToggles = 0;
       let tradeAliasDispatches = 0;
       addEventListener("gw:trade-toggle", () => { tradeAliasDispatches += 1; });
@@ -892,6 +893,10 @@ export async function assertToolboxFoundationLifecycle() {
               pendingTradeToggles = 0;
               return pending;
             },
+            enhancement_configure_chat_filters: (mask: number) => {
+              chatFilterConfigurations.push(mask);
+              return 1;
+            },
           },
         },
         module,
@@ -1048,6 +1053,7 @@ export async function assertToolboxFoundationLifecycle() {
         runtimeKeys: Object.keys(runtime).sort(),
         storageConfigurations: [...storageConfigurations],
         travelConfigurations: [...travelConfigurations],
+        chatFilterConfigurations: [...chatFilterConfigurations],
         scalar: {
           buildId: runtime.buildId,
           companionAbi: runtime.companionAbi,
@@ -1102,6 +1108,7 @@ export async function assertToolboxFoundationLifecycle() {
         transitions,
         storageConfigurations: [...storageConfigurations],
         travelConfigurations: [...travelConfigurations],
+        chatFilterConfigurations: [...chatFilterConfigurations],
       };
       return { after, before, pvp, recovered };
     }, {
@@ -1185,6 +1192,7 @@ export async function assertToolboxFoundationLifecycle() {
       tradeConfiguration: 1,
     });
     assert.deepEqual(result.before.travelConfigurations.at(-1), [travelPointer, 1]);
+    assert.deepEqual(result.before.chatFilterConfigurations, [0]);
     assert.equal(result.before.companionStatePublished, false);
     assert.equal(result.before.cursorStatePublished, true);
     assert.equal(result.before.globalRuntimeIsRuntime, false);
@@ -1279,6 +1287,7 @@ export async function assertToolboxFoundationLifecycle() {
     }]);
     assert.deepEqual(result.after.storageConfigurations.at(-1), [0, 0]);
     assert.deepEqual(result.after.travelConfigurations.at(-1), [0, 0]);
+    assert.deepEqual(result.after.chatFilterConfigurations, [0, 0]);
     assert.equal(result.after.hook, 0);
     assert.equal(result.after.cursorStatePublished, false);
     assert.equal(result.after.runtime, undefined);
