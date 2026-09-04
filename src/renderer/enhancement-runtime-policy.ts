@@ -34,7 +34,7 @@ export function enhancementRuntimePolicy(
     characterSwitch: selected("characterSwitch"),
     cartography: selected("cartography"),
     // The local Tools host remains reachable without a live observation, but
-    // withdraws when the certified region reports active PvP play.
+    // follows GWToolbox++ by withdrawing on a certified PvP map.
     tools: selected("tools", developerToolbox),
     buildLibrary: selected("buildLibrary", developerToolbox),
     tradeChat: selected("tradeChat", developerToolbox),

@@ -91,8 +91,8 @@ pub(crate) unsafe fn lifecycle(event: u32, request: u32, connection: u32, succes
 
 pub(crate) unsafe fn tick(layout: Layout) {
     let generation = unsafe { friend_session::accepted_generation() };
-    // This lightweight region proof must precede every roster read. Guild halls
-    // and PvP outposts classify as PVE here; active PvP and loading do not.
+    // This lightweight region proof must precede every roster read. PvP maps
+    // and loading do not reach the roster.
     if generation == 0 || !matches!(unsafe { resolve_game(layout) },
         GameState::Ready { play_region: PLAY_REGION_PVE, .. })
     {

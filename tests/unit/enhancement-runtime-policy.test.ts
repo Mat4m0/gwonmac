@@ -115,7 +115,7 @@ test("unknown regions keep local Tools while live PvE features fail closed", () 
   });
 });
 
-test("confirmed active PvP play disables every product and developer tool", () => {
+test("a confirmed PvP map disables every product and developer tool", () => {
   const on = Object.freeze({
     characterSwitchEnabled: false,
     cartographyEnabled: false,
@@ -226,7 +226,7 @@ test("runtime policy projects every registered feature exactly once", () => {
   );
 });
 
-test("local Tools require their setting or developer program and only active PvP blocks them", () => {
+test("local Tools require their setting or developer program and PvP maps block them", () => {
   const regions = ["pve", "pvp", "unknown"] as const;
   const programs = [
     "none",

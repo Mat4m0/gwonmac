@@ -54,7 +54,7 @@ describe("Companion Xunlai access kernel", () => {
     assert.equal(
       decoded(readCompanionSnapshot(kernel.memory.buffer, ADDRESSES.snapshot))
         .xunlaiAccess,
-      true,
+      false,
     );
 
     kernel.view.setUint32(ADDRESSES.character + 0x19c, 1, true);

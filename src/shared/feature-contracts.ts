@@ -102,7 +102,7 @@ export const FEATURE_SELECTION_POLICIES = defineFeatureSelectionPolicies({
       master: "gwonmacTools",
     },
     // The storage controller still owns the stronger, fresh access gate.
-    // This coarse rule withdraws the complete feature during active PvP play.
+    // This coarse rule follows GWToolbox++ and withdraws on a certified PvP map.
     region: "non-pvp",
   },
   quickItemMove: {

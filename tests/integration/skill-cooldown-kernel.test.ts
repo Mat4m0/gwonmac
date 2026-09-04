@@ -169,11 +169,10 @@ describe("skill cooldown kernel", () => {
     assert.equal(kernel.skillCooldowns().status, "ready");
     kernel.view.setUint32(ADDRESSES.areaInfo + 133 * 0x7c + 0x10, 1, true);
     kernel.tick(0, 10_000);
-    assert.equal(
-      kernel.skillCooldowns().status,
-      "ready",
-      "PvP outposts remain supported",
-    );
+    assert.deepEqual(kernel.skillCooldowns(), {
+      status: "waiting",
+      reason: "game",
+    });
 
     kernel.view.setUint32(ADDRESSES.character + 0x19c, 1, true);
     kernel.view.setUint32(ADDRESSES.character + 0x23c, 1, true);
