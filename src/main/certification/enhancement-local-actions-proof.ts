@@ -886,8 +886,11 @@ export function locateAutomaticLocalActions(
         ) === LOCAL_ACTION_HASHES.unlockAssertionFile
         && soleValue(unlockConsumerValues, "unlock.bounds") === travelAreaReader
         ? Object.freeze({
-            ...travelExpected,
-            guildHall,
+            enqueueExport: travelExpected.enqueueExport,
+            configureExport: travelExpected.configureExport,
+            toggleExport: travelExpected.toggleExport,
+            messageId: travelExpected.messageId,
+            ...(guildHall ? { guildHall } : {}),
             producer: Object.freeze({
               ...travelExpected.producer,
               functionIndex: travelFunction!,

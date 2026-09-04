@@ -29,6 +29,7 @@ function fixture(options: Readonly<{
 }> = {}, attachTo?: Element) {
   const state = ref<TravelHost["state"]["value"]>({
     status: "ready", mapId: 55, travelContext: "world", characterKey: null, unlockedMapWords: null,
+    guildHall: false, hasGuildHall: false,
   });
   let preferences: TravelPreferences = Object.freeze({
     shortcuts: options.shortcuts ?? DEFAULT_TRAVEL_SHORTCUTS,
@@ -39,7 +40,7 @@ function fixture(options: Readonly<{
   const notice = ref<TravelHost["notice"]["value"]>(null);
   const history = ref(options.history ?? EMPTY_TRAVEL_HISTORY);
   const travel = vi.fn<TravelHost["travel"]>(async (request) => {
-    attempt.value = { status: "queued", mapId: request.mapId };
+    attempt.value = { status: "queued", kind: "map", mapId: request.mapId };
   });
   const guildHall = vi.fn(async () => {});
   const savePreferences = vi.fn<TravelHost["savePreferences"]>(async (
@@ -71,7 +72,9 @@ function fixture(options: Readonly<{
       const current = attempt.value;
       if (current.status === "idle") return;
       if (next.status === "waiting" && next.reason === "loading") {
-        attempt.value = { status: "loading", mapId: current.mapId };
+        if (current.kind === "map") {
+          attempt.value = { status: "loading", kind: "map", mapId: current.mapId };
+        }
       } else if (current.status === "loading" && next.status === "ready") {
         attempt.value = { status: "idle" };
       }
@@ -103,6 +106,11 @@ describe("TravelPalette", () => {
     expect(wrapper.text()).toContain("Guild Hall");
     expect(wrapper.text()).toContain("No Guild Hall");
     expect(wrapper.get("#travel-guild-hall").attributes("disabled")).toBeDefined();
+
+    await wrapper.get("#travel-search-input").setValue("alligator");
+    expect(wrapper.find("#travel-guild-hall").exists()).toBe(false);
+    await wrapper.get("#travel-search-input").setValue("hall");
+    expect(wrapper.find("#travel-guild-hall").exists()).toBe(true);
 
     state.value = {
       status: "ready", mapId: 55, travelContext: "world", characterKey: null,
@@ -245,6 +253,7 @@ describe("TravelPalette", () => {
       travelContext: "world",
       characterKey: travelCharacterKey("0123456789abcdef"),
       unlockedMapWords,
+      guildHall: false, hasGuildHall: false,
     };
     await wrapper.get("#travel-search-input").setValue("Kamadan");
     expect(wrapper.findAll('[role="option"]')).toHaveLength(0);
@@ -271,6 +280,7 @@ describe("TravelPalette", () => {
       travelContext: "pre-searing",
       characterKey: travelCharacterKey("0123456789abcdef"),
       unlockedMapWords,
+      guildHall: false, hasGuildHall: false,
     };
     await flushPromises();
 
@@ -315,6 +325,7 @@ describe("TravelPalette", () => {
       travelContext: "world",
       characterKey: travelCharacterKey("0123456789abcdef"),
       unlockedMapWords,
+      guildHall: false, hasGuildHall: false,
     };
     await flushPromises();
 
@@ -332,6 +343,7 @@ describe("TravelPalette", () => {
       travelContext: "pre-searing",
       characterKey: travelCharacterKey("0123456789abcdef"),
       unlockedMapWords: null,
+      guildHall: false, hasGuildHall: false,
     };
     await flushPromises();
 
@@ -354,6 +366,7 @@ describe("TravelPalette", () => {
       travelContext: "world",
       characterKey: travelCharacterKey("0123456789abcdef"),
       unlockedMapWords,
+      guildHall: false, hasGuildHall: false,
     };
     await flushPromises();
 
@@ -371,6 +384,7 @@ describe("TravelPalette", () => {
       travelContext: "pre-searing",
       characterKey: travelCharacterKey("0123456789abcdef"),
       unlockedMapWords: Array.from({ length: 28 }, () => 0xffff_ffff),
+      guildHall: false, hasGuildHall: false,
     };
 
     await wrapper.get("#travel-search-input").setValue("asc");
@@ -394,6 +408,7 @@ describe("TravelPalette", () => {
       travelContext: "pre-searing",
       characterKey: travelCharacterKey("0123456789abcdef"),
       unlockedMapWords: Array.from({ length: 28 }, () => 0xffff_ffff),
+      guildHall: false, hasGuildHall: false,
     };
     await flushPromises();
 
@@ -413,6 +428,7 @@ describe("TravelPalette", () => {
       travelContext: "pre-searing",
       characterKey: travelCharacterKey("0123456789abcdef"),
       unlockedMapWords: Array.from({ length: 28 }, () => 0xffff_ffff),
+      guildHall: false, hasGuildHall: false,
     };
     await flushPromises();
 
@@ -760,6 +776,7 @@ describe("TravelPalette", () => {
       travelContext: "world",
       characterKey: travelCharacterKey("0123456789abcdef"),
       unlockedMapWords,
+      guildHall: false, hasGuildHall: false,
     };
     await flushPromises();
 

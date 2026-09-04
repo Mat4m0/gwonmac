@@ -37,6 +37,8 @@ function projectPlayRegion(state: CompanionPlayRegionState): string {
     state.travelContext,
     state.characterKey ?? "unknown-character",
     state.unlockedMapWords?.join(",") ?? "unknown-unlocks",
+    state.guildHall ? "guild-hall" : "outside-guild-hall",
+    state.hasGuildHall ? "has-guild-hall" : "no-guild-hall",
   ].join(":");
 }
 

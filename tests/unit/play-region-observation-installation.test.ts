@@ -11,6 +11,8 @@ const ready = (sequence: number, mapId = 81) => Object.freeze({
   travelContext: "world" as const,
   characterKey: null,
   unlockedMapWords: null,
+  guildHall: false,
+  hasGuildHall: false,
 });
 
 test("play-region authority withdraws on staleness and requires a newer publication to recover", (context) => {
