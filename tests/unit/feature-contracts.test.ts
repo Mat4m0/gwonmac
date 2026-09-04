@@ -135,12 +135,19 @@ test("the capability registry is the ordered wire vocabulary", () => {
       configOwners: ["observation", "player-effects"],
       hooks: ["ui"],
     },
+    {
+      id: "effectIconGeometry",
+      requiresAll: ["playRegionObservation", "playerEffectObservation"],
+      requiresAny: [],
+      configOwners: ["skill-slots"],
+      hooks: [],
+    },
   ]);
   assert.deepEqual(
     ENHANCEMENT_CAPABILITY_CONTRACTS.map(({ id }) => id),
     ENHANCEMENT_CAPABILITY_FIELDS,
   );
-  assert.equal(new Set(ENHANCEMENT_CAPABILITY_FIELDS).size, 14);
+  assert.equal(new Set(ENHANCEMENT_CAPABILITY_FIELDS).size, 16);
   for (const contract of ENHANCEMENT_CAPABILITY_CONTRACTS) {
     assert.equal(Object.isFrozen(contract), true, contract.id);
     assert.equal(Object.isFrozen(contract.requiresAll), true, contract.id);

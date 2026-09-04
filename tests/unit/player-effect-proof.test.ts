@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { isPlayerEffectObservationProof } from
+import { isEffectIconGeometryProof, isPlayerEffectObservationProof } from
   "../../src/main/certification/enhancement-player-effect-proof.ts";
 
 function proof() {
@@ -69,5 +69,65 @@ test("player-effect proof accepts only the exact fixed semantic contract", () =>
   assert.equal(isPlayerEffectObservationProof({
     ...valid,
     layout: { ...valid.layout, effectDuration: 0x14 },
+  }), false);
+});
+
+function iconProof() {
+  return {
+    frameHash: 0x66e6_211f,
+    initializer: {
+      functionIndex: 12_345,
+      params: ["i32", "i32"],
+      results: [],
+      bodySha256: "9267c76c395a6ca5bc2efd0f9eb1cd3234feb5c95041a3e6230c98f23f9a4d60",
+      constructorCallOperand: 168,
+    },
+    constructor: {
+      functionIndex: 6_676,
+      params: ["i32", "i32", "i32", "i32", "i32", "i32"],
+      results: ["i32"],
+      bodySha256: "a29fca1d30e5fa7dea1ca30f6453acbb8a099e4423c1f05ee43b01cfc3045c41",
+    },
+    childBuilder: {
+      functionIndex: 12_346,
+      params: ["i32", "i32"],
+      results: [],
+      bodySha256: "d5e3a36c3336cf3e42867228919ae973072dc54fb442d80244067a3f308b5fd5",
+      childOffset: 4,
+    },
+    layout: {
+      frameArray: 0x5a1fdc,
+      frameCount: 0x5a1fe4,
+      frameBytes: 0x1c8,
+      frameChildOffsetId: 0xb8,
+      frameId: 0xbc,
+      framePositionFlags: 0xd8,
+      frameViewportWidth: 0x104,
+      frameViewportHeight: 0x108,
+      frameScreenLeft: 0x10c,
+      frameScreenBottom: 0x110,
+      frameScreenRight: 0x114,
+      frameScreenTop: 0x118,
+      frameRelation: 0x128,
+      frameState: 0x18c,
+    },
+  };
+}
+
+test("effect-icon proof refuses changed anchors, relations, and child formula", () => {
+  const valid = iconProof();
+  assert.equal(isEffectIconGeometryProof(valid), true);
+  assert.equal(isEffectIconGeometryProof({ ...valid, frameHash: 1 }), false);
+  assert.equal(isEffectIconGeometryProof({
+    ...valid,
+    initializer: { ...valid.initializer, constructorCallOperand: 169 },
+  }), false);
+  assert.equal(isEffectIconGeometryProof({
+    ...valid,
+    childBuilder: { ...valid.childBuilder, childOffset: 8 },
+  }), false);
+  assert.equal(isEffectIconGeometryProof({
+    ...valid,
+    layout: { ...valid.layout, frameRelation: 0x12c },
   }), false);
 });

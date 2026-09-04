@@ -474,6 +474,12 @@ export class ClientRuntime {
           supported.playerEffectObservation,
           preparationFailed,
         ),
+        effectIconGeometry: optionalFeatureStatus(
+          requested.effectIconGeometry,
+          effective.effectIconGeometry,
+          supported.effectIconGeometry,
+          preparationFailed,
+        ),
         preGameControls: optionalFeatureStatus(
           requested.preGameControls,
           effective.preGameControls,

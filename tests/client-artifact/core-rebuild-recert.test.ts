@@ -30,6 +30,7 @@ const CORE_CAPABILITIES = Object.freeze({
   skillSlotGeometry: false,
   skillCooldownObservation: false,
   playerEffectObservation: false,
+    effectIconGeometry: false,
   playRegionObservation: true,
   preGameControls: true,
   characterSwitchAction: true,

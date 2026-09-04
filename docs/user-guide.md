@@ -104,7 +104,8 @@ every account. The launcher exposes:
 - **Maps** — enable exploration and walkability guidance;
 - **Target Distance** — show distance to the selected target in PvE;
 - **Skill Key Labels** — label the eight skill slots with your controls;
-- **Skill Cooldowns** — show numeric recharge timers with a preset or custom color.
+- **Skill Cooldowns** — show numeric recharge timers with a preset or custom color;
+- **Effect Timers** — show exact remaining time on your own native Effects icons in PvE.
 
 Open **Settings → Tools** to configure them. Features with shortcuts have
 an editable shortcut value. Select **Change** to capture a shortcut. Open

@@ -120,6 +120,13 @@ export const LOCAL_FEATURE_INVARIANTS = Object.freeze({
     "player-effects.collection-layout",
     "player-effects.precise-timer",
   ] as const),
+  effectIconGeometry: Object.freeze([
+    ...SHARED_FEATURE_INVARIANTS,
+    "effect-icons.frame-constructor",
+    "effect-icons.child-builder",
+    "effect-icons.child-id-formula",
+    "effect-icons.frame-layout",
+  ] as const),
   preGameControls: Object.freeze([
     ...SHARED_FEATURE_INVARIANTS,
     "pre-game.exact-frame-labels",
@@ -228,6 +235,10 @@ export interface LocalFeatureCertificateMap {
     & RequiredBuildFact<
       | "playRegionObservation" | "observationBase"
       | "uiDispatcher" | "playerEffectObservation"
+    >;
+  readonly effectIconGeometry: Readonly<{ core: EnhancementProofCore }>
+    & RequiredBuildFact<
+      "playRegionObservation" | "playerEffectObservation" | "effectIconGeometry"
     >;
   readonly preGameControls: Readonly<{ core: EnhancementProofCore }>
     & RequiredBuildFact<"preGameControls">;
@@ -486,6 +497,17 @@ export function localFeatureVerdictsForBuild(
         playerEffectObservation: build.playerEffectObservation,
       })
     : null;
+  const effectIconGeometry = effective?.effectIconGeometry && core !== null
+      && build?.playRegionObservation !== undefined
+      && build.playerEffectObservation !== undefined
+      && build.effectIconGeometry !== undefined
+    ? Object.freeze({
+        core,
+        playRegionObservation: build.playRegionObservation,
+        playerEffectObservation: build.playerEffectObservation,
+        effectIconGeometry: build.effectIconGeometry,
+      })
+    : null;
   const preGameControls = effective?.preGameControls
       && core !== null && build?.preGameControls !== undefined
     ? Object.freeze({ core, preGameControls: build.preGameControls })
@@ -596,6 +618,13 @@ export function localFeatureVerdictsForBuild(
       playerEffectObservation,
       failures.playerEffectObservation,
       "player-effects.collection-layout",
+    ),
+    effectIconGeometry: featureVerdict<"effectIconGeometry">(
+      inputSha256,
+      requested.effectIconGeometry,
+      effectIconGeometry,
+      failures.effectIconGeometry,
+      "effect-icons.frame-constructor",
     ),
     preGameControls: featureVerdict<"preGameControls">(
       inputSha256,

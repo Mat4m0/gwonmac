@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { describe, it } from "node:test";
 import {
   ENHANCEMENT_TRANSFORM_ABI,
@@ -24,6 +25,7 @@ import { inspectEnhancementCandidate } from "../../src/main/certification/enhanc
 import { decodeEnhancementManifest } from "../../src/renderer/enhancement-manifest.js";
 import {
   callbackFixture,
+  commandBody,
   CURSOR_ONLY,
   CURSOR_TARGET,
   CURSOR_TOOLBOX,
@@ -52,6 +54,7 @@ const PARTY_ONLY: EnhancementCapabilities = Object.freeze({
   skillSlotGeometry: false,
   skillCooldownObservation: false,
   playerEffectObservation: false,
+    effectIconGeometry: false,
 });
 
 const EFFECT_ONLY: EnhancementCapabilities = Object.freeze({
@@ -65,10 +68,12 @@ const EFFECT_ONLY: EnhancementCapabilities = Object.freeze({
   travelAction: false,
   xunlaiAction: false,
   chatAliases: false,
+  chatFiltering: false,
   skillSlotGeometry: false,
   skillCooldownObservation: false,
   quickItemMove: false,
   playerEffectObservation: true,
+    effectIconGeometry: false,
 });
 
 describe("targeted Enhancement WebAssembly transform", () => {
@@ -328,6 +333,7 @@ describe("targeted Enhancement WebAssembly transform", () => {
           skillSlotGeometry: false,
           skillCooldownObservation: false,
           playerEffectObservation: false,
+    effectIconGeometry: false,
         },
       ),
       /capability profile is not certified/,
@@ -577,15 +583,15 @@ describe("targeted Enhancement WebAssembly transform", () => {
       playerEffectObservation: {
         accessors: [],
         mutations: {
-          addTimed: { functionIndex: 0, bodySha256: "a".repeat(64) },
-          renewTimed: { functionIndex: 1, bodySha256: "b".repeat(64) },
-          remove: { functionIndex: 2, bodySha256: "c".repeat(64) },
+          addTimed: { functionIndex: 3, bodySha256: createHash("sha256").update(commandBody(input, 0)).digest("hex") },
+          renewTimed: { functionIndex: 3, bodySha256: createHash("sha256").update(commandBody(input, 0)).digest("hex") },
+          remove: { functionIndex: 3, bodySha256: createHash("sha256").update(commandBody(input, 0)).digest("hex") },
         },
         timer: {
-          functionIndex: 3,
+          functionIndex: 17,
           params: [],
           results: ["i32"],
-          bodySha256: "d".repeat(64),
+          bodySha256: createHash("sha256").update(commandBody(input, 14)).digest("hex"),
         },
         dirtyMessages,
         layout: {

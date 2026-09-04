@@ -36,6 +36,7 @@ function request() {
       playRegion: { pointer: 425_984, bytes: COMPANION_PLAY_REGION_BYTES },
       characterList: { pointer: 450_560, bytes: COMPANION_ABI.characterList.bytes },
       playerEffects: { pointer: 475_136, bytes: COMPANION_ABI.playerEffects.bytes },
+      effectIcons: { pointer: 491_520, bytes: COMPANION_ABI.effectIcons.bytes },
     },
   } as const;
 }
@@ -53,6 +54,7 @@ function initArguments(): readonly number[] {
     450_560, COMPANION_ABI.characterList.bytes,
     0, 0,
     475_136, COMPANION_ABI.playerEffects.bytes,
+    491_520, COMPANION_ABI.effectIcons.bytes,
     0,
     FEATURE_FLAGS,
   ];

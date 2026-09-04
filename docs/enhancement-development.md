@@ -66,6 +66,10 @@ Current integrated features are:
   announcements from entering the game chat log. A certified game-module
   pre-handler owns the fixed template checks; Electron receives no chat text.
   The feature and its three categories change live outside PvP maps.
+- **Effect Timers**: show exact durations from the controlled player's bounded
+  effect collection over independently certified native Effects icons. Duplicate
+  records remain distinct in observation; presentation shows the longest finite
+  duration for each skill. Party and hostile-agent effects are not inferred.
 
 These features then change live. Live observers and commands stop when disabled
 or when map policy refuses them. Host-only authoring remains available without

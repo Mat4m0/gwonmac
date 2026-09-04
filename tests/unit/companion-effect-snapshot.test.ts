@@ -3,9 +3,11 @@ import { describe, it } from "node:test";
 import { COMPANION_ABI } from "../../src/shared/companion-abi.js";
 import {
   formatEffectTimer,
+  readCompanionEffectIcons,
   readCompanionPlayerEffects,
   remainingEffectMs,
 } from "../../src/renderer/companion-effect-snapshot.js";
+import { projectEffectTimerLabels } from "../../src/renderer/effect-timer-overlay-consumer.js";
 
 type EffectRecord = Readonly<{
   effectId: number;
@@ -102,5 +104,90 @@ describe("controlled-player effect snapshots", () => {
     assert.equal(formatEffectTimer(2_999), "3.0");
     assert.equal(formatEffectTimer(2_001), "2.1");
     assert.equal(formatEffectTimer(1), "0.1");
+  });
+});
+
+function iconSnapshot() {
+  const buffer = new ArrayBuffer(COMPANION_ABI.effectIcons.bytes);
+  const view = new DataView(buffer);
+  view.setUint32(0, 0x4945_5747, true);
+  view.setUint16(4, COMPANION_ABI.effectIcons.abi, true);
+  view.setUint16(6, COMPANION_ABI.effectIcons.bytes, true);
+  view.setUint32(8, 2, true);
+  view.setUint32(12, 1, true);
+  view.setUint32(16, 3, true);
+  view.setUint32(20, 27, true);
+  view.setUint32(24, 1, true);
+  view.setFloat32(36, 800, true);
+  view.setFloat32(40, 600, true);
+  view.setUint32(44, 123, true);
+  view.setFloat32(48, 100, true);
+  view.setFloat32(52, -12, true);
+  view.setFloat32(56, 148, true);
+  view.setFloat32(60, 36, true);
+  return buffer;
+}
+
+describe("native effect icon geometry", () => {
+  it("accepts a visible rectangle clipped by the viewport edge", () => {
+    const state = readCompanionEffectIcons(iconSnapshot(), 0);
+    assert.equal(state.status, "ready");
+    if (state.status !== "ready") return;
+    assert.deepEqual(state.icons[0], {
+      skillId: 123,
+      left: 100,
+      bottom: -12,
+      right: 148,
+      top: 36,
+    });
+  });
+
+  it("projects the longest finite duplicate without a stack count", () => {
+    const geometry = readCompanionEffectIcons(iconSnapshot(), 0);
+    const effects = readCompanionPlayerEffects(effectSnapshot([
+      { ...FINITE, durationMs: 10_000, appliedAtGameMs: 5_000 },
+      { ...FINITE, effectId: 10, durationMs: 20_000, appliedAtGameMs: 5_000 },
+      { ...FINITE, effectId: 11, durationMs: 0 },
+    ]), 0);
+    const canvas = {
+      getBoundingClientRect: () => ({ left: 10, top: 20, width: 1_600, height: 1_200 }),
+    } as HTMLCanvasElement;
+    const labels = projectEffectTimerLabels(effects, geometry, canvas);
+    assert.deepEqual(labels, [{
+      skillId: 123,
+      x: 210,
+      y: 1_148,
+      width: 96,
+      height: 96,
+      text: "13",
+      urgency: "normal",
+    }]);
+  });
+
+  it("withdraws labels for indefinite-only and unavailable inputs", () => {
+    const geometry = readCompanionEffectIcons(iconSnapshot(), 0);
+    const canvas = {
+      getBoundingClientRect: () => ({ left: 0, top: 0, width: 800, height: 600 }),
+    } as HTMLCanvasElement;
+    const indefinite = readCompanionPlayerEffects(effectSnapshot([
+      { ...FINITE, durationMs: 0 },
+    ]), 0);
+    assert.deepEqual(projectEffectTimerLabels(indefinite, geometry, canvas), []);
+    assert.equal(projectEffectTimerLabels(
+      { status: "waiting", reason: "stale" },
+      geometry,
+      canvas,
+    ), null);
+  });
+
+  it("rejects non-ready geometry that retains published frame state", () => {
+    const buffer = iconSnapshot();
+    const view = new DataView(buffer);
+    view.setUint32(12, 0, true);
+    view.setUint32(28, 4, true);
+    assert.deepEqual(readCompanionEffectIcons(buffer, 0), {
+      status: "waiting",
+      reason: "corrupt",
+    });
   });
 });

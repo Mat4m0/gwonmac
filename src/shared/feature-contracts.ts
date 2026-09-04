@@ -21,6 +21,7 @@ type FeatureBooleanSetting = BooleanSetting & (
   | "skillKeyLabelsEnabled"
   | "skillCooldownOverlayEnabled"
   | "chatFiltersEnabled"
+  | "effectTimersEnabled"
   | "cartographyEnabled"
   | "characterSwitchEnabled"
 );
@@ -144,6 +145,14 @@ export const FEATURE_SELECTION_POLICIES = defineFeatureSelectionPolicies({
       master: "gwonmacTools",
     },
     region: "non-pvp",
+  },
+  effectTimers: {
+    activation: {
+      kind: "setting",
+      setting: "effectTimersEnabled",
+      master: "gwonmacTools",
+    },
+    region: "pve",
   },
 });
 

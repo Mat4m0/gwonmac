@@ -149,7 +149,10 @@ export function enhancementConfigWords(
             : build.travelAction?.guildHall?.layout[field.key];
           break;
         case "skill-slots":
-          value = build.skillSlotGeometry?.layout[field.key];
+          // SkillBar and Effects children share one independently proved frame
+          // table layout. Effects do not gain SkillBar authority merely to use it.
+          value = (build.skillSlotGeometry ?? build.effectIconGeometry)
+            ?.layout[field.key];
           break;
         case "skill-cooldown":
           value = build.skillCooldownObservation?.layout[field.key];
@@ -573,6 +576,26 @@ export interface KnownEnhancementBuild {
     dirtyMessages: EnhancementEffectDirtyMessages;
     layout: EnhancementPlayerEffectLayout;
   }>;
+  /** Exact native Effects parent and child mapping authority. */
+  effectIconGeometry?: Readonly<{
+    frameHash: number;
+    initializer: Readonly<{
+      functionIndex: number;
+      params: readonly ["i32", "i32"];
+      results: readonly [];
+      bodySha256: string;
+      constructorCallOperand: number;
+    }>;
+    constructor: NonNullable<KnownEnhancementBuild["skillSlotGeometry"]>["constructor"];
+    childBuilder: Readonly<{
+      functionIndex: number;
+      params: readonly ["i32", "i32"];
+      results: readonly [];
+      bodySha256: string;
+      childOffset: 4;
+    }>;
+    layout: EnhancementSkillSlotGeometryLayout;
+  }>;
 }
 
 export function supportedEnhancementCapabilities(
@@ -616,6 +639,7 @@ export function supportedEnhancementCapabilities(
     playerEffectObservation: observationBase
       && build.uiDispatcher !== undefined
       && build.playerEffectObservation !== undefined,
+    effectIconGeometry: build.effectIconGeometry !== undefined,
   });
   // Evidence locators decide only what they proved. The shared registry owns
   // every dependency and closes the available set in one canonical place.
@@ -656,6 +680,7 @@ export function hasValidEnhancementProfileHashes(
     || build.partyObservation !== undefined
     || build.skillCooldownObservation !== undefined
     || build.playerEffectObservation !== undefined
+    || build.effectIconGeometry !== undefined
     || build.xunlaiAction !== undefined;
   if (hasObservation && build.observationBase === undefined) {
     return false;
@@ -666,6 +691,7 @@ export function hasValidEnhancementProfileHashes(
   if (build.playerEffectObservation !== undefined && build.uiDispatcher === undefined) {
     return false;
   }
+  if (build.effectIconGeometry !== undefined && !hasPlayRegion) return false;
   if (build.partyObservation !== undefined && build.uiDispatcher === undefined) {
     return false;
   }

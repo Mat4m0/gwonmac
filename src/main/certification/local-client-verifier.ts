@@ -74,9 +74,12 @@ import {
 } from "./local-client-skillbar-verifier.js";
 import { derivePreGameControls } from "./enhancement-pre-game-proof.js";
 import {
+  deriveEffectIconGeometry,
   derivePlayerEffectObservation,
+  effectIconCandidateCounts,
   playerEffectCandidateCounts,
 } from "./enhancement-player-effect-proof.js";
+import { deriveSkillSlotGeometry } from "./enhancement-skill-slot-geometry-proof.js";
 
 export { isLocalClientVerification } from "./local-client-verification-boundary.js";
 export {
@@ -192,6 +195,9 @@ function failuresForRequested(
       : {}),
     ...(requested.playerEffectObservation
       ? { playerEffectObservation: changedFeature("playerEffectObservation", invariant) }
+      : {}),
+    ...(requested.effectIconGeometry
+      ? { effectIconGeometry: changedFeature("effectIconGeometry", invariant) }
       : {}),
   });
 }
@@ -628,6 +634,12 @@ function deriveEnhancementBuild(
   const playerEffects = requestedCapabilities.playerEffectObservation
     ? derivePlayerEffectObservation(context.moduleView())
     : null;
+  const effectIcons = requestedCapabilities.effectIconGeometry
+    ? deriveEffectIconGeometry(
+        context.moduleView(),
+        deriveSkillSlotGeometry(context),
+      )
+    : null;
   const includePreGame = requestedCapabilities.preGameControls
     && preGameControls !== null;
   const wantsLocal = requestedCapabilities.partyObservation
@@ -638,7 +650,8 @@ function deriveEnhancementBuild(
     || requestedCapabilities.chatFiltering
     || requestedCapabilities.characterSwitchAction
     || requestedCapabilities.quickItemMove
-    || requestedCapabilities.playerEffectObservation;
+    || requestedCapabilities.playerEffectObservation
+    || requestedCapabilities.effectIconGeometry;
   const locatedLocal = wantsLocal
     ? locateAutomaticLocalActions(
         templateOutput,
@@ -689,9 +702,16 @@ function deriveEnhancementBuild(
     && playerEffects !== null
     && locatedLocal?.observationLayout != null
     && locatedLocal.uiDispatcher != null;
+  const includeEffectIcons = requestedCapabilities.effectIconGeometry
+    && includePlayRegion
+    && includePlayerEffects
+    && effectIcons !== null;
   const playerEffectCounts = includePlayerEffects || playerEffects !== null
     ? []
     : playerEffectCandidateCounts(context.moduleView());
+  const effectIconCounts = includeEffectIcons || effectIcons !== null
+    ? []
+    : effectIconCandidateCounts(context.moduleView());
   const failures = diagnoseFeatureFailures(
     templateOutput,
     requestedCapabilities,
@@ -734,6 +754,23 @@ function deriveEnhancementBuild(
                 playerEffects === null
                   ? "player-effects.collection-layout"
                   : "player-effects.ui-dispatcher",
+              ),
+        }
+      : {}),
+    ...(requestedCapabilities.effectIconGeometry && !includeEffectIcons
+      ? {
+          effectIconGeometry: effectIcons === null
+            && effectIconCounts.some((count) => count > 1)
+            ? ambiguousFeature(
+                "effectIconGeometry",
+                "effect-icons.frame-constructor",
+                Math.max(...effectIconCounts),
+              )
+            : changedFeature(
+                "effectIconGeometry",
+                effectIcons === null
+                  ? "effect-icons.frame-constructor"
+                  : "effect-icons.frame-layout",
               ),
         }
       : {}),
@@ -873,6 +910,7 @@ function deriveEnhancementBuild(
     ...(includePreGame ? { preGameControls: preGameControls! } : {}),
     ...(includeQuickItemMove ? { quickItemMove: locatedLocal!.quickItemMove! } : {}),
     ...(includePlayerEffects ? { playerEffectObservation: playerEffects! } : {}),
+    ...(includeEffectIcons ? { effectIconGeometry: effectIcons! } : {}),
     ...skillbarBuild.beforeTeam,
     ...(includeTeam ? { teamApply: locatedLocal!.teamApply! } : {}),
     ...skillbarBuild.afterTeam,
@@ -893,6 +931,7 @@ function deriveEnhancementBuild(
     characterSwitchAction: includeCharacterSwitch,
     quickItemMove: includeQuickItemMove,
     playerEffectObservation: includePlayerEffects,
+    effectIconGeometry: includeEffectIcons,
   });
   const effective = intersectEnhancementCapabilities(requestedCapabilities, maximum);
   const profile = enhancementCapabilityProfile(effective);

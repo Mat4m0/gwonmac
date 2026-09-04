@@ -19,9 +19,10 @@ its rules.
 | How do agents develop, branch, stabilize, and roll out changes? | [Development and rollout](development-workflow.md) |
 | How do I change or recertify an Enhancement? | [Enhancement development](enhancement-development.md) |
 | How are player skill cooldowns certified and displayed? | [Skill cooldowns](skill-cooldowns.md) |
+| How are controlled-player effect timers certified and displayed? | [Effect timers](effect-timers.md) |
 | How do the cartography grid and walkability overlay work? | [Cartography](cartography.md) |
 | How do I certify every cartography layer in a live game? | [Live cartography certification](live-cartography-certification.md) |
-| What is the later research path for effects and debuffs? | [Future effect and debuff research](future-effect-durations.md) |
+| What remains to research for party and hostile effects? | [Future effect and debuff research](future-effect-durations.md) |
 | How do application releases, Stable, and Beta work? | [Release verification](release-verification.md) |
 | Which UI tokens and components must Tools use? | [Tools design](../apps/tools/DESIGN.md) |
 

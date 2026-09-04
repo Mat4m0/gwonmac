@@ -16,6 +16,7 @@ import type {
   OptionalObserverReaders,
   SkillCooldownConsumer,
   SkillSlotConsumer,
+  EffectIconConsumer,
   PlayerEffectConsumer,
   StateConsumer,
   ToolboxConsumer,
@@ -36,6 +37,7 @@ export type CompanionObserverExtension = Readonly<{
   skillSlots: SkillSlotConsumer | null;
   skillCooldowns: SkillCooldownConsumer | null;
   playerEffects: PlayerEffectConsumer | null;
+  effectIcons: EffectIconConsumer | null;
   readers: OptionalObserverReaders | null;
   pointers: Readonly<{
     snapshot: number;
@@ -44,6 +46,7 @@ export type CompanionObserverExtension = Readonly<{
     skillSlots: number;
     skillCooldowns: number;
     playerEffects: number;
+    effectIcons: number;
   }>;
 }>;
 
@@ -86,6 +89,7 @@ export type PreparedCompanionExtension = Readonly<{
     skillSlots: KernelRegion;
     skillCooldowns: KernelRegion;
     playerEffects: KernelRegion;
+    effectIcons: KernelRegion;
     friends: KernelRegion;
     friendRoot: number;
   }>;

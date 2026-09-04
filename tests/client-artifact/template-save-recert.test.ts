@@ -169,6 +169,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     characterSwitchAction: false,
     quickItemMove: false,
     playerEffectObservation: false,
+    effectIconGeometry: true,
   });
   const verifyFeatureMutation = (candidate: Uint8Array) =>
     verifyLocalClientBytes(candidate, withoutCharacterSwitch);
@@ -188,6 +189,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     characterSwitchAction: true,
     quickItemMove: true,
     playerEffectObservation: true,
+    effectIconGeometry: true,
   });
   // If this is a statically shipped build, the shape locator must still
   // reproduce that record exactly. Unknown builds are intentionally decided
@@ -319,6 +321,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     characterSwitchAction: false,
     quickItemMove: false,
     playerEffectObservation: false,
+    effectIconGeometry: false,
   });
   assert.deepEqual(addressDecision.reasons, []);
   const addressTemplateBuild = addressDecision.templateSaveBuild;
@@ -343,6 +346,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     characterSwitchAction: false,
     quickItemMove: false,
     playerEffectObservation: false,
+    effectIconGeometry: false,
   });
 
   const areaInfo = playRegionLocation.playRegionLayout.areaInfo;

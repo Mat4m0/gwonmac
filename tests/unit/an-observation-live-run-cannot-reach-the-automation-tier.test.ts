@@ -194,6 +194,7 @@ describe("an observation live run cannot reach the automation tier", () => {
         "operatorStep",
         "readCharacterSwitchDiagnostics",
         "readCursorProjection",
+        "readEffectIcons",
         "readPlayerEffects",
         "wait",
       ],
@@ -237,11 +238,13 @@ describe("an observation live run cannot reach the automation tier", () => {
       readCursorProjection: () => Promise<unknown>;
       readCharacterSwitchDiagnostics: () => Promise<unknown>;
       readPlayerEffects: () => Promise<unknown>;
+      readEffectIcons: () => Promise<unknown>;
       wait: (ms: number) => Promise<unknown>;
     };
     assert.equal(await context.readCursorProjection(), "read");
     assert.equal(await context.readCharacterSwitchDiagnostics(), "read");
     assert.equal(await context.readPlayerEffects(), "read");
+    assert.equal(await context.readEffectIcons(), "read");
     assert.equal(await context.wait(1), undefined);
   });
 

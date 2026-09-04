@@ -565,6 +565,7 @@ window.gwToolsSettings = () => Object.freeze({
   chatFilterHallOfHeroes: appSettings?.chatFilterHallOfHeroes ?? false,
   chatFilterTitleAchievements: appSettings?.chatFilterTitleAchievements ?? false,
   quickItemMove: appSettings?.quickItemMove ?? false,
+  effectTimersEnabled: appSettings?.effectTimersEnabled ?? false,
   skillCooldownColor: appSettings?.skillCooldownColor
     ?? Object.freeze({ kind: 'preset', preset: 'red' }),
 });

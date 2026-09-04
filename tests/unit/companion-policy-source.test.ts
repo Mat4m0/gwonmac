@@ -66,6 +66,7 @@ describe("companion policy source", () => {
           skillCooldowns: false,
           chatFilters: false,
           quickItemMove: false,
+          effectTimers: false,
         },
       },
     });

@@ -12,4 +12,7 @@ export {
   readCompanionSkillCooldowns,
   readCompanionSkillSlots,
 } from "./companion-skill-snapshot.js";
-export { readCompanionPlayerEffects } from "./companion-effect-snapshot.js";
+export {
+  readCompanionEffectIcons,
+  readCompanionPlayerEffects,
+} from "./companion-effect-snapshot.js";

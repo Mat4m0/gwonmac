@@ -106,7 +106,6 @@ function encodeName(value: string): Uint8Array {
   return concat(uleb(bytes.byteLength), bytes);
 }
 
-
 function assertSignature(
   label: string,
   type: FunctionType,
@@ -762,7 +761,9 @@ function assembleEnhancementTransform(
   const selectedOriginalIndices = selected.map((hook) =>
     appendFunction(hook.typeIndex, bodies[hook.localIndex]!));
   const skillTimerFunctionIndex = skillResolution.cooldown
-    ?.certificate.timer.functionIndex ?? null;
+    ?.certificate.timer.functionIndex
+    ?? skillResolution.effects?.certificate.timer.functionIndex
+    ?? null;
   const uiHookIndex = selected.findIndex(({ role }) => role === "ui");
   const uiOriginalIndex = uiHookIndex >= 0
     ? selectedOriginalIndices[uiHookIndex]!
@@ -778,8 +779,12 @@ function assembleEnhancementTransform(
       extraArgumentGlobal: capabilities.skillSlotGeometry && hook.role === "tick"
         ? skillBarFrameGlobalIndex
         : null,
-      extraArgumentFunction: capabilities.skillCooldownObservation && hook.role === "tick"
+      extraArgumentFunction: (capabilities.skillCooldownObservation
+        || capabilities.playerEffectObservation) && hook.role === "tick"
         ? skillTimerFunctionIndex
+        : null,
+      secondExtraArgumentConstant: capabilities.effectIconGeometry && hook.role === "tick"
+        ? skillResolution.effectGeometry?.certificate.frameHash ?? null
         : null,
     });
   });
@@ -790,7 +795,6 @@ function assembleEnhancementTransform(
     skillBarFrameGlobalIndex,
     appendFunction,
   });
-
   const addedFunctionExports: Array<Readonly<{ name: string; index: number }>> = [];
   if (capabilities.chatFiltering) {
     addedFunctionExports.push({

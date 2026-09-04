@@ -141,6 +141,7 @@ export const TARGET_ONLY: EnhancementCapabilities = Object.freeze({
   skillSlotGeometry: false,
   skillCooldownObservation: false,
   playerEffectObservation: false,
+    effectIconGeometry: false,
 });
 export const TOOLBOX_PROGRAM_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
@@ -158,6 +159,7 @@ export const TOOLBOX_PROGRAM_CAPABILITIES: EnhancementCapabilities = Object.free
   skillSlotGeometry: false,
   skillCooldownObservation: false,
   playerEffectObservation: false,
+    effectIconGeometry: false,
 });
 export const PRODUCT_TOOLS_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
@@ -175,6 +177,7 @@ export const PRODUCT_TOOLS_CAPABILITIES: EnhancementCapabilities = Object.freeze
   skillSlotGeometry: false,
   skillCooldownObservation: false,
   playerEffectObservation: false,
+    effectIconGeometry: false,
 });
 export const TARGET_OFF_PRODUCT_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
@@ -192,6 +195,7 @@ export const TARGET_OFF_PRODUCT_CAPABILITIES: EnhancementCapabilities = Object.f
   skillSlotGeometry: false,
   skillCooldownObservation: false,
   playerEffectObservation: false,
+    effectIconGeometry: false,
 });
 export const CONFIG_BYTES =
   ENHANCEMENT_CONFIG_WORD_COUNT * Uint32Array.BYTES_PER_ELEMENT;

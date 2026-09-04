@@ -293,3 +293,16 @@ pub(crate) unsafe fn inactive(game_timer: u32, tick: u32, active_features: u32) 
         unsafe { publish(0, game_timer); LAST_PUBLISH = tick; }
     }
 }
+
+pub(crate) unsafe fn current_skills() -> (u32, [u32; EFFECT_RECORDS]) {
+    let mut skills = [0; EFFECT_RECORDS];
+    let count = unsafe { CACHED_COUNT };
+    for index in 0..count as usize {
+        unsafe { *skills.get_unchecked_mut(index) = cached(index).skill_id; }
+    }
+    (count, skills)
+}
+
+pub(crate) unsafe fn current_generation() -> u32 {
+    unsafe { GENERATION }
+}

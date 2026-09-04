@@ -453,6 +453,7 @@ const candidateSettingsDomains = Array.from(
       skillKeyLabelsEnabled: cycle(booleanValues, index + 1),
       skillCooldownOverlayEnabled: cycle(booleanValues, index),
       quickItemMove: false,
+      effectTimersEnabled: cycle(booleanValues, index + 1),
       skillCooldownColor: { kind: "preset", preset: "red" },
       extendedMemoryEnabled: cycle(booleanValues, index + 1),
       autoRelogAfterReload: cycle(booleanValues, index),

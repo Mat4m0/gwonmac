@@ -23,7 +23,10 @@ import type {
 } from "../shared/diagnostics.js";
 import type { ToolboxObservation } from "../shared/builds/live-party.js";
 import type { PublishedCompanionState } from "./companion-snapshot.js";
-import type { CompanionPlayerEffectState } from "./companion-effect-snapshot.js";
+import type {
+  CompanionEffectIconState,
+  CompanionPlayerEffectState,
+} from "./companion-effect-snapshot.js";
 import type { VirtualGamepadController } from "./virtual-gamepad.js";
 import type { ControllerPromptTextureStats } from "./controller-prompt-texture.js";
 import type {
@@ -228,6 +231,7 @@ declare global {
     readonly toolbox: ToolboxObservation | null;
     readonly xunlaiAccess: boolean | null;
     readonly playerEffects: CompanionPlayerEffectState | null;
+    readonly effectIcons: CompanionEffectIconState | null;
   }
 
   interface CompanionObserverRuntime extends CompanionDeveloperRuntime {
@@ -301,6 +305,7 @@ declare global {
       chatFilterHallOfHeroes: boolean;
       chatFilterTitleAchievements: boolean;
       quickItemMove: boolean;
+      effectTimersEnabled: boolean;
       skillCooldownColor: AppSettings['skillCooldownColor'];
     }>;
     gwLoading: LoadingController;

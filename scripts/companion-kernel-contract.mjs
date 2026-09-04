@@ -38,10 +38,11 @@ export const COMPANION_KERNEL_EXPORT_VALUES = Object.freeze({
   companion_character_list_bytes: COMPANION_ABI.characterList.bytes,
   companion_friend_bytes: COMPANION_ABI.friends.bytes,
   companion_player_effect_bytes: COMPANION_ABI.playerEffects.bytes,
+  companion_effect_icon_bytes: COMPANION_ABI.effectIcons.bytes,
 });
 
 export const COMPANION_KERNEL_DYLINK0 = Object.freeze([
-  // Memory footprint 2309 bytes (0x85 0x12 as LEB128). Documented moves:
+  // Memory footprint 3969 bytes (0x81 0x1f as LEB128). Documented moves:
   //   309 ->  310  the Toolbox observer gained PARTY_OBSERVED, the byte that
   //                separates "you have no heroes" from "nobody read the party";
   //   310 ->  410  Layout grew by the 25 party-detail address words, at 4 bytes
@@ -99,10 +100,12 @@ export const COMPANION_KERNEL_DYLINK0 = Object.freeze([
   //   2309 -> 3941 controlled-player effects add a fixed 64-record cache,
   //                reconciliation state, and 15 appended config words. The
   //                1572-byte publication remains in host-owned memory.
+  //   3941 -> 3969 native Effects geometry adds seven bounded cache and
+  //                heartbeat words; its 1324-byte publication stays host-owned.
   // This constant exists so a kernel whose footprint moves cannot ship without
   // someone saying why. One page is still the ceiling, and this remains far
   // under it.
-  0x01, 0x05, 0xe5, 0x1e, 0x02, 0x00, 0x00,
+  0x01, 0x05, 0x81, 0x1f, 0x02, 0x00, 0x00,
 ]);
 
 const WASM_PAGE_BYTES = 65_536;

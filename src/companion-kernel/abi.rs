@@ -38,6 +38,7 @@ pub(crate) const FEATURE_PLAY_REGION_OBSERVATION: u32 = 1 << 6;
 pub(crate) const FEATURE_CHARACTER_LIST: u32 = 1 << 7;
 pub(crate) const FEATURE_FRIEND_OBSERVATION: u32 = 1 << 8;
 pub(crate) const FEATURE_PLAYER_EFFECT_OBSERVATION: u32 = 1 << 9;
+pub(crate) const FEATURE_EFFECT_ICON_GEOMETRY: u32 = 1 << 10;
 pub(crate) const KNOWN_FEATURES: u32 = FEATURE_NATIVE_CURSOR
     | FEATURE_GAME_SNAPSHOT
     | FEATURE_TOOLBOX_FOUNDATION
@@ -47,7 +48,8 @@ pub(crate) const KNOWN_FEATURES: u32 = FEATURE_NATIVE_CURSOR
     | FEATURE_PLAY_REGION_OBSERVATION
     | FEATURE_CHARACTER_LIST
     | FEATURE_FRIEND_OBSERVATION
-    | FEATURE_PLAYER_EFFECT_OBSERVATION;
+    | FEATURE_PLAYER_EFFECT_OBSERVATION
+    | FEATURE_EFFECT_ICON_GEOMETRY;
 
 pub(crate) const CHARACTER_LIST_BYTES: u32 = size_of::<CharacterListSnapshot>() as u32;
 pub(crate) const CHARACTER_LIST_MAGIC: u32 = 0x4843_5747;
@@ -86,6 +88,10 @@ pub(crate) const PLAYER_EFFECT_ABI_AND_SIZE: u32 = (PLAYER_EFFECT_BYTES << 16) |
 pub(crate) const FLAG_PLAYER_EFFECTS_READY: u32 = 1 << 0;
 pub(crate) const FLAG_PLAYER_EFFECTS_LOADING: u32 = 1 << 1;
 pub(crate) const EFFECT_RECORDS: usize = 64;
+pub(crate) const EFFECT_ICON_BYTES: u32 = size_of::<EffectIconSnapshot>() as u32;
+pub(crate) const EFFECT_ICON_MAGIC: u32 = 0x4945_5747;
+pub(crate) const EFFECT_ICON_ABI_AND_SIZE: u32 = (EFFECT_ICON_BYTES << 16) | 1;
+pub(crate) const FLAG_EFFECT_ICONS_READY: u32 = 1 << 0;
 
 pub(crate) const TOOLBOX_BYTES: u32 = size_of::<ToolboxSnapshot>() as u32;
 pub(crate) const TOOLBOX_MAGIC: u32 = 0x5854_5747;
@@ -609,6 +615,29 @@ pub(crate) struct PlayerEffectSnapshot {
     pub(crate) effects: [PlayerEffectRecord; EFFECT_RECORDS],
 }
 
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub(crate) struct EffectIconRecord {
+    pub(crate) skill_id: u32,
+    pub(crate) rectangle: SkillSlotRect,
+}
+
+#[repr(C)]
+pub(crate) struct EffectIconSnapshot {
+    pub(crate) magic: u32,
+    pub(crate) abi_and_size: u32,
+    pub(crate) sequence: u32,
+    pub(crate) flags: u32,
+    pub(crate) generation: u32,
+    pub(crate) frame_id: u32,
+    pub(crate) count: u32,
+    pub(crate) outcome: u32,
+    pub(crate) candidate_count: u32,
+    pub(crate) viewport_width: f32,
+    pub(crate) viewport_height: f32,
+    pub(crate) icons: [EffectIconRecord; EFFECT_RECORDS],
+}
+
 /// One party position, as much of it as has been read.
 ///
 /// Every field is paired with a bit in `flags` that says whether it was read.
@@ -687,3 +716,5 @@ const _: [(); 164] = [(); size_of::<SkillSlotSnapshot>()];
 const _: [(); 60] = [(); size_of::<SkillCooldownSnapshot>()];
 const _: [(); 24] = [(); size_of::<PlayerEffectRecord>()];
 const _: [(); 1572] = [(); size_of::<PlayerEffectSnapshot>()];
+const _: [(); 20] = [(); size_of::<EffectIconRecord>()];
+const _: [(); 1324] = [(); size_of::<EffectIconSnapshot>()];

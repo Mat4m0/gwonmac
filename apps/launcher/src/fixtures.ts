@@ -40,6 +40,7 @@ export const fixtureSnapshot: LauncherSnapshot = {
       "skill-key-labels": { enabled: false },
       "skill-cooldowns": { enabled: true },
       "chat-filters": { enabled: false },
+      "effect-timers": { enabled: false },
     },
   },
   shortcuts: resolveShortcuts({}),

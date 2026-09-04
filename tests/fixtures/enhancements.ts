@@ -28,7 +28,9 @@ import {
 } from "../../src/renderer/companion-skill-snapshot.ts";
 import { readCompanionFriends } from "../../src/renderer/companion-friend-snapshot.ts";
 import {
+  COMPANION_EFFECT_ICON_BYTES,
   COMPANION_PLAYER_EFFECT_BYTES,
+  readCompanionEffectIcons,
   readCompanionPlayerEffects,
 } from "../../src/renderer/companion-effect-snapshot.ts";
 import {
@@ -127,6 +129,8 @@ export const FEATURE_PLAY_REGION_OBSERVATION =
   COMPANION_FEATURE_BITS.playRegionObservation;
 export const FEATURE_PLAYER_EFFECT_OBSERVATION =
   COMPANION_FEATURE_BITS.playerEffectObservation;
+export const FEATURE_EFFECT_ICON_GEOMETRY =
+  COMPANION_FEATURE_BITS.effectIconGeometry;
 export { COMPANION_PLAY_REGION_BYTES };
 export const ALL_FEATURES = FEATURE_NATIVE_CURSOR
   | FEATURE_GAME_SNAPSHOT
@@ -300,6 +304,7 @@ export const ADDRESSES = Object.freeze({
   playRegion: 0xc200,
   characterList: 0xc300,
   playerEffects: 0xc600,
+  effectIcons: 0xcc40,
   agentEffectRows: 0xe000,
   effectRecords: 0xe800,
   friends: 0x5_0000,
@@ -505,6 +510,8 @@ export interface KernelOverrides {
   friendSize?: number;
   playerEffectPointer?: number;
   playerEffectSize?: number;
+  effectIconPointer?: number;
+  effectIconSize?: number;
   friendRoot?: number;
   toolboxSize?: number;
 }
@@ -540,6 +547,8 @@ export type KernelInit = (
   friendSize: number,
   playerEffectPointer: number,
   playerEffectSize: number,
+  effectIconPointer: number,
+  effectIconSize: number,
   friendRoot: number,
   features: number,
 ) => number;
@@ -758,16 +767,24 @@ export async function createKernel(
           ?? ((features & FEATURE_PLAYER_EFFECT_OBSERVATION) !== 0
             ? COMPANION_PLAYER_EFFECT_BYTES
             : 0),
+        overrides.effectIconPointer
+          ?? ((features & FEATURE_EFFECT_ICON_GEOMETRY) !== 0
+            ? ADDRESSES.effectIcons
+            : 0),
+        overrides.effectIconSize
+          ?? ((features & FEATURE_EFFECT_ICON_GEOMETRY) !== 0
+            ? COMPANION_EFFECT_ICON_BYTES
+            : 0),
         overrides.friendRoot ?? 0,
         features,
       );
     },
-    tick: (skillBarFrameId = 0, skillTimer = 0) => exports.dispatch(
+    tick: (skillBarFrameId = 0, skillTimer = 0, effectsFrameHash = 0) => exports.dispatch(
       COMPANION_DISPATCH_KINDS.tick,
       123,
       skillBarFrameId,
       skillTimer,
-      0,
+      effectsFrameHash,
       0,
     ),
     cursorEvent: (...args: number[]) =>
@@ -808,6 +825,8 @@ export async function createKernel(
     playRegion: () => readCompanionPlayRegion(memory.buffer, ADDRESSES.playRegion),
     playerEffects: () =>
       readCompanionPlayerEffects(memory.buffer, ADDRESSES.playerEffects),
+    effectIcons: () =>
+      readCompanionEffectIcons(memory.buffer, ADDRESSES.effectIcons),
     field: (offset: number) => view.getUint32(ADDRESSES.cursor + offset, true),
     header: () => readCompanionCursorHeader(memory.buffer, ADDRESSES.cursor),
     published: () => readCompanionCursorPixels(memory.buffer, ADDRESSES.cursor),
@@ -926,6 +945,36 @@ export function installSkillBarGraph(view: DataView, parentId = 1) {
     view.setFloat32(child + 0x114, left + 48, true);
     view.setFloat32(child + 0x118, 68, true);
   }
+}
+
+/** Install one stock Effects parent and one visible child for a skill. */
+export function installEffectIconGraph(
+  view: DataView,
+  skillId: number,
+  parentHash = 0x66e6_211f,
+) {
+  const frameBytes = 0x1c8;
+  const parent = ADDRESSES.frameBuffer + frameBytes;
+  const child = ADDRESSES.frameBuffer + frameBytes * 2;
+  view.setUint32(ADDRESSES.frameArrayGlobal, ADDRESSES.frameTable, true);
+  view.setUint32(ADDRESSES.frameCountGlobal, 3, true);
+  view.setUint32(ADDRESSES.frameTable + 4, parent, true);
+  view.setUint32(ADDRESSES.frameTable + 8, child, true);
+  view.setUint32(parent + 0xbc, 1, true);
+  view.setUint32(parent + 0x18c, 0x4, true);
+  view.setUint32(parent + 0x134, parentHash, true);
+  view.setFloat32(parent + 0x104, 800, true);
+  view.setFloat32(parent + 0x108, 600, true);
+  view.setUint32(child + 0xbc, 2, true);
+  view.setUint32(child + 0x18c, 0x4, true);
+  view.setUint32(child + 0xb8, skillId + 4, true);
+  view.setUint32(child + 0x128, parent + 0x128, true);
+  view.setFloat32(child + 0x104, 800, true);
+  view.setFloat32(child + 0x108, 600, true);
+  view.setFloat32(child + 0x10c, 100, true);
+  view.setFloat32(child + 0x110, 20, true);
+  view.setFloat32(child + 0x114, 148, true);
+  view.setFloat32(child + 0x118, 68, true);
 }
 
 /** Add a second visible frame that claims slot zero of the installed bar. */

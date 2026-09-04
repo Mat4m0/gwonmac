@@ -21,6 +21,7 @@ const capabilities: EnhancementCapabilities = Object.freeze({
   skillSlotGeometry: true,
   skillCooldownObservation: true,
   playerEffectObservation: false,
+    effectIconGeometry: false,
   playRegionObservation: true,
     preGameControls: false,
     characterSwitchAction: false,
@@ -140,9 +141,15 @@ test("unselected skill facts stay absent and selected missing facts fail clearly
     skillSlotGeometry: false,
     skillCooldownObservation: false,
     playerEffectObservation: false,
+    effectIconGeometry: false,
   });
   assert.deepEqual(unselected.labels, []);
-  assert.deepEqual(unselected.resolution, { geometry: null, cooldown: null });
+  assert.deepEqual(unselected.resolution, {
+    geometry: null,
+    cooldown: null,
+    effects: null,
+    effectGeometry: null,
+  });
   assert.throws(
     () => resolve(withoutSkillFacts),
     /skill-slot geometry is not certified/u,

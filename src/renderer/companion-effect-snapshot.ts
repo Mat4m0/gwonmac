@@ -5,7 +5,9 @@
 import { COMPANION_ABI } from "../shared/companion-abi.js";
 
 export const COMPANION_PLAYER_EFFECT_BYTES = COMPANION_ABI.playerEffects.bytes;
+export const COMPANION_EFFECT_ICON_BYTES = COMPANION_ABI.effectIcons.bytes;
 const EFFECT_MAGIC = 0x46455747;
+const ICON_MAGIC = 0x49455747;
 const READY = 1;
 const LOADING = 2;
 const MAX_EFFECTS = 64;
@@ -91,6 +93,86 @@ export function readCompanionPlayerEffects(buffer: ArrayBuffer, pointer: number)
 
 export type CompanionPlayerEffectState = ReturnType<typeof readCompanionPlayerEffects>
   | Readonly<{ status: "waiting"; reason: "stale" | "inactive"; activeFeatures?: number }>;
+
+export function readCompanionEffectIcons(buffer: ArrayBuffer, pointer: number) {
+  if (!(buffer instanceof ArrayBuffer) || !Number.isInteger(pointer) || pointer < 0
+    || pointer + COMPANION_EFFECT_ICON_BYTES > buffer.byteLength) {
+    return Object.freeze({ status: "waiting", reason: "memory" } as const);
+  }
+  const view = new DataView(buffer, pointer, COMPANION_EFFECT_ICON_BYTES);
+  const first = view.getUint32(8, true);
+  if (first & 1) return Object.freeze({ status: "waiting", reason: "writing" } as const);
+  const magic = view.getUint32(0, true);
+  const abi = view.getUint16(4, true);
+  const bytes = view.getUint16(6, true);
+  const flags = view.getUint32(12, true);
+  const generation = view.getUint32(16, true);
+  const frameId = view.getUint32(20, true);
+  const count = view.getUint32(24, true);
+  const outcome = view.getUint32(28, true);
+  const candidateCount = view.getUint32(32, true);
+  const viewportWidth = view.getFloat32(36, true);
+  const viewportHeight = view.getFloat32(40, true);
+  if (count > MAX_EFFECTS) {
+    return Object.freeze({ status: "waiting", reason: "corrupt" } as const);
+  }
+  const icons = Object.freeze(Array.from({ length: count }, (_, index) => {
+    const at = 44 + index * 20;
+    return Object.freeze({
+      skillId: view.getUint32(at, true),
+      left: view.getFloat32(at + 4, true),
+      bottom: view.getFloat32(at + 8, true),
+      right: view.getFloat32(at + 12, true),
+      top: view.getFloat32(at + 16, true),
+    });
+  }));
+  const second = view.getUint32(8, true);
+  if (magic !== ICON_MAGIC || abi !== COMPANION_ABI.effectIcons.abi
+    || bytes !== COMPANION_EFFECT_ICON_BYTES || first !== second || second & 1
+    || flags & ~READY) {
+    return Object.freeze({ status: "waiting", reason: "snapshot" } as const);
+  }
+  if (!(flags & READY)) {
+    if (frameId !== 0 || count !== 0 || outcome === 0
+      || viewportWidth !== 0 || viewportHeight !== 0) {
+      return Object.freeze({ status: "waiting", reason: "corrupt" } as const);
+    }
+    return Object.freeze({
+      status: "waiting" as const,
+      reason: ({
+        1: "inactive",
+        2: "invalid-input",
+        3: "frame-table",
+        4: "parent-missing",
+        5: "parent-hidden",
+        6: "ambiguous",
+        7: "child-invalid",
+        8: "relation-mismatch",
+        9: "parent-ambiguous",
+      } as const)[outcome as 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9] ?? "frame",
+      ...(candidateCount > 0 ? { candidateCount } : {}),
+    });
+  }
+  const finite = (value: number) => Number.isFinite(value)
+    && Math.abs(value) <= 32_768;
+  if (frameId === 0 || outcome !== 0 || candidateCount !== 0
+    || !finite(viewportWidth) || !finite(viewportHeight)
+    || viewportWidth <= 0 || viewportHeight <= 0
+    || icons.some((icon) => icon.skillId === 0
+      || ![icon.left, icon.bottom, icon.right, icon.top].every(finite)
+      || icon.right <= icon.left || icon.top <= icon.bottom
+      || icon.right <= 0 || icon.top <= 0
+      || icon.left >= viewportWidth || icon.bottom >= viewportHeight)) {
+    return Object.freeze({ status: "waiting", reason: "corrupt" } as const);
+  }
+  return Object.freeze({
+    status: "ready" as const, sequence: second, generation, frameId,
+    viewportWidth, viewportHeight, icons,
+  });
+}
+
+export type CompanionEffectIconState = ReturnType<typeof readCompanionEffectIcons>
+  | Readonly<{ status: "waiting"; reason: "stale" | "inactive" }>;
 
 export function remainingEffectMs(gameTimer: number, appliedAt: number, durationMs: number): number | null {
   if (durationMs === 0) return null;

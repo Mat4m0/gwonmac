@@ -54,7 +54,8 @@ function liveReadinessSatisfied(required: LiveReadiness): boolean {
     return typeof window.gwCompanionRuntime?.xunlaiAccess === "boolean";
   }
   if (required === "effects") {
-    return window.gwCompanionRuntime?.playerEffects?.status === "ready";
+    return window.gwCompanionRuntime?.playerEffects?.status === "ready"
+      && window.gwCompanionRuntime?.effectIcons?.status === "ready";
   }
   const cursor = window.gwCompanionRuntime?.cursor;
   return window.gwCompanionRuntime?.status === "installed"
@@ -73,6 +74,7 @@ export type ObservationContext = Readonly<{
   readCursorProjection: () => Promise<CompanionDeveloperRuntime["cursor"]>;
   readCharacterSwitchDiagnostics: () => Promise<CharacterSwitchDiagnostics | null>;
   readPlayerEffects: () => Promise<CompanionDeveloperRuntime["playerEffects"]>;
+  readEffectIcons: () => Promise<CompanionDeveloperRuntime["effectIcons"]>;
   operatorStep: (step: Readonly<{
     id: string;
     title: string;
@@ -815,7 +817,7 @@ export const SCENARIOS: Readonly<Record<string, LiveScenario>> = Object.freeze({
     tier: "observation",
     program: "effect-observer",
     readiness: "effects",
-    async run({ readPlayerEffects, operatorStep, wait }: ObservationContext) {
+    async run({ readPlayerEffects, readEffectIcons, operatorStep, wait }: ObservationContext) {
       const steps = Object.freeze([
         {
           id: "baseline",
@@ -852,6 +854,8 @@ export const SCENARIOS: Readonly<Record<string, LiveScenario>> = Object.freeze({
         id: string;
         first: CompanionDeveloperRuntime["playerEffects"];
         second: CompanionDeveloperRuntime["playerEffects"];
+        firstIcons: CompanionDeveloperRuntime["effectIcons"];
+        secondIcons: CompanionDeveloperRuntime["effectIcons"];
       }>> = [];
       const outputDirectory = path.join(
         process.cwd(),
@@ -861,7 +865,7 @@ export const SCENARIOS: Readonly<Record<string, LiveScenario>> = Object.freeze({
       const output = path.join(outputDirectory, "effect-observer.json");
       await mkdir(outputDirectory, { recursive: true });
       const persist = (complete: boolean) => writeFile(output, `${JSON.stringify({
-        version: 1,
+        version: 2,
         complete,
         checkpoints,
       }, null, 2)}\n`, "utf8");
@@ -870,9 +874,11 @@ export const SCENARIOS: Readonly<Record<string, LiveScenario>> = Object.freeze({
         await operatorStep(step);
         await wait(100);
         const first = await readPlayerEffects();
+        const firstIcons = await readEffectIcons();
         await wait(150);
         const second = await readPlayerEffects();
-        checkpoints.push(Object.freeze({ id: step.id, first, second }));
+        const secondIcons = await readEffectIcons();
+        checkpoints.push(Object.freeze({ id: step.id, first, second, firstIcons, secondIcons }));
         await persist(false);
       }
       await persist(true);
@@ -884,6 +890,8 @@ export const SCENARIOS: Readonly<Record<string, LiveScenario>> = Object.freeze({
           id: string;
           first: CompanionDeveloperRuntime["playerEffects"];
           second: CompanionDeveloperRuntime["playerEffects"];
+          firstIcons: CompanionDeveloperRuntime["effectIcons"];
+          secondIcons: CompanionDeveloperRuntime["effectIcons"];
         }>[];
       }>;
     }) {
@@ -894,6 +902,8 @@ export const SCENARIOS: Readonly<Record<string, LiveScenario>> = Object.freeze({
       for (const checkpoint of checkpoints) {
         if (checkpoint.first?.status !== "ready"
           || checkpoint.second?.status !== "ready"
+          || checkpoint.firstIcons?.status !== "ready"
+          || checkpoint.secondIcons?.status !== "ready"
           || checkpoint.second.sequence === checkpoint.first.sequence) {
           throw new Error(`${checkpoint.id} did not publish a ready heartbeat`);
         }
@@ -1116,6 +1126,8 @@ export function scenarioContext(
       window.gwCharacterSwitch?.diagnostics() ?? null),
     readPlayerEffects: async () => (await currentPage()).evaluate(() =>
       window.gwCompanionRuntime?.playerEffects ?? null),
+    readEffectIcons: async () => (await currentPage()).evaluate(() =>
+      window.gwCompanionRuntime?.effectIcons ?? null),
     operatorStep,
     wait: (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
   };

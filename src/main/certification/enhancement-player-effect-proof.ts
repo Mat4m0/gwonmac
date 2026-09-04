@@ -3,8 +3,10 @@
  * It refuses the capability unless every exact function role has one match.
  */
 import {
+  functionBody,
   functionBodySha256,
   signatureMatches,
+  unsignedOperand,
 } from "./wasm-evidence.js";
 import type { ModuleShape } from "./enhancement-evidence-types.js";
 import type { KnownEnhancementBuild } from "./enhancement-builds.js";
@@ -12,6 +14,7 @@ import type { KnownEnhancementBuild } from "./enhancement-builds.js";
 type PlayerEffectProof = NonNullable<
   KnownEnhancementBuild["playerEffectObservation"]
 >;
+type EffectIconProof = NonNullable<KnownEnhancementBuild["effectIconGeometry"]>;
 
 type ExactRole = Readonly<{
   hash: string;
@@ -35,6 +38,22 @@ const TIMERS: readonly ExactRole[] = Object.freeze([
   { hash: "7340dbe70f3f4bf731d23f80882df99553e837f825d8bbebee7f8eac45d8ef58", bodyLength: 80, params: [], results: ["i32"] },
   { hash: "c1f93ac7e783305bff7d976dbf55365b67fa6696243305685aa1fb0fb7901030", bodyLength: 80, params: [], results: ["i32"] },
 ]);
+const EFFECTS_INITIALIZER: ExactRole = {
+  hash: "9267c76c395a6ca5bc2efd0f9eb1cd3234feb5c95041a3e6230c98f23f9a4d60",
+  bodyLength: 374, params: ["i32", "i32"], results: [],
+};
+const CHILD_BUILDER: ExactRole = {
+  hash: "d5e3a36c3336cf3e42867228919ae973072dc54fb442d80244067a3f308b5fd5",
+  bodyLength: 245, params: ["i32", "i32"], results: [],
+};
+const EFFECTS_FRAME_HASH = 0x66e6211f;
+const FIXED_FRAME_LAYOUT = Object.freeze({
+  frameBytes: 0x1c8, frameChildOffsetId: 0xb8, frameId: 0xbc,
+  framePositionFlags: 0xd8, frameViewportWidth: 0x104,
+  frameViewportHeight: 0x108, frameScreenLeft: 0x10c,
+  frameScreenBottom: 0x110, frameScreenRight: 0x114,
+  frameScreenTop: 0x118, frameRelation: 0x128, frameState: 0x18c,
+});
 const DIRTY_MESSAGES = Object.freeze([
   0x10000055, 0x10000056, 0x10000057, 0x10000141,
 ] as const);
@@ -168,5 +187,82 @@ export function derivePlayerEffectObservation(
     timer: Object.freeze({ functionIndex: timer, params: [] as const, results: ["i32"] as const, bodySha256: timerHash }),
     dirtyMessages: DIRTY_MESSAGES,
     layout: PLAYER_EFFECT_LAYOUT,
+  });
+}
+
+export function effectIconCandidateCounts(module: ModuleShape): readonly number[] {
+  return Object.freeze(scan(module, [EFFECTS_INITIALIZER, CHILD_BUILDER])
+    .map((matches) => matches.length));
+}
+
+/** Strict boundary proof for the independently located native icon geometry. */
+export function isEffectIconGeometryProof(value: unknown): value is EffectIconProof {
+  if (!value || typeof value !== "object") return false;
+  const proof = value as Partial<EffectIconProof>;
+  const initializer = proof.initializer;
+  const constructor = proof.constructor;
+  const child = proof.childBuilder;
+  const layout = proof.layout;
+  return exactKeys(value, ["frameHash", "initializer", "constructor", "childBuilder", "layout"])
+    && proof.frameHash === EFFECTS_FRAME_HASH
+    && initializer !== undefined
+    && exactKeys(initializer, ["functionIndex", "params", "results", "bodySha256", "constructorCallOperand"])
+    && index(initializer.functionIndex)
+    && initializer.constructorCallOperand === 168
+    && initializer.bodySha256 === EFFECTS_INITIALIZER.hash
+    && sameStrings(initializer.params, EFFECTS_INITIALIZER.params)
+    && sameStrings(initializer.results, EFFECTS_INITIALIZER.results)
+    && constructor !== undefined
+    && exactKeys(constructor, ["functionIndex", "params", "results", "bodySha256"])
+    && index(constructor.functionIndex)
+    && /^[0-9a-f]{64}$/u.test(constructor.bodySha256)
+    && sameStrings(constructor.params, ["i32", "i32", "i32", "i32", "i32", "i32"])
+    && sameStrings(constructor.results, ["i32"])
+    && child !== undefined
+    && exactKeys(child, ["functionIndex", "params", "results", "bodySha256", "childOffset"])
+    && index(child.functionIndex)
+    && child.childOffset === 4
+    && child.bodySha256 === CHILD_BUILDER.hash
+    && sameStrings(child.params, CHILD_BUILDER.params)
+    && sameStrings(child.results, CHILD_BUILDER.results)
+    && layout !== undefined
+    && index(layout.frameArray) && layout.frameArray > 0
+    && layout.frameCount === layout.frameArray + 8
+    && Object.entries(FIXED_FRAME_LAYOUT).every(([key, expected]) =>
+      layout[key as keyof typeof FIXED_FRAME_LAYOUT] === expected);
+}
+
+export function deriveEffectIconGeometry(
+  module: ModuleShape,
+  skillGeometry: NonNullable<KnownEnhancementBuild["skillSlotGeometry"]> | null,
+): EffectIconProof | null {
+  const matches = scan(module, [EFFECTS_INITIALIZER, CHILD_BUILDER]);
+  if (matches.some((candidate) => candidate.length !== 1) || skillGeometry === null) return null;
+  const initializer = matches[0]![0]!;
+  const childBuilder = matches[1]![0]!;
+  const initializerBody = functionBody(module, initializer);
+  if (
+    initializerBody[167] !== 0x10
+    || unsignedOperand(initializerBody, 168)
+      !== skillGeometry.constructor.functionIndex
+  ) return null;
+  return Object.freeze({
+    frameHash: EFFECTS_FRAME_HASH,
+    initializer: Object.freeze({
+      functionIndex: initializer,
+      params: ["i32", "i32"] as const,
+      results: [] as const,
+      bodySha256: EFFECTS_INITIALIZER.hash,
+      constructorCallOperand: 168,
+    }),
+    constructor: skillGeometry.constructor,
+    childBuilder: Object.freeze({
+      functionIndex: childBuilder,
+      params: ["i32", "i32"] as const,
+      results: [] as const,
+      bodySha256: CHILD_BUILDER.hash,
+      childOffset: 4 as const,
+    }),
+    layout: skillGeometry.layout,
   });
 }

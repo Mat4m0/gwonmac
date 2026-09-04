@@ -149,6 +149,15 @@ const CAPABILITY_DEFINITIONS = Object.freeze([
     configOwners: ["observation", "player-effects"],
     hooks: ["ui"],
   },
+  {
+    // Geometry has its own proof, but it consumes the bounded player-effect
+    // projection to decide which native children are relevant.
+    id: "effectIconGeometry",
+    requiresAll: ["playRegionObservation", "playerEffectObservation"],
+    requiresAny: [],
+    configOwners: ["skill-slots"],
+    hooks: [],
+  },
 ] as const);
 for (const contract of CAPABILITY_DEFINITIONS) {
   Object.freeze(contract.requiresAll);
@@ -241,6 +250,7 @@ export const NO_ENHANCEMENT_CAPABILITIES: EnhancementCapabilities = Object.freez
   chatFiltering: false,
   quickItemMove: false,
   playerEffectObservation: false,
+  effectIconGeometry: false,
 });
 
 function isExactBooleanRecord<Key extends string>(
@@ -280,6 +290,7 @@ export function parseEnhancementCapabilities(
     chatFiltering: value.chatFiltering,
     quickItemMove: value.quickItemMove,
     playerEffectObservation: value.playerEffectObservation,
+    effectIconGeometry: value.effectIconGeometry,
   });
 }
 
@@ -312,8 +323,8 @@ export const ENHANCEMENT_CAPABILITY_PRESETS = Object.freeze({
   cursorParty: capabilitiesFromMask(0x285),
   storage: capabilitiesFromMask(0x270),
   partyCommandsStorage: capabilitiesFromMask(0x2fc),
-  effects: capabilitiesFromMask(0x4200),
-  all: capabilitiesFromMask(0x7fff),
+  effects: capabilitiesFromMask(0xc200),
+  all: capabilitiesFromMask(0xffff),
 });
 
 /** The two capability sets shipped by Core and Tools release launches. */
@@ -328,7 +339,7 @@ export {
   ENHANCEMENT_LAYOUT_WORD_COUNT,
   ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT,
 } from "./enhancement-config.js";
-export const ENHANCEMENT_TRANSFORM_ABI = 52;
+export const ENHANCEMENT_TRANSFORM_ABI = 53;
 
 export const ENHANCEMENT_CHAT_FILTER_MASKS = Object.freeze({
   allyDrops: 1,
