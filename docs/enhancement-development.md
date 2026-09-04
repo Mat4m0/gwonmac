@@ -291,8 +291,9 @@ it is not a second product feature or setting.
 
 Region selection has three explicit strengths: `any`, `non-pvp`, and `pve`.
 `non-pvp` keeps unknown or loading state eligible. A positively identified PvP
-map, including a PvP outpost or guild hall, withdraws the feature. Developer
-programs can replace saved selection, never the registered region rule.
+map, including a PvP outpost, withdraws the feature. Guild Halls are the one
+explicit exception. Developer programs can replace saved selection, never the
+registered region rule.
 
 Choose the smallest path:
 

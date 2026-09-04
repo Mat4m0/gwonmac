@@ -229,9 +229,10 @@ After that restart, these choices update during the session:
   saved colour remains when the tool is off.
 
 Disabled optional observers stop their domain reads. Core cursor observation
-stays active. A small map-policy projection follows GWToolbox++'s PvP map flag.
-PvP outposts and guild halls close Tools and Xunlai storage. Stricter live
-features also withdraw during transitions and unknown regions.
+stays active. A small map-policy projection reads GWToolbox++'s PvP map flag
+but keeps Guild Halls as an explicit gwonmac exception. PvP outposts close Tools
+and Xunlai storage. Stricter live features also withdraw during transitions and
+unknown regions.
 
 If live integration is unavailable while Tools Beta and Build Library remain
 enabled, the host can still mount the saved-library part of Tools. Players can

@@ -186,7 +186,7 @@ impl State {
     }
 }
 
-/** The client-owned map policy used by GWToolbox++ itself. */
+/** The Tools map policy, including gwonmac's explicit Guild Hall exception. */
 unsafe fn classify_play_region(layout: Layout, map_id: u32) -> (u32, bool, bool, bool) {
     if layout.area_info == 0
         || layout.area_info_count == 0
@@ -215,7 +215,8 @@ unsafe fn classify_play_region(layout: Layout, map_id: u32) -> (u32, bool, bool,
     else {
         return (PLAY_REGION_UNKNOWN, false, false, false);
     };
-    let play_region = if flags & 0x0004_0001 != 0 {
+    let guild_hall = flags & 0x0080_0000 != 0;
+    let play_region = if flags & 0x0004_0001 != 0 && !guild_hall {
         PLAY_REGION_PVP
     } else {
         PLAY_REGION_PVE
@@ -224,7 +225,7 @@ unsafe fn classify_play_region(layout: Layout, map_id: u32) -> (u32, bool, bool,
         play_region,
         area_region == 7 && play_region == PLAY_REGION_PVE,
         flags & 0x20 == 0,
-        flags & 0x0080_0000 != 0,
+        guild_hall,
     )
 }
 

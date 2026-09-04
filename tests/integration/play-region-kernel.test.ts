@@ -90,7 +90,7 @@ describe("play-region kernel", () => {
     const hall = kernel.playRegion();
     assert.equal(hall.status, "ready");
     if (hall.status !== "ready") return;
-    assert.equal(hall.playRegion, "pvp");
+    assert.equal(hall.playRegion, "pve");
     assert.equal(hall.hasGuildHall, true);
     assert.equal(hall.guildHall, true);
   });
