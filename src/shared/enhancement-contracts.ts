@@ -127,6 +127,13 @@ const CAPABILITY_DEFINITIONS = Object.freeze([
     configOwners: [],
     hooks: [],
   },
+  {
+    id: "quickItemMove",
+    requiresAll: ["playRegionObservation", "preGameControls"],
+    requiresAny: [],
+    configOwners: [],
+    hooks: [],
+  },
 ] as const);
 for (const contract of CAPABILITY_DEFINITIONS) {
   Object.freeze(contract.requiresAll);
@@ -152,7 +159,7 @@ export const ENHANCEMENT_CAPABILITY_FIELDS = Object.freeze(
 export type EnhancementCapabilities = Readonly<Record<EnhancementCapability, boolean>>;
 
 const MAX_CAPABILITY_MASK = (1 << ENHANCEMENT_CAPABILITY_FIELDS.length) - 1;
-const CAPABILITY_PROFILE = /^features-([0-9a-f]{2,3})$/;
+const CAPABILITY_PROFILE = /^features-([0-9a-f]{2,4})$/;
 
 /** A compact transform identity whose hex mask follows the registry order. */
 export type EnhancementCapabilityProfile = `features-${string}`;
@@ -216,6 +223,7 @@ export const NO_ENHANCEMENT_CAPABILITIES: EnhancementCapabilities = Object.freez
   playRegionObservation: false,
   preGameControls: false,
   characterSwitchAction: false,
+  quickItemMove: false,
 });
 
 function isExactBooleanRecord<Key extends string>(
@@ -252,6 +260,7 @@ export function parseEnhancementCapabilities(
     playRegionObservation: value.playRegionObservation,
     preGameControls: value.preGameControls,
     characterSwitchAction: value.characterSwitchAction,
+    quickItemMove: value.quickItemMove,
   });
 }
 
@@ -284,7 +293,7 @@ export const ENHANCEMENT_CAPABILITY_PRESETS = Object.freeze({
   cursorParty: capabilitiesFromMask(0x285),
   storage: capabilitiesFromMask(0x270),
   partyCommandsStorage: capabilitiesFromMask(0x2fc),
-  all: capabilitiesFromMask(0xfff),
+  all: capabilitiesFromMask(0x1fff),
 });
 
 /** The two capability sets shipped by Core and Tools release launches. */

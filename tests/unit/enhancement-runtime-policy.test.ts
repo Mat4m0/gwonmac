@@ -16,6 +16,7 @@ const off = Object.freeze({
   travelPalette: false,
   skillKeyLabelsEnabled: false,
   skillCooldownOverlayEnabled: false,
+  quickItemMove: false,
 });
 
 test("developer programs replace saved optional-tool selection in PvE", () => {
@@ -31,6 +32,7 @@ test("developer programs replace saved optional-tool selection in PvE", () => {
     travel: false,
     skillKeyLabels: false,
     skillCooldowns: false,
+    quickItemMove: false,
   });
   assert.deepEqual(enhancementRuntimePolicy("toolbox-commands", off, "pve"), {
     characterSwitch: false,
@@ -44,6 +46,7 @@ test("developer programs replace saved optional-tool selection in PvE", () => {
     travel: true,
     skillKeyLabels: false,
     skillCooldowns: false,
+    quickItemMove: false,
   });
   assert.deepEqual(enhancementRuntimePolicy("xunlai-storage", off, "pve"), {
     characterSwitch: false,
@@ -57,6 +60,7 @@ test("developer programs replace saved optional-tool selection in PvE", () => {
     travel: true,
     skillKeyLabels: false,
     skillCooldowns: false,
+    quickItemMove: false,
   });
   assert.deepEqual(enhancementRuntimePolicy("target-observer", off, "pve"), {
     characterSwitch: false,
@@ -70,6 +74,7 @@ test("developer programs replace saved optional-tool selection in PvE", () => {
     travel: false,
     skillKeyLabels: false,
     skillCooldowns: false,
+    quickItemMove: false,
   });
 });
 
@@ -85,6 +90,7 @@ test("unknown regions keep local Tools while live PvE features fail closed", () 
     travelPalette: true,
     skillKeyLabelsEnabled: false,
     skillCooldownOverlayEnabled: false,
+    quickItemMove: false,
   });
   assert.deepEqual(enhancementRuntimePolicy("none", on, "unknown"), {
     characterSwitch: false,
@@ -98,6 +104,7 @@ test("unknown regions keep local Tools while live PvE features fail closed", () 
     travel: false,
     skillKeyLabels: false,
     skillCooldowns: false,
+    quickItemMove: false,
   });
 });
 
@@ -113,6 +120,7 @@ test("confirmed active PvP play disables every product and developer tool", () =
     travelPalette: true,
     skillKeyLabelsEnabled: true,
     skillCooldownOverlayEnabled: true,
+    quickItemMove: false,
   });
   for (const program of [
     "none",
@@ -133,6 +141,7 @@ test("confirmed active PvP play disables every product and developer tool", () =
       travel: false,
       skillKeyLabels: false,
       skillCooldowns: false,
+      quickItemMove: false,
     }, program);
   }
 });
@@ -149,6 +158,7 @@ test("product tool settings remain live once the capability is present", () => {
     travelPalette: true,
     skillKeyLabelsEnabled: false,
     skillCooldownOverlayEnabled: true,
+    quickItemMove: false,
   }, "pve"), {
     characterSwitch: false,
     cartography: false,
@@ -161,6 +171,7 @@ test("product tool settings remain live once the capability is present", () => {
     travel: true,
     skillKeyLabels: false,
     skillCooldowns: true,
+    quickItemMove: false,
   });
 });
 
@@ -172,6 +183,7 @@ test("skill feature selection distinguishes labels from cooldowns", () => {
     gwonmacTools: true,
     skillKeyLabelsEnabled: false,
     skillCooldownOverlayEnabled: false,
+    quickItemMove: false,
   }, "pve");
   assert.equal(empty.skillKeyLabels, false);
   assert.equal(empty.skillCooldowns, false);
@@ -182,9 +194,18 @@ test("skill feature selection distinguishes labels from cooldowns", () => {
     gwonmacTools: true,
     skillKeyLabelsEnabled: true,
     skillCooldownOverlayEnabled: false,
+    quickItemMove: false,
   }, "pve");
   assert.equal(labels.skillKeyLabels, true);
   assert.equal(labels.skillCooldowns, false);
+});
+
+test("Quick Item Move follows its single Tools switch and withdraws in PvP", () => {
+  const settings = { ...off, gwonmacTools: true, quickItemMove: true };
+  assert.equal(enhancementRuntimePolicy("none", settings, "pve").quickItemMove, true);
+  assert.equal(enhancementRuntimePolicy("none", settings, "unknown").quickItemMove, true);
+  assert.equal(enhancementRuntimePolicy("none", settings, "pvp").quickItemMove, false);
+  assert.equal(enhancementRuntimePolicy("none", { ...settings, gwonmacTools: false }, "pve").quickItemMove, false);
 });
 
 test("runtime policy projects every registered feature exactly once", () => {

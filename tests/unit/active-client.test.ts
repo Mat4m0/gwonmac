@@ -22,6 +22,7 @@ function generation(wasmPath: string, size: number): ClientGeneration {
         playRegionObservation: { status: "off" },
         preGameControls: { status: "off" },
         characterSwitchAction: { status: "off" },
+        quickItemMove: { status: "off" },
         targetObservation: { status: "off" },
         partyObservation: { status: "off" },
         teamApply: { status: "off" },

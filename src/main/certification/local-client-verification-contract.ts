@@ -123,6 +123,10 @@ export const LOCAL_FEATURE_INVARIANTS = Object.freeze({
     ...SHARED_FEATURE_INVARIANTS,
     "character-switch.exact-action-path",
   ] as const),
+  quickItemMove: Object.freeze([
+    ...SHARED_FEATURE_INVARIANTS,
+    "quick-item-move.inventory-actions",
+  ] as const),
 } as const satisfies Readonly<
   Record<LocalClientFeature, readonly string[]>
 >);
@@ -210,6 +214,10 @@ export interface LocalFeatureCertificateMap {
     & RequiredBuildFact<"preGameControls">;
   readonly characterSwitchAction: Readonly<{ core: EnhancementProofCore }>
     & RequiredBuildFact<"preGameControls">;
+  readonly quickItemMove: Readonly<{ core: EnhancementProofCore }>
+    & RequiredBuildFact<
+      "playRegionObservation" | "preGameControls" | "uiDispatcher" | "quickItemMove"
+    >;
 }
 
 export type LocalFeatureVerdict<Feature extends LocalClientFeature> =
@@ -452,6 +460,20 @@ export function localFeatureVerdictsForBuild(
       && core !== null && build?.preGameControls?.characterSwitchAction !== undefined
     ? Object.freeze({ core, preGameControls: build.preGameControls })
     : null;
+  const quickItemMove = effective?.quickItemMove
+      && core !== null
+      && build?.playRegionObservation !== undefined
+      && build.preGameControls !== undefined
+      && build.uiDispatcher !== undefined
+      && build.quickItemMove !== undefined
+    ? Object.freeze({
+        core,
+        playRegionObservation: build.playRegionObservation,
+        preGameControls: build.preGameControls,
+        uiDispatcher: build.uiDispatcher,
+        quickItemMove: build.quickItemMove,
+      })
+    : null;
   return Object.freeze({
     nativeCursor: featureVerdict<"nativeCursor">(
       inputSha256,
@@ -536,6 +558,13 @@ export function localFeatureVerdictsForBuild(
       characterSwitchAction,
       failures.characterSwitchAction,
       "character-switch.exact-action-path",
+    ),
+    quickItemMove: featureVerdict<"quickItemMove">(
+      inputSha256,
+      requested.quickItemMove,
+      quickItemMove,
+      failures.quickItemMove,
+      "quick-item-move.inventory-actions",
     ),
   });
 }

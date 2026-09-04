@@ -684,6 +684,39 @@ export function deriveTravelContextResolver(
 }
 
 
+function deriveQuickItemMove(
+  module: ModuleShape,
+  baseline: KnownEnhancementBuild,
+  inputSha256: string,
+  uiDispatcher: KnownEnhancementBuild["uiDispatcher"] | null,
+): KnownEnhancementBuild["quickItemMove"] | null {
+  const certificate = baseline.quickItemMove;
+  // The item and trade structure fields are reviewed build facts. Until they
+  // gain independent witnesses, only the exact reviewed module may use them.
+  if (!certificate || baseline.sha256 !== inputSha256
+    || !uiDispatcher || !baseline.preGameControls) return null;
+  const entries = [
+    certificate.inventorySlot,
+    certificate.materialStorageSlot,
+    certificate.numberPreference,
+  ] as const;
+  const resolved = entries.map((entry) =>
+    uniqueExactFunction(module, entry.bodySha256, entry.params, entry.results));
+  if (resolved.some((functionIndex) => functionIndex === null)) return null;
+  return Object.freeze({
+    ...certificate,
+    inventorySlot: Object.freeze({ ...certificate.inventorySlot, functionIndex: resolved[0]! }),
+    materialStorageSlot: Object.freeze({
+      ...certificate.materialStorageSlot,
+      functionIndex: resolved[1]!,
+    }),
+    numberPreference: Object.freeze({
+      ...certificate.numberPreference,
+      functionIndex: resolved[2]!,
+    }),
+  });
+}
+
 export function locateAutomaticLocalActions(
   input: Uint8Array,
   baselines: readonly KnownEnhancementBuild[],
@@ -698,6 +731,7 @@ export function locateAutomaticLocalActions(
       : enhancementProofContext(input);
     if (!context) return null;
     const module = context.moduleView();
+    const inputSha256 = createHash("sha256").update(input).digest("hex");
     const tick = tickEvidence(module).candidate;
     if (!tick || !bodyMatchesRole(functionBody(module, tick.functionIndex), CLIENT_TICK_ROLE)) {
       return null;
@@ -946,7 +980,13 @@ export function locateAutomaticLocalActions(
       const teamApply = partyObservation && gameThread
         ? isolatedProof(() => deriveTeamApply(module, baseline, decoded))
         : null;
-      if (!travelAction && !xunlaiAction && !chatAliases && !partyObservation) continue;
+      const quickItemMove = deriveQuickItemMove(
+        module,
+        baseline,
+        inputSha256,
+        uiDispatcher,
+      );
+      if (!travelAction && !xunlaiAction && !chatAliases && !partyObservation && !quickItemMove) continue;
       locations.push(Object.freeze({
         baseline,
         hookFunction: tick.functionIndex,
@@ -961,6 +1001,7 @@ export function locateAutomaticLocalActions(
         chatAliases,
         partyObservation,
         teamApply,
+        quickItemMove,
       }));
     }
     if (locations.length === 0) return null;
@@ -974,6 +1015,7 @@ export function locateAutomaticLocalActions(
       chatAliases: value.chatAliases,
       partyObservation: value.partyObservation,
       teamApply: value.teamApply,
+      quickItemMove: value.quickItemMove,
     });
     return locations.every((match) => identity(match) === identity(locations[0]!))
       ? locations[0]!

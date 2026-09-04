@@ -250,6 +250,7 @@ export function commandDrain(
   storage: Readonly<{ functionIndex: number; payloadGlobalIndex: number }> | null,
   travelBranch: Uint8Array | null,
   characterBranch: Uint8Array | null,
+  quickItemMoveBranch: Uint8Array | null,
 ): Uint8Array {
   return concat(
     uleb(0),
@@ -265,6 +266,7 @@ export function commandDrain(
       : []),
     ...(travelBranch ? [travelBranch] : []),
     ...(characterBranch ? [characterBranch] : []),
+    ...(quickItemMoveBranch ? [quickItemMoveBranch] : []),
     ...entries.map((entry) => concat(
       Uint8Array.of(0x23), uleb(pendingGlobalIndex),
       Uint8Array.of(0x41), sleb(entry.opcode),

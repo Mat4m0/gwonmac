@@ -23,7 +23,7 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
   Object.freeze([
     Object.freeze({
       sha256:
-        "26a71c3e2bf55ab992dce659c1192213858ee25799daa87841ed23a3ddbb601a",
+        "484f7f20691c912c372b7e265a1cc4a4d26b37bfbd52c838b3137d5f29b67d3b",
       // Recomputed from the exact current JSPI artifact when the independent
       // play-region capability landed. The retained output is the complete
       // product profiles proved by the current semantic verifier.
@@ -36,16 +36,18 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
       // ENHANCEMENT_TRANSFORM_ABI or any config word changes.
       outputSha256: Object.freeze({
         "features-601":
-          "9de0f92805a704052d5f0ee42a1405055f005d15a81355241a1c642e8ec76718",
+          "63b063bf51fd690d434ab3a60fce04cfae1caa4ac56421c765db320be1b2b4c0",
         "features-e01":
-          "62267d95b30752823aa364c289bdc84f2c025dac4caeda86a76a432001667acb",
+          "58934fd0e4b7756413016f0d2cc67f37fb65cffbb675d7d62da6b5005e385e03",
         "features-fff":
-          "e22c2c0876f1381a133fbb0c739f73f9fc6a7d8988da5ce0d9789481ab7f0c9e",
+          "9d676b10c93179641c8324b8b133b1df5092cac225045f32edc7ac1e23b79226",
+        "features-1fff":
+          "abb464a6b3e7e6864b6c9ce2dd89ae917b2f046b07e97cad6f144d765fc4ca71",
       }),
       programId: 1,
       // The verifier derives this bounded identity from the exact module; it is
       // diagnostic metadata, never a nearest-build selector.
-      buildId: 3_100_397_719,
+      buildId: 514_880_306,
       hookFunction: 446,
       hookParams: Object.freeze(["i32"] as const),
       hookResults: Object.freeze([] as const),
@@ -615,6 +617,33 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
           characterUuid: 0x64,
           currentInstanceType: 0x23c,
         }),
+      }),
+      quickItemMove: Object.freeze({
+        configureExport: "enhancement_configure_quick_item_move",
+        modifierExport: "enhancement_quick_item_move_modifiers",
+        inventorySlot: Object.freeze({
+          // GWCA's current Wasm scanner names this exact target
+          // InventoryBag_UICallback_Func.
+          functionIndex: 14956,
+          params: ["i32", "i32", "i32"] as const,
+          results: [] as const,
+          bodySha256: "eb94c3a6a02a1df3ee09724a20c1203fd3d973cd933b098ee4fd2b6a91403a4d",
+        }),
+        materialStorageSlot: Object.freeze({
+          functionIndex: 14994,
+          params: ["i32", "i32", "i32"] as const,
+          results: [] as const,
+          bodySha256: "7cf0967a3e5f3f785087f32415386eb424bb5ee54ade0cc70ba42c8d7fc799ea",
+        }),
+        numberPreference: Object.freeze({
+          functionIndex: 10807,
+          params: ["i32"] as const,
+          results: ["i32"] as const,
+          bodySha256: "6bbf1281e9b949a76d31595dddf1f95f6eae8de0f2129214e0ccb059cb46d1e9",
+        }),
+        storageFrameHash: 0x8a02_f1b2,
+        tradeCartFrameHash: 0x72f7_171f,
+        tradeDialogFrameHash: 0xbea6_724c,
       }),
       skillCooldownObservation: Object.freeze({
         // #8704 is the unique bounded Skillbar row/slot reader. It reads the

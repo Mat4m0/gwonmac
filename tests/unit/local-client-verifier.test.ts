@@ -31,6 +31,7 @@ const NONE: EnhancementCapabilities = Object.freeze({
   playRegionObservation: false,
     preGameControls: false,
     characterSwitchAction: false,
+    quickItemMove: false,
 });
 const ALL: EnhancementCapabilities = Object.freeze({
   ...NONE,
@@ -46,6 +47,7 @@ const ALL: EnhancementCapabilities = Object.freeze({
   playRegionObservation: true,
   preGameControls: true,
   characterSwitchAction: true,
+  quickItemMove: false,
 });
 const CURSOR: EnhancementCapabilities = Object.freeze({
   ...NONE,
@@ -56,12 +58,14 @@ const REGION: EnhancementCapabilities = Object.freeze({
   playRegionObservation: true,
     preGameControls: false,
     characterSwitchAction: false,
+    quickItemMove: false,
 });
 const TARGET: EnhancementCapabilities = Object.freeze({
   ...NONE,
   playRegionObservation: true,
     preGameControls: false,
     characterSwitchAction: false,
+    quickItemMove: false,
   targetObservation: true,
 });
 const STORAGE: EnhancementCapabilities = Object.freeze({
@@ -69,6 +73,7 @@ const STORAGE: EnhancementCapabilities = Object.freeze({
   playRegionObservation: true,
     preGameControls: false,
     characterSwitchAction: false,
+    quickItemMove: false,
   travelAction: true,
   xunlaiAction: true,
   chatAliases: true,
@@ -80,6 +85,7 @@ const PARTY_TEAM: EnhancementCapabilities = Object.freeze({
   playRegionObservation: true,
     preGameControls: false,
     characterSwitchAction: false,
+    quickItemMove: false,
   partyObservation: true,
   teamApply: true,
 });
@@ -88,6 +94,7 @@ const SKILL_SLOTS: EnhancementCapabilities = Object.freeze({
   playRegionObservation: true,
     preGameControls: false,
     characterSwitchAction: false,
+    quickItemMove: false,
   skillSlotGeometry: true,
 });
 const COOLDOWN: EnhancementCapabilities = Object.freeze({
@@ -95,6 +102,7 @@ const COOLDOWN: EnhancementCapabilities = Object.freeze({
   playRegionObservation: true,
     preGameControls: false,
     characterSwitchAction: false,
+    quickItemMove: false,
   skillCooldownObservation: true,
 });
 const PROVED_FILE = Object.freeze({

@@ -41,6 +41,7 @@ function session(capabilities: EnhancementCapabilities): ClientSession {
       playRegionObservation: selected(capabilities.playRegionObservation),
       preGameControls: selected(capabilities.preGameControls),
       characterSwitchAction: selected(capabilities.characterSwitchAction),
+      quickItemMove: selected(capabilities.quickItemMove),
     },
   };
   return {
@@ -53,7 +54,7 @@ function session(capabilities: EnhancementCapabilities): ClientSession {
 
 describe("effective Enhancement capability boundary", () => {
   it("reproduces every served profile from Main's session, independent of request", () => {
-    for (let mask = 1; mask <= 0xfff; mask += 1) {
+    for (let mask = 1; mask <= 0x1fff; mask += 1) {
       const capabilities = enhancementCapabilitiesForProfile(
         `features-${mask.toString(16).padStart(2, "0")}`,
       );
@@ -86,6 +87,7 @@ describe("effective Enhancement capability boundary", () => {
           playRegionObservation: off,
           preGameControls: off,
           characterSwitchAction: off,
+          quickItemMove: off,
         },
       },
     };
@@ -103,6 +105,7 @@ describe("effective Enhancement capability boundary", () => {
       playRegionObservation: false,
       preGameControls: false,
       characterSwitchAction: false,
+      quickItemMove: false,
     });
   });
 

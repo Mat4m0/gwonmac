@@ -21,16 +21,11 @@ import {
   enhancementCapabilityProfile,
   enhancementCapabilitiesCover,
   enhancementHooksFor,
-  ENHANCEMENT_TRANSFORM_ABI,
   parseEnhancementCapabilities,
   validEnhancementCapabilities,
   type EnhancementCapabilities,
 } from "../../shared/enhancement-contracts.js";
-import {
-  enhancementConfigWords,
-  supportedEnhancementCapabilities,
-  type KnownEnhancementBuild,
-} from "./enhancement-builds.js";
+import { supportedEnhancementCapabilities, type KnownEnhancementBuild } from "./enhancement-builds.js";
 import {
   applyFeatureContributions,
   featureExportNames,
@@ -44,6 +39,12 @@ import {
   resolveEnhancementPreGameTransform,
   verifyCharacterSwitchActionCertificate,
 } from "./enhancement-pre-game-transform.js";
+import {
+  applyQuickItemMoveTransform,
+  quickItemMoveGlobals,
+  reserveQuickItemMoveTypes,
+  resolveQuickItemMoveTransform,
+} from "./enhancement-quick-item-move-transform.js";
 import {
   PROFESSION_TRACE_WORDS,
   professionTraceGlobals,
@@ -74,6 +75,8 @@ import {
   enhancementTableSlotFunctions,
   parseEnhancementTable,
 } from "./enhancement-table.js";
+import { buildEnhancementManifestSection } from "./enhancement-transform-manifest.js";
+export { ENHANCEMENT_MANIFEST_SECTION } from "./enhancement-transform-manifest.js";
 
 declare const WebAssembly: {
   Module: new (bytes: Uint8Array) => unknown;
@@ -81,7 +84,6 @@ declare const WebAssembly: {
 };
 
 export const ENHANCEMENT_HOOK_EXPORT = "enhancement_hook_slot";
-export const ENHANCEMENT_MANIFEST_SECTION = "enhancement_manifest";
 
 const DISPATCH_PARAMS = 6;
 /** `(opcode, a0, a1, a2, a3) -> i32`. Four arguments covers every certified
@@ -150,63 +152,6 @@ function dispatcher(
   );
 }
 
-function buildManifestSection(
-  build: KnownEnhancementBuild,
-  capabilities: EnhancementCapabilities,
-): Section {
-  const selectedHooks = enhancementHooksFor(capabilities);
-  const cursorEvent = build.cursorEvent;
-  const partyObservation = build.partyObservation;
-  const uiDispatcher = build.uiDispatcher;
-  const configWords = enhancementConfigWords(build, capabilities);
-  const json = new TextEncoder().encode(
-    JSON.stringify({
-      transformAbi: ENHANCEMENT_TRANSFORM_ABI,
-      programId: build.programId,
-      buildId: build.buildId,
-      tableSlot: build.tableSlot,
-      capabilities,
-      hooks: {
-        tick: selectedHooks.tick
-          ? {
-              functionIndex: build.hookFunction,
-              params: build.hookParams,
-              results: build.hookResults,
-            }
-          : null,
-        cursor: selectedHooks.cursor
-          ? {
-              functionIndex: cursorEvent!.functionIndex,
-              params: cursorEvent!.params,
-              results: cursorEvent!.results,
-              existingTableSlot: cursorEvent!.tableSlot,
-            }
-          : null,
-        ui: selectedHooks.ui
-          ? {
-              functionIndex: uiDispatcher!.functionIndex,
-              params: uiDispatcher!.params,
-              results: uiDispatcher!.results,
-            }
-          : null,
-      },
-      messages: selectedHooks.ui
-          ? {
-            playerChat: uiDispatcher!.playerChatMessage,
-            hideHeroPanel: uiDispatcher!.hideHeroPanelMessage,
-            showHeroPanel: uiDispatcher!.showHeroPanelMessage,
-            partyDirty: partyObservation!.partyDirtyMessages,
-          }
-        : null,
-      configWords,
-    }),
-  );
-  return {
-    id: 0,
-    body: concat(encodeName(ENHANCEMENT_MANIFEST_SECTION), json),
-  };
-}
-
 function assertSignature(
   label: string,
   type: FunctionType,
@@ -271,7 +216,8 @@ function resolveEnhancementTransform(
   const hasActionQueue = capabilities.teamApply
     || capabilities.travelAction
     || capabilities.xunlaiAction
-    || capabilities.characterSwitchAction;
+    || capabilities.characterSwitchAction
+    || capabilities.quickItemMove;
   const selectedHooks = enhancementHooksFor(capabilities);
   const hash = createHash("sha256").update(input).digest("hex");
   if (hash !== build.sha256) fail(`input hash ${hash} is unsupported`);
@@ -328,7 +274,7 @@ function resolveEnhancementTransform(
     });
   }
   const uiDispatcherHook = selectedHooks.ui || capabilities.travelAction
-      || capabilities.characterSwitchAction
+      || capabilities.characterSwitchAction || capabilities.quickItemMove
     ? resolveHook(
         "UI dispatcher",
         uiDispatcher.functionIndex,
@@ -386,6 +332,13 @@ function resolveEnhancementTransform(
       fail,
     });
   }
+  const quickItemMoveResolution = resolveQuickItemMoveTransform({
+    build,
+    enabled: capabilities.quickItemMove,
+    resolveFunction: resolveHook,
+    bodyHash,
+    fail,
+  });
   const skillInitializer = skillResolution.geometry?.initializer ?? null;
   const skillConstructor = skillResolution.geometry?.constructor ?? null;
   if (bodyHash(build.hookFunction) !== build.hookBodySha256) {
@@ -609,13 +562,9 @@ function resolveEnhancementTransform(
       name: "travel payload producer",
       functionIndex: travelProducer.localIndex + importCount,
     }] : []),
-    ...(capabilities.travelAction && !selectedHooks.ui ? [{
-      name: "Travel UI dispatcher",
-      functionIndex: uiDispatcherHook!.localIndex + importCount,
-    }] : []),
-    ...(capabilities.characterSwitchAction && !selectedHooks.ui && !capabilities.travelAction ? [{
-      name: "Character Switch UI dispatcher",
-      functionIndex: uiDispatcherHook!.localIndex + importCount,
+    ...(uiDispatcherHook && !selectedHooks.ui ? [{
+      name: "native action UI dispatcher",
+      functionIndex: uiDispatcherHook.localIndex + importCount,
     }] : []),
     ...(skillInitializer ? [{
       name: "SkillBar initializer",
@@ -628,6 +577,13 @@ function resolveEnhancementTransform(
     ...(preGameResolution ? [{
       name: "pre-game label hash",
       functionIndex: preGameResolution.hashFunction.localIndex + importCount,
+    }] : []),
+    ...(quickItemMoveResolution ? [{
+      name: "quick item inventory slot",
+      functionIndex: quickItemMoveResolution.inventorySlot.localIndex + importCount,
+    }, {
+      name: "quick item material slot",
+      functionIndex: quickItemMoveResolution.materialStorageSlot.localIndex + importCount,
     }] : []),
   ];
   const roleByFunction = new Map<number, string>();
@@ -688,11 +644,13 @@ function resolveEnhancementTransform(
     selected,
     cursorEvent,
     uiDispatcher,
+    uiDispatcherHook,
     teamApply,
     xunlaiAction,
     travelAction,
     gameThread,
     chatAliases,
+    quickItemMoveResolution,
     skillResolution,
     preGameResolution,
     commands,
@@ -766,6 +724,9 @@ function assembleEnhancementTransform(
   const characterEnabledGlobalIndex = capabilities.characterSwitchAction ? allocateGlobals(1) : 0;
   const characterExpectedIndexGlobalIndex = capabilities.characterSwitchAction ? allocateGlobals(1) : 0;
   const characterConfirmationAttemptsGlobalIndex = capabilities.characterSwitchAction ? allocateGlobals(1) : 0;
+  const quickGlobals = capabilities.quickItemMove
+    ? quickItemMoveGlobals(allocateGlobals(5))
+    : null;
   const traceGlobalBase = capabilities.teamApply
     ? allocateGlobals(PROFESSION_TRACE_WORDS)
     : 0;
@@ -824,6 +785,10 @@ function assembleEnhancementTransform(
   const characterExecuteTypeIndex = capabilities.characterSwitchAction
     ? appendType({ params: [0x7f, 0x7f, 0x7f], results: [] })
     : null;
+  const quickTypes = reserveQuickItemMoveTypes({
+    enabled: capabilities.quickItemMove,
+    appendType,
+  });
 
   const nextFunctionTypes = [...functionTypes];
   const nextBodies = [...bodies];
@@ -875,6 +840,33 @@ function assembleEnhancementTransform(
       appendFunction,
     }));
   }
+  let quickItemMoveHandlerIndex: number | null = null;
+  if (capabilities.quickItemMove) {
+    const quickResolution = resolution.quickItemMoveResolution
+      ?? fail("Quick Item Move resolution is missing");
+    const quickPreGame = preGameResolution?.certificate
+      ?? fail("Quick Item Move frame authority is missing");
+    const quickUiHook = resolution.uiDispatcherHook
+      ?? fail("Quick Item Move UI authority is missing");
+    const quickGlobalSet = quickGlobals
+      ?? fail("Quick Item Move globals are missing");
+    const quickTypeSet = quickTypes
+      ?? fail("Quick Item Move function types are missing");
+    const quickContribution = applyQuickItemMoveTransform({
+      resolution: quickResolution,
+      preGame: quickPreGame,
+      uiHook: quickUiHook,
+      globals: quickGlobalSet,
+      types: quickTypeSet,
+      bodies,
+      nextBodies,
+      appendFunction,
+      pendingGlobal: commandPendingGlobalIndex,
+      argumentGlobalBase: commandArgumentGlobalBase,
+    });
+    addedFunctionExports.push(...quickContribution.exports);
+    quickItemMoveHandlerIndex = quickContribution.handlerIndex;
+  }
   applyFeatureContributions(resolution, {
     nextBodies,
     appendFunction,
@@ -911,6 +903,9 @@ function assembleEnhancementTransform(
     },
     traceGlobals,
     uiOriginalIndex,
+    quickItemMove: quickItemMoveHandlerIndex === null || quickGlobals === null
+      ? null
+      : { handlerIndex: quickItemMoveHandlerIndex, globals: quickGlobals },
   });
   const addedGlobalCount = nextGlobalIndex - globals.count;
   const nextGlobals = concat(
@@ -951,7 +946,7 @@ function assembleEnhancementTransform(
   const output = concat(
     WASM_HEADER,
     ...rewritten.map(encodeSection),
-    encodeSection(buildManifestSection(build, capabilities)),
+    encodeSection(buildEnhancementManifestSection(build, capabilities)),
   );
   if (!WebAssembly.validate(output)) {
     try {

@@ -16,6 +16,7 @@ type FeatureBooleanSetting = BooleanSetting & (
   | "tradeChat"
   | "targetReadout"
   | "xunlaiStorage"
+  | "quickItemMove"
   | "travelPalette"
   | "skillKeyLabelsEnabled"
   | "skillCooldownOverlayEnabled"
@@ -101,6 +102,14 @@ export const FEATURE_SELECTION_POLICIES = defineFeatureSelectionPolicies({
     },
     // The storage controller still owns the stronger, fresh access gate.
     // This coarse rule withdraws the complete feature during active PvP play.
+    region: "non-pvp",
+  },
+  quickItemMove: {
+    activation: {
+      kind: "setting",
+      setting: "quickItemMove",
+      master: "gwonmacTools",
+    },
     region: "non-pvp",
   },
   travel: {

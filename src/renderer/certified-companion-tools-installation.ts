@@ -33,6 +33,12 @@ import {
   clearCartographyPlayerState,
   updateCartographyPlayerState,
 } from "./cartography-player-state.js";
+import {
+  installQuickItemMove,
+  QUICK_ITEM_MOVE_SCRATCH_BYTES,
+  quickItemMoveExports,
+  type QuickItemMoveInstallation,
+} from "./quick-item-move-installation.js";
 
 const EMPTY_REGION = Object.freeze({ pointer: 0, bytes: 0 });
 
@@ -79,6 +85,7 @@ export async function prepareToolsCompanionExtension(
   const foundation = capabilities.partyObservation;
   const friendManifest = capabilities.travelAction ? decodeFriendObserverManifest(module) : null;
   let friendPointer = 0;
+  let quickItemMovePointer = 0;
   const observeState = capabilities.targetObservation || capabilities.xunlaiAction;
   const skills = tools.createSkillOverlaysInstallation(capabilities);
   const slots = skills.geometry;
@@ -103,6 +110,10 @@ export async function prepareToolsCompanionExtension(
   const travel: TravelInstallation | null = capabilities.travelAction
     ? (await import("./enhancement-travel-installation.js"))
         .createTravelInstallation(exports, true) : null;
+  const quickItemMove = capabilities.quickItemMove ? quickItemMoveExports(exports) : null;
+  if (capabilities.quickItemMove && quickItemMove === null) {
+    throw new Error("the Quick Item Move profile derived a module with no certified controls");
+  }
   const configureTrade = capabilities.chatAliases
     && typeof exports.enhancement_configure_trade_toggle === "function"
     ? exports.enhancement_configure_trade_toggle as (enabled: number) => number : null;
@@ -132,11 +143,13 @@ export async function prepareToolsCompanionExtension(
     allocate(malloc) {
       allocated = true;
       if (friendManifest !== null) friendPointer = Number(malloc(COMPANION_ABI.friends.bytes));
+      if (quickItemMove !== null) quickItemMovePointer = Number(malloc(QUICK_ITEM_MOVE_SCRATCH_BYTES));
       slots?.allocate(malloc);
       cooldowns?.allocate(malloc);
       storage?.allocate(malloc);
       travel?.allocate(malloc);
       if ((friendManifest !== null && (!Number.isInteger(friendPointer) || friendPointer <= 0))
+        || (quickItemMove !== null && (!Number.isInteger(quickItemMovePointer) || quickItemMovePointer <= 0))
         || (slots !== null && !slots.allocated)
         || (cooldowns !== null && !cooldowns.allocated)
         || (storage !== null && !storage.region().pointer)
@@ -146,11 +159,16 @@ export async function prepareToolsCompanionExtension(
     },
     initialize(memory) {
       if (friendPointer !== 0) new Uint8Array(memory.buffer, friendPointer, COMPANION_ABI.friends.bytes).fill(0);
+      if (quickItemMovePointer !== 0) {
+        new Uint8Array(memory.buffer, quickItemMovePointer, QUICK_ITEM_MOVE_SCRATCH_BYTES).fill(0);
+      }
       storage?.initialize(memory); travel?.initialize();
     },
     ownedRegions: () => [
       ...(friendPointer === 0 ? [] : [{ name: "friend snapshot", pointer: friendPointer,
         size: COMPANION_ABI.friends.bytes, align: 4 as const }]),
+      ...(quickItemMovePointer === 0 ? [] : [{ name: "Quick Item Move payload", pointer: quickItemMovePointer,
+        size: QUICK_ITEM_MOVE_SCRATCH_BYTES, align: 4 as const }]),
       ...(slots?.region == null ? [] : [slots.region]),
       ...(cooldowns?.region == null ? [] : [cooldowns.region]),
       ...(storage === null ? [] : [storage.region()]),
@@ -170,7 +188,7 @@ export async function prepareToolsCompanionExtension(
     activate(context) {
       const session = activateTools({ context, capabilities, program, foundation, observeState,
         skills, slots, cooldowns, enqueue, traceReader, teamCommands, storage,
-        travel, configureTrade, takeTrade, friendPointer });
+        travel, configureTrade, takeTrade, friendPointer, quickItemMove, quickItemMovePointer });
       activated = true;
       return session;
     },
@@ -178,6 +196,7 @@ export async function prepareToolsCompanionExtension(
       if (!allocated || activated) return;
       runCleanupSteps("Companion Tools allocation rollback failed", [
         () => { if (friendPointer !== 0) free(friendPointer); friendPointer = 0; },
+        () => { if (quickItemMovePointer !== 0) free(quickItemMovePointer); quickItemMovePointer = 0; },
         () => slots?.release(free),
         () => cooldowns?.release(free),
         () => storage?.dispose(free),
@@ -204,6 +223,8 @@ type ToolsInput = Readonly<{
   configureTrade: ((enabled: number) => number) | null;
   takeTrade: (() => number) | null;
   friendPointer: number;
+  quickItemMove: ReturnType<typeof quickItemMoveExports>;
+  quickItemMovePointer: number;
 }>;
 
 function activateTools(input: ToolsInput): CompanionExtensionSession {
@@ -211,6 +232,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
     slots, cooldowns, enqueue, traceReader, teamCommands, storage, travel,
     configureTrade, takeTrade } = input;
   let activeFriendPointer = input.friendPointer;
+  let activeQuickItemMovePointer = input.quickItemMovePointer;
   const { memory, core, kernel, playRegions } = context;
   const source = tools.createCompanionPolicySource({
     program,
@@ -231,6 +253,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
   let readout: ReturnType<typeof tools.createTargetReadout> | null = null;
   let toolbox: ReturnType<typeof tools.createToolboxLifecycle> | null = null;
   let professionTrace: ReturnType<typeof tools.createProfessionCommandTrace> | null = null;
+  let quickItemMoveInstallation: QuickItemMoveInstallation | null = null;
   let aliasEnabled: boolean | null = null;
   let lastTrace = "";
   let observingFriends = false;
@@ -265,6 +288,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
       () => slots?.dispose(),
       () => cooldowns?.dispose(),
       () => { configureTrade?.(0); },
+      () => { quickItemMoveInstallation?.dispose(); quickItemMoveInstallation = null; },
       () => professionTrace?.dispose(),
       () => { unsubscribeFriends?.(); friendFeed?.dispose(); },
     ],
@@ -293,6 +317,14 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
   };
 
   prepare(() => skills.mount(document.body, snapshot().settings));
+  const quickItemMoveControls = input.quickItemMove;
+  if (quickItemMoveControls !== null && activeQuickItemMovePointer !== 0) {
+    quickItemMoveInstallation = prepare(() => installQuickItemMove({
+      configure: quickItemMoveControls.configure,
+      setModifiers: quickItemMoveControls.setModifiers,
+      scratchPointer: activeQuickItemMovePointer,
+    }));
+  }
 
   const commands = enqueue === null ? null : teamCommands!.createTeamApplyCommands({
     memory,
@@ -380,6 +412,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
     syncObservers();
     syncStorage();
     syncTravel();
+    quickItemMoveInstallation?.update(policy().quickItemMove);
   };
   const syncPolicy = (reason: "region" | "settings") => {
     tracePolicy(reason); syncToolbox(); syncConsumers(); syncAlias();
@@ -488,6 +521,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
       runCleanupSteps("Companion Tools callback cleanup failed", [
         () => storage?.dispose(free),
         () => travel?.dispose(free),
+        () => { if (activeQuickItemMovePointer !== 0) free(activeQuickItemMovePointer); activeQuickItemMovePointer = 0; },
       ]);
     },
   });

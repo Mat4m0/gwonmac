@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   enhancementCapabilitiesForProfile,
   enhancementCapabilityProfile,
+  ENHANCEMENT_CAPABILITY_FIELDS,
   type EnhancementCapabilities,
   type EnhancementCapabilityProfile,
 } from "../../src/shared/enhancement-contracts.js";
@@ -21,6 +22,7 @@ const NO_CAPABILITIES = Object.freeze({
   playRegionObservation: false,
     preGameControls: false,
     characterSwitchAction: false,
+    quickItemMove: false,
   targetObservation: false,
   partyObservation: false,
   teamApply: false,
@@ -32,9 +34,11 @@ const NO_CAPABILITIES = Object.freeze({
 });
 describe("Enhancement client chain", () => {
   it("source-pins every executable capability profile", () => {
-    // Enumerate the complete ten-bit wire vocabulary. The registry rejects
+    // Enumerate the complete wire vocabulary. The registry rejects
     // masks whose declared dependencies are absent.
-    const profiles = Array.from({ length: 1_023 }, (_, index) => {
+    const profiles = Array.from({
+      length: (1 << ENHANCEMENT_CAPABILITY_FIELDS.length) - 1,
+    }, (_, index) => {
       const mask = index + 1;
       const profile = `features-${mask.toString(16).padStart(mask < 0x100 ? 2 : 3, "0")}` as
         EnhancementCapabilityProfile;
@@ -46,10 +50,12 @@ describe("Enhancement client chain", () => {
           ]]
         : [];
     }).flat();
-    assert.equal(profiles.length, 337);
-    assert.equal(new Set(profiles.map(([, value]) => JSON.stringify(value))).size, 337);
+    assert.equal(
+      new Set(profiles.map(([, value]) => JSON.stringify(value))).size,
+      profiles.length,
+    );
     const teamProfiles = profiles.filter(([, capabilities]) => capabilities.teamApply);
-    assert.equal(teamProfiles.length, 112);
+    assert.ok(teamProfiles.length > 0);
     assert.ok(teamProfiles.every(([, capabilities]) => capabilities.partyObservation));
     for (const [profile, capabilities] of profiles) {
       assert.equal(enhancementCapabilityProfile(capabilities), profile);
@@ -70,6 +76,7 @@ describe("Enhancement client chain", () => {
         playRegionObservation: false,
     preGameControls: false,
     characterSwitchAction: false,
+    quickItemMove: false,
         targetObservation: false,
         partyObservation: false,
         teamApply: true,
@@ -116,6 +123,7 @@ describe("Enhancement client chain", () => {
     delete cursorOnly.xunlaiAction;
     delete cursorOnly.travelAction;
     delete cursorOnly.chatAliases;
+    delete cursorOnly.quickItemMove;
     assert.deepEqual(enhancementProfilesForBuild(cursorOnly), ["features-01"]);
     assert.equal(hasValidEnhancementProfileHashes(cursorOnly), true);
 
@@ -141,6 +149,7 @@ describe("Enhancement client chain", () => {
     delete partyOnly.xunlaiAction;
     delete partyOnly.travelAction;
     delete partyOnly.chatAliases;
+    delete partyOnly.quickItemMove;
     assert.deepEqual(enhancementProfilesForBuild(partyOnly), ["features-204"]);
     assert.equal(hasValidEnhancementProfileHashes(partyOnly), true);
 

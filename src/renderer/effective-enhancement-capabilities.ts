@@ -26,5 +26,6 @@ export function effectiveCapabilities(
     preGameControls: features.preGameControls.status === "available",
     characterSwitchAction:
       features.characterSwitchAction.status === "available",
+    quickItemMove: features.quickItemMove.status === "available",
   });
 }

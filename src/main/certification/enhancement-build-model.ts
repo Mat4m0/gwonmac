@@ -480,6 +480,17 @@ export interface KnownEnhancementBuild {
       | "characterUuid" | "currentInstanceType">
       & Readonly<{ frameHashId: number }>;
   }>;
+  /** Exact inventory UI and item-model authority used by Control-click moves. */
+  quickItemMove?: Readonly<{
+    configureExport: string;
+    modifierExport: string;
+    inventorySlot: Readonly<{ functionIndex: number; params: readonly ["i32", "i32", "i32"]; results: readonly []; bodySha256: string }>;
+    materialStorageSlot: Readonly<{ functionIndex: number; params: readonly ["i32", "i32", "i32"]; results: readonly []; bodySha256: string }>;
+    numberPreference: Readonly<{ functionIndex: number; params: readonly ["i32"]; results: readonly ["i32"]; bodySha256: string }>;
+    storageFrameHash: number;
+    tradeCartFrameHash: number;
+    tradeDialogFrameHash: number;
+  }>;
   /** Exact reader and clock authority for player skill recharge timestamps. */
   skillCooldownObservation?: Readonly<{
     reader: Readonly<{
@@ -529,6 +540,10 @@ export function supportedEnhancementCapabilities(
     playRegionObservation,
     preGameControls: build.preGameControls !== undefined,
     characterSwitchAction: build.preGameControls?.characterSwitchAction !== undefined
+      && build.uiDispatcher !== undefined
+      && gameThread,
+    quickItemMove: build.quickItemMove !== undefined
+      && build.preGameControls !== undefined
       && build.uiDispatcher !== undefined
       && gameThread,
   });
@@ -609,6 +624,15 @@ export function hasValidEnhancementProfileHashes(
   if (
     build.chatAliases !== undefined
     && build.uiDispatcher === undefined
+  ) return false;
+  if (
+    build.quickItemMove !== undefined
+    && (
+      build.playRegionObservation === undefined
+      || build.preGameControls === undefined
+      || build.uiDispatcher === undefined
+      || build.gameThread === undefined
+    )
   ) return false;
   if (build.skillSlotGeometry !== undefined && build.skillSlotGeometry.labelAddress === 0) {
     return false;

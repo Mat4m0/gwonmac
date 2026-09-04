@@ -16,6 +16,7 @@ const features: Record<GlobalTool, { label: string; description: string; action?
   "build-management": { label: "Build Library", description: "Save and load skill builds.", action: "tools.toggle" },
   "quick-travel": { label: "Quick Travel", description: "Search destinations and travel between outposts.", action: "travel.open" },
   "xunlai-storage": { label: "Xunlai Storage", description: "Open storage in supported outposts.", action: "storage.open" },
+  "quick-item-move": { label: "Quick Item Move", description: "Control-click items to move whole stacks through open storage or trade windows. Add Shift to choose an amount." },
   "trade-chat": { label: "Trade Chat", description: "Browse the trade feed.", action: "trade.toggle" },
   maps: { label: "Maps", description: "Exploration grid and walkable terrain on supported PvE maps." },
   "target-readout": { label: "Target Distance", description: "Show distance to the selected target in PvE." },

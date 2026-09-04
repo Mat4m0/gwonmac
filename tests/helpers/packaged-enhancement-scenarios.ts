@@ -455,6 +455,7 @@ export async function assertCleanupSafetyGates() {
             skillKeyBindings: [null, null, null, null, null, null, null, null] as const,
             skillKeyLabelsEnabled: false,
             skillCooldownOverlayEnabled: true,
+            quickItemMove: false,
             skillCooldownColor: { kind: "preset", preset: "red" } as const,
           });
         });
@@ -844,6 +845,7 @@ export async function assertToolboxFoundationLifecycle() {
         skillKeyBindings: [null, null, null, null, null, null, null, null] as const,
         skillKeyLabelsEnabled: false,
         skillCooldownOverlayEnabled: true,
+        quickItemMove: false,
         skillCooldownColor: { kind: "preset", preset: "red" } as const,
       });
       const runtime = await installCertifiedCompanion(
@@ -1405,6 +1407,7 @@ export async function assertRollbackAfterTablePublication() {
           skillKeyBindings: [null, null, null, null, null, null, null, null] as const,
           skillKeyLabelsEnabled: false,
           skillCooldownOverlayEnabled: true,
+          quickItemMove: false,
           skillCooldownColor: { kind: "preset", preset: "red" } as const,
         });
         globalThis.requestAnimationFrame = () => {
