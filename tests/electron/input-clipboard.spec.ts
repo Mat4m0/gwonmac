@@ -1,4 +1,4 @@
-import { expect, test, type ElectronApplication } from "@playwright/test";
+import { expect, test, type ElectronApplication, type Page } from "@playwright/test";
 import { closeOffline, launchPlayableClient } from "./fixtures.mjs";
 import { startGameInput } from "./input-helpers.js";
 
@@ -50,11 +50,19 @@ async function clickEdit(
     return typeof item?.click === "function";
   }, id)).toBe(true);
   await app.evaluate(({ BrowserWindow, Menu }, itemId) => {
-    const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+    const win = BrowserWindow.getAllWindows().find(
+      (candidate) => candidate.webContents.getURL() === "gw://app/",
+    );
     const item = Menu.getApplicationMenu()?.getMenuItemById(itemId);
     if (!win || !item?.click) throw new Error(`${itemId} is unavailable`);
     item.click(item, win, {} as Electron.KeyboardEvent);
   }, id);
+}
+
+async function expectGameKeyCount(page: Page, count: number): Promise<void> {
+  await expect.poll(() => page.evaluate(() =>
+    (window as OskWindow).__clipboardGameKeys?.length ?? 0))
+    .toBe(count);
 }
 
 test.describe("renderer text editing", () => {
@@ -167,6 +175,7 @@ test.describe("renderer text editing", () => {
         await clickEdit(app, EDIT_ITEMS.cut);
         await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readText()))
           .toBe("beta");
+        await expectGameKeyCount(page, 4);
 
         await app.evaluate(({ clipboard }) => clipboard.writeText("preserve me"));
         await page.evaluate(() => {
@@ -194,6 +203,7 @@ test.describe("renderer text editing", () => {
         });
         await clickEdit(app, EDIT_ITEMS.paste);
         await expect(page.locator("#osk-input-text")).toHaveValue("é🙂 line next");
+        await expectGameKeyCount(page, 8);
         expect(await page.evaluate(() => (window as OskWindow).__clipboardInputs))
           .toEqual([
             { phase: "beforeinput", inputType: "insertFromPaste", data: "é🙂 line\nnext", trusted: true },
@@ -209,6 +219,7 @@ test.describe("renderer text editing", () => {
         });
         await clickEdit(app, EDIT_ITEMS.paste);
         await expect(page.locator("#osk-input-multiline")).toHaveValue("é🙂 line\nnext");
+        await expectGameKeyCount(page, 12);
         expect(await page.evaluate(() => (window as OskWindow).__clipboardInputs))
           .toEqual([
             { phase: "beforeinput", inputType: "insertFromPaste", data: "é🙂 line\nnext", trusted: true },
@@ -216,13 +227,15 @@ test.describe("renderer text editing", () => {
           ]);
 
         await clickEdit(app, EDIT_ITEMS.selectAll);
-        expect(await page.evaluate(() => {
+        await expect.poll(() => page.evaluate(() => {
           const field = document.getElementById("osk-input-multiline") as HTMLTextAreaElement;
           return [field.selectionStart, field.selectionEnd];
         })).toEqual([0, "é🙂 line\nnext".length]);
+        await expectGameKeyCount(page, 16);
         await clickEdit(app, EDIT_ITEMS.cut);
         await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readText()))
           .toBe("é🙂 line\nnext");
+        await expectGameKeyCount(page, 20);
         expect(await page.evaluate(() => (window as OskWindow).__clipboardGameKeys))
           .toEqual([
             { type: "keydown", key: "Control", code: "ControlLeft", control: true, meta: false, trusted: true },
