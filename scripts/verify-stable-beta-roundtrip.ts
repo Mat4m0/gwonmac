@@ -414,6 +414,10 @@ const candidateSettingsDomains = Array.from(
       compassRangeCastEnabled: cycle(booleanValues, index + 1),
       compassRangeSpiritEnabled: cycle(booleanValues, index),
       compassRangeSpiritExtendedEnabled: cycle(booleanValues, index + 1),
+      compassRangeEarshotOpacity: cycle([0, 60, 95, 100] as const, index),
+      compassRangeCastOpacity: cycle([0, 55, 95, 100] as const, index + 1),
+      compassRangeSpiritOpacity: cycle([0, 50, 95, 100] as const, index + 2),
+      compassRangeSpiritExtendedOpacity: cycle([0, 45, 95, 100] as const, index + 3),
       cartographyRevealMode: cycle(["off", "normal", "birds-eye"] as const, index),
       cartographyPresetLibrary: index % 2 === 0 ? {
         activePreset: { kind: "builtin", id: "cartographer" },

@@ -24,7 +24,7 @@
   height: var(--cartography-control-size);
   padding: 0;
   place-items: center;
-  color: var(--cartography-trigger-color, var(--ui-text-bright));
+  color: var(--ui-text-bright);
   background: var(--ui-well-overlay-fill);
   border: var(--ui-frame-width) solid var(--cartography-trigger-border, var(--ui-edge-strong));
   border-radius: var(--ui-radius-pill);
@@ -285,7 +285,7 @@
   height: var(--compass-range-control-size);
   padding: 0;
   place-items: center;
-  color: var(--ui-text-muted);
+  color: var(--ui-text-bright);
   background: var(--ui-well-overlay-fill);
   border: var(--ui-frame-width) solid var(--ui-edge-strong);
   border-radius: var(--ui-radius-pill);
@@ -294,7 +294,6 @@
 }
 
 .compass-range-control-trigger[aria-pressed="true"] {
-  color: var(--ui-success);
   border-color: var(--ui-success);
 }
 
@@ -353,6 +352,13 @@
 
 .compass-range-control-list {
   display: grid;
+  gap: var(--ui-space-2);
+}
+
+.compass-range-control-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 68px 30px;
+  align-items: center;
   gap: var(--ui-space-1);
 }
 
@@ -360,8 +366,9 @@
   display: grid;
   grid-template-columns: 10px 1fr;
   align-items: center;
-  gap: var(--ui-space-2);
-  padding: 0 var(--ui-space-2);
+  gap: var(--ui-space-1);
+  min-width: 0;
+  padding: 0 var(--ui-space-1);
   text-align: left;
 }
 
@@ -373,13 +380,33 @@
   box-shadow: 0 0 0 1px var(--ui-edge-strong);
 }
 
-.compass-range-control-panel button[aria-pressed="true"] {
-  color: var(--ui-accent-hover);
+.compass-range-control-all[aria-pressed="true"] {
+  color: var(--ui-text-bright);
   background: var(--ui-accent-well-fill);
-  border-color: var(--ui-accent);
+  border-color: var(--ui-success);
 }
 
-.compass-range-control-panel button:disabled,
+.compass-range-control-range[aria-pressed="true"] {
+  color: var(--ui-text-bright);
+  background: var(--ui-accent-well-fill);
+  border-color: var(--compass-range-color);
+}
+
+.compass-range-control-row input[type="range"] {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  accent-color: var(--compass-range-color);
+  cursor: pointer;
+}
+
+.compass-range-control-row output {
+  color: var(--ui-text-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.compass-range-control-panel :where(button, input):disabled,
 .compass-range-control-trigger:disabled {
   cursor: default;
   opacity: 0.45;

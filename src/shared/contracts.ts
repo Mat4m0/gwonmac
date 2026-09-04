@@ -65,6 +65,7 @@ import {
   type CartographyPresetLibrary,
   type CartographyPresetRef,
 } from "./cartography-overlay.js";
+import { DEFAULT_COMPASS_RANGE_OPACITY } from "./compass-ranges.js";
 import type {
   CartographyEvidenceCapture,
   CartographyEvidenceExportResult,
@@ -396,6 +397,10 @@ export interface AppSettings {
   compassRangeCastEnabled: boolean;
   compassRangeSpiritEnabled: boolean;
   compassRangeSpiritExtendedEnabled: boolean;
+  compassRangeEarshotOpacity: number;
+  compassRangeCastOpacity: number;
+  compassRangeSpiritOpacity: number;
+  compassRangeSpiritExtendedOpacity: number;
   /** Persistent Compass footprint; Mission Map hover uses Shift or Option+Shift. */
   cartographyRevealMode: "off" | "normal" | "birds-eye";
   /** Active built-in or player-owned appearance and all custom presets. */
@@ -506,6 +511,10 @@ export const RENDERER_WRITABLE_SETTINGS = [
   "compassRangeCastEnabled",
   "compassRangeSpiritEnabled",
   "compassRangeSpiritExtendedEnabled",
+  "compassRangeEarshotOpacity",
+  "compassRangeCastOpacity",
+  "compassRangeSpiritOpacity",
+  "compassRangeSpiritExtendedOpacity",
   "cartographyGridOpacity",
   "cartographyWalkabilityOpacity",
   "characterSwitchProfession",
@@ -565,6 +574,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
   compassRangeCastEnabled: true,
   compassRangeSpiritEnabled: true,
   compassRangeSpiritExtendedEnabled: true,
+  compassRangeEarshotOpacity: DEFAULT_COMPASS_RANGE_OPACITY,
+  compassRangeCastOpacity: DEFAULT_COMPASS_RANGE_OPACITY,
+  compassRangeSpiritOpacity: DEFAULT_COMPASS_RANGE_OPACITY,
+  compassRangeSpiritExtendedOpacity: DEFAULT_COMPASS_RANGE_OPACITY,
   cartographyRevealMode: "off",
   cartographyPresetLibrary: DEFAULT_CARTOGRAPHY_PRESET_LIBRARY,
   cartographyWalkabilityOpacity: 55,

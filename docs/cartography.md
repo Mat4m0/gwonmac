@@ -8,7 +8,7 @@ GWonMac has three independent native-map layers:
   that do not yet have this preference.
 - **Walkable terrain** shades the current instance's certified pathing geometry
   on the Compass and Mission Map while preserving the native map artwork.
-- **Compass ranges** draws the standard Shout, Cast, Spirit, and Spirit+
+- **Compass ranges** draws the standard Shout, Cast, Spirit, and Ext. Spirit
   distances around the player. The native Compass edge already represents
   Compass range, so the overlay does not repeat it.
 
@@ -120,8 +120,9 @@ green continent tint. It works before the map window is opened.
 Compass ranges also work without opening the Mission Map. Their radii are
 1012, 1248, 2512, and 3500 Guild Wars units, projected from the certified
 5000-unit Compass edge. The separate circular control beside the Compass
-toggles all ranges when clicked. Hover it to choose individual ranges. Turning
-the master off preserves those choices for the next time it is enabled.
+toggles all ranges when clicked. Hover it to choose individual ranges and
+preview each ring's opacity. Turning the master off preserves those choices.
+Settings → Maps provides the same durable visibility and opacity controls.
 
 The Cartography and Compass-range controls form one centred stack. A lone
 available control remains centred by itself. Both menus use the same size,

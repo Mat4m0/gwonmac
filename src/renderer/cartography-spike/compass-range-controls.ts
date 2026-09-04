@@ -4,6 +4,12 @@
  */
 import type { AppSettings, RendererSettingsPatch } from "../../shared/contracts.js";
 import {
+  COMPASS_RANGE_INDICATORS,
+  COMPASS_RANGE_OPACITY_MAX,
+  COMPASS_RANGE_OPACITY_MIN,
+  type CompassRangeId,
+} from "../../shared/compass-ranges.js";
+import {
   COMPASS_CONTROL_GAP,
   COMPASS_CONTROL_OPEN_EVENT,
   COMPASS_CONTROL_SIZE,
@@ -11,21 +17,13 @@ import {
   type CompassControlPlacement,
 } from "./compass-control-placement.js";
 import {
-  COMPASS_RANGE_INDICATORS,
-  type CompassRangeId,
+  type CompassRangeSelection,
 } from "./compass-range-layer.js";
 import type { ScreenBox } from "./frame-placement.js";
 
 const COLLAPSE_DELAY_MS = 600;
-const PANEL_WIDTH = 170;
-const PANEL_HEIGHT_ESTIMATE = 184;
-
-const RANGE_SETTING_KEYS = Object.freeze({
-  earshot: "compassRangeEarshotEnabled",
-  cast: "compassRangeCastEnabled",
-  spirit: "compassRangeSpiritEnabled",
-  "spirit-extended": "compassRangeSpiritExtendedEnabled",
-} satisfies Record<CompassRangeId, keyof AppSettings>);
+const PANEL_WIDTH = 220;
+const PANEL_HEIGHT_ESTIMATE = 250;
 
 export type CompassRangeControls = Readonly<{
   update(
@@ -55,16 +53,23 @@ function rangeIcon(document: Document): SVGSVGElement {
   return svg;
 }
 
-export function visibleCompassRangeIds(settings: AppSettings): readonly CompassRangeId[] {
+export function visibleCompassRanges(
+  settings: AppSettings,
+  previewOpacity: (id: CompassRangeId) => number | null = () => null,
+): readonly CompassRangeSelection[] {
   if (!settings.compassRangeIndicatorsEnabled) return [];
   return COMPASS_RANGE_INDICATORS
-    .filter(({ id }) => settings[RANGE_SETTING_KEYS[id]] === true)
-    .map(({ id }) => id);
+    .filter(({ enabledSetting }) => settings[enabledSetting] === true)
+    .map(({ id, opacitySetting }) => ({
+      id,
+      opacity: previewOpacity(id) ?? settings[opacitySetting],
+    }));
 }
 
 export function createCompassRangeControls(options: Readonly<{
   parent: HTMLElement;
   persist(patch: RendererSettingsPatch): Promise<AppSettings>;
+  previewOpacity(id: CompassRangeId, opacity: number | null): void;
 }>): CompassRangeControls {
   const document = options.parent.ownerDocument;
   const view = document.defaultView;
@@ -95,20 +100,35 @@ export function createCompassRangeControls(options: Readonly<{
   allButton.textContent = "All ranges";
   const rangeList = document.createElement("div");
   rangeList.className = "compass-range-control-list";
-  const rangeButtons = new Map<CompassRangeId, HTMLButtonElement>();
+  const rangeControls = new Map<CompassRangeId, Readonly<{
+    button: HTMLButtonElement;
+    input: HTMLInputElement;
+    output: HTMLOutputElement;
+  }>>();
   for (const range of COMPASS_RANGE_INDICATORS) {
+    const row = document.createElement("div");
+    row.className = "compass-range-control-row";
+    row.style.setProperty("--compass-range-color", range.color);
     const button = document.createElement("button");
     button.type = "button";
     button.className = "compass-range-control-range";
     button.dataset.range = range.id;
     const swatch = document.createElement("span");
     swatch.className = "compass-range-control-swatch";
-    swatch.style.setProperty("--compass-range-color", range.color);
     const label = document.createElement("span");
     label.textContent = range.label;
     button.append(swatch, label);
-    rangeButtons.set(range.id, button);
-    rangeList.append(button);
+    const input = document.createElement("input");
+    input.type = "range";
+    input.min = String(COMPASS_RANGE_OPACITY_MIN);
+    input.max = String(COMPASS_RANGE_OPACITY_MAX);
+    input.step = "1";
+    input.setAttribute("aria-label", `${range.label} opacity`);
+    const output = document.createElement("output");
+    output.setAttribute("aria-label", `${range.label} opacity value`);
+    row.append(button, input, output);
+    rangeControls.set(range.id, { button, input, output });
+    rangeList.append(row);
   }
   const status = document.createElement("p");
   status.className = "compass-range-control-status";
@@ -131,8 +151,10 @@ export function createCompassRangeControls(options: Readonly<{
   const syncDisabled = (): void => {
     trigger.disabled = saving;
     allButton.disabled = saving;
-    const enabled = canonical?.compassRangeIndicatorsEnabled === true;
-    for (const button of rangeButtons.values()) button.disabled = saving || !enabled;
+    for (const { button, input } of rangeControls.values()) {
+      button.disabled = saving;
+      input.disabled = saving;
+    }
   };
   const setSaving = (value: boolean): void => { saving = value; syncDisabled(); };
   const sync = (force = false): void => {
@@ -142,8 +164,15 @@ export function createCompassRangeControls(options: Readonly<{
     const enabled = settings.compassRangeIndicatorsEnabled;
     trigger.setAttribute("aria-pressed", String(enabled));
     allButton.setAttribute("aria-pressed", String(enabled));
-    for (const [id, button] of rangeButtons) {
-      button.setAttribute("aria-pressed", String(settings[RANGE_SETTING_KEYS[id]]));
+    allButton.textContent = enabled ? "Hide all ranges" : "Show all ranges";
+    for (const range of COMPASS_RANGE_INDICATORS) {
+      const controls = rangeControls.get(range.id);
+      if (controls === undefined) continue;
+      controls.button.setAttribute("aria-pressed", String(settings[range.enabledSetting]));
+      if (document.activeElement !== controls.input) {
+        controls.input.value = String(settings[range.opacitySetting]);
+      }
+      controls.output.value = `${controls.input.value}%`;
     }
     syncDisabled();
     if (!open) root.style.opacity = String(settings.cartographyControlIdleOpacity / 100);
@@ -172,6 +201,7 @@ export function createCompassRangeControls(options: Readonly<{
       ? "1"
       : String((canonical?.cartographyControlIdleOpacity ?? 35) / 100);
     if (value) positionPanel();
+    else for (const { id } of COMPASS_RANGE_INDICATORS) options.previewOpacity(id, null);
   };
   const observer = typeof view.ResizeObserver === "function"
     ? new view.ResizeObserver((entries) => {
@@ -236,11 +266,20 @@ export function createCompassRangeControls(options: Readonly<{
   });
   trigger.addEventListener("click", toggleAll);
   allButton.addEventListener("click", toggleAll);
-  for (const [id, button] of rangeButtons) {
-    button.addEventListener("click", () => {
+  for (const range of COMPASS_RANGE_INDICATORS) {
+    const controls = rangeControls.get(range.id);
+    if (controls === undefined) continue;
+    controls.button.addEventListener("click", () => {
       if (canonical === null) return;
-      const key = RANGE_SETTING_KEYS[id];
-      apply({ [key]: !canonical[key] });
+      apply({ [range.enabledSetting]: !canonical[range.enabledSetting] });
+    });
+    controls.input.addEventListener("input", () => {
+      controls.output.value = `${controls.input.value}%`;
+      options.previewOpacity(range.id, Number(controls.input.value));
+    });
+    controls.input.addEventListener("change", () => {
+      options.previewOpacity(range.id, null);
+      apply({ [range.opacitySetting]: Number(controls.input.value) });
     });
   }
 

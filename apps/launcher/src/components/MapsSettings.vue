@@ -6,6 +6,7 @@ import ColorControl from "./ColorControl.vue";
 import RangeControl from "./RangeControl.vue";
 import MapStylePreview from "./MapStylePreview.vue";
 import BaseModal from "./BaseModal.vue";
+import { COMPASS_RANGE_INDICATORS, type CompassRange } from "@shared/compass-ranges";
 import {
   CARTOGRAPHY_BUILTIN_PRESETS,
   isCartographyBuiltinPresetId,
@@ -71,6 +72,14 @@ async function persist(patch: LauncherSettingsPatch) {
     await props.save(patch);
     return true;
   } catch { status.value = "The map setting could not be saved. Try again."; return false; }
+}
+
+async function setRangeEnabled(range: CompassRange, enabled: boolean) {
+  await persist({ [range.enabledSetting]: enabled });
+}
+
+async function setRangeOpacity(range: CompassRange, opacity: number) {
+  await persist({ [range.opacitySetting]: opacity });
 }
 
 async function selectPreset(value: string) {
@@ -189,7 +198,15 @@ async function updateUnseen(patch: Partial<CartographyPresetStyle["grid"]["unsee
       <input id="map-grid" type="checkbox" aria-label="Exploration grid" aria-describedby="map-grid-help" :checked="settings.cartographyGridEnabled" @change="persist({ cartographyGridEnabled: ($event.currentTarget as HTMLInputElement).checked })" />
     </div>
     <label><span><strong>Grid on Compass</strong><small>Also show exploration cells on the Compass. Off by default.</small></span><input type="checkbox" :checked="settings.cartographyCompassGridEnabled" :disabled="!settings.cartographyGridEnabled" @change="persist({ cartographyCompassGridEnabled: ($event.currentTarget as HTMLInputElement).checked })" /></label>
-    <label><span><strong>Compass ranges</strong><small>Show Shout, Cast, Spirit, and Spirit+ range rings.</small></span><input type="checkbox" aria-label="Compass ranges" :checked="settings.compassRangeIndicatorsEnabled" @change="persist({ compassRangeIndicatorsEnabled: ($event.currentTarget as HTMLInputElement).checked })" /></label>
+    <label><span><strong>Compass ranges</strong><small>Show Shout, Cast, Spirit, and Ext. Spirit range rings.</small></span><input type="checkbox" aria-label="Compass ranges" :checked="settings.compassRangeIndicatorsEnabled" @change="persist({ compassRangeIndicatorsEnabled: ($event.currentTarget as HTMLInputElement).checked })" /></label>
+    <details class="compass-range-settings">
+      <summary>Configure Compass ranges</summary>
+      <p>Choose each ring and its opacity. These choices remain saved while Compass ranges are off.</p>
+      <div v-for="range in COMPASS_RANGE_INDICATORS" :key="range.id" class="setting-row compass-range-setting">
+        <label><input type="checkbox" :aria-label="`Show ${range.label} range`" :checked="settings[range.enabledSetting]" @change="setRangeEnabled(range, ($event.currentTarget as HTMLInputElement).checked)" /><strong>{{ range.label }}</strong></label>
+        <RangeControl :label="`${range.label} opacity`" :value="settings[range.opacitySetting]" :min="0" :max="100" unit="%" @change="setRangeOpacity(range, $event)" />
+      </div>
+    </details>
     <div class="feature-heading">
       <label for="map-terrain"><strong>Walkable terrain</strong><small id="map-terrain-help">Shade areas you cannot walk on.</small></label>
       <ShortcutSetting v-if="shortcuts" action="cartography.walkability.toggle" :shortcuts="shortcuts" :api="api" :perform-save="performSave" />
@@ -248,4 +265,6 @@ async function updateUnseen(patch: Partial<CartographyPresetStyle["grid"]["unsee
 .setting-group > label > span { min-width: 140px; flex: 1; }
 .compass-options > summary { padding: 12px 0; }
 .compass-options > label { display: flex; justify-content: space-between; gap: 16px; padding: 12px 0; }
+.compass-range-settings > p { margin: 8px 0; color: var(--muted); font-size: 13px; }
+.compass-range-setting > label { display: flex; align-items: center; gap: 10px; min-width: 140px; }
 </style>

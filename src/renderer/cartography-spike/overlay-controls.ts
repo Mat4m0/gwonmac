@@ -341,7 +341,6 @@ export function createCartographyOverlayControls(options: Readonly<{
     const style = resolveCartographyPreset(settings.cartographyPresetLibrary);
     if (style === null) return;
     root.style.setProperty("--cartography-trigger-border", style.walkability.boundaryColor);
-    root.style.setProperty("--cartography-trigger-color", style.grid.current.color);
   };
   const positionPanel = (): void => {
     if (latestBox === null || !open) return;

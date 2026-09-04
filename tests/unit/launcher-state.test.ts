@@ -45,6 +45,17 @@ describe("launcher presentation state", () => {
     assert.deepEqual(parseLauncherSettingsPatch({ cartographyCompassGridEnabled: true }), { cartographyCompassGridEnabled: true });
     assert.throws(() => parseLauncherSettingsPatch({ cartographyCompassGridEnabled: 1 }));
   });
+  it("validates Compass range visibility and opacity settings", () => {
+    const patch = {
+      compassRangeIndicatorsEnabled: true,
+      compassRangeCastEnabled: false,
+      compassRangeCastOpacity: 62,
+    };
+    assert.deepEqual(parseLauncherSettingsPatch(patch), patch);
+    assert.throws(() => parseLauncherSettingsPatch({ compassRangeCastEnabled: 1 }));
+    assert.throws(() => parseLauncherSettingsPatch({ compassRangeCastOpacity: 101 }));
+    assert.throws(() => parseLauncherSettingsPatch({ compassRangeCastOpacity: 62.5 }));
+  });
   it("validates restored appearance controls through the launcher boundary", () => {
     const patch = {
       uiStyle: "custom", uiFont: "inter", uiPanelOpacity: 80,

@@ -5,10 +5,10 @@ import {
 } from "../../src/renderer/cartography-spike/compass-control-placement.js";
 import {
   compassRangeAtPoint,
-  COMPASS_RANGE_INDICATORS,
   projectCompassRangeIndicators,
 } from "../../src/renderer/cartography-spike/compass-range-layer.js";
-import { visibleCompassRangeIds } from "../../src/renderer/cartography-spike/compass-range-controls.js";
+import { visibleCompassRanges } from "../../src/renderer/cartography-spike/compass-range-controls.js";
+import { COMPASS_RANGE_INDICATORS } from "../../src/shared/compass-ranges.js";
 import { DEFAULT_SETTINGS } from "../../src/shared/contracts.js";
 
 test("projects standard ranges from the native Compass edge", () => {
@@ -44,6 +44,10 @@ test("refuses malformed or clipped Compass frames", () => {
   assert.equal(projectCompassRangeIndicators({ left: 0, top: 0, width: 0, height: 260 }), null);
   assert.equal(projectCompassRangeIndicators({ left: 0, top: 0, width: 245, height: 200 }), null);
   assert.equal(projectCompassRangeIndicators({ left: Number.NaN, top: 0, width: 245, height: 260 }), null);
+  assert.equal(projectCompassRangeIndicators(
+    { left: 0, top: 0, width: 245, height: 260 },
+    [{ id: "cast", opacity: 101 }],
+  ), null);
 });
 
 test("resolves a short hover label only near the closest ring", () => {
@@ -67,11 +71,32 @@ test("master visibility preserves independent range choices", () => {
     compassRangeCastEnabled: false,
     compassRangeSpiritExtendedEnabled: false,
   };
-  assert.deepEqual(visibleCompassRangeIds(selected), ["earshot", "spirit"]);
-  assert.deepEqual(visibleCompassRangeIds({
+  assert.deepEqual(visibleCompassRanges(selected), [
+    { id: "earshot", opacity: 95 },
+    { id: "spirit", opacity: 95 },
+  ]);
+  assert.deepEqual(visibleCompassRanges({
     ...selected,
     compassRangeIndicatorsEnabled: false,
   }), []);
+});
+
+test("projects saved and preview opacity without changing range geometry", () => {
+  const settings = {
+    ...DEFAULT_SETTINGS,
+    compassRangeIndicatorsEnabled: true,
+    compassRangeCastOpacity: 40,
+  };
+  assert.deepEqual(visibleCompassRanges(settings).map(({ id, opacity }) => ({ id, opacity })), [
+    { id: "earshot", opacity: 95 },
+    { id: "cast", opacity: 40 },
+    { id: "spirit", opacity: 95 },
+    { id: "spirit-extended", opacity: 95 },
+  ]);
+  assert.equal(
+    visibleCompassRanges(settings, (id) => id === "cast" ? 72 : null)[1]?.opacity,
+    72,
+  );
 });
 
 test("centers one control and the complete two-control stack", () => {

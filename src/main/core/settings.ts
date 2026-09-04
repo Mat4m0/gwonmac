@@ -54,6 +54,10 @@ import {
   normaliseCartographyPresetLibrary,
   normaliseCartographyPresetRef,
 } from "../../shared/cartography-overlay.js";
+import {
+  COMPASS_RANGE_OPACITY_MAX,
+  COMPASS_RANGE_OPACITY_MIN,
+} from "../../shared/compass-ranges.js";
 import { writeAtomicJson } from "./atomic-file.js";
 import { quarantineCorruptDocument } from "./corrupt-document.js";
 
@@ -186,6 +190,21 @@ export function parseSettings(raw: unknown): AppSettings {
         setting,
         CARTOGRAPHY_OPACITY_MIN,
         CARTOGRAPHY_OPACITY_MAX,
+      );
+    }
+  }
+  for (const setting of [
+    "compassRangeEarshotOpacity",
+    "compassRangeCastOpacity",
+    "compassRangeSpiritOpacity",
+    "compassRangeSpiritExtendedOpacity",
+  ] as const) {
+    if (setting in src) {
+      out[setting] = asBoundedInteger(
+        src[setting],
+        setting,
+        COMPASS_RANGE_OPACITY_MIN,
+        COMPASS_RANGE_OPACITY_MAX,
       );
     }
   }

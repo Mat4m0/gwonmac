@@ -46,8 +46,9 @@ import {
 } from "./overlay-controls.js";
 import {
   createCompassRangeControls,
-  visibleCompassRangeIds,
+  visibleCompassRanges,
 } from "./compass-range-controls.js";
+import type { CompassRangeId } from "../../shared/compass-ranges.js";
 import {
   createCompassRangeLayer,
   type CompassRangeLayerSnapshot,
@@ -160,9 +161,14 @@ export function mountCartographyOverlay(options: Readonly<{
     "cartography-world-map-current-instance-boundary",
   );
   const compassRangeLayer = createCompassRangeLayer(options.parent);
+  const previewRangeOpacity = new Map<CompassRangeId, number>();
   const compassRangeControls = createCompassRangeControls({
     parent: options.parent,
     persist: options.persist,
+    previewOpacity(id, opacity) {
+      if (opacity === null) previewRangeOpacity.delete(id);
+      else previewRangeOpacity.set(id, opacity);
+    },
   });
   let previewGridOpacity: number | null = null;
   let previewWalkabilityOpacity: number | null = null;
@@ -404,7 +410,10 @@ export function mountCartographyOverlay(options: Readonly<{
     const canvasBox = options.canvas.getBoundingClientRect();
     const compass = options.modelSources.compass.snapshot();
     const controlBox = compass === null ? null : projectNativeFrame(compass, canvasBox);
-    compassRangeLayer.update(controlBox, visibleCompassRangeIds(settings));
+    compassRangeLayer.update(controlBox, visibleCompassRanges(
+      settings,
+      (id) => previewRangeOpacity.get(id) ?? null,
+    ));
     if (controlBox === null) {
       controls.hide();
       compassRangeControls.hide();

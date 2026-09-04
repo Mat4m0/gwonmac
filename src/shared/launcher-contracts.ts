@@ -12,6 +12,7 @@ import type {
   NoticeCode,
 } from "./contracts.js";
 import { RENDER_SCALES, UI_STYLES, UI_FONTS, CONTROLLER_PROMPT_STYLES, UI_PANEL_OPACITY_MIN, UI_PANEL_OPACITY_MAX } from "./contracts.js";
+import { COMPASS_RANGE_OPACITY_MAX, COMPASS_RANGE_OPACITY_MIN } from "./compass-ranges.js";
 import { normaliseCustomUiTheme } from "./ui-theme.js";
 import type { ErrorCode } from "./errors.js";
 import {
@@ -195,6 +196,14 @@ export interface LauncherSettings {
   readonly cartographyGridEnabled: boolean;
   readonly cartographyCompassGridEnabled: boolean;
   readonly compassRangeIndicatorsEnabled: boolean;
+  readonly compassRangeEarshotEnabled: boolean;
+  readonly compassRangeCastEnabled: boolean;
+  readonly compassRangeSpiritEnabled: boolean;
+  readonly compassRangeSpiritExtendedEnabled: boolean;
+  readonly compassRangeEarshotOpacity: number;
+  readonly compassRangeCastOpacity: number;
+  readonly compassRangeSpiritOpacity: number;
+  readonly compassRangeSpiritExtendedOpacity: number;
   readonly cartographyRevealMode: AppSettings["cartographyRevealMode"];
   readonly cartographyPresetLibrary: CartographyPresetLibrary;
   readonly cartographyWalkabilityOpacity: number;
@@ -371,7 +380,10 @@ export function parseLauncherSettingsPatch(value: unknown): LauncherSettingsPatc
     "autoRelogAfterReload", "characterSwitchProfession", "characterSwitchLevel",
     "characterSwitchLocation", "skillKeyBindings", "skillCooldownColor",
     "chatFilterAllyDrops", "chatFilterHallOfHeroes", "chatFilterTitleAchievements",
-    "cartographyOverlayEnabled", "cartographyGridEnabled", "cartographyCompassGridEnabled", "compassRangeIndicatorsEnabled", "cartographyRevealMode",
+    "cartographyOverlayEnabled", "cartographyGridEnabled", "cartographyCompassGridEnabled", "compassRangeIndicatorsEnabled",
+    "compassRangeEarshotEnabled", "compassRangeCastEnabled", "compassRangeSpiritEnabled", "compassRangeSpiritExtendedEnabled",
+    "compassRangeEarshotOpacity", "compassRangeCastOpacity", "compassRangeSpiritOpacity", "compassRangeSpiritExtendedOpacity",
+    "cartographyRevealMode",
     "cartographyPresetLibrary", "cartographyWalkabilityOpacity", "cartographyGridOpacity",
     "cartographyControlIdleOpacity",
   ], "launcher settings patch");
@@ -403,6 +415,7 @@ export function parseLauncherSettingsPatch(value: unknown): LauncherSettingsPatc
     "autoRelogAfterReload", "characterSwitchProfession", "characterSwitchLevel", "characterSwitchLocation",
     "chatFilterAllyDrops", "chatFilterHallOfHeroes", "chatFilterTitleAchievements",
     "cartographyOverlayEnabled", "cartographyGridEnabled", "cartographyCompassGridEnabled", "compassRangeIndicatorsEnabled",
+    "compassRangeEarshotEnabled", "compassRangeCastEnabled", "compassRangeSpiritEnabled", "compassRangeSpiritExtendedEnabled",
   ] as const) {
     if (source[key] === undefined) continue;
     if (typeof source[key] !== "boolean") throw new Error(`${key} must be a boolean`);
@@ -440,6 +453,10 @@ export function parseLauncherSettingsPatch(value: unknown): LauncherSettingsPatc
     ["cartographyWalkabilityOpacity", CARTOGRAPHY_OPACITY_MIN, CARTOGRAPHY_OPACITY_MAX],
     ["cartographyGridOpacity", CARTOGRAPHY_OPACITY_MIN, CARTOGRAPHY_OPACITY_MAX],
     ["cartographyControlIdleOpacity", CARTOGRAPHY_CONTROL_IDLE_OPACITY_MIN, CARTOGRAPHY_CONTROL_IDLE_OPACITY_MAX],
+    ["compassRangeEarshotOpacity", COMPASS_RANGE_OPACITY_MIN, COMPASS_RANGE_OPACITY_MAX],
+    ["compassRangeCastOpacity", COMPASS_RANGE_OPACITY_MIN, COMPASS_RANGE_OPACITY_MAX],
+    ["compassRangeSpiritOpacity", COMPASS_RANGE_OPACITY_MIN, COMPASS_RANGE_OPACITY_MAX],
+    ["compassRangeSpiritExtendedOpacity", COMPASS_RANGE_OPACITY_MIN, COMPASS_RANGE_OPACITY_MAX],
   ] as const) {
     const candidate = source[key];
     if (candidate === undefined) continue;
