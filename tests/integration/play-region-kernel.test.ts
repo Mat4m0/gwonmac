@@ -41,8 +41,7 @@ describe("play-region kernel", () => {
       ...OBSERVED_CHARACTER,
     });
 
-    // Guild halls and PvP outposts carry the PvP area flag, but an outpost is
-    // not active player-versus-player play and remains supported.
+    // GWToolbox++ disables from the map flag alone, including in an outpost.
     kernel.view.setUint32(AREA_133 + 0x10, 1, true);
     kernel.tick();
     assert.deepEqual(kernel.playRegion(), {
@@ -50,7 +49,7 @@ describe("play-region kernel", () => {
       sequence: 6,
       mapId: 133,
       instanceType: 0,
-      playRegion: "pve",
+      playRegion: "pvp",
       travelContext: "world",
       ...OBSERVED_CHARACTER,
     });
@@ -86,11 +85,12 @@ describe("play-region kernel", () => {
     assert.equal(outpost.hasGuildHall, true);
     assert.equal(outpost.guildHall, false);
 
-    kernel.view.setUint32(AREA_133 + 0x10, 0x0080_0000, true);
+    kernel.view.setUint32(AREA_133 + 0x10, 0x0080_0001, true);
     kernel.tick();
     const hall = kernel.playRegion();
     assert.equal(hall.status, "ready");
     if (hall.status !== "ready") return;
+    assert.equal(hall.playRegion, "pve");
     assert.equal(hall.hasGuildHall, true);
     assert.equal(hall.guildHall, true);
   });

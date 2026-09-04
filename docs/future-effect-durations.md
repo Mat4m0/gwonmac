@@ -36,10 +36,10 @@ answer:
   a documented derived view.
 - Treat party effects and hostile-agent debuffs as separate capabilities. Do
   not infer them from skill-bar recharge or animation state.
-- Keep the present active-PvP restriction by default. Guild halls and PvP
-  outposts are supported, but availability during a PvP match needs a separate
-  fairness review. The review must prove that the UI reveals only information
-  the stock client already gives that player.
+- Keep the present PvP-map restriction and Guild Hall exception by default.
+  Any future availability on another PvP map needs a separate fairness review.
+  The review must prove that the UI reveals only information the stock client
+  already gives that player.
 - Require exact hashes, exact function signatures and operands, unique matches,
   bounded reads, sequence-protected publication, and feature-local fail-closed
   behavior, as the cooldown observer does.

@@ -229,10 +229,10 @@ After that restart, these choices update during the session:
   saved colour remains when the tool is off.
 
 Disabled optional observers stop their domain reads. Core cursor observation
-stays active. A small map-policy projection combines ArenaNet's map flag with
-the instance type. Guild halls and PvP outposts remain supported; active PvP
-play closes Tools and Xunlai storage. Stricter live features also withdraw
-during transitions and unknown regions.
+stays active. A small map-policy projection reads GWToolbox++'s PvP map flag
+but keeps Guild Halls as an explicit gwonmac exception. PvP outposts close Tools
+and Xunlai storage. Stricter live features also withdraw during transitions and
+unknown regions.
 
 If live integration is unavailable while Tools Beta and Build Library remain
 enabled, the host can still mount the saved-library part of Tools. Players can
@@ -303,7 +303,7 @@ queues a fixed `{ agent: 0, type: 0, data: 3 }` DataWindow payload, then calls
 the certified client DataWindow handler at the existing game-thread drain. It
 does not send that payload to ArenaNet. The action is enabled only with its
 separate Tools setting and a fresh snapshot that proves the current player is
-in a supported outpost and can access storage. Every snapshot update
+in a supported PvE outpost and can access storage. Every snapshot update
 resynchronizes the action, so loading, character, account, and map transitions
 revoke stale access immediately.
 
@@ -381,7 +381,7 @@ running the reset again safely finishes it. Window-position cleanup is a
 separate best-effort action and cannot change that result.
 
 Team Apply requires enabled Tools and Build Library, a proved Team Apply
-capability, a positively classified supported outpost, fresh party state,
+capability, a positively classified PvE outpost, fresh party state,
 and an explicit player action.
 
 The runner checks policy before each command and while it confirms results. A

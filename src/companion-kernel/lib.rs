@@ -186,17 +186,8 @@ impl State {
     }
 }
 
-/**
- * The Tools safety region derived from the client-owned map policy.
- *
- * ArenaNet marks guild halls and PvP outposts as PvP maps too. They are safe
- * outpost instances, so only a PvP explorable instance is active PvP play.
- */
-unsafe fn classify_play_region(
-    layout: Layout,
-    map_id: u32,
-    instance_type: u32,
-) -> (u32, bool, bool, bool) {
+/** The Tools map policy, including gwonmac's explicit Guild Hall exception. */
+unsafe fn classify_play_region(layout: Layout, map_id: u32) -> (u32, bool, bool, bool) {
     if layout.area_info == 0
         || layout.area_info_count == 0
         || layout.area_info_stride < 20
@@ -224,7 +215,8 @@ unsafe fn classify_play_region(
     else {
         return (PLAY_REGION_UNKNOWN, false, false, false);
     };
-    let play_region = if flags & (0x0004_0001 | 0x0080_0000) != 0 && instance_type == 1 {
+    let guild_hall = flags & 0x0080_0000 != 0;
+    let play_region = if flags & 0x0004_0001 != 0 && !guild_hall {
         PLAY_REGION_PVP
     } else {
         PLAY_REGION_PVE
@@ -233,7 +225,7 @@ unsafe fn classify_play_region(
         play_region,
         area_region == 7 && play_region == PLAY_REGION_PVE,
         flags & 0x20 == 0,
-        flags & 0x0080_0000 != 0,
+        guild_hall,
     )
 }
 
@@ -423,7 +415,7 @@ pub(crate) unsafe fn resolve_game(layout: Layout) -> GameState {
     }
 
     let (play_region, pre_searing, on_world_map, guild_hall) = unsafe {
-        classify_play_region(layout, map_id, instance_type)
+        classify_play_region(layout, map_id)
     };
     GameState::Ready {
         game,
