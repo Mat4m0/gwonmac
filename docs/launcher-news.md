@@ -49,6 +49,7 @@ Commit the Markdown and regenerated JSON together. The check fails for duplicate
 ## Runtime behavior
 
 - Electron main fetches only the exact GWonMac feed and Guild Wars Wiki API URLs.
+- Guild Wars Wiki cards show the first player-facing update item with its section name. Page headings, Wiki maintenance notes, and build metadata stay out of the preview.
 - Responses and images have byte limits and strict origin/type checks.
 - The last valid GWonMac feed is cached for offline use.
 - The renderer receives typed content and opaque story IDs, never arbitrary navigation or fetch access.

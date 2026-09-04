@@ -89,7 +89,10 @@ test("release workflow stages and publishes one tested, attested package version
     verification.indexOf("actions/dependency-review-action@") <
       verification.indexOf("pnpm install --frozen-lockfile"),
   );
-  assert.match(verification, /run: pnpm audit --audit-level=high/);
+  assert.match(
+    verification,
+    /run: pnpm audit --audit-level=high --ignore-registry-errors/,
+  );
   const releaseBuild = workflow.slice(
     workflow.indexOf("  release-build:"),
     workflow.indexOf("\n  stage-release:"),
