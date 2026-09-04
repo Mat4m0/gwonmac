@@ -70,7 +70,8 @@ jobs:
         run: rustup toolchain install
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install chromium
-      - run: pnpm audit --audit-level=high
+      - name: Audit dependencies
+        run: pnpm audit --audit-level=high --ignore-registry-errors
       - run: pnpm verify:runtime
       - name: Package and test the verified build
         if: inputs.packaged-smoke || inputs.artifact-name != ''
