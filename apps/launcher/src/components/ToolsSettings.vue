@@ -22,11 +22,17 @@ const features: Record<GlobalTool, { label: string; description: string; action?
   "target-readout": { label: "Target Distance", description: "Show distance to the selected target in PvE." },
   "skill-key-labels": { label: "Skill Key Labels", description: "Show your own control labels on the eight skill slots." },
   "skill-cooldowns": { label: "Skill Cooldowns", description: "Show numeric recharge timers on the skill bar." },
+  "chat-filters": { label: "Chat Filters", description: "Hide selected system notices before they enter chat." },
 };
 const characterDetails = [
   { key: "characterSwitchProfession", label: "Show profession" },
   { key: "characterSwitchLevel", label: "Show level" },
   { key: "characterSwitchLocation", label: "Show location" },
+] as const;
+const chatFilterDetails = [
+  { key: "chatFilterAllyDrops", label: "Other party members' item drops" },
+  { key: "chatFilterHallOfHeroes", label: "Hall of Heroes winner announcements" },
+  { key: "chatFilterTitleAchievements", label: "Player title achievements" },
 ] as const;
 const enabled = (tool: GlobalTool) => props.snapshot.tools.features[tool].enabled
   && (tool === "character-switch" || props.snapshot.tools.configured);
@@ -65,6 +71,9 @@ function customColor(value: string) {
         </details>
         <div v-if="tool === 'maps'" class="feature-details"><button class="secondary" @click="emit('maps')">Customize Maps</button><p>Choose layers, styles, and shortcuts. Map shortcuts are unassigned by default.</p></div>
         <SkillLabelsSettings v-if="tool === 'skill-key-labels'" :bindings="snapshot.settings.skillKeyBindings" :save="save" />
+        <div v-if="tool === 'chat-filters'" class="chat-filter-details">
+          <label v-for="filter in chatFilterDetails" :key="filter.key"><span>{{ filter.label }}</span><input type="checkbox" :checked="snapshot.settings[filter.key]" @change="perform(() => save({ [filter.key]: ($event.target as HTMLInputElement).checked }))" /></label>
+        </div>
         <template v-if="tool === 'skill-cooldowns'">
           <label><span>Timer color</span><select :value="snapshot.settings.skillCooldownColor.kind === 'preset' ? snapshot.settings.skillCooldownColor.preset : 'custom'" @change="perform(() => save({ skillCooldownColor: ($event.target as HTMLSelectElement).value === 'custom' ? { kind: 'custom', value: '#e35a4f' } : { kind: 'preset', preset: ($event.target as HTMLSelectElement).value as typeof SKILL_COOLDOWN_PRESETS[number] } }))"><option v-for="preset in SKILL_COOLDOWN_PRESETS" :key="preset" :value="preset">{{ preset }}</option><option value="custom">Custom</option></select></label>
           <div v-if="snapshot.settings.skillCooldownColor.kind === 'custom'" class="setting-row"><span>Custom timer color</span><ColorControl label="Custom timer color" :value="skillCooldownCssColor(snapshot.settings.skillCooldownColor)" @change="customColor" /></div>
@@ -78,7 +87,8 @@ function customColor(value: string) {
 <style scoped>
 .feature-setting { margin-bottom: 0; }
 .tools-state { margin: 0 0 16px; font-size: 14px; }
-.character-details label { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; }
+.character-details label,
+.chat-filter-details label { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; }
 .feature-details { padding: 0 0 16px; }
 .feature-details p { margin-bottom: 0; }
 </style>

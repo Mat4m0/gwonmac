@@ -166,6 +166,9 @@ function failuresForRequested(
     ...(requested.chatAliases
       ? { chatAliases: changedFeature("chatAliases", invariant) }
       : {}),
+    ...(requested.chatFiltering
+      ? { chatFiltering: changedFeature("chatFiltering", invariant) }
+      : {}),
     ...(requested.skillSlotGeometry
       ? { skillSlotGeometry: changedFeature("skillSlotGeometry", invariant) }
       : {}),
@@ -343,6 +346,7 @@ function diagnoseFeatureFailures(
     || (requested.travelAction && !locatedLocal?.travelAction)
     || (requested.xunlaiAction && !locatedLocal?.xunlaiAction)
     || (requested.chatAliases && !locatedLocal?.chatAliases)
+    || (requested.chatFiltering && !locatedLocal?.chatFiltering)
     || (requested.quickItemMove && !locatedLocal?.quickItemMove);
   const needsEvidence = (requested.nativeCursor && !locatedCursor)
     || (requested.playRegionObservation && !locatedPlayRegion)
@@ -366,6 +370,7 @@ function diagnoseFeatureFailures(
   const travelShared = sharedEvidenceFailure("travelAction", evidence);
   const xunlaiShared = sharedEvidenceFailure("xunlaiAction", evidence);
   const aliasesShared = sharedEvidenceFailure("chatAliases", evidence);
+  const filteringShared = sharedEvidenceFailure("chatFiltering", evidence);
   const skillbarFailures = diagnoseLocalSkillbarFailures(skillbar, {
     skillSlotGeometry: sharedEvidenceFailure("skillSlotGeometry", evidence),
     skillCooldownObservation: sharedEvidenceFailure(
@@ -537,6 +542,27 @@ function diagnoseFeatureFailures(
               : changedFeature("chatAliases", "chat.alias-parser-anchor")),
         }
       : {}),
+    ...(requested.chatFiltering && !locatedLocal?.chatFiltering
+      ? {
+          chatFiltering: filteringShared
+            ?? ambiguousRoleFailure(
+              "chatFiltering",
+              "local.ui-dispatcher",
+              roles?.uiDispatcher,
+            )
+            ?? ambiguousRoleFailure(
+              "chatFiltering",
+              "chat.log-packet-anchor",
+              roles?.chatFiltering,
+            )
+            ?? (!locatedLocal?.observationLayout && locatedLocal !== null
+              ? changedFeature(
+                  "chatFiltering",
+                  "chat.player-number-layout",
+                )
+              : changedFeature("chatFiltering", "chat.log-packet-anchor")),
+        }
+      : {}),
     ...skillbarFailures,
   });
 }
@@ -599,6 +625,7 @@ function deriveEnhancementBuild(
     || requestedCapabilities.travelAction
     || requestedCapabilities.xunlaiAction
     || requestedCapabilities.chatAliases
+    || requestedCapabilities.chatFiltering
     || requestedCapabilities.characterSwitchAction
     || requestedCapabilities.quickItemMove;
   const locatedLocal = wantsLocal
@@ -634,6 +661,10 @@ function deriveEnhancementBuild(
   const includeAliases = requestedCapabilities.chatAliases
     && locatedLocal?.uiDispatcher != null
     && locatedLocal.chatAliases != null;
+  const includeChatFiltering = requestedCapabilities.chatFiltering
+    && locatedLocal?.observationLayout != null
+    && locatedLocal.uiDispatcher != null
+    && locatedLocal.chatFiltering != null;
   const includeCharacterSwitch = requestedCapabilities.characterSwitchAction
     && includePreGame
     && locatedLocal?.uiDispatcher != null
@@ -672,7 +703,8 @@ function deriveEnhancementBuild(
       : {}),
   });
   const localContributes = includeParty || includeTeam || includeTravel
-    || includeXunlai || includeAliases || includeCharacterSwitch || includeQuickItemMove;
+    || includeXunlai || includeAliases || includeChatFiltering
+    || includeCharacterSwitch || includeQuickItemMove;
   const source = includeCursor
     ? locatedCursor
     : includePlayRegion
@@ -689,7 +721,7 @@ function deriveEnhancementBuild(
   }
   const observationLayout = includeTarget
     ? locatedTarget.observationLayout
-    : includeParty || includeTravel || includeXunlai
+    : includeParty || includeTravel || includeXunlai || includeChatFiltering
       ? locatedLocal!.observationLayout!
       : skillbar.includeCooldown
         ? skillbar.cooldownObservationLayout
@@ -795,6 +827,9 @@ function deriveEnhancementBuild(
     ...(includeTravel ? { travelAction: locatedLocal!.travelAction! } : {}),
     ...(includeXunlai ? { xunlaiAction: locatedLocal!.xunlaiAction! } : {}),
     ...(includeAliases ? { chatAliases: locatedLocal!.chatAliases! } : {}),
+    ...(includeChatFiltering
+      ? { chatFiltering: locatedLocal!.chatFiltering! }
+      : {}),
     ...(includeParty ? {
       partyObservation: locatedLocal.partyObservation,
     } : {}),
@@ -812,6 +847,7 @@ function deriveEnhancementBuild(
     travelAction: includeTravel,
     xunlaiAction: includeXunlai,
     chatAliases: includeAliases,
+    chatFiltering: includeChatFiltering,
     skillSlotGeometry: skillbar.includeGeometry,
     skillCooldownObservation: skillbar.includeCooldown,
     playRegionObservation: includePlayRegion,

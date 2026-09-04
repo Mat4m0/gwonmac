@@ -24,6 +24,7 @@ export const UNSUPPORTED_ALL_CAPABILITIES: EnhancementCapabilities = Object.free
   travelAction: false,
   xunlaiAction: false,
   chatAliases: false,
+  chatFiltering: false,
   skillSlotGeometry: false,
   skillCooldownObservation: false,
 });
@@ -39,6 +40,7 @@ export const CURSOR_ONLY: EnhancementCapabilities = Object.freeze({
   travelAction: false,
   xunlaiAction: false,
   chatAliases: false,
+  chatFiltering: false,
   skillSlotGeometry: false,
   skillCooldownObservation: false,
 });
@@ -54,6 +56,7 @@ export const CURSOR_TARGET: EnhancementCapabilities = Object.freeze({
   travelAction: false,
   xunlaiAction: false,
   chatAliases: false,
+  chatFiltering: false,
   skillSlotGeometry: false,
   skillCooldownObservation: false,
 });
@@ -69,6 +72,7 @@ export const TARGET_ONLY: EnhancementCapabilities = Object.freeze({
   travelAction: false,
   xunlaiAction: false,
   chatAliases: false,
+  chatFiltering: false,
   skillSlotGeometry: false,
   skillCooldownObservation: false,
 });
@@ -84,6 +88,7 @@ export const STORAGE_ONLY: EnhancementCapabilities = Object.freeze({
   travelAction: true,
   xunlaiAction: true,
   chatAliases: true,
+  chatFiltering: false,
   skillSlotGeometry: false,
   skillCooldownObservation: false,
 });
@@ -99,6 +104,7 @@ export const CURSOR_TOOLBOX: EnhancementCapabilities = Object.freeze({
   travelAction: false,
   xunlaiAction: false,
   chatAliases: false,
+  chatFiltering: false,
   skillSlotGeometry: false,
   skillCooldownObservation: false,
 });
@@ -114,6 +120,7 @@ export const NO_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   travelAction: false,
   xunlaiAction: false,
   chatAliases: false,
+  chatFiltering: false,
   skillSlotGeometry: false,
   skillCooldownObservation: false,
 });
@@ -129,6 +136,7 @@ export const CURSOR_TOOLBOX_COMMANDS: EnhancementCapabilities = Object.freeze({
   travelAction: true,
   xunlaiAction: true,
   chatAliases: true,
+  chatFiltering: false,
   skillSlotGeometry: false,
   skillCooldownObservation: false,
 });
@@ -144,6 +152,7 @@ export const CURSOR_TARGET_TOOLBOX_COMMANDS: EnhancementCapabilities = Object.fr
   travelAction: true,
   xunlaiAction: true,
   chatAliases: true,
+  chatFiltering: false,
   skillSlotGeometry: false,
   skillCooldownObservation: false,
 });
@@ -159,6 +168,7 @@ export const CURSOR_TOOLBOX_STORAGE: EnhancementCapabilities = Object.freeze({
   travelAction: true,
   xunlaiAction: true,
   chatAliases: true,
+  chatFiltering: false,
   skillSlotGeometry: false,
   skillCooldownObservation: false,
 });

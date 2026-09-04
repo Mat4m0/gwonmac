@@ -36,6 +36,7 @@ function session(capabilities: EnhancementCapabilities): ClientSession {
       travelAction: selected(capabilities.travelAction),
       xunlaiAction: selected(capabilities.xunlaiAction),
       chatAliases: selected(capabilities.chatAliases),
+      chatFiltering: selected(capabilities.chatFiltering),
       skillSlotGeometry: selected(capabilities.skillSlotGeometry),
       skillCooldownObservation: selected(capabilities.skillCooldownObservation),
       playRegionObservation: selected(capabilities.playRegionObservation),
@@ -54,7 +55,7 @@ function session(capabilities: EnhancementCapabilities): ClientSession {
 
 describe("effective Enhancement capability boundary", () => {
   it("reproduces every served profile from Main's session, independent of request", () => {
-    for (let mask = 1; mask <= 0x1fff; mask += 1) {
+    for (let mask = 1; mask <= 0x3fff; mask += 1) {
       const capabilities = enhancementCapabilitiesForProfile(
         `features-${mask.toString(16).padStart(2, "0")}`,
       );
@@ -82,6 +83,7 @@ describe("effective Enhancement capability boundary", () => {
           travelAction: off,
           xunlaiAction: off,
           chatAliases: off,
+          chatFiltering: off,
           skillSlotGeometry: off,
           skillCooldownObservation: off,
           playRegionObservation: off,
@@ -100,6 +102,7 @@ describe("effective Enhancement capability boundary", () => {
       travelAction: false,
       xunlaiAction: false,
       chatAliases: false,
+      chatFiltering: false,
       skillSlotGeometry: false,
       skillCooldownObservation: false,
       playRegionObservation: false,

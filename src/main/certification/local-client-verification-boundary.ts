@@ -142,6 +142,10 @@ function featureFailuresFromVerdicts(
   const travelAction = refusalForFeature("travelAction", verdicts.travelAction);
   const xunlaiAction = refusalForFeature("xunlaiAction", verdicts.xunlaiAction);
   const chatAliases = refusalForFeature("chatAliases", verdicts.chatAliases);
+  const chatFiltering = refusalForFeature(
+    "chatFiltering",
+    verdicts.chatFiltering,
+  );
   const skillSlotGeometry = refusalForFeature(
     "skillSlotGeometry",
     verdicts.skillSlotGeometry,
@@ -171,6 +175,7 @@ function featureFailuresFromVerdicts(
     || travelAction === null
     || xunlaiAction === null
     || chatAliases === null
+    || chatFiltering === null
     || skillSlotGeometry === null
     || skillCooldownObservation === null
     || preGameControls === null
@@ -186,6 +191,7 @@ function featureFailuresFromVerdicts(
     ...(travelAction ? { travelAction } : {}),
     ...(xunlaiAction ? { xunlaiAction } : {}),
     ...(chatAliases ? { chatAliases } : {}),
+    ...(chatFiltering ? { chatFiltering } : {}),
     ...(skillSlotGeometry ? { skillSlotGeometry } : {}),
     ...(skillCooldownObservation ? { skillCooldownObservation } : {}),
     ...(preGameControls ? { preGameControls } : {}),
@@ -487,6 +493,29 @@ function matchesChatAliases(
     && isDeepStrictEqual(candidate.results, expected.results);
 }
 
+function matchesChatFiltering(
+  build: SemanticBuild,
+  baseline: KnownEnhancementBuild,
+): boolean {
+  const candidate = build.chatFiltering;
+  if (candidate === undefined) return true;
+  const expected = baseline.chatFiltering;
+  return expected !== undefined
+    && isDeepStrictEqual(
+      {
+        ...candidate,
+        producer: {
+          ...candidate.producer,
+          functionIndex: expected.producer.functionIndex,
+          bodySha256: expected.producer.bodySha256,
+        },
+      },
+      expected,
+    )
+    && isIndex(candidate.producer.functionIndex)
+    && isDigest(candidate.producer.bodySha256);
+}
+
 function matchesPartyObservation(
   build: SemanticBuild,
   baseline: KnownEnhancementBuild,
@@ -646,6 +675,7 @@ function isAutomaticSemanticBuild(
   const hasTravel = build.travelAction !== undefined;
   const hasXunlai = build.xunlaiAction !== undefined;
   const hasAliases = build.chatAliases !== undefined;
+  const hasChatFiltering = build.chatFiltering !== undefined;
   const hasParty = build.partyObservation !== undefined;
   const hasTeam = build.teamApply !== undefined;
   const hasSkillSlotGeometry = build.skillSlotGeometry !== undefined;
@@ -653,7 +683,7 @@ function isAutomaticSemanticBuild(
   const hasSkillCooldown = build.skillCooldownObservation !== undefined;
   const hasPreGameControls = build.preGameControls !== undefined;
   if (!hasCursor && !hasPlayRegion && !hasObservation && !hasTarget
-    && !hasTravel && !hasXunlai && !hasAliases
+    && !hasTravel && !hasXunlai && !hasAliases && !hasChatFiltering
     && !hasParty && !hasTeam && !hasSkillSlotGeometry
     && !hasPlayerSkillbar && !hasSkillCooldown && !hasPreGameControls) {
     return false;
@@ -671,6 +701,8 @@ function isAutomaticSemanticBuild(
     || (hasTeam && (!hasParty || build.gameThread === undefined))
     || ((hasTravel || hasXunlai) && build.gameThread === undefined)
     || ((hasTravel || hasXunlai || hasAliases) && build.uiDispatcher === undefined)
+    || (hasChatFiltering
+      && (!hasObservation || build.uiDispatcher === undefined))
   ) return false;
   const supported = supportedEnhancementCapabilities(build as KnownEnhancementBuild);
   const effective = intersectEnhancementCapabilities(
@@ -699,6 +731,7 @@ function isAutomaticSemanticBuild(
     && matchesTravelAction(build, baseline)
     && matchesXunlaiAction(build, baseline)
     && matchesChatAliases(build, baseline)
+    && matchesChatFiltering(build, baseline)
     && matchesPartyObservation(build, baseline)
     && matchesPlayerSkillbarObservation(build, baseline)
     && matchesTeamApply(build, baseline)

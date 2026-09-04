@@ -430,6 +430,14 @@ export interface AppSettings {
   skillKeyBindings: SkillKeyBindings;
   /** Show the configured skill-key labels over the eight player skill slots. */
   skillKeyLabelsEnabled: boolean;
+  /** Enable the certified in-client filter for selected system chat notices. */
+  chatFiltersEnabled: boolean;
+  /** Hide item-drop notices assigned to another party member. */
+  chatFilterAllyDrops: boolean;
+  /** Hide global Hall of Heroes winner announcements. */
+  chatFilterHallOfHeroes: boolean;
+  /** Hide player title-achievement announcements. */
+  chatFilterTitleAchievements: boolean;
   /** Show Guild Wars' observed recharge state as display-only countdowns. */
   skillCooldownOverlayEnabled: boolean;
   /** One curated or exact RGB color shared by all eight cooldown labels. */
@@ -561,6 +569,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
   shortcutOverrides: {},
   skillKeyBindings: EMPTY_SKILL_KEY_BINDINGS,
   skillKeyLabelsEnabled: false,
+  chatFiltersEnabled: false,
+  chatFilterAllyDrops: true,
+  chatFilterHallOfHeroes: true,
+  chatFilterTitleAchievements: true,
   skillCooldownOverlayEnabled: true,
   skillCooldownColor: DEFAULT_SKILL_COOLDOWN_COLOR,
   extendedMemoryEnabled: false,
@@ -748,6 +760,7 @@ export interface ClientCompatibility {
     playRegionObservation: OptionalFeatureStatus;
     preGameControls: OptionalFeatureStatus;
     characterSwitchAction: OptionalFeatureStatus;
+    chatFiltering: OptionalFeatureStatus;
     quickItemMove: OptionalFeatureStatus;
   }>;
 }

@@ -29,6 +29,7 @@ const NO_CAPABILITIES = Object.freeze({
   travelAction: false,
   xunlaiAction: false,
   chatAliases: false,
+  chatFiltering: false,
   skillSlotGeometry: false,
   skillCooldownObservation: false,
 });
@@ -83,6 +84,7 @@ describe("Enhancement client chain", () => {
         travelAction: false,
         xunlaiAction: false,
         chatAliases: false,
+        chatFiltering: false,
         skillSlotGeometry: false,
         skillCooldownObservation: false,
       },

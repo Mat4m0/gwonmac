@@ -179,6 +179,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     travelAction: true,
     xunlaiAction: true,
     chatAliases: true,
+    chatFiltering: true,
     skillSlotGeometry: true,
     skillCooldownObservation: true,
     playRegionObservation: true,
@@ -308,7 +309,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   assert.equal(addressDecision.enhancementBuild.teamApply, undefined);
   assert.deepEqual(capabilitiesOf(addressDecision), {
     nativeCursor: true, targetObservation: false, partyObservation: false,
-    teamApply: false, travelAction: false, xunlaiAction: false, chatAliases: false,
+    teamApply: false, travelAction: false, xunlaiAction: false, chatAliases: false, chatFiltering: false,
     skillSlotGeometry: true,
     skillCooldownObservation: false,
     playRegionObservation: true,
@@ -331,6 +332,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     travelAction: false,
     xunlaiAction: false,
     chatAliases: false,
+    chatFiltering: false,
     skillSlotGeometry: true,
     skillCooldownObservation: false,
     playRegionObservation: true,

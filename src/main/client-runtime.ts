@@ -450,6 +450,12 @@ export class ClientRuntime {
           supported.chatAliases,
           preparationFailed,
         ),
+        chatFiltering: optionalFeatureStatus(
+          requested.chatFiltering,
+          effective.chatFiltering,
+          supported.chatFiltering,
+          preparationFailed,
+        ),
         skillSlotGeometry: optionalFeatureStatus(
           requested.skillSlotGeometry,
           effective.skillSlotGeometry,
@@ -492,6 +498,7 @@ export class ClientRuntime {
     gauge("enhancement.effectiveTravelAction", effective.travelAction);
     gauge("enhancement.effectiveXunlaiAction", effective.xunlaiAction);
     gauge("enhancement.effectiveChatAliases", effective.chatAliases);
+    gauge("enhancement.effectiveChatFiltering", effective.chatFiltering);
     gauge("enhancement.effectiveQuickItemMove", effective.quickItemMove);
     gauge("enhancement.effectiveSkillSlotGeometry", effective.skillSlotGeometry);
     gauge(

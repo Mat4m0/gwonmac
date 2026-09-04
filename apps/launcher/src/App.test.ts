@@ -185,6 +185,38 @@ describe("unified launcher shell", () => {
     expect(wrapper.text()).toContain("Trade Chat");
     expect(wrapper.text()).toContain("Character Switch");
     expect(wrapper.text()).toContain("Skill Cooldowns");
+    expect(wrapper.text()).toContain("Chat Filters");
+  });
+
+  it("saves each enabled Chat Filter category independently", async () => {
+    const update = vi.fn(async () => undefined);
+    const snapshot = {
+      ...fixtureSnapshot,
+      tools: {
+        ...fixtureSnapshot.tools,
+        configured: true,
+        loaded: true,
+        features: {
+          ...fixtureSnapshot.tools.features,
+          "chat-filters": { enabled: true },
+        },
+      },
+    };
+    installNative({
+      state: { get: async () => snapshot, onChange: () => () => undefined },
+      settings: { update },
+    });
+    const wrapper = mount(App);
+    await flushPromises();
+    await wrapper.get('button[aria-label="Settings"]').trigger("click");
+    await wrapper.findAll(".settings-page aside button")
+      .find((button) => button.text() === "Tools")!.trigger("click");
+    const allyDrop = wrapper.findAll(".chat-filter-details label")
+      .find((label) => label.text().includes("Other party members' item drops"));
+    expect(allyDrop).toBeDefined();
+    await allyDrop!.get('input[type="checkbox"]').setValue(false);
+    await flushPromises();
+    expect(update).toHaveBeenCalledWith({ chatFilterAllyDrops: false });
   });
 
   it("keeps Maps discoverable and explains disabled and restart states", async () => {

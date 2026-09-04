@@ -5,6 +5,10 @@
 import { createHash } from "node:crypto";
 import { CLIENT_TICK_ROLE } from "./enhancement-client-hook-role.js";
 import {
+  CHAT_LOG_PRODUCER_ROLE,
+  deriveChatFiltering,
+} from "./enhancement-chat-filter-proof.js";
+import {
   deriveAreaLookupFunction,
   deriveObservationLayout,
 } from "./enhancement-target-proof.js";
@@ -116,6 +120,7 @@ export interface LocalActionRoleDiagnostics {
   readonly travelContext: Readonly<{ status: LocalActionRoleCandidateStatus; candidateCount: number }>;
   readonly xunlaiAction: Readonly<{ status: LocalActionRoleCandidateStatus; candidateCount: number }>;
   readonly chatAliases: Readonly<{ status: LocalActionRoleCandidateStatus; candidateCount: number }>;
+  readonly chatFiltering: Readonly<{ status: LocalActionRoleCandidateStatus; candidateCount: number }>;
   readonly partyObservation: Readonly<{ status: LocalActionRoleCandidateStatus; candidateCount: number }>;
   readonly teamApply: Readonly<{ status: LocalActionRoleCandidateStatus; candidateCount: number }>;
 }
@@ -378,6 +383,7 @@ export function inspectLocalActionRoleCandidates(
       travelContext: candidateDiagnostic(module, TRAVEL_CONTEXT_RESOLVER_ROLE),
       xunlaiAction: candidateDiagnostic(module, XUNLAI_HANDLER_ROLE),
       chatAliases: candidateDiagnostic(module, CHAT_ALIASES_ROLE),
+      chatFiltering: candidateDiagnostic(module, CHAT_LOG_PRODUCER_ROLE),
       partyObservation: aggregateCandidateDiagnostics(
         partyTeam.map(({ partyObservation }) => partyObservation),
       ),
@@ -970,6 +976,18 @@ export function locateAutomaticLocalActions(
       const chatAliases = uiDispatcher
         ? isolatedProof(() => deriveChatAliases(module, baseline, uiDispatcher))
         : null;
+      const chatLogProducer = uniqueRoleFunction(module, CHAT_LOG_PRODUCER_ROLE);
+      const chatFiltering = uiDispatcher
+          && observationLayout
+          && chatLogProducer !== null
+          && uiEvidence?.nearby7fProducerFunctionIndices.includes(chatLogProducer)
+        ? isolatedProof(() => deriveChatFiltering(
+            module,
+            baseline,
+            uiDispatcher,
+            chatLogProducer,
+          ))
+        : null;
       const partyObservation = suppliedPlayerSkillbar
           && uiDispatcher && observationLayout && uiEvidence
         ? isolatedProof(() => derivePartyObservation(
@@ -980,6 +998,8 @@ export function locateAutomaticLocalActions(
       const teamApply = partyObservation && gameThread
         ? isolatedProof(() => deriveTeamApply(module, baseline, decoded))
         : null;
+      if (!travelAction && !xunlaiAction && !chatAliases && !chatFiltering
+        && !partyObservation) continue;
       const quickItemMove = deriveQuickItemMove(
         module,
         baseline,
@@ -991,7 +1011,7 @@ export function locateAutomaticLocalActions(
         baseline,
         hookFunction: tick.functionIndex,
         hookBodySha256: tick.bodySha256,
-        observationLayout: travelAction || xunlaiAction || partyObservation
+        observationLayout: travelAction || xunlaiAction || chatFiltering || partyObservation
           ? observationLayout
           : null,
         uiDispatcher,
@@ -999,6 +1019,7 @@ export function locateAutomaticLocalActions(
         travelAction,
         xunlaiAction,
         chatAliases,
+        chatFiltering,
         partyObservation,
         teamApply,
         quickItemMove,
@@ -1013,6 +1034,7 @@ export function locateAutomaticLocalActions(
       travelAction: value.travelAction,
       xunlaiAction: value.xunlaiAction,
       chatAliases: value.chatAliases,
+      chatFiltering: value.chatFiltering,
       partyObservation: value.partyObservation,
       teamApply: value.teamApply,
       quickItemMove: value.quickItemMove,

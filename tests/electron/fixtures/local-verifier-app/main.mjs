@@ -65,6 +65,7 @@ void app.whenReady().then(async () => {
           playRegionObservation: true,
           preGameControls: false,
           characterSwitchAction: false,
+          chatFiltering: false,
           quickItemMove: false,
         },
       });

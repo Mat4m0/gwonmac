@@ -291,6 +291,10 @@ declare global {
       skillKeyBindings: AppSettings['skillKeyBindings'];
       skillKeyLabelsEnabled: boolean;
       skillCooldownOverlayEnabled: boolean;
+      chatFiltersEnabled: boolean;
+      chatFilterAllyDrops: boolean;
+      chatFilterHallOfHeroes: boolean;
+      chatFilterTitleAchievements: boolean;
       quickItemMove: boolean;
       skillCooldownColor: AppSettings['skillCooldownColor'];
     }>;

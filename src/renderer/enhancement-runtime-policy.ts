@@ -49,6 +49,7 @@ export function enhancementRuntimePolicy(
     travel: selected("travel", developerStorage),
     skillKeyLabels: selected("skillKeyLabels"),
     skillCooldowns: selected("skillCooldowns"),
+    chatFilters: selected("chatFilters"),
     quickItemMove: selected("quickItemMove"),
   } satisfies Record<FeatureId, boolean>);
 }

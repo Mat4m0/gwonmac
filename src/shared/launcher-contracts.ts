@@ -146,6 +146,7 @@ export function parseLauncherProfileAppearance(value: unknown): LauncherProfileA
 export const GLOBAL_TOOLS = [
   "character-switch", "build-management", "quick-travel", "xunlai-storage", "quick-item-move",
   "trade-chat", "maps", "target-readout", "skill-key-labels", "skill-cooldowns",
+  "chat-filters",
 ] as const;
 export type GlobalTool = (typeof GLOBAL_TOOLS)[number];
 export const GLOBAL_TOOL_FEATURES = Object.freeze({
@@ -159,6 +160,7 @@ export const GLOBAL_TOOL_FEATURES = Object.freeze({
   "target-readout": "targetReadout",
   "skill-key-labels": "skillKeyLabels",
   "skill-cooldowns": "skillCooldowns",
+  "chat-filters": "chatFilters",
 } satisfies Record<GlobalTool, FeatureId>);
 export const LAUNCHER_EXTERNAL_LINKS = ["github", "bugReport", "featureRequest", "discord", "arenaNetSupport", "donate", "releases"] as const;
 export type LauncherExternalLink = (typeof LAUNCHER_EXTERNAL_LINKS)[number];
@@ -186,6 +188,9 @@ export interface LauncherSettings {
   readonly characterSwitchLocation: boolean;
   readonly skillKeyBindings: AppSettings["skillKeyBindings"];
   readonly skillCooldownColor: AppSettings["skillCooldownColor"];
+  readonly chatFilterAllyDrops: boolean;
+  readonly chatFilterHallOfHeroes: boolean;
+  readonly chatFilterTitleAchievements: boolean;
   readonly cartographyOverlayEnabled: boolean;
   readonly cartographyGridEnabled: boolean;
   readonly cartographyCompassGridEnabled: boolean;
@@ -364,6 +369,7 @@ export function parseLauncherSettingsPatch(value: unknown): LauncherSettingsPatc
     "autoCheckUpdates", "updateTrack", "renderScale", "extendedMemoryEnabled", "showDiagnostics",
     "autoRelogAfterReload", "characterSwitchProfession", "characterSwitchLevel",
     "characterSwitchLocation", "skillKeyBindings", "skillCooldownColor",
+    "chatFilterAllyDrops", "chatFilterHallOfHeroes", "chatFilterTitleAchievements",
     "cartographyOverlayEnabled", "cartographyGridEnabled", "cartographyCompassGridEnabled", "cartographyRevealMode",
     "cartographyPresetLibrary", "cartographyWalkabilityOpacity", "cartographyGridOpacity",
     "cartographyControlIdleOpacity",
@@ -395,6 +401,7 @@ export function parseLauncherSettingsPatch(value: unknown): LauncherSettingsPatc
     "autoCheckUpdates", "extendedMemoryEnabled", "showDiagnostics",
     "autoRelogAfterReload", "characterSwitchProfession", "characterSwitchLevel", "characterSwitchLocation",
     "cartographyOverlayEnabled", "cartographyGridEnabled", "cartographyCompassGridEnabled",
+    "chatFilterAllyDrops", "chatFilterHallOfHeroes", "chatFilterTitleAchievements",
   ] as const) {
     if (source[key] === undefined) continue;
     if (typeof source[key] !== "boolean") throw new Error(`${key} must be a boolean`);
