@@ -86,10 +86,12 @@ export function createCompassRangeControls(options: Readonly<{
   trigger.type = "button";
   trigger.className = "compass-range-control-trigger";
   trigger.setAttribute("aria-label", "Toggle Compass ranges");
+  trigger.setAttribute("aria-controls", "compass-range-control-panel");
   trigger.setAttribute("aria-expanded", "false");
   trigger.title = "Compass ranges";
   trigger.append(rangeIcon(document));
   const panel = document.createElement("div");
+  panel.id = "compass-range-control-panel";
   panel.className = "compass-range-control-panel";
   panel.hidden = true;
   panel.setAttribute("role", "group");
