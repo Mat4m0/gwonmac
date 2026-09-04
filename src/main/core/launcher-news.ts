@@ -15,6 +15,7 @@ const PROJECT_ORIGIN = "https://gwonmac.vercel.app";
 const MAX_FEED_BYTES = 512 * 1024;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_STORIES = 24;
+const MAX_WIKI_SUMMARY_LENGTH = 280;
 const REQUEST_TIMEOUT_MS = 8_000;
 const ALLOWED_LINK_ORIGINS = new Set([PROJECT_ORIGIN, "https://wiki.guildwars.com", "https://github.com", "https://discord.gg"]);
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
@@ -178,6 +179,31 @@ function markdown(body: string, storyId: string, media: Map<string, string>, lin
   return blocks.slice(0, 80);
 }
 
+function truncateAtWord(value: string, maxLength: number): string {
+  if (value.length <= maxLength) return value;
+  const candidate = value.slice(0, maxLength - 1);
+  const lastSpace = candidate.lastIndexOf(" ");
+  return `${candidate.slice(0, lastSpace > 0 ? lastSpace : undefined).trimEnd()}…`;
+}
+
+function wikiSummary(extract: string): string {
+  let section = "";
+  let skipSection = false;
+  for (const rawLine of extract.replace(/\r/gu, "").split("\n")) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const heading = /^(={2,6})\s*(.*?)\s*\1$/u.exec(line)?.[2]?.trim();
+    if (heading !== undefined) {
+      skipSection = /^Guild Wars Wiki notes$/iu.test(heading);
+      if (!skipSection && !/^Update\s*-/iu.test(heading)) section = heading;
+      continue;
+    }
+    if (skipSection || /^Build:\s*/iu.test(line)) continue;
+    return truncateAtWord(section ? `${section} — ${line}` : line, MAX_WIKI_SUMMARY_LENGTH);
+  }
+  return "Read the full update notes on the Guild Wars Wiki.";
+}
+
 function wikiStories(value: unknown): RawStory[] {
   const pages = object(object(object(value, "Wiki response").query, "Wiki query").pages, "Wiki pages");
   return Object.values(pages).flatMap((raw): RawStory[] => {
@@ -187,13 +213,13 @@ function wikiStories(value: unknown): RawStory[] {
     if (!match || typeof page.fullurl !== "string" || typeof page.extract !== "string" || !page.extract.trim()) return [];
     const publishedAt = `${match[1]}-${match[2]}-${match[3]}T12:00:00Z`;
     const dateLabel = new Intl.DateTimeFormat("en", { month: "long", day: "numeric" }).format(new Date(publishedAt));
-    const clean = page.extract.replace(/\n+/gu, " ").replace(/\s+/gu, " ").trim();
+    const clean = page.extract.replace(/\s+/gu, " ").trim();
     return [{
       id: `guild-wars-update-${match[1]}-${match[2]}-${match[3]}`,
       source: "game",
       channel: "all",
       title: `Guild Wars update — ${dateLabel}`,
-      summary: clean.slice(0, 280),
+      summary: wikiSummary(page.extract),
       publishedAt,
       featured: true,
       url: trustedUrl(page.fullurl, "Wiki page url"),

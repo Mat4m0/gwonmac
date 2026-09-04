@@ -30,7 +30,15 @@ const wiki = {
   query: { pages: { "1": {
     title: "Feedback:Game updates/20260901",
     fullurl: "https://wiki.guildwars.com/wiki/Feedback:Game_updates/20260901",
-    extract: "Skill updates Seven skills were corrected in this build.",
+    extract: `
+== Update - September 1, 2026 ==
+
+=== Skill updates ===
+ Mirage Cloak: Adjust additional block chance to 4..10 (so that Earth investment is required) and fixed a bug where damage from enchantment removal was getting improperly multiplied.
+ Focused Shot: Removed errant cast time.
+
+=== Guild Wars Wiki notes ===
+Build: 38,888`,
   } } },
 };
 
@@ -70,6 +78,10 @@ describe("launcher news", () => {
     const snapshot = service.snapshot("stable", DEFAULT_LAUNCHER_PREFERENCES);
     assert.equal(snapshot.status, "ready");
     assert.deepEqual(snapshot.stories.map((story) => story.source), ["game", "launcher"]);
+    assert.equal(
+      snapshot.stories[0]?.summary,
+      "Skill updates — Mirage Cloak: Adjust additional block chance to 4..10 (so that Earth investment is required) and fixed a bug where damage from enchantment removal was getting improperly multiplied.",
+    );
     const article = snapshot.stories[1]!.body[0];
     if (article?.type !== "paragraph") throw new Error("expected the release introduction");
     const actionId = article.content.find((part) => part.actionId)?.actionId;
