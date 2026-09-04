@@ -8,6 +8,7 @@ import type {
   EnhancementTravelConfigure,
   EnhancementTravelEnqueue,
   EnhancementTravelToggleTake,
+  EnhancementGuildHallEnqueue,
 } from "./enhancement-travel-command.js";
 import { TRAVEL_PAYLOAD_BYTES } from "./enhancement-travel-command.js";
 import {
@@ -44,6 +45,9 @@ export function createTravelInstallation(
   const takeToggle = typeof exports.enhancement_take_travel_toggle === "function"
     ? exports.enhancement_take_travel_toggle as EnhancementTravelToggleTake
     : null;
+  const enqueueGuildHall = typeof exports.enhancement_guild_hall === "function"
+    ? exports.enhancement_guild_hall as EnhancementGuildHallEnqueue
+    : null;
   if (enqueue === null || configure === null || takeToggle === null) {
     throw new Error("the travel profile derived a module with no travel command");
   }
@@ -62,7 +66,7 @@ export function createTravelInstallation(
       configure(payloadPointer, 0);
     },
     mount(parent) {
-      controller = createTravelController(enqueue, configure, payloadPointer);
+      controller = createTravelController(enqueue, enqueueGuildHall, configure, payloadPointer);
       palette = createTravelPalette(parent, controller.command);
     },
     update(availability) {

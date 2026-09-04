@@ -10,12 +10,15 @@ import {
   FEATURE_TOOLBOX_FOUNDATION,
   installGameGraph,
   installPlayerSkillbarConfig,
+  setConfigField,
 } from "../fixtures/enhancements.ts";
 
 const AREA_133 = ADDRESSES.areaInfo + 133 * 0x7c;
 const OBSERVED_CHARACTER = Object.freeze({
   characterKey: "e7ecfb4f6e006495",
   unlockedMapWords: null,
+  guildHall: false,
+  hasGuildHall: false,
 });
 
 describe("play-region kernel", () => {
@@ -64,6 +67,32 @@ describe("play-region kernel", () => {
       travelContext: "world",
       ...OBSERVED_CHARACTER,
     });
+  });
+
+  it("publishes the current Guild Hall and whether the character has one", async () => {
+    const kernel = await createKernel();
+    installGameGraph(kernel.view);
+    setConfigField(kernel.config, "guildContextSlot", 15);
+    setConfigField(kernel.config, "guildHallKey", 0x64);
+    kernel.view.setUint32(ADDRESSES.contexts + 15 * 4, ADDRESSES.guild, true);
+    kernel.view.setUint32(ADDRESSES.guild + 0x64, 0x1122_3344, true);
+    kernel.view.setUint32(ADDRESSES.guild + 0x68, 0x5566_7788, true);
+    assert.equal(kernel.init({ features: FEATURE_PLAY_REGION_OBSERVATION }), 1);
+
+    kernel.tick();
+    const outpost = kernel.playRegion();
+    assert.equal(outpost.status, "ready");
+    if (outpost.status !== "ready") return;
+    assert.equal(outpost.hasGuildHall, true);
+    assert.equal(outpost.guildHall, false);
+
+    kernel.view.setUint32(AREA_133 + 0x10, 0x0080_0000, true);
+    kernel.tick();
+    const hall = kernel.playRegion();
+    assert.equal(hall.status, "ready");
+    if (hall.status !== "ready") return;
+    assert.equal(hall.hasGuildHall, true);
+    assert.equal(hall.guildHall, true);
   });
 
   it("derives the closed Travel context from the certified area region", async () => {

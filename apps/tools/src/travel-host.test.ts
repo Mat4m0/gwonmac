@@ -56,7 +56,12 @@ function fixture() {
       record: recordHistory,
     },
   } as unknown as GwNativeApi;
-  const command: TravelCommand = { travel: vi.fn(), unavailable: () => null };
+  const command: TravelCommand = {
+    travel: vi.fn(),
+    guildHall: vi.fn(),
+    guildHallUnavailable: () => null,
+    unavailable: () => null,
+  };
   return {
     host: createNativeTravelHost(api, command),
     command,
@@ -72,6 +77,45 @@ function fixture() {
 afterEach(() => vi.useRealTimers());
 
 describe("native Travel host", () => {
+  it("enters and leaves a Guild Hall through one confirmed native action", async () => {
+    vi.useFakeTimers();
+    const { host, command } = fixture();
+    host.updateGameState({
+      status: "ready", mapId: 55, travelContext: "world", characterKey: null,
+      unlockedMapWords: null, guildHall: false, hasGuildHall: true,
+    });
+
+    await host.guildHall?.();
+    expect(command.guildHall).toHaveBeenCalledOnce();
+    expect(host.attempt.value).toEqual({ status: "queued", guildHall: true, mapId: 0 });
+    host.updateGameState({ status: "waiting", reason: "loading" });
+    host.updateGameState({
+      status: "ready", mapId: 4, travelContext: "world", characterKey: null,
+      unlockedMapWords: null, guildHall: true, hasGuildHall: true,
+    });
+    expect(host.attempt.value).toEqual({ status: "idle" });
+    expect(host.notice.value).toBeNull();
+
+    await host.guildHall?.();
+    expect(command.guildHall).toHaveBeenCalledTimes(2);
+    host.updateGameState({ status: "waiting", reason: "loading" });
+    host.updateGameState({
+      status: "ready", mapId: 55, travelContext: "world", characterKey: null,
+      unlockedMapWords: null, guildHall: false, hasGuildHall: true,
+    });
+    expect(host.attempt.value).toEqual({ status: "idle" });
+  });
+
+  it("refuses Guild Hall travel when the character has no hall", async () => {
+    const { host, command } = fixture();
+    host.updateGameState({
+      status: "ready", mapId: 55, travelContext: "world", characterKey: null,
+      unlockedMapWords: null, guildHall: false, hasGuildHall: false,
+    });
+    await expect(host.guildHall?.()).rejects.toThrow("does not have a Guild Hall");
+    expect(command.guildHall).not.toHaveBeenCalled();
+  });
+
   it("delegates shortcut mutations to Main", async () => {
     const { host, setTravel } = fixture();
     await host.loadPreferences();

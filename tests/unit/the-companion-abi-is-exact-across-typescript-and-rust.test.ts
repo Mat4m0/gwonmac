@@ -167,7 +167,7 @@ test("the independent TypeScript and Rust companion contracts match exactly", ()
     rustSource.match(/const PLAY_REGION_ABI_AND_SIZE: u32 = \(PLAY_REGION_BYTES << 16\) \| (\d+);/u),
     "Rust play-region ABI",
   )), COMPANION_ABI.playRegion.abi);
-  assert.equal(typescriptConfigSlots().length, 116);
+  assert.equal(typescriptConfigSlots().length, 118);
 });
 
 test("same-size field swaps, bit drift, opcode drift, and new names are rejected", () => {

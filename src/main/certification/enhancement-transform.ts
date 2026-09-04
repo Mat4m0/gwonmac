@@ -543,6 +543,18 @@ function resolveEnhancementTransform(
     && bodyHash(travelAction.unlockProof.accessor.functionIndex)
       !== travelAction.unlockProof.accessor.bodySha256
   ) fail("travel unlock accessor body does not match its certified identity");
+  if (capabilities.travelAction && travelAction.guildHall) {
+    for (const [label, fact] of [
+      ["Guild Hall key accessor", travelAction.guildHall.keyAccessor],
+      ["Guild Hall area type accessor", travelAction.guildHall.areaTypeAccessor],
+      ["Guild Hall native producer", travelAction.guildHall.producer],
+    ] as const) {
+      resolveHook(label, fact.functionIndex, fact.params, fact.results);
+      if (bodyHash(fact.functionIndex) !== fact.bodySha256) {
+        fail(`${label} body does not match its certified identity`);
+      }
+    }
+  }
   const travelUnlockConsumer = capabilities.travelAction
     ? resolveHook(
         "travel unlock bitset consumer",

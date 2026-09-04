@@ -17,9 +17,11 @@ export type EnhancementTravelConfigure = (
 ) => number;
 
 export type EnhancementTravelToggleTake = () => number;
+export type EnhancementGuildHallEnqueue = () => number;
 
 export function createTravelCommand(
   send: EnhancementTravelEnqueue,
+  sendGuildHall: EnhancementGuildHallEnqueue | null,
   unavailable: () => string | null,
 ): TravelCommand {
   return Object.freeze({
@@ -29,6 +31,17 @@ export function createTravelCommand(
       if (send(request.mapId) !== 1) {
         throw new Error("Guild Wars command queue is busy");
       }
+    },
+    guildHall() {
+      const refusal = unavailable()
+        ?? (sendGuildHall === null ? "Guild Hall travel is unavailable for this client" : null);
+      if (refusal !== null) throw new Error(refusal);
+      if (sendGuildHall === null) throw new Error("Guild Hall travel is unavailable for this client");
+      if (sendGuildHall() !== 1) throw new Error("Guild Wars command queue is busy");
+    },
+    guildHallUnavailable() {
+      return unavailable()
+        ?? (sendGuildHall === null ? "Guild Hall travel is unavailable for this client" : null);
     },
     unavailable,
   });

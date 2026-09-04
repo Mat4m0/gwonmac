@@ -96,7 +96,7 @@ Tools are global. The same master switch, Tool switches, and shortcuts apply to
 every account. The launcher exposes:
 
 - **Build Library** — save and organize builds and teams;
-- **Quick Travel** — search reviewed Guild Wars destinations;
+- **Quick Travel** — search reviewed destinations, online friends, and your Guild Hall;
 - **Xunlai Storage** — open storage in supported PvE outposts;
 - **Trade Chat** — browse the trade feed;
 - **Maps** — enable exploration and walkability guidance;

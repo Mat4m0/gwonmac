@@ -25,6 +25,7 @@ function fixture(options: Readonly<{
   history?: readonly number[];
   friends?: TravelFriends;
   unavailable?: string | null;
+  guildHallUnavailable?: string | null;
 }> = {}, attachTo?: Element) {
   const state = ref<TravelHost["state"]["value"]>({
     status: "ready", mapId: 55, travelContext: "world", characterKey: null, unlockedMapWords: null,
@@ -40,6 +41,7 @@ function fixture(options: Readonly<{
   const travel = vi.fn<TravelHost["travel"]>(async (request) => {
     attempt.value = { status: "queued", mapId: request.mapId };
   });
+  const guildHall = vi.fn(async () => {});
   const savePreferences = vi.fn<TravelHost["savePreferences"]>(async (
     patch: TravelPreferencePatch,
   ) => {
@@ -57,10 +59,12 @@ function fixture(options: Readonly<{
     notice,
     history,
     unavailable: options.unavailable ?? null,
+    guildHallUnavailable: options.guildHallUnavailable ?? null,
     async loadPreferences() { return preferences; },
     savePreferences,
     async loadHistory() { return history.value; },
     travel,
+    guildHall,
     updateFriends(next) { friends.value = next; },
     updateGameState(next) {
       state.value = next;
@@ -85,12 +89,36 @@ function fixture(options: Readonly<{
     notice,
     state,
     travel,
+    guildHall,
     savePreferences,
     traceSearch,
   };
 }
 
 describe("TravelPalette", () => {
+  it("finds the own Guild Hall, disables a missing hall, and becomes Leave inside", async () => {
+    const { wrapper, state, guildHall } = fixture();
+    await flushPromises();
+    await wrapper.get("#travel-search-input").setValue("gh");
+    expect(wrapper.text()).toContain("Guild Hall");
+    expect(wrapper.text()).toContain("No Guild Hall");
+    expect(wrapper.get("#travel-guild-hall").attributes("disabled")).toBeDefined();
+
+    state.value = {
+      status: "ready", mapId: 55, travelContext: "world", characterKey: null,
+      unlockedMapWords: null, guildHall: false, hasGuildHall: true,
+    };
+    await flushPromises();
+    await wrapper.get("#travel-guild-hall").trigger("click");
+    expect(guildHall).toHaveBeenCalledOnce();
+
+    state.value = { ...state.value, guildHall: true };
+    await flushPromises();
+    expect(wrapper.text()).toContain("Leave Guild Hall");
+    expect(wrapper.text()).toContain("Return to previous outpost");
+    wrapper.unmount();
+  });
+
   it("opens in Travel with compact assigned favorites", async () => {
     const { wrapper } = fixture();
     await flushPromises();

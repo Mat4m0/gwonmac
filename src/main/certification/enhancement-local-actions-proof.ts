@@ -25,6 +25,7 @@ import {
   matchesEvidenceInput,
   mutableSpans,
   parseActiveTableRelations,
+  paddedOperand,
   roleFunctions,
   semanticRole,
   signatureMatches,
@@ -55,6 +56,56 @@ import type {
 declare const WebAssembly: {
   validate(bytes: Uint8Array): boolean;
 };
+
+const GUILD_HALL_KEY_ACCESSOR_ROLE = semanticRole(
+  14,
+  "aa6e200ba8acc6089f4d270158e47c99900e3878e50bd8a60b619aae729fa0c9",
+  mutableSpans([[4, 9, "guild.context"]]),
+  [],
+  ["i32"],
+);
+const GUILD_HALL_AREA_TYPE_ROLE = semanticRole(
+  23,
+  "a8b85fbbb029fa5674663b212b1531b0f2602ad64f55fa935a80f58581b66feb",
+  mutableSpans([[4, 9, "area.context"], [14, 19, "area.lookup"]]),
+  [],
+  ["i32"],
+);
+
+function containsBytes(body: Uint8Array, bytes: readonly number[]): boolean {
+  for (let start = body.indexOf(bytes[0]!); start >= 0; start = body.indexOf(bytes[0]!, start + 1)) {
+    let matched = true;
+    for (let index = 1; index < bytes.length; index += 1) {
+      if (body[start + index] !== bytes[index]) {
+        matched = false;
+        break;
+      }
+    }
+    if (matched) return true;
+  }
+  return false;
+}
+
+function guildHallProducer(
+  module: ModuleShape,
+  keyAccessor: number,
+  areaTypeAccessor: number,
+  uiDispatcher: number,
+  enterMessage: number,
+  leaveMessage: number,
+): number | null {
+  const operand = (value: number) => [...paddedOperand(value)];
+  const enter = [0x41, ...operand(enterMessage), 0x10, ...operand(keyAccessor),
+    0x41, 0, 0x10, ...operand(uiDispatcher)];
+  const leave = [0x41, ...operand(leaveMessage), 0x41, 0, 0x41, 0,
+    0x10, ...operand(uiDispatcher)];
+  const area = [0x10, ...operand(areaTypeAccessor), 0x41, 4];
+  const matches = module.bodies.flatMap((body, localIndex) =>
+    signatureMatches(module, module.functionImportCount + localIndex, ["i32", "i32"], [])
+      && containsBytes(body, enter) && containsBytes(body, leave) && containsBytes(body, area)
+      ? [module.functionImportCount + localIndex] : []);
+  return matches.length === 1 ? matches[0]! : null;
+}
 
 export type LocalActionRoleCandidateStatus = "candidate" | "ambiguous" | "unavailable";
 
@@ -747,6 +798,47 @@ export function locateAutomaticLocalActions(
             functionBody(module, unlockConsumer),
             TRAVEL_UNLOCK_CONSUMER_ROLE,
           );
+      const guildExpected = travelExpected?.guildHall;
+      const guildKeyAccessor = guildExpected
+        ? uniqueRoleFunction(module, GUILD_HALL_KEY_ACCESSOR_ROLE) : null;
+      const guildAreaTypeAccessor = guildExpected
+        ? uniqueRoleFunction(module, GUILD_HALL_AREA_TYPE_ROLE) : null;
+      const guildProducer = guildExpected && guildKeyAccessor !== null
+          && guildAreaTypeAccessor !== null && uiDispatcher !== null
+        ? guildHallProducer(
+            module,
+            guildKeyAccessor,
+            guildAreaTypeAccessor,
+            uiDispatcher.functionIndex,
+            guildExpected.enterMessageId,
+            guildExpected.leaveMessageId,
+          )
+        : null;
+      const guildHall = guildExpected && guildKeyAccessor !== null
+          && guildAreaTypeAccessor !== null && guildProducer !== null
+          && unsignedOperand(functionBody(module, guildKeyAccessor), 2)
+            === guildExpected.layout.guildContextSlot
+          && unsignedOperand(functionBody(module, guildKeyAccessor), 10)
+            === guildExpected.layout.guildHallKey
+        ? Object.freeze({
+            ...guildExpected,
+            keyAccessor: Object.freeze({
+              ...guildExpected.keyAccessor,
+              functionIndex: guildKeyAccessor,
+              bodySha256: functionBodySha256(module, guildKeyAccessor),
+            }),
+            areaTypeAccessor: Object.freeze({
+              ...guildExpected.areaTypeAccessor,
+              functionIndex: guildAreaTypeAccessor,
+              bodySha256: functionBodySha256(module, guildAreaTypeAccessor),
+            }),
+            producer: Object.freeze({
+              ...guildExpected.producer,
+              functionIndex: guildProducer,
+              bodySha256: functionBodySha256(module, guildProducer),
+            }),
+          })
+        : undefined;
       const travelAction = uiDispatcher && gameThread && travelExpected && travelBody
         && observationLayout
         && travelAreaCount !== null
@@ -795,6 +887,7 @@ export function locateAutomaticLocalActions(
         && soleValue(unlockConsumerValues, "unlock.bounds") === travelAreaReader
         ? Object.freeze({
             ...travelExpected,
+            guildHall,
             producer: Object.freeze({
               ...travelExpected.producer,
               functionIndex: travelFunction!,

@@ -106,6 +106,8 @@ export interface EnhancementLayout {
   characterArrayPointer: number;
   characterArrayCount: number;
   selectedCharacterName: number;
+  guildContextSlot: number;
+  guildHallKey: number;
 }
 
 export type EnhancementPlayRegionLayout = Pick<EnhancementLayout,
@@ -133,7 +135,10 @@ export type EnhancementStorageLayout = Pick<EnhancementLayout,
   | "worldPlayers" | "playerRecordStride" | "playerRecordAgentId"
   | "playerRecordAccessFlags" | "playerRecordNumber" | "areaInfoType"
 >;
-export type EnhancementTravelLayout = Pick<EnhancementLayout, "worldUnlockedMaps">;
+export type EnhancementTravelLayout = Pick<
+  EnhancementLayout,
+  "worldUnlockedMaps" | "guildContextSlot" | "guildHallKey"
+>;
 export type EnhancementSkillSlotGeometryLayout = Pick<EnhancementLayout,
   | "frameArray" | "frameCount" | "frameBytes" | "frameChildOffsetId"
   | "frameId" | "framePositionFlags" | "frameViewportWidth"
@@ -303,6 +308,7 @@ export const ENHANCEMENT_CONFIG_FIELDS = Object.freeze([
   ...characterList(
     "characterArrayPointer", "characterArrayCount", "selectedCharacterName",
   ),
+  ...travel("guildContextSlot", "guildHallKey"),
   { source: "dispatcher", key: "playerChatMessage", owner: "party" },
   { source: "dispatcher", key: "hideHeroPanelMessage", owner: "party" },
   { source: "dispatcher", key: "showHeroPanelMessage", owner: "party" },

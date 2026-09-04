@@ -23,6 +23,7 @@ import {
   travelConfigure,
   travelDrain,
   travelEnqueue,
+  guildHallEnqueue,
   travelToggleTake,
 } from "./enhancement-travel-command-transform.js";
 import type { EnhancementTransformResolution } from "./enhancement-transform.js";
@@ -68,7 +69,12 @@ export function featureExportNames(
       ? [xunlaiAction.openExport, xunlaiAction.configureExport]
       : []),
     ...(capabilities.travelAction
-      ? [travelAction.enqueueExport, travelAction.configureExport, travelAction.toggleExport]
+      ? [
+          travelAction.enqueueExport,
+          travelAction.configureExport,
+          travelAction.toggleExport,
+          ...(travelAction.guildHall ? [travelAction.guildHall.enqueueExport] : []),
+        ]
       : []),
     ...(capabilities.chatAliases
       ? ["enhancement_configure_trade_toggle", "enhancement_take_trade_toggle"]
@@ -275,6 +281,14 @@ export function applyFeatureContributions(
             messageId: travelAction.messageId,
             payloadGlobalIndex: globalIndices.travelPayload,
             reviewedMapIds: REVIEWED_TRAVEL_MAP_IDS,
+            ...(travelAction.guildHall ? {
+              guildHall: {
+                keyAccessorFunctionIndex: travelAction.guildHall.keyAccessor.functionIndex,
+                areaTypeAccessorFunctionIndex: travelAction.guildHall.areaTypeAccessor.functionIndex,
+                enterMessageId: travelAction.guildHall.enterMessageId,
+                leaveMessageId: travelAction.guildHall.leaveMessageId,
+              },
+            } : {}),
             },
           )
         : null,
@@ -380,6 +394,17 @@ export function applyFeatureContributions(
           ),
         ),
       },
+      ...(travelAction.guildHall ? [{
+        name: travelAction.guildHall.enqueueExport,
+        index: appendFunction(
+          required(typeIndices.travelToggle, "Guild Hall enqueue function type"),
+          guildHallEnqueue(
+            globalIndices.commandPending,
+            globalIndices.travelPayload,
+            globalIndices.travelEnabled,
+          ),
+        ),
+      }] : []),
       {
         name: travelAction.configureExport,
         index: appendFunction(

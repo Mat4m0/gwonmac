@@ -136,7 +136,9 @@ export function enhancementConfigWords(
           value = build.xunlaiAction?.accessProof?.layout[field.key];
           break;
         case "travel":
-          value = build.travelAction?.unlockProof.layout[field.key];
+          value = field.key === "worldUnlockedMaps"
+            ? build.travelAction?.unlockProof.layout.worldUnlockedMaps
+            : build.travelAction?.guildHall?.layout[field.key];
           break;
         case "skill-slots":
           value = build.skillSlotGeometry?.layout[field.key];
@@ -153,6 +155,10 @@ export function enhancementConfigWords(
         }
       }
       if (field.owner === "storage" && build.xunlaiAction === undefined) {
+        return 0;
+      }
+      if (field.owner === "travel" && field.key !== "worldUnlockedMaps"
+        && build.travelAction?.guildHall === undefined) {
         return 0;
       }
       if (typeof value !== "number") {
@@ -317,7 +323,7 @@ export interface KnownEnhancementBuild {
     messageId: number;
     /** Certified client array and official bit-test consumer. */
     unlockProof: Readonly<{
-      layout: EnhancementTravelLayout;
+      layout: Readonly<Pick<EnhancementTravelLayout, "worldUnlockedMaps">>;
       accessor: Readonly<{
         functionIndex: number;
         params: readonly [];
@@ -345,6 +351,33 @@ export interface KnownEnhancementBuild {
       results: readonly [];
       bodySha256: string;
     }>;
+    guildHall?: Readonly<{
+      enqueueExport: string;
+      enterMessageId: number;
+      leaveMessageId: number;
+      layout: Readonly<Pick<
+        EnhancementTravelLayout,
+        "guildContextSlot" | "guildHallKey"
+      >>;
+      keyAccessor: Readonly<{
+        functionIndex: number;
+        params: readonly [];
+        results: readonly ["i32"];
+        bodySha256: string;
+      }>;
+      areaTypeAccessor: Readonly<{
+        functionIndex: number;
+        params: readonly [];
+        results: readonly ["i32"];
+        bodySha256: string;
+      }>;
+      producer: Readonly<{
+        functionIndex: number;
+        params: readonly ["i32", "i32"];
+        results: readonly [];
+        bodySha256: string;
+      }>;
+    }> | undefined;
   }>;
   chatAliases?: Readonly<{
     parser: Readonly<{
