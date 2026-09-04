@@ -40,6 +40,12 @@ Current integrated features are:
   Command-Shift-C, `/chest`, or `/xunlai` in a certified supported outpost. It
   has a separate Settings opt-in and requires a live snapshot that proves the
   current character can access storage. It does not depend on party observation.
+- **Quick Item Move**: Control-click moves a whole stack through an open
+  storage or player-trade window. Control-Shift-click uses Guild Wars' native
+  quantity dialog. Inventory clicks prefer an active trade; storage clicks
+  always withdraw; clicks on the player's own offer remove that complete offer.
+  Partner offers are never changed. The feature has one live Settings switch,
+  is off by default, and withdraws during confirmed PvP play.
 - **Travel**: Command-T or `/tp` opens host-owned destination
   autocomplete and 1–9 shortcuts. Search filters positively locked maps from
   the current character's bounded unlock set, and Recent persists certified map
@@ -79,6 +85,20 @@ applicable. Disabling it must stop its listeners, observers, timers, requests,
 sockets, commands, surfaces, and storage work. Disabling the master applies the
 same shutdown to every child while preserving settings and saved data. Complete
 module unloading happens on the next Core launch.
+
+Quick Item Move replaces only two exact item-slot callbacks and calls the
+copied UI dispatcher already certified for Tools. Its certificate binds the
+callback bodies, item lookup, storage-page preference reader, frame hierarchy,
+and UI dispatcher to the client build. A changed or ambiguous anchor disables
+only this capability. The trade and item structure offsets are reviewed facts
+for the exact post-template client build, so an ArenaNet client update disables
+Quick Item Move until those facts are recertified. Storage moves use the first
+empty slot in the visible pane or inventory; they do not merge partial stacks
+or search other storage panes. The renderer sends two modifier bits and owns a
+scratch region whose layout is shared with the transform: 28 bytes for the
+largest native action payload and 64 temporary destination reservations.
+Reservations prevent rapid clicks from choosing the same still-empty slot and
+clear when Control is released.
 
 ## Use the cheapest proof
 

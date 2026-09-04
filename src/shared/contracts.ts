@@ -408,6 +408,8 @@ export interface AppSettings {
   tradeChat: boolean;
   /** Allow the explicit local Xunlai window command in supported outposts. */
   xunlaiStorage: boolean;
+  /** Move clicked item stacks through the open storage or trade window. */
+  quickItemMove: boolean;
   /** Allow the focused Travel palette and its explicit map command. */
   travelPalette: boolean;
   /** Allow the Core Character Switch surface independently of optional Tools. */
@@ -548,6 +550,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   buildLibrary: true,
   tradeChat: true,
   xunlaiStorage: false,
+  quickItemMove: false,
   travelPalette: true,
   characterSwitchEnabled: true,
   characterSwitchProfession: true,
@@ -745,6 +748,7 @@ export interface ClientCompatibility {
     playRegionObservation: OptionalFeatureStatus;
     preGameControls: OptionalFeatureStatus;
     characterSwitchAction: OptionalFeatureStatus;
+    quickItemMove: OptionalFeatureStatus;
   }>;
 }
 

@@ -69,6 +69,7 @@ describe("settings", () => {
       skillKeyBindings: [null, null, null, null, null, null, null, null],
       skillKeyLabelsEnabled: false,
       skillCooldownOverlayEnabled: true,
+      quickItemMove: false,
       skillCooldownColor: { kind: "preset", preset: "red" },
       extendedMemoryEnabled: false,
       autoRelogAfterReload: false,
@@ -138,6 +139,7 @@ describe("settings", () => {
       skillKeyBindings: [null, null, null, null, null, null, null, null],
       skillKeyLabelsEnabled: false,
       skillCooldownOverlayEnabled: true,
+      quickItemMove: false,
       skillCooldownColor: { kind: "preset", preset: "red" },
       extendedMemoryEnabled: false,
       autoRelogAfterReload: false,
@@ -405,6 +407,11 @@ describe("settings", () => {
     ]) assert.throws(() => parseSettings({ skillCooldownColor: value }), AppError);
   });
 
+  it("keeps Quick Item Move off by default and accepts its one switch", () => {
+    assert.equal(parseSettings({}).quickItemMove, false);
+    assert.deepEqual(parseSettingsPatch({ quickItemMove: true }), { quickItemMove: true });
+  });
+
   it("validates patches without filling fields from defaults", () => {
     assert.throws(() => parseSettingsPatch({ nativeCursor: true }), AppError);
     assert.deepEqual(parseSettingsPatch({ lastUpdateCheckAt: 1_000 }), {
@@ -538,6 +545,7 @@ describe("settings", () => {
       "formatVersion",
       "gwonmacTools",
       "lastUpdateCheckAt",
+      "quickItemMove",
       "renderScale",
       "shortcutOverrides",
       "showDiagnostics",
@@ -652,6 +660,7 @@ describe("settings", () => {
       skillKeyBindings: [null, null, null, null, null, null, null, null],
       skillKeyLabelsEnabled: false,
       skillCooldownOverlayEnabled: true,
+      quickItemMove: false,
       skillCooldownColor: { kind: "preset", preset: "red" },
       extendedMemoryEnabled: false,
       autoRelogAfterReload: false,

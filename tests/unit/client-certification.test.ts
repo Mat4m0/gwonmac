@@ -27,6 +27,7 @@ const ALL_CAPABILITIES = Object.freeze({
   playRegionObservation: true,
     preGameControls: false,
     characterSwitchAction: false,
+    quickItemMove: false,
 });
 
 function localVerification(

@@ -31,6 +31,7 @@ const CORE_CAPABILITIES = Object.freeze({
   playRegionObservation: true,
   preGameControls: true,
   characterSwitchAction: true,
+  quickItemMove: false,
 });
 
 function rewriteCode(

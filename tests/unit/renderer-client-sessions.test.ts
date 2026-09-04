@@ -22,6 +22,7 @@ const base: ClientSession = {
       playRegionObservation: { status: "off" },
         preGameControls: { status: "off" },
         characterSwitchAction: { status: "off" },
+        quickItemMove: { status: "off" },
     },
   },
   extendedMemory: {

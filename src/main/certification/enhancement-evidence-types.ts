@@ -145,6 +145,7 @@ export interface AutomaticLocalActionsLocation {
   readonly chatAliases: KnownEnhancementBuild["chatAliases"] | null;
   readonly partyObservation: KnownEnhancementBuild["partyObservation"] | null;
   readonly teamApply: KnownEnhancementBuild["teamApply"] | null;
+  readonly quickItemMove: KnownEnhancementBuild["quickItemMove"] | null;
 }
 
 export interface WasmExport {

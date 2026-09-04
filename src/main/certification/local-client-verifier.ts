@@ -342,7 +342,8 @@ function diagnoseFeatureFailures(
     || (requested.teamApply && !locatedLocal?.teamApply)
     || (requested.travelAction && !locatedLocal?.travelAction)
     || (requested.xunlaiAction && !locatedLocal?.xunlaiAction)
-    || (requested.chatAliases && !locatedLocal?.chatAliases);
+    || (requested.chatAliases && !locatedLocal?.chatAliases)
+    || (requested.quickItemMove && !locatedLocal?.quickItemMove);
   const needsEvidence = (requested.nativeCursor && !locatedCursor)
     || (requested.playRegionObservation && !locatedPlayRegion)
     || (requested.targetObservation && !locatedTarget)
@@ -598,7 +599,8 @@ function deriveEnhancementBuild(
     || requestedCapabilities.travelAction
     || requestedCapabilities.xunlaiAction
     || requestedCapabilities.chatAliases
-    || requestedCapabilities.characterSwitchAction;
+    || requestedCapabilities.characterSwitchAction
+    || requestedCapabilities.quickItemMove;
   const locatedLocal = wantsLocal
     ? locateAutomaticLocalActions(
         templateOutput,
@@ -636,6 +638,10 @@ function deriveEnhancementBuild(
     && includePreGame
     && locatedLocal?.uiDispatcher != null
     && locatedLocal.gameThread != null;
+  const includeQuickItemMove = requestedCapabilities.quickItemMove
+    && includePreGame
+    && locatedLocal?.uiDispatcher != null
+    && locatedLocal.quickItemMove != null;
   const failures = diagnoseFeatureFailures(
     templateOutput,
     requestedCapabilities,
@@ -666,7 +672,7 @@ function deriveEnhancementBuild(
       : {}),
   });
   const localContributes = includeParty || includeTeam || includeTravel
-    || includeXunlai || includeAliases || includeCharacterSwitch;
+    || includeXunlai || includeAliases || includeCharacterSwitch || includeQuickItemMove;
   const source = includeCursor
     ? locatedCursor
     : includePlayRegion
@@ -793,6 +799,7 @@ function deriveEnhancementBuild(
       partyObservation: locatedLocal.partyObservation,
     } : {}),
     ...(includePreGame ? { preGameControls: preGameControls! } : {}),
+    ...(includeQuickItemMove ? { quickItemMove: locatedLocal!.quickItemMove! } : {}),
     ...skillbarBuild.beforeTeam,
     ...(includeTeam ? { teamApply: locatedLocal!.teamApply! } : {}),
     ...skillbarBuild.afterTeam,
@@ -810,6 +817,7 @@ function deriveEnhancementBuild(
     playRegionObservation: includePlayRegion,
     preGameControls: includePreGame,
     characterSwitchAction: includeCharacterSwitch,
+    quickItemMove: includeQuickItemMove,
   });
   const effective = intersectEnhancementCapabilities(requestedCapabilities, maximum);
   const profile = enhancementCapabilityProfile(effective);

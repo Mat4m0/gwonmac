@@ -158,6 +158,10 @@ function featureFailuresFromVerdicts(
     "characterSwitchAction",
     verdicts.characterSwitchAction,
   );
+  const quickItemMove = refusalForFeature(
+    "quickItemMove",
+    verdicts.quickItemMove,
+  );
   if (
     nativeCursor === null
     || playRegionObservation === null
@@ -171,6 +175,7 @@ function featureFailuresFromVerdicts(
     || skillCooldownObservation === null
     || preGameControls === null
     || characterSwitchAction === null
+    || quickItemMove === null
   ) return null;
   return Object.freeze({
     ...(nativeCursor ? { nativeCursor } : {}),
@@ -185,6 +190,7 @@ function featureFailuresFromVerdicts(
     ...(skillCooldownObservation ? { skillCooldownObservation } : {}),
     ...(preGameControls ? { preGameControls } : {}),
     ...(characterSwitchAction ? { characterSwitchAction } : {}),
+    ...(quickItemMove ? { quickItemMove } : {}),
   });
 }
 

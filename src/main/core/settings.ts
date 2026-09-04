@@ -251,6 +251,7 @@ export function parseSettings(raw: unknown): AppSettings {
     "buildLibrary",
     "tradeChat",
     "xunlaiStorage",
+    "quickItemMove",
     "travelPalette",
     "characterSwitchEnabled",
     "characterSwitchProfession",

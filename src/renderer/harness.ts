@@ -558,6 +558,7 @@ window.gwToolsSettings = () => Object.freeze({
   skillKeyBindings: appSettings?.skillKeyBindings ?? emptySkillKeyBindings,
   skillKeyLabelsEnabled: appSettings?.skillKeyLabelsEnabled ?? false,
   skillCooldownOverlayEnabled: appSettings?.skillCooldownOverlayEnabled ?? true,
+  quickItemMove: appSettings?.quickItemMove ?? false,
   skillCooldownColor: appSettings?.skillCooldownColor
     ?? Object.freeze({ kind: 'preset', preset: 'red' }),
 });

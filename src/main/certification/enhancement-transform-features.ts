@@ -38,6 +38,10 @@ import {
   characterActionEnqueue,
   characterActionExecute,
 } from "./enhancement-character-switch-transform.js";
+import {
+  quickItemMoveDrain,
+  type QuickItemMoveGlobals,
+} from "./enhancement-quick-item-move-transform.js";
 
 const REVIEWED_TRAVEL_MAP_IDS = TRAVEL_DESTINATIONS.map(({ mapId }) => mapId);
 
@@ -53,6 +57,9 @@ export function featureExportNames(
   resolution: EnhancementTransformResolution,
 ): readonly string[] {
   const { capabilities, preGameResolution, teamApply, xunlaiAction, travelAction } = resolution;
+  const quick = capabilities.quickItemMove
+    ? resolution.quickItemMoveResolution?.certificate ?? null
+    : null;
   const action = capabilities.characterSwitchAction
     ? required(preGameResolution, "pre-game action certificate")
         .certificate.characterSwitchAction
@@ -79,6 +86,7 @@ export function featureExportNames(
     ...(capabilities.chatAliases
       ? ["enhancement_configure_trade_toggle", "enhancement_take_trade_toggle"]
       : []),
+    ...(quick ? [quick.configureExport, quick.modifierExport] : []),
   ]);
 }
 
@@ -122,6 +130,10 @@ export type TransformRewriteWorkspace = Readonly<{
   globalIndices: TransformGlobalIndices;
   traceGlobals: ProfessionTraceGlobals | null;
   uiOriginalIndex: number | null;
+  quickItemMove: Readonly<{
+    handlerIndex: number;
+    globals: QuickItemMoveGlobals;
+  }> | null;
 }>;
 
 /** Apply only feature-owned rewrites and exports. The generic section assembly
@@ -153,6 +165,7 @@ export function applyFeatureContributions(
     globalIndices,
     traceGlobals,
     uiOriginalIndex,
+    quickItemMove,
   } = workspace;
   const characterExecuteIndex = capabilities.characterSwitchAction
     ? (() => {
@@ -301,6 +314,14 @@ export function applyFeatureContributions(
             required(characterExecuteIndex, "character action executor"),
           )
         : null,
+      quickItemMove === null
+        ? null
+        : quickItemMoveDrain(
+            globalIndices.commandPending,
+            globalIndices.commandArgumentBase,
+            quickItemMove.globals,
+            quickItemMove.handlerIndex,
+          ),
     ),
   );
   nextBodies[commandDrainBoundary.localIndex] = commandBoundary(

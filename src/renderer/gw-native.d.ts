@@ -291,6 +291,7 @@ declare global {
       skillKeyBindings: AppSettings['skillKeyBindings'];
       skillKeyLabelsEnabled: boolean;
       skillCooldownOverlayEnabled: boolean;
+      quickItemMove: boolean;
       skillCooldownColor: AppSettings['skillCooldownColor'];
     }>;
     gwLoading: LoadingController;

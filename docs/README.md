@@ -13,6 +13,7 @@ its rules.
 | How do players import and run TexMod UI packs? | [Texture packs](texture-packs.md) |
 | How does the official client host and certification work? | [WASM host](wasm-host.md) |
 | How do client features remain safe across ArenaNet updates? | [ArenaNet compatibility](arenanet-compatibility.md) |
+| How do I develop or verify Quick Item Move? | [Enhancement development](enhancement-development.md#current-product-boundary) |
 | How does Trade Chat discovery work? | [Trade Chat discovery](trade-discovery.md) |
 | What can diagnostics record and export? | [Diagnostics](diagnostics.md) |
 | How do agents develop, branch, stabilize, and roll out changes? | [Development and rollout](development-workflow.md) |

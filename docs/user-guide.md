@@ -98,6 +98,8 @@ every account. The launcher exposes:
 - **Build Library** — save and organize builds and teams;
 - **Quick Travel** — search reviewed destinations, online friends, and your Guild Hall;
 - **Xunlai Storage** — open storage in supported PvE outposts;
+- **Quick Item Move** — Control-click whole stacks between inventory and an
+  open Xunlai chest or player trade. Hold Shift too to choose the quantity;
 - **Trade Chat** — browse the trade feed;
 - **Maps** — enable exploration and walkability guidance;
 - **Target Distance** — show distance to the selected target in PvE;

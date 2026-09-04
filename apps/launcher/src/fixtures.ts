@@ -33,6 +33,7 @@ export const fixtureSnapshot: LauncherSnapshot = {
       "build-management": { enabled: true },
       "quick-travel": { enabled: true },
       "xunlai-storage": { enabled: false },
+      "quick-item-move": { enabled: false },
       "trade-chat": { enabled: false },
       maps: { enabled: true },
       "target-readout": { enabled: false },

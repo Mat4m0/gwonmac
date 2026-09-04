@@ -474,6 +474,12 @@ export class ClientRuntime {
           supported.characterSwitchAction,
           preparationFailed,
         ),
+        quickItemMove: optionalFeatureStatus(
+          requested.quickItemMove,
+          effective.quickItemMove,
+          supported.quickItemMove,
+          preparationFailed,
+        ),
       },
     };
     gauge("wasm.templateSaveCompatible", prepared.gameFileSaving.status === "available");
@@ -486,6 +492,7 @@ export class ClientRuntime {
     gauge("enhancement.effectiveTravelAction", effective.travelAction);
     gauge("enhancement.effectiveXunlaiAction", effective.xunlaiAction);
     gauge("enhancement.effectiveChatAliases", effective.chatAliases);
+    gauge("enhancement.effectiveQuickItemMove", effective.quickItemMove);
     gauge("enhancement.effectiveSkillSlotGeometry", effective.skillSlotGeometry);
     gauge(
       "enhancement.effectiveSkillCooldownObservation",

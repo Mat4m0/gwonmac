@@ -50,6 +50,7 @@ function projectCompatibility(
       playRegionObservation: status("playRegionObservation"),
       preGameControls: status("preGameControls"),
       characterSwitchAction: status("characterSwitchAction"),
+      quickItemMove: status("quickItemMove"),
     }),
   });
 }
