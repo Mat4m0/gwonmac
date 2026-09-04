@@ -24,6 +24,7 @@ import {
 import {
   validateCommonAcceptance,
 } from "./enhancements-live/acceptance.js";
+import { activeProfileOwner } from "./enhancements-live/profile-lock.js";
 import { runGraphicsProbeSession } from "./enhancements-live/graphics-probe.js";
 import {
   closedCharacterSwitchFailureCode,
@@ -63,6 +64,15 @@ if (!plan) {
 }
 const selectedScenario = plan.scenario;
 const privacySensitive = plan.name === "character-switch";
+const profileOwner = await activeProfileOwner(userData);
+if (profileOwner !== null) {
+  console.error(JSON.stringify({
+    blocked: "profile-already-running",
+    pid: profileOwner,
+    please: "close the other Guild Wars development session and retry",
+  }));
+  process.exit(2);
+}
 const preflight = await inspectEnhancementWorkspace(
   userData,
   plan.scenario.program,
