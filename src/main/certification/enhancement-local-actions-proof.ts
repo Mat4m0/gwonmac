@@ -705,12 +705,16 @@ function deriveQuickItemMove(
     certificate.inventorySlot,
     certificate.materialStorageSlot,
     certificate.numberPreference,
+    certificate.moveItem,
+    certificate.timer,
   ] as const;
   const resolved = entries.map((entry) =>
     uniqueExactFunction(module, entry.bodySha256, entry.params, entry.results));
   if (resolved.some((functionIndex) => functionIndex === null)) return null;
   return Object.freeze({
     ...certificate,
+    timer: Object.freeze({ ...certificate.timer, functionIndex: resolved[4]! }),
+    moveItem: Object.freeze({ ...certificate.moveItem, functionIndex: resolved[3]! }),
     inventorySlot: Object.freeze({ ...certificate.inventorySlot, functionIndex: resolved[0]! }),
     materialStorageSlot: Object.freeze({
       ...certificate.materialStorageSlot,

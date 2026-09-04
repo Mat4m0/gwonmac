@@ -510,6 +510,8 @@ export interface KnownEnhancementBuild {
     inventorySlot: Readonly<{ functionIndex: number; params: readonly ["i32", "i32", "i32"]; results: readonly []; bodySha256: string }>;
     materialStorageSlot: Readonly<{ functionIndex: number; params: readonly ["i32", "i32", "i32"]; results: readonly []; bodySha256: string }>;
     numberPreference: Readonly<{ functionIndex: number; params: readonly ["i32"]; results: readonly ["i32"]; bodySha256: string }>;
+    timer: Readonly<{ functionIndex: number; params: readonly []; results: readonly ["i32"]; bodySha256: string }>;
+    moveItem: Readonly<{ functionIndex: number; params: readonly ["i32", "i32", "i32", "i32"]; results: readonly []; bodySha256: string }>;
     storageFrameHash: number;
     tradeCartFrameHash: number;
     tradeDialogFrameHash: number;

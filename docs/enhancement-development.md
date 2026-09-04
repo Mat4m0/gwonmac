@@ -90,19 +90,46 @@ sockets, commands, surfaces, and storage work. Disabling the master applies the
 same shutdown to every child while preserving settings and saved data. Complete
 module unloading happens on the next Core launch.
 
-Quick Item Move replaces only two exact item-slot callbacks and calls the
-copied UI dispatcher already certified for Tools. Its certificate binds the
-callback bodies, item lookup, storage-page preference reader, frame hierarchy,
-and UI dispatcher to the client build. A changed or ambiguous anchor disables
-only this capability. The trade and item structure offsets are reviewed facts
+Quick Item Move wraps two exact item-slot callbacks, the native quantity-move
+helper, and the UI dispatcher already certified for Tools. Its certificate binds
+those bodies, item lookup, the storage-page reader, frame hierarchy, and clock
+to the client build. A changed or ambiguous anchor disables only this capability. The trade and item structure offsets are reviewed facts
 for the exact post-template client build, so an ArenaNet client update disables
-Quick Item Move until those facts are recertified. Storage moves use the first
-empty slot in the visible pane or inventory; they do not merge partial stacks
-or search other storage panes. The renderer sends two modifier bits and owns a
-scratch region whose layout is shared with the transform: 28 bytes for the
-largest native action payload and 64 temporary destination reservations.
-Reservations prevent rapid clicks from choosing the same still-empty slot and
-clear when Control is released.
+Quick Item Move until those facts are recertified. Ordinary storage transfers
+fill compatible stacks before using empty cells. Deposits stay in the visible
+pane. Withdrawals search the backpack, belt pouch, and both bags for stacks
+before selecting empty cells. Excess items remain at the source when no more
+space is available. Material storage uses the same quantity and claim handling,
+with fixed slots and the account's upgraded capacity. As in Toolbox, birthday
+presents are refused by this shortcut.
+
+Stack matching follows Toolbox's model-file, dye, and encoded-name checks and
+requires stackable items. Name reads are bounded. Control-Shift-click opens one
+native quantity prompt at the source, as in Toolbox. Its selected amount enters
+the same stack-first transfer path at the deferred game-thread boundary. Another
+native move cancels prompt ownership. Unrelated native moves pass through;
+trade behavior is unchanged.
+
+The renderer sends two modifier bits and owns the scratch region defined by
+[the shared contract](../src/shared/quick-item-move-contract.ts). Its 64 temporary
+move claims record source locations, source remainders, expected destination
+quantities, and the native start time.
+Claims prevent repeated source moves and overfilled destinations before the
+client observes the result. Observed destination quantities and claims are not
+added together. Claims are reclaimed after both endpoints reflect the move, or
+after Toolbox's three-second retry timeout. Key release does not acknowledge a
+move. A full claim buffer refuses additional moves until claims are reclaimed.
+Claims are temporary; canonical inventory state remains in the game.
+
+The quantity-aware function is the current client's `GmItemHelpers.cpp` move
+helper identified by `ItemCliValidate(sourceItemId)`, also used by GWCA. It takes
+an item ID, quantity, destination bag index, and zero-based slot. Its exact body
+is checked before the transform calls it. Synthetic WebAssembly tests prove
+selection, overflow, identity, and pending-click behavior. The real-client test
+proves certification and bytecode validation; live transfer behavior still
+requires Matthias's in-game check. Material-slot bounds follow this client's
+42-entry table, and capacity follows GWCA's account-unlock `0x83` rule. These
+layout facts remain restricted to the exact reviewed client.
 
 ## Use the cheapest proof
 

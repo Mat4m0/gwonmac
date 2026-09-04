@@ -525,6 +525,9 @@ function resolveEnhancementTransform(
     }, {
       name: "quick item material slot",
       functionIndex: quickItemMoveResolution.materialStorageSlot.localIndex + importCount,
+    }, {
+      name: "quick item quantity confirmation",
+      functionIndex: quickItemMoveResolution.moveItem.localIndex + importCount,
     }] : []),
   ];
   const roleByFunction = new Map<number, string>();
