@@ -567,7 +567,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
           syncStorage();
         },
       } : null,
-      toolbox: foundation ? { enabled: () => policy().buildLibrary,
+      toolbox: foundation ? { enabled: () => policy().buildLibrary || program === "effect-observer",
         update: (state) => { party = state; professionTrace?.poll(state); toolbox?.update(state); } } : null,
       observeState,
       publishState: program === "target-observer",
@@ -613,6 +613,26 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
       Object.defineProperties(base, {
         readout: { configurable: true, enumerable: true, get: () => readout?.state ?? null },
         toolbox: { configurable: true, enumerable: true, get: () => toolbox?.state ?? null },
+        party: { configurable: true, enumerable: true, get: () => {
+          if (program !== "effect-observer") return null;
+          const roster = party?.party;
+          if (party?.status !== "ready" || roster?.status !== "ready"
+            || roster.rosterObserved !== true || !Array.isArray(roster.slots)
+            || typeof roster.slotCount !== "number" || !Number.isInteger(roster.slotCount)) {
+            return Object.freeze({ status: "waiting" as const });
+          }
+          const agentIds = roster.slots.flatMap((slot) =>
+            slot.occupied && typeof slot.agentId === "number"
+              && Number.isInteger(slot.agentId) && slot.agentId > 0 ? [slot.agentId] : []);
+          if (agentIds.length !== roster.slotCount + 1) {
+            return Object.freeze({ status: "waiting" as const });
+          }
+          return Object.freeze({
+            status: "ready" as const,
+            slotCount: roster.slotCount,
+            agentIds: Object.freeze(agentIds),
+          });
+        } },
         skillCooldowns: { configurable: true, enumerable: true, get: () => cooldowns?.state ?? null },
         playerEffects: { configurable: true, enumerable: true, get: () => playerEffects.state },
         effectIcons: { configurable: true, enumerable: true, get: () => effectIcons.state },

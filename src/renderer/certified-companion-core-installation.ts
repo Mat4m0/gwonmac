@@ -461,6 +461,7 @@ export async function installCoreCertifiedCompanion(
       get cursor() { return cursor?.state ?? null; },
       get readout() { return null; },
       get toolbox() { return null; },
+      get party() { return null; },
       get xunlaiAccess() { return null; },
       get playerEffects() { return null; },
       get effectIcons() { return null; },

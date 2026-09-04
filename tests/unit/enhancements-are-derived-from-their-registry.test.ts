@@ -139,6 +139,25 @@ test("one capability plan derives hooks without losing feature identity", () => 
       enhancementCapabilitiesFor(selection, "xunlai-storage"),
       { nativeCursor: false, targetObservation: false, partyObservation: false, teamApply: false, travelAction: true, xunlaiAction: true, chatAliases: true, skillSlotGeometry: false, skillCooldownObservation: false, playRegionObservation: true, preGameControls: false, characterSwitchAction: false, chatFiltering: false, quickItemMove: false, playerEffectObservation: false, effectIconGeometry: false },
     );
+    assert.deepEqual(
+      enhancementCapabilitiesFor(selection, "effect-observer"),
+      {
+        nativeCursor: false,
+        targetObservation: false,
+        partyObservation: true,
+        teamApply: false,
+        travelAction: false,
+        xunlaiAction: false,
+        chatAliases: false,
+        skillSlotGeometry: false,
+        skillCooldownObservation: false,
+        playRegionObservation: true,
+        preGameControls: false,
+        characterSwitchAction: false,
+        playerEffectObservation: true,
+        effectIconGeometry: true,
+      },
+    );
   }
 });
 
@@ -151,6 +170,7 @@ test("launch intent resolves to the canonical frozen capability profiles", () =>
     [{ nativeCursor: false, tools: false }, "toolbox-foundation", "features-284"],
     [{ nativeCursor: false, tools: false }, "xunlai-storage", "features-270"],
     [{ nativeCursor: false, tools: false }, "reconnect-probe", "features-601"],
+    [{ nativeCursor: false, tools: false }, "effect-observer", "features-c204"],
   ] as const;
   for (const [selection, program, profile] of cases) {
     const resolved = enhancementCapabilitiesFor(selection, program);

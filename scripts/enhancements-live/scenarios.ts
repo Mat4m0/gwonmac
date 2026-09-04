@@ -55,7 +55,8 @@ function liveReadinessSatisfied(required: LiveReadiness): boolean {
   }
   if (required === "effects") {
     return window.gwCompanionRuntime?.playerEffects?.status === "ready"
-      && window.gwCompanionRuntime?.effectIcons?.status === "ready";
+      && window.gwCompanionRuntime?.effectIcons?.status === "ready"
+      && window.gwCompanionRuntime?.party?.status === "ready";
   }
   const cursor = window.gwCompanionRuntime?.cursor;
   return window.gwCompanionRuntime?.status === "installed"
@@ -75,6 +76,7 @@ export type ObservationContext = Readonly<{
   readCharacterSwitchDiagnostics: () => Promise<CharacterSwitchDiagnostics | null>;
   readPlayerEffects: () => Promise<CompanionDeveloperRuntime["playerEffects"]>;
   readEffectIcons: () => Promise<CompanionDeveloperRuntime["effectIcons"]>;
+  readPartyProjection: () => Promise<CompanionDeveloperRuntime["party"]>;
   operatorStep: (step: Readonly<{
     id: string;
     title: string;
@@ -817,7 +819,13 @@ export const SCENARIOS: Readonly<Record<string, LiveScenario>> = Object.freeze({
     tier: "observation",
     program: "effect-observer",
     readiness: "effects",
-    async run({ readPlayerEffects, readEffectIcons, operatorStep, wait }: ObservationContext) {
+    async run({
+      readPlayerEffects,
+      readEffectIcons,
+      readPartyProjection,
+      operatorStep,
+      wait,
+    }: ObservationContext) {
       const steps = Object.freeze([
         {
           id: "baseline",
@@ -849,6 +857,24 @@ export const SCENARIOS: Readonly<Record<string, LiveScenario>> = Object.freeze({
           instruction: "Apply a maintained enchantment, if available. Otherwise keep an indefinite stock effect visible.",
           buttonLabel: "Capture maintained effect",
         },
+        {
+          id: "solo",
+          title: "Solo party",
+          instruction: "Remove every hero and henchman so only your character remains.",
+          buttonLabel: "Capture solo party",
+        },
+        {
+          id: "hero-added",
+          title: "Hero added",
+          instruction: "Add one hero to the party and wait until the party panel updates.",
+          buttonLabel: "Capture hero added",
+        },
+        {
+          id: "hero-removed",
+          title: "Hero removed",
+          instruction: "Remove that hero and wait until the party panel updates.",
+          buttonLabel: "Capture hero removed",
+        },
       ] as const);
       const checkpoints: Array<Readonly<{
         id: string;
@@ -856,6 +882,8 @@ export const SCENARIOS: Readonly<Record<string, LiveScenario>> = Object.freeze({
         second: CompanionDeveloperRuntime["playerEffects"];
         firstIcons: CompanionDeveloperRuntime["effectIcons"];
         secondIcons: CompanionDeveloperRuntime["effectIcons"];
+        firstParty: CompanionDeveloperRuntime["party"];
+        secondParty: CompanionDeveloperRuntime["party"];
       }>> = [];
       const outputDirectory = path.join(
         process.cwd(),
@@ -865,7 +893,7 @@ export const SCENARIOS: Readonly<Record<string, LiveScenario>> = Object.freeze({
       const output = path.join(outputDirectory, "effect-observer.json");
       await mkdir(outputDirectory, { recursive: true });
       const persist = (complete: boolean) => writeFile(output, `${JSON.stringify({
-        version: 2,
+        version: 3,
         complete,
         checkpoints,
       }, null, 2)}\n`, "utf8");
@@ -875,10 +903,14 @@ export const SCENARIOS: Readonly<Record<string, LiveScenario>> = Object.freeze({
         await wait(100);
         const first = await readPlayerEffects();
         const firstIcons = await readEffectIcons();
+        const firstParty = await readPartyProjection();
         await wait(150);
         const second = await readPlayerEffects();
         const secondIcons = await readEffectIcons();
-        checkpoints.push(Object.freeze({ id: step.id, first, second, firstIcons, secondIcons }));
+        const secondParty = await readPartyProjection();
+        checkpoints.push(Object.freeze({
+          id: step.id, first, second, firstIcons, secondIcons, firstParty, secondParty,
+        }));
         await persist(false);
       }
       await persist(true);
@@ -892,11 +924,13 @@ export const SCENARIOS: Readonly<Record<string, LiveScenario>> = Object.freeze({
           second: CompanionDeveloperRuntime["playerEffects"];
           firstIcons: CompanionDeveloperRuntime["effectIcons"];
           secondIcons: CompanionDeveloperRuntime["effectIcons"];
+          firstParty: CompanionDeveloperRuntime["party"];
+          secondParty: CompanionDeveloperRuntime["party"];
         }>[];
       }>;
     }) {
       const checkpoints = result.evidence?.checkpoints;
-      if (checkpoints?.length !== 5) {
+      if (checkpoints?.length !== 8) {
         throw new Error("effect observer did not retain every checkpoint");
       }
       for (const checkpoint of checkpoints) {
@@ -912,6 +946,18 @@ export const SCENARIOS: Readonly<Record<string, LiveScenario>> = Object.freeze({
       if (finite?.status !== "ready"
         || !finite.effects.some(({ durationMs }) => durationMs > 0)) {
         throw new Error("finite checkpoint observed no timed player effect");
+      }
+      const partyCount = (id: string) => {
+        const state = checkpoints.find((checkpoint) => checkpoint.id === id)?.secondParty;
+        return state?.status === "ready"
+          ? state.slotCount
+          : null;
+      };
+      const solo = partyCount("solo");
+      const added = partyCount("hero-added");
+      const removed = partyCount("hero-removed");
+      if (solo !== 0 || added === null || added < 1 || removed === null || removed >= added) {
+        throw new Error("party checkpoints did not prove the hero add/remove lifecycle");
       }
     },
   }),
@@ -1128,6 +1174,8 @@ export function scenarioContext(
       window.gwCompanionRuntime?.playerEffects ?? null),
     readEffectIcons: async () => (await currentPage()).evaluate(() =>
       window.gwCompanionRuntime?.effectIcons ?? null),
+    readPartyProjection: async () => (await currentPage()).evaluate(() =>
+      window.gwCompanionRuntime?.party ?? null),
     operatorStep,
     wait: (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
   };

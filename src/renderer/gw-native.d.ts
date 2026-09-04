@@ -229,6 +229,12 @@ declare global {
     }> | null;
     readonly readout: Readonly<{ visible: boolean; line: string }> | null;
     readonly toolbox: ToolboxObservation | null;
+    /** Minimal roster identity projection exposed only for developer evidence. */
+    readonly party: Readonly<{
+      status: "ready";
+      slotCount: number;
+      agentIds: readonly number[];
+    }> | Readonly<{ status: "waiting" }> | null;
     readonly xunlaiAccess: boolean | null;
     readonly playerEffects: CompanionPlayerEffectState | null;
     readonly effectIcons: CompanionEffectIconState | null;

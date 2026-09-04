@@ -44,3 +44,8 @@ answer:
 The research output should first be a proof report and read-only diagnostics.
 Only after live evidence confirms semantics should a new UI or durable setting
 be proposed.
+
+The retained `effect-observer` session already records the certified roster
+beside player effects for solo, hero-added, and hero-removed checkpoints. That
+is identity-correlation evidence only. A later party-effect spike must still
+prove each non-player effect row and its lifecycle independently.

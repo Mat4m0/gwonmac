@@ -324,6 +324,9 @@ export const ENHANCEMENT_CAPABILITY_PRESETS = Object.freeze({
   storage: capabilitiesFromMask(0x270),
   partyCommandsStorage: capabilitiesFromMask(0x2fc),
   effects: capabilitiesFromMask(0xc200),
+  // Developer-only session: exact player effects plus the already-certified
+  // roster projection needed to correlate later party-effect evidence.
+  effectObserver: capabilitiesFromMask(0xc204),
   all: capabilitiesFromMask(0xffff),
 });
 
@@ -385,7 +388,7 @@ export function enhancementCapabilitiesFor(
     // The reload probe needs the same bounded pre-game and play-region readers
     // that required Core installs in production.
     case "reconnect-probe": return ENHANCEMENT_CAPABILITY_PRESETS.reconnect;
-    case "effect-observer": return ENHANCEMENT_CAPABILITY_PRESETS.effects;
+    case "effect-observer": return ENHANCEMENT_CAPABILITY_PRESETS.effectObserver;
   }
 }
 

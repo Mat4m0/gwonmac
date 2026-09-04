@@ -48,10 +48,15 @@ loading, PvP, malformed, clipped, ambiguous, and stale states.
 
 The unpackaged `effect-observer` scenario is the patch-day semantic check. Its
 click-through checkpoints record two consecutive player and icon snapshots in
-`test-results/enhancements-live/effect-observer.json`. Static proof and synthetic
-tests make the build eligible for live testing; release acceptance still needs a
-Developer Build session that visually confirms a finite effect, refresh, natural
-expiry, an indefinite or maintained effect, and travel/loading withdrawal.
+`test-results/enhancements-live/effect-observer.json`. The developer-only run
+also records the existing certified party projection through solo, hero-added,
+and hero-removed checkpoints. This correlates stable party agent identities for
+later research; it does not add party effects to the player capability.
+
+Static proof and synthetic tests make the build eligible for live testing.
+Release acceptance still needs a Developer Build session that visually confirms
+a finite effect, refresh, natural expiry, an indefinite or maintained effect,
+and travel/loading withdrawal.
 
 Party awareness and hostile-agent effects remain separate authority decisions.
 They must not reuse this player's capability or infer exact durations from broad
