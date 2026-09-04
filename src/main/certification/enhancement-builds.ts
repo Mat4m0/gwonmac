@@ -36,17 +36,17 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
       // ENHANCEMENT_TRANSFORM_ABI or any config word changes.
       outputSha256: Object.freeze({
         "features-601":
-          "4a7317c9df48f49c87459fe8db4e8c6647e0b10209f8c665894b493b6621c186",
+          "06e7e534f680cc1ec2c049229b1a7c5e0c8379a46b68ebd8269b972484a22424",
         "features-e01":
-          "31118fac219c22c14b7f2025f7e3bf72802a5fda9376b0fbd03c070b99b0424c",
+          "771c917b5bd59b9d96ae404dac7a8156c3c8b97ffff3914c323f13e4672aa4f6",
         "features-fff":
-          "5c67e7859b14b93c09d807199daffc73a76c8fe683c6c3a9f8c06c8115361098",
+          "421914a8add1c9cd6d88f0124d943a296260bb9e459700d11ab71a9cfc40ae2a",
         "features-1fff":
-          "d8a048527d569c829870d79a5bdd59dd8e6e547e315533465b38cdefbf363ec6",
+          "5aa56c8aadeaddf490948811558cb70fd4528d54109de20167794c75ca50b301",
         "features-2fff":
-          "08227b5388c9fad57309cc891f2164c28c1c38806ed292391f2d2b68317455b5",
+          "f4570ddbd87c876ac6fecbadd5db957108689922efa9077b6c06bac3aab5a350",
         "features-3fff":
-          "a81546a534d0a93b23fac9d65407b35a2b77d6a83385e7c0a1ed3dd276084cfd",
+          "6d843b14c4b468452e7277b9f00a1a2defeaece3a6596d066de331a53b9da0a9",
       }),
       programId: 1,
       // The verifier derives this bounded identity from the exact module; it is
@@ -672,6 +672,20 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
           params: ["i32"] as const,
           results: ["i32"] as const,
           bodySha256: "6bbf1281e9b949a76d31595dddf1f95f6eae8de0f2129214e0ccb059cb46d1e9",
+        }),
+        timer: Object.freeze({
+          functionIndex: 249,
+          params: [] as const,
+          results: ["i32"] as const,
+          bodySha256: "c1f93ac7e783305bff7d976dbf55365b67fa6696243305685aa1fb0fb7901030",
+        }),
+        // GmItemHelpers.cpp: ItemCliValidate(sourceItemId), followed by
+        // quantity, bag-index and slot validation. GWCA MoveItem_Func.
+        moveItem: Object.freeze({
+          functionIndex: 13640,
+          params: ["i32", "i32", "i32", "i32"] as const,
+          results: [] as const,
+          bodySha256: "12b11795227c8ca7ea284798a22fa350234a6d0330fe222caab8b895ffde98e5",
         }),
         storageFrameHash: 0x8a02_f1b2,
         tradeCartFrameHash: 0x72f7_171f,

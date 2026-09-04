@@ -2,6 +2,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  quickItemMoveMaterialCapacity,
+  quickItemMoveConfigure,
+  quickItemMoveAvailableSource,
+  quickItemMoveSlot,
+  quickItemMoveQuantityWrapper,
+  quickItemMoveUiWrapper,
+  quickItemMoveDispatch,
+  resolveQuickItemMoveTransform,
+  quickItemMoveSameItem,
+  quickItemMoveModifiers,
   quickItemMoveHandler,
   quickItemMoveItemLookup,
   quickItemMoveDrain,
@@ -62,17 +72,16 @@ const handlerState = Object.freeze({
 });
 
 const storageState = Object.freeze({
-  itemPointer: 7,
-  page: 8,
-  storageFrame: 9,
-  claimAllowed: 10,
-  claimBag: 11,
-  claimSlot: 12,
-  uiMessage: 13,
-  uiItem: 14,
-  uiQuantity: 15,
-  uiBag: 16,
-  uiSlot: 17,
+  page: 7,
+  storageFrame: 8,
+  uiMessage: 9,
+  uiItem: 10,
+  uiQuantity: 11,
+  uiBag: 12,
+  uiSlot: 13,
+  nativeCalls: 14,
+  clock: 15,
+  pending: 16,
 });
 
 function handlerModule(): Uint8Array {
@@ -117,10 +126,8 @@ function handlerModule(): Uint8Array {
     layout,
     globals,
     itemLookup: 0,
-    numberPreference: 1,
     uiDispatcher: 2,
     findFrame: 3,
-    claimDestination: 4,
     frameDispatch: 5,
     frameDispatchOffset: 0,
     findAncestor: 6,
@@ -175,11 +182,15 @@ function storageExecutorModule(): Uint8Array {
   const certificate = build.quickItemMove!;
   const layout = { ...build.preGameControls!.layout, contextRoot: 32, gameContextSlot: 0 };
   const types = concat(
-    uleb(4),
+    uleb(8),
     op(0x60), uleb(1), op(0x7f), uleb(1), op(0x7f),
     op(0x60), uleb(3), op(0x7f, 0x7f, 0x7f), uleb(0),
     op(0x60), uleb(2), op(0x7f, 0x7f), uleb(1), op(0x7f),
     op(0x60), uleb(3), op(0x7f, 0x7f, 0x7f), uleb(1), op(0x7f),
+    op(0x60), uleb(4), op(0x7f, 0x7f, 0x7f, 0x7f), uleb(0),
+    op(0x60), uleb(0), uleb(1), op(0x7f),
+    op(0x60), uleb(6), op(0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f), uleb(1), op(0x7f),
+    op(0x60), uleb(0), uleb(0),
   );
   const returnGlobal = (index: number) => concat(uleb(0), global(index), op(0x0b));
   const uiDispatcher = concat(
@@ -191,21 +202,27 @@ function storageExecutorModule(): Uint8Array {
     local(1), load(12), setGlobal(storageState.uiSlot),
     op(0x0b),
   );
-  const claimDestination = concat(
-    uleb(0),
-    local(0), setGlobal(storageState.claimBag),
-    local(1), setGlobal(storageState.claimSlot),
-    global(storageState.claimAllowed), op(0x0b),
+  const nativeMove = concat(
+    uleb(1), uleb(1), op(0x7f),
+    i32(40_000), global(storageState.nativeCalls), i32(16), op(0x6c, 0x6a, 0x21, 0x04),
+    ...[0, 1, 2, 3].map((index) => concat(local(4), local(index), op(0x36, 0x02), uleb(index * 4))),
+    global(storageState.nativeCalls), i32(1), op(0x6a), setGlobal(storageState.nativeCalls), op(0x0b),
   );
+  const config = {
+    certificate: { ...certificate, moveItem: { ...certificate.moveItem, functionIndex: 6 }, timer: { ...certificate.timer, functionIndex: 8 } },
+    globals, itemLookup: 0, sameItem: 4,
+  };
   const executor = quickItemMoveStorageExecutor({
-    certificate,
+    certificate: config.certificate,
     layout,
     globals,
     itemLookup: 0,
     numberPreference: 1,
     uiDispatcher: 2,
     findFrame: 3,
-    claimDestination: 4,
+    availableSource: 9,
+    moveSlot: 10,
+    materialCapacity: 17,
   });
   const stateExports = Object.entries(storageState).map(([key, index]) =>
     exported(key, 0x03, index));
@@ -213,31 +230,44 @@ function storageExecutorModule(): Uint8Array {
     WASM_HEADER,
     encodeSection({ id: 1, body: types }),
     encodeSection({ id: 3, body: concat(
-      uleb(6), uleb(0), uleb(0), uleb(1), uleb(0), uleb(2), uleb(3),
+      uleb(18), uleb(0), uleb(0), uleb(1), uleb(0), uleb(2), uleb(3), uleb(4), uleb(0), uleb(5), uleb(2), uleb(6), uleb(4), uleb(1), uleb(2), uleb(2), uleb(7), uleb(2), uleb(0),
     ) }),
     encodeSection({ id: 5, body: concat(uleb(1), op(0x00), uleb(1)) }),
     encodeSection({ id: 6, body: concat(
-      uleb(18), mutableGlobal(1), mutableGlobal(1), mutableGlobal(2_048),
+      uleb(19), mutableGlobal(1), mutableGlobal(1), mutableGlobal(32_000),
       mutableGlobal(), mutableGlobal(), mutableGlobal(), mutableGlobal(),
-      mutableGlobal(256), mutableGlobal(),
-      mutableGlobal(1), mutableGlobal(1),
-      ...Array.from({ length: 7 }, () => mutableGlobal()),
+      mutableGlobal(), mutableGlobal(1),
+      ...Array.from({ length: 10 }, () => mutableGlobal()),
     ) }),
     encodeSection({ id: 7, body: concat(
-      uleb(5 + stateExports.length),
-      exported("memory", 0x02, 0), exported("executor", 0x00, 5),
+      uleb(10 + stateExports.length),
+      exported("memory", 0x02, 0), exported("executor", 0x00, 5), exported("setModifiers", 0x00, 7),
+      exported("confirm", 0x00, 6), exported("ui", 0x00, 12),
+      exported("drain", 0x00, 15), exported("configure", 0x00, 16),
       exported("modifiers", 0x03, globals.modifiers),
       exported("draining", 0x03, globals.draining),
       exported("intentModifiers", 0x03, globals.intentModifiers),
       ...stateExports,
     ) }),
     encodeSection({ id: 10, body: encodeCode([
-      returnGlobal(storageState.itemPointer),
+      quickItemMoveItemLookup(layout),
       returnGlobal(storageState.page),
       uiDispatcher,
       returnGlobal(storageState.storageFrame),
-      claimDestination,
+      quickItemMoveSameItem(),
       executor,
+      quickItemMoveQuantityWrapper({ globals, original: 11, pendingGlobal: 16, argumentGlobalBase: 17 }),
+      quickItemMoveModifiers(globals),
+      returnGlobal(storageState.clock),
+      quickItemMoveAvailableSource(config),
+      quickItemMoveSlot(config),
+      nativeMove,
+      quickItemMoveUiWrapper(globals, 2),
+      quickItemMoveDispatch(globals, 14, 5),
+      concat(uleb(0), i32(0), op(0x0b)),
+      concat(uleb(0), quickItemMoveDrain(16, 17, globals, 13), op(0x0b)),
+      quickItemMoveConfigure(globals, 16),
+      quickItemMoveMaterialCapacity(),
     ]) }),
   );
 }
@@ -562,85 +592,338 @@ test("handler routes inventory, storage, own offers, and partner offers safely",
   assert.equal(state("frameMessage").value, 0);
 });
 
-test("storage executor validates direction, capacity, material slots, and quantity", async () => {
+
+async function storageFixture(direction = 1) {
   const instance = await instantiate(storageExecutorModule());
-  const exports = instance.exports;
-  const memory = exports.memory as WebAssembly.Memory;
-  const execute = exports.executor as (itemId: number, quantity: number, direction: number) => number;
-  const state = (nameValue: keyof typeof storageState) => exports[nameValue] as WebAssembly.Global;
-  const view = new DataView(memory.buffer);
-  const itemId = 1_234;
-  const item = 256;
-  const inventory = 400;
-  const sourceBag = 600;
-  const storageBag = 700;
-  const materialBag = 720;
-  const backpack = 740;
-  const slots = 900;
-  view.setUint32(32, 128, true);
-  view.setUint32(128, 160, true);
-  view.setUint32(160 + 0x40, 200, true);
-  view.setUint32(200 + 0xf8, inventory, true);
-  view.setUint32(item + 12, sourceBag, true);
-  view.setUint16(item + 76, 9, true);
-  view.setUint32(sourceBag + 4, 3, true);
-  view.setUint32(inventory + 8 * 4, storageBag, true);
-  view.setUint32(storageBag + 4, 8, true);
-  view.setUint32(storageBag + 24, slots, true);
-  view.setUint32(storageBag + 32, 2, true);
+  const view = new DataView((instance.exports.memory as WebAssembly.Memory).buffer);
+  const state = (key: keyof typeof storageState) => instance.exports[key] as WebAssembly.Global;
+  const execute = instance.exports.executor as (id: number, quantity: number, direction: number) => number;
+  const setModifiers = instance.exports.setModifiers as (modifiers: number) => number;
+  const u32 = (address: number, value: number) => view.setUint32(address, value, true);
+  u32(32, 128); u32(128, 256); u32(256 + 0x40, 512);
+  u32(512 + 0xf8, 1_024); u32(512 + 0xb8, 12_000); u32(512 + 0xc0, 100);
+  const bag = (index: number, slots: readonly number[]) => {
+    const pointer = 4_096 + index * 64;
+    const array = 6_000 + index * 256;
+    u32(1_024 + index * 4, pointer);
+    u32(pointer, index < 5 ? 1 : index === 6 ? 5 : 4);
+    u32(pointer + 4, index - 1);
+    u32(pointer + 24, array); u32(pointer + 32, slots.length);
+    slots.forEach((id, slot) => u32(array + slot * 4, id ? 2_048 + id * 128 : 0));
+    return pointer;
+  };
+  const item = (id: number, quantity: number, bagIndex: number, options: {
+    name?: string; model?: number; stackable?: boolean; dye?: number;
+  } = {}) => {
+    const pointer = 2_048 + id * 128;
+    u32(12_000 + id * 4, pointer); u32(pointer, id);
+    u32(pointer + 12, 4_096 + bagIndex * 64);
+    u32(pointer + 0x1c, options.model ?? 777);
+    u32(pointer + 0x20, options.dye === undefined ? 11 : 10 | options.dye << 8);
+    u32(pointer + 0x28, options.stackable === false ? 0 : 0x80000);
+    view.setUint16(pointer + 76, quantity, true);
+    const namePointer = 20_000 + id * 128;
+    u32(pointer + 0x34, namePointer);
+    const text = options.name ?? 'same encoded item';
+    [...text, '\0'].forEach((character, index) => view.setUint16(namePointer + index * 2, character.charCodeAt(0), true));
+    return pointer;
+  };
+  const moves = () => Array.from({ length: Number(state('nativeCalls').value) }, (_, index) =>
+    Array.from({ length: 4 }, (_, word) => view.getUint32(40_000 + index * 16 + word * 4, true)));
+  bag(direction === 1 ? 1 : 8, [1]);
+  item(1, 3, direction === 1 ? 1 : 8);
+  const confirm = instance.exports.confirm as (id: number, quantity: number, bag: number, slot: number) => void;
+  const ui = instance.exports.ui as (message: number, pointer: number, extra: number) => void;
+  const drain = instance.exports.drain as () => void;
+  const configure = instance.exports.configure as (enabled: number, scratch: number) => number;
+  return { view, state, bag, item, moves, u32, setModifiers, confirm, ui, drain, configure,
+    move: (id = 1, quantity = 3) => execute(id, quantity, direction),
+    execute };
+}
 
-  view.setUint32(sourceBag, 1, true);
-  assert.equal(execute(itemId, 9, 1), 1);
-  assert.equal(state("claimBag").value, 8);
-  assert.equal(state("claimSlot").value, 0);
-  assert.equal(state("uiMessage").value, 0x1000_01af);
-  assert.equal(state("uiItem").value, itemId);
-  assert.equal(state("uiQuantity").value, 8, "kMoveItem word 2 is the destination bag index");
-  assert.equal(state("uiBag").value, 0, "kMoveItem word 3 is the destination slot");
-  assert.equal(state("uiSlot").value, 0, "plain Control does not request a quantity prompt");
+test('storage merges 3 into 18 before an earlier empty cell, including a full pane', async () => {
+  for (const slots of [[0, 2], [2]]) {
+    const f = await storageFixture();
+    f.bag(8, slots); f.item(2, 18, 8);
+    assert.equal(f.move(), 1);
+    assert.deepEqual(f.moves(), [[1, 3, 7, slots.indexOf(2)]]);
+  }
+});
 
-  (exports.modifiers as WebAssembly.Global).value = 3;
-  assert.equal(execute(itemId, 9, 1), 1);
-  assert.equal(state("uiSlot").value, 1, "Control+Shift requests the native quantity prompt");
-  (exports.modifiers as WebAssembly.Global).value = 1;
+test('withdrawal searches all four bags for stacks before using backpack space', async () => {
+  const f = await storageFixture(2);
+  f.bag(1, [0]); f.bag(4, [2]); f.item(2, 18, 4);
+  assert.equal(f.move(), 1);
+  assert.deepEqual(f.moves(), [[1, 3, 3, 0]]);
+});
 
-  state("uiMessage").value = 0;
-  assert.equal(execute(itemId, 0, 1), 0);
-  assert.equal(execute(itemId, 10, 1), 0);
-  assert.equal(state("uiMessage").value, 0);
+test('overflow fills stacks then empty cells and leaves any excess at source', async () => {
+  for (const hasEmpty of [false, true]) {
+    const f = await storageFixture();
+    f.item(1, 20, 1); f.item(2, 245, 8); f.item(3, 248, 8);
+    f.bag(8, hasEmpty ? [0, 2, 3] : [2, 3]);
+    assert.equal(f.move(1, 20), 1);
+    assert.deepEqual(f.moves(), hasEmpty
+      ? [[1, 5, 7, 1], [1, 2, 7, 2], [1, 13, 7, 0]]
+      : [[1, 5, 7, 0], [1, 2, 7, 1]]);
+  }
+});
 
-  view.setUint32(slots, 1, true);
-  view.setUint32(slots + 4, 1, true);
-  assert.equal(execute(itemId, 9, 1), 0, "a full normal pane fails closed");
-  view.setUint32(slots, 0, true);
-  view.setUint32(slots + 4, 0, true);
+test('withdrawal skips full and absent bags and splits large material stacks', async () => {
+  const f = await storageFixture(2);
+  f.item(1, 600, 8); f.item(2, 250, 1); f.bag(1, [2]); f.bag(4, [0, 0]);
+  assert.equal(f.move(1, 600), 1);
+  assert.deepEqual(f.moves(), [[1, 250, 3, 0], [1, 250, 3, 1]]);
+});
 
-  state("page").value = 15;
-  assert.equal(execute(itemId, 9, 1), 0, "an unknown storage pane fails closed");
+test('matching respects encoded names, model files, stackability and dye variants', async () => {
+  for (const options of [{ name: 'different' }, { model: 778 }, { stackable: false }, { dye: 4 }]) {
+    const f = await storageFixture();
+    f.item(1, 3, 1, { dye: 3 }); f.item(2, 18, 8, options); f.bag(8, [2, 0]);
+    assert.equal(f.move(), 1);
+    assert.deepEqual(f.moves(), [[1, 3, 7, 1]]);
+  }
+  const f = await storageFixture();
+  f.item(1, 3, 1, { dye: 3 }); f.item(2, 18, 8, { dye: 3 }); f.bag(8, [2]);
+  assert.equal(f.move(), 1);
+  assert.deepEqual(f.moves(), [[1, 3, 7, 0]]);
+});
 
-  state("page").value = 14;
-  view.setUint32(inventory + 6 * 4, materialBag, true);
-  view.setUint32(materialBag + 4, 6, true);
-  view.setUint32(item + 16, 1_000, true);
-  view.setUint32(item + 20, 1, true);
-  view.setUint32(1_000, 0x2508_2800, true);
-  state("claimAllowed").value = 0;
-  assert.equal(execute(itemId, 9, 1), 1);
-  assert.equal(state("uiQuantity").value, 6);
-  assert.equal(state("uiBag").value, 40, "Zaishen coin material slots are valid");
-  assert.equal(state("uiSlot").value, 0);
+test('rapid clicks reserve quantities, share pending stacks and do not repeat a source', async () => {
+  const f = await storageFixture();
+  f.item(1, 10, 1); f.item(2, 10, 1); f.item(3, 245, 8); f.bag(8, [3, 0]);
+  assert.equal(f.move(1, 10), 1);
+  assert.equal(f.move(1, 10), 0);
+  assert.equal(f.move(2, 10), 1);
+  assert.deepEqual(f.moves(), [[1, 5, 7, 0], [1, 5, 7, 1], [2, 10, 7, 1]]);
+  // Acknowledged destination quantities do not get counted twice.
+  f.item(4, 3, 1); f.item(5, 15, 8); f.bag(8, [3, 5]);
+  assert.equal(f.move(4, 3), 1);
+  assert.deepEqual(f.moves().at(-1), [4, 3, 7, 1]);
+});
 
-  state("page").value = 0;
-  state("claimAllowed").value = 1;
-  view.setUint32(sourceBag, 4, true);
-  view.setUint32(inventory + 4, backpack, true);
-  view.setUint32(backpack + 4, 1, true);
-  view.setUint32(backpack + 24, slots, true);
-  view.setUint32(backpack + 32, 2, true);
-  assert.equal(execute(itemId, 9, 2), 1);
-  assert.equal(state("claimBag").value, 1);
-  assert.equal(state("claimSlot").value, 0);
+test('pending destinations cannot accept different items or nonstackable items', async () => {
+  for (const stackable of [true, false]) {
+    const f = await storageFixture();
+    f.item(1, 1, 1, { stackable }); f.item(2, 1, 1, { stackable, name: 'other item' }); f.bag(8, [0]);
+    assert.equal(f.move(1, 1), 1);
+    assert.equal(f.move(2, 1), 0);
+    assert.deepEqual(f.moves(), [[1, 1, 7, 0]]);
+    f.setModifiers(0); f.setModifiers(1);
+    assert.equal(f.move(2, 1), 0, 'modifier release cannot acknowledge a pending move');
+    f.state('clock').value = 3_000;
+    assert.equal(f.move(2, 1), 1, 'a rejected move becomes retryable after the timeout');
+  }
+});
 
-  state("claimAllowed").value = 0;
-  assert.equal(execute(itemId, 9, 2), 0, "an in-flight destination is not reused");
+test('invalid quantities, directions, storage pages and closed storage do not move', async () => {
+  const f = await storageFixture(); f.bag(8, [0]);
+  assert.equal(f.move(1, 0), 0); assert.equal(f.move(1, 4), 0);
+  assert.equal(f.execute(1, 3, 0), 0); assert.equal(f.execute(1, 3, 2), 0);
+  f.state('page').value = 15; assert.equal(f.move(), 0);
+  f.state('page').value = 0; f.state('storageFrame').value = 0;
+  assert.equal(f.move(), 0); assert.deepEqual(f.moves(), []);
+});
+
+test('Control-Shift prompts at the source before choosing destinations', async () => {
+  const f = await storageFixture(); f.bag(8, [0, 2]); f.item(2, 18, 8);
+  f.setModifiers(3); assert.equal(f.move(), 1);
+  assert.equal(f.state('uiMessage').value, 0x1000_01af);
+  assert.equal(f.state('uiItem').value, 1);
+  assert.equal(f.state('uiQuantity').value, 0); // Source bag index.
+  assert.equal(f.state('uiBag').value, 0); // Source slot.
+  assert.equal(f.state('uiSlot').value, 1); // Native prompt flag.
+  assert.deepEqual(f.moves(), []);
+});
+
+test('material storage uses the fixed slot and explicit quantity', async () => {
+  const f = await storageFixture(); f.bag(6, Array.from({ length: 42 }, () => 0)); f.state('page').value = 14;
+  const item = f.item(1, 3, 1);
+  f.u32(item + 16, 30_000); f.u32(item + 20, 1); f.u32(30_000, 0x2508_2800);
+  assert.equal(f.move(), 1);
+  assert.deepEqual(f.moves(), [[1, 3, 5, 40]]);
+});
+
+test('acknowledged stack moves remain usable after the source item disappears', async () => {
+  const f = await storageFixture(); f.bag(8, [0]);
+  assert.equal(f.move(), 1);
+  f.u32(12_000 + 4, 0); // Server removed the original source id.
+  f.item(3, 3, 8); f.bag(8, [3]); f.item(2, 3, 1);
+  assert.equal(f.move(2), 1);
+  assert.deepEqual(f.moves(), [[1, 3, 7, 0], [2, 3, 7, 0]]);
+});
+
+test('deposits do not spill into another storage pane', async () => {
+  const f = await storageFixture(); f.bag(8, [2]); f.item(2, 250, 8); f.bag(9, [0]);
+  assert.equal(f.move(), 0);
+  assert.deepEqual(f.moves(), []);
+});
+
+test('malformed item identity cannot select an occupied slot', async () => {
+  for (const namePointer of [0, 65_535]) {
+    const f = await storageFixture(); f.bag(8, [2]);
+    const target = f.item(2, 18, 8); f.u32(target + 0x34, namePointer);
+    assert.equal(f.move(), 0);
+    assert.deepEqual(f.moves(), []);
+  }
+});
+
+test('changed native move or clock bodies refuse Quick Item Move certification', () => {
+  const build = ENHANCEMENT_BUILDS[0]!;
+  const certificate = build.quickItemMove!;
+  const entries = [certificate.inventorySlot, certificate.materialStorageSlot,
+    certificate.numberPreference, certificate.moveItem, certificate.timer];
+  for (const changed of [certificate.moveItem, certificate.timer]) {
+    assert.throws(() => resolveQuickItemMoveTransform({
+      build, enabled: true,
+      resolveFunction: (_label, functionIndex) => ({ localIndex: functionIndex, typeIndex: 0 }),
+      bodyHash: (functionIndex) => functionIndex === changed.functionIndex
+        ? 'changed' : entries.find((entry) => entry.functionIndex === functionIndex)!.bodySha256,
+      fail: (message) => { throw new Error(message); },
+    }), /body does not match/);
+  }
+});
+
+test('a full reservation buffer stops safely instead of issuing untracked moves', async () => {
+  const f = await storageFixture(2);
+  f.item(1, 16_001, 8); f.bag(1, Array.from({ length: 64 }, () => 0)); f.bag(2, [0]);
+  assert.equal(f.move(1, 16_001), 1);
+  assert.equal(f.moves().length, 64);
+  assert.equal(f.moves().reduce((total, move) => total + move[1]!, 0), 16_000);
+});
+
+test('confirmed quantities use the shared stack-first path exactly once', async () => {
+  const f = await storageFixture(); f.item(1, 20, 1); f.item(2, 245, 8); f.bag(8, [2, 0]);
+  f.setModifiers(3); f.move(1, 20); f.setModifiers(0);
+  f.confirm(1, 10, 0, 0);
+  assert.equal(f.state('pending').value, -20); assert.deepEqual(f.moves(), []);
+  f.drain(); f.drain();
+  assert.deepEqual(f.moves(), [[1, 5, 7, 0], [1, 5, 7, 1]]);
+});
+
+test('cancelled prompts and unrelated native moves are never rerouted', async () => {
+  const f = await storageFixture(); f.bag(8, [0]);
+  f.setModifiers(3); f.move();
+  f.confirm(1, 1, 7, 0); // An unrelated move goes to its actual destination.
+  assert.equal(f.state('pending').value, 0);
+  f.ui(0x1000_01af, 32_000, 0); // A new native move cancels old prompt ownership.
+  f.confirm(1, 2, 0, 0); f.drain();
+  assert.deepEqual(f.moves(), [[1, 1, 7, 0], [1, 2, 0, 0]]);
+});
+
+test('quantity confirmation refuses busy, disabled, changed-source and closed-storage states', async () => {
+  for (const condition of ['busy', 'disabled', 'changed', 'closed', 'too-many', 'zero']) {
+    const f = await storageFixture(); f.bag(8, [0]); f.setModifiers(3); f.move();
+    if (condition === 'busy') f.state('pending').value = 99;
+    if (condition === 'disabled') f.configure(0, 32_000);
+    if (condition === 'changed') f.item(1, 3, 8);
+    if (condition === 'closed') f.state('storageFrame').value = 0;
+    f.confirm(1, condition === 'too-many' ? 4 : condition === 'zero' ? 0 : 2, 0, 0);
+    f.drain();
+    // Disabling relinquishes the native prompt; its same-source action is left to the game.
+    assert.deepEqual(f.moves(), condition === 'disabled' ? [[1, 2, 0, 0]] : [], condition);
+  }
+});
+
+test('source and destination acknowledgements may arrive in either order', async () => {
+  for (const first of ['source', 'destination']) {
+    const f = await storageFixture(); f.bag(8, [2]); f.item(2, 18, 8); f.move();
+    if (first === 'source') f.u32(12_000 + 4, 0);
+    else f.item(2, 21, 8);
+    if (first === 'destination') assert.equal(f.move(), 0, 'source still has an unacknowledged move');
+    else { f.item(3, 3, 1); assert.equal(f.move(3), 0, 'missing source alone cannot free a claim'); }
+    f.u32(12_000 + 4, 0); f.item(2, 21, 8); f.item(3, 3, 1);
+    assert.equal(f.move(3), 1);
+    assert.deepEqual(f.moves().at(-1), [3, 3, 7, 0]);
+  }
+});
+
+test('acknowledged claims are recycled while Control stays held', async () => {
+  const f = await storageFixture(); f.bag(8, [2]); f.item(2, 18, 8);
+  for (let index = 0; index < 80; index += 1) {
+    const id = index % 2 === 0 ? 1 : 3;
+    f.item(id, 1, 1); assert.equal(f.move(id, 1), 1);
+    f.u32(12_000 + id * 4, 0); f.item(2, 19 + index, 8);
+  }
+  assert.equal(f.moves().length, 80);
+});
+
+test('whole-stack moves preserving the item id can be reversed after acknowledgement', async () => {
+  const f = await storageFixture(); f.bag(8, [0]); f.move();
+  f.item(1, 3, 8); f.bag(8, [1]); f.bag(1, [0]);
+  assert.equal(f.execute(1, 3, 2), 1);
+  assert.deepEqual(f.moves(), [[1, 3, 7, 0], [1, 3, 0, 0]]);
+});
+
+test('retry timeout survives key release and unsigned clock wrap', async () => {
+  const f = await storageFixture(); f.bag(8, [0]);
+  f.state('clock').value = 0xffff_ff00; f.move(); f.setModifiers(0); f.setModifiers(1);
+  f.state('clock').value = (0xffff_ff00 + 2_999) >>> 0; assert.equal(f.move(), 0);
+  f.state('clock').value = (0xffff_ff00 + 3_000) >>> 0; assert.equal(f.move(), 1);
+});
+
+test('the last storage tab also reclaims acknowledged moves', async () => {
+  const f = await storageFixture(); f.state('page').value = 13; f.bag(21, [2]); f.item(2, 18, 21);
+  f.move(); f.u32(12_000 + 4, 0); f.item(2, 21, 21); f.item(3, 3, 1);
+  assert.equal(f.move(3), 1); assert.deepEqual(f.moves().at(-1), [3, 3, 20, 0]);
+});
+
+test('unsupported presents and malformed memory fail without native moves or traps', async () => {
+  for (const condition of ['present', 'source-bag', 'destination-bag', 'slots', 'count', 'scratch']) {
+    const f = await storageFixture(); const bag = f.bag(8, [0]); const item = f.item(1, 3, 1);
+    if (condition === 'present') f.u32(item + 0x1c, 0x2f301);
+    if (condition === 'source-bag') f.u32(item + 12, 65_520);
+    if (condition === 'destination-bag') f.u32(1_024 + 8 * 4, 65_520);
+    if (condition === 'slots') f.u32(bag + 24, 0);
+    if (condition === 'count') f.u32(bag + 32, 0xffff_ffff);
+    if (condition === 'scratch') f.configure(1, 65_520);
+    assert.equal(f.move(), 0, condition); assert.deepEqual(f.moves(), []);
+  }
+});
+
+test('material transfers respect upgrades, remaining capacity and the selected quantity', async () => {
+  for (const upgrades of [0, 3, 9]) {
+    const f = await storageFixture(); f.state('page').value = 14;
+    const slots = Array.from({ length: 42 }, () => 0); slots[41] = 2; f.bag(6, slots);
+    const limit = (upgrades + 1) * 250;
+    f.item(2, limit - 5, 6); const source = f.item(1, 20, 1);
+    f.u32(source + 16, 30_000); f.u32(source + 20, 1); f.u32(30_000, 0x2508_2900);
+    f.u32(256 + 0x28, 28_000); f.u32(28_000, 28_100); f.u32(28_000 + 8, 1);
+    f.u32(28_100, 0x83); f.u32(28_104, upgrades);
+    f.setModifiers(3); f.move(1, 20); f.confirm(1, 3, 0, 0); f.drain();
+    assert.deepEqual(f.moves(), [[1, 3, 5, 41]]);
+    f.item(3, 20, 1); f.u32(2_048 + 3 * 128 + 16, 30_000); f.u32(2_048 + 3 * 128 + 20, 1);
+    f.setModifiers(1); f.move(3, 20);
+    assert.deepEqual(f.moves().at(-1), [3, 2, 5, 41]);
+  }
+});
+
+test('capacity accounting conserves quantities across empty, partial and full stacks', async () => {
+  for (const quantity of [1, 3, 249, 250, 251, 600]) {
+    for (const stacks of [[0], [18], [249, 249], [250, 250], [18, 0, 249, 0]]) {
+      const f = await storageFixture(2); f.item(1, quantity, 8);
+      f.bag(1, stacks.map((count, index) => count ? index + 2 : 0));
+      stacks.forEach((count, index) => { if (count) f.item(index + 2, count, 1); });
+      f.move(1, quantity);
+      const moved = f.moves().reduce((total, move) => total + move[1]!, 0);
+      assert.equal(moved, Math.min(quantity, stacks.reduce((total, count) => total + 250 - count, 0)));
+      for (const move of f.moves()) assert.ok(stacks[move[3]!]! + move[1]! <= 250);
+    }
+  }
+});
+
+test('a chosen partial amount does not reserve the unselected source remainder', async () => {
+  const f = await storageFixture(); f.item(1, 20, 1); f.bag(8, [2, 0]); f.item(2, 245, 8);
+  f.setModifiers(3); f.move(1, 20); f.confirm(1, 5, 0, 0); f.drain();
+  f.item(1, 15, 1); f.item(2, 250, 8); f.setModifiers(1);
+  assert.equal(f.move(1, 15), 1);
+  assert.deepEqual(f.moves(), [[1, 5, 7, 0], [1, 15, 7, 1]]);
+});
+
+test('a withdrawal cannot repeat when only its destination has updated', async () => {
+  const f = await storageFixture(2); f.bag(8, [0, 0, 0, 0, 0, 1]);
+  f.view.setUint8(2_048 + 128 + 80, 5); f.bag(1, [2]); f.item(2, 18, 1);
+  f.move(); f.item(2, 21, 1);
+  assert.equal(f.move(), 0);
+  assert.deepEqual(f.moves(), [[1, 3, 0, 0]]);
 });
