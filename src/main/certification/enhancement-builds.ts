@@ -235,6 +235,32 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
         // writes its four scalar arguments to {map, region, language,
         // district} and sends this message through the certified dispatcher.
         messageId: 0x1000_0183,
+        guildHall: Object.freeze({
+          enqueueExport: "enhancement_guild_hall",
+          // The client's guild command chooses Leave while AreaInfo type is
+          // GuildHall (4); otherwise it sends the current guild's 16-byte key.
+          enterMessageId: 0x1000_0180,
+          leaveMessageId: 0x1000_0182,
+          layout: Object.freeze({ guildContextSlot: 15, guildHallKey: 0x64 }),
+          keyAccessor: Object.freeze({
+            functionIndex: 7960,
+            params: Object.freeze([] as const),
+            results: Object.freeze(["i32"] as const),
+            bodySha256: "f78d0067879c110a5269ab57eaab946525cbc0a7ba09ff02c150db94d5176598",
+          }),
+          areaTypeAccessor: Object.freeze({
+            functionIndex: 9531,
+            params: Object.freeze([] as const),
+            results: Object.freeze(["i32"] as const),
+            bodySha256: "6b1546fa7e04a8f3642c4d5a0daa0d9d58255a879d47965920615013f465172f",
+          }),
+          producer: Object.freeze({
+            functionIndex: 15462,
+            params: Object.freeze(["i32", "i32"] as const),
+            results: Object.freeze([] as const),
+            bodySha256: "ff6bcc8db69cbb7fddc17af6d4b7a4c052cb6cd17e335155db495c2e435290c9",
+          }),
+        }),
         // WorldContext::unlocked_map is not accepted from GWCA's struct.
         // Accessor #9184 returns the exact Array<u32> at +0x60c, while the
         // official map consumer #15978 proves word=map/32 and bit=map%32.

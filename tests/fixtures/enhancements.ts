@@ -314,6 +314,7 @@ export const ADDRESSES = Object.freeze({
   attributeBuffer: 0x1_4000,
   playerRecordBuffer: 0x1_5000,
   travelUnlockBuffer: 0x1_6000,
+  guild: 0x1_7000,
   areaInfo: 0x20_0000,
   frameArrayGlobal: 0x21_0000,
   frameCountGlobal: 0x21_0004,

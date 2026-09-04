@@ -99,6 +99,29 @@ unsafe fn current_character_key(layout: Layout, game: u32) -> Option<u64> {
     unsafe { character_key(uuid) }
 }
 
+unsafe fn has_guild_hall(layout: Layout) -> bool {
+    if layout.guild_context_slot == 0 || layout.guild_hall_key == 0 {
+        return false;
+    }
+    let Some(contexts) = (unsafe { pointer(layout.context_root, 28) }) else {
+        return false;
+    };
+    let Some(slot) = indexed(contexts, layout.guild_context_slot, 4) else {
+        return false;
+    };
+    let Some(required) = checked_add(layout.guild_hall_key, 16) else {
+        return false;
+    };
+    let Some(guild) = (unsafe { pointer(slot, required) }) else {
+        return false;
+    };
+    (0..4).any(|index| {
+        offset(guild, layout.guild_hall_key + index * 4)
+            .and_then(|at| unsafe { read_u32(at) })
+            .is_some_and(|word| word != 0)
+    })
+}
+
 pub(crate) unsafe fn tick(layout: Layout) {
     match unsafe { resolve_game(layout) } {
         GameState::Ready {
@@ -107,6 +130,7 @@ pub(crate) unsafe fn tick(layout: Layout) {
             instance_type,
             play_region,
             pre_searing,
+            guild_hall,
             ..
         } if play_region == PLAY_REGION_PVE || play_region == PLAY_REGION_PVP => unsafe {
             let key = current_character_key(layout, game);
@@ -126,7 +150,9 @@ pub(crate) unsafe fn tick(layout: Layout) {
                     FLAG_PLAY_REGION_PRE_SEARING
                 } else {
                     0
-                };
+                }
+                | if guild_hall { FLAG_PLAY_REGION_GUILD_HALL } else { 0 }
+                | if has_guild_hall(layout) { FLAG_PLAY_REGION_HAS_GUILD_HALL } else { 0 };
             publish(
                 flags,
                 map_id,

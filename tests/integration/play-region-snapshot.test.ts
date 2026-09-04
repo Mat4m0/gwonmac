@@ -47,6 +47,8 @@ describe("play-region snapshot ABI", () => {
       travelContext: "world",
       characterKey: null,
       unlockedMapWords: null,
+      guildHall: false,
+      hasGuildHall: false,
     });
     assert.deepEqual(readCompanionPlayRegion(snapshot({
       mapId: 248,
@@ -61,6 +63,8 @@ describe("play-region snapshot ABI", () => {
       travelContext: "world",
       characterKey: null,
       unlockedMapWords: null,
+      guildHall: false,
+      hasGuildHall: false,
     });
   });
 
@@ -74,6 +78,8 @@ describe("play-region snapshot ABI", () => {
       travelContext: "pre-searing",
       characterKey: null,
       unlockedMapWords: null,
+      guildHall: false,
+      hasGuildHall: false,
     });
     assert.deepEqual(readCompanionPlayRegion(snapshot({
       flags: 17,
@@ -84,6 +90,33 @@ describe("play-region snapshot ABI", () => {
     assert.deepEqual(readCompanionPlayRegion(snapshot({
       flags: 16, mapId: 0, instanceType: 0, playRegion: 0,
     }), 0), { status: "waiting", reason: "snapshot" });
+  });
+
+  it("publishes Guild Hall presence and the current Guild Hall state", () => {
+    assert.deepEqual(readCompanionPlayRegion(snapshot({ flags: 65 }), 0), {
+      status: "ready",
+      sequence: 2,
+      mapId: 133,
+      instanceType: 0,
+      playRegion: "pve",
+      travelContext: "world",
+      characterKey: null,
+      unlockedMapWords: null,
+      guildHall: false,
+      hasGuildHall: true,
+    });
+    assert.deepEqual(readCompanionPlayRegion(snapshot({ flags: 97 }), 0), {
+      status: "ready",
+      sequence: 2,
+      mapId: 133,
+      instanceType: 0,
+      playRegion: "pve",
+      travelContext: "world",
+      characterKey: null,
+      unlockedMapWords: null,
+      guildHall: true,
+      hasGuildHall: true,
+    });
   });
 
   it("fails closed for memory, torn headers, contradictory flags, and values", () => {
@@ -103,6 +136,9 @@ describe("play-region snapshot ABI", () => {
       status: "waiting", reason: "corrupt",
     });
     assert.deepEqual(readCompanionPlayRegion(snapshot({ playRegion: 0 }), 0), {
+      status: "waiting", reason: "corrupt",
+    });
+    assert.deepEqual(readCompanionPlayRegion(snapshot({ flags: 33 }), 0), {
       status: "waiting", reason: "corrupt",
     });
   });

@@ -24,6 +24,8 @@ export type TravelGameState =
     travelContext: TravelContext;
     characterKey: TravelCharacterKey | null;
     unlockedMapWords: readonly number[] | null;
+    guildHall?: boolean;
+    hasGuildHall?: boolean;
   }>;
 
 export const TRAVEL_UNLOCK_WORDS = 28;
@@ -81,6 +83,8 @@ export function travelGameState(value: unknown): TravelGameState {
         travelContext: input.travelContext,
         characterKey: isTravelCharacterKey(input.characterKey) ? input.characterKey : null,
         unlockedMapWords,
+        guildHall: input.guildHall === true,
+        hasGuildHall: input.hasGuildHall === true,
       });
     }
     if (
@@ -94,5 +98,7 @@ export function travelGameState(value: unknown): TravelGameState {
 
 export type TravelCommand = Readonly<{
   travel(request: TravelRequest): void;
+  guildHall?: () => void;
+  guildHallUnavailable?: () => string | null;
   unavailable(): string | null;
 }>;

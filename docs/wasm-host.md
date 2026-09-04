@@ -331,6 +331,19 @@ exact client Travel dispatcher with `kTravel`. An unknown or locked map,
 unreadable unlock array, unresolved live context, or changed helper stops only
 Travel without dispatching another client UI message.
 
+Guild Hall travel is a separate named action inside Travel. It does not treat a
+Guild Hall layout map ID as an ordinary destination. The companion publishes
+only whether the current character has a nonzero Guild Hall key and whether
+the current `AreaInfo` record has the Guild Hall flag. The 16-byte key stays
+inside the game module.
+
+At the game-thread drain, the action calls the certified current-area type
+reader. Type `4` sends `kLeaveGuildHall` with no payload. Every other
+supported ready area re-reads the current guild key, checks its pointer and four
+words, copies it into the private Travel payload, and sends `kGuildHall`.
+Changed or missing Guild Hall evidence removes only this action. Ordinary map
+Travel remains available.
+
 The Tools host owns one Travel attempt: `idle`, `queued`, or `loading`. A
 three-second start deadline and a separate thirty-second arrival deadline both
 return it to `idle`; disconnect, corrupt snapshot, and other non-loading states

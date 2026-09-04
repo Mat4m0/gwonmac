@@ -3,8 +3,8 @@
  * Renderer, scripts, and tests derive their ABI constants from this descriptor.
  */
 export const COMPANION_ABI = Object.freeze({
-  kernel: 22,
-  config: Object.freeze({ bytes: 464 }),
+  kernel: 23,
+  config: Object.freeze({ bytes: 472 }),
   snapshot: Object.freeze({ abi: 4, bytes: 64 }),
   friends: Object.freeze({ abi: 1, bytes: 12_312, slots: 128, nameUnits: 20 }),
   travelUnlockWords: 28,
@@ -13,7 +13,7 @@ export const COMPANION_ABI = Object.freeze({
   party: Object.freeze({ abi: 7, bytes: 1_560 }),
   skillSlots: Object.freeze({ abi: 2, bytes: 164 }),
   skillCooldowns: Object.freeze({ abi: 1, bytes: 60 }),
-  playRegion: Object.freeze({ abi: 3, bytes: 148 }),
+  playRegion: Object.freeze({ abi: 4, bytes: 148 }),
   characterList: Object.freeze({ abi: 2, bytes: 4_632, slots: 64, nameUnits: 20 }),
 });
 

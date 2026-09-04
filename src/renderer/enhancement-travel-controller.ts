@@ -12,6 +12,7 @@ import {
   TRAVEL_PAYLOAD_BYTES,
   type EnhancementTravelConfigure,
   type EnhancementTravelEnqueue,
+  type EnhancementGuildHallEnqueue,
 } from "./enhancement-travel-command.js";
 
 export { TRAVEL_PAYLOAD_BYTES };
@@ -50,6 +51,7 @@ function unavailableReason(
 
 export function createTravelController(
   enqueue: EnhancementTravelEnqueue,
+  enqueueGuildHall: EnhancementGuildHallEnqueue | null,
   configure: EnhancementTravelConfigure,
   payloadPointer: number,
 ): TravelController {
@@ -61,7 +63,7 @@ export function createTravelController(
   };
   let configuredEnabled: boolean | null = null;
   const unavailable = () => unavailableReason(active, availability);
-  const command = createTravelCommand(enqueue, unavailable);
+  const command = createTravelCommand(enqueue, enqueueGuildHall, unavailable);
   const sync = () => {
     const enabled = unavailable() === null;
     if (enabled === configuredEnabled) return;

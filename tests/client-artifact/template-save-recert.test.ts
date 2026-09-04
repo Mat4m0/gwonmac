@@ -406,8 +406,25 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   }
 
   const certifiedEnhancements = local.enhancementBuild!;
+  const guildHallCertificate = certifiedEnhancements.travelAction?.guildHall;
+  assert.ok(guildHallCertificate, "the real client must prove Guild Hall travel");
+  const completeTemplate = rewriteTemplateSaveWasm(bytes, local.templateSaveBuild!);
+  const completeCapabilities = effectiveCapabilitiesOf(local)!;
+  const completeOutput = transformEnhancementWasm(
+    completeTemplate,
+    certifiedEnhancements,
+    completeCapabilities,
+  );
+  assert.equal(
+    parseExports(sectionById(splitSections(completeOutput), 7)).some(
+      ({ name }) => name === guildHallCertificate.enqueueExport,
+    ),
+    true,
+  );
   const travelProducer = certifiedEnhancements.travelAction!.producer.functionIndex;
   const travelContext = certifiedEnhancements.travelAction!.contextResolver.functionIndex;
+  const guildKeyAccessor = certifiedEnhancements.travelAction!.guildHall!
+    .keyAccessor.functionIndex;
   const xunlaiHandler = certifiedEnhancements.xunlaiAction!.handler.functionIndex;
   const xunlaiAccess = certifiedEnhancements.xunlaiAction!.accessProof!
     .readers["access-flags"].functionIndex;
@@ -434,6 +451,22 @@ test("the template-save verifier makes a fail-closed decision for a real client"
       if (feature !== mutation.feature) assert.equal(capabilities[feature], true, mutation.label);
     }
   }
+
+  const changedGuildKey = rewriteCode(bytes, (bodies) => {
+    const body = bodies[guildKeyAccessor - derived.importCount]!;
+    body[2] = body[2]! ^ 1;
+  });
+  assert.equal(WebAssembly.validate(new Uint8Array(changedGuildKey)), true);
+  const changedGuildKeyDecision = verifyFeatureMutation(changedGuildKey);
+  assert.ok(
+    changedGuildKeyDecision.enhancementBuild?.travelAction,
+    "ordinary map travel must survive a changed Guild Hall key accessor",
+  );
+  assert.equal(
+    changedGuildKeyDecision.enhancementBuild.travelAction.guildHall,
+    undefined,
+  );
+  assert.equal(capabilitiesOf(changedGuildKeyDecision)?.travelAction, true);
 
   const changedTravelContext = rewriteCode(bytes, (bodies) => {
     bodies[travelContext - derived.importCount]![14]

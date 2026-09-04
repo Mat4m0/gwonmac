@@ -80,7 +80,15 @@ type FriendSearchResult = Readonly<{
   friend: TravelFriend;
   disabledReason: string | null;
 }>;
-type SearchResult = DestinationSearchResult | FriendSearchResult;
+type GuildHallSearchResult = Readonly<{
+  kind: "guild-hall";
+  resultKey: "guild-hall";
+  mapId: 0;
+  destination: null;
+  friend: null;
+  disabledReason: string | null;
+}>;
+type SearchResult = DestinationSearchResult | FriendSearchResult | GuildHallSearchResult;
 const catalogueResults = computed(() => hasQuery.value
   ? searchTravelDestinations(query.value, synonyms.value)
   : []
@@ -124,11 +132,30 @@ const friendResults = computed<FriendSearchResult[]>(() => {
     }];
   });
 });
+const guildHallResults = computed<GuildHallSearchResult[]>(() => {
+  if (!hasQuery.value) return [];
+  const tokens = normaliseTravelTerm(query.value).split(" ").filter(Boolean);
+  if (!tokens.every((token) => "guild hall gh".includes(token))) return [];
+  const state = props.host.state.value;
+  const disabledReason = props.host.guildHallUnavailable
+    ?? (state.status !== "ready"
+    ? "Unavailable right now"
+    : state.guildHall || state.hasGuildHall ? null : "No Guild Hall");
+  return [{
+    kind: "guild-hall",
+    resultKey: "guild-hall",
+    mapId: 0,
+    destination: null,
+    friend: null,
+    disabledReason,
+  }];
+});
 const results = computed<SearchResult[]>(() => {
   const friendMaps = new Set(friendResults.value
     .filter(({ disabledReason }) => disabledReason === null)
     .map(({ mapId }) => mapId));
   return [
+    ...guildHallResults.value,
     ...friendResults.value,
     ...catalogueResults.value
       .filter((destination) => isAvailable(destination.mapId) && !friendMaps.has(destination.mapId))
@@ -249,7 +276,10 @@ function queryMatchLabel(destination: TravelDestination): string {
 }
 
 function searchResultLocation(result: SearchResult): string {
-  return result.kind === "friend" ? result.location : result.destination.name;
+  if (result.kind === "friend") return result.location;
+  if (result.kind === "guild-hall") return props.host.state.value.status === "ready"
+    && props.host.state.value.guildHall ? "Return to previous outpost" : "Your guild";
+  return result.destination.name;
 }
 
 function friendResultLabel(result: FriendSearchResult): string {
@@ -314,7 +344,7 @@ watch(results, (next, previous) => {
   );
   const firstAvailable = next.findIndex((result) => result.disabledReason === null);
   active.value = retained >= 0 ? retained : firstAvailable;
-  props.host.traceSearch(query.value, next.map((result) => result.mapId));
+  props.host.traceSearch(query.value, next.map((result) => result.mapId).filter((mapId) => mapId > 0));
 });
 watch(() => props.visible, async (visible) => {
   if (!visible) return;
@@ -366,6 +396,15 @@ async function travel(request: TravelRequest): Promise<void> {
 }
 
 async function travelToResult(result: SearchResult): Promise<void> {
+  if (result.kind === "guild-hall") {
+    if (result.disabledReason === null) {
+      try {
+        await props.host.guildHall?.();
+        emit("close");
+      } catch { /* The host owns the refusal notice. */ }
+    }
+    return;
+  }
   if (result.kind === "friend") {
     const observed = props.host.friends.value;
     const current = observed.status === "ready"
@@ -596,12 +635,13 @@ function onKeydown(event: KeyboardEvent): void {
     <section v-if="hasQuery" id="travel-results-panel" class="ui-scroll travel-body" role="region" aria-label="Travel search results">
       <div v-if="results.length" class="travel-result-heading">{{ results.length === 1 ? 'Best match for' : 'Matches for' }} <strong>{{ query }}</strong></div>
       <div v-if="results.length" id="travel-results" class="travel-results" role="listbox">
-        <button v-for="(result, index) in results" :id="`travel-${result.resultKey}`" :key="result.resultKey" type="button" class="travel-result ui-row" role="option" tabindex="-1" :aria-selected="index === active" :aria-disabled="searchResultDisabled(result)" :aria-label="result.kind === 'friend' ? `${result.friend.alias}, ${result.friend.character}, ${friendResultLabel(result)}` : undefined" :disabled="searchResultDisabled(result)" @mouseenter="active = index" @click="active = index; travelToResult(result)">
+        <button v-for="(result, index) in results" :id="`travel-${result.resultKey}`" :key="result.resultKey" type="button" class="travel-result ui-row" role="option" tabindex="-1" :aria-selected="index === active" :aria-disabled="searchResultDisabled(result)" :aria-label="result.kind === 'friend' ? `${result.friend.alias}, ${result.friend.character}, ${friendResultLabel(result)}` : result.kind === 'guild-hall' ? `${host.state.value.status === 'ready' && host.state.value.guildHall ? 'Leave' : 'Travel to'} Guild Hall, ${searchResultLocation(result)}` : undefined" :disabled="searchResultDisabled(result)" @mouseenter="active = index" @click="active = index; travelToResult(result)">
           <span class="travel-result-identity">
             <svg v-if="result.kind === 'friend'" class="travel-player-icon" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="6.5" r="3" /><path d="M4.5 17c.6-3.1 2.4-4.7 5.5-4.7s4.9 1.6 5.5 4.7" /></svg>
-            <span><strong v-if="result.kind === 'friend'">{{ result.friend.alias }}</strong><strong v-else><template v-for="(part, partIndex) in highlightTravelDestinationName(result.destination, query)" :key="partIndex"><mark v-if="part.match">{{ part.text }}</mark><template v-else>{{ part.text }}</template></template></strong><small>{{ result.kind === 'friend' ? result.friend.character : result.destination.campaign }}</small></span>
+            <svg v-else-if="result.kind === 'guild-hall'" class="travel-player-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.5 16 5v4.4c0 3.7-2.2 6.4-6 8.1-3.8-1.7-6-4.4-6-8.1V5l6-2.5Z" /><path d="M7.2 9.7h5.6M10 6.8v5.8" /></svg>
+            <span><strong v-if="result.kind === 'friend'">{{ result.friend.alias }}</strong><strong v-else-if="result.kind === 'guild-hall'">{{ host.state.value.status === 'ready' && host.state.value.guildHall ? 'Leave Guild Hall' : 'Guild Hall' }}</strong><strong v-else><template v-for="(part, partIndex) in highlightTravelDestinationName(result.destination, query)" :key="partIndex"><mark v-if="part.match">{{ part.text }}</mark><template v-else>{{ part.text }}</template></template></strong><small>{{ result.kind === 'friend' ? result.friend.character : result.kind === 'guild-hall' ? 'Guild' : result.destination.campaign }}</small></span>
           </span>
-          <span class="travel-result-context"><span class="travel-match" :data-unavailable="result.disabledReason !== null || undefined">{{ result.kind === 'friend' ? searchResultLocation(result) : queryMatchLabel(result.destination) }}</span><small v-if="result.disabledReason !== null" class="travel-unavailable-reason">{{ result.disabledReason }}</small></span>
+          <span class="travel-result-context"><span class="travel-match" :data-unavailable="result.disabledReason !== null || undefined">{{ result.kind === 'destination' ? queryMatchLabel(result.destination) : searchResultLocation(result) }}</span><small v-if="result.disabledReason !== null" class="travel-unavailable-reason">{{ result.disabledReason }}</small></span>
         </button>
       </div>
       <div v-else class="ui-empty travel-empty"><strong>{{ emptySearchTitle }}</strong><p>{{ emptySearchHelp }}</p><button type="button" class="ui-button" @click="query = ''">Clear search</button></div>

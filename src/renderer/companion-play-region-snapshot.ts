@@ -14,6 +14,8 @@ const FLAGS = Object.freeze({
   character: 4,
   unlocks: 8,
   preSearing: 16,
+  guildHall: 32,
+  hasGuildHall: 64,
 });
 const UNLOCK_WORDS = COMPANION_ABI.travelUnlockWords;
 
@@ -52,9 +54,13 @@ export function readCompanionPlayRegion(buffer: ArrayBuffer, pointer: number) {
     || (secondSequence & 1) !== 0
     || (flags & ~(
       FLAGS.ready | FLAGS.loading | FLAGS.character | FLAGS.unlocks | FLAGS.preSearing
+      | FLAGS.guildHall | FLAGS.hasGuildHall
     )) !== 0
     || (flags & FLAGS.loading) !== 0 && flags !== FLAGS.loading
-    || (flags & (FLAGS.character | FLAGS.unlocks | FLAGS.preSearing)) !== 0
+    || (flags & (
+      FLAGS.character | FLAGS.unlocks | FLAGS.preSearing
+      | FLAGS.guildHall | FLAGS.hasGuildHall
+    )) !== 0
       && (flags & FLAGS.ready) === 0
   ) return Object.freeze({ status: "waiting", reason: "snapshot" } as const);
 
@@ -85,6 +91,7 @@ export function readCompanionPlayRegion(buffer: ArrayBuffer, pointer: number) {
     hasCharacter !== (characterLow !== 0 || characterHigh !== 0)
     || (!hasUnlocks && unlockedMapWords.some((word) => word !== 0))
     || (preSearing && encodedRegion !== 1)
+    || (flags & FLAGS.guildHall) !== 0 && (flags & FLAGS.hasGuildHall) === 0
   ) return Object.freeze({ status: "waiting", reason: "corrupt" } as const);
 
   return Object.freeze({
@@ -98,9 +105,23 @@ export function readCompanionPlayRegion(buffer: ArrayBuffer, pointer: number) {
       ? `${characterHigh.toString(16).padStart(8, "0")}${characterLow.toString(16).padStart(8, "0")}`
       : null,
     unlockedMapWords: hasUnlocks ? unlockedMapWords : null,
+    guildHall: (flags & FLAGS.guildHall) !== 0,
+    hasGuildHall: (flags & FLAGS.hasGuildHall) !== 0,
   });
 }
 
 export type CompanionPlayRegionState =
   | ReturnType<typeof readCompanionPlayRegion>
+  | Readonly<{
+      status: "ready";
+      sequence: number;
+      mapId: number;
+      instanceType: number;
+      playRegion: "pve" | "pvp";
+      travelContext: "pre-searing" | "world";
+      characterKey: string | null;
+      unlockedMapWords: readonly number[] | null;
+      guildHall?: boolean;
+      hasGuildHall?: boolean;
+    }>
   | Readonly<{ status: "waiting"; reason: "stale" }>;

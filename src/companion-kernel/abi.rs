@@ -58,12 +58,14 @@ pub(crate) const CHARACTER_NAME_UNITS: usize = 20;
 
 pub(crate) const PLAY_REGION_BYTES: u32 = size_of::<PlayRegionSnapshot>() as u32;
 pub(crate) const PLAY_REGION_MAGIC: u32 = 0x5250_5747;
-pub(crate) const PLAY_REGION_ABI_AND_SIZE: u32 = (PLAY_REGION_BYTES << 16) | 3;
+pub(crate) const PLAY_REGION_ABI_AND_SIZE: u32 = (PLAY_REGION_BYTES << 16) | 4;
 pub(crate) const FLAG_PLAY_REGION_READY: u32 = 1 << 0;
 pub(crate) const FLAG_PLAY_REGION_LOADING: u32 = 1 << 1;
 pub(crate) const FLAG_PLAY_REGION_CHARACTER: u32 = 1 << 2;
 pub(crate) const FLAG_PLAY_REGION_UNLOCKS: u32 = 1 << 3;
 pub(crate) const FLAG_PLAY_REGION_PRE_SEARING: u32 = 1 << 4;
+pub(crate) const FLAG_PLAY_REGION_GUILD_HALL: u32 = 1 << 5;
+pub(crate) const FLAG_PLAY_REGION_HAS_GUILD_HALL: u32 = 1 << 6;
 
 pub(crate) const SKILL_SLOT_BYTES: u32 = size_of::<SkillSlotSnapshot>() as u32;
 pub(crate) const SKILL_SLOT_MAGIC: u32 = 0x534b_5747;
@@ -300,6 +302,8 @@ pub(crate) struct Layout {
     pub(crate) character_array_pointer: u32,
     pub(crate) character_array_count: u32,
     pub(crate) selected_character_name: u32,
+    pub(crate) guild_context_slot: u32,
+    pub(crate) guild_hall_key: u32,
     pub(crate) player_chat_message: u32,
     pub(crate) hide_hero_panel_message: u32,
     pub(crate) show_hero_panel_message: u32,
@@ -411,6 +415,8 @@ impl Layout {
         character_array_pointer: 0,
         character_array_count: 0,
         selected_character_name: 0,
+        guild_context_slot: 0,
+        guild_hall_key: 0,
         player_chat_message: 0,
         hide_hero_panel_message: 0,
         show_hero_panel_message: 0,
@@ -608,7 +614,7 @@ pub(crate) struct PartySnapshot {
     pub(crate) character_skills: [u32; SKILL_UNLOCK_WORDS],
 }
 
-const _: [(); 464] = [(); size_of::<Layout>()];
+const _: [(); 472] = [(); size_of::<Layout>()];
 const _: [(); 72] = [(); size_of::<CharacterRecord>()];
 const _: [(); 4632] = [(); size_of::<CharacterListSnapshot>()];
 const _: [(); 96] = [(); size_of::<PartySlot>()];

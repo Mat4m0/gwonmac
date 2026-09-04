@@ -153,6 +153,8 @@ character names, account data, chat, packet bytes, or Travel search text.
   locked results. A zero result can mean no match, only locked matches, or only
   destinations outside the current context. Passage-scroll locations
   such as Urgoz's Warren and The Deep intentionally use their original UI.
+  The terms `guild`, `guild hall`, and `gh` add the separately certified
+  Guild Hall action. Its trace and UI contain no Guild Hall key.
 
 For a report, reproduce one operation at a time and copy the lines from its
 first request through its final success, refusal, or timeout. Also record the
