@@ -12,6 +12,12 @@ import type {
   NoticeCode,
 } from "./contracts.js";
 import { RENDER_SCALES, UI_STYLES, UI_FONTS, CONTROLLER_PROMPT_STYLES, UI_PANEL_OPACITY_MIN, UI_PANEL_OPACITY_MAX } from "./contracts.js";
+import {
+  COMPASS_RANGE_OPACITY_MAX,
+  COMPASS_RANGE_OPACITY_MIN,
+  COMPASS_RANGE_THEMES,
+  type CompassRangeTheme,
+} from "./compass-ranges.js";
 import { normaliseCustomUiTheme } from "./ui-theme.js";
 import type { ErrorCode } from "./errors.js";
 import {
@@ -194,6 +200,16 @@ export interface LauncherSettings {
   readonly cartographyOverlayEnabled: boolean;
   readonly cartographyGridEnabled: boolean;
   readonly cartographyCompassGridEnabled: boolean;
+  readonly compassRangeIndicatorsEnabled: boolean;
+  readonly compassRangeEarshotEnabled: boolean;
+  readonly compassRangeCastEnabled: boolean;
+  readonly compassRangeSpiritEnabled: boolean;
+  readonly compassRangeSpiritExtendedEnabled: boolean;
+  readonly compassRangeEarshotOpacity: number;
+  readonly compassRangeCastOpacity: number;
+  readonly compassRangeSpiritOpacity: number;
+  readonly compassRangeSpiritExtendedOpacity: number;
+  readonly compassRangeTheme: CompassRangeTheme;
   readonly cartographyRevealMode: AppSettings["cartographyRevealMode"];
   readonly cartographyPresetLibrary: CartographyPresetLibrary;
   readonly cartographyWalkabilityOpacity: number;
@@ -370,7 +386,11 @@ export function parseLauncherSettingsPatch(value: unknown): LauncherSettingsPatc
     "autoRelogAfterReload", "characterSwitchProfession", "characterSwitchLevel",
     "characterSwitchLocation", "skillKeyBindings", "skillCooldownColor",
     "chatFilterAllyDrops", "chatFilterHallOfHeroes", "chatFilterTitleAchievements",
-    "cartographyOverlayEnabled", "cartographyGridEnabled", "cartographyCompassGridEnabled", "cartographyRevealMode",
+    "cartographyOverlayEnabled", "cartographyGridEnabled", "cartographyCompassGridEnabled", "compassRangeIndicatorsEnabled",
+    "compassRangeEarshotEnabled", "compassRangeCastEnabled", "compassRangeSpiritEnabled", "compassRangeSpiritExtendedEnabled",
+    "compassRangeEarshotOpacity", "compassRangeCastOpacity", "compassRangeSpiritOpacity", "compassRangeSpiritExtendedOpacity",
+    "compassRangeTheme",
+    "cartographyRevealMode",
     "cartographyPresetLibrary", "cartographyWalkabilityOpacity", "cartographyGridOpacity",
     "cartographyControlIdleOpacity",
   ], "launcher settings patch");
@@ -400,8 +420,9 @@ export function parseLauncherSettingsPatch(value: unknown): LauncherSettingsPatc
   for (const key of [
     "autoCheckUpdates", "extendedMemoryEnabled", "showDiagnostics",
     "autoRelogAfterReload", "characterSwitchProfession", "characterSwitchLevel", "characterSwitchLocation",
-    "cartographyOverlayEnabled", "cartographyGridEnabled", "cartographyCompassGridEnabled",
     "chatFilterAllyDrops", "chatFilterHallOfHeroes", "chatFilterTitleAchievements",
+    "cartographyOverlayEnabled", "cartographyGridEnabled", "cartographyCompassGridEnabled", "compassRangeIndicatorsEnabled",
+    "compassRangeEarshotEnabled", "compassRangeCastEnabled", "compassRangeSpiritEnabled", "compassRangeSpiritExtendedEnabled",
   ] as const) {
     if (source[key] === undefined) continue;
     if (typeof source[key] !== "boolean") throw new Error(`${key} must be a boolean`);
@@ -430,6 +451,10 @@ export function parseLauncherSettingsPatch(value: unknown): LauncherSettingsPatc
     if (!["off", "normal", "birds-eye"].includes(source.cartographyRevealMode as string)) throw new Error("cartography reveal mode is invalid");
     result.cartographyRevealMode = source.cartographyRevealMode as AppSettings["cartographyRevealMode"];
   }
+  if (source.compassRangeTheme !== undefined) {
+    if (!COMPASS_RANGE_THEMES.includes(source.compassRangeTheme as CompassRangeTheme)) throw new Error("Compass range theme is invalid");
+    result.compassRangeTheme = source.compassRangeTheme as CompassRangeTheme;
+  }
   if (source.cartographyPresetLibrary !== undefined) {
     const library = normaliseCartographyPresetLibrary(source.cartographyPresetLibrary);
     if (library === null) throw new Error("cartography preset library is invalid");
@@ -439,6 +464,10 @@ export function parseLauncherSettingsPatch(value: unknown): LauncherSettingsPatc
     ["cartographyWalkabilityOpacity", CARTOGRAPHY_OPACITY_MIN, CARTOGRAPHY_OPACITY_MAX],
     ["cartographyGridOpacity", CARTOGRAPHY_OPACITY_MIN, CARTOGRAPHY_OPACITY_MAX],
     ["cartographyControlIdleOpacity", CARTOGRAPHY_CONTROL_IDLE_OPACITY_MIN, CARTOGRAPHY_CONTROL_IDLE_OPACITY_MAX],
+    ["compassRangeEarshotOpacity", COMPASS_RANGE_OPACITY_MIN, COMPASS_RANGE_OPACITY_MAX],
+    ["compassRangeCastOpacity", COMPASS_RANGE_OPACITY_MIN, COMPASS_RANGE_OPACITY_MAX],
+    ["compassRangeSpiritOpacity", COMPASS_RANGE_OPACITY_MIN, COMPASS_RANGE_OPACITY_MAX],
+    ["compassRangeSpiritExtendedOpacity", COMPASS_RANGE_OPACITY_MIN, COMPASS_RANGE_OPACITY_MAX],
   ] as const) {
     const candidate = source[key];
     if (candidate === undefined) continue;

@@ -46,6 +46,7 @@
     "graphics:live": "GW_LIVE_SMOKE=1 pnpm enhancements:live -- --scenario graphics-probe",
     "recon:compass-cartography": "GW_LIVE_SMOKE=1 pnpm enhancements:live -- --scenario graphics-probe --leave-open",
     "recon:cartography-live": "GW_LIVE_SMOKE=1 GW_CARTOGRAPHY_LIVE=1 pnpm enhancements:live -- --scenario cartography-probe --leave-open",
+    "recon:compass-ranges": "GW_LIVE_SMOKE=1 GW_COMPASS_RANGE_LIVE=1 pnpm enhancements:live -- --scenario cartography-probe --leave-open",
     "recon:client-anchors": "node --import ./scripts/ts-hook.mjs scripts/compass-cartography-static-recon.ts",
     "recon:pathing-certification": "node --import ./scripts/ts-hook.mjs scripts/pathing-certification-recon.ts",
     "certification": "pnpm build && node build/tools/certification.js",

@@ -54,6 +54,12 @@ import {
   normaliseCartographyPresetLibrary,
   normaliseCartographyPresetRef,
 } from "../../shared/cartography-overlay.js";
+import {
+  COMPASS_RANGE_OPACITY_MAX,
+  COMPASS_RANGE_OPACITY_MIN,
+  COMPASS_RANGE_THEMES,
+  type CompassRangeTheme,
+} from "../../shared/compass-ranges.js";
 import { writeAtomicJson } from "./atomic-file.js";
 import { quarantineCorruptDocument } from "./corrupt-document.js";
 
@@ -189,6 +195,27 @@ export function parseSettings(raw: unknown): AppSettings {
       );
     }
   }
+  for (const setting of [
+    "compassRangeEarshotOpacity",
+    "compassRangeCastOpacity",
+    "compassRangeSpiritOpacity",
+    "compassRangeSpiritExtendedOpacity",
+  ] as const) {
+    if (setting in src) {
+      out[setting] = asBoundedInteger(
+        src[setting],
+        setting,
+        COMPASS_RANGE_OPACITY_MIN,
+        COMPASS_RANGE_OPACITY_MAX,
+      );
+    }
+  }
+  if ("compassRangeTheme" in src) {
+    if (!COMPASS_RANGE_THEMES.includes(src.compassRangeTheme as CompassRangeTheme)) {
+      throw new AppError("bad_settings", "settings.compassRangeTheme is invalid");
+    }
+    out.compassRangeTheme = src.compassRangeTheme as CompassRangeTheme;
+  }
   if ("cartographyControlIdleOpacity" in src) {
     out.cartographyControlIdleOpacity = asBoundedInteger(
       src.cartographyControlIdleOpacity,
@@ -248,6 +275,11 @@ export function parseSettings(raw: unknown): AppSettings {
     "cartographyOverlayEnabled",
     "cartographyGridEnabled",
     "cartographyCompassGridEnabled",
+    "compassRangeIndicatorsEnabled",
+    "compassRangeEarshotEnabled",
+    "compassRangeCastEnabled",
+    "compassRangeSpiritEnabled",
+    "compassRangeSpiritExtendedEnabled",
     "buildLibrary",
     "tradeChat",
     "xunlaiStorage",

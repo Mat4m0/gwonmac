@@ -45,6 +45,15 @@ import {
   type CartographyQaStatus,
 } from "./overlay-controls.js";
 import {
+  createCompassRangeControls,
+  visibleCompassRanges,
+} from "./compass-range-controls.js";
+import type { CompassRangeId } from "../../shared/compass-ranges.js";
+import {
+  createCompassRangeLayer,
+  type CompassRangeLayerSnapshot,
+} from "./compass-range-layer.js";
+import {
   createWalkableTerrainSurface,
   type WalkableTerrainSurface,
 } from "./walkable-terrain-surface.js";
@@ -62,6 +71,7 @@ export type CartographyGridStats = Readonly<{
 }>;
 
 export type CartographyModelStats = CartographyQaStatus;
+export type CompassRangeStats = CompassRangeLayerSnapshot;
 
 function countSetBits(words: Uint32Array): number {
   let count = 0;
@@ -150,6 +160,16 @@ export function mountCartographyOverlay(options: Readonly<{
     options.parent,
     "cartography-world-map-current-instance-boundary",
   );
+  const compassRangeLayer = createCompassRangeLayer(options.parent);
+  const previewRangeOpacity = new Map<CompassRangeId, number>();
+  const compassRangeControls = createCompassRangeControls({
+    parent: options.parent,
+    persist: options.persist,
+    previewOpacity(id, opacity) {
+      if (opacity === null) previewRangeOpacity.delete(id);
+      else previewRangeOpacity.set(id, opacity);
+    },
+  });
   let previewGridOpacity: number | null = null;
   let previewWalkabilityOpacity: number | null = null;
   const controls = createCartographyOverlayControls({
@@ -252,6 +272,8 @@ export function mountCartographyOverlay(options: Readonly<{
     });
   };
   view.gwCartographyGridStats = gridStats;
+  const rangeStats = (): CompassRangeStats => compassRangeLayer.snapshot();
+  view.gwCompassRangeStats = rangeStats;
   const modelStats = (): CartographyModelStats => Object.freeze({
     continent: state.continent.status === "ready"
       ? Object.freeze({
@@ -383,24 +405,34 @@ export function mountCartographyOverlay(options: Readonly<{
       nextModelPoll = now + MODEL_POLL_MS;
     }
     presentation = readCartographyPresentation(state, options.modelSources);
+    const settings = options.settings();
+    const style = resolveCartographyPreset(settings.cartographyPresetLibrary);
+    const canvasBox = options.canvas.getBoundingClientRect();
+    const compass = options.modelSources.compass.snapshot();
+    const controlBox = compass === null ? null : projectNativeFrame(compass, canvasBox);
+    compassRangeLayer.update(controlBox, visibleCompassRanges(
+      settings,
+      (id) => previewRangeOpacity.get(id) ?? null,
+    ), settings.compassRangeTheme);
+    if (controlBox === null) {
+      controls.hide();
+      compassRangeControls.hide();
+    } else if (style === null) {
+      controls.hide();
+      compassRangeControls.update(controlBox, settings, { index: 0, count: 1 });
+    } else {
+      controls.update(controlBox, settings, { index: 0, count: 2 });
+      compassRangeControls.update(controlBox, settings, { index: 1, count: 2 });
+    }
     const disposition = cartographyOverlayDisposition(state);
     if (disposition !== "layers") {
       terrainKey = "";
       terrain = null;
       hideAllLayers();
-      const compass = options.modelSources.compass.snapshot();
-      const box = compass === null
-        ? null
-        : projectNativeFrame(compass, options.canvas.getBoundingClientRect());
-      if (box === null) controls.hide();
-      else controls.update(box, options.settings());
       return;
     }
-    const settings = options.settings();
-    const style = resolveCartographyPreset(settings.cartographyPresetLibrary);
     if (style === null) {
       hideAllLayers();
-      controls.hide();
       return;
     }
     const gridOpacity = previewGridOpacity ?? settings.cartographyGridOpacity;
@@ -474,13 +506,6 @@ export function mountCartographyOverlay(options: Readonly<{
       if (rememberedReachable === null) return null;
       return bitsetHasCell(rememberedReachable, { x, y });
     };
-    const canvasBox = options.canvas.getBoundingClientRect();
-    const controlBox = presentation.compass === null
-      ? null
-      : projectNativeFrame(presentation.compass, canvasBox);
-    if (controlBox === null) controls.hide();
-    else controls.update(controlBox, settings);
-
     safe("compass", () => {
       if (
         state.currentInstance.status !== "ready"
@@ -702,8 +727,11 @@ export function mountCartographyOverlay(options: Readonly<{
     compassGridLayer.dispose();
     missionGridLayer.dispose();
     worldGridLayer.dispose();
+    compassRangeLayer.dispose();
+    compassRangeControls.dispose();
     controls.dispose();
     if (view.gwCartographyGridStats === gridStats) delete view.gwCartographyGridStats;
     if (view.gwCartographyModelStats === modelStats) delete view.gwCartographyModelStats;
+    if (view.gwCompassRangeStats === rangeStats) delete view.gwCompassRangeStats;
   };
 }

@@ -55,6 +55,21 @@ describe("Maps settings", () => {
     expect((compass.element as HTMLInputElement).checked).toBe(true);
   });
 
+  it("offers Compass ranges independently from the Cartography layers", async () => {
+    const save = vi.fn(async () => undefined);
+    const wrapper = mount(MapsSettings, {
+      props: { settings: fixtureSnapshot.settings, save },
+    });
+    await wrapper.get('[aria-label="Compass ranges"]').setValue(true);
+    expect(save).toHaveBeenCalledWith({ compassRangeIndicatorsEnabled: true });
+    await wrapper.get('[aria-label="Show Cast range"]').setValue(false);
+    expect(save).toHaveBeenCalledWith({ compassRangeCastEnabled: false });
+    await wrapper.get('[aria-label="Cast opacity value"]').setValue("62");
+    expect(save).toHaveBeenCalledWith({ compassRangeCastOpacity: 62 });
+    await wrapper.get('[aria-label="Compass range appearance"]').setValue("monochrome");
+    expect(save).toHaveBeenCalledWith({ compassRangeTheme: "monochrome" });
+  });
+
   it("reports a failed persistence call without claiming the change was saved", async () => {
     const wrapper = mount(MapsSettings, { props: { settings: fixtureSnapshot.settings, save: async () => { throw new Error("disk"); } } });
     await wrapper.findAll('input[type="checkbox"]')[0]!.setValue(true);

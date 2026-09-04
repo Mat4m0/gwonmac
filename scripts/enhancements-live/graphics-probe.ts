@@ -25,6 +25,7 @@ export type GraphicsProbeSample = Readonly<{
   wasmHeapBytes: number;
   textures: ReturnType<NonNullable<Window["gwTextureStats"]>> | null;
   cartographyGrid: ReturnType<NonNullable<Window["gwCartographyGridStats"]>> | null;
+  compassRanges: ReturnType<NonNullable<Window["gwCompassRangeStats"]>> | null;
   cartographyModel: ReturnType<NonNullable<Window["gwCartographyModelStats"]>> | null;
   compassFrame: ReturnType<NonNullable<Window["gwCompassFrameSpike"]>["snapshot"]> | null;
   missionMapFrame: ReturnType<NonNullable<Window["gwMissionMapFrameSpike"]>["snapshot"]> | null;
@@ -112,6 +113,7 @@ function readGraphicsProjection(page: Page): Promise<GraphicsProbeSample> {
       wasmHeapBytes: window.gwWasmHeapBytes?.() ?? 0,
       textures: window.gwTextureStats?.() ?? null,
       cartographyGrid: window.gwCartographyGridStats?.() ?? null,
+      compassRanges: window.gwCompassRangeStats?.() ?? null,
       cartographyModel: window.gwCartographyModelStats?.() ?? null,
       compassFrame: window.gwCompassFrameSpike?.snapshot() ?? null,
       missionMapFrame,
@@ -175,6 +177,7 @@ export async function runGraphicsProbeSession({
   );
   let captureCount = 0;
   const cartographyCalibration = process.env.GW_CARTOGRAPHY_LIVE === "1";
+  const compassRangeCalibration = process.env.GW_COMPASS_RANGE_LIVE === "1";
   const baseline = await readGraphicsProjection(page);
   const captures: Array<{
     label: string;
@@ -186,7 +189,16 @@ export async function runGraphicsProbeSession({
   console.log(JSON.stringify({
     checkpoint: "graphics-probe-ready",
     please: "follow the named Mission Map matrix; wait one second after each visual change before capture",
-    suggestedSequence: cartographyCalibration
+    suggestedSequence: compassRangeCalibration
+      ? [
+          "capture ranges-default",
+          "capture ranges-compass-moved",
+          "capture ranges-game-resized",
+          "capture ranges-toggle-off",
+          "reset-context",
+          "capture ranges-context-restored",
+        ]
+      : cartographyCalibration
       ? [
           "capture maps-closed",
           "capture compass-idle-1",
@@ -275,6 +287,7 @@ export async function runGraphicsProbeSession({
         wasmHeapBytes: sample.wasmHeapBytes,
         contextLost: sample.canvas.contextLost,
         cartographyGrid: sample.cartographyGrid,
+        compassRanges: sample.compassRanges,
         exploration: sample.exploration,
         cartographyModel: sample.cartographyModel,
       }));

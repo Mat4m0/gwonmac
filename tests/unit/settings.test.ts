@@ -50,6 +50,16 @@ describe("settings", () => {
       cartographyOverlayEnabled: false,
       cartographyGridEnabled: false,
       cartographyCompassGridEnabled: false,
+      compassRangeIndicatorsEnabled: false,
+      compassRangeEarshotEnabled: true,
+      compassRangeCastEnabled: true,
+      compassRangeSpiritEnabled: true,
+      compassRangeSpiritExtendedEnabled: true,
+      compassRangeEarshotOpacity: 95,
+      compassRangeCastOpacity: 95,
+      compassRangeSpiritOpacity: 95,
+      compassRangeSpiritExtendedOpacity: 95,
+      compassRangeTheme: "color",
       cartographyRevealMode: "off",
       cartographyPresetLibrary: DEFAULT_SETTINGS.cartographyPresetLibrary,
       cartographyWalkabilityOpacity: 55,
@@ -95,6 +105,31 @@ describe("settings", () => {
     assert.throws(() => parseSettingsPatch({ cartographyCompassGridEnabled: "true" }), AppError);
   });
 
+  it("defaults Compass ranges off while preserving each selected range", () => {
+    const defaults = parseSettings({});
+    assert.equal(defaults.compassRangeIndicatorsEnabled, false);
+    assert.equal(defaults.compassRangeEarshotEnabled, true);
+    assert.equal(defaults.compassRangeCastEnabled, true);
+    assert.equal(defaults.compassRangeSpiritEnabled, true);
+    assert.equal(defaults.compassRangeSpiritExtendedEnabled, true);
+    assert.equal(defaults.compassRangeEarshotOpacity, 95);
+    assert.equal(defaults.compassRangeCastOpacity, 95);
+    assert.equal(defaults.compassRangeSpiritOpacity, 95);
+    assert.equal(defaults.compassRangeSpiritExtendedOpacity, 95);
+    assert.deepEqual(parseRendererSettingsPatch({
+      compassRangeIndicatorsEnabled: true,
+      compassRangeCastEnabled: false,
+      compassRangeCastOpacity: 62,
+    }), {
+      compassRangeIndicatorsEnabled: true,
+      compassRangeCastEnabled: false,
+      compassRangeCastOpacity: 62,
+    });
+    assert.throws(() => parseSettingsPatch({ compassRangeSpiritEnabled: "true" }), AppError);
+    assert.throws(() => parseSettingsPatch({ compassRangeSpiritOpacity: 101 }), AppError);
+    assert.throws(() => parseSettingsPatch({ compassRangeCastOpacity: 94.5 }), AppError);
+  });
+
   it("drops retired cursor fields from an alpha profile", () => {
     // A profile written before the cursor became a boolean carries
     // `cursorTheme` and a selectable input mode. They are unknown fields now,
@@ -124,6 +159,16 @@ describe("settings", () => {
       cartographyOverlayEnabled: false,
       cartographyGridEnabled: false,
       cartographyCompassGridEnabled: false,
+      compassRangeIndicatorsEnabled: false,
+      compassRangeEarshotEnabled: true,
+      compassRangeCastEnabled: true,
+      compassRangeSpiritEnabled: true,
+      compassRangeSpiritExtendedEnabled: true,
+      compassRangeEarshotOpacity: 95,
+      compassRangeCastOpacity: 95,
+      compassRangeSpiritOpacity: 95,
+      compassRangeSpiritExtendedOpacity: 95,
+      compassRangeTheme: "color",
       cartographyRevealMode: "off",
       cartographyPresetLibrary: DEFAULT_SETTINGS.cartographyPresetLibrary,
       cartographyWalkabilityOpacity: 55,
@@ -233,6 +278,7 @@ describe("settings", () => {
       cartographyWalkabilityOpacity: 72,
       cartographyGridOpacity: 61,
       cartographyControlIdleOpacity: 44,
+      compassRangeTheme: "monochrome",
     }), {
       cartographyOverlayEnabled: true,
       cartographyGridEnabled: true,
@@ -248,12 +294,14 @@ describe("settings", () => {
       cartographyWalkabilityOpacity: 72,
       cartographyGridOpacity: 61,
       cartographyControlIdleOpacity: 44,
+      compassRangeTheme: "monochrome",
     });
     assert.throws(() => parseSettingsPatch({ cartographyGridEnabled: "yes" }), AppError);
     assert.throws(() => parseSettingsPatch({ cartographyRevealMode: "wide" }), AppError);
     assert.throws(() => parseSettingsPatch({ cartographyWalkabilityOpacity: 101 }), AppError);
     assert.throws(() => parseSettingsPatch({ cartographyGridOpacity: -1 }), AppError);
     assert.throws(() => parseSettingsPatch({ cartographyControlIdleOpacity: 14 }), AppError);
+    assert.throws(() => parseSettingsPatch({ compassRangeTheme: "sepia" }), AppError);
     assert.throws(() => parseSettingsPatch({
       cartographyPresetLibrary: {
         ...library,
@@ -554,6 +602,16 @@ describe("settings", () => {
       "chatFilterHallOfHeroes",
       "chatFilterTitleAchievements",
       "chatFiltersEnabled",
+      "compassRangeCastEnabled",
+      "compassRangeCastOpacity",
+      "compassRangeEarshotEnabled",
+      "compassRangeEarshotOpacity",
+      "compassRangeIndicatorsEnabled",
+      "compassRangeSpiritEnabled",
+      "compassRangeSpiritExtendedEnabled",
+      "compassRangeSpiritExtendedOpacity",
+      "compassRangeSpiritOpacity",
+      "compassRangeTheme",
       "compatibilityNoticeSeenFor",
       "controllerPromptStyle",
       "dataStrategy",
@@ -657,6 +715,16 @@ describe("settings", () => {
       cartographyOverlayEnabled: false,
       cartographyGridEnabled: false,
       cartographyCompassGridEnabled: false,
+      compassRangeIndicatorsEnabled: false,
+      compassRangeEarshotEnabled: true,
+      compassRangeCastEnabled: true,
+      compassRangeSpiritEnabled: true,
+      compassRangeSpiritExtendedEnabled: true,
+      compassRangeEarshotOpacity: 95,
+      compassRangeCastOpacity: 95,
+      compassRangeSpiritOpacity: 95,
+      compassRangeSpiritExtendedOpacity: 95,
+      compassRangeTheme: "color",
       cartographyRevealMode: "off",
       cartographyPresetLibrary: DEFAULT_SETTINGS.cartographyPresetLibrary,
       cartographyWalkabilityOpacity: 55,
