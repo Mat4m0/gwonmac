@@ -99,6 +99,20 @@ test("projects saved and preview opacity without changing range geometry", () =>
   );
 });
 
+test("offers a high-contrast monochrome theme without changing range geometry", () => {
+  const box = { left: 0, top: 0, width: 245, height: 260 };
+  const color = projectCompassRangeIndicators(box);
+  const monochrome = projectCompassRangeIndicators(box, undefined, "monochrome");
+  assert.ok(color !== null && monochrome !== null);
+  assert.deepEqual(monochrome.rings.map(({ color: ringColor }) => ringColor), [
+    "#F2F2F0", "#F2F2F0", "#F2F2F0", "#F2F2F0",
+  ]);
+  assert.deepEqual(
+    monochrome.rings.map(({ radiusPixels }) => radiusPixels),
+    color.rings.map(({ radiusPixels }) => radiusPixels),
+  );
+});
+
 test("centers one control and the complete two-control stack", () => {
   const box = { left: 900, top: 20, width: 245, height: 260 };
   const viewport = { width: 1_440, height: 900 };

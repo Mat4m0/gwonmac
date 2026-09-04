@@ -8,7 +8,9 @@ import {
   COMPASS_RANGE_OPACITY_MAX,
   COMPASS_RANGE_OPACITY_MIN,
   DEFAULT_COMPASS_RANGE_OPACITY,
+  compassRangeColor,
   type CompassRangeId,
+  type CompassRangeTheme,
 } from "../../shared/compass-ranges.js";
 import {
   COMPASS_FRAME_WIDTH,
@@ -39,7 +41,11 @@ export type CompassRangeLayerSnapshot = Readonly<{
   projection: CompassRangeProjection | null;
 }>;
 export type CompassRangeLayer = Readonly<{
-  update(box: ScreenBox | null, ranges: readonly CompassRangeSelection[]): void;
+  update(
+    box: ScreenBox | null,
+    ranges: readonly CompassRangeSelection[],
+    theme: CompassRangeTheme,
+  ): void;
   snapshot(): CompassRangeLayerSnapshot;
   dispose(): void;
 }>;
@@ -51,6 +57,7 @@ export function projectCompassRangeIndicators(
     id,
     opacity: DEFAULT_COMPASS_RANGE_OPACITY,
   })),
+  theme: CompassRangeTheme = "color",
 ): CompassRangeProjection | null {
   if (
     ![box.left, box.top, box.width, box.height].every(Number.isFinite)
@@ -74,7 +81,7 @@ export function projectCompassRangeIndicators(
         id: range.id,
         label: range.label,
         units: range.units,
-        color: range.color,
+        color: compassRangeColor(range, theme),
         opacity: selection.opacity,
         radiusPixels: clipRadius * range.units / COMPASS_WORLD_RADIUS,
       });
@@ -186,10 +193,10 @@ export function createCompassRangeLayer(parent: HTMLElement): CompassRangeLayer 
   document.addEventListener("pointermove", onPointerMove, { passive: true });
 
   return Object.freeze({
-    update(box, ranges) {
+    update(box, ranges, theme) {
       if (ranges.length === 0) { hide("disabled"); return; }
       if (box === null) { hide("frame-unavailable"); return; }
-      const projection = projectCompassRangeIndicators(box, ranges);
+      const projection = projectCompassRangeIndicators(box, ranges, theme);
       if (projection === null) { hide("frame-unavailable"); return; }
       root.style.left = `${box.left}px`;
       root.style.top = `${box.top}px`;
@@ -199,6 +206,7 @@ export function createCompassRangeLayer(parent: HTMLElement): CompassRangeLayer 
         box.width,
         box.height,
         document.defaultView?.devicePixelRatio ?? 1,
+        theme,
         ...ranges.flatMap(({ id, opacity }) => [id, opacity]),
       ].join(":");
       if (nextVersion !== drawingVersion && !draw(projection)) {

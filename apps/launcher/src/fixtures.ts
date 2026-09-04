@@ -75,6 +75,7 @@ export const fixtureSnapshot: LauncherSnapshot = {
     compassRangeCastOpacity: 95,
     compassRangeSpiritOpacity: 95,
     compassRangeSpiritExtendedOpacity: 95,
+    compassRangeTheme: "color",
     cartographyRevealMode: "off",
     cartographyPresetLibrary: DEFAULT_CARTOGRAPHY_PRESET_LIBRARY,
     cartographyWalkabilityOpacity: 55,

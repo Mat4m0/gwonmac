@@ -66,6 +66,8 @@ describe("Maps settings", () => {
     expect(save).toHaveBeenCalledWith({ compassRangeCastEnabled: false });
     await wrapper.get('[aria-label="Cast opacity value"]').setValue("62");
     expect(save).toHaveBeenCalledWith({ compassRangeCastOpacity: 62 });
+    await wrapper.get('[aria-label="Compass range appearance"]').setValue("monochrome");
+    expect(save).toHaveBeenCalledWith({ compassRangeTheme: "monochrome" });
   });
 
   it("reports a failed persistence call without claiming the change was saved", async () => {

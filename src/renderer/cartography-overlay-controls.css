@@ -335,6 +335,7 @@
 }
 
 .compass-range-control-all,
+.compass-range-theme-options button,
 .compass-range-control-range {
   width: 100%;
   height: var(--ui-control-height-compact);
@@ -348,6 +349,19 @@
 
 .compass-range-control-all {
   margin-bottom: var(--ui-space-1);
+}
+
+.compass-range-theme-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--ui-space-1);
+  margin-bottom: var(--ui-space-2);
+}
+
+.compass-range-theme-options button[aria-pressed="true"] {
+  color: var(--ui-text-bright);
+  background: var(--ui-accent-well-fill);
+  border-color: var(--ui-accent);
 }
 
 .compass-range-control-list {

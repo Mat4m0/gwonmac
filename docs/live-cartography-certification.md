@@ -47,6 +47,7 @@ controls must remain centred as one stack.
 | Resize the game | `capture ranges-game-resized` | Ring radii scale with the Compass width. |
 | Toggle one range | `capture ranges-one-hidden` | Only the selected ring hides; the other choices remain unchanged. |
 | Drag one opacity slider | `capture ranges-opacity` | The selected ring previews smoothly, saves on release, and retains its opacity after restart. |
+| Switch Color to Monochrome | `capture ranges-monochrome` | All four rings become neutral white without moving or changing opacity. |
 | Inspect both controls | `capture ranges-controls` | Both center icons stay white; only the range control's outer border reports its on/off state. |
 | Turn all ranges off | `capture ranges-toggle-off` | No ring remains and diagnostics report `disabled`. |
 | Restore graphics context | `capture ranges-context-restored` | Enabled rings return once, with no stale or duplicate canvas. |

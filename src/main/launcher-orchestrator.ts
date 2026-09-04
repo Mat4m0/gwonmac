@@ -118,6 +118,7 @@ export class LauncherOrchestrator {
         compassRangeCastOpacity: settings.compassRangeCastOpacity,
         compassRangeSpiritOpacity: settings.compassRangeSpiritOpacity,
         compassRangeSpiritExtendedOpacity: settings.compassRangeSpiritExtendedOpacity,
+        compassRangeTheme: settings.compassRangeTheme,
         cartographyRevealMode: settings.cartographyRevealMode,
         cartographyPresetLibrary: settings.cartographyPresetLibrary,
         cartographyWalkabilityOpacity: settings.cartographyWalkabilityOpacity,

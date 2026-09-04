@@ -5,6 +5,8 @@
 export const COMPASS_RANGE_OPACITY_MIN = 0;
 export const COMPASS_RANGE_OPACITY_MAX = 100;
 export const DEFAULT_COMPASS_RANGE_OPACITY = 95;
+export const COMPASS_RANGE_THEMES = ["color", "monochrome"] as const;
+export type CompassRangeTheme = (typeof COMPASS_RANGE_THEMES)[number];
 
 export const COMPASS_RANGE_INDICATORS = Object.freeze([
   Object.freeze({
@@ -43,3 +45,7 @@ export const COMPASS_RANGE_INDICATORS = Object.freeze([
 
 export type CompassRange = (typeof COMPASS_RANGE_INDICATORS)[number];
 export type CompassRangeId = CompassRange["id"];
+
+export function compassRangeColor(range: CompassRange, theme: CompassRangeTheme): string {
+  return theme === "monochrome" ? "#F2F2F0" : range.color;
+}

@@ -7,7 +7,10 @@ import {
   COMPASS_RANGE_INDICATORS,
   COMPASS_RANGE_OPACITY_MAX,
   COMPASS_RANGE_OPACITY_MIN,
+  COMPASS_RANGE_THEMES,
+  compassRangeColor,
   type CompassRangeId,
+  type CompassRangeTheme,
 } from "../../shared/compass-ranges.js";
 import {
   COMPASS_CONTROL_GAP,
@@ -23,7 +26,7 @@ import type { ScreenBox } from "./frame-placement.js";
 
 const COLLAPSE_DELAY_MS = 600;
 const PANEL_WIDTH = 220;
-const PANEL_HEIGHT_ESTIMATE = 250;
+const PANEL_HEIGHT_ESTIMATE = 290;
 
 export type CompassRangeControls = Readonly<{
   update(
@@ -98,6 +101,18 @@ export function createCompassRangeControls(options: Readonly<{
   allButton.type = "button";
   allButton.className = "compass-range-control-all";
   allButton.textContent = "All ranges";
+  const themeGroup = document.createElement("div");
+  themeGroup.className = "compass-range-theme-options";
+  themeGroup.setAttribute("role", "group");
+  themeGroup.setAttribute("aria-label", "Range appearance");
+  const themeButtons = new Map<CompassRangeTheme, HTMLButtonElement>();
+  for (const theme of COMPASS_RANGE_THEMES) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = theme === "color" ? "Color" : "Monochrome";
+    themeButtons.set(theme, button);
+    themeGroup.append(button);
+  }
   const rangeList = document.createElement("div");
   rangeList.className = "compass-range-control-list";
   const rangeControls = new Map<CompassRangeId, Readonly<{
@@ -108,7 +123,6 @@ export function createCompassRangeControls(options: Readonly<{
   for (const range of COMPASS_RANGE_INDICATORS) {
     const row = document.createElement("div");
     row.className = "compass-range-control-row";
-    row.style.setProperty("--compass-range-color", range.color);
     const button = document.createElement("button");
     button.type = "button";
     button.className = "compass-range-control-range";
@@ -134,7 +148,7 @@ export function createCompassRangeControls(options: Readonly<{
   status.className = "compass-range-control-status";
   status.setAttribute("role", "status");
   status.setAttribute("aria-live", "polite");
-  panel.append(heading, allButton, rangeList, status);
+  panel.append(heading, allButton, themeGroup, rangeList, status);
   root.append(trigger, panel);
   options.parent.append(root);
 
@@ -151,6 +165,7 @@ export function createCompassRangeControls(options: Readonly<{
   const syncDisabled = (): void => {
     trigger.disabled = saving;
     allButton.disabled = saving;
+    for (const button of themeButtons.values()) button.disabled = saving;
     for (const { button, input } of rangeControls.values()) {
       button.disabled = saving;
       input.disabled = saving;
@@ -165,10 +180,17 @@ export function createCompassRangeControls(options: Readonly<{
     trigger.setAttribute("aria-pressed", String(enabled));
     allButton.setAttribute("aria-pressed", String(enabled));
     allButton.textContent = enabled ? "Hide all ranges" : "Show all ranges";
+    for (const [theme, button] of themeButtons) {
+      button.setAttribute("aria-pressed", String(settings.compassRangeTheme === theme));
+    }
     for (const range of COMPASS_RANGE_INDICATORS) {
       const controls = rangeControls.get(range.id);
       if (controls === undefined) continue;
       controls.button.setAttribute("aria-pressed", String(settings[range.enabledSetting]));
+      controls.button.style.setProperty(
+        "--compass-range-color",
+        compassRangeColor(range, settings.compassRangeTheme),
+      );
       if (document.activeElement !== controls.input) {
         controls.input.value = String(settings[range.opacitySetting]);
       }
@@ -266,6 +288,9 @@ export function createCompassRangeControls(options: Readonly<{
   });
   trigger.addEventListener("click", toggleAll);
   allButton.addEventListener("click", toggleAll);
+  for (const [theme, button] of themeButtons) {
+    button.addEventListener("click", () => apply({ compassRangeTheme: theme }));
+  }
   for (const range of COMPASS_RANGE_INDICATORS) {
     const controls = rangeControls.get(range.id);
     if (controls === undefined) continue;

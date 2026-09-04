@@ -59,6 +59,7 @@ describe("settings", () => {
       compassRangeCastOpacity: 95,
       compassRangeSpiritOpacity: 95,
       compassRangeSpiritExtendedOpacity: 95,
+      compassRangeTheme: "color",
       cartographyRevealMode: "off",
       cartographyPresetLibrary: DEFAULT_SETTINGS.cartographyPresetLibrary,
       cartographyWalkabilityOpacity: 55,
@@ -167,6 +168,7 @@ describe("settings", () => {
       compassRangeCastOpacity: 95,
       compassRangeSpiritOpacity: 95,
       compassRangeSpiritExtendedOpacity: 95,
+      compassRangeTheme: "color",
       cartographyRevealMode: "off",
       cartographyPresetLibrary: DEFAULT_SETTINGS.cartographyPresetLibrary,
       cartographyWalkabilityOpacity: 55,
@@ -276,6 +278,7 @@ describe("settings", () => {
       cartographyWalkabilityOpacity: 72,
       cartographyGridOpacity: 61,
       cartographyControlIdleOpacity: 44,
+      compassRangeTheme: "monochrome",
     }), {
       cartographyOverlayEnabled: true,
       cartographyGridEnabled: true,
@@ -291,12 +294,14 @@ describe("settings", () => {
       cartographyWalkabilityOpacity: 72,
       cartographyGridOpacity: 61,
       cartographyControlIdleOpacity: 44,
+      compassRangeTheme: "monochrome",
     });
     assert.throws(() => parseSettingsPatch({ cartographyGridEnabled: "yes" }), AppError);
     assert.throws(() => parseSettingsPatch({ cartographyRevealMode: "wide" }), AppError);
     assert.throws(() => parseSettingsPatch({ cartographyWalkabilityOpacity: 101 }), AppError);
     assert.throws(() => parseSettingsPatch({ cartographyGridOpacity: -1 }), AppError);
     assert.throws(() => parseSettingsPatch({ cartographyControlIdleOpacity: 14 }), AppError);
+    assert.throws(() => parseSettingsPatch({ compassRangeTheme: "sepia" }), AppError);
     assert.throws(() => parseSettingsPatch({
       cartographyPresetLibrary: {
         ...library,
@@ -606,6 +611,7 @@ describe("settings", () => {
       "compassRangeSpiritExtendedEnabled",
       "compassRangeSpiritExtendedOpacity",
       "compassRangeSpiritOpacity",
+      "compassRangeTheme",
       "compatibilityNoticeSeenFor",
       "controllerPromptStyle",
       "dataStrategy",
@@ -718,6 +724,7 @@ describe("settings", () => {
       compassRangeCastOpacity: 95,
       compassRangeSpiritOpacity: 95,
       compassRangeSpiritExtendedOpacity: 95,
+      compassRangeTheme: "color",
       cartographyRevealMode: "off",
       cartographyPresetLibrary: DEFAULT_SETTINGS.cartographyPresetLibrary,
       cartographyWalkabilityOpacity: 55,

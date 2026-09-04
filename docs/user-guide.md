@@ -144,10 +144,10 @@ exploration cells and highlights the cell containing your character.
 keeps the native map artwork visible.
 **Compass ranges** shows thin rings for Shout, Cast, Spirit, and Ext. Spirit range.
 Click its circular control beside the Compass to show or hide all rings. Hover
-the control to choose individual rings or adjust their opacity. The center icon
-stays white; the outer border shows whether ranges are on. Hover a visible ring
-to see its short name. Settings → Maps provides the same saved controls. The
-ranges work without opening the Mission Map.
+the control to choose Color or Monochrome, select individual rings, or adjust
+their opacity. The center icon stays white; the outer border shows whether
+ranges are on. Hover a visible ring to see its short name. Settings → Maps
+provides the same saved controls. The ranges work without opening the Mission Map.
 
 Choose Cartographer, Synthwave, or Monochrome. Custom styles can change colors,
 line widths, patterns, unseen-cell markers, and inspection ranges. A normal

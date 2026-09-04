@@ -10,7 +10,8 @@ GWonMac has three independent native-map layers:
   on the Compass and Mission Map while preserving the native map artwork.
 - **Compass ranges** draws the standard Shout, Cast, Spirit, and Ext. Spirit
   distances around the player. The native Compass edge already represents
-  Compass range, so the overlay does not repeat it.
+  Compass range, so the overlay does not repeat it. Choose distinct colors or
+  a high-contrast monochrome treatment from the Compass menu or Maps settings.
 
 The layers can be enabled separately. Cartographer, Synthwave, and Monochrome
 styles are included. **Customize style** creates an editable copy of a built-in

@@ -413,7 +413,7 @@ export function mountCartographyOverlay(options: Readonly<{
     compassRangeLayer.update(controlBox, visibleCompassRanges(
       settings,
       (id) => previewRangeOpacity.get(id) ?? null,
-    ));
+    ), settings.compassRangeTheme);
     if (controlBox === null) {
       controls.hide();
       compassRangeControls.hide();

@@ -6,7 +6,12 @@ import ColorControl from "./ColorControl.vue";
 import RangeControl from "./RangeControl.vue";
 import MapStylePreview from "./MapStylePreview.vue";
 import BaseModal from "./BaseModal.vue";
-import { COMPASS_RANGE_INDICATORS, type CompassRange } from "@shared/compass-ranges";
+import {
+  COMPASS_RANGE_INDICATORS,
+  COMPASS_RANGE_THEMES,
+  type CompassRange,
+  type CompassRangeTheme,
+} from "@shared/compass-ranges";
 import {
   CARTOGRAPHY_BUILTIN_PRESETS,
   isCartographyBuiltinPresetId,
@@ -202,6 +207,7 @@ async function updateUnseen(patch: Partial<CartographyPresetStyle["grid"]["unsee
     <details class="compass-range-settings">
       <summary>Configure Compass ranges</summary>
       <p>Choose each ring and its opacity. These choices remain saved while Compass ranges are off.</p>
+      <label class="compass-range-theme"><span><strong>Appearance</strong></span><select aria-label="Compass range appearance" :value="settings.compassRangeTheme" @change="persist({ compassRangeTheme: ($event.currentTarget as HTMLSelectElement).value as CompassRangeTheme })"><option v-for="theme in COMPASS_RANGE_THEMES" :key="theme" :value="theme">{{ theme === 'color' ? 'Color' : 'Monochrome' }}</option></select></label>
       <div v-for="range in COMPASS_RANGE_INDICATORS" :key="range.id" class="setting-row compass-range-setting">
         <label><input type="checkbox" :aria-label="`Show ${range.label} range`" :checked="settings[range.enabledSetting]" @change="setRangeEnabled(range, ($event.currentTarget as HTMLInputElement).checked)" /><strong>{{ range.label }}</strong></label>
         <RangeControl :label="`${range.label} opacity`" :value="settings[range.opacitySetting]" :min="0" :max="100" unit="%" @change="setRangeOpacity(range, $event)" />
@@ -266,5 +272,6 @@ async function updateUnseen(patch: Partial<CartographyPresetStyle["grid"]["unsee
 .compass-options > summary { padding: 12px 0; }
 .compass-options > label { display: flex; justify-content: space-between; gap: 16px; padding: 12px 0; }
 .compass-range-settings > p { margin: 8px 0; color: var(--muted); font-size: 13px; }
+.compass-range-theme { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 0 12px; }
 .compass-range-setting > label { display: flex; align-items: center; gap: 10px; min-width: 140px; }
 </style>

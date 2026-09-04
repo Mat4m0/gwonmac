@@ -65,7 +65,10 @@ import {
   type CartographyPresetLibrary,
   type CartographyPresetRef,
 } from "./cartography-overlay.js";
-import { DEFAULT_COMPASS_RANGE_OPACITY } from "./compass-ranges.js";
+import {
+  DEFAULT_COMPASS_RANGE_OPACITY,
+  type CompassRangeTheme,
+} from "./compass-ranges.js";
 import type {
   CartographyEvidenceCapture,
   CartographyEvidenceExportResult,
@@ -401,6 +404,8 @@ export interface AppSettings {
   compassRangeCastOpacity: number;
   compassRangeSpiritOpacity: number;
   compassRangeSpiritExtendedOpacity: number;
+  /** Shared color treatment for all standard Compass range rings. */
+  compassRangeTheme: CompassRangeTheme;
   /** Persistent Compass footprint; Mission Map hover uses Shift or Option+Shift. */
   cartographyRevealMode: "off" | "normal" | "birds-eye";
   /** Active built-in or player-owned appearance and all custom presets. */
@@ -515,6 +520,7 @@ export const RENDERER_WRITABLE_SETTINGS = [
   "compassRangeCastOpacity",
   "compassRangeSpiritOpacity",
   "compassRangeSpiritExtendedOpacity",
+  "compassRangeTheme",
   "cartographyGridOpacity",
   "cartographyWalkabilityOpacity",
   "characterSwitchProfession",
@@ -578,6 +584,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   compassRangeCastOpacity: DEFAULT_COMPASS_RANGE_OPACITY,
   compassRangeSpiritOpacity: DEFAULT_COMPASS_RANGE_OPACITY,
   compassRangeSpiritExtendedOpacity: DEFAULT_COMPASS_RANGE_OPACITY,
+  compassRangeTheme: "color",
   cartographyRevealMode: "off",
   cartographyPresetLibrary: DEFAULT_CARTOGRAPHY_PRESET_LIBRARY,
   cartographyWalkabilityOpacity: 55,
