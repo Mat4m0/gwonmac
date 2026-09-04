@@ -226,6 +226,7 @@ const developerProgramNames: Readonly<Record<
   'toolbox-commands': 'Toolbox Commands',
   'xunlai-storage': 'Xunlai Storage',
   'reconnect-probe': 'Reconnect Probe',
+  'effect-observer': 'Effect Observer',
 });
 const developerProgram = native().init.enhancementProgram;
 if (developerProgram !== 'none') {

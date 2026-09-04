@@ -73,6 +73,10 @@ import {
   type LocalSkillbarProofs,
 } from "./local-client-skillbar-verifier.js";
 import { derivePreGameControls } from "./enhancement-pre-game-proof.js";
+import {
+  derivePlayerEffectObservation,
+  playerEffectCandidateCounts,
+} from "./enhancement-player-effect-proof.js";
 
 export { isLocalClientVerification } from "./local-client-verification-boundary.js";
 export {
@@ -185,6 +189,9 @@ function failuresForRequested(
       : {}),
     ...(requested.characterSwitchAction
       ? { characterSwitchAction: changedFeature("characterSwitchAction", invariant) }
+      : {}),
+    ...(requested.playerEffectObservation
+      ? { playerEffectObservation: changedFeature("playerEffectObservation", invariant) }
       : {}),
   });
 }
@@ -618,6 +625,9 @@ function deriveEnhancementBuild(
         locatedPlayRegion.playRegionLayout,
       )
     : null;
+  const playerEffects = requestedCapabilities.playerEffectObservation
+    ? derivePlayerEffectObservation(context.moduleView())
+    : null;
   const includePreGame = requestedCapabilities.preGameControls
     && preGameControls !== null;
   const wantsLocal = requestedCapabilities.partyObservation
@@ -627,7 +637,8 @@ function deriveEnhancementBuild(
     || requestedCapabilities.chatAliases
     || requestedCapabilities.chatFiltering
     || requestedCapabilities.characterSwitchAction
-    || requestedCapabilities.quickItemMove;
+    || requestedCapabilities.quickItemMove
+    || requestedCapabilities.playerEffectObservation;
   const locatedLocal = wantsLocal
     ? locateAutomaticLocalActions(
         templateOutput,
@@ -673,6 +684,14 @@ function deriveEnhancementBuild(
     && includePreGame
     && locatedLocal?.uiDispatcher != null
     && locatedLocal.quickItemMove != null;
+  const includePlayerEffects = requestedCapabilities.playerEffectObservation
+    && includePlayRegion
+    && playerEffects !== null
+    && locatedLocal?.observationLayout != null
+    && locatedLocal.uiDispatcher != null;
+  const playerEffectCounts = includePlayerEffects || playerEffects !== null
+    ? []
+    : playerEffectCandidateCounts(context.moduleView());
   const failures = diagnoseFeatureFailures(
     templateOutput,
     requestedCapabilities,
@@ -701,10 +720,27 @@ function deriveEnhancementBuild(
           ),
         }
       : {}),
+    ...(requestedCapabilities.playerEffectObservation && !includePlayerEffects
+      ? {
+          playerEffectObservation: playerEffects === null
+            && playerEffectCounts.some((count) => count > 1)
+            ? ambiguousFeature(
+                "playerEffectObservation",
+                "player-effects.collection-layout",
+                Math.max(...playerEffectCounts),
+              )
+            : changedFeature(
+                "playerEffectObservation",
+                playerEffects === null
+                  ? "player-effects.collection-layout"
+                  : "player-effects.ui-dispatcher",
+              ),
+        }
+      : {}),
   });
   const localContributes = includeParty || includeTeam || includeTravel
     || includeXunlai || includeAliases || includeChatFiltering
-    || includeCharacterSwitch || includeQuickItemMove;
+    || includeCharacterSwitch || includeQuickItemMove || includePlayerEffects;
   const source = includeCursor
     ? locatedCursor
     : includePlayRegion
@@ -722,6 +758,7 @@ function deriveEnhancementBuild(
   const observationLayout = includeTarget
     ? locatedTarget.observationLayout
     : includeParty || includeTravel || includeXunlai || includeChatFiltering
+      || includePlayerEffects
       ? locatedLocal!.observationLayout!
       : skillbar.includeCooldown
         ? skillbar.cooldownObservationLayout
@@ -835,6 +872,7 @@ function deriveEnhancementBuild(
     } : {}),
     ...(includePreGame ? { preGameControls: preGameControls! } : {}),
     ...(includeQuickItemMove ? { quickItemMove: locatedLocal!.quickItemMove! } : {}),
+    ...(includePlayerEffects ? { playerEffectObservation: playerEffects! } : {}),
     ...skillbarBuild.beforeTeam,
     ...(includeTeam ? { teamApply: locatedLocal!.teamApply! } : {}),
     ...skillbarBuild.afterTeam,
@@ -854,6 +892,7 @@ function deriveEnhancementBuild(
     preGameControls: includePreGame,
     characterSwitchAction: includeCharacterSwitch,
     quickItemMove: includeQuickItemMove,
+    playerEffectObservation: includePlayerEffects,
   });
   const effective = intersectEnhancementCapabilities(requestedCapabilities, maximum);
   const profile = enhancementCapabilityProfile(effective);

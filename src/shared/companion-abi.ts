@@ -4,7 +4,7 @@
  */
 export const COMPANION_ABI = Object.freeze({
   kernel: 23,
-  config: Object.freeze({ bytes: 472 }),
+  config: Object.freeze({ bytes: 532 }),
   snapshot: Object.freeze({ abi: 4, bytes: 64 }),
   friends: Object.freeze({ abi: 1, bytes: 12_312, slots: 128, nameUnits: 20 }),
   travelUnlockWords: 28,
@@ -15,6 +15,7 @@ export const COMPANION_ABI = Object.freeze({
   skillCooldowns: Object.freeze({ abi: 1, bytes: 60 }),
   playRegion: Object.freeze({ abi: 4, bytes: 148 }),
   characterList: Object.freeze({ abi: 2, bytes: 4_632, slots: 64, nameUnits: 20 }),
+  playerEffects: Object.freeze({ abi: 1, bytes: 1_572, records: 64 }),
 });
 
 export const COMPANION_FEATURE_BITS = Object.freeze({
@@ -27,6 +28,7 @@ export const COMPANION_FEATURE_BITS = Object.freeze({
   playRegionObservation: 1 << 6,
   characterList: 1 << 7,
   friendObservation: 1 << 8,
+  playerEffectObservation: 1 << 9,
 });
 
 export const COMPANION_DISPATCH_KINDS = Object.freeze({

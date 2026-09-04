@@ -9,6 +9,7 @@ import {
   enhancementCapabilitiesForProfile,
   enhancementCapabilitiesCover,
   enhancementCapabilitiesRequested,
+  ENHANCEMENT_CAPABILITY_FIELDS,
   ENHANCEMENT_CAPABILITY_PRESETS,
   intersectEnhancementCapabilities,
   type EnhancementCapabilities,
@@ -35,6 +36,8 @@ import {
 } from "./local-client-verification-contract.js";
 import { SEMANTIC_VERIFIER_ABI } from "./semantic-proof.js";
 import { isSkillSlotGeometryProof } from "./enhancement-skill-slot-geometry-proof.js";
+import { isPlayerEffectObservationProof } from
+  "./enhancement-player-effect-proof.js";
 import {
   BRIDGE_KINDS,
   TEMPLATE_SAVE_BUILDS,
@@ -125,6 +128,10 @@ function refusalForFeature<Feature extends LocalClientFeature>(
 function featureFailuresFromVerdicts(
   verdicts: LocalFeatureVerdicts,
 ): LocalFeatureFailures | null {
+  if (!hasExactOwnKeys(
+    verdicts as unknown as Readonly<Record<string, unknown>>,
+    ENHANCEMENT_CAPABILITY_FIELDS,
+  )) return null;
   const nativeCursor = refusalForFeature("nativeCursor", verdicts.nativeCursor);
   const playRegionObservation = refusalForFeature(
     "playRegionObservation",
@@ -166,6 +173,10 @@ function featureFailuresFromVerdicts(
     "quickItemMove",
     verdicts.quickItemMove,
   );
+  const playerEffectObservation = refusalForFeature(
+    "playerEffectObservation",
+    verdicts.playerEffectObservation,
+  );
   if (
     nativeCursor === null
     || playRegionObservation === null
@@ -181,6 +192,7 @@ function featureFailuresFromVerdicts(
     || preGameControls === null
     || characterSwitchAction === null
     || quickItemMove === null
+    || playerEffectObservation === null
   ) return null;
   return Object.freeze({
     ...(nativeCursor ? { nativeCursor } : {}),
@@ -197,6 +209,7 @@ function featureFailuresFromVerdicts(
     ...(preGameControls ? { preGameControls } : {}),
     ...(characterSwitchAction ? { characterSwitchAction } : {}),
     ...(quickItemMove ? { quickItemMove } : {}),
+    ...(playerEffectObservation ? { playerEffectObservation } : {}),
   });
 }
 
@@ -591,6 +604,13 @@ function matchesSkillCooldownObservation(
     && isDeepStrictEqual(candidate.layout, expected.layout);
 }
 
+function matchesPlayerEffectObservation(
+  build: SemanticBuild,
+): boolean {
+  const candidate = build.playerEffectObservation;
+  return candidate === undefined || isPlayerEffectObservationProof(candidate);
+}
+
 function matchesPreGameControls(
   build: SemanticBuild,
   baseline: KnownEnhancementBuild,
@@ -682,10 +702,12 @@ function isAutomaticSemanticBuild(
   const hasPlayerSkillbar = build.playerSkillbarObservation !== undefined;
   const hasSkillCooldown = build.skillCooldownObservation !== undefined;
   const hasPreGameControls = build.preGameControls !== undefined;
+  const hasPlayerEffects = build.playerEffectObservation !== undefined;
   if (!hasCursor && !hasPlayRegion && !hasObservation && !hasTarget
     && !hasTravel && !hasXunlai && !hasAliases && !hasChatFiltering
     && !hasParty && !hasTeam && !hasSkillSlotGeometry
-    && !hasPlayerSkillbar && !hasSkillCooldown && !hasPreGameControls) {
+    && !hasPlayerSkillbar && !hasSkillCooldown && !hasPreGameControls
+    && !hasPlayerEffects) {
     return false;
   }
   if (
@@ -698,6 +720,8 @@ function isAutomaticSemanticBuild(
     || (hasParty && (!hasObservation || !hasPlayerSkillbar
       || build.uiDispatcher === undefined))
     || (hasSkillCooldown && (!hasObservation || !hasPlayerSkillbar))
+    || (hasPlayerEffects && (!hasObservation || !hasPlayRegion
+      || build.uiDispatcher === undefined))
     || (hasTeam && (!hasParty || build.gameThread === undefined))
     || ((hasTravel || hasXunlai) && build.gameThread === undefined)
     || ((hasTravel || hasXunlai || hasAliases) && build.uiDispatcher === undefined)
@@ -737,6 +761,7 @@ function isAutomaticSemanticBuild(
     && matchesTeamApply(build, baseline)
     && matchesSkillSlotGeometry(build)
     && matchesSkillCooldownObservation(build, baseline)
+    && matchesPlayerEffectObservation(build)
     && matchesPreGameControls(build, baseline)
   );
 }

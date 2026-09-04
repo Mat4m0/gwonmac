@@ -100,6 +100,7 @@ describe("an observation live run cannot reach the automation tier", () => {
     assert.equal(planFor("target").scenario.readiness, "observer");
     assert.equal(planFor("toolbox-foundation").scenario.readiness, "toolbox");
     assert.equal(planFor("cursor-capture").scenario.readiness, "cursor");
+    assert.equal(planFor("effect-observer").scenario.readiness, "effects");
     assert.equal(planFor("graphics-probe").scenario.readiness, "frontend");
   });
 
@@ -190,8 +191,10 @@ describe("an observation live run cannot reach the automation tier", () => {
     assert.deepEqual(
       Object.keys(observation).sort(),
       [
+        "operatorStep",
         "readCharacterSwitchDiagnostics",
         "readCursorProjection",
+        "readPlayerEffects",
         "wait",
       ],
     );
@@ -233,10 +236,12 @@ describe("an observation live run cannot reach the automation tier", () => {
     }) as {
       readCursorProjection: () => Promise<unknown>;
       readCharacterSwitchDiagnostics: () => Promise<unknown>;
+      readPlayerEffects: () => Promise<unknown>;
       wait: (ms: number) => Promise<unknown>;
     };
     assert.equal(await context.readCursorProjection(), "read");
     assert.equal(await context.readCharacterSwitchDiagnostics(), "read");
+    assert.equal(await context.readPlayerEffects(), "read");
     assert.equal(await context.wait(1), undefined);
   });
 

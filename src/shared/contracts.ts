@@ -793,6 +793,7 @@ export interface ClientCompatibility {
     chatAliases: OptionalFeatureStatus;
     skillSlotGeometry: OptionalFeatureStatus;
     skillCooldownObservation: OptionalFeatureStatus;
+    playerEffectObservation: OptionalFeatureStatus;
     playRegionObservation: OptionalFeatureStatus;
     preGameControls: OptionalFeatureStatus;
     characterSwitchAction: OptionalFeatureStatus;

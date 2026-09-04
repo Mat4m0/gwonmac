@@ -44,6 +44,7 @@ import {
   quickItemMoveExports,
   type QuickItemMoveInstallation,
 } from "./quick-item-move-installation.js";
+import { createPlayerEffectObservationInstallation } from "./player-effect-state-installation.js";
 
 const EMPTY_REGION = Object.freeze({ pointer: 0, bytes: 0 });
 
@@ -108,6 +109,9 @@ export async function prepareToolsCompanionExtension(
   const skills = tools.createSkillOverlaysInstallation(capabilities);
   const slots = skills.geometry;
   const cooldowns = skills.cooldowns;
+  const playerEffects = createPlayerEffectObservationInstallation(
+    capabilities.playerEffectObservation,
+  );
   const enqueue = capabilities.teamApply && typeof exports.enhancement_command === "function"
     ? exports.enhancement_command as EnhancementCommandEnqueue : null;
   const traceReader = capabilities.teamApply
@@ -156,6 +160,8 @@ export async function prepareToolsCompanionExtension(
       | (foundation ? COMPANION_FEATURE_BITS.toolboxFoundation : 0)
       | (capabilities.targetObservation ? COMPANION_FEATURE_BITS.targetObservation : 0)
       | skills.certifiedFeatureFlags
+      | (capabilities.playerEffectObservation
+        ? COMPANION_FEATURE_BITS.playerEffectObservation : 0)
       | (friendManifest === null ? 0 : COMPANION_FEATURE_BITS.friendObservation),
     memoryNeeds: {
       snapshot: observeState,
@@ -171,12 +177,14 @@ export async function prepareToolsCompanionExtension(
       if (quickItemMove !== null) quickItemMovePointer = Number(malloc(QUICK_ITEM_MOVE_SCRATCH_BYTES));
       slots?.allocate(malloc);
       cooldowns?.allocate(malloc);
+      playerEffects.allocate(malloc);
       storage?.allocate(malloc);
       travel?.allocate(malloc);
       if ((friendManifest !== null && (!Number.isInteger(friendPointer) || friendPointer <= 0))
         || (quickItemMove !== null && (!Number.isInteger(quickItemMovePointer) || quickItemMovePointer <= 0))
         || (slots !== null && !slots.allocated)
         || (cooldowns !== null && !cooldowns.allocated)
+        || !playerEffects.allocated
         || (storage !== null && !storage.region().pointer)
         || (travel !== null && !travel.region().pointer)) {
         throw new Error("Companion Tools allocation failed");
@@ -187,6 +195,13 @@ export async function prepareToolsCompanionExtension(
       if (quickItemMovePointer !== 0) {
         new Uint8Array(memory.buffer, quickItemMovePointer, QUICK_ITEM_MOVE_SCRATCH_BYTES).fill(0);
       }
+      if (playerEffects.pointer !== 0) {
+        new Uint8Array(
+          memory.buffer,
+          playerEffects.pointer,
+          playerEffects.bytes,
+        ).fill(0);
+      }
       storage?.initialize(memory); travel?.initialize();
     },
     ownedRegions: () => [
@@ -196,6 +211,7 @@ export async function prepareToolsCompanionExtension(
         size: QUICK_ITEM_MOVE_SCRATCH_BYTES, align: 4 as const }]),
       ...(slots?.region == null ? [] : [slots.region]),
       ...(cooldowns?.region == null ? [] : [cooldowns.region]),
+      ...(playerEffects.region == null ? [] : [playerEffects.region]),
       ...(storage === null ? [] : [storage.region()]),
       ...(travel === null ? [] : [travel.region()]),
     ],
@@ -209,10 +225,15 @@ export async function prepareToolsCompanionExtension(
         return cooldowns === null
           ? EMPTY_REGION : { pointer: cooldowns.pointer, bytes: cooldowns.bytes };
       },
+      get playerEffects() {
+        return playerEffects.region === null
+          ? EMPTY_REGION
+          : { pointer: playerEffects.pointer, bytes: playerEffects.bytes };
+      },
     },
     activate(context) {
       const session = activateTools({ context, capabilities, program, foundation, observeState,
-        skills, slots, cooldowns, enqueue, traceReader, teamCommands, storage,
+        skills, slots, cooldowns, playerEffects, enqueue, traceReader, teamCommands, storage,
         travel, configureTrade, takeTrade, configureChatFilters, friendPointer,
         quickItemMove, quickItemMovePointer });
       activated = true;
@@ -225,6 +246,7 @@ export async function prepareToolsCompanionExtension(
         () => { if (quickItemMovePointer !== 0) free(quickItemMovePointer); quickItemMovePointer = 0; },
         () => slots?.release(free),
         () => cooldowns?.release(free),
+        () => playerEffects.release(free),
         () => storage?.dispose(free),
         () => travel?.dispose(free),
       ]);
@@ -241,6 +263,7 @@ type ToolsInput = Readonly<{
   skills: ReturnType<typeof tools.createSkillOverlaysInstallation>;
   slots: ReturnType<typeof tools.createSkillOverlaysInstallation>["geometry"];
   cooldowns: ReturnType<typeof tools.createSkillOverlaysInstallation>["cooldowns"];
+  playerEffects: ReturnType<typeof createPlayerEffectObservationInstallation>;
   enqueue: EnhancementCommandEnqueue | null;
   traceReader: ProfessionCommandTraceReader | null;
   teamCommands: typeof TeamCommandsModule | null;
@@ -256,7 +279,7 @@ type ToolsInput = Readonly<{
 
 function activateTools(input: ToolsInput): CompanionExtensionSession {
   const { context, capabilities, program, foundation, observeState, skills,
-    slots, cooldowns, enqueue, traceReader, teamCommands, storage, travel,
+    slots, cooldowns, playerEffects, enqueue, traceReader, teamCommands, storage, travel,
     configureTrade, takeTrade, configureChatFilters } = input;
   let activeFriendPointer = input.friendPointer;
   let activeQuickItemMovePointer = input.quickItemMovePointer;
@@ -270,6 +293,8 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
   });
   const snapshot = () => source.snapshot;
   const policy = () => snapshot().policy;
+  const effectsActive = program === "effect-observer";
+  playerEffects.setActive(effectsActive);
   const playRegion = () => snapshot().playRegion;
   const cartographyActive = () => {
     const settings = window.gwToolsSettings();
@@ -419,6 +444,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
       | (policy().targetReadout || cartographyActive()
         ? COMPANION_FEATURE_BITS.targetObservation : 0)
       | skills.activeFeatureFlags
+      | (effectsActive ? COMPANION_FEATURE_BITS.playerEffectObservation : 0)
       | (activeFriendPointer !== 0 && policy().travel && travel?.observingFriends() === true
         ? COMPANION_FEATURE_BITS.friendObservation : 0),
     0, 0, 0, 0,
@@ -513,10 +539,16 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
           cooldowns.sink?.update(state);
           setSkillCooldownReadiness(state.status);
         } },
+      playerEffects: playerEffects.sink == null ? null : {
+        enabled: () => playerEffects.active,
+        inactive: () => playerEffects.setActive(false),
+        update: playerEffects.sink.update,
+      },
       readers: tools.observerReaders,
       pointers: { snapshot: core.snapshot.pointer, toolbox: core.toolbox.pointer,
         party: core.party.pointer, skillSlots: slots?.pointer ?? 0,
-        skillCooldowns: cooldowns?.pointer ?? 0 },
+        skillCooldowns: cooldowns?.pointer ?? 0,
+        playerEffects: playerEffects.pointer },
     },
     beforeHook() {
       source.subscribe(({ reason }) => {
@@ -532,6 +564,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
         readout: { configurable: true, enumerable: true, get: () => readout?.state ?? null },
         toolbox: { configurable: true, enumerable: true, get: () => toolbox?.state ?? null },
         skillCooldowns: { configurable: true, enumerable: true, get: () => cooldowns?.state ?? null },
+        playerEffects: { configurable: true, enumerable: true, get: () => playerEffects.state },
         xunlaiAccess: { configurable: true, enumerable: true, get: () =>
           companionState?.status === "ready" && typeof companionState.xunlaiAccess === "boolean"
             ? companionState.xunlaiAccess : null },
@@ -556,6 +589,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
         () => { if (activeFriendPointer !== 0) free(activeFriendPointer); activeFriendPointer = 0; },
         () => slots?.release(free),
         () => cooldowns?.release(free),
+        () => { playerEffects.release(free); playerEffects.dispose(); },
       ]);
     },
     releaseCallbackResources(free) {

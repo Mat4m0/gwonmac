@@ -35,6 +35,7 @@ function request() {
       skillCooldowns: { pointer: 409_600, bytes: COMPANION_SKILL_COOLDOWN_BYTES },
       playRegion: { pointer: 425_984, bytes: COMPANION_PLAY_REGION_BYTES },
       characterList: { pointer: 450_560, bytes: COMPANION_ABI.characterList.bytes },
+      playerEffects: { pointer: 475_136, bytes: COMPANION_ABI.playerEffects.bytes },
     },
   } as const;
 }
@@ -50,7 +51,9 @@ function initArguments(): readonly number[] {
     409_600, COMPANION_SKILL_COOLDOWN_BYTES,
     425_984, COMPANION_PLAY_REGION_BYTES,
     450_560, COMPANION_ABI.characterList.bytes,
-    0, 0, 0,
+    0, 0,
+    475_136, COMPANION_ABI.playerEffects.bytes,
+    0,
     FEATURE_FLAGS,
   ];
 }

@@ -29,6 +29,7 @@ const FEATURE_NAMES = Object.freeze({
   playRegionObservation: "FEATURE_PLAY_REGION_OBSERVATION",
   characterList: "FEATURE_CHARACTER_LIST",
   friendObservation: "FEATURE_FRIEND_OBSERVATION",
+  playerEffectObservation: "FEATURE_PLAYER_EFFECT_OBSERVATION",
 } as const);
 
 const DISPATCH_NAMES = Object.freeze({
@@ -60,6 +61,9 @@ function typescriptConfigSlots(): string[] {
     if (field.source === "party-dirty") {
       return `party_dirty_messages[${field.index}]`;
     }
+    if (field.source === "effect-dirty") {
+      return `effect_dirty_messages[${field.index}]`;
+    }
     return camelToSnake(field.key);
   });
 }
@@ -78,7 +82,7 @@ function rustConfigSlots(source: string): string[] {
   return body.split("\n").map((line) => line.trim()).filter(Boolean)
     .flatMap((line) => {
       const declaration = line.match(
-        /^pub\(crate\) ([a-z0-9_]+): (u32|\[u32; PARTY_DIRTY_MESSAGE_COUNT\]),$/u,
+        /^pub\(crate\) ([a-z0-9_]+): (u32|\[u32; (?:PARTY|EFFECT)_DIRTY_MESSAGE_COUNT\]),$/u,
       );
       if (declaration === null) {
         throw new Error(`unsupported Rust Layout declaration: ${line}`);
@@ -88,10 +92,16 @@ function rustConfigSlots(source: string): string[] {
         throw new Error(`incomplete Rust Layout declaration: ${line}`);
       }
       if (type === "u32") return [name];
-      if (name !== "party_dirty_messages") {
+      if (name !== "party_dirty_messages" && name !== "effect_dirty_messages") {
         throw new Error(`unexpected Rust config array: ${name}`);
       }
-      return Array.from({ length: count }, (_, index) => `${name}[${index}]`);
+      const arrayCount = name === "party_dirty_messages"
+        ? count
+        : Number(captured(
+          clean.match(/const EFFECT_DIRTY_MESSAGE_COUNT: usize = (\d+);/u),
+          "Rust effect dirty-message count",
+        ));
+      return Array.from({ length: arrayCount }, (_, index) => `${name}[${index}]`);
     });
 }
 
@@ -167,7 +177,7 @@ test("the independent TypeScript and Rust companion contracts match exactly", ()
     rustSource.match(/const PLAY_REGION_ABI_AND_SIZE: u32 = \(PLAY_REGION_BYTES << 16\) \| (\d+);/u),
     "Rust play-region ABI",
   )), COMPANION_ABI.playRegion.abi);
-  assert.equal(typescriptConfigSlots().length, 118);
+  assert.equal(typescriptConfigSlots().length, COMPANION_ABI.config.bytes / 4);
 });
 
 test("same-size field swaps, bit drift, opcode drift, and new names are rejected", () => {

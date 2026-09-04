@@ -37,6 +37,7 @@ pub(crate) const FEATURE_SKILL_COOLDOWN_OBSERVATION: u32 = 1 << 5;
 pub(crate) const FEATURE_PLAY_REGION_OBSERVATION: u32 = 1 << 6;
 pub(crate) const FEATURE_CHARACTER_LIST: u32 = 1 << 7;
 pub(crate) const FEATURE_FRIEND_OBSERVATION: u32 = 1 << 8;
+pub(crate) const FEATURE_PLAYER_EFFECT_OBSERVATION: u32 = 1 << 9;
 pub(crate) const KNOWN_FEATURES: u32 = FEATURE_NATIVE_CURSOR
     | FEATURE_GAME_SNAPSHOT
     | FEATURE_TOOLBOX_FOUNDATION
@@ -45,7 +46,8 @@ pub(crate) const KNOWN_FEATURES: u32 = FEATURE_NATIVE_CURSOR
     | FEATURE_SKILL_COOLDOWN_OBSERVATION
     | FEATURE_PLAY_REGION_OBSERVATION
     | FEATURE_CHARACTER_LIST
-    | FEATURE_FRIEND_OBSERVATION;
+    | FEATURE_FRIEND_OBSERVATION
+    | FEATURE_PLAYER_EFFECT_OBSERVATION;
 
 pub(crate) const CHARACTER_LIST_BYTES: u32 = size_of::<CharacterListSnapshot>() as u32;
 pub(crate) const CHARACTER_LIST_MAGIC: u32 = 0x4843_5747;
@@ -78,6 +80,13 @@ pub(crate) const SKILL_COOLDOWN_ABI_AND_SIZE: u32 = (SKILL_COOLDOWN_BYTES << 16)
 pub(crate) const FLAG_SKILL_COOLDOWNS_READY: u32 = 1 << 0;
 pub(crate) const FLAG_SKILL_COOLDOWNS_LOADING: u32 = 1 << 1;
 
+pub(crate) const PLAYER_EFFECT_BYTES: u32 = size_of::<PlayerEffectSnapshot>() as u32;
+pub(crate) const PLAYER_EFFECT_MAGIC: u32 = 0x4645_5747;
+pub(crate) const PLAYER_EFFECT_ABI_AND_SIZE: u32 = (PLAYER_EFFECT_BYTES << 16) | 1;
+pub(crate) const FLAG_PLAYER_EFFECTS_READY: u32 = 1 << 0;
+pub(crate) const FLAG_PLAYER_EFFECTS_LOADING: u32 = 1 << 1;
+pub(crate) const EFFECT_RECORDS: usize = 64;
+
 pub(crate) const TOOLBOX_BYTES: u32 = size_of::<ToolboxSnapshot>() as u32;
 pub(crate) const TOOLBOX_MAGIC: u32 = 0x5854_5747;
 pub(crate) const TOOLBOX_ABI_AND_SIZE: u32 = (TOOLBOX_BYTES << 16) | 4;
@@ -100,6 +109,7 @@ pub(crate) const DISPATCH_UI: u32 = 2;
 pub(crate) const DISPATCH_ACTIVE_FEATURES: u32 = 3;
 pub(crate) const DISPATCH_FRIEND_LIFECYCLE: u32 = 4;
 pub(crate) const PARTY_DIRTY_MESSAGE_COUNT: usize = 10;
+pub(crate) const EFFECT_DIRTY_MESSAGE_COUNT: usize = 4;
 
 pub(crate) const PARTY_BYTES: u32 = size_of::<PartySnapshot>() as u32;
 pub(crate) const PARTY_MAGIC: u32 = 0x5054_5747;
@@ -308,6 +318,18 @@ pub(crate) struct Layout {
     pub(crate) hide_hero_panel_message: u32,
     pub(crate) show_hero_panel_message: u32,
     pub(crate) party_dirty_messages: [u32; PARTY_DIRTY_MESSAGE_COUNT],
+    pub(crate) world_party_effects: u32,
+    pub(crate) agent_effects_stride: u32,
+    pub(crate) agent_effects_agent_id: u32,
+    pub(crate) agent_effects_effects: u32,
+    pub(crate) effect_stride: u32,
+    pub(crate) effect_skill_id: u32,
+    pub(crate) effect_attribute_level: u32,
+    pub(crate) effect_id: u32,
+    pub(crate) effect_maintainer_agent_id: u32,
+    pub(crate) effect_duration: u32,
+    pub(crate) effect_timestamp: u32,
+    pub(crate) effect_dirty_messages: [u32; EFFECT_DIRTY_MESSAGE_COUNT],
 }
 
 impl Layout {
@@ -421,6 +443,18 @@ impl Layout {
         hide_hero_panel_message: 0,
         show_hero_panel_message: 0,
         party_dirty_messages: [0; PARTY_DIRTY_MESSAGE_COUNT],
+        world_party_effects: 0,
+        agent_effects_stride: 0,
+        agent_effects_agent_id: 0,
+        agent_effects_effects: 0,
+        effect_stride: 0,
+        effect_skill_id: 0,
+        effect_attribute_level: 0,
+        effect_id: 0,
+        effect_maintainer_agent_id: 0,
+        effect_duration: 0,
+        effect_timestamp: 0,
+        effect_dirty_messages: [0; EFFECT_DIRTY_MESSAGE_COUNT],
     };
 }
 
@@ -550,6 +584,31 @@ pub(crate) struct SkillCooldownSnapshot {
     pub(crate) recharge_timestamps: [u32; SKILL_SLOTS],
 }
 
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub(crate) struct PlayerEffectRecord {
+    pub(crate) effect_id: u32,
+    pub(crate) skill_id: u32,
+    pub(crate) attribute_level: u32,
+    pub(crate) maintainer_agent_id: u32,
+    pub(crate) duration_ms: u32,
+    pub(crate) applied_at_game_ms: u32,
+}
+
+#[repr(C)]
+pub(crate) struct PlayerEffectSnapshot {
+    pub(crate) magic: u32,
+    pub(crate) abi_and_size: u32,
+    pub(crate) sequence: u32,
+    pub(crate) flags: u32,
+    pub(crate) generation: u32,
+    pub(crate) game_timer: u32,
+    pub(crate) count: u32,
+    pub(crate) player_agent_id: u32,
+    pub(crate) outcome: u32,
+    pub(crate) effects: [PlayerEffectRecord; EFFECT_RECORDS],
+}
+
 /// One party position, as much of it as has been read.
 ///
 /// Every field is paired with a bit in `flags` that says whether it was read.
@@ -614,7 +673,7 @@ pub(crate) struct PartySnapshot {
     pub(crate) character_skills: [u32; SKILL_UNLOCK_WORDS],
 }
 
-const _: [(); 472] = [(); size_of::<Layout>()];
+const _: [(); 532] = [(); size_of::<Layout>()];
 const _: [(); 72] = [(); size_of::<CharacterRecord>()];
 const _: [(); 4632] = [(); size_of::<CharacterListSnapshot>()];
 const _: [(); 96] = [(); size_of::<PartySlot>()];
@@ -626,3 +685,5 @@ const _: [(); 64] = [(); size_of::<ToolboxSnapshot>()];
 const _: [(); 16] = [(); size_of::<SkillSlotRect>()];
 const _: [(); 164] = [(); size_of::<SkillSlotSnapshot>()];
 const _: [(); 60] = [(); size_of::<SkillCooldownSnapshot>()];
+const _: [(); 24] = [(); size_of::<PlayerEffectRecord>()];
+const _: [(); 1572] = [(); size_of::<PlayerEffectSnapshot>()];

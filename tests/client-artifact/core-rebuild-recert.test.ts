@@ -29,6 +29,7 @@ const CORE_CAPABILITIES = Object.freeze({
   chatFiltering: false,
   skillSlotGeometry: false,
   skillCooldownObservation: false,
+  playerEffectObservation: false,
   playRegionObservation: true,
   preGameControls: true,
   characterSwitchAction: true,

@@ -108,6 +108,17 @@ export interface EnhancementLayout {
   selectedCharacterName: number;
   guildContextSlot: number;
   guildHallKey: number;
+  worldPartyEffects: number;
+  agentEffectsStride: number;
+  agentEffectsAgentId: number;
+  agentEffectsEffects: number;
+  effectStride: number;
+  effectSkillId: number;
+  effectAttributeLevel: number;
+  effectId: number;
+  effectMaintainerAgentId: number;
+  effectDuration: number;
+  effectTimestamp: number;
 }
 
 export type EnhancementPlayRegionLayout = Pick<EnhancementLayout,
@@ -151,6 +162,12 @@ export type EnhancementSkillCooldownLayout = Pick<EnhancementLayout,
 export type EnhancementCharacterListLayout = Pick<EnhancementLayout,
   | "characterArrayPointer" | "characterArrayCount" | "selectedCharacterName"
 >;
+export type EnhancementPlayerEffectLayout = Pick<EnhancementLayout,
+  | "worldPartyEffects" | "agentEffectsStride" | "agentEffectsAgentId"
+  | "agentEffectsEffects" | "effectStride" | "effectSkillId"
+  | "effectAttributeLevel" | "effectId" | "effectMaintainerAgentId"
+  | "effectDuration" | "effectTimestamp"
+>;
 export type EnhancementPlayerSkillbarLayout = Pick<EnhancementLayout,
   | "worldSkillbars" | "skillbarStride" | "skillbarAgentId"
   | "skillbarSkills" | "skillSlotStride"
@@ -174,7 +191,7 @@ export type EnhancementPartyLayout = Pick<EnhancementLayout,
 
 type Owner = "play-region" | "observation" | "target" | "cursor" | "party" | "storage"
   | "travel" | "player-skillbar" | "party-skillbar" | "skill-slots" | "skill-cooldown"
-  | "character-list";
+  | "character-list" | "player-effects";
 type ConfigField =
   | Readonly<{
     source: "layout";
@@ -217,11 +234,21 @@ type ConfigField =
     key: keyof EnhancementCharacterListLayout;
   }>
   | Readonly<{
+    source: "layout";
+    owner: "player-effects";
+    key: keyof EnhancementPlayerEffectLayout;
+  }>
+  | Readonly<{
     source: "dispatcher";
     key: "playerChatMessage" | "hideHeroPanelMessage" | "showHeroPanelMessage";
     owner: "party";
   }>
-  | Readonly<{ source: "party-dirty"; index: number; owner: "party" }>;
+  | Readonly<{ source: "party-dirty"; index: number; owner: "party" }>
+  | Readonly<{
+    source: "effect-dirty";
+    index: number;
+    owner: "player-effects";
+  }>;
 
 const observation = (
   ...keys: readonly (keyof EnhancementObservationBaseLayout)[]
@@ -271,6 +298,11 @@ const characterList = (
 ): readonly ConfigField[] => keys.map((key) => ({
   source: "layout", key, owner: "character-list",
 }));
+const playerEffects = (
+  ...keys: readonly (keyof EnhancementPlayerEffectLayout)[]
+): readonly ConfigField[] => keys.map((key) => ({
+  source: "layout", key, owner: "player-effects",
+}));
 
 export const ENHANCEMENT_CONFIG_FIELDS = Object.freeze([
   ...playRegion("contextRoot"),
@@ -313,6 +345,16 @@ export const ENHANCEMENT_CONFIG_FIELDS = Object.freeze([
   { source: "dispatcher", key: "hideHeroPanelMessage", owner: "party" },
   { source: "dispatcher", key: "showHeroPanelMessage", owner: "party" },
   ...Array.from({ length: 10 }, (_, index): ConfigField => ({ source: "party-dirty", index, owner: "party" })),
+  // Append every effect word so all existing config positions remain stable.
+  ...playerEffects(
+    "worldPartyEffects", "agentEffectsStride", "agentEffectsAgentId",
+    "agentEffectsEffects", "effectStride", "effectSkillId",
+    "effectAttributeLevel", "effectId", "effectMaintainerAgentId",
+    "effectDuration", "effectTimestamp",
+  ),
+  ...Array.from({ length: 4 }, (_, index): ConfigField => ({
+    source: "effect-dirty", index, owner: "player-effects",
+  })),
 ] as const satisfies readonly ConfigField[]);
 
 export const ENHANCEMENT_LAYOUT_FIELDS = Object.freeze(
@@ -336,6 +378,14 @@ export const ENHANCEMENT_LAYOUT_OWNERSHIP_IS_EXHAUSTIVE:
 export const ENHANCEMENT_LAYOUT_WORD_COUNT = ENHANCEMENT_LAYOUT_FIELDS.length;
 export const ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT = ENHANCEMENT_CONFIG_FIELDS
   .filter((field) => field.source === "party-dirty").length;
+export const ENHANCEMENT_EFFECT_DIRTY_MESSAGE_COUNT = ENHANCEMENT_CONFIG_FIELDS
+  .filter((field) => field.source === "effect-dirty").length;
+export const ENHANCEMENT_DISPATCHER_CONFIG_START = ENHANCEMENT_CONFIG_FIELDS
+  .findIndex((field) => field.source === "dispatcher");
+export const ENHANCEMENT_PARTY_DIRTY_CONFIG_START = ENHANCEMENT_CONFIG_FIELDS
+  .findIndex((field) => field.source === "party-dirty");
+export const ENHANCEMENT_EFFECT_DIRTY_CONFIG_START = ENHANCEMENT_CONFIG_FIELDS
+  .findIndex((field) => field.source === "effect-dirty");
 export const ENHANCEMENT_CONFIG_WORD_COUNT = ENHANCEMENT_CONFIG_FIELDS.length;
 
 export type EnhancementConfigOwner = Owner;

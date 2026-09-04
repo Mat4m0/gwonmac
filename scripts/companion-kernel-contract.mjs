@@ -37,6 +37,7 @@ export const COMPANION_KERNEL_EXPORT_VALUES = Object.freeze({
   companion_play_region_bytes: COMPANION_ABI.playRegion.bytes,
   companion_character_list_bytes: COMPANION_ABI.characterList.bytes,
   companion_friend_bytes: COMPANION_ABI.friends.bytes,
+  companion_player_effect_bytes: COMPANION_ABI.playerEffects.bytes,
 });
 
 export const COMPANION_KERNEL_DYLINK0 = Object.freeze([
@@ -95,10 +96,13 @@ export const COMPANION_KERNEL_DYLINK0 = Object.freeze([
   //                the 12312-byte snapshot remains in host-owned memory.
   //   2301 -> 2309 Guild Hall availability adds two certified layout words;
   //                its two booleans reuse the play-region flags word.
+  //   2309 -> 3941 controlled-player effects add a fixed 64-record cache,
+  //                reconciliation state, and 15 appended config words. The
+  //                1572-byte publication remains in host-owned memory.
   // This constant exists so a kernel whose footprint moves cannot ship without
   // someone saying why. One page is still the ceiling, and this remains far
   // under it.
-  0x01, 0x05, 0x85, 0x12, 0x02, 0x00, 0x00,
+  0x01, 0x05, 0xe5, 0x1e, 0x02, 0x00, 0x00,
 ]);
 
 const WASM_PAGE_BYTES = 65_536;

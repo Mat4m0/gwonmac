@@ -28,15 +28,20 @@ import {
 } from "../../src/renderer/companion-skill-snapshot.ts";
 import { readCompanionFriends } from "../../src/renderer/companion-friend-snapshot.ts";
 import {
+  COMPANION_PLAYER_EFFECT_BYTES,
+  readCompanionPlayerEffects,
+} from "../../src/renderer/companion-effect-snapshot.ts";
+import {
   COMPANION_PLAY_REGION_BYTES,
   readCompanionPlayRegion,
 } from "../../src/renderer/companion-play-region-snapshot.ts";
 import {
   ENHANCEMENT_CONFIG_WORD_COUNT,
-  ENHANCEMENT_LAYOUT_WORD_COUNT,
 } from "../../src/shared/enhancement-contracts.ts";
 import {
   ENHANCEMENT_CONFIG_FIELDS,
+  ENHANCEMENT_DISPATCHER_CONFIG_START,
+  ENHANCEMENT_EFFECT_DIRTY_CONFIG_START,
   ENHANCEMENT_LAYOUT_FIELDS,
 } from "../../src/shared/enhancement-config.ts";
 
@@ -120,6 +125,8 @@ export const FEATURE_SKILL_COOLDOWN_OBSERVATION =
   COMPANION_FEATURE_BITS.skillCooldownObservation;
 export const FEATURE_PLAY_REGION_OBSERVATION =
   COMPANION_FEATURE_BITS.playRegionObservation;
+export const FEATURE_PLAYER_EFFECT_OBSERVATION =
+  COMPANION_FEATURE_BITS.playerEffectObservation;
 export { COMPANION_PLAY_REGION_BYTES };
 export const ALL_FEATURES = FEATURE_NATIVE_CURSOR
   | FEATURE_GAME_SNAPSHOT
@@ -292,6 +299,9 @@ export const ADDRESSES = Object.freeze({
   skillCooldowns: 0xc100,
   playRegion: 0xc200,
   characterList: 0xc300,
+  playerEffects: 0xc600,
+  agentEffectRows: 0xe000,
+  effectRecords: 0xe800,
   friends: 0x5_0000,
   friendRoot: 0x5_4000,
   friendArray: 0x5_4100,
@@ -387,7 +397,9 @@ export function setConfigField(
   key: (typeof ENHANCEMENT_LAYOUT_FIELDS)[number],
   value: number,
 ): void {
-  const index = ENHANCEMENT_LAYOUT_FIELDS.indexOf(key);
+  const index = ENHANCEMENT_CONFIG_FIELDS.findIndex(
+    (field) => field.source === "layout" && field.key === key,
+  );
   if (index < 0) throw new Error(`unknown Enhancement config field ${key}`);
   config[index] = value;
 }
@@ -424,12 +436,50 @@ export function installPlayerSkillbarGraph(
     view.setUint32(row + DETAIL.skillbarAgentId, agentId, true);
   });
 }
+
+export type EffectFixtureRecord = Readonly<{
+  effectId: number;
+  skillId: number;
+  attributeLevel?: number;
+  maintainerAgentId?: number;
+  durationSeconds: number;
+  timestamp: number;
+}>;
+
+/** Installs the controlled player's exact AgentEffects row and effect array. */
+export function installPlayerEffects(
+  view: DataView,
+  effects: readonly EffectFixtureRecord[],
+): void {
+  const header = ADDRESSES.world + 0x508;
+  view.setUint32(header, ADDRESSES.agentEffectRows, true);
+  view.setUint32(header + 4, 1, true);
+  view.setUint32(header + 8, 1, true);
+  const row = ADDRESSES.agentEffectRows;
+  view.setUint32(row, 7, true);
+  view.setUint32(
+    row + 0x14,
+    effects.length === 0 ? 0 : ADDRESSES.effectRecords,
+    true,
+  );
+  view.setUint32(row + 0x18, effects.length, true);
+  view.setUint32(row + 0x1c, effects.length, true);
+  effects.forEach((effect, index) => {
+    const at = ADDRESSES.effectRecords + index * 0x18;
+    view.setUint32(at, effect.skillId, true);
+    view.setUint32(at + 4, effect.attributeLevel ?? 12, true);
+    view.setUint32(at + 8, effect.effectId, true);
+    view.setUint32(at + 0x0c, effect.maintainerAgentId ?? 7, true);
+    view.setFloat32(at + 0x10, effect.durationSeconds, true);
+    view.setUint32(at + 0x14, effect.timestamp, true);
+  });
+}
 export const PLAYER_RECORD_INDEX = 42;
 export const PLAYER_RECORD_ADDRESS =
   ADDRESSES.playerRecordBuffer + PLAYER_RECORD_INDEX * DETAIL.playerStride;
 export const CONFIG_WORDS = ENHANCEMENT_CONFIG_WORD_COUNT;
 export const CONFIG_BYTES = CONFIG_WORDS * 4;
-export const MESSAGE_CONFIG_START = ENHANCEMENT_LAYOUT_WORD_COUNT;
+export const MESSAGE_CONFIG_START = ENHANCEMENT_DISPATCHER_CONFIG_START;
 export const TEXTURE_KEY = 0x6772_7478;
 
 export interface KernelOverrides {
@@ -453,6 +503,8 @@ export interface KernelOverrides {
   characterListSize?: number;
   friendPointer?: number;
   friendSize?: number;
+  playerEffectPointer?: number;
+  playerEffectSize?: number;
   friendRoot?: number;
   toolboxSize?: number;
 }
@@ -486,6 +538,8 @@ export type KernelInit = (
   characterListSize: number,
   friendPointer: number,
   friendSize: number,
+  playerEffectPointer: number,
+  playerEffectSize: number,
   friendRoot: number,
   features: number,
 ) => number;
@@ -593,8 +647,27 @@ export async function createKernel(
     0x1c8, 0xb8, 0xbc, 0xd8, 0x104, 0x108,
     0x10c, 0x110, 0x114, 0x118, 0x128, 0x18c,
   ], SKILL_CONFIG_START);
-  config[ENHANCEMENT_LAYOUT_FIELDS.indexOf("worldUnlockedMaps")] = 0x60c;
-  config[ENHANCEMENT_LAYOUT_FIELDS.indexOf("characterUuid")] = 0x64;
+  setConfigField(config, "worldUnlockedMaps", 0x60c);
+  setConfigField(config, "characterUuid", 0x64);
+  for (const [key, value] of Object.entries({
+    worldPartyEffects: 0x508,
+    agentEffectsStride: 0x24,
+    agentEffectsAgentId: 0,
+    agentEffectsEffects: 0x14,
+    effectStride: 0x18,
+    effectSkillId: 0,
+    effectAttributeLevel: 4,
+    effectId: 8,
+    effectMaintainerAgentId: 0x0c,
+    effectDuration: 0x10,
+    effectTimestamp: 0x14,
+  } as const)) {
+    setConfigField(
+      config,
+      key as (typeof ENHANCEMENT_LAYOUT_FIELDS)[number],
+      value,
+    );
+  }
   // Placed at the boundary rather than appended to the literal above. Written
   // as one flat list, the messages sat directly after the party chain — and
   // when the layout grew they silently stayed there, a full detail block short of
@@ -602,6 +675,10 @@ export async function createKernel(
   config.set(
     [0x1000_0082, 0x1000_01a3, 0x1000_01a4, ...PARTY_DIRTY_MESSAGES],
     MESSAGE_CONFIG_START,
+  );
+  config.set(
+    [0x1000_0055, 0x1000_0056, 0x1000_0057, 0x1000_0141],
+    ENHANCEMENT_EFFECT_DIRTY_CONFIG_START,
   );
   return {
     instance,
@@ -673,6 +750,14 @@ export async function createKernel(
           ?? ((features & COMPANION_FEATURE_BITS.friendObservation) !== 0 ? ADDRESSES.friends : 0),
         overrides.friendSize
           ?? ((features & COMPANION_FEATURE_BITS.friendObservation) !== 0 ? COMPANION_ABI.friends.bytes : 0),
+        overrides.playerEffectPointer
+          ?? ((features & FEATURE_PLAYER_EFFECT_OBSERVATION) !== 0
+            ? ADDRESSES.playerEffects
+            : 0),
+        overrides.playerEffectSize
+          ?? ((features & FEATURE_PLAYER_EFFECT_OBSERVATION) !== 0
+            ? COMPANION_PLAYER_EFFECT_BYTES
+            : 0),
         overrides.friendRoot ?? 0,
         features,
       );
@@ -721,6 +806,8 @@ export async function createKernel(
     skillCooldowns: () =>
       readCompanionSkillCooldowns(memory.buffer, ADDRESSES.skillCooldowns),
     playRegion: () => readCompanionPlayRegion(memory.buffer, ADDRESSES.playRegion),
+    playerEffects: () =>
+      readCompanionPlayerEffects(memory.buffer, ADDRESSES.playerEffects),
     field: (offset: number) => view.getUint32(ADDRESSES.cursor + offset, true),
     header: () => readCompanionCursorHeader(memory.buffer, ADDRESSES.cursor),
     published: () => readCompanionCursorPixels(memory.buffer, ADDRESSES.cursor),

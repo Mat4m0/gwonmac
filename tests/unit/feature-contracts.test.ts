@@ -128,6 +128,13 @@ test("the capability registry is the ordered wire vocabulary", () => {
       configOwners: [],
       hooks: [],
     },
+    {
+      id: "playerEffectObservation",
+      requiresAll: ["playRegionObservation"],
+      requiresAny: [],
+      configOwners: ["observation", "player-effects"],
+      hooks: ["ui"],
+    },
   ]);
   assert.deepEqual(
     ENHANCEMENT_CAPABILITY_CONTRACTS.map(({ id }) => id),
@@ -180,14 +187,15 @@ test("dependency pruning is derived from capability contracts", () => {
     assert.deepEqual(enhancementHooksFor(isolated), {
       tick: true,
       cursor: contract.id === "nativeCursor",
-      ui: contract.id === "partyObservation",
+      ui: contract.id === "partyObservation"
+        || contract.id === "playerEffectObservation",
     }, contract.id);
   }
 });
 
 test("cooldown owns the reusable player skillbar core without Party", () => {
-  assert.equal(ENHANCEMENT_CONFIG_WORD_COUNT * Uint32Array.BYTES_PER_ELEMENT, 472);
-  assert.equal(ENHANCEMENT_LAYOUT_WORD_COUNT, 105);
+  assert.equal(ENHANCEMENT_CONFIG_WORD_COUNT * Uint32Array.BYTES_PER_ELEMENT, 532);
+  assert.equal(ENHANCEMENT_LAYOUT_WORD_COUNT, 116);
   assert.equal(ENHANCEMENT_LAYOUT_OWNERSHIP_IS_EXHAUSTIVE, true);
   assert.equal(
     new Set(ENHANCEMENT_LAYOUT_FIELDS).size,

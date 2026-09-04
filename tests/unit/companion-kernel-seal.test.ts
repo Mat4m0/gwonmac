@@ -86,6 +86,7 @@ describe("companion kernel build contract", () => {
       { name: "companion_play_region_bytes", typeIndex: 2 },
       { name: "companion_character_list_bytes", typeIndex: 2 },
       { name: "companion_friend_bytes", typeIndex: 2 },
+      { name: "companion_player_effect_bytes", typeIndex: 2 },
     ]);
   });
 
@@ -155,6 +156,7 @@ describe("companion kernel build contract", () => {
       companion_play_region_bytes: COMPANION_PLAY_REGION_BYTES,
       companion_character_list_bytes: 4_632,
       companion_friend_bytes: COMPANION_ABI.friends.bytes,
+      companion_player_effect_bytes: COMPANION_ABI.playerEffects.bytes,
     });
     // One export per value, so a region added to the kernel cannot be left
     // unverified by forgetting to state its size.

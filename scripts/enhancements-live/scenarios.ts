@@ -33,7 +33,8 @@ import {
 } from "./character-switch-scenario.js";
 
 export type LiveTier = "automation" | "observation" | "graphics-observation";
-export type LiveReadiness = "frontend" | "observer" | "toolbox" | "cursor" | "storage";
+export type LiveReadiness =
+  | "frontend" | "observer" | "toolbox" | "cursor" | "storage" | "effects";
 
 /** Serializable readiness predicate shared by preflight and the final wait. */
 function liveReadinessSatisfied(required: LiveReadiness): boolean {
@@ -52,6 +53,9 @@ function liveReadinessSatisfied(required: LiveReadiness): boolean {
   if (required === "storage") {
     return typeof window.gwCompanionRuntime?.xunlaiAccess === "boolean";
   }
+  if (required === "effects") {
+    return window.gwCompanionRuntime?.playerEffects?.status === "ready";
+  }
   const cursor = window.gwCompanionRuntime?.cursor;
   return window.gwCompanionRuntime?.status === "installed"
     && typeof cursor === "object"
@@ -68,6 +72,13 @@ function liveReadinessSatisfied(required: LiveReadiness): boolean {
 export type ObservationContext = Readonly<{
   readCursorProjection: () => Promise<CompanionDeveloperRuntime["cursor"]>;
   readCharacterSwitchDiagnostics: () => Promise<CharacterSwitchDiagnostics | null>;
+  readPlayerEffects: () => Promise<CompanionDeveloperRuntime["playerEffects"]>;
+  operatorStep: (step: Readonly<{
+    id: string;
+    title: string;
+    instruction: string;
+    buttonLabel: string;
+  }>) => Promise<void>;
   wait: (milliseconds: number) => Promise<void>;
 }>;
 
@@ -800,6 +811,100 @@ export const SCENARIOS: Readonly<Record<string, LiveScenario>> = Object.freeze({
       }
     },
   }),
+  "effect-observer": Object.freeze({
+    tier: "observation",
+    program: "effect-observer",
+    readiness: "effects",
+    async run({ readPlayerEffects, operatorStep, wait }: ObservationContext) {
+      const steps = Object.freeze([
+        {
+          id: "baseline",
+          title: "Baseline",
+          instruction: "Enter playable PvE. Leave the current effects unchanged.",
+          buttonLabel: "Capture baseline",
+        },
+        {
+          id: "finite",
+          title: "Finite effect",
+          instruction: "Cast Healing Breeze or another timed effect on yourself.",
+          buttonLabel: "Capture active effect",
+        },
+        {
+          id: "refresh",
+          title: "Refresh",
+          instruction: "Recast the same effect so its duration restarts.",
+          buttonLabel: "Capture refresh",
+        },
+        {
+          id: "expired",
+          title: "Expiry",
+          instruction: "Wait until that effect expires naturally.",
+          buttonLabel: "Capture expiry",
+        },
+        {
+          id: "maintained",
+          title: "Maintained effect",
+          instruction: "Apply a maintained enchantment, if available. Otherwise keep an indefinite stock effect visible.",
+          buttonLabel: "Capture maintained effect",
+        },
+      ] as const);
+      const checkpoints: Array<Readonly<{
+        id: string;
+        first: CompanionDeveloperRuntime["playerEffects"];
+        second: CompanionDeveloperRuntime["playerEffects"];
+      }>> = [];
+      const outputDirectory = path.join(
+        process.cwd(),
+        "test-results",
+        "enhancements-live",
+      );
+      const output = path.join(outputDirectory, "effect-observer.json");
+      await mkdir(outputDirectory, { recursive: true });
+      const persist = (complete: boolean) => writeFile(output, `${JSON.stringify({
+        version: 1,
+        complete,
+        checkpoints,
+      }, null, 2)}\n`, "utf8");
+      await persist(false);
+      for (const step of steps) {
+        await operatorStep(step);
+        await wait(100);
+        const first = await readPlayerEffects();
+        await wait(150);
+        const second = await readPlayerEffects();
+        checkpoints.push(Object.freeze({ id: step.id, first, second }));
+        await persist(false);
+      }
+      await persist(true);
+      return Object.freeze({ output, checkpoints: Object.freeze(checkpoints) });
+    },
+    validate(result: {
+      evidence?: Readonly<{
+        checkpoints: readonly Readonly<{
+          id: string;
+          first: CompanionDeveloperRuntime["playerEffects"];
+          second: CompanionDeveloperRuntime["playerEffects"];
+        }>[];
+      }>;
+    }) {
+      const checkpoints = result.evidence?.checkpoints;
+      if (checkpoints?.length !== 5) {
+        throw new Error("effect observer did not retain every checkpoint");
+      }
+      for (const checkpoint of checkpoints) {
+        if (checkpoint.first?.status !== "ready"
+          || checkpoint.second?.status !== "ready"
+          || checkpoint.second.sequence === checkpoint.first.sequence) {
+          throw new Error(`${checkpoint.id} did not publish a ready heartbeat`);
+        }
+      }
+      const finite = checkpoints.find(({ id }) => id === "finite")?.first;
+      if (finite?.status !== "ready"
+        || !finite.effects.some(({ durationMs }) => durationMs > 0)) {
+        throw new Error("finite checkpoint observed no timed player effect");
+      }
+    },
+  }),
   "character-switch": Object.freeze({
     tier: "observation",
     program: "none",
@@ -960,11 +1065,58 @@ export function scenarioContext(
     cdp,
     sendAutomationCommand,
   } = capabilities;
+  const operatorStep: ObservationContext["operatorStep"] = async (step) => {
+    const activePage = await currentPage();
+    await activePage.evaluate((value) => {
+      let root = document.getElementById("effect-observer-operator-panel");
+      if (root === null) {
+        root = document.createElement("aside");
+        root.id = "effect-observer-operator-panel";
+        root.setAttribute("aria-live", "polite");
+        root.style.cssText = [
+          "position:fixed", "right:18px", "top:18px", "z-index:2147483647",
+          "width:min(340px,calc(100vw - 36px))", "box-sizing:border-box",
+          "padding:14px", "border:1px solid #a47d35", "border-radius:8px",
+          "background:rgba(20,17,13,.94)", "color:#eee3cc",
+          "box-shadow:0 8px 28px rgba(0,0,0,.55)",
+          "font:13px/1.4 -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif",
+        ].join(";");
+        document.body.append(root);
+      }
+      const eyebrow = document.createElement("div");
+      eyebrow.textContent = "EFFECT OBSERVER · LIVE CHECK";
+      eyebrow.style.cssText =
+        "font-size:10px;letter-spacing:.11em;color:#d1a75c;margin-bottom:5px";
+      const title = document.createElement("strong");
+      title.textContent = value.title;
+      title.style.cssText =
+        "display:block;font-size:15px;color:#fff4dd;margin-bottom:6px";
+      const instruction = document.createElement("div");
+      instruction.textContent = value.instruction;
+      instruction.style.cssText = "color:#d8cfbe;margin-bottom:12px";
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = value.buttonLabel;
+      button.style.cssText = [
+        "width:100%", "padding:9px 11px", "border:1px solid #c49a50",
+        "border-radius:5px", "background:#6f4f20", "color:#fff5df",
+        "font:700 13px/1.2 -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif",
+        "cursor:pointer",
+      ].join(";");
+      root.replaceChildren(eyebrow, title, instruction, button);
+      return new Promise<void>((resolve) => {
+        button.addEventListener("click", () => resolve(), { once: true });
+      });
+    }, step);
+  };
   const observation: ObservationContext = {
     readCursorProjection: async () => (await currentPage()).evaluate(() =>
       window.gwCompanionRuntime?.cursor ?? null),
     readCharacterSwitchDiagnostics: async () => (await currentPage()).evaluate(() =>
       window.gwCharacterSwitch?.diagnostics() ?? null),
+    readPlayerEffects: async () => (await currentPage()).evaluate(() =>
+      window.gwCompanionRuntime?.playerEffects ?? null),
+    operatorStep,
     wait: (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
   };
   return Object.freeze(

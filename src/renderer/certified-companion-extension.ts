@@ -16,6 +16,7 @@ import type {
   OptionalObserverReaders,
   SkillCooldownConsumer,
   SkillSlotConsumer,
+  PlayerEffectConsumer,
   StateConsumer,
   ToolboxConsumer,
 } from "./companion-observer.js";
@@ -34,6 +35,7 @@ export type CompanionObserverExtension = Readonly<{
   publishState: boolean;
   skillSlots: SkillSlotConsumer | null;
   skillCooldowns: SkillCooldownConsumer | null;
+  playerEffects: PlayerEffectConsumer | null;
   readers: OptionalObserverReaders | null;
   pointers: Readonly<{
     snapshot: number;
@@ -41,6 +43,7 @@ export type CompanionObserverExtension = Readonly<{
     party: number;
     skillSlots: number;
     skillCooldowns: number;
+    playerEffects: number;
   }>;
 }>;
 
@@ -82,6 +85,7 @@ export type PreparedCompanionExtension = Readonly<{
   kernelRegions: Readonly<{
     skillSlots: KernelRegion;
     skillCooldowns: KernelRegion;
+    playerEffects: KernelRegion;
     friends: KernelRegion;
     friendRoot: number;
   }>;

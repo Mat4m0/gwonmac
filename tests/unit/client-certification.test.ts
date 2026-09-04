@@ -25,6 +25,7 @@ const ALL_CAPABILITIES = Object.freeze({
   chatFiltering: true,
   skillSlotGeometry: false,
   skillCooldownObservation: false,
+  playerEffectObservation: false,
   playRegionObservation: true,
     preGameControls: false,
     characterSwitchAction: false,

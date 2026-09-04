@@ -26,6 +26,7 @@ import {
   readCompanionPlayRegion,
 } from "./companion-play-region-snapshot.js";
 import type * as OptionalObserverReadersModule from "./companion-tools-observer-readers.js";
+import type { CompanionPlayerEffectState } from "./companion-effect-snapshot.js";
 import type { EnhancementObserverConsumer } from "../shared/diagnostics.js";
 import {
   readCompanionCharacterList,
@@ -41,6 +42,7 @@ export type SnapshotObserverTarget = {
   skillCooldownPointer?: number;
   playRegionPointer?: number;
   characterListPointer?: number;
+  playerEffectPointer?: number;
   snapshotReads: number;
   rejectedSnapshots: number;
   hertz: number;
@@ -63,6 +65,12 @@ export type SkillCooldownConsumer = {
   enabled?(): boolean;
   inactive?(): void;
   update(state: CompanionSkillCooldownState): void;
+};
+
+export type PlayerEffectConsumer = {
+  enabled?(): boolean;
+  inactive?(): void;
+  update(state: CompanionPlayerEffectState): void;
 };
 
 export type PlayRegionConsumer = {
@@ -115,6 +123,7 @@ export function observeCompanion(
   readers: OptionalObserverReaders | null = null,
   firstObservation: (consumer: EnhancementObserverConsumer) => void = () => {},
   characterList: CharacterListConsumer | null = null,
+  playerEffects: PlayerEffectConsumer | null = null,
 ) {
   let frame = 0;
   let cadenceAt = performance.now();
@@ -233,6 +242,15 @@ export function observeCompanion(
       );
       skillCooldowns.update(state);
       if (state.status === "ready") firstObservation("cooldowns");
+    }
+    if (playerEffects && playerEffects.enabled?.() === false) {
+      playerEffects.inactive?.();
+    } else if (playerEffects) {
+      if (!readers) throw new Error("Tools effect readers are unavailable");
+      playerEffects.update(readers.readCompanionPlayerEffects(
+        runtime.memory.buffer,
+        runtime.playerEffectPointer ?? 0,
+      ));
     }
     // Outside the measured window: lastRenderUs stays the snapshot read cost.
     for (const poller of pollers) {

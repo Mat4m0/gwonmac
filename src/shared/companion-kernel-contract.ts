@@ -28,6 +28,7 @@ export const COMPANION_KERNEL_SIGNATURES: readonly Readonly<{
   { name: "companion_play_region_bytes", typeIndex: 2 },
   { name: "companion_character_list_bytes", typeIndex: 2 },
   { name: "companion_friend_bytes", typeIndex: 2 },
+  { name: "companion_player_effect_bytes", typeIndex: 2 },
 ]);
 
 export const COMPANION_KERNEL_EXPORTS = Object.freeze(
@@ -73,8 +74,8 @@ function encodeSection(id: number, payload: number[]): number[] {
  */
 export function companionKernelSignatureBytes(): Uint8Array<ArrayBuffer> {
   const types = [
-    // Ten region pointer/size pairs, the certified friend root, and features.
-    i32FunctionType(22, true),
+    // Eleven region pointer/size pairs, the certified friend root, and features.
+    i32FunctionType(24, true),
     i32FunctionType(6, false),
     i32FunctionType(0, true),
   ];

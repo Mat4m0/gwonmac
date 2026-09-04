@@ -47,6 +47,7 @@ function projectCompatibility(
       chatAliases: status("chatAliases"),
       skillSlotGeometry: status("skillSlotGeometry"),
       skillCooldownObservation: status("skillCooldownObservation"),
+      playerEffectObservation: status("playerEffectObservation"),
       playRegionObservation: status("playRegionObservation"),
       preGameControls: status("preGameControls"),
       characterSwitchAction: status("characterSwitchAction"),

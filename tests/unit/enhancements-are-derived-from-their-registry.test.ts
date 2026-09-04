@@ -118,26 +118,26 @@ test("one capability plan derives hooks without losing feature identity", () => 
   ]) {
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "cursor-observer"),
-      { nativeCursor: true, targetObservation: false, partyObservation: false, teamApply: false, travelAction: false, xunlaiAction: false, chatAliases: false, skillSlotGeometry: false, skillCooldownObservation: false, playRegionObservation: false, preGameControls: false, characterSwitchAction: false, chatFiltering: false, quickItemMove: false },
+      { nativeCursor: true, targetObservation: false, partyObservation: false, teamApply: false, travelAction: false, xunlaiAction: false, chatAliases: false, skillSlotGeometry: false, skillCooldownObservation: false, playRegionObservation: false, preGameControls: false, characterSwitchAction: false, chatFiltering: false, quickItemMove: false, playerEffectObservation: false },
     );
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "target-observer"),
-      { nativeCursor: false, targetObservation: true, partyObservation: false, teamApply: false, travelAction: false, xunlaiAction: false, chatAliases: false, skillSlotGeometry: false, skillCooldownObservation: false, playRegionObservation: true, preGameControls: false, characterSwitchAction: false, chatFiltering: false, quickItemMove: false },
+      { nativeCursor: false, targetObservation: true, partyObservation: false, teamApply: false, travelAction: false, xunlaiAction: false, chatAliases: false, skillSlotGeometry: false, skillCooldownObservation: false, playRegionObservation: true, preGameControls: false, characterSwitchAction: false, chatFiltering: false, quickItemMove: false, playerEffectObservation: false },
     );
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "toolbox-foundation"),
-      { nativeCursor: false, targetObservation: false, partyObservation: true, teamApply: false, travelAction: false, xunlaiAction: false, chatAliases: false, skillSlotGeometry: true, skillCooldownObservation: false, playRegionObservation: true, preGameControls: false, characterSwitchAction: false, chatFiltering: false, quickItemMove: false },
+      { nativeCursor: false, targetObservation: false, partyObservation: true, teamApply: false, travelAction: false, xunlaiAction: false, chatAliases: false, skillSlotGeometry: true, skillCooldownObservation: false, playRegionObservation: true, preGameControls: false, characterSwitchAction: false, chatFiltering: false, quickItemMove: false, playerEffectObservation: false },
     );
     // The read foundation and the write program differ by exactly this bit,
     // and no saved setting reaches the second: choosing the panel can never
     // carry the ability to send a packet in with it.
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "toolbox-commands"),
-      { nativeCursor: false, targetObservation: false, partyObservation: true, teamApply: true, travelAction: true, xunlaiAction: true, chatAliases: true, skillSlotGeometry: true, skillCooldownObservation: false, playRegionObservation: true, preGameControls: false, characterSwitchAction: false, chatFiltering: false, quickItemMove: false },
+      { nativeCursor: false, targetObservation: false, partyObservation: true, teamApply: true, travelAction: true, xunlaiAction: true, chatAliases: true, skillSlotGeometry: true, skillCooldownObservation: false, playRegionObservation: true, preGameControls: false, characterSwitchAction: false, chatFiltering: false, quickItemMove: false, playerEffectObservation: false },
     );
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "xunlai-storage"),
-      { nativeCursor: false, targetObservation: false, partyObservation: false, teamApply: false, travelAction: true, xunlaiAction: true, chatAliases: true, skillSlotGeometry: false, skillCooldownObservation: false, playRegionObservation: true, preGameControls: false, characterSwitchAction: false, chatFiltering: false, quickItemMove: false },
+      { nativeCursor: false, targetObservation: false, partyObservation: false, teamApply: false, travelAction: true, xunlaiAction: true, chatAliases: true, skillSlotGeometry: false, skillCooldownObservation: false, playRegionObservation: true, preGameControls: false, characterSwitchAction: false, chatFiltering: false, quickItemMove: false, playerEffectObservation: false },
     );
   }
 });
@@ -190,6 +190,7 @@ test("the capability wire contract is exact and has one empty value", () => {
     preGameControls: true,
     characterSwitchAction: true,
     quickItemMove: true,
+    playerEffectObservation: true,
   });
   assert.ok(all);
   assert.equal(Object.isFrozen(all), true);
@@ -222,6 +223,7 @@ test("the capability wire contract is exact and has one empty value", () => {
     preGameControls: false,
     characterSwitchAction: false,
     quickItemMove: false,
+    playerEffectObservation: false,
   });
 
   assert.equal(parseEnhancementCapabilities({ ...all, extra: false }), null);
@@ -298,6 +300,7 @@ test("renderer consumes main's effective subset instead of launch intent", () =>
         skillSlotGeometry: { status: "off" },
         skillCooldownObservation: { status: "off" },
         quickItemMove: { status: "off" },
+        playerEffectObservation: { status: "off" },
       },
     },
   }), enhancementCapabilitiesForProfile("features-e07"));

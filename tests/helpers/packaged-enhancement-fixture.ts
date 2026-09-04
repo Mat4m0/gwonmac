@@ -140,6 +140,7 @@ export const TARGET_ONLY: EnhancementCapabilities = Object.freeze({
   chatFiltering: false,
   skillSlotGeometry: false,
   skillCooldownObservation: false,
+  playerEffectObservation: false,
 });
 export const TOOLBOX_PROGRAM_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
@@ -156,6 +157,7 @@ export const TOOLBOX_PROGRAM_CAPABILITIES: EnhancementCapabilities = Object.free
   chatFiltering: false,
   skillSlotGeometry: false,
   skillCooldownObservation: false,
+  playerEffectObservation: false,
 });
 export const PRODUCT_TOOLS_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
@@ -172,6 +174,7 @@ export const PRODUCT_TOOLS_CAPABILITIES: EnhancementCapabilities = Object.freeze
   chatFiltering: true,
   skillSlotGeometry: false,
   skillCooldownObservation: false,
+  playerEffectObservation: false,
 });
 export const TARGET_OFF_PRODUCT_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
@@ -188,6 +191,7 @@ export const TARGET_OFF_PRODUCT_CAPABILITIES: EnhancementCapabilities = Object.f
   chatFiltering: true,
   skillSlotGeometry: false,
   skillCooldownObservation: false,
+  playerEffectObservation: false,
 });
 export const CONFIG_BYTES =
   ENHANCEMENT_CONFIG_WORD_COUNT * Uint32Array.BYTES_PER_ELEMENT;
@@ -302,7 +306,12 @@ export function installableManifestModule(
       playerChat: ENHANCEMENT_BUILD.uiDispatcher!.playerChatMessage,
       hideHeroPanel: ENHANCEMENT_BUILD.uiDispatcher!.hideHeroPanelMessage,
       showHeroPanel: ENHANCEMENT_BUILD.uiDispatcher!.showHeroPanelMessage,
-      partyDirty: ENHANCEMENT_BUILD.partyObservation!.partyDirtyMessages,
+      partyDirty: capabilities.partyObservation
+        ? ENHANCEMENT_BUILD.partyObservation!.partyDirtyMessages
+        : [],
+      effectDirty: capabilities.playerEffectObservation
+        ? ENHANCEMENT_BUILD.playerEffectObservation!.dirtyMessages
+        : [],
     } : null,
     configWords: enhancementConfigWords(ENHANCEMENT_BUILD, capabilities),
   }))];

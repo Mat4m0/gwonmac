@@ -28,6 +28,7 @@ import {
   type EnhancementObservationBaseLayout,
   type EnhancementPartySkillbarLayout,
   type EnhancementPlayRegionLayout,
+  type EnhancementPlayerEffectLayout,
   type EnhancementPlayerSkillbarLayout,
   type EnhancementPartyLayout,
   type EnhancementSkillCooldownLayout,
@@ -74,6 +75,13 @@ export type EnhancementPartyDirtyMessages = readonly [
   partyRemoveHero: number,
   partyAddPlayer: number,
   partyRemovePlayer: number,
+];
+
+export type EnhancementEffectDirtyMessages = readonly [
+  add: number,
+  renew: number,
+  remove: number,
+  update: number,
 ];
 
 /**
@@ -149,6 +157,9 @@ export function enhancementConfigWords(
         case "character-list":
           value = build.preGameControls?.characterListLayout[field.key];
           break;
+        case "player-effects":
+          value = build.playerEffectObservation?.layout[field.key];
+          break;
         default: {
           const unreachable: never = field;
           return unreachable;
@@ -172,6 +183,13 @@ export function enhancementConfigWords(
         throw new Error("UI dispatcher configuration is not certified");
       }
       return dispatcher[field.key];
+    }
+    if (field.source === "effect-dirty") {
+      const effects = build.playerEffectObservation;
+      if (!effects) {
+        throw new Error("player effect observation configuration is not certified");
+      }
+      return effects.dirtyMessages[field.index] ?? 0;
     }
     const party = build.partyObservation;
     if (!party) throw new Error("party observation configuration is not certified");
@@ -533,6 +551,28 @@ export interface KnownEnhancementBuild {
     }>;
     layout: EnhancementSkillCooldownLayout;
   }>;
+  /** Exact current-state authority for controlled-player timed effects. */
+  playerEffectObservation?: Readonly<{
+    accessors: readonly Readonly<{
+      functionIndex: number;
+      params: readonly string[];
+      results: readonly string[];
+      bodySha256: string;
+    }>[];
+    mutations: Readonly<{
+      addTimed: Readonly<{ functionIndex: number; bodySha256: string }>;
+      renewTimed: Readonly<{ functionIndex: number; bodySha256: string }>;
+      remove: Readonly<{ functionIndex: number; bodySha256: string }>;
+    }>;
+    timer: Readonly<{
+      functionIndex: number;
+      params: readonly [];
+      results: readonly ["i32"];
+      bodySha256: string;
+    }>;
+    dirtyMessages: EnhancementEffectDirtyMessages;
+    layout: EnhancementPlayerEffectLayout;
+  }>;
 }
 
 export function supportedEnhancementCapabilities(
@@ -573,6 +613,9 @@ export function supportedEnhancementCapabilities(
       && build.preGameControls !== undefined
       && build.uiDispatcher !== undefined
       && gameThread,
+    playerEffectObservation: observationBase
+      && build.uiDispatcher !== undefined
+      && build.playerEffectObservation !== undefined,
   });
   // Evidence locators decide only what they proved. The shared registry owns
   // every dependency and closes the available set in one canonical place.
@@ -612,6 +655,7 @@ export function hasValidEnhancementProfileHashes(
     || build.targetObservation !== undefined
     || build.partyObservation !== undefined
     || build.skillCooldownObservation !== undefined
+    || build.playerEffectObservation !== undefined
     || build.xunlaiAction !== undefined;
   if (hasObservation && build.observationBase === undefined) {
     return false;
@@ -619,6 +663,9 @@ export function hasValidEnhancementProfileHashes(
   if (hasObservation && !hasPlayRegion) return false;
   if (build.partyObservation !== undefined && !hasPlayerSkillbar) return false;
   if (build.skillCooldownObservation !== undefined && !hasPlayerSkillbar) return false;
+  if (build.playerEffectObservation !== undefined && build.uiDispatcher === undefined) {
+    return false;
+  }
   if (build.partyObservation !== undefined && build.uiDispatcher === undefined) {
     return false;
   }

@@ -313,6 +313,7 @@ export async function installCoreCertifiedCompanion(
         party: core.party,
         skillSlots: extension?.kernelRegions.skillSlots ?? { pointer: 0, bytes: 0 },
         skillCooldowns: extension?.kernelRegions.skillCooldowns ?? { pointer: 0, bytes: 0 },
+        playerEffects: extension?.kernelRegions.playerEffects ?? { pointer: 0, bytes: 0 },
         friends: extension?.kernelRegions.friends ?? { pointer: 0, bytes: 0 },
         playRegion: { pointer: playRegions.pointer, bytes: playRegions.bytes },
         characterList: core.characterList,
@@ -380,6 +381,7 @@ export async function installCoreCertifiedCompanion(
       partyPointer: extensionSession?.observer.pointers.party ?? 0,
       skillSlotPointer: extensionSession?.observer.pointers.skillSlots ?? 0,
       skillCooldownPointer: extensionSession?.observer.pointers.skillCooldowns ?? 0,
+      playerEffectPointer: extensionSession?.observer.pointers.playerEffects ?? 0,
       playRegionPointer: playRegions.pointer,
       characterListPointer: core.characterList.pointer,
       hertz: 0,
@@ -433,6 +435,7 @@ export async function installCoreCertifiedCompanion(
       extensionSession?.observer.readers ?? null,
       firstObservation,
       characterConsumer,
+      extensionSession?.observer.playerEffects ?? null,
     );
 
     const installation = coreInstallations + 1;
@@ -456,6 +459,7 @@ export async function installCoreCertifiedCompanion(
       get readout() { return null; },
       get toolbox() { return null; },
       get xunlaiAccess() { return null; },
+      get playerEffects() { return null; },
     };
     const runtime = Object.freeze(
       extensionSession?.createRuntime(baseRuntime) ?? baseRuntime,
