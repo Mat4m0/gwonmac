@@ -409,6 +409,11 @@ const candidateSettingsDomains = Array.from(
       cartographyOverlayEnabled: cycle(booleanValues, index),
       cartographyGridEnabled: cycle(booleanValues, index + 1),
       cartographyCompassGridEnabled: cycle(booleanValues, index),
+      compassRangeIndicatorsEnabled: cycle(booleanValues, index + 1),
+      compassRangeEarshotEnabled: cycle(booleanValues, index),
+      compassRangeCastEnabled: cycle(booleanValues, index + 1),
+      compassRangeSpiritEnabled: cycle(booleanValues, index),
+      compassRangeSpiritExtendedEnabled: cycle(booleanValues, index + 1),
       cartographyRevealMode: cycle(["off", "normal", "birds-eye"] as const, index),
       cartographyPresetLibrary: index % 2 === 0 ? {
         activePreset: { kind: "builtin", id: "cartographer" },

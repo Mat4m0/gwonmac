@@ -189,6 +189,7 @@ async function updateUnseen(patch: Partial<CartographyPresetStyle["grid"]["unsee
       <input id="map-grid" type="checkbox" aria-label="Exploration grid" aria-describedby="map-grid-help" :checked="settings.cartographyGridEnabled" @change="persist({ cartographyGridEnabled: ($event.currentTarget as HTMLInputElement).checked })" />
     </div>
     <label><span><strong>Grid on Compass</strong><small>Also show exploration cells on the Compass. Off by default.</small></span><input type="checkbox" :checked="settings.cartographyCompassGridEnabled" :disabled="!settings.cartographyGridEnabled" @change="persist({ cartographyCompassGridEnabled: ($event.currentTarget as HTMLInputElement).checked })" /></label>
+    <label><span><strong>Compass ranges</strong><small>Show Shout, Cast, Spirit, and Spirit+ range rings.</small></span><input type="checkbox" aria-label="Compass ranges" :checked="settings.compassRangeIndicatorsEnabled" @change="persist({ compassRangeIndicatorsEnabled: ($event.currentTarget as HTMLInputElement).checked })" /></label>
     <div class="feature-heading">
       <label for="map-terrain"><strong>Walkable terrain</strong><small id="map-terrain-help">Shade areas you cannot walk on.</small></label>
       <ShortcutSetting v-if="shortcuts" action="cartography.walkability.toggle" :shortcuts="shortcuts" :api="api" :perform-save="performSave" />

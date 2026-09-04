@@ -28,6 +28,7 @@ import type { ControllerPromptTextureStats } from "./controller-prompt-texture.j
 import type {
   CartographyGridStats,
   CartographyModelStats,
+  CompassRangeStats,
 } from "./cartography-spike/overlay.js";
 import type {
   CompassFrameSpikeController,
@@ -274,6 +275,7 @@ declare global {
     };
     gwApplySettings?(settings: AppSettings): void;
     gwCartographyGridStats?(): CartographyGridStats;
+    gwCompassRangeStats?(): CompassRangeStats;
     /** Pointer-free atomic epoch and classification diagnostics; development only. */
     gwCartographyModelStats?(): CartographyModelStats;
     gwSurfaces: GwonmacSurfaceController;
@@ -288,6 +290,7 @@ declare global {
       cartographyEnabled: boolean;
       cartographyOverlayEnabled: boolean;
       cartographyGridEnabled: boolean;
+      compassRangeIndicatorsEnabled: boolean;
       skillKeyBindings: AppSettings['skillKeyBindings'];
       skillKeyLabelsEnabled: boolean;
       skillCooldownOverlayEnabled: boolean;

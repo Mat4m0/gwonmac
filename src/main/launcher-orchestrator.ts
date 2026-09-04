@@ -109,6 +109,7 @@ export class LauncherOrchestrator {
         cartographyOverlayEnabled: settings.cartographyOverlayEnabled,
         cartographyGridEnabled: settings.cartographyGridEnabled,
         cartographyCompassGridEnabled: settings.cartographyCompassGridEnabled,
+        compassRangeIndicatorsEnabled: settings.compassRangeIndicatorsEnabled,
         cartographyRevealMode: settings.cartographyRevealMode,
         cartographyPresetLibrary: settings.cartographyPresetLibrary,
         cartographyWalkabilityOpacity: settings.cartographyWalkabilityOpacity,

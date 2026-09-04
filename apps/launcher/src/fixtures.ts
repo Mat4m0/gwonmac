@@ -66,6 +66,7 @@ export const fixtureSnapshot: LauncherSnapshot = {
     cartographyOverlayEnabled: false,
     cartographyGridEnabled: false,
     cartographyCompassGridEnabled: false,
+    compassRangeIndicatorsEnabled: false,
     cartographyRevealMode: "off",
     cartographyPresetLibrary: DEFAULT_CARTOGRAPHY_PRESET_LIBRARY,
     cartographyWalkabilityOpacity: 55,

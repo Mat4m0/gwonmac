@@ -57,7 +57,7 @@ test("compact Cartography controls avoid frame-loop layout reads and static inli
   );
   assert.doesNotMatch(controls, /offsetHeight|style\.cssText/u);
   assert.match(controls, /canonical !== settings/u);
-  assert.match(controls, /boxChanged \|\| becameVisible/u);
+  assert.match(controls, /boxChanged \|\| placementChanged \|\| becameVisible/u);
 });
 
 test("Cartography controls open only by click and remain open after pointer movement", () => {

@@ -194,6 +194,7 @@ export interface LauncherSettings {
   readonly cartographyOverlayEnabled: boolean;
   readonly cartographyGridEnabled: boolean;
   readonly cartographyCompassGridEnabled: boolean;
+  readonly compassRangeIndicatorsEnabled: boolean;
   readonly cartographyRevealMode: AppSettings["cartographyRevealMode"];
   readonly cartographyPresetLibrary: CartographyPresetLibrary;
   readonly cartographyWalkabilityOpacity: number;
@@ -370,7 +371,7 @@ export function parseLauncherSettingsPatch(value: unknown): LauncherSettingsPatc
     "autoRelogAfterReload", "characterSwitchProfession", "characterSwitchLevel",
     "characterSwitchLocation", "skillKeyBindings", "skillCooldownColor",
     "chatFilterAllyDrops", "chatFilterHallOfHeroes", "chatFilterTitleAchievements",
-    "cartographyOverlayEnabled", "cartographyGridEnabled", "cartographyCompassGridEnabled", "cartographyRevealMode",
+    "cartographyOverlayEnabled", "cartographyGridEnabled", "cartographyCompassGridEnabled", "compassRangeIndicatorsEnabled", "cartographyRevealMode",
     "cartographyPresetLibrary", "cartographyWalkabilityOpacity", "cartographyGridOpacity",
     "cartographyControlIdleOpacity",
   ], "launcher settings patch");
@@ -400,8 +401,8 @@ export function parseLauncherSettingsPatch(value: unknown): LauncherSettingsPatc
   for (const key of [
     "autoCheckUpdates", "extendedMemoryEnabled", "showDiagnostics",
     "autoRelogAfterReload", "characterSwitchProfession", "characterSwitchLevel", "characterSwitchLocation",
-    "cartographyOverlayEnabled", "cartographyGridEnabled", "cartographyCompassGridEnabled",
     "chatFilterAllyDrops", "chatFilterHallOfHeroes", "chatFilterTitleAchievements",
+    "cartographyOverlayEnabled", "cartographyGridEnabled", "cartographyCompassGridEnabled", "compassRangeIndicatorsEnabled",
   ] as const) {
     if (source[key] === undefined) continue;
     if (typeof source[key] !== "boolean") throw new Error(`${key} must be a boolean`);

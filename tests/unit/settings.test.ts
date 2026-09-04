@@ -50,6 +50,11 @@ describe("settings", () => {
       cartographyOverlayEnabled: false,
       cartographyGridEnabled: false,
       cartographyCompassGridEnabled: false,
+      compassRangeIndicatorsEnabled: false,
+      compassRangeEarshotEnabled: true,
+      compassRangeCastEnabled: true,
+      compassRangeSpiritEnabled: true,
+      compassRangeSpiritExtendedEnabled: true,
       cartographyRevealMode: "off",
       cartographyPresetLibrary: DEFAULT_SETTINGS.cartographyPresetLibrary,
       cartographyWalkabilityOpacity: 55,
@@ -95,6 +100,23 @@ describe("settings", () => {
     assert.throws(() => parseSettingsPatch({ cartographyCompassGridEnabled: "true" }), AppError);
   });
 
+  it("defaults Compass ranges off while preserving each selected range", () => {
+    const defaults = parseSettings({});
+    assert.equal(defaults.compassRangeIndicatorsEnabled, false);
+    assert.equal(defaults.compassRangeEarshotEnabled, true);
+    assert.equal(defaults.compassRangeCastEnabled, true);
+    assert.equal(defaults.compassRangeSpiritEnabled, true);
+    assert.equal(defaults.compassRangeSpiritExtendedEnabled, true);
+    assert.deepEqual(parseRendererSettingsPatch({
+      compassRangeIndicatorsEnabled: true,
+      compassRangeCastEnabled: false,
+    }), {
+      compassRangeIndicatorsEnabled: true,
+      compassRangeCastEnabled: false,
+    });
+    assert.throws(() => parseSettingsPatch({ compassRangeSpiritEnabled: "true" }), AppError);
+  });
+
   it("drops retired cursor fields from an alpha profile", () => {
     // A profile written before the cursor became a boolean carries
     // `cursorTheme` and a selectable input mode. They are unknown fields now,
@@ -124,6 +146,11 @@ describe("settings", () => {
       cartographyOverlayEnabled: false,
       cartographyGridEnabled: false,
       cartographyCompassGridEnabled: false,
+      compassRangeIndicatorsEnabled: false,
+      compassRangeEarshotEnabled: true,
+      compassRangeCastEnabled: true,
+      compassRangeSpiritEnabled: true,
+      compassRangeSpiritExtendedEnabled: true,
       cartographyRevealMode: "off",
       cartographyPresetLibrary: DEFAULT_SETTINGS.cartographyPresetLibrary,
       cartographyWalkabilityOpacity: 55,
@@ -554,6 +581,11 @@ describe("settings", () => {
       "chatFilterHallOfHeroes",
       "chatFilterTitleAchievements",
       "chatFiltersEnabled",
+      "compassRangeCastEnabled",
+      "compassRangeEarshotEnabled",
+      "compassRangeIndicatorsEnabled",
+      "compassRangeSpiritEnabled",
+      "compassRangeSpiritExtendedEnabled",
       "compatibilityNoticeSeenFor",
       "controllerPromptStyle",
       "dataStrategy",
@@ -657,6 +689,11 @@ describe("settings", () => {
       cartographyOverlayEnabled: false,
       cartographyGridEnabled: false,
       cartographyCompassGridEnabled: false,
+      compassRangeIndicatorsEnabled: false,
+      compassRangeEarshotEnabled: true,
+      compassRangeCastEnabled: true,
+      compassRangeSpiritEnabled: true,
+      compassRangeSpiritExtendedEnabled: true,
       cartographyRevealMode: "off",
       cartographyPresetLibrary: DEFAULT_SETTINGS.cartographyPresetLibrary,
       cartographyWalkabilityOpacity: 55,

@@ -259,3 +259,150 @@
   margin: var(--ui-space-1) 0 0;
   color: var(--ui-text-faint);
 }
+
+/* Compass range control shares placement with Cartography, but owns its menu. */
+#compass-range-controls {
+  position: fixed;
+  z-index: var(--ui-z-status);
+  width: var(--compass-range-control-size);
+  height: var(--compass-range-control-size);
+  box-sizing: border-box;
+  color: var(--ui-text-bright);
+  font: var(--ui-font-weight-semibold) var(--ui-type-caption-size) / 1.25 var(--ui-font-interface);
+  pointer-events: auto;
+  transition: opacity 140ms ease-out;
+}
+
+#compass-range-controls[hidden],
+.compass-range-control-panel[hidden],
+.compass-range-tooltip[hidden] {
+  display: none;
+}
+
+.compass-range-control-trigger {
+  display: grid;
+  width: var(--compass-range-control-size);
+  height: var(--compass-range-control-size);
+  padding: 0;
+  place-items: center;
+  color: var(--ui-text-muted);
+  background: var(--ui-well-overlay-fill);
+  border: var(--ui-frame-width) solid var(--ui-edge-strong);
+  border-radius: var(--ui-radius-pill);
+  box-shadow: var(--ui-shadow-raised-soft);
+  cursor: pointer;
+}
+
+.compass-range-control-trigger[aria-pressed="true"] {
+  color: var(--ui-success);
+  border-color: var(--ui-success);
+}
+
+.compass-range-control-trigger:active,
+.compass-range-control-trigger[aria-expanded="true"] {
+  background: var(--ui-accent-well-fill);
+}
+
+.compass-range-control-trigger:focus-visible,
+.compass-range-control-panel button:focus-visible {
+  outline: var(--ui-border-width) solid var(--ui-focus);
+  outline-offset: var(--ui-frame-width);
+}
+
+.compass-range-control-icon {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+.compass-range-control-panel {
+  position: absolute;
+  width: var(--compass-range-panel-width);
+  box-sizing: border-box;
+  padding: var(--ui-space-2);
+  color: var(--ui-text);
+  background: var(--ui-panel-fill);
+  border: var(--ui-frame-width) solid var(--ui-edge);
+  border-radius: var(--ui-radius-lg);
+  box-shadow: var(--ui-shadow);
+  backdrop-filter: blur(6px);
+}
+
+.compass-range-control-heading {
+  display: block;
+  margin: 0 0 var(--ui-space-1);
+  color: var(--ui-text-bright);
+  font-size: var(--ui-type-caption-size);
+}
+
+.compass-range-control-all,
+.compass-range-control-range {
+  width: 100%;
+  height: var(--ui-control-height-compact);
+  color: var(--ui-text-muted);
+  background: var(--ui-well-fill);
+  border: var(--ui-frame-width) solid var(--ui-edge);
+  border-radius: var(--ui-radius);
+  font: inherit;
+  cursor: pointer;
+}
+
+.compass-range-control-all {
+  margin-bottom: var(--ui-space-1);
+}
+
+.compass-range-control-list {
+  display: grid;
+  gap: var(--ui-space-1);
+}
+
+.compass-range-control-range {
+  display: grid;
+  grid-template-columns: 10px 1fr;
+  align-items: center;
+  gap: var(--ui-space-2);
+  padding: 0 var(--ui-space-2);
+  text-align: left;
+}
+
+.compass-range-control-swatch {
+  width: 7px;
+  height: 7px;
+  background: var(--compass-range-color);
+  border-radius: var(--ui-radius-pill);
+  box-shadow: 0 0 0 1px var(--ui-edge-strong);
+}
+
+.compass-range-control-panel button[aria-pressed="true"] {
+  color: var(--ui-accent-hover);
+  background: var(--ui-accent-well-fill);
+  border-color: var(--ui-accent);
+}
+
+.compass-range-control-panel button:disabled,
+.compass-range-control-trigger:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.compass-range-control-status {
+  margin: var(--ui-space-1) 0 0;
+  color: var(--ui-warning);
+  font: var(--ui-font-weight-medium) 10px / 1.4 var(--ui-font-readable);
+}
+
+.compass-range-control-status:empty {
+  display: none;
+}
+
+.compass-range-tooltip {
+  position: absolute;
+  z-index: var(--ui-z-status);
+  padding: 2px 5px;
+  color: var(--ui-text-bright);
+  background: var(--ui-panel-fill);
+  border-radius: var(--ui-radius-sm);
+  font: var(--ui-font-weight-semibold) 11px / 1.2 var(--ui-font-interface);
+  white-space: nowrap;
+  pointer-events: none;
+}

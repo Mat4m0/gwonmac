@@ -13,8 +13,14 @@ import {
 } from "../cartography-preset-select.js";
 import type { CartographyReachabilityDiagnostic } from "./reachability-kernel.js";
 import type { ScreenBox } from "./frame-placement.js";
+import {
+  COMPASS_CONTROL_GAP,
+  COMPASS_CONTROL_OPEN_EVENT,
+  COMPASS_CONTROL_SIZE,
+  projectCompassControlPosition,
+  type CompassControlPlacement,
+} from "./compass-control-placement.js";
 
-const CONTROL_SIZE = 30;
 const PANEL_WIDTH = 204;
 const PANEL_HEIGHT_ESTIMATE = 230;
 const SAVE_CONFIRMATION_MS = 1_200;
@@ -161,7 +167,11 @@ export function describeCartographyQaStatus(status: CartographyQaStatus): QaPres
 }
 
 export type CartographyOverlayControls = Readonly<{
-  update(box: ScreenBox, settings: AppSettings): void;
+  update(
+    box: ScreenBox,
+    settings: AppSettings,
+    placement: CompassControlPlacement,
+  ): void;
   updateQaStatus(status: CartographyQaStatus): void;
   hide(): void;
   dispose(): void;
@@ -195,7 +205,7 @@ export function createCartographyOverlayControls(options: Readonly<{
   const root = document.createElement("div");
   root.id = "cartography-overlay-controls";
   root.hidden = true;
-  root.style.setProperty("--cartography-control-size", `${CONTROL_SIZE}px`);
+  root.style.setProperty("--cartography-control-size", `${COMPASS_CONTROL_SIZE}px`);
   root.style.setProperty("--cartography-panel-width", `${PANEL_WIDTH}px`);
   const trigger = document.createElement("button");
   trigger.type = "button";
@@ -295,6 +305,7 @@ export function createCartographyOverlayControls(options: Readonly<{
   let open = false;
   let saveStatusTimer = 0;
   let latestBox: ScreenBox | null = null;
+  let latestPlacement: CompassControlPlacement = { index: 0, count: 1 };
   let renderedLibrary: AppSettings["cartographyPresetLibrary"] | null = null;
   let renderedSettings: AppSettings | null = null;
   let panelHeight = PANEL_HEIGHT_ESTIMATE;
@@ -336,9 +347,14 @@ export function createCartographyOverlayControls(options: Readonly<{
     if (latestBox === null || !open) return;
     const margin = 6;
     const rootTop = Number.parseFloat(root.style.top) || margin;
-    panel.style.top = `${Math.round(Math.max(margin, Math.min(view.innerHeight - panelHeight - margin, rootTop + (CONTROL_SIZE - panelHeight) / 2)) - rootTop)}px`;
+    panel.style.top = `${Math.round(Math.max(margin, Math.min(view.innerHeight - panelHeight - margin, rootTop + (COMPASS_CONTROL_SIZE - panelHeight) / 2)) - rootTop)}px`;
   };
   const setOpen = (next: boolean): void => {
+    if (next && !open) {
+      document.dispatchEvent(new CustomEvent(COMPASS_CONTROL_OPEN_EVENT, {
+        detail: "cartography",
+      }));
+    }
     open = next;
     panel.hidden = !next;
     trigger.setAttribute("aria-expanded", String(next));
@@ -402,6 +418,10 @@ export function createCartographyOverlayControls(options: Readonly<{
     if (open && event.target instanceof Node && !root.contains(event.target)) setOpen(false);
   };
   document.addEventListener("pointerdown", outsidePointerDown);
+  const otherControlOpened = (event: Event): void => {
+    if (event instanceof CustomEvent && event.detail !== "cartography") setOpen(false);
+  };
+  document.addEventListener(COMPASS_CONTROL_OPEN_EVENT, otherControlOpened);
   gridButton.addEventListener("click", () => {
     const settings = currentSettings();
     if (settings !== null) apply({ cartographyGridEnabled: !settings.cartographyGridEnabled });
@@ -461,26 +481,26 @@ export function createCartographyOverlayControls(options: Readonly<{
   const positionRoot = (): void => {
     const box = latestBox;
     if (box === null) return;
-    const gap = 5;
-    const margin = 6;
-    const roomLeft = box.left >= PANEL_WIDTH + CONTROL_SIZE + gap + margin;
-    const roomRight = box.left + box.width + PANEL_WIDTH + CONTROL_SIZE + gap + margin <= view.innerWidth;
-    const onLeft = roomLeft || !roomRight;
-    const left = onLeft ? Math.max(margin, box.left - CONTROL_SIZE - gap)
-      : Math.min(view.innerWidth - CONTROL_SIZE - margin, box.left + box.width + gap);
-    const top = Math.max(margin, Math.min(view.innerHeight - CONTROL_SIZE - margin,
-      box.top + Math.max(0, (box.height - CONTROL_SIZE) / 2)));
-    panel.style.left = onLeft ? "auto" : `${CONTROL_SIZE + gap}px`;
-    panel.style.right = onLeft ? `${CONTROL_SIZE + gap}px` : "auto";
-    root.style.left = `${left}px`;
-    root.style.top = `${top}px`;
+    const position = projectCompassControlPosition(
+      box,
+      { width: view.innerWidth, height: view.innerHeight },
+      PANEL_WIDTH,
+      latestPlacement,
+    );
+    if (position === null) return;
+    panel.style.left = position.panelSide === "right"
+      ? `${COMPASS_CONTROL_SIZE + COMPASS_CONTROL_GAP}px` : "auto";
+    panel.style.right = position.panelSide === "left"
+      ? `${COMPASS_CONTROL_SIZE + COMPASS_CONTROL_GAP}px` : "auto";
+    root.style.left = `${position.left}px`;
+    root.style.top = `${position.top}px`;
     positionPanel();
   };
   const viewportResize = (): void => positionRoot();
   view.addEventListener("resize", viewportResize);
 
   return Object.freeze({
-    update(box, settings) {
+    update(box, settings, placement) {
       if (resolveCartographyPreset(settings.cartographyPresetLibrary) === null) {
         hide();
         return;
@@ -489,6 +509,9 @@ export function createCartographyOverlayControls(options: Readonly<{
         || latestBox.left !== box.left || latestBox.top !== box.top
         || latestBox.width !== box.width || latestBox.height !== box.height;
       if (boxChanged) latestBox = { ...box };
+      const placementChanged = latestPlacement.index !== placement.index
+        || latestPlacement.count !== placement.count;
+      if (placementChanged) latestPlacement = { ...placement };
       if (canonical !== settings) {
         canonical = settings;
         sync();
@@ -498,7 +521,7 @@ export function createCartographyOverlayControls(options: Readonly<{
       }
       const becameVisible = root.hidden;
       root.hidden = false;
-      if (boxChanged || becameVisible) positionRoot();
+      if (boxChanged || placementChanged || becameVisible) positionRoot();
     },
     updateQaStatus(status) {
       const presentation = describeCartographyQaStatus(status);
@@ -532,6 +555,7 @@ export function createCartographyOverlayControls(options: Readonly<{
       clearSaveStatusTimer();
       panelResizeObserver?.disconnect();
       document.removeEventListener("pointerdown", outsidePointerDown);
+      document.removeEventListener(COMPASS_CONTROL_OPEN_EVENT, otherControlOpened);
       view.removeEventListener("resize", viewportResize);
       root.remove();
     },

@@ -390,6 +390,12 @@ export interface AppSettings {
   cartographyGridEnabled: boolean;
   /** Include the Compass in exploration-grid presentation; off by default. */
   cartographyCompassGridEnabled: boolean;
+  /** Draw standard Guild Wars ranges around the player on the Compass. */
+  compassRangeIndicatorsEnabled: boolean;
+  compassRangeEarshotEnabled: boolean;
+  compassRangeCastEnabled: boolean;
+  compassRangeSpiritEnabled: boolean;
+  compassRangeSpiritExtendedEnabled: boolean;
   /** Persistent Compass footprint; Mission Map hover uses Shift or Option+Shift. */
   cartographyRevealMode: "off" | "normal" | "birds-eye";
   /** Active built-in or player-owned appearance and all custom presets. */
@@ -495,6 +501,11 @@ export const RENDERER_WRITABLE_SETTINGS = [
   "autoRelogAfterReload",
   "cartographyOverlayEnabled",
   "cartographyGridEnabled",
+  "compassRangeIndicatorsEnabled",
+  "compassRangeEarshotEnabled",
+  "compassRangeCastEnabled",
+  "compassRangeSpiritEnabled",
+  "compassRangeSpiritExtendedEnabled",
   "cartographyGridOpacity",
   "cartographyWalkabilityOpacity",
   "characterSwitchProfession",
@@ -549,6 +560,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
   cartographyOverlayEnabled: false,
   cartographyGridEnabled: false,
   cartographyCompassGridEnabled: false,
+  compassRangeIndicatorsEnabled: false,
+  compassRangeEarshotEnabled: true,
+  compassRangeCastEnabled: true,
+  compassRangeSpiritEnabled: true,
+  compassRangeSpiritExtendedEnabled: true,
   cartographyRevealMode: "off",
   cartographyPresetLibrary: DEFAULT_CARTOGRAPHY_PRESET_LIBRARY,
   cartographyWalkabilityOpacity: 55,
