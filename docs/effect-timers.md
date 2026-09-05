@@ -29,6 +29,10 @@ The renderer joins the two complete snapshots only at the presentation edge.
 For repeated records with one skill ID it shows the longest finite remaining
 duration. It does not show a multiplier because reapplication normally refreshes
 an effect instead of stacking it. Indefinite or unknown durations show no number.
+Records with an original duration of 3,600 seconds or more also show no number.
+This hides long placeholders such as Displacement without hiding ordinary
+spirit timers or changing the native icon. The cutoff uses original duration,
+so an old placeholder cannot become a countdown later.
 
 - More than 99 seconds: upward-rounded minutes, such as `2m`.
 - Three through 99 seconds: upward-rounded whole seconds.

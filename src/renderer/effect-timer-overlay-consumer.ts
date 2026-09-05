@@ -23,6 +23,8 @@ export function projectEffectTimerLabels(
 
   const longest = new Map<number, number>();
   for (const effect of effects.effects) {
+    // Long native durations can be placeholders, including Displacement.
+    if (effect.durationMs >= 3_600_000) continue;
     const remaining = remainingEffectMs(
       effects.gameTimer,
       effect.appliedAtGameMs,
