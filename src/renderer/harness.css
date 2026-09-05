@@ -85,6 +85,8 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
   align-items: center;
   gap: 16px;
   max-width: min(92vw, 600px);
+  max-height: calc(100vh - 16px);
+  overflow: auto;
   box-sizing: border-box;
   padding: 11px 13px;
   border: 1px solid var(--ui-warning-border);
@@ -226,3 +228,7 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden;
 .osk-input { width:80%; font-size:1.5rem; color:#fff; background:#404040;
              border:2px solid #666; border-radius:4px; outline:none; resize:none; }
 .osk-input:focus { outline:none; border-width:4px; }
+
+#memory-notice-label { cursor: grab; touch-action: none; user-select: none; }
+#memory-notice-label:active { cursor: grabbing; }
+#memory-notice-label:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
