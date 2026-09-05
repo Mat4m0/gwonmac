@@ -1,10 +1,25 @@
 /**
- * Sends only the confirmed /resign command through the client's normal chat UI.
- * No command is sent unless an empty text proxy opens from the game canvas.
+ * Prepares an empty chat editor and validates the fixed command before submission.
+ * Main owns native text insertion; this owner preserves focus and interruption checks.
  */
 import { featureActivationRequested } from "../shared/feature-contracts.js";
 
-export async function resignFromGame(): Promise<void> {
+let pending: { submit(): void; dispose(): void } | null = null;
+
+export async function resignFromGame(phase: "prepare" | "submit" | "cancel"): Promise<void> {
+  if (phase !== "prepare") {
+    const current = pending;
+    pending = null;
+    try {
+      if (phase === "submit") {
+        if (!current) throw new Error("Resign preparation expired.");
+        current.submit();
+      }
+    } finally { current?.dispose(); }
+    return;
+  }
+  pending?.dispose();
+  pending = null;
   const enabled = () => featureActivationRequested("resign", window.gwToolsSettings());
   if (!enabled()) throw new Error("Enable Resign in Tools settings first.");
   const canvas = document.getElementById("canvas");
@@ -38,18 +53,27 @@ export async function resignFromGame(): Promise<void> {
       || field.disabled || field.readOnly) {
       throw new Error("Chat did not open empty. Nothing was sent; close chat and try again.");
     }
-    field.value = "/resign";
-    field.dispatchEvent(new InputEvent("input", {
-      bubbles: true, inputType: "insertText", data: "/resign",
-    }));
-    // Let the game consume text input before submitting its visible chat editor.
-    await new Promise((resolve) => setTimeout(resolve, 16));
-    if (!unchanged() || document.activeElement !== field || field.value !== "/resign") {
-      throw new Error("Resign was interrupted. Check the chat field before continuing.");
-    }
-    key(field, "Enter");
+    const timer = setTimeout(() => {
+      pending?.dispose();
+      pending = null;
+    }, 4_000);
+    pending = {
+      submit() {
+        if (!unchanged() || document.activeElement !== field || field.value !== "/resign") {
+          throw new Error("Resign was interrupted. Check the chat field before continuing.");
+        }
+        key(field, "Enter");
+      },
+      dispose() {
+        clearTimeout(timer);
+        window.removeEventListener("keydown", interrupt, true);
+        window.removeEventListener("pointerdown", interrupt, true);
+      },
+    };
   } finally {
-    window.removeEventListener("keydown", interrupt, true);
-    window.removeEventListener("pointerdown", interrupt, true);
+    if (pending === null) {
+      window.removeEventListener("keydown", interrupt, true);
+      window.removeEventListener("pointerdown", interrupt, true);
+    }
   }
 }

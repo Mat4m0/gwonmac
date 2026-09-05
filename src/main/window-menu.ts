@@ -246,7 +246,16 @@ export async function showResignGame(host: WindowHost, win: BrowserWindow): Prom
     });
     if (result.response !== 0 || win.isDestroyed()) return;
     if (!featureActivationRequested("resign", await host.getSettings())) return;
-    const outcome = await sendRendererCommand(win, { type: "game.resign" });
+    let outcome = await sendRendererCommand(win, { type: "game.resign", phase: "prepare" });
+    try {
+      if (outcome === "completed" && !win.isDestroyed() && win.isFocused()) {
+        // Use Chromium's native text input; a constructed InputEvent only
+        // changed the hidden proxy without entering text in the live client.
+        await win.webContents.insertText("/resign");
+        outcome = await sendRendererCommand(win, { type: "game.resign", phase: "submit" });
+      } else if (outcome === "completed") outcome = "failed";
+    } catch { outcome = "failed"; }
+    finally { await sendRendererCommand(win, { type: "game.resign", phase: "cancel" }); }
     if (outcome !== "completed" && !win.isDestroyed()) {
       await dialog.showMessageBox(win, {
         type: "warning", buttons: ["OK"],

@@ -1006,7 +1006,7 @@ export type RendererCommand =
   | { type: "storage.open" }
   | { type: "travel.toggle" }
   | { type: "character.toggle" }
-  | { type: "game.resign" }
+  | { type: "game.resign"; phase: "prepare" | "submit" | "cancel" }
   | { type: "filesystem.sync" }
   | { type: "input.trace"; enabled: boolean }
   | { type: "diagnostics.toggle" }

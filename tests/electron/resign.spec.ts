@@ -6,7 +6,7 @@ import { closeOffline, launchPlayableClient } from "./fixtures.mjs";
 import { startGameInput } from "./input-helpers.js";
 
 test("resign confirms once and sends only /resign through an empty chat editor", async () => {
-  const fixture = await launchPlayableClient("gw-resign-", {}, async userData => {
+  const fixture = await launchPlayableClient("gw-resign-", { GW_BACKGROUND_LAUNCH: "0" }, async userData => {
     await writeFile(path.join(userData, "settings.json"), JSON.stringify({ gwonmacTools: true, resignEnabled: true }));
   });
   try {
@@ -14,6 +14,7 @@ test("resign confirms once and sends only /resign through an empty chat editor",
     await startGameInput(page);
     const press = (key: string) => app.evaluate(({ BrowserWindow }, key) => {
       const win = BrowserWindow.getAllWindows().find(window => window.webContents.getURL() === "gw://app/")!;
+      win.show(); win.focus();
       win.webContents.sendInputEvent({ type: "keyDown", keyCode: key, modifiers: ["meta", "shift"] });
       win.webContents.sendInputEvent({ type: "keyUp", keyCode: key, modifiers: ["meta", "shift"] });
     }, key);
@@ -39,6 +40,7 @@ test("resign confirms once and sends only /resign through an empty chat editor",
       });
       field.addEventListener("input", (event) => {
         document.body.dataset.resignText = (event as InputEvent).data ?? "";
+        document.body.dataset.resignTrusted = String(event.isTrusted);
       });
       field.addEventListener("keydown", (event) => {
         if (event.key === "Enter") document.body.dataset.resignSubmitted = field.value;
@@ -67,6 +69,7 @@ test("resign confirms once and sends only /resign through an empty chat editor",
     await press("R");
     await expect(page.locator("body")).toHaveAttribute("data-resign-text", "/resign");
     await expect(page.locator("body")).toHaveAttribute("data-resign-submitted", "/resign");
+    await expect(page.locator("body")).toHaveAttribute("data-resign-trusted", "true");
     const launcher = app.windows().find(window => window.url().endsWith("launcher/index.html"));
     if (!launcher) throw new Error("launcher is required");
     await app.evaluate(({ dialog }) => {
