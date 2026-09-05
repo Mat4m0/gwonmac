@@ -457,6 +457,7 @@ const candidateSettingsDomains = Array.from(
       skillCooldownColor: { kind: "preset", preset: "red" },
       extendedMemoryEnabled: cycle(booleanValues, index + 1),
       autoRelogAfterReload: cycle(booleanValues, index),
+      memoryWarningPosition: null,
       showDiagnostics: cycle(booleanValues, index),
       dataStrategy: "full",
       autoCheckUpdates: false,

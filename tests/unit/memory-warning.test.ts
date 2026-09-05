@@ -64,6 +64,8 @@ const warningActions = (
   autoRelogAfterReload = false,
   reload: () => void | Promise<void> = () => {},
 ) => ({
+  position: null,
+  async savePosition() {},
   autoRelogAfterReload,
   async saveAutoRelog() {},
   reload,
@@ -120,6 +122,8 @@ describe("memory warning presenter", () => {
     const presenter = bindMemoryWarning(
       dom.document,
       {
+        position: null,
+        async savePosition() {},
         autoRelogAfterReload: false,
         async saveAutoRelog(enabled) { saved.push(enabled); },
         reload() { reloads += 1; },

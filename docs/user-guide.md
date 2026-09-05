@@ -228,6 +228,11 @@ only the affected profile.
 custom map styles, and panel colors. The confirmation lists affected and kept
 data. It is separate from resetting downloaded game files.
 
+The memory warning can be moved by dragging its heading. Focus the heading and
+use arrow keys to move it with the keyboard; Shift moves one pixel at a time.
+The app remembers its position for later warnings and keeps it inside the window
+when the window size changes.
+
 ## Updates
 
 Automatic application updates are enabled by default. Stable is recommended;

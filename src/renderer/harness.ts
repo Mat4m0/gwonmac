@@ -437,6 +437,10 @@ function requestHeapCap() {
       heapWarning = bindMemoryWarning(
         document,
         {
+          position: settings.memoryWarningPosition,
+          async savePosition(memoryWarningPosition) {
+            await native().settings.set({ memoryWarningPosition });
+          },
           autoRelogAfterReload: settings.autoRelogAfterReload,
           async saveAutoRelog(autoRelogAfterReload) {
             await native().settings.set({ autoRelogAfterReload });
@@ -457,6 +461,7 @@ function requestHeapCap() {
       disposeMemoryWarningSettings();
       disposeMemoryWarningSettings = native().settings.onChange((updated) => {
         heapWarning?.setAutoRelog(updated.autoRelogAfterReload);
+        heapWarning?.setPosition(updated.memoryWarningPosition);
       });
     })
     // A failed load retries on the next tick rather than silencing the
@@ -662,6 +667,7 @@ addEventListener('beforeunload', () => {
   controllerPrompts = null;
   texturePack?.dispose();
   texturePack = null;
+  heapWarning?.dispose();
   disposeMemoryWarningSettings();
   disposeSettings();
   automaticCharacterReturn?.dispose();
