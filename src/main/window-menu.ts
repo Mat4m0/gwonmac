@@ -226,6 +226,36 @@ export function showQuitOrReloadGame(
   );
 }
 
+const activeResignDialogs = new WeakSet<BrowserWindow>();
+
+async function showResignGame(win: BrowserWindow): Promise<void> {
+  if (activeResignDialogs.has(win)) return;
+  activeResignDialogs.add(win);
+  try {
+    await resetGameInput(win);
+    const result = await dialog.showMessageBox(win, {
+      type: "warning",
+      buttons: ["Resign", "Cancel"],
+      defaultId: 0,
+      cancelId: 1,
+      noLink: true,
+      message: "Resign from this instance?",
+      detail: "Sends /resign in Guild Wars chat. This can end your current attempt.",
+    });
+    if (result.response !== 0 || win.isDestroyed()) return;
+    const outcome = await sendRendererCommand(win, { type: "game.resign" });
+    if (outcome !== "completed" && !win.isDestroyed()) {
+      await dialog.showMessageBox(win, {
+        type: "warning", buttons: ["OK"],
+        message: "Resign was not completed",
+        detail: "Return to Guild Wars in PvE, close other windows, and check chat before trying again.",
+      });
+    }
+  } finally {
+    activeResignDialogs.delete(win);
+  }
+}
+
 function showReloadGame(host: WindowHost, win: BrowserWindow): Promise<void> {
   return runExclusiveReloadDialog(win, async () => {
     void resetGameInput(win);
@@ -450,9 +480,14 @@ export function installApplicationMenu(actions: ApplicationMenuActions, settings
           click: withGameOwner((win) => toggleCharacterSwitch(win)),
         },
         {
+          id: "resign-game",
+          label: "Resign…",
+          accelerator: "CmdOrCtrl+Shift+R",
+          click: withGameOwner((win) => showResignGame(win)),
+        },
+        {
           id: "reload-game",
           label: "Reload Guild Wars…",
-          accelerator: "CmdOrCtrl+Shift+R",
           click: withGameOwner((win) => showReloadGame(host, win)),
         },
         ...(dev
