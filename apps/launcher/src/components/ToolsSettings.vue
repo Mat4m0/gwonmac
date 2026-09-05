@@ -23,6 +23,7 @@ const features: Record<GlobalTool, { label: string; description: string; action?
   "skill-key-labels": { label: "Skill Key Labels", description: "Show your own control labels on the eight skill slots." },
   "skill-cooldowns": { label: "Skill Cooldowns", description: "Show numeric recharge timers on the skill bar." },
   "chat-filters": { label: "Chat Filters", description: "Hide selected system notices before they enter chat." },
+  "effect-timers": { label: "Effect Timers", description: "Show exact remaining time on your native Effects icons." },
 };
 const characterDetails = [
   { key: "characterSwitchProfession", label: "Show profession" },

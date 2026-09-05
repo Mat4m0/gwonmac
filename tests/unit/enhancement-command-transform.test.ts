@@ -69,6 +69,8 @@ describe("Enhancement command transform", () => {
       chatFiltering: false,
       skillSlotGeometry: false,
       skillCooldownObservation: false,
+      playerEffectObservation: false,
+    effectIconGeometry: false,
     };
     const commandsOutput = transformEnhancementWasm(input, build, commandsOnly);
     const commandsExports = parseExports(sectionById(splitSections(commandsOutput), 7));
@@ -138,6 +140,8 @@ describe("Enhancement command transform", () => {
           chatFiltering: false,
           skillSlotGeometry: false,
           skillCooldownObservation: false,
+          playerEffectObservation: false,
+    effectIconGeometry: false,
         }),
         null,
         "a profile without local actions must not accept their manifest",
@@ -156,6 +160,8 @@ describe("Enhancement command transform", () => {
         chatFiltering: false,
         skillSlotGeometry: false,
         skillCooldownObservation: false,
+        playerEffectObservation: false,
+    effectIconGeometry: false,
       }),
       null,
       "manifest comparison must reject unexpected storage authority",
@@ -172,6 +178,8 @@ describe("Enhancement command transform", () => {
         chatFiltering: false,
         skillSlotGeometry: false,
         skillCooldownObservation: false,
+        playerEffectObservation: false,
+    effectIconGeometry: false,
       }),
       null,
       "manifest comparison must reject missing storage authority",
@@ -234,6 +242,8 @@ describe("Enhancement command transform", () => {
       chatFiltering: false,
       skillSlotGeometry: false,
       skillCooldownObservation: false,
+      playerEffectObservation: false,
+    effectIconGeometry: false,
     } as const;
     assert.equal(
       intersectEnhancementCapabilities(aliasesOnly, aliasesOnly).chatAliases,

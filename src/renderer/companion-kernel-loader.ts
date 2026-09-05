@@ -30,6 +30,8 @@ const COMPANION_TOOLBOX_BYTES = COMPANION_ABI.toolbox.bytes;
 const COMPANION_SKILL_SLOT_BYTES = COMPANION_ABI.skillSlots.bytes;
 const COMPANION_SKILL_COOLDOWN_BYTES = COMPANION_ABI.skillCooldowns.bytes;
 const COMPANION_CHARACTER_LIST_BYTES = COMPANION_ABI.characterList.bytes;
+const COMPANION_PLAYER_EFFECT_BYTES = COMPANION_ABI.playerEffects.bytes;
+const COMPANION_EFFECT_ICON_BYTES = COMPANION_ABI.effectIcons.bytes;
 
 type CompanionKernelInit = (
   snapshotPointer: number,
@@ -52,6 +54,10 @@ type CompanionKernelInit = (
   characterListBytes: number,
   friendPointer: number,
   friendBytes: number,
+  playerEffectPointer: number,
+  playerEffectBytes: number,
+  effectIconPointer: number,
+  effectIconBytes: number,
   friendRoot: number,
   featureFlags: number,
 ) => number;
@@ -88,6 +94,8 @@ type CompanionKernelRequest = Readonly<{
     playRegion: KernelRegion;
     characterList?: KernelRegion;
     friends?: KernelRegion;
+    playerEffects: KernelRegion;
+    effectIcons: KernelRegion;
   }>;
 }>;
 
@@ -155,6 +163,8 @@ function bindCompanionKernel(
   const playRegionBytes = exports.companion_play_region_bytes as () => number;
   const characterListBytes = exports.companion_character_list_bytes as () => number;
   const friendBytes = exports.companion_friend_bytes as () => number;
+  const playerEffectBytes = exports.companion_player_effect_bytes as () => number;
+  const effectIconBytes = exports.companion_effect_icon_bytes as () => number;
   const { regions } = request;
   const friends = regions.friends ?? { pointer: 0, bytes: 0 };
   const characterList = regions.characterList ?? { pointer: 0, bytes: 0 };
@@ -170,6 +180,8 @@ function bindCompanionKernel(
     || playRegionBytes() !== COMPANION_PLAY_REGION_BYTES
     || characterListBytes() !== COMPANION_CHARACTER_LIST_BYTES
     || friendBytes() !== COMPANION_ABI.friends.bytes
+    || playerEffectBytes() !== COMPANION_PLAYER_EFFECT_BYTES
+    || effectIconBytes() !== COMPANION_EFFECT_ICON_BYTES
   ) {
     throw new Error("Companion kernel rejected its ABI");
   }
@@ -195,6 +207,10 @@ function bindCompanionKernel(
     characterList.bytes,
     friends.pointer,
     friends.bytes,
+    regions.playerEffects.pointer,
+    regions.playerEffects.bytes,
+    regions.effectIcons.pointer,
+    regions.effectIcons.bytes,
     request.friendRoot ?? 0,
     request.featureFlags,
   ) !== 1) {

@@ -29,6 +29,8 @@ const NONE: EnhancementCapabilities = Object.freeze({
   chatFiltering: false,
   skillSlotGeometry: false,
   skillCooldownObservation: false,
+  playerEffectObservation: false,
+    effectIconGeometry: false,
   playRegionObservation: false,
     preGameControls: false,
     characterSwitchAction: false,
@@ -46,6 +48,8 @@ const ALL: EnhancementCapabilities = Object.freeze({
   chatFiltering: false,
   skillSlotGeometry: true,
   skillCooldownObservation: true,
+  playerEffectObservation: false,
+    effectIconGeometry: false,
   playRegionObservation: true,
   preGameControls: true,
   characterSwitchAction: true,
@@ -86,6 +90,8 @@ const STORAGE: EnhancementCapabilities = Object.freeze({
   chatFiltering: false,
   skillSlotGeometry: false,
   skillCooldownObservation: false,
+  playerEffectObservation: false,
+    effectIconGeometry: false,
 });
 const PARTY_TEAM: EnhancementCapabilities = Object.freeze({
   ...NONE,
@@ -111,6 +117,8 @@ const COOLDOWN: EnhancementCapabilities = Object.freeze({
     characterSwitchAction: false,
     quickItemMove: false,
   skillCooldownObservation: true,
+  playerEffectObservation: false,
+    effectIconGeometry: false,
 });
 const PROVED_FILE = Object.freeze({
   status: "proved" as const,

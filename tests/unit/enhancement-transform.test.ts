@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { describe, it } from "node:test";
 import {
   ENHANCEMENT_TRANSFORM_ABI,
   ENHANCEMENT_CONFIG_WORD_COUNT,
+  ENHANCEMENT_EFFECT_DIRTY_MESSAGE_COUNT,
   ENHANCEMENT_LAYOUT_WORD_COUNT,
   enhancementConfigWordActive,
   type EnhancementCapabilities,
@@ -11,6 +13,7 @@ import {
   enhancementConfigWords,
   ENHANCEMENT_LAYOUT_FIELDS,
   supportedEnhancementCapabilities,
+  type KnownEnhancementBuild,
 } from "../../src/main/certification/enhancement-builds.js";
 import { ENHANCEMENT_CONFIG_FIELDS } from "../../src/shared/enhancement-config.js";
 import {
@@ -22,6 +25,7 @@ import { inspectEnhancementCandidate } from "../../src/main/certification/enhanc
 import { decodeEnhancementManifest } from "../../src/renderer/enhancement-manifest.js";
 import {
   callbackFixture,
+  commandBody,
   CURSOR_ONLY,
   CURSOR_TARGET,
   CURSOR_TOOLBOX,
@@ -49,6 +53,27 @@ const PARTY_ONLY: EnhancementCapabilities = Object.freeze({
   chatFiltering: false,
   skillSlotGeometry: false,
   skillCooldownObservation: false,
+  playerEffectObservation: false,
+    effectIconGeometry: false,
+});
+
+const EFFECT_ONLY: EnhancementCapabilities = Object.freeze({
+  nativeCursor: false,
+  playRegionObservation: true,
+  preGameControls: false,
+  characterSwitchAction: false,
+  targetObservation: false,
+  partyObservation: false,
+  teamApply: false,
+  travelAction: false,
+  xunlaiAction: false,
+  chatAliases: false,
+  chatFiltering: false,
+  skillSlotGeometry: false,
+  skillCooldownObservation: false,
+  quickItemMove: false,
+  playerEffectObservation: true,
+    effectIconGeometry: false,
 });
 
 describe("targeted Enhancement WebAssembly transform", () => {
@@ -109,6 +134,7 @@ describe("targeted Enhancement WebAssembly transform", () => {
           hideHeroPanel: 0x1000_01a3,
           showHeroPanel: 0x1000_01a4,
           partyDirty: PARTY_DIRTY_MESSAGES,
+          effectDirty: [],
         },
         configWords: enhancementConfigWords(build, CURSOR_TOOLBOX),
       },
@@ -306,6 +332,8 @@ describe("targeted Enhancement WebAssembly transform", () => {
           chatFiltering: false,
           skillSlotGeometry: false,
           skillCooldownObservation: false,
+          playerEffectObservation: false,
+    effectIconGeometry: false,
         },
       ),
       /capability profile is not certified/,
@@ -544,18 +572,75 @@ describe("targeted Enhancement WebAssembly transform", () => {
     assert.equal(decodeEnhancementManifest(moduleWithManifest(duplicate)), null);
   });
 
-  // The message words start where the address words stop, and three places
-  // used to carry that boundary as the literal `36`: the manifest decoder, the
-  // integration fixtures, and the layout field list that actually determines
-  // it. Growing the layout moved the messages and two of the three did not
-  // notice — the decoder went on reading party-dirty messages out of address
-  // words and refused every manifest. This binds the constant to the list, so
-  // the next field added moves it or fails here.
-  it("starts the message words exactly where the layout words end", () => {
+  it("keeps effect-only UI observation independent from party observation", () => {
+    const input = fixture();
+    const base = manifest(input);
+    const dirtyMessages = [
+      0x1000_0055, 0x1000_0056, 0x1000_0057, 0x1000_0141,
+    ] as const;
+    const build: KnownEnhancementBuild = {
+      ...base,
+      playerEffectObservation: {
+        accessors: [],
+        mutations: {
+          addTimed: { functionIndex: 3, bodySha256: createHash("sha256").update(commandBody(input, 0)).digest("hex") },
+          renewTimed: { functionIndex: 3, bodySha256: createHash("sha256").update(commandBody(input, 0)).digest("hex") },
+          remove: { functionIndex: 3, bodySha256: createHash("sha256").update(commandBody(input, 0)).digest("hex") },
+        },
+        timer: {
+          functionIndex: 17,
+          params: [],
+          results: ["i32"],
+          bodySha256: createHash("sha256").update(commandBody(input, 14)).digest("hex"),
+        },
+        dirtyMessages,
+        layout: {
+          worldPartyEffects: 0x508,
+          agentEffectsStride: 0x24,
+          agentEffectsAgentId: 0,
+          agentEffectsEffects: 0x14,
+          effectStride: 0x18,
+          effectSkillId: 0,
+          effectAttributeLevel: 4,
+          effectId: 8,
+          effectMaintainerAgentId: 0x0c,
+          effectDuration: 0x10,
+          effectTimestamp: 0x14,
+        },
+      },
+    };
+    const transformed = transformEnhancementWasm(input, build, EFFECT_ONLY);
+    const module = new WebAssembly.Module(new Uint8Array(transformed));
+    const decoded = decodeEnhancementManifest(module, EFFECT_ONLY);
+    const sectionBytes = WebAssembly.Module.customSections(
+      module,
+      ENHANCEMENT_MANIFEST_SECTION,
+    )[0];
+    assert.ok(sectionBytes);
+    const raw = JSON.parse(new TextDecoder().decode(sectionBytes)) as {
+      messages: unknown;
+    };
+
+    assert.ok(decoded);
+    assert.deepEqual(decoded.hooks, { tick: true, cursor: false, ui: true });
+    assert.deepEqual(raw.messages, {
+      playerChat: 0x1000_0082,
+      hideHeroPanel: 0x1000_01a3,
+      showHeroPanel: 0x1000_01a4,
+      partyDirty: [],
+      effectDirty: dirtyMessages,
+    });
+    assert.deepEqual(decoded.configWords, enhancementConfigWords(build, EFFECT_ONLY));
+  });
+
+  // Existing config positions are an ABI. New capability words append after
+  // the established dispatcher and party-message section instead of moving it.
+  it("accounts for every typed config word without assuming contiguous layouts", () => {
     assert.equal(ENHANCEMENT_LAYOUT_WORD_COUNT, ENHANCEMENT_LAYOUT_FIELDS.length);
     assert.equal(
       ENHANCEMENT_CONFIG_WORD_COUNT,
-      ENHANCEMENT_LAYOUT_FIELDS.length + 3 + PARTY_DIRTY_MESSAGES.length,
+      ENHANCEMENT_LAYOUT_FIELDS.length + 3 + PARTY_DIRTY_MESSAGES.length
+        + ENHANCEMENT_EFFECT_DIRTY_MESSAGE_COUNT,
     );
     // And the list itself carries no duplicate, which would make two config
     // positions the same field and hide the drift this test looks for.

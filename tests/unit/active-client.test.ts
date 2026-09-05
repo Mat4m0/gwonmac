@@ -32,6 +32,8 @@ function generation(wasmPath: string, size: number): ClientGeneration {
         chatFiltering: { status: "off" },
         skillSlotGeometry: { status: "off" },
         skillCooldownObservation: { status: "off" },
+        playerEffectObservation: { status: "off" },
+        effectIconGeometry: { status: "off" },
       },
     },
     extendedMemory: supported

@@ -62,6 +62,8 @@ void app.whenReady().then(async () => {
           chatAliases: true,
           skillSlotGeometry: false,
           skillCooldownObservation: false,
+          playerEffectObservation: false,
+          effectIconGeometry: false,
           playRegionObservation: true,
           preGameControls: false,
           characterSwitchAction: false,

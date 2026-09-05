@@ -39,6 +39,8 @@ function session(capabilities: EnhancementCapabilities): ClientSession {
       chatFiltering: selected(capabilities.chatFiltering),
       skillSlotGeometry: selected(capabilities.skillSlotGeometry),
       skillCooldownObservation: selected(capabilities.skillCooldownObservation),
+      playerEffectObservation: selected(capabilities.playerEffectObservation),
+      effectIconGeometry: selected(capabilities.effectIconGeometry),
       playRegionObservation: selected(capabilities.playRegionObservation),
       preGameControls: selected(capabilities.preGameControls),
       characterSwitchAction: selected(capabilities.characterSwitchAction),
@@ -55,7 +57,7 @@ function session(capabilities: EnhancementCapabilities): ClientSession {
 
 describe("effective Enhancement capability boundary", () => {
   it("reproduces every served profile from Main's session, independent of request", () => {
-    for (let mask = 1; mask <= 0x3fff; mask += 1) {
+    for (let mask = 1; mask <= 0xffff; mask += 1) {
       const capabilities = enhancementCapabilitiesForProfile(
         `features-${mask.toString(16).padStart(2, "0")}`,
       );
@@ -86,6 +88,8 @@ describe("effective Enhancement capability boundary", () => {
           chatFiltering: off,
           skillSlotGeometry: off,
           skillCooldownObservation: off,
+          playerEffectObservation: off,
+          effectIconGeometry: off,
           playRegionObservation: off,
           preGameControls: off,
           characterSwitchAction: off,
@@ -105,6 +109,8 @@ describe("effective Enhancement capability boundary", () => {
       chatFiltering: false,
       skillSlotGeometry: false,
       skillCooldownObservation: false,
+      playerEffectObservation: false,
+      effectIconGeometry: false,
       playRegionObservation: false,
       preGameControls: false,
       characterSwitchAction: false,

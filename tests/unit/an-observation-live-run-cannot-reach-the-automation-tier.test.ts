@@ -100,6 +100,7 @@ describe("an observation live run cannot reach the automation tier", () => {
     assert.equal(planFor("target").scenario.readiness, "observer");
     assert.equal(planFor("toolbox-foundation").scenario.readiness, "toolbox");
     assert.equal(planFor("cursor-capture").scenario.readiness, "cursor");
+    assert.equal(planFor("effect-observer").scenario.readiness, "effects");
     assert.equal(planFor("graphics-probe").scenario.readiness, "frontend");
   });
 
@@ -190,8 +191,12 @@ describe("an observation live run cannot reach the automation tier", () => {
     assert.deepEqual(
       Object.keys(observation).sort(),
       [
+        "operatorStep",
         "readCharacterSwitchDiagnostics",
         "readCursorProjection",
+        "readEffectIcons",
+        "readPartyProjection",
+        "readPlayerEffects",
         "wait",
       ],
     );
@@ -233,10 +238,14 @@ describe("an observation live run cannot reach the automation tier", () => {
     }) as {
       readCursorProjection: () => Promise<unknown>;
       readCharacterSwitchDiagnostics: () => Promise<unknown>;
+      readPlayerEffects: () => Promise<unknown>;
+      readEffectIcons: () => Promise<unknown>;
       wait: (ms: number) => Promise<unknown>;
     };
     assert.equal(await context.readCursorProjection(), "read");
     assert.equal(await context.readCharacterSwitchDiagnostics(), "read");
+    assert.equal(await context.readPlayerEffects(), "read");
+    assert.equal(await context.readEffectIcons(), "read");
     assert.equal(await context.wait(1), undefined);
   });
 
@@ -335,6 +344,43 @@ describe("an observation live run cannot reach the automation tier", () => {
           },
         }),
       /did not render/,
+    );
+  });
+
+  it("retains player effects beside a proved party add/remove lifecycle", () => {
+    const checkpoint = (id: string, slotCount: number, timed = false) => ({
+      id,
+      first: {
+        status: "ready",
+        sequence: 2,
+        effects: timed ? [{ durationMs: 15_000 }] : [],
+      },
+      second: {
+        status: "ready",
+        sequence: 4,
+        effects: timed ? [{ durationMs: 15_000 }] : [],
+      },
+      firstIcons: { status: "ready" },
+      secondIcons: { status: "ready" },
+      firstParty: { status: "ready", slotCount, agentIds: [11] },
+      secondParty: { status: "ready", slotCount, agentIds: [11] },
+    });
+    const checkpoints = [
+      checkpoint("baseline", 0),
+      checkpoint("finite", 0, true),
+      checkpoint("refresh", 0, true),
+      checkpoint("expired", 0),
+      checkpoint("maintained", 0),
+      checkpoint("solo", 0),
+      checkpoint("hero-added", 1),
+      checkpoint("hero-removed", 0),
+    ];
+    const scenario = scenarios["effect-observer"]!;
+    assert.doesNotThrow(() => scenario.validate({ evidence: { checkpoints } }));
+    checkpoints[7] = checkpoint("hero-removed", 1);
+    assert.throws(
+      () => scenario.validate({ evidence: { checkpoints } }),
+      /hero add\/remove lifecycle/,
     );
   });
 });

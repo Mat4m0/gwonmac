@@ -20,6 +20,8 @@ const base: ClientSession = {
       chatFiltering: { status: "off" },
       skillSlotGeometry: { status: "available" },
       skillCooldownObservation: { status: "off" },
+      playerEffectObservation: { status: "off" },
+      effectIconGeometry: { status: "off" },
       playRegionObservation: { status: "off" },
         preGameControls: { status: "off" },
         characterSwitchAction: { status: "off" },

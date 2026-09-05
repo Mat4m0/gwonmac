@@ -225,6 +225,7 @@ function enhancementCache(
     chatAliases: capabilities.chatAliases,
     skillSlotGeometry: capabilities.skillSlotGeometry,
     skillCooldownObservation: capabilities.skillCooldownObservation,
+    playerEffectObservation: capabilities.playerEffectObservation,
     playRegionObservation: capabilities.playRegionObservation,
     preGameControls: capabilities.preGameControls,
     characterSwitchAction: capabilities.characterSwitchAction,

@@ -468,6 +468,18 @@ export class ClientRuntime {
           supported.skillCooldownObservation,
           preparationFailed,
         ),
+        playerEffectObservation: optionalFeatureStatus(
+          requested.playerEffectObservation,
+          effective.playerEffectObservation,
+          supported.playerEffectObservation,
+          preparationFailed,
+        ),
+        effectIconGeometry: optionalFeatureStatus(
+          requested.effectIconGeometry,
+          effective.effectIconGeometry,
+          supported.effectIconGeometry,
+          preparationFailed,
+        ),
         preGameControls: optionalFeatureStatus(
           requested.preGameControls,
           effective.preGameControls,

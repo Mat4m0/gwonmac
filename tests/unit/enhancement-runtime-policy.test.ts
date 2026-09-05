@@ -18,6 +18,7 @@ const off = Object.freeze({
   skillCooldownOverlayEnabled: false,
   chatFiltersEnabled: false,
   quickItemMove: false,
+  effectTimersEnabled: false,
 });
 
 test("developer programs replace saved optional-tool selection in PvE", () => {
@@ -35,6 +36,7 @@ test("developer programs replace saved optional-tool selection in PvE", () => {
     skillCooldowns: false,
     chatFilters: false,
     quickItemMove: false,
+    effectTimers: false,
   });
   assert.deepEqual(enhancementRuntimePolicy("toolbox-commands", off, "pve"), {
     characterSwitch: false,
@@ -50,6 +52,7 @@ test("developer programs replace saved optional-tool selection in PvE", () => {
     skillCooldowns: false,
     chatFilters: false,
     quickItemMove: false,
+    effectTimers: false,
   });
   assert.deepEqual(enhancementRuntimePolicy("xunlai-storage", off, "pve"), {
     characterSwitch: false,
@@ -65,6 +68,7 @@ test("developer programs replace saved optional-tool selection in PvE", () => {
     skillCooldowns: false,
     chatFilters: false,
     quickItemMove: false,
+    effectTimers: false,
   });
   assert.deepEqual(enhancementRuntimePolicy("target-observer", off, "pve"), {
     characterSwitch: false,
@@ -80,6 +84,7 @@ test("developer programs replace saved optional-tool selection in PvE", () => {
     skillCooldowns: false,
     chatFilters: false,
     quickItemMove: false,
+    effectTimers: false,
   });
 });
 
@@ -97,6 +102,7 @@ test("unknown regions keep local Tools while live PvE features fail closed", () 
     skillKeyLabelsEnabled: false,
     skillCooldownOverlayEnabled: false,
     quickItemMove: false,
+    effectTimersEnabled: false,
   });
   assert.deepEqual(enhancementRuntimePolicy("none", on, "unknown"), {
     characterSwitch: false,
@@ -112,6 +118,7 @@ test("unknown regions keep local Tools while live PvE features fail closed", () 
     skillCooldowns: false,
     chatFilters: true,
     quickItemMove: false,
+    effectTimers: false,
   });
 });
 
@@ -129,6 +136,7 @@ test("a confirmed PvP map disables every product and developer tool", () => {
     skillCooldownOverlayEnabled: true,
     chatFiltersEnabled: true,
     quickItemMove: false,
+    effectTimersEnabled: false,
   });
   for (const program of [
     "none",
@@ -151,6 +159,7 @@ test("a confirmed PvP map disables every product and developer tool", () => {
       skillCooldowns: false,
       chatFilters: false,
       quickItemMove: false,
+      effectTimers: false,
     }, program);
   }
 });
@@ -169,6 +178,7 @@ test("product tool settings remain live once the capability is present", () => {
     skillCooldownOverlayEnabled: true,
     chatFiltersEnabled: false,
     quickItemMove: false,
+    effectTimersEnabled: false,
   }, "pve"), {
     characterSwitch: false,
     cartography: false,
@@ -183,6 +193,7 @@ test("product tool settings remain live once the capability is present", () => {
     skillCooldowns: true,
     chatFilters: false,
     quickItemMove: false,
+    effectTimers: false,
   });
 });
 
@@ -195,6 +206,7 @@ test("skill feature selection distinguishes labels from cooldowns", () => {
     skillKeyLabelsEnabled: false,
     skillCooldownOverlayEnabled: false,
     quickItemMove: false,
+    effectTimersEnabled: false,
   }, "pve");
   assert.equal(empty.skillKeyLabels, false);
   assert.equal(empty.skillCooldowns, false);
@@ -206,6 +218,7 @@ test("skill feature selection distinguishes labels from cooldowns", () => {
     skillKeyLabelsEnabled: true,
     skillCooldownOverlayEnabled: false,
     quickItemMove: false,
+    effectTimersEnabled: false,
   }, "pve");
   assert.equal(labels.skillKeyLabels, true);
   assert.equal(labels.skillCooldowns, false);
@@ -217,6 +230,15 @@ test("Quick Item Move follows its single Tools switch and withdraws in PvP", () 
   assert.equal(enhancementRuntimePolicy("none", settings, "unknown").quickItemMove, true);
   assert.equal(enhancementRuntimePolicy("none", settings, "pvp").quickItemMove, false);
   assert.equal(enhancementRuntimePolicy("none", { ...settings, gwonmacTools: false }, "pve").quickItemMove, false);
+});
+
+test("effect observation is PvE-only for both product and developer selection", () => {
+  const product = { ...off, gwonmacTools: true, effectTimersEnabled: true };
+  assert.equal(enhancementRuntimePolicy("none", product, "pve").effectTimers, true);
+  assert.equal(enhancementRuntimePolicy("none", product, "unknown").effectTimers, false);
+  assert.equal(enhancementRuntimePolicy("none", product, "pvp").effectTimers, false);
+  assert.equal(enhancementRuntimePolicy("effect-observer", off, "pve").effectTimers, true);
+  assert.equal(enhancementRuntimePolicy("effect-observer", off, "pvp").effectTimers, false);
 });
 
 test("runtime policy projects every registered feature exactly once", () => {

@@ -90,6 +90,7 @@ export function createEnhancementHookBody(input: Readonly<{
   preFilterFunction?: number | null;
   extraArgumentGlobal?: number | null;
   extraArgumentFunction?: number | null;
+  secondExtraArgumentConstant?: number | null;
 }>): Uint8Array {
   const args = Array.from({ length: input.paramCount }, (_, index) =>
     concat(Uint8Array.of(0x20), uleb(index)),
@@ -102,6 +103,9 @@ export function createEnhancementHookBody(input: Readonly<{
     ...(input.extraArgumentFunction == null
       ? []
       : [concat(Uint8Array.of(0x10), uleb(input.extraArgumentFunction))]),
+    ...(input.secondExtraArgumentConstant == null
+      ? []
+      : [concat(Uint8Array.of(0x41), sleb(input.secondExtraArgumentConstant))]),
   ];
   return concat(
     uleb(0),
