@@ -172,7 +172,9 @@ test.describe("renderer keyboard input", () => {
         const moduleUrl: string = "gw://app/memory-warning.js";
         const { bindMemoryWarning } = await import(moduleUrl) as MemoryWarningModule;
         const presenter = bindMemoryWarning(document, {
-          autoRelogAfterReload: false,
+          position: null,
+        async savePosition() {},
+        autoRelogAfterReload: false,
           async saveAutoRelog() {},
           reload() {},
         });

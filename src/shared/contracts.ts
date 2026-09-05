@@ -464,6 +464,8 @@ export interface AppSettings {
   extendedMemoryEnabled: boolean;
   /** Return toward the current character after an explicit game reload. */
   autoRelogAfterReload: boolean;
+  /** Warning position within the available viewport space; null keeps the default. */
+  memoryWarningPosition: Readonly<{ x: number; y: number }> | null;
   showDiagnostics: boolean;
   /**
    * Rollback-only storage field. Runtime behavior is always `full`; keeping
@@ -511,6 +513,7 @@ export type AppSettingsPatch = Partial<AppSettings>;
  */
 export const RENDERER_WRITABLE_SETTINGS = [
   "autoRelogAfterReload",
+  "memoryWarningPosition",
   "cartographyOverlayEnabled",
   "cartographyGridEnabled",
   "compassRangeIndicatorsEnabled",
@@ -616,6 +619,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   skillCooldownColor: DEFAULT_SKILL_COOLDOWN_COLOR,
   extendedMemoryEnabled: false,
   autoRelogAfterReload: false,
+  memoryWarningPosition: null,
   showDiagnostics: false,
   dataStrategy: "full",
   autoCheckUpdates: true,

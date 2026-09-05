@@ -302,6 +302,21 @@ export function parseSettings(raw: unknown): AppSettings {
   ] as const) {
     if (setting in src) out[setting] = asBool(src[setting], setting);
   }
+  if ("memoryWarningPosition" in src) {
+    const position = src.memoryWarningPosition;
+    if (position === null) out.memoryWarningPosition = null;
+    else {
+      if (typeof position !== "object" || Array.isArray(position)
+        || !("x" in position) || !("y" in position)
+        || Object.keys(position).length !== 2
+        || typeof position.x !== "number" || !Number.isFinite(position.x)
+        || typeof position.y !== "number" || !Number.isFinite(position.y)
+        || position.x < 0 || position.x > 1 || position.y < 0 || position.y > 1) {
+        throw new AppError("bad_settings", "settings.memoryWarningPosition must contain x and y between 0 and 1");
+      }
+      out.memoryWarningPosition = { x: position.x, y: position.y };
+    }
+  }
   if ("showDiagnostics" in src) {
     out.showDiagnostics = asBool(src.showDiagnostics, "showDiagnostics");
   }
