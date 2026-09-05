@@ -114,8 +114,8 @@ Character Switch has its own switch, shortcut, and display settings here.
 It is a Core feature and does not require **Enable Tools**.
 The in-game Character Switch settings also select a horizontal or vertical
 layout. Horizontal is the default and follows the character-selection order.
-Search can be enabled there and is off by default. The layout and search choices
-last for the current app session.
+The search bar is shown by default and can be hidden there. The layout and search
+choices last for the current app session.
 
 Shortcuts use macOS Command combinations such as Command-T. Normal editing and
 application shortcuts such as Command-C, Command-V, Command-Q, and Command-W
@@ -171,10 +171,11 @@ styles. Deleting a custom style requires confirmation.
 ## Switch Character
 
 Press **Command-R** to open **Switch Character** from a playable outpost.
-Search is always available, and the complete live account list stays in
-alphabetical order. Browse every character with the pointer or arrow keys;
-the number keys 1–9 and 0 switch to the first ten characters. Press
-**Command-Shift-R** to reload Guild Wars.
+The search bar is shown for every account size. Initial focus remains on the
+current character. Press Left or Up for the previous character. Press Right or
+Down for the next character. Start typing to move focus to search. The number
+keys 1–9 and 0 switch to the first ten characters. Press **Command-Shift-R** to
+reload Guild Wars.
 
 Character names and search text are not saved.
 
