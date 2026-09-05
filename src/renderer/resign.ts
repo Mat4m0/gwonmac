@@ -7,7 +7,7 @@ export async function resignFromGame(): Promise<void> {
   const field = document.getElementById("osk-input-text");
   const context = window.gwCharacterSwitch?.context;
   if (!(canvas instanceof HTMLCanvasElement) || !(field instanceof HTMLInputElement)
-    || document.activeElement !== canvas || !document.hasFocus()
+    || document.activeElement !== canvas || field.value !== "" || !document.hasFocus()
     || (context !== "outpost" && context !== "pve-explorable")) {
     throw new Error("Return to Guild Wars in PvE and close other windows or text fields first.");
   }

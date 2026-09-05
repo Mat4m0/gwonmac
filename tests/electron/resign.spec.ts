@@ -68,6 +68,10 @@ test("resign confirms once and sends only /resign through an empty chat editor",
     await click();
     await expect(page.locator("body")).not.toHaveAttribute("data-resign-submitted", /.*/u);
     await expect(page.locator("#osk-input-text")).toHaveValue("unfinished chat");
+    await page.locator("#canvas").focus();
+    await click();
+    await expect(page.locator("body")).not.toHaveAttribute("data-resign-submitted", /.*/u);
+    await expect(page.locator("#osk-input-text")).toHaveValue("unfinished chat");
   } finally {
     await closeOffline(fixture);
   }
