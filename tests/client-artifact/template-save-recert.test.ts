@@ -220,7 +220,13 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   });
   assert.equal(isolatedFileFailure.officialSha256, sha256(changedCaller));
   assert.deepEqual(isolatedFileFailure.reasons, []);
-  assert.deepEqual(capabilitiesOf(isolatedFileFailure), capabilitiesOf(local));
+  // Quick Item Move still relies on exact reviewed module identity. When the
+  // official input changes, it withdraws even if its participating functions
+  // remain byte-identical. Every independently derived capability survives.
+  assert.deepEqual(capabilitiesOf(isolatedFileFailure), {
+    ...capabilitiesOf(local),
+    quickItemMove: false,
+  });
 
   // Static addresses must preserve their measured relationship to independent
   // initialized-data or BSS anchors. Moving one delete-state word must refuse.

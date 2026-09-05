@@ -154,6 +154,8 @@ test("one capability plan derives hooks without losing feature identity", () => 
         playRegionObservation: true,
         preGameControls: false,
         characterSwitchAction: false,
+        chatFiltering: false,
+        quickItemMove: false,
         playerEffectObservation: true,
         effectIconGeometry: true,
       },
