@@ -120,10 +120,10 @@ green continent tint. It works before the map window is opened.
 
 Compass ranges also work without opening the Mission Map. Their radii are
 1012, 1248, 2512, and 3500 Guild Wars units, projected from the certified
-5000-unit Compass edge. The separate circular control beside the Compass
-toggles all ranges when clicked. Hover it to choose individual ranges and
-preview each ring's opacity. Turning the master off preserves those choices.
-Settings → Maps provides the same durable visibility and opacity controls.
+5000-unit Compass edge. Click the separate circular control beside the Compass
+to open its menu. Use the menu to show or hide all ranges, choose individual
+ranges, and preview each ring's opacity. Turning the master off preserves those
+choices. Settings → Maps provides the same durable controls.
 
 The Cartography and Compass-range controls form one centred stack. A lone
 available control remains centred by itself. Both menus use the same size,

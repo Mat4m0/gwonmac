@@ -24,7 +24,6 @@ import {
 } from "./compass-range-layer.js";
 import type { ScreenBox } from "./frame-placement.js";
 
-const COLLAPSE_DELAY_MS = 600;
 const PANEL_WIDTH = 220;
 const PANEL_HEIGHT_ESTIMATE = 290;
 
@@ -85,7 +84,7 @@ export function createCompassRangeControls(options: Readonly<{
   const trigger = document.createElement("button");
   trigger.type = "button";
   trigger.className = "compass-range-control-trigger";
-  trigger.setAttribute("aria-label", "Toggle Compass ranges");
+  trigger.setAttribute("aria-label", "Compass range settings");
   trigger.setAttribute("aria-controls", "compass-range-control-panel");
   trigger.setAttribute("aria-expanded", "false");
   trigger.title = "Compass ranges";
@@ -158,14 +157,12 @@ export function createCompassRangeControls(options: Readonly<{
   let saving = false;
   let disposed = false;
   let open = false;
-  let collapseTimer = 0;
   let latestBox: ScreenBox | null = null;
   let latestPlacement: CompassControlPlacement = { index: 0, count: 1 };
   let renderedSettings: AppSettings | null = null;
   let panelHeight = PANEL_HEIGHT_ESTIMATE;
 
   const syncDisabled = (): void => {
-    trigger.disabled = saving;
     allButton.disabled = saving;
     for (const button of themeButtons.values()) button.disabled = saving;
     for (const { button, input } of rangeControls.values()) {
@@ -179,7 +176,6 @@ export function createCompassRangeControls(options: Readonly<{
     if (settings === null || (!force && renderedSettings === settings)) return;
     renderedSettings = settings;
     const enabled = settings.compassRangeIndicatorsEnabled;
-    trigger.setAttribute("aria-pressed", String(enabled));
     allButton.setAttribute("aria-pressed", String(enabled));
     allButton.textContent = enabled ? "Hide all ranges" : "Show all ranges";
     for (const [theme, button] of themeButtons) {
@@ -238,17 +234,6 @@ export function createCompassRangeControls(options: Readonly<{
     })
     : null;
   observer?.observe(panel);
-  const cancelCollapse = (): void => {
-    if (collapseTimer !== 0) view.clearTimeout(collapseTimer);
-    collapseTimer = 0;
-  };
-  const scheduleCollapse = (): void => {
-    cancelCollapse();
-    collapseTimer = view.setTimeout(() => {
-      collapseTimer = 0;
-      if (!root.matches(":hover") && !root.contains(document.activeElement)) setOpen(false);
-    }, COLLAPSE_DELAY_MS);
-  };
   const apply = (patch: RendererSettingsPatch): void => {
     if (canonical === null || saving) return;
     setSaving(true);
@@ -274,10 +259,13 @@ export function createCompassRangeControls(options: Readonly<{
   for (const type of ["pointerdown", "pointerup", "click", "wheel", "keydown", "keyup"]) {
     root.addEventListener(type, (event) => event.stopPropagation());
   }
-  root.addEventListener("pointerenter", () => { cancelCollapse(); setOpen(true); });
-  root.addEventListener("pointerleave", scheduleCollapse);
-  root.addEventListener("focusin", () => { cancelCollapse(); setOpen(true); });
-  root.addEventListener("focusout", scheduleCollapse);
+  trigger.addEventListener("click", () => setOpen(!open));
+  const outsidePointerDown = (event: Event): void => {
+    if (open && event.target instanceof Node && !root.contains(event.target)) {
+      setOpen(false);
+    }
+  };
+  document.addEventListener("pointerdown", outsidePointerDown);
   const otherControlOpened = (event: Event): void => {
     if (event instanceof CustomEvent && event.detail !== "ranges") setOpen(false);
   };
@@ -288,7 +276,6 @@ export function createCompassRangeControls(options: Readonly<{
     setOpen(false);
     trigger.focus();
   });
-  trigger.addEventListener("click", toggleAll);
   allButton.addEventListener("click", toggleAll);
   for (const [theme, button] of themeButtons) {
     button.addEventListener("click", () => apply({ compassRangeTheme: theme }));
@@ -345,7 +332,6 @@ export function createCompassRangeControls(options: Readonly<{
       if (boxChanged || placementChanged || becameVisible) positionRoot();
     },
     hide() {
-      cancelCollapse();
       setOpen(false);
       root.hidden = true;
       latestBox = null;
@@ -354,9 +340,9 @@ export function createCompassRangeControls(options: Readonly<{
     },
     dispose() {
       disposed = true;
-      cancelCollapse();
       observer?.disconnect();
       view.removeEventListener("resize", viewportResize);
+      document.removeEventListener("pointerdown", outsidePointerDown);
       document.removeEventListener(COMPASS_CONTROL_OPEN_EVENT, otherControlOpened);
       root.remove();
     },

@@ -70,6 +70,23 @@ test("Cartography controls open only by click and remain open after pointer move
   assert.match(controls, /if \(open && event\.target instanceof Node/u);
 });
 
+test("Compass range controls open only by click", () => {
+  const controls = readFileSync(
+    "src/renderer/cartography-spike/compass-range-controls.ts",
+    "utf8",
+  );
+  assert.match(
+    controls,
+    /trigger\.addEventListener\("click", \(\) => setOpen\(!open\)\)/u,
+  );
+  assert.doesNotMatch(
+    controls,
+    /pointerenter|pointerleave|focusin|focusout|matches\(":hover"\)|collapseTimer/u,
+  );
+  assert.match(controls, /if \(open && event\.target instanceof Node/u);
+  assert.match(controls, /allButton\.addEventListener\("click", toggleAll\)/u);
+});
+
 test("compact Cartography panel keeps guidance progressively disclosed", () => {
   const controls = readFileSync(
     "src/renderer/cartography-spike/overlay-controls.ts",
