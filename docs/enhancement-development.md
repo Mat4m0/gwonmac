@@ -24,9 +24,11 @@ Current integrated features are:
   character-selection order, opens on the current character, and wraps only
   after navigation reaches a visible end. Its alternative vertical layout is
   alphabetical. Accounts that fit inside the visible carousel are centered and
-  shown in full. Optional bounded name search is off by default; direct 1–9 and
-  0 shortcuts select the first ten characters. The exact companion projection
-  owns the live records. Reload Guild Wars uses Command-Shift-R.
+  shown in full. Bounded name search is shown by default for every account size
+  and can be hidden. Character focus remains primary until typing starts a
+  search. Direct 1–9 and 0 shortcuts select the first ten characters. The exact
+  companion projection owns the live records. Reload Guild Wars uses
+  Command-Shift-R.
 
 - **Build Library** (Beta): host-owned build and team authoring. Command-B
   opens it when both Tools Beta and Build Library are enabled, and its Apply

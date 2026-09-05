@@ -88,7 +88,7 @@ test("a 27-character account uses the horizontal carousel or vertical list", asy
     const search = page.getByRole("combobox", { name: "Search characters" });
     const list = dialog.locator("#character-switch-list");
     await expect(dialog).toBeVisible();
-    await expect(search).toBeHidden();
+    await expect(search).toBeVisible();
     const selected = list.locator(".character-switch-row[data-selected=true]");
     await expect(selected).toContainText("Character 01");
     await expect.poll(() => isDomActiveElement(selected)).toBe(true);
@@ -96,6 +96,7 @@ test("a 27-character account uses the horizontal carousel or vertical list", asy
     const edgeSlotCount = Math.floor(carouselCapacity / 2);
     await expect(list.locator(".character-switch-slot")).toHaveCount(edgeSlotCount);
     await page.evaluate(() => window.dispatchEvent(new Event("test-character-five")));
+    await expect(search).toBeVisible();
     const fiveCharacterCount = carouselCapacity >= 5 ? 5 : Math.ceil(carouselCapacity / 2);
     await expect(list.getByRole("option")).toHaveCount(fiveCharacterCount);
     await expect(list.locator(".character-switch-slot")).toHaveCount(
@@ -125,30 +126,35 @@ test("a 27-character account uses the horizontal carousel or vertical list", asy
     await page.keyboard.press("ArrowLeft");
     await expect(selected).toContainText("Character 01");
     await page.keyboard.press("ArrowUp");
+    await expect(selected).toContainText("Rudolph Prime");
+    await page.keyboard.press("ArrowDown");
+    await expect(selected).toContainText("Character 01");
+    await expect.poll(() => isDomActiveElement(selected)).toBe(true);
+    await page.keyboard.type("u");
+    await expect.poll(() => isDomActiveElement(search)).toBe(true);
+    await expect(search).toHaveValue("u");
+    await expect(list.getByRole("option")).toHaveCount(1);
+    await expect(selected).toContainText("Rudolph Prime");
+    await search.press("Escape");
+    await search.press("ArrowDown");
     await expect.poll(() => isDomActiveElement(selected)).toBe(true);
 
     await dialog.getByRole("button", { name: "Character Switch settings" }).click();
     const horizontalLayout = dialog.getByRole("radio", { name: /Horizontal/u });
     const verticalLayout = dialog.getByRole("radio", { name: /Vertical/u });
-    const searchSetting = dialog.getByRole("checkbox", { name: /Enable search/u });
+    const searchSetting = dialog.getByRole("checkbox", { name: /Show search bar/u });
     await expect(horizontalLayout).toBeChecked();
-    await expect(searchSetting).not.toBeChecked();
-    await searchSetting.check();
+    await expect(searchSetting).toBeChecked();
+    await searchSetting.uncheck();
     await page.keyboard.press("Escape");
-    await expect(search).toBeVisible();
-    await page.keyboard.press("ArrowUp");
-    await expect.poll(() => isDomActiveElement(search)).toBe(true);
-    await search.press("ArrowDown");
+    await expect(search).toBeHidden();
     await expect.poll(() => isDomActiveElement(selected)).toBe(true);
-    await page.keyboard.type("u");
-    await expect(search).toHaveValue("u");
-    await expect(list.getByRole("option")).toHaveCount(1);
-    await expect(selected).toContainText("Rudolph Prime");
-    await search.press("Escape");
 
     await dialog.getByRole("button", { name: "Character Switch settings" }).click();
+    await searchSetting.check();
     await verticalLayout.check();
     await page.keyboard.press("Escape");
+    await expect(search).toBeVisible();
     await expect(dialog).toHaveAttribute("data-layout", "vertical");
     await expect(list.getByRole("button")).toHaveCount(27);
     await expect(list.locator("img")).toHaveCount(27);
@@ -164,6 +170,12 @@ test("a 27-character account uses the horizontal carousel or vertical list", asy
     await expect(list.getByRole("button").first()).toHaveAccessibleName(
       /Level 20, Lion's Arch/u,
     );
+    await page.keyboard.type("u");
+    await expect.poll(() => isDomActiveElement(search)).toBe(true);
+    await expect(search).toHaveValue("u");
+    await expect(list.getByRole("option")).toHaveCount(1);
+    await search.press("Escape");
+    await search.press("ArrowDown");
     const focusedRow = list.getByRole("button").nth(1);
     await focusedRow.focus();
     const focusedName = await focusedRow.getAttribute("aria-label");
@@ -245,7 +257,7 @@ test("a 27-character account uses the horizontal carousel or vertical list", asy
     ));
     await expect(selected).toContainText("Character 01");
     await expect.poll(() => isDomActiveElement(selected)).toBe(true);
-    await search.press("0");
+    await selected.press("0");
     await expect(page.locator("body")).toHaveAttribute("data-character-switch-request", "9");
     await expect(dialog).toBeHidden();
     await page.evaluate(() => window.dispatchEvent(
@@ -337,7 +349,7 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
       new CustomEvent("gw:character-toggle", { cancelable: true }),
     ));
     await expect(dialog).toBeVisible();
-    await expect(search).toBeHidden();
+    await expect(search).toBeVisible();
     await expect.poll(() => isDomActiveElement(
       dialog.getByRole("option", { name: /Private Alpha/u }),
     )).toBe(true);
