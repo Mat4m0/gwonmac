@@ -130,9 +130,9 @@ test("a 27-character account uses the horizontal carousel or vertical list", asy
     await page.keyboard.press("ArrowDown");
     await expect(selected).toContainText("Character 01");
     await expect.poll(() => isDomActiveElement(selected)).toBe(true);
-    await page.keyboard.type("u");
+    await page.keyboard.type("rud");
     await expect.poll(() => isDomActiveElement(search)).toBe(true);
-    await expect(search).toHaveValue("u");
+    await expect(search).toHaveValue("rud");
     await expect(list.getByRole("option")).toHaveCount(1);
     await expect(selected).toContainText("Rudolph Prime");
     await search.press("Escape");
@@ -170,9 +170,9 @@ test("a 27-character account uses the horizontal carousel or vertical list", asy
     await expect(list.getByRole("button").first()).toHaveAccessibleName(
       /Level 20, Lion's Arch/u,
     );
-    await page.keyboard.type("u");
+    await page.keyboard.type("rud");
     await expect.poll(() => isDomActiveElement(search)).toBe(true);
-    await expect(search).toHaveValue("u");
+    await expect(search).toHaveValue("rud");
     await expect(list.getByRole("option")).toHaveCount(1);
     await search.press("Escape");
     await search.press("ArrowDown");
