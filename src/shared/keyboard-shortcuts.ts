@@ -3,6 +3,7 @@
  * Main and renderer consume this one model so interception and presentation agree.
  */
 export const SHORTCUT_ACTIONS = [
+  "game.resign",
   "character.switch",
   "tools.toggle",
   "trade.toggle",
@@ -31,6 +32,7 @@ export type ShortcutCaptureResult =
   | Readonly<{ status: "invalid" }>;
 
 export const DEFAULT_SHORTCUTS = Object.freeze({
+    "game.resign": Object.freeze({ key: "r", shift: true, option: false }),
     "character.switch": Object.freeze({ key: "r", shift: false, option: false }),
     "tools.toggle": Object.freeze({ key: "b", shift: false, option: false }),
     "trade.toggle": Object.freeze({ key: "k", shift: false, option: false }),
@@ -42,6 +44,7 @@ export const DEFAULT_SHORTCUTS = Object.freeze({
 
 export const SHORTCUT_LABELS: Readonly<Record<ShortcutAction, string>> =
   Object.freeze({
+    "game.resign": "Resign",
     "character.switch": "Switch Character",
     "tools.toggle": "Build Library",
     "trade.toggle": "Trade Chat",
@@ -95,6 +98,8 @@ export function resolveShortcuts(
   overrides: ShortcutOverrides,
 ): Readonly<Record<ShortcutAction, ShortcutBinding | null>> {
   return Object.freeze({
+    "game.resign": overrides["game.resign"] === undefined
+      ? DEFAULT_SHORTCUTS["game.resign"] : overrides["game.resign"],
     "character.switch": overrides["character.switch"] === undefined
       ? DEFAULT_SHORTCUTS["character.switch"]
       : overrides["character.switch"],
@@ -159,7 +164,6 @@ const RESERVED_SHORTCUTS: readonly ShortcutBinding[] = [
     option: false,
   })),
   { key: "z", shift: true, option: false },
-  { key: "r", shift: true, option: false },
   { key: "m", shift: true, option: false },
   { key: "h", shift: false, option: true },
   { key: "i", shift: false, option: true },

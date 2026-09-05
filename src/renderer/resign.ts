@@ -2,7 +2,11 @@
  * Sends only the confirmed /resign command through the client's normal chat UI.
  * No command is sent unless an empty text proxy opens from the game canvas.
  */
+import { featureActivationRequested } from "../shared/feature-contracts.js";
+
 export async function resignFromGame(): Promise<void> {
+  const enabled = () => featureActivationRequested("resign", window.gwToolsSettings());
+  if (!enabled()) throw new Error("Enable Resign in Tools settings first.");
   const canvas = document.getElementById("canvas");
   const field = document.getElementById("osk-input-text");
   const context = window.gwCharacterSwitch?.context;
@@ -20,7 +24,7 @@ export async function resignFromGame(): Promise<void> {
       }));
     }
   };
-  const unchanged = () => !interrupted && document.hasFocus()
+  const unchanged = () => enabled() && !interrupted && document.hasFocus()
     && window.gwCharacterSwitch?.context === context;
   window.addEventListener("keydown", interrupt, true);
   window.addEventListener("pointerdown", interrupt, true);

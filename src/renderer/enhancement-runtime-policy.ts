@@ -32,6 +32,7 @@ export function enhancementRuntimePolicy(
       && (developerSelected || featureActivationRequested(id, settings));
   return Object.freeze({
     characterSwitch: selected("characterSwitch"),
+    resign: selected("resign"),
     cartography: selected("cartography"),
     // The local Tools host remains reachable without a live observation, but
     // withdraws on a certified PvP map outside a Guild Hall.

@@ -405,6 +405,7 @@ const candidateSettingsDomains = Array.from(
       controllerPromptStyle: cycle(CONTROLLER_PROMPT_STYLES, index),
       uiPanelOpacity: cycle(opacityValues, index),
       characterSwitchEnabled: cycle(booleanValues, index),
+      resignEnabled: cycle(booleanValues, index),
       cartographyEnabled: cycle(booleanValues, index + 1),
       cartographyOverlayEnabled: cycle(booleanValues, index),
       cartographyGridEnabled: cycle(booleanValues, index + 1),

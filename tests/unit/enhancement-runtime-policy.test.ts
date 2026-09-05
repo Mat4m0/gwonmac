@@ -7,6 +7,7 @@ import { FEATURE_SELECTION_POLICIES } from "../../src/shared/feature-contracts.j
 
 const off = Object.freeze({
   characterSwitchEnabled: false,
+  resignEnabled: false,
   cartographyEnabled: false,
   gwonmacTools: false,
   buildLibrary: false,
@@ -24,6 +25,7 @@ const off = Object.freeze({
 test("developer programs replace saved optional-tool selection in PvE", () => {
   assert.deepEqual(enhancementRuntimePolicy("toolbox-foundation", off, "pve"), {
     characterSwitch: false,
+    resign: false,
     cartography: false,
     tools: true,
     buildLibrary: true,
@@ -40,6 +42,7 @@ test("developer programs replace saved optional-tool selection in PvE", () => {
   });
   assert.deepEqual(enhancementRuntimePolicy("toolbox-commands", off, "pve"), {
     characterSwitch: false,
+    resign: false,
     cartography: false,
     tools: true,
     buildLibrary: true,
@@ -56,6 +59,7 @@ test("developer programs replace saved optional-tool selection in PvE", () => {
   });
   assert.deepEqual(enhancementRuntimePolicy("xunlai-storage", off, "pve"), {
     characterSwitch: false,
+    resign: false,
     cartography: false,
     tools: true,
     buildLibrary: true,
@@ -72,6 +76,7 @@ test("developer programs replace saved optional-tool selection in PvE", () => {
   });
   assert.deepEqual(enhancementRuntimePolicy("target-observer", off, "pve"), {
     characterSwitch: false,
+    resign: false,
     cartography: false,
     tools: false,
     buildLibrary: false,
@@ -91,6 +96,7 @@ test("developer programs replace saved optional-tool selection in PvE", () => {
 test("unknown regions keep local Tools while live PvE features fail closed", () => {
   const on = Object.freeze({
     characterSwitchEnabled: false,
+  resignEnabled: false,
     cartographyEnabled: false,
     gwonmacTools: true,
     buildLibrary: true,
@@ -106,6 +112,7 @@ test("unknown regions keep local Tools while live PvE features fail closed", () 
   });
   assert.deepEqual(enhancementRuntimePolicy("none", on, "unknown"), {
     characterSwitch: false,
+    resign: false,
     cartography: false,
     tools: true,
     buildLibrary: true,
@@ -125,6 +132,7 @@ test("unknown regions keep local Tools while live PvE features fail closed", () 
 test("a confirmed PvP map disables every product and developer tool", () => {
   const on = Object.freeze({
     characterSwitchEnabled: false,
+  resignEnabled: false,
     cartographyEnabled: false,
     gwonmacTools: true,
     buildLibrary: true,
@@ -147,6 +155,7 @@ test("a confirmed PvP map disables every product and developer tool", () => {
   ] as const) {
     assert.deepEqual(enhancementRuntimePolicy(program, on, "pvp"), {
       characterSwitch: false,
+    resign: false,
       cartography: false,
       tools: false,
       buildLibrary: false,
@@ -167,6 +176,7 @@ test("a confirmed PvP map disables every product and developer tool", () => {
 test("product tool settings remain live once the capability is present", () => {
   assert.deepEqual(enhancementRuntimePolicy("none", {
     characterSwitchEnabled: false,
+  resignEnabled: false,
     cartographyEnabled: false,
     gwonmacTools: true,
     buildLibrary: true,
@@ -181,6 +191,7 @@ test("product tool settings remain live once the capability is present", () => {
     effectTimersEnabled: false,
   }, "pve"), {
     characterSwitch: false,
+    resign: false,
     cartography: false,
     tools: true,
     buildLibrary: true,
@@ -201,6 +212,7 @@ test("skill feature selection distinguishes labels from cooldowns", () => {
   const empty = enhancementRuntimePolicy("none", {
     ...off,
     characterSwitchEnabled: false,
+  resignEnabled: false,
     cartographyEnabled: false,
     gwonmacTools: true,
     skillKeyLabelsEnabled: false,
@@ -213,6 +225,7 @@ test("skill feature selection distinguishes labels from cooldowns", () => {
   const labels = enhancementRuntimePolicy("none", {
     ...off,
     characterSwitchEnabled: false,
+  resignEnabled: false,
     cartographyEnabled: false,
     gwonmacTools: true,
     skillKeyLabelsEnabled: true,
@@ -287,4 +300,14 @@ test("local Tools require their setting or developer program and PvP maps block 
       }
     }
   }
+});
+
+
+test("Resign requires both Tools switches and a known PvE region", () => {
+  const settings = { ...off, gwonmacTools: true, resignEnabled: true };
+  assert.equal(enhancementRuntimePolicy("toolbox-foundation", settings, "pve").resign, true);
+  assert.equal(enhancementRuntimePolicy("toolbox-foundation", settings, "pvp").resign, false);
+  assert.equal(enhancementRuntimePolicy("toolbox-foundation", settings, "unknown").resign, false);
+  assert.equal(enhancementRuntimePolicy("toolbox-foundation", { ...settings, resignEnabled: false }, "pve").resign, false);
+  assert.equal(enhancementRuntimePolicy("toolbox-foundation", { ...settings, gwonmacTools: false }, "pve").resign, false);
 });

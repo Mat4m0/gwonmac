@@ -150,13 +150,14 @@ export function parseLauncherProfileAppearance(value: unknown): LauncherProfileA
 }
 
 export const GLOBAL_TOOLS = [
-  "character-switch", "build-management", "quick-travel", "xunlai-storage", "quick-item-move",
+  "resign", "character-switch", "build-management", "quick-travel", "xunlai-storage", "quick-item-move",
   "trade-chat", "maps", "target-readout", "skill-key-labels", "skill-cooldowns",
   "chat-filters",
   "effect-timers",
 ] as const;
 export type GlobalTool = (typeof GLOBAL_TOOLS)[number];
 export const GLOBAL_TOOL_FEATURES = Object.freeze({
+  "resign": "resign",
   "character-switch": "characterSwitch",
   "build-management": "buildLibrary",
   "quick-travel": "travel",

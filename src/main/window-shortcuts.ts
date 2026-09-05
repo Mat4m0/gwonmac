@@ -29,7 +29,7 @@ const tracedKey = (key: string) => {
 };
 
 interface ShortcutActions {
-  run(action: ShortcutAction): void;
+  run(action: ShortcutAction): void | Promise<void>;
   edit(command: GameTextEditCommand): void;
   quitOrReload(): void | Promise<void>;
   recordCommandQ?(
@@ -61,6 +61,7 @@ const textEditCommand = (input: Electron.Input): GameTextEditCommand | null => {
 class WindowShortcuts {
   readonly #actions: ShortcutActions;
   #shortcuts = resolveShortcuts({
+    "game.resign": null,
     "character.switch": null,
     "tools.toggle": null,
     "trade.toggle": null,
@@ -234,7 +235,12 @@ class WindowShortcuts {
           event.preventDefault();
           this.#claimedCodes.set(input.code, 'shortcut');
           if (!input.isAutoRepeat) {
-            this.#actions.run(action as ShortcutAction);
+            const operation = this.#actions.run(action as ShortcutAction);
+            if (action === "game.resign") {
+              // Native sheets can consume the physical key-up, as with Command-Q.
+              void Promise.resolve(operation).finally(() => this.#claimedCodes.delete(input.code))
+                .catch(error => console.error("Resign shortcut failed", error));
+            }
           }
           return;
         }
@@ -257,10 +263,12 @@ class WindowShortcuts {
     | "travelPalette"
     | "shortcutOverrides"
     | "characterSwitchEnabled"
+    | "resignEnabled"
     | "cartographyEnabled"
   >): void {
     const resolved = resolveShortcuts(settings.shortcutOverrides);
     this.#shortcuts = {
+      "game.resign": featureActivationRequested("resign", settings) ? resolved["game.resign"] : null,
       "character.switch": featureActivationRequested("characterSwitch", settings)
         ? resolved["character.switch"] : null,
       "tools.toggle": featureActivationRequested("buildLibrary", settings)

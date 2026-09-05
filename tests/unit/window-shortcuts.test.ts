@@ -18,11 +18,41 @@ type ShortcutInput = Pick<
 >;
 
 describe("window shortcut input", () => {
+  it("gates and rebinds Resign, and rearms after a native sheet consumes key-up", async () => {
+    let dispatch!: (event: { preventDefault(): void }, input: ShortcutInput) => void;
+    const win = { webContents: { on: (_name: string, listener: typeof dispatch) => { dispatch = listener; } }, on() { return win; } } as unknown as BrowserWindow;
+    const actions: string[] = [];
+    installWindowShortcuts(win, { run: async action => { actions.push(action); }, edit() {}, quitOrReload() {} });
+    const press = (code = "KeyR") => {
+      let claimed = false;
+      dispatch({ preventDefault() { claimed = true; } }, { type: "keyDown", code, key: code.slice(3), meta: true, control: false, shift: true, alt: false, isAutoRepeat: false });
+      return claimed;
+    };
+    updateWindowShortcuts(win, { ...DEFAULT_SETTINGS, resignEnabled: true });
+    assert.equal(press(), false);
+    updateWindowShortcuts(win, { ...DEFAULT_SETTINGS, gwonmacTools: true });
+    assert.equal(press(), false);
+    const enabled = { ...DEFAULT_SETTINGS, gwonmacTools: true, resignEnabled: true };
+    updateWindowShortcuts(win, enabled);
+    assert.equal(press(), true);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(press(), true);
+    await new Promise(resolve => setImmediate(resolve));
+    updateWindowShortcuts(win, { ...enabled, shortcutOverrides: { "game.resign": { key: "j", shift: true, option: false } } });
+    assert.equal(press(), false);
+    assert.equal(press("KeyJ"), true);
+    await new Promise(resolve => setImmediate(resolve));
+    updateWindowShortcuts(win, { ...enabled, shortcutOverrides: { "game.resign": null } });
+    assert.equal(press(), false);
+    assert.equal(press("KeyJ"), false);
+    assert.deepEqual(actions, ["game.resign", "game.resign", "game.resign"]);
+  });
+
   it("gates Core and Maps independently and keeps a hidden layer's shortcut usable", () => {
     let dispatch!: (event: { preventDefault(): void }, input: ShortcutInput) => void;
     const win = { webContents: { on: (_name: string, listener: typeof dispatch) => { dispatch = listener; } }, on() { return win; } } as unknown as BrowserWindow;
     const actions: string[] = [];
-    installWindowShortcuts(win, { run: action => actions.push(action), edit: () => undefined, quitOrReload: async () => undefined });
+    installWindowShortcuts(win, { run: action => { actions.push(action); }, edit: () => undefined, quitOrReload: async () => undefined });
     const settings = { ...DEFAULT_SETTINGS, shortcutOverrides: { "cartography.grid.toggle": { key: "g", shift: false, option: false }, "cartography.walkability.toggle": { key: "l", shift: false, option: false } } };
     const press = (code: string) => {
       let prevented = false;
@@ -64,7 +94,7 @@ describe("window shortcut input", () => {
     const commandQ: string[] = [];
     const settleQuitDialogs: Array<() => void> = [];
     installWindowShortcuts(win, {
-      run: (action) => actions.push(action),
+      run: (action) => { actions.push(action); },
       edit: (command) => edits.push(command),
       quitOrReload: () => {
         quitOrReload += 1;

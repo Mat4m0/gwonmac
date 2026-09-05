@@ -124,6 +124,7 @@
         break;
       }
       case 'game.resign':
+        if (!window.gwNative.init.enhancementSelection.tools) return 'unhandled';
         await (await import('./resign.js')).resignFromGame();
         break;
       case 'filesystem.sync':

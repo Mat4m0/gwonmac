@@ -80,12 +80,13 @@ export function installNativeApplicationMenu(
 
 type ToolMenuSettings = Pick<AppSettings,
   "gwonmacTools" | "buildLibrary" | "tradeChat" | "xunlaiStorage"
-  | "travelPalette" | "characterSwitchEnabled" | "shortcutOverrides">;
+  | "travelPalette" | "characterSwitchEnabled" | "resignEnabled" | "shortcutOverrides">;
 const TOOL_MENU_FEATURES: Readonly<Record<string, { feature: FeatureId; action: ShortcutAction }>> = {
   "toggle-tools": { feature: "buildLibrary", action: "tools.toggle" },
   "toggle-trade": { feature: "tradeChat", action: "trade.toggle" },
   "open-xunlai-storage": { feature: "xunlaiStorage", action: "storage.open" },
   "open-travel": { feature: "travel", action: "travel.open" },
+  "resign-game": { feature: "resign", action: "game.resign" },
   "switch-character": { feature: "characterSwitch", action: "character.switch" },
 };
 // Electron makes accelerators immutable. Retain the existing menu builder,
@@ -228,7 +229,8 @@ export function showQuitOrReloadGame(
 
 const activeResignDialogs = new WeakSet<BrowserWindow>();
 
-async function showResignGame(win: BrowserWindow): Promise<void> {
+export async function showResignGame(host: WindowHost, win: BrowserWindow): Promise<void> {
+  if (!featureActivationRequested("resign", await host.getSettings())) return;
   if (activeResignDialogs.has(win)) return;
   activeResignDialogs.add(win);
   try {
@@ -243,6 +245,7 @@ async function showResignGame(win: BrowserWindow): Promise<void> {
       detail: "Sends /resign in Guild Wars chat. This can end your current attempt.",
     });
     if (result.response !== 0 || win.isDestroyed()) return;
+    if (!featureActivationRequested("resign", await host.getSettings())) return;
     const outcome = await sendRendererCommand(win, { type: "game.resign" });
     if (outcome !== "completed" && !win.isDestroyed()) {
       await dialog.showMessageBox(win, {
@@ -482,8 +485,8 @@ export function installApplicationMenu(actions: ApplicationMenuActions, settings
         {
           id: "resign-game",
           label: "Resign…",
-          accelerator: "CmdOrCtrl+Shift+R",
-          click: withGameOwner((win) => showResignGame(win)),
+          enabled: false,
+          click: withGameOwner((win) => showResignGame(host, win)),
         },
         {
           id: "reload-game",

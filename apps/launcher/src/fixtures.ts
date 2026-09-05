@@ -29,6 +29,7 @@ export const fixtureSnapshot: LauncherSnapshot = {
     loaded: false,
     restartRequired: false,
     features: {
+      resign: { enabled: false },
       "character-switch": { enabled: true },
       "build-management": { enabled: true },
       "quick-travel": { enabled: true },
