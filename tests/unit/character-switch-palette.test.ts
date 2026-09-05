@@ -9,12 +9,16 @@ import {
 } from "../../src/renderer/character-switch-palette.js";
 import type { CharacterSummary } from "../../src/renderer/companion-character-list-snapshot.js";
 
-const character = (name: string, primaryProfession = 1): CharacterSummary =>
+const character = (
+  name: string,
+  primaryProfession = 1,
+  secondaryProfession = 0,
+): CharacterSummary =>
   Object.freeze({
     name,
     characterKey: primaryProfession.toString(16).padStart(16, "0"),
     primaryProfession,
-    secondaryProfession: 0,
+    secondaryProfession,
     characterType: "roleplaying",
     campaign: 1,
     level: 20,
@@ -106,5 +110,24 @@ describe("character switch ordering", () => {
       searchCharacters(ordered, "a candy").map(({ character: row }) => row.name),
       ["Á Candy Cane Shard"],
     );
+  });
+
+  it("matches primary profession substrings without searching secondaries", () => {
+    const ordered = orderCharacters(Object.freeze([
+      character("Alpha", 6),
+      character("Helen", 1),
+      character("Gamma", 1, 6),
+      character("Shadow", 7),
+      character("Delta", 1, 7),
+      character("Oracle", 8),
+    ]));
+    const names = (query: string) => searchCharacters(ordered, query)
+      .map(({ character: row }) => row.name);
+
+    assert.deepEqual(names("ele"), ["Alpha", "Helen"]);
+    assert.deepEqual(names("sin"), ["Shadow"]);
+    assert.deepEqual(names("rit"), ["Oracle"]);
+    assert.deepEqual(names("rt"), []);
+    assert.deepEqual(names("alpha ele"), []);
   });
 });
