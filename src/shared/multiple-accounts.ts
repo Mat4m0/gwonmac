@@ -51,6 +51,8 @@ export interface MultiWorkspace {
    * classified. `null` means this installation started with isolated profiles.
    */
   readonly legacyPrimaryProfileId?: ProfileId | null;
+  /** Display name only; the adopted identity and storage never change. */
+  readonly legacyPrimaryProfileName?: string;
 }
 
 export type AccountWorkspace = MultiWorkspace & Readonly<{
@@ -188,8 +190,14 @@ export function parseMultiWorkspace(value: unknown): MultiWorkspace {
       }
     }
   }
+  const legacyPrimaryProfileName = source.legacyPrimaryProfileName === undefined
+    ? undefined : parseProfileName(source.legacyPrimaryProfileName);
+  if (legacyPrimaryProfileName !== undefined && (!legacyPrimaryProfileId || names.has(profileNameKey(legacyPrimaryProfileName)))) {
+    throw new AppError("bad_multi_workspace", "adopted profile name must be unique and have an adopted profile");
+  }
   return {
     formatVersion: 1,
+    ...(legacyPrimaryProfileName === undefined ? {} : { legacyPrimaryProfileName }),
     profiles,
     deletingProfileIds,
     ...(legacyPrimaryProfileId === undefined

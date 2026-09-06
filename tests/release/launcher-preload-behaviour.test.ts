@@ -61,7 +61,7 @@ test("the built launcher preload exposes every launcher command and nothing else
 
   await api.state.get();
   await api.profiles.create({ name: "Second account" });
-  await api.profiles.updateAppearance({ id, icon: "swords", color: "#496b58" });
+  await api.profiles.update({ id, name: "Main", icon: "swords", color: "#496b58" });
   await api.profiles.setSelection([id]);
   await api.profiles.play([id]);
   await api.profiles.show(id);

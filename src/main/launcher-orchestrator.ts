@@ -165,7 +165,7 @@ export class LauncherOrchestrator {
 
   async play(ids: readonly ProfileId[]): Promise<void> {
     this.options.accounts.validateOpenable(ids);
-    await this.options.state.setSelection(ids);
+    // Launch intent is independent of the remembered batch selection.
     const runtime = new Map(
       this.options.accounts.state().profiles.map((profile) => [profile.id, profile]),
     );

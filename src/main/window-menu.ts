@@ -18,7 +18,7 @@ import {
   type BaseWindow,
   type MenuItemConstructorOptions,
 } from "electron";
-import type { LauncherDestination } from "../shared/launcher-contracts.js";
+import type { LauncherDestination, LauncherProfileSummary } from "../shared/launcher-contracts.js";
 import {
   EXTERNAL_URLS,
   type AppSettings,
@@ -46,6 +46,7 @@ import {
 import type { WindowHost } from "./window.js";
 import { resolveShortcuts, shortcutAccelerator, type ShortcutAction } from "../shared/keyboard-shortcuts.js";
 import { windowRegistry } from "./window-registry.js";
+import type { ProfileId } from "../shared/multiple-accounts.js";
 
 const USER_GUIDE_URL = `${EXTERNAL_URLS.github}/blob/main/docs/user-guide.md`;
 
@@ -54,16 +55,55 @@ export interface ApplicationMenuActions {
   /** Window state stays window.ts's; the menu only asks for the reset. */
   resetWindowState: (win: BrowserWindow) => Promise<void>;
   revealLauncher: LauncherReveal;
+  accounts: AccountMenuActions;
 }
 
 export type LauncherReveal = (destination?: LauncherDestination) => void;
+
+export interface AccountMenuActions {
+  profiles(): readonly LauncherProfileSummary[];
+  activate(id: ProfileId): Promise<void>;
+}
+
+function accountMenuItems(reveal: LauncherReveal, actions: AccountMenuActions): MenuItemConstructorOptions[] {
+  const status = {
+    ready: "", running: " — Open", failed: " — Try again",
+    queued: " — Waiting", opening: " — Opening…", checking: " — Opening…",
+  };
+  return [
+    { id: "manage-accounts", label: "Manage Accounts…", click: () => reveal("accounts") },
+    { type: "separator" },
+    ...actions.profiles().filter(profile => !profile.archived).map(profile => ({
+      id: `activate-account-${profile.id}`,
+      label: `${profile.name}${status[profile.state]}`,
+      enabled: profile.state === "ready" || profile.state === "failed" || profile.state === "running",
+      click: () => { void actions.activate(profile.id).catch(() => reveal("accounts")); },
+    })),
+  ];
+}
+
+let refreshAccountMenu: (() => void) | undefined;
+export function refreshNativeAccountsMenu(): void { refreshAccountMenu?.(); }
 
 /** Install one native Window menu and add the launcher's explicit recovery. */
 export function installNativeApplicationMenu(
   template: MenuItemConstructorOptions[],
   revealLauncher: LauncherReveal,
+  accounts: AccountMenuActions,
 ): void {
-  const menu = Menu.buildFromTemplate(template);
+  const accountItems = accountMenuItems(revealLauncher, accounts);
+  const menu = Menu.buildFromTemplate([
+    ...template.slice(0, 2),
+    { id: "accounts", label: "Accounts", submenu: accountItems },
+    ...template.slice(2),
+  ]);
+  refreshAccountMenu = () => {
+    const next = accountMenuItems(revealLauncher, accounts);
+    if (next.length !== accountItems.length || next.some((item, index) =>
+      item.id !== accountItems[index]?.id || item.label !== accountItems[index]?.label || item.enabled !== accountItems[index]?.enabled)) {
+      installNativeApplicationMenu(template, revealLauncher, accounts);
+    }
+  };
   const windowMenu = menu.items.find(
     (item) => item.role?.toLowerCase() === "windowmenu",
   )?.submenu;
@@ -71,7 +111,7 @@ export function installNativeApplicationMenu(
     windowMenu.insert(0, new MenuItem({
       id: "show-launcher",
       label: "Show Launcher",
-      click: () => revealLauncher("home"),
+      click: () => revealLauncher(),
     }));
     windowMenu.insert(1, new MenuItem({ type: "separator" }));
   }
@@ -347,7 +387,7 @@ async function showQuitOrReloadGameOnce(
 }
 
 export function installApplicationMenu(actions: ApplicationMenuActions, settings?: ToolMenuSettings): void {
-  const { host, resetWindowState, revealLauncher } = actions;
+  const { host, resetWindowState, revealLauncher, accounts } = actions;
   const isMac = process.platform === "darwin";
   const dev = isDevBuild();
 
@@ -618,7 +658,7 @@ export function installApplicationMenu(actions: ApplicationMenuActions, settings
     }
   }
   rebuildGameMenu = next => installApplicationMenu(actions, next);
-  installNativeApplicationMenu(template, revealLauncher);
+  installNativeApplicationMenu(template, revealLauncher, accounts);
   if (!settings) {
     const installedMenu = Menu.getApplicationMenu();
     void host.getSettings().then(next => {

@@ -1,15 +1,25 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import { Archive, Crown, Flame, Map as MapIcon, Pencil, Play, Plus, RotateCcw, ScrollText, Shield, Star, Swords } from "lucide-vue-next";
-import type { LauncherProfileSummary } from "@shared/launcher-contracts";
+import type { LauncherProfileSummary, LauncherReadiness } from "@shared/launcher-contracts";
 import type { ProfileId } from "@shared/multiple-accounts";
 import { profileStatus } from "../launcher-view-model";
 
-defineProps<{ profiles: readonly LauncherProfileSummary[] }>();
+const props = defineProps<{
+  profiles: readonly LauncherProfileSummary[];
+  selected: readonly ProfileId[];
+  readiness: LauncherReadiness;
+}>();
+const activeProfiles = computed(() => props.profiles.filter(profile => !profile.archived));
+const openCount = computed(() => activeProfiles.value.filter(profile => profile.state === "running").length);
+const failedCount = computed(() => activeProfiles.value.filter(profile => profile.state === "failed").length);
 const emit = defineEmits<{
   add: [];
+  toggle: [id: ProfileId];
   customize: [profile: LauncherProfileSummary];
   show: [id: ProfileId];
   play: [id: ProfileId];
+  cancel: [id: ProfileId];
   restore: [id: ProfileId];
   delete: [id: ProfileId];
 }>();
@@ -19,18 +29,23 @@ const profileIcons = { swords: Swords, archive: Archive, map: MapIcon, scroll: S
 
 <template>
   <section class="page accounts-page">
-    <div class="page-head"><div><h1>Game windows</h1><p>Add another account when you want another game window.</p></div><button class="secondary" @click="emit('add')"><Plus />Add account</button></div>
+    <div class="page-head">
+      <div><h1>Accounts</h1><p>{{ activeProfiles.length }} accounts · {{ openCount }} open<span v-if="failedCount"> · {{ failedCount }} need attention</span></p></div>
+      <button class="secondary" @click="emit('add')"><Plus />Add account</button>
+    </div>
+    <div class="accounts-list-heading"><span>Select accounts to open together.</span><span>Play or show one account</span></div>
     <div class="account-cards">
-      <article v-for="profile in profiles.filter(candidate => !candidate.archived)" :key="profile.id" class="account-card">
-        <div class="avatar" :style="{ background: profile.appearance.color }"><component :is="profileIcons[profile.appearance.icon as keyof typeof profileIcons] ?? Swords" /></div>
-        <div class="account-details"><div class="account-title"><h3>{{ profile.name }}</h3><span class="status-dot" :class="profile.state" aria-hidden="true" /></div><p>{{ profileStatus(profile) }}</p></div>
+      <article v-for="profile in activeProfiles" :key="profile.id" class="account-card" :class="{ selected: selected.includes(profile.id) }">
+        <input class="account-select" type="checkbox" :disabled="selected.length === 1 && selected.includes(profile.id)" :title="selected.length === 1 && selected.includes(profile.id) ? 'Select another account before removing this one' : undefined" :checked="selected.includes(profile.id)" :aria-label="`Select ${profile.name}`" @change="emit('toggle', profile.id)" />
+        <div class="avatar" :style="{ background: profile.appearance.color }" aria-hidden="true"><component :is="profileIcons[profile.appearance.icon as keyof typeof profileIcons] ?? Swords" /></div>
+        <div class="account-details"><h2>{{ profile.name }}</h2></div>
+        <p class="account-state" :class="{ failed: profile.state === 'failed' }" :role="profile.state === 'opening' || profile.state === 'checking' ? 'status' : undefined"><span class="status-dot" :class="profile.state" aria-hidden="true" />{{ profileStatus(profile) }}</p>
         <div class="account-actions">
-          <button class="secondary account-appearance" @click="emit('customize', profile)"><Pencil />Edit</button>
-          <button v-if="profile.state === 'running'" class="secondary" @click="emit('show', profile.id)">Show</button>
-          <template v-else-if="profile.state === 'ready' || profile.state === 'failed'">
-            <button class="secondary" @click="emit('play', profile.id)"><RotateCcw v-if="profile.state === 'failed'" /><Play v-else />{{ profile.state === 'failed' ? 'Try again' : 'Play' }}</button>
-          </template>
-          <span v-else class="account-progress" role="status">{{ profileStatus(profile) }}</span>
+          <button v-if="profile.state === 'running'" class="profile-action" :aria-label="`Show ${profile.name}`" @click="emit('show', profile.id)">Show</button>
+          <button v-else-if="profile.state === 'ready' || profile.state === 'failed'" class="profile-action" :aria-label="`${readiness.state === 'repair-required' ? 'Repair game files for' : profile.state === 'failed' ? 'Try again for' : 'Play'} ${profile.name}`" @click="emit('play', profile.id)"><RotateCcw v-if="profile.state === 'failed' || readiness.state === 'repair-required'" aria-hidden="true" /><Play v-else aria-hidden="true" />{{ readiness.state === 'repair-required' ? 'Repair' : profile.state === 'failed' ? 'Try again' : 'Play' }}</button>
+          <button v-else-if="profile.state === 'queued'" class="profile-action" :aria-label="`Cancel waiting for ${profile.name}`" @click="emit('cancel', profile.id)">Cancel</button>
+          <button v-else class="profile-action" disabled>Opening</button>
+          <button class="account-appearance" :aria-label="`Edit ${profile.name}`" @click="emit('customize', profile)"><Pencil aria-hidden="true" /><span>Edit</span></button>
         </div>
       </article>
     </div>

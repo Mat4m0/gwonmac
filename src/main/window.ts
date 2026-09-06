@@ -56,6 +56,7 @@ import {
 } from "./renderer-commands.js";
 import {
   installApplicationMenu,
+  type AccountMenuActions,
   showQuitOrReloadGame,
   updateToolsMenuItems,
   showResignGame,
@@ -86,6 +87,7 @@ export interface WindowHost {
   requestQuit: (win: BrowserWindow) => void;
   prepareRendererRecovery: () => Promise<void>;
   revealLauncher: (destination?: LauncherDestination) => void;
+  accounts: AccountMenuActions;
   gameWindowClosed?: () => void;
 }
 
@@ -514,48 +516,66 @@ export function createMainWindow(
   const rendererId = win.webContents.id;
   const diagnosticOwnerId = options.diagnosticOwnerId;
 
-  let resolvePresentation!: () => void;
-  let rejectPresentation!: (error: Error) => void;
-  const presentationPromise = new Promise<void>((resolve, reject) => {
-    resolvePresentation = resolve;
-    rejectPresentation = reject;
-  });
-  const presentationTimeout = setTimeout(() => {
-    const gate = gamePresentationGates.get(win);
-    if (!gate || gate.settled) return;
-    gate.fail(new Error("game did not submit its first frame"));
-    options.onRendererFailure?.();
-    if (!win.isDestroyed()) win.destroy();
-  }, GAME_FIRST_FRAME_TIMEOUT_MS);
-  const gate: GamePresentationGate = {
-    browserReady: false,
-    frameReady: false,
-    settled: false,
-    promise: presentationPromise,
-    present: () => {
-      if (gate.settled || !gate.browserReady || !gate.frameReady) return;
-      gate.settled = true;
-      clearTimeout(presentationTimeout);
-      if (initialState?.mode === "maximized") win.maximize();
-      if (!BACKGROUND_LAUNCH) {
-        if (options.showInactive) win.showInactive();
-        else win.show();
-      }
-      if (initialState?.mode === "fullscreen") win.setFullScreen(true);
-      resolvePresentation();
-    },
-    fail: (error) => {
+  const preparePresentation = (reloading: boolean): GamePresentationGate => {
+    let resolvePresentation!: () => void;
+    let rejectPresentation!: (error: Error) => void;
+    const presentationPromise = new Promise<void>((resolve, reject) => {
+      resolvePresentation = resolve;
+      rejectPresentation = reject;
+    });
+    // Reloads have no startup caller awaiting the gate; lifecycle handlers own
+    // their failure state. Keep the rejection available to startup callers too.
+    void presentationPromise.catch(() => undefined);
+    const presentationTimeout = setTimeout(() => {
       if (gate.settled) return;
-      gate.settled = true;
-      clearTimeout(presentationTimeout);
-      rejectPresentation(error);
-    },
+      gate.fail(new Error("game did not submit its first frame"));
+      options.onRendererFailure?.();
+      if (!win.isDestroyed()) win.destroy();
+    }, GAME_FIRST_FRAME_TIMEOUT_MS);
+    const gate: GamePresentationGate = {
+      browserReady: reloading,
+      frameReady: options.awaitFirstFrame === false,
+      settled: false,
+      promise: presentationPromise,
+      present: () => {
+        if (gate.settled || !gate.browserReady || !gate.frameReady) return;
+        gate.settled = true;
+        clearTimeout(presentationTimeout);
+        if (reloading) {
+          options.onRendererRecovered?.();
+        } else {
+          if (initialState?.mode === "maximized") win.maximize();
+          if (!BACKGROUND_LAUNCH) {
+            if (options.showInactive) win.showInactive();
+            else win.show();
+          }
+          if (initialState?.mode === "fullscreen") win.setFullScreen(true);
+        }
+        resolvePresentation();
+      },
+      fail: (error) => {
+        if (gate.settled) return;
+        gate.settled = true;
+        clearTimeout(presentationTimeout);
+        rejectPresentation(error);
+      },
+    };
+    gamePresentationGates.set(win, gate);
+    return gate;
   };
-  gamePresentationGates.set(win, gate);
-  if (options.awaitFirstFrame === false) gate.frameReady = true;
+  const initialPresentation = preparePresentation(false);
   win.once("ready-to-show", () => {
-    gate.browserReady = true;
-    gate.present();
+    initialPresentation.browserReady = true;
+    initialPresentation.present();
+  });
+  win.webContents.on("did-start-navigation", (details) => {
+    if (!details.isMainFrame || details.isSameDocument
+      || !gamePresentationGates.get(win)?.settled) return;
+    options.onRendererRecoveryStart?.();
+    preparePresentation(true);
+  });
+  win.webContents.on("did-finish-load", () => {
+    gamePresentationGates.get(win)?.present();
   });
 
   const rememberNormalBounds = (): void => {
@@ -632,6 +652,7 @@ export function createMainWindow(
       host,
       resetWindowState,
       revealLauncher: host.revealLauncher,
+      accounts: host.accounts,
     });
   };
   installWindowShortcuts(win, {
@@ -720,7 +741,7 @@ export function createMainWindow(
       exitCode: details.exitCode,
     }, diagnosticOwnerId);
     host.sockets.closeAll(rendererId);
-    if (isQuitting()) return;
+    if (isQuitting() || windowRegistry.profileWindow(context.profileId) !== win) return;
     const presentation = gamePresentationGates.get(win);
     if (presentation && !presentation.settled) {
       presentation.fail(new Error("game renderer stopped before its first frame"));
@@ -737,7 +758,7 @@ export function createMainWindow(
       options.onRendererRecoveryStart?.();
       logEvent({ k: "renderer.recoveryScheduled" }, diagnosticOwnerId);
       setTimeout(() => {
-        if (isQuitting() || win.isDestroyed()) return;
+        if (isQuitting() || win.isDestroyed() || !win.webContents.isCrashed()) return;
         void host
           .prepareRendererRecovery()
           .catch((error) => {
@@ -747,18 +768,24 @@ export function createMainWindow(
             }, diagnosticOwnerId);
           })
           .finally(() => {
-            if (isQuitting() || win.isDestroyed()) return;
+            if (isQuitting() || win.isDestroyed() || !win.webContents.isCrashed()) return;
             // Release the immutable profile ownership before registering its
             // replacement. Destroying afterward keeps the transition local to
             // this profile and lets the old closed handler remain idempotent.
             windowRegistry.unregister(win);
-            createMainWindow(host, options);
+            const replacement = createMainWindow(host, options);
             win.destroy();
-            options.onRendererRecovered?.();
-            logEvent({ k: "renderer.recovered" }, diagnosticOwnerId);
+            void waitForGamePresentation(replacement).then(() => {
+              if (windowRegistry.profileWindow(context.profileId) !== replacement
+                || replacement.webContents.isDestroyed() || replacement.webContents.isCrashed()) return;
+              options.onRendererRecovered?.();
+              logEvent({ k: "renderer.recovered" }, diagnosticOwnerId);
+            }).catch(() => {
+              // The replacement's timeout, crash, or close handler owns status.
+            });
           });
       }, 500);
-    } else if (details.reason !== "clean-exit") {
+    } else {
       options.onRendererFailure?.();
       void dialog.showMessageBox(win, {
         type: "error",

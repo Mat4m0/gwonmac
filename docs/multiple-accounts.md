@@ -13,16 +13,39 @@ profile. **Show** restores and focuses its existing window. Profiles open
 sequentially and the first new window remains the client-generation canary.
 Failure in one profile does not close another profile.
 
+The account picker offers **Play** or **Show** beside each account. These
+actions affect only that account and do not change the remembered selection.
+Checkboxes choose the group for the main launch button. Opening accounts
+cannot be launched again; failed accounts offer **Try again**. The picker
+scrolls when the account list exceeds the available window height. Waiting
+accounts offer **Cancel** without changing the remembered selection.
+
+Accounts uses compact rows with selection checkboxes and individual actions.
+The last selected account remains checked until another account is selected.
+**Edit** changes the name, icon, and color. Names remain unique across the
+workspace and update open game-window titles. An adopted Main account stores
+its optional display name in `legacyPrimaryProfileName` in the workspace;
+its profile ID, storage, and login remain unchanged. Name and appearance
+writes use their existing owners. If one write fails, the editor stays open
+and warns that some changes may already be saved. Retrying is safe.
+
+The launcher remembers the last Home or Accounts page in its presentation
+preferences. Settings, Known issues, and Feedback do not replace this startup
+destination. Missing preferences keep Home as the default. Existing documents
+need no migration. Older builds ignore these additive presentation fields;
+saving with an older build can discard the remembered page or adopted name.
+
 ## Canonical owners
 
 | State | Owner |
 |---|---|
 | Profile registry and deletion journal | `multi/workspace.json` |
-| Launcher setup, content order, remembered selection, profile appearance | `launcher-state.json` |
+| Launcher setup, content order, starting page, remembered selection, profile appearance | `launcher-state.json` |
 | Live profile state | Main-process profile runtime |
 | Queued launch intent and launcher snapshot | Main-process launcher orchestrator |
 | Launcher and game-window identity | Main-process window registry |
 | Window presentation | Main-process window coordinator |
+| Launcher bounds and window mode | `launcher-window-state.json` |
 | Application settings, client downloads, repair, updates, Tools install | Global main-process owners |
 | Cartography visited-map knowledge | Global `cartography-map-knowledge.json` |
 | Login, Steam session, game storage, private libraries, window state | Resolved profile storage |
@@ -90,8 +113,16 @@ restores it at Settings. Closing the launcher hides it while a game is open.
 Closing one game affects only that profile; closing the final game reveals the
 launcher. A Dock activation restores the most recently used live window. If
 that window has closed, it falls back through the previous game windows before
-revealing the launcher. The Dock menu's **Show Launcher** command always
-restores the launcher at Home.
+revealing the launcher. The Dock and Window menus' **Show Launcher** commands
+preserve the current launcher page. The native **Accounts** menu opens account
+management or activates a named account. Running accounts show their existing
+window; waiting and opening accounts cannot be launched again. Menu names and
+states refresh from the canonical launcher snapshot.
+
+The launcher restores its normal bounds and maximized or fullscreen state
+independently of game windows. It reuses the existing display-fitting rules
+when a saved monitor is unavailable. Placement writes are queued and flushed
+on close and application quit.
 A second app launch restores the launcher explicitly. An asynchronous Play
 completion does not steal focus if the player has already moved to another app.
 
@@ -112,11 +143,27 @@ launcher to one repair state without marking every profile as failed.
 
 A game window is created only after a playable client exists. Electron keeps it
 hidden after `ready-to-show`; the game renderer then submits the dedicated
-`gameReadyToPresent` event with its owning profile. Main accepts that event once,
+`gameReadyToPresent` event with its owning profile. Main accepts that event once per document,
 restores maximize or fullscreen state, and presents the window only if the
 launch still owns focus. A crash or 90-second timeout destroys only that
 profile window and returns a local retry state. Diagnostics are not used as
 presentation control flow.
+
+**Open** means the profile owns an existing native game window with a live
+renderer; it does not imply a game-server login or network connection. Hidden
+and minimized windows remain Open. Normal closure returns the profile to
+Ready. Renderer failure removes Open immediately: automatic recovery and
+manual reload use Opening until the replacement document submits its first
+frame; unrecovered failure offers Try again. Reload does not restore old
+bounds or steal focus. Late startup checks cannot promote a closed or replaced
+window back to Open.
+
+Main publishes lifecycle changes through revisioned launcher snapshots. The
+launcher subscribes before fetching its initial snapshot and ignores older
+revisions, so closing a window during connection cannot leave stale status.
+Snapshots reconcile running state against the existing window registry and
+renderer health. There is no polling timer, persisted online flag, or second
+window registry.
 
 ## Security boundary
 

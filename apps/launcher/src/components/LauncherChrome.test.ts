@@ -138,12 +138,12 @@ describe("launcher chrome", () => {
       ...profile,
       state: index === 1 ? "queued" as const : profile.state,
     }));
-    const wrapper = mount(AccountsView, { props: { profiles: waiting } });
+    const wrapper = mount(AccountsView, { props: { profiles: waiting, selected: [], readiness: fixtureSnapshot.readiness } });
     const cards = wrapper.findAll(".account-card");
 
     expect(cards[1]!.text()).toContain("Waiting for game files");
     expect(cards[1]!.findAll("button").map((button) => button.text()))
-      .toEqual(["Edit"]);
+      .toEqual(["Cancel", "Edit"]);
   });
 
   it("keeps archive out of the primary account actions", () => {
@@ -151,7 +151,7 @@ describe("launcher chrome", () => {
       ...profile,
       state: "ready" as const,
     }));
-    const wrapper = mount(AccountsView, { props: { profiles: readyProfiles } });
+    const wrapper = mount(AccountsView, { props: { profiles: readyProfiles, selected: [], readiness: fixtureSnapshot.readiness } });
 
     expect(wrapper.text()).not.toContain("Archive");
     expect(wrapper.findAll(".account-appearance")).toHaveLength(2);

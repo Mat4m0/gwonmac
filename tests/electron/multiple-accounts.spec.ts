@@ -598,6 +598,7 @@ test("global map settings live in the launcher and survive restart", async () =>
 test("renderer recovery stays inside one profile and leaves the launcher alive", async () => {
   const fixture = await launchCachedClient("gw-launcher-recovery-", {
     GW_TEST_RETURN_LAUNCHER: "1",
+    GW_TEST_ALLOW_UNREADY_LAUNCH: "0",
   });
   try {
     await fixture.page.getByRole("button", { name: "Continue" }).click();
@@ -630,6 +631,33 @@ test("renderer recovery stays inside one profile and leaves the launcher alive",
       fixture.app.windows().filter((page) => page.url() === "gw://app/").length,
     ).toBe(1);
 
+    await expect.poll(() => fixture.page.evaluate(async () =>
+      (await window.launcherNative.state.get()).profiles[0]?.state,
+    )).toBe("opening");
+    const replacementGame = fixture.app.windows().find((page) => page.url() === "gw://app/");
+    if (!replacementGame) throw new Error("Recovered account window is required");
+    await replacementGame.evaluate(() => window.gwNative.client.readyToPresent());
+    await expect.poll(() => fixture.page.evaluate(async () =>
+      (await window.launcherNative.state.get()).profiles[0]?.state,
+    )).toBe("running");
+
+    await fixture.app.evaluate(({ BrowserWindow }) => {
+      BrowserWindow.getAllWindows()
+        .find((win) => win.getTitle().endsWith("Main account"))?.hide();
+    });
+    expect(await fixture.page.evaluate(async () =>
+      (await window.launcherNative.state.get()).profiles[0]?.state,
+    )).toBe("running");
+
+    await replacementGame.reload();
+    await expect.poll(() => fixture.page.evaluate(async () =>
+      (await window.launcherNative.state.get()).profiles[0]?.state,
+    )).toBe("opening");
+    await replacementGame.evaluate(() => window.gwNative.client.readyToPresent());
+    await expect.poll(() => fixture.page.evaluate(async () =>
+      (await window.launcherNative.state.get()).profiles[0]?.state,
+    )).toBe("running");
+
     await fixture.app.evaluate(({ BrowserWindow }) => {
       BrowserWindow.getAllWindows()
         .find((win) => win.getTitle().endsWith("Main account"))
@@ -637,6 +665,9 @@ test("renderer recovery stays inside one profile and leaves the launcher alive",
     });
     await expect.poll(() => fixture.app.windows().filter((page) => page.url() === "gw://app/").length)
       .toBe(0);
+    await expect.poll(() => fixture.page.evaluate(async () =>
+      (await window.launcherNative.state.get()).profiles[0]?.state,
+    )).toBe("ready");
     await expect(fixture.page.locator("body")).toBeVisible();
   } finally {
     await closeOffline(fixture);
