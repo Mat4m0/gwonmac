@@ -801,6 +801,7 @@ export interface ClientCompatibility {
     skillCooldownObservation: OptionalFeatureStatus;
     playerEffectObservation: OptionalFeatureStatus;
     effectIconGeometry: OptionalFeatureStatus;
+    resignAction: OptionalFeatureStatus;
     playRegionObservation: OptionalFeatureStatus;
     preGameControls: OptionalFeatureStatus;
     characterSwitchAction: OptionalFeatureStatus;
@@ -1006,7 +1007,7 @@ export type RendererCommand =
   | { type: "storage.open" }
   | { type: "travel.toggle" }
   | { type: "character.toggle" }
-  | { type: "game.resign"; phase: "prepare" | "submit" | "cancel" }
+  | { type: "game.resign" }
   | { type: "filesystem.sync" }
   | { type: "input.trace"; enabled: boolean }
   | { type: "diagnostics.toggle" }

@@ -49,6 +49,7 @@ function projectCompatibility(
       skillCooldownObservation: status("skillCooldownObservation"),
       playerEffectObservation: status("playerEffectObservation"),
       effectIconGeometry: status("effectIconGeometry"),
+      resignAction: status("resignAction"),
       playRegionObservation: status("playRegionObservation"),
       preGameControls: status("preGameControls"),
       characterSwitchAction: status("characterSwitchAction"),

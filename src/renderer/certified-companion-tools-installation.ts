@@ -22,6 +22,7 @@ import { createCompanionSequenceFeed } from "./companion-sequence-feed.js";
 import type { EnhancementCommandEnqueue } from "./enhancement-team-commands.js";
 import type * as TeamCommandsModule from "./enhancement-team-commands.js";
 import type { ProfessionCommandTraceReader } from "./profession-command-trace.js";
+import { installResignCommand } from "./resign.js";
 import type { StorageInstallation } from "./enhancement-storage-installation.js";
 import type { TravelInstallation } from "./enhancement-travel-installation.js";
 import type {
@@ -255,6 +256,7 @@ export async function prepareToolsCompanionExtension(
       const session = activateTools({ context, capabilities, program, foundation, observeState,
         skills, slots, cooldowns, playerEffects, effectIcons, enqueue, traceReader, teamCommands, storage,
         travel, configureTrade, takeTrade, configureChatFilters, friendPointer,
+        resignExports: capabilities.resignAction ? exports : null,
         quickItemMove, quickItemMovePointer });
       activated = true;
       return session;
@@ -289,6 +291,7 @@ type ToolsInput = Readonly<{
   enqueue: EnhancementCommandEnqueue | null;
   traceReader: ProfessionCommandTraceReader | null;
   teamCommands: typeof TeamCommandsModule | null;
+  resignExports: WebAssembly.Exports | null;
   storage: StorageInstallation | null;
   travel: TravelInstallation | null;
   configureTrade: ((enabled: number) => number) | null;
@@ -303,6 +306,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
   const { context, capabilities, program, foundation, observeState, skills,
     slots, cooldowns, playerEffects, effectIcons, enqueue, traceReader, teamCommands, storage, travel,
     configureTrade, takeTrade, configureChatFilters } = input;
+  const resign = input.resignExports ? installResignCommand(input.resignExports) : null;
   let activeFriendPointer = input.friendPointer;
   let activeQuickItemMovePointer = input.quickItemMovePointer;
   const { memory, core, kernel, playRegions } = context;
@@ -370,6 +374,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
       () => { unsubscribeEffects?.(); unsubscribeEffects = null; },
       () => { unsubscribeEffectIcons?.(); unsubscribeEffectIcons = null; },
       () => { effectOverlay?.dispose(); effectOverlay = null; },
+      () => { resign?.dispose(); },
       () => { configureTrade?.(0); },
       () => { configureChatFilters?.(0); },
       () => { quickItemMoveInstallation?.dispose(); quickItemMoveInstallation = null; },
@@ -520,6 +525,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
     effectIcons.setActive(effectIconsActive());
     effectOverlay?.setEnabled(policy().effectTimers && effectIconsActive());
     syncObservers();
+    resign?.update(policy().resign);
     syncStorage();
     syncTravel();
     quickItemMoveInstallation?.update(policy().quickItemMove);

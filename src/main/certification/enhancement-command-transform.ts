@@ -251,6 +251,7 @@ export function commandDrain(
   travelBranch: Uint8Array | null,
   characterBranch: Uint8Array | null,
   quickItemMoveBranch: Uint8Array | null,
+  resignBranch: Uint8Array | null = null,
 ): Uint8Array {
   return concat(
     uleb(0),
@@ -264,6 +265,7 @@ export function commandDrain(
           Uint8Array.of(0x0f, 0x0b),
         )]
       : []),
+    ...(resignBranch ? [resignBranch] : []),
     ...(travelBranch ? [travelBranch] : []),
     ...(characterBranch ? [characterBranch] : []),
     ...(quickItemMoveBranch ? [quickItemMoveBranch] : []),

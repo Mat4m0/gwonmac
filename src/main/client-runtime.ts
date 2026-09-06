@@ -474,6 +474,9 @@ export class ClientRuntime {
           supported.playerEffectObservation,
           preparationFailed,
         ),
+        resignAction: optionalFeatureStatus(
+          requested.resignAction, effective.resignAction, supported.resignAction, preparationFailed,
+        ),
         effectIconGeometry: optionalFeatureStatus(
           requested.effectIconGeometry,
           effective.effectIconGeometry,

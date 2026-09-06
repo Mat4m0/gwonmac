@@ -33,8 +33,10 @@ Current integrated features are:
   menu.
 
 - **Resign**: an optional Tools switch, off by default. Its configurable shortcut
-  defaults to Command-Shift-R and asks before sending `/resign` through an empty
-  PvE chat editor. Turning off Resign or Tools disables the command immediately.
+  defaults to Command-Shift-R and asks before sending the fixed `/resign` command
+  through the certified native chat sender in PvE. It does not type into chat.
+  Turning off Resign or Tools disables the command and cancels a queued request.
+  A changed native chat path withdraws Resign until its exact bodies are reviewed.
 
 - **Build Library** (Beta): host-owned build and team authoring. Command-B
   opens it when both Tools Beta and Build Library are enabled, and its Apply

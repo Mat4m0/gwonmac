@@ -5,7 +5,7 @@ import { expect, test } from "@playwright/test";
 import { closeOffline, launchPlayableClient } from "./fixtures.mjs";
 import { startGameInput } from "./input-helpers.js";
 
-test("resign confirms once and sends only /resign through an empty chat editor", async () => {
+test("resign confirms once and requests the native command without editing chat", async () => {
   const fixture = await launchPlayableClient("gw-resign-", { GW_BACKGROUND_LAUNCH: "0" }, async userData => {
     await writeFile(path.join(userData, "settings.json"), JSON.stringify({ gwonmacTools: true, resignEnabled: true }));
   });
@@ -18,7 +18,14 @@ test("resign confirms once and sends only /resign through an empty chat editor",
       win.webContents.sendInputEvent({ type: "keyDown", keyCode: key, modifiers: ["meta", "shift"] });
       win.webContents.sendInputEvent({ type: "keyUp", keyCode: key, modifiers: ["meta", "shift"] });
     }, key);
-    await page.evaluate(() => {
+    await page.evaluate(async () => {
+      const modulePath = "gw://app/resign.js";
+      const { installResignCommand } = await import(modulePath);
+      const resign = installResignCommand({
+        enhancement_configure_resign() { return 1; },
+        enhancement_resign() { document.body.dataset.resignSubmitted = "native"; return 1; },
+      });
+      resign.update(true);
       document.getElementById("loading")?.classList.add("gone");
       window.gwCharacterSwitch = {
         context: "pve-explorable",
@@ -29,22 +36,6 @@ test("resign confirms once and sends only /resign through an empty chat editor",
         subscribe: () => () => {},
       };
       const canvas = document.getElementById("canvas")!;
-      const field = document.getElementById("osk-input-text") as HTMLInputElement;
-      canvas.addEventListener("keydown", (event) => {
-        if ((event as KeyboardEvent).key === "Enter") {
-          const module = window.Module as { oskActiveInput?: Element; oskIsActive?: boolean };
-          module.oskActiveInput = field;
-          module.oskIsActive = true;
-          field.value = ""; field.focus();
-        }
-      });
-      field.addEventListener("input", (event) => {
-        document.body.dataset.resignText = (event as InputEvent).data ?? "";
-        document.body.dataset.resignTrusted = String(event.isTrusted);
-      });
-      field.addEventListener("keydown", (event) => {
-        if (event.key === "Enter") document.body.dataset.resignSubmitted = field.value;
-      });
       canvas.focus();
     });
     await app.evaluate(({ dialog }) => {
@@ -61,15 +52,14 @@ test("resign confirms once and sends only /resign through an empty chat editor",
       return item.click(item, win, {} as Electron.KeyboardEvent);
     });
     await press("R");
-    await expect(page.locator("body")).not.toHaveAttribute("data-resign-text", /.*/u);
+    await expect(page.locator("body")).not.toHaveAttribute("data-resign-submitted", /.*/u);
     await app.evaluate(({ dialog }) => {
       dialog.showMessageBox = async () => ({ response: 0, checkboxChecked: false });
     });
     await page.locator("#canvas").focus();
     await press("R");
-    await expect(page.locator("body")).toHaveAttribute("data-resign-text", "/resign");
-    await expect(page.locator("body")).toHaveAttribute("data-resign-submitted", "/resign");
-    await expect(page.locator("body")).toHaveAttribute("data-resign-trusted", "true");
+    await expect(page.locator("body")).toHaveAttribute("data-resign-submitted", "native");
+    await expect(page.locator("#osk-input-text")).toHaveValue("");
     const launcher = app.windows().find(window => window.url().endsWith("launcher/index.html"));
     if (!launcher) throw new Error("launcher is required");
     await app.evaluate(({ dialog }) => {

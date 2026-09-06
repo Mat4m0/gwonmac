@@ -400,6 +400,13 @@ export interface KnownEnhancementBuild {
       }>;
     }>;
   }>;
+  /** Fixed command authority; no renderer-supplied text or native pointer. */
+  resignAction?: Readonly<{
+    functionIndex: number;
+    params: readonly ["i32", "i32"];
+    results: readonly [];
+    bodySha256: string;
+  }>;
   chatAliases?: Readonly<{
     parser: Readonly<{
       functionIndex: number;
@@ -640,6 +647,7 @@ export function supportedEnhancementCapabilities(
       && build.uiDispatcher !== undefined
       && build.playerEffectObservation !== undefined,
     effectIconGeometry: build.effectIconGeometry !== undefined,
+    resignAction: playRegionObservation && gameThread && build.resignAction !== undefined,
   });
   // Evidence locators decide only what they proved. The shared registry owns
   // every dependency and closes the available set in one canonical place.

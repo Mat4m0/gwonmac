@@ -96,6 +96,7 @@ export const LOCAL_FEATURE_INVARIANTS = Object.freeze({
     "local.game-thread-safe-point",
     "xunlai.data-window-anchors",
   ] as const),
+  resignAction: Object.freeze([...SHARED_FEATURE_INVARIANTS, "resign.native-chat-path"] as const),
   chatAliases: Object.freeze([
     ...SHARED_FEATURE_INVARIANTS,
     "local.ui-dispatcher",
@@ -222,6 +223,8 @@ export interface LocalFeatureCertificateMap {
     core: EnhancementProofCore;
     xunlaiAction: CertifiedXunlaiAction;
   }> & RequiredBuildFact<"observationBase" | "uiDispatcher" | "gameThread">;
+  readonly resignAction: Readonly<{ core: EnhancementProofCore }>
+    & RequiredBuildFact<"playRegionObservation" | "gameThread" | "resignAction">;
   readonly chatAliases: Readonly<{ core: EnhancementProofCore }>
     & RequiredBuildFact<"uiDispatcher" | "chatAliases">;
   readonly skillSlotGeometry: Readonly<{ core: EnhancementProofCore }>
@@ -453,6 +456,12 @@ export function localFeatureVerdictsForBuild(
         }),
       })
     : null;
+  const resignAction = effective?.resignAction && core !== null
+      && build?.playRegionObservation !== undefined
+      && build.gameThread !== undefined && build.resignAction !== undefined
+    ? Object.freeze({ core, playRegionObservation: build.playRegionObservation,
+        gameThread: build.gameThread, resignAction: build.resignAction })
+    : null;
   const chatAliases = effective?.chatAliases && core !== null
       && build?.uiDispatcher !== undefined
       && build.chatAliases !== undefined
@@ -590,6 +599,10 @@ export function localFeatureVerdictsForBuild(
       xunlaiAction,
       failures.xunlaiAction,
       "xunlai.data-window-anchors",
+    ),
+    resignAction: featureVerdict<"resignAction">(
+      inputSha256, requested.resignAction, resignAction,
+      failures.resignAction, "resign.native-chat-path",
     ),
     chatAliases: featureVerdict<"chatAliases">(
       inputSha256,

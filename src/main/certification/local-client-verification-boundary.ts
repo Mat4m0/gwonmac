@@ -2,6 +2,7 @@
  * Strict process-boundary validation for ABI- and input-bound feature verdicts.
  * It rejects stale, malformed, and cross-input proof messages.
  */
+import { RESIGN_NATIVE_SENDER } from "./enhancement-resign-proof.js";
 import { isDeepStrictEqual } from "node:util";
 import { isDigest } from "../../shared/digest.js";
 import {
@@ -148,6 +149,7 @@ function featureFailuresFromVerdicts(
   const teamApply = refusalForFeature("teamApply", verdicts.teamApply);
   const travelAction = refusalForFeature("travelAction", verdicts.travelAction);
   const xunlaiAction = refusalForFeature("xunlaiAction", verdicts.xunlaiAction);
+  const resignAction = refusalForFeature("resignAction", verdicts.resignAction);
   const chatAliases = refusalForFeature("chatAliases", verdicts.chatAliases);
   const chatFiltering = refusalForFeature(
     "chatFiltering",
@@ -198,6 +200,7 @@ function featureFailuresFromVerdicts(
     || quickItemMove === null
     || playerEffectObservation === null
     || effectIconGeometry === null
+    || resignAction === null
   ) return null;
   return Object.freeze({
     ...(nativeCursor ? { nativeCursor } : {}),
@@ -216,6 +219,7 @@ function featureFailuresFromVerdicts(
     ...(quickItemMove ? { quickItemMove } : {}),
     ...(playerEffectObservation ? { playerEffectObservation } : {}),
     ...(effectIconGeometry ? { effectIconGeometry } : {}),
+    ...(resignAction ? { resignAction } : {}),
   });
 }
 
@@ -699,6 +703,10 @@ function isAutomaticSemanticBuild(
     || !isIndex(build.tableSlot)
     || !isDigest(build.hookBodySha256)
   ) return false;
+  if (build.resignAction !== undefined && (
+    !build.playRegionObservation || !build.gameThread
+    || !isDeepStrictEqual(build.resignAction, RESIGN_NATIVE_SENDER)
+  )) return false;
   const hasCursor = build.cursorEvent !== undefined;
   const hasPlayRegion = build.playRegionObservation !== undefined;
   const hasObservation = build.observationBase !== undefined;

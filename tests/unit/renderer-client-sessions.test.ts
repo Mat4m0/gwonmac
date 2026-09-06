@@ -22,6 +22,7 @@ const base: ClientSession = {
       skillCooldownObservation: { status: "off" },
       playerEffectObservation: { status: "off" },
       effectIconGeometry: { status: "off" },
+      resignAction: { status: "off" },
       playRegionObservation: { status: "off" },
         preGameControls: { status: "off" },
         characterSwitchAction: { status: "off" },
