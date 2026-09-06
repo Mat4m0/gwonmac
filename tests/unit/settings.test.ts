@@ -89,6 +89,7 @@ describe("settings", () => {
       skillCooldownColor: { kind: "preset", preset: "red" },
       extendedMemoryEnabled: false,
       autoRelogAfterReload: false,
+      memoryWarningPosition: null,
       showDiagnostics: false,
       dataStrategy: "full",
       // Automatic app-update checks remain a separate preference from the
@@ -200,6 +201,7 @@ describe("settings", () => {
       skillCooldownColor: { kind: "preset", preset: "red" },
       extendedMemoryEnabled: false,
       autoRelogAfterReload: false,
+      memoryWarningPosition: null,
       showDiagnostics: true,
       dataStrategy: "full",
       autoCheckUpdates: true,
@@ -624,6 +626,7 @@ describe("settings", () => {
       "formatVersion",
       "gwonmacTools",
       "lastUpdateCheckAt",
+      "memoryWarningPosition",
       "quickItemMove",
       "renderScale",
       "resignEnabled",
@@ -760,6 +763,7 @@ describe("settings", () => {
       skillCooldownColor: { kind: "preset", preset: "red" },
       extendedMemoryEnabled: false,
       autoRelogAfterReload: false,
+      memoryWarningPosition: null,
       showDiagnostics: true,
       dataStrategy: "full",
       // Fields that alpha never wrote arrive at their defaults — deliberately
@@ -861,5 +865,19 @@ describe("settings", () => {
     );
     // Refused, not reinterpreted, and not destroyed: the bytes are still there.
     assert.deepEqual(JSON.parse(await readFile(backup, "utf8")), future);
+  });
+});
+
+
+describe("memory warning position", () => {
+  it("stores only bounded viewport ratios", () => {
+    assert.equal(parseSettings({}).memoryWarningPosition, null);
+    assert.deepEqual(parseSettingsPatch({ memoryWarningPosition: { x: 0.25, y: 1 } }), {
+      memoryWarningPosition: { x: 0.25, y: 1 },
+    });
+    for (const value of [{ x: -1, y: 0 }, { x: 0, y: 2 }, { x: NaN, y: 0 },
+      { x: 0, y: Infinity }, { x: 0 }, { x: 0, y: 0, extra: true }, "0,0"]) {
+      assert.throws(() => parseSettingsPatch({ memoryWarningPosition: value }), AppError);
+    }
   });
 });
