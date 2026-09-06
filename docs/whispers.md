@@ -38,7 +38,8 @@ game messages.
 - A movable person icon shows unread messages without stealing focus. Collapse
   restores the same recipient and keeps drafts. Close discards a conversation,
   with an inline guard for an unsent draft. The icon position and Messenger
-  window geometry persist in the current account profile.
+  window geometry persist as viewport-relative values in the current account
+  profile, so resizing the game window preserves their placement.
 - A conversation opens at its first unread message once. Its exact reading
   position and keyboard focus then survive updates, conversation switches and
   collapse/reopen. A jump-to-latest control appears without pulling a reader

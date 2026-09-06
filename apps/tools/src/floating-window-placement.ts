@@ -21,6 +21,12 @@ type StoredFloatingWindowPlacement = Readonly<{
   height: number;
 }>;
 
+type StoredFloatingPosition = Readonly<{
+  formatVersion: 1;
+  left: number;
+  top: number;
+}>;
+
 const ratio = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1;
 
@@ -34,11 +40,7 @@ function usable(viewport: FloatingWindowViewport) {
   };
 }
 
-export function restoreFloatingWindowPlacement(
-  serialized: string | null,
-  viewport: FloatingWindowViewport,
-  minimum: Readonly<{ width: number; height: number }>,
-): FloatingWindowBox | null {
+function storedRecord(serialized: string | null): Record<string, unknown> | null {
   if (serialized === null) return null;
   let value: unknown;
   try {
@@ -46,8 +48,18 @@ export function restoreFloatingWindowPlacement(
   } catch {
     return null;
   }
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const stored = value as Record<string, unknown>;
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+export function restoreFloatingWindowPlacement(
+  serialized: string | null,
+  viewport: FloatingWindowViewport,
+  minimum: Readonly<{ width: number; height: number }>,
+): FloatingWindowBox | null {
+  const stored = storedRecord(serialized);
+  if (!stored) return null;
   if (
     stored.formatVersion !== 1
     || !ratio(stored.left)
@@ -80,6 +92,51 @@ export function restoreFloatingWindowPlacement(
     width,
     height,
   };
+}
+
+export function restoreFloatingPosition(
+  serialized: string | null,
+  viewport: FloatingWindowViewport,
+  size: Readonly<{ width: number; height: number }>,
+): Readonly<{ left: number; top: number }> | null {
+  const stored = storedRecord(serialized);
+  if (!stored || stored.formatVersion !== 1 || !ratio(stored.left) || !ratio(stored.top)) {
+    return null;
+  }
+  const available = usable(viewport);
+  if (available.width === 0 || available.height === 0 || size.width <= 0 || size.height <= 0) {
+    return null;
+  }
+  return {
+    left: viewport.margin + Math.round(
+      stored.left * Math.max(0, available.width - size.width),
+    ),
+    top: viewport.margin + Math.round(
+      stored.top * Math.max(0, available.height - size.height),
+    ),
+  };
+}
+
+export function serializeFloatingPosition(
+  position: Readonly<{ left: number; top: number }>,
+  viewport: FloatingWindowViewport,
+  size: Readonly<{ width: number; height: number }>,
+): string | null {
+  const available = usable(viewport);
+  if (available.width === 0 || available.height === 0 || size.width <= 0 || size.height <= 0) {
+    return null;
+  }
+  const horizontalRange = Math.max(0, available.width - size.width);
+  const verticalRange = Math.max(0, available.height - size.height);
+  return JSON.stringify({
+    formatVersion: 1,
+    left: horizontalRange === 0
+      ? 0
+      : clamp((position.left - viewport.margin) / horizontalRange, 0, 1),
+    top: verticalRange === 0
+      ? 0
+      : clamp((position.top - viewport.margin) / verticalRange, 0, 1),
+  } satisfies StoredFloatingPosition);
 }
 
 export function serializeFloatingWindowPlacement(

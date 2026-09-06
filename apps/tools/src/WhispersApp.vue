@@ -5,8 +5,8 @@ import { WHISPER_LINE_UNITS, WHISPER_MESSAGE_UNITS } from "../../../src/shared/w
 import type { FriendPresence, TravelFriend } from "../../../src/shared/friends";
 import { useFloatingWindow } from "./use-floating-window";
 import {
-  restoreFloatingWindowPlacement,
-  serializeFloatingWindowPlacement,
+  restoreFloatingPosition,
+  serializeFloatingPosition,
 } from "./floating-window-placement";
 
 const props = defineProps<{ session: WhisperSession }>();
@@ -58,7 +58,7 @@ function restoredIconPosition() {
   let serialized: string | null = null;
   try { serialized = window.localStorage.getItem(ICON_PLACEMENT_KEY); }
   catch { /* Browser storage refusal leaves the icon at its ordinary default. */ }
-  const restored = restoreFloatingWindowPlacement(
+  const restored = restoreFloatingPosition(
     serialized,
     iconViewport(),
     { width: ICON_SIZE, height: ICON_SIZE },
@@ -298,11 +298,11 @@ function opacityChange(event: Event) {
   props.session.setBackgroundOpacity(Number((event.target as HTMLInputElement).value));
 }
 function persistIconPosition() {
-  const serialized = serializeFloatingWindowPlacement({
-    ...icon.value,
-    width: ICON_SIZE,
-    height: ICON_SIZE,
-  }, iconViewport());
+  const serialized = serializeFloatingPosition(
+    icon.value,
+    iconViewport(),
+    { width: ICON_SIZE, height: ICON_SIZE },
+  );
   if (serialized === null) return;
   try { window.localStorage.setItem(ICON_PLACEMENT_KEY, serialized); }
   catch { /* A UI preference must not make the surface unusable when storage fails. */ }
