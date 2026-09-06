@@ -407,6 +407,8 @@ export interface KnownEnhancementBuild {
     results: readonly [];
     bodySha256: string;
   }>;
+  /** Narrow whisper authority shares the exact native sender proof. */
+  whisperChat?: KnownEnhancementBuild["resignAction"];
   chatAliases?: Readonly<{
     parser: Readonly<{
       functionIndex: number;
@@ -647,6 +649,8 @@ export function supportedEnhancementCapabilities(
       && build.uiDispatcher !== undefined
       && build.playerEffectObservation !== undefined,
     effectIconGeometry: build.effectIconGeometry !== undefined,
+    whisperChat: playRegionObservation && gameThread && build.uiDispatcher !== undefined
+      && build.chatFiltering !== undefined && build.whisperChat !== undefined,
     resignAction: playRegionObservation && gameThread && build.resignAction !== undefined,
   });
   // Evidence locators decide only what they proved. The shared registry owns

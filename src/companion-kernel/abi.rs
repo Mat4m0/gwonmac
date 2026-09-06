@@ -39,6 +39,7 @@ pub(crate) const FEATURE_CHARACTER_LIST: u32 = 1 << 7;
 pub(crate) const FEATURE_FRIEND_OBSERVATION: u32 = 1 << 8;
 pub(crate) const FEATURE_PLAYER_EFFECT_OBSERVATION: u32 = 1 << 9;
 pub(crate) const FEATURE_EFFECT_ICON_GEOMETRY: u32 = 1 << 10;
+pub(crate) const FEATURE_WHISPER_OBSERVATION: u32 = 1 << 11;
 pub(crate) const KNOWN_FEATURES: u32 = FEATURE_NATIVE_CURSOR
     | FEATURE_GAME_SNAPSHOT
     | FEATURE_TOOLBOX_FOUNDATION
@@ -49,7 +50,8 @@ pub(crate) const KNOWN_FEATURES: u32 = FEATURE_NATIVE_CURSOR
     | FEATURE_CHARACTER_LIST
     | FEATURE_FRIEND_OBSERVATION
     | FEATURE_PLAYER_EFFECT_OBSERVATION
-    | FEATURE_EFFECT_ICON_GEOMETRY;
+    | FEATURE_EFFECT_ICON_GEOMETRY
+    | FEATURE_WHISPER_OBSERVATION;
 
 pub(crate) const CHARACTER_LIST_BYTES: u32 = size_of::<CharacterListSnapshot>() as u32;
 pub(crate) const CHARACTER_LIST_MAGIC: u32 = 0x4843_5747;
@@ -113,6 +115,7 @@ pub(crate) const DISPATCH_TICK: u32 = 0;
 pub(crate) const DISPATCH_CURSOR: u32 = 1;
 pub(crate) const DISPATCH_UI: u32 = 2;
 pub(crate) const DISPATCH_ACTIVE_FEATURES: u32 = 3;
+pub(crate) const DISPATCH_WHISPER_SEND_GATE: u32 = 5;
 pub(crate) const DISPATCH_FRIEND_LIFECYCLE: u32 = 4;
 pub(crate) const PARTY_DIRTY_MESSAGE_COUNT: usize = 10;
 pub(crate) const EFFECT_DIRTY_MESSAGE_COUNT: usize = 4;
@@ -718,3 +721,29 @@ const _: [(); 24] = [(); size_of::<PlayerEffectRecord>()];
 const _: [(); 1572] = [(); size_of::<PlayerEffectSnapshot>()];
 const _: [(); 20] = [(); size_of::<EffectIconRecord>()];
 const _: [(); 1324] = [(); size_of::<EffectIconSnapshot>()];
+
+pub(crate) const WHISPER_SLOT_COUNT: usize = 32;
+pub(crate) const WHISPER_SENDER_UNITS: usize = 20;
+pub(crate) const WHISPER_MESSAGE_UNITS: usize = 120;
+pub(crate) const WHISPER_SNAPSHOT_BYTES: u32 = size_of::<WhisperSnapshot>() as u32;
+pub(crate) const WHISPER_BYTES: u32 = WHISPER_SNAPSHOT_BYTES + 592;
+pub(crate) const WHISPER_MAGIC: u32 = 0x4857_5747;
+pub(crate) const WHISPER_ABI_AND_SIZE: u32 = (WHISPER_BYTES << 16) | 1;
+
+#[repr(C)]
+pub(crate) struct WhisperSlot {
+    pub(crate) id: u32,
+    pub(crate) sender_and_message_units: u32,
+    pub(crate) sender: [u16; WHISPER_SENDER_UNITS],
+    pub(crate) message: [u16; WHISPER_MESSAGE_UNITS],
+}
+
+#[repr(C)]
+pub(crate) struct WhisperSnapshot {
+    pub(crate) magic: u32,
+    pub(crate) abi_and_size: u32,
+    pub(crate) sequence: u32,
+    pub(crate) write_count: u32,
+    pub(crate) rejected_count: u32,
+    pub(crate) slots: [WhisperSlot; WHISPER_SLOT_COUNT],
+}

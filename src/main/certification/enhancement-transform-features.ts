@@ -2,6 +2,8 @@
  * Feature-owned rewrite contributions consumed by the Enhancement assembler.
  * Generic WASM section assembly remains outside this module.
  */
+import { concat } from "../core/wasm-binary.js";
+import { whisperConfigure, whisperEnqueue, whisperDrain } from "./enhancement-whisper-transform.js";
 import { resignConfigure, resignEnqueue, resignExecute, resignDrain } from "./enhancement-resign-transform.js";
 import {
   professionTraceReader,
@@ -85,6 +87,7 @@ export function featureExportNames(
           ...(travelAction.guildHall ? [travelAction.guildHall.enqueueExport] : []),
         ]
       : []),
+    ...(capabilities.whisperChat ? ["enhancement_configure_whispers", "enhancement_send_whisper"] : []),
     ...(capabilities.resignAction ? ["enhancement_configure_resign", "enhancement_resign"] : []),
     ...(capabilities.chatAliases
       ? ["enhancement_configure_trade_toggle", "enhancement_take_trade_toggle"]
@@ -105,6 +108,9 @@ export type TransformTypeIndices = Readonly<{
   travelEnqueue: number | null;
   travelConfigure: number | null;
   travelToggle: number | null;
+  whisperDispatch: number;
+  whisperConfigure: number | null;
+  whisperEnqueue: number | null;
   resignConfigure: number | null;
   resignEnqueue: number | null;
   tradeConfigure: number | null;
@@ -122,6 +128,9 @@ export type TransformGlobalIndices = Readonly<{
   travelPayload: number;
   travelEnabled: number;
   travelToggle: number;
+  whisperHook: number;
+  whisperPointer: number;
+  whisperEnabled: number;
   resignEnabled: number;
   tradeEnabled: number;
   tradeToggle: number;
@@ -286,6 +295,17 @@ export function applyFeatureContributions(
         resignEnqueue(globalIndices.commandPending, globalIndices.resignEnabled)) },
     );
   }
+  if (capabilities.whisperChat) {
+    addedFunctionExports.push(
+      { name: "enhancement_configure_whispers", index: appendFunction(
+        required(typeIndices.whisperConfigure, "Whisper configure type"),
+        whisperConfigure(globalIndices.commandPending, globalIndices.whisperPointer, globalIndices.whisperEnabled)) },
+      { name: "enhancement_send_whisper", index: appendFunction(
+        required(typeIndices.whisperEnqueue, "Whisper enqueue type"),
+        whisperEnqueue(globalIndices.commandPending, globalIndices.whisperPointer, globalIndices.whisperEnabled,
+          { hookGlobal: globalIndices.whisperHook, dispatchType: typeIndices.whisperDispatch })) },
+    );
+  }
   const drainFunctionIndex = appendFunction(
     required(typeIndices.commandDrain, "command drain function type"),
     commandDrain(
@@ -344,8 +364,14 @@ export function applyFeatureContributions(
             quickItemMove.globals,
             quickItemMove.handlerIndex,
           ),
-      resignExecuteIndex === null ? null
-        : resignDrain(globalIndices.commandPending, globalIndices.resignEnabled, resignExecuteIndex),
+      concat(
+        resignExecuteIndex === null ? new Uint8Array()
+          : resignDrain(globalIndices.commandPending, globalIndices.resignEnabled, resignExecuteIndex),
+        capabilities.whisperChat ? whisperDrain(globalIndices.commandPending,
+          globalIndices.whisperPointer, globalIndices.whisperEnabled, resolution.whisperChat.functionIndex,
+          { hookGlobal: globalIndices.whisperHook, dispatchType: typeIndices.whisperDispatch })
+          : new Uint8Array(),
+      ),
     ),
   );
   nextBodies[commandDrainBoundary.localIndex] = commandBoundary(

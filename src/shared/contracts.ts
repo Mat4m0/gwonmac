@@ -806,6 +806,7 @@ export interface ClientCompatibility {
     playerEffectObservation: OptionalFeatureStatus;
     effectIconGeometry: OptionalFeatureStatus;
     resignAction: OptionalFeatureStatus;
+    whisperChat: OptionalFeatureStatus;
     playRegionObservation: OptionalFeatureStatus;
     preGameControls: OptionalFeatureStatus;
     characterSwitchAction: OptionalFeatureStatus;

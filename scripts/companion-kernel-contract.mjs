@@ -26,6 +26,7 @@ const companionKernelSignatureModule = new WebAssembly.Module(
  * without one test or the other saying so.
  */
 export const COMPANION_KERNEL_EXPORT_VALUES = Object.freeze({
+  companion_whisper_bytes: COMPANION_ABI.whispers.bytes,
   companion_abi: COMPANION_ABI.kernel,
   companion_config_bytes: COMPANION_ABI.config.bytes,
   companion_snapshot_bytes: COMPANION_ABI.snapshot.bytes,
@@ -105,7 +106,8 @@ export const COMPANION_KERNEL_DYLINK0 = Object.freeze([
   // This constant exists so a kernel whose footprint moves cannot ship without
   // someone saying why. One page is still the ceiling, and this remains far
   // under it.
-  0x01, 0x05, 0x81, 0x1f, 0x02, 0x00, 0x00,
+  // 3969 -> 3984: whisper ring publication state; ring/mailbox are host-owned.
+  0x01, 0x05, 0x90, 0x1f, 0x02, 0x00, 0x00,
 ]);
 
 const WASM_PAGE_BYTES = 65_536;

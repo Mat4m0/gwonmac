@@ -72,6 +72,7 @@ describe("Enhancement command transform", () => {
       playerEffectObservation: false,
     effectIconGeometry: false,
     resignAction: false,
+    whisperChat: false,
     };
     const commandsOutput = transformEnhancementWasm(input, build, commandsOnly);
     const commandsExports = parseExports(sectionById(splitSections(commandsOutput), 7));
@@ -144,6 +145,7 @@ describe("Enhancement command transform", () => {
           playerEffectObservation: false,
     effectIconGeometry: false,
     resignAction: false,
+    whisperChat: false,
         }),
         null,
         "a profile without local actions must not accept their manifest",
@@ -165,6 +167,7 @@ describe("Enhancement command transform", () => {
         playerEffectObservation: false,
     effectIconGeometry: false,
     resignAction: false,
+    whisperChat: false,
       }),
       null,
       "manifest comparison must reject unexpected storage authority",
@@ -184,6 +187,7 @@ describe("Enhancement command transform", () => {
         playerEffectObservation: false,
     effectIconGeometry: false,
     resignAction: false,
+    whisperChat: false,
       }),
       null,
       "manifest comparison must reject missing storage authority",
@@ -249,6 +253,7 @@ describe("Enhancement command transform", () => {
       playerEffectObservation: false,
     effectIconGeometry: false,
     resignAction: false,
+    whisperChat: false,
     } as const;
     assert.equal(
       intersectEnhancementCapabilities(aliasesOnly, aliasesOnly).chatAliases,

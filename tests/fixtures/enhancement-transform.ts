@@ -30,6 +30,7 @@ export const UNSUPPORTED_ALL_CAPABILITIES: EnhancementCapabilities = Object.free
   playerEffectObservation: false,
     effectIconGeometry: false,
     resignAction: false,
+    whisperChat: false,
 });
 export const CURSOR_ONLY: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
@@ -49,6 +50,7 @@ export const CURSOR_ONLY: EnhancementCapabilities = Object.freeze({
   playerEffectObservation: false,
     effectIconGeometry: false,
     resignAction: false,
+    whisperChat: false,
 });
 export const CURSOR_TARGET: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
@@ -68,6 +70,7 @@ export const CURSOR_TARGET: EnhancementCapabilities = Object.freeze({
   playerEffectObservation: false,
     effectIconGeometry: false,
     resignAction: false,
+    whisperChat: false,
 });
 export const TARGET_ONLY: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
@@ -87,6 +90,7 @@ export const TARGET_ONLY: EnhancementCapabilities = Object.freeze({
   playerEffectObservation: false,
     effectIconGeometry: false,
     resignAction: false,
+    whisperChat: false,
 });
 export const STORAGE_ONLY: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
@@ -106,6 +110,7 @@ export const STORAGE_ONLY: EnhancementCapabilities = Object.freeze({
   playerEffectObservation: false,
     effectIconGeometry: false,
     resignAction: false,
+    whisperChat: false,
 });
 export const CURSOR_TOOLBOX: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
@@ -125,6 +130,7 @@ export const CURSOR_TOOLBOX: EnhancementCapabilities = Object.freeze({
   playerEffectObservation: false,
     effectIconGeometry: false,
     resignAction: false,
+    whisperChat: false,
 });
 export const NO_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
@@ -144,6 +150,7 @@ export const NO_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   playerEffectObservation: false,
     effectIconGeometry: false,
     resignAction: false,
+    whisperChat: false,
 });
 export const CURSOR_TOOLBOX_COMMANDS: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
@@ -163,6 +170,7 @@ export const CURSOR_TOOLBOX_COMMANDS: EnhancementCapabilities = Object.freeze({
   playerEffectObservation: false,
     effectIconGeometry: false,
     resignAction: false,
+    whisperChat: false,
 });
 export const CURSOR_TARGET_TOOLBOX_COMMANDS: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
@@ -182,6 +190,7 @@ export const CURSOR_TARGET_TOOLBOX_COMMANDS: EnhancementCapabilities = Object.fr
   playerEffectObservation: false,
     effectIconGeometry: false,
     resignAction: false,
+    whisperChat: false,
 });
 export const CURSOR_TOOLBOX_STORAGE: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
@@ -201,6 +210,7 @@ export const CURSOR_TOOLBOX_STORAGE: EnhancementCapabilities = Object.freeze({
   playerEffectObservation: false,
     effectIconGeometry: false,
     resignAction: false,
+    whisperChat: false,
 });
 export const PARTY_DIRTY_MESSAGES = Object.freeze([
   0x1000_0038,

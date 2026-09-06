@@ -53,6 +53,7 @@ mod play_region;
 mod skill_cooldowns;
 mod skill_slots;
 mod toolbox;
+mod whispers;
 
 use abi::*;
 use memory::*;
@@ -732,6 +733,8 @@ pub unsafe extern "C" fn companion_init(
     effect_icon_size: u32,
     friend_root: u32,
     features: u32,
+    whisper_ptr: u32,
+    whisper_size: u32,
 ) -> u32 {
     if features == 0
         || features & !KNOWN_FEATURES != 0
@@ -768,6 +771,7 @@ pub unsafe extern "C" fn companion_init(
             effect_icon_size,
             EFFECT_ICON_BYTES,
         )
+        || !valid_region(features & FEATURE_WHISPER_OBSERVATION != 0, whisper_ptr, whisper_size, WHISPER_BYTES)
         || config_size != CONFIG_BYTES
         || config_ptr & 3 != 0
         || !contains(config_ptr, config_size)
@@ -841,6 +845,7 @@ pub unsafe extern "C" fn companion_init(
     // `valid_region` demand, so the pointer it stores is non-null, aligned, and
     // large enough for the snapshot it will publish.
     unsafe {
+        if features & FEATURE_WHISPER_OBSERVATION != 0 { whispers::initialize(whisper_ptr); }
         SNAPSHOT_PTR = snapshot_ptr;
         LAYOUT = layout;
         FEATURES = features;
@@ -958,12 +963,21 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, c: u32, d
             }
             unsafe {
                 let layout = LAYOUT;
+                if ACTIVE_FEATURES & FEATURE_WHISPER_OBSERVATION != 0
+                    && matches!(resolve_game(layout), GameState::Ready { play_region: PLAY_REGION_PVE, .. })
+                { whispers::observe(a, b); }
                 if ACTIVE_FEATURES & FEATURE_TOOLBOX_FOUNDATION != 0 {
                     toolbox::observe_ui(layout, a, b);
                 }
                 if ACTIVE_FEATURES & FEATURE_PLAYER_EFFECT_OBSERVATION != 0 {
                     player_effects::observe_ui(layout, a);
                 }
+            }
+        }
+        DISPATCH_WHISPER_SEND_GATE => {
+            if unsafe { INITIALIZED } && unsafe { FEATURES } & FEATURE_WHISPER_OBSERVATION != 0 {
+                unsafe { whispers::authorize_send(LAYOUT, a, b,
+                    ACTIVE_FEATURES & FEATURE_WHISPER_OBSERVATION != 0); }
             }
         }
         DISPATCH_FRIEND_LIFECYCLE => {
@@ -1022,7 +1036,7 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, c: u32, d
 
 #[no_mangle]
 pub extern "C" fn companion_abi() -> u32 {
-    24
+    25
 }
 
 #[no_mangle]
@@ -1093,3 +1107,6 @@ pub unsafe extern "C" fn companion_cursor_event_count() -> u32 {
         0
     }
 }
+
+#[no_mangle]
+pub extern "C" fn companion_whisper_bytes() -> u32 { WHISPER_BYTES }

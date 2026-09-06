@@ -307,6 +307,7 @@ export const ADDRESSES = Object.freeze({
   effectIcons: 0xcc40,
   agentEffectRows: 0xe000,
   effectRecords: 0xe800,
+  whispers: 0x6_0000,
   friends: 0x5_0000,
   friendRoot: 0x5_4000,
   friendArray: 0x5_4100,
@@ -512,6 +513,8 @@ export interface KernelOverrides {
   playerEffectSize?: number;
   effectIconPointer?: number;
   effectIconSize?: number;
+  whisperPointer?: number;
+  whisperSize?: number;
   friendRoot?: number;
   toolboxSize?: number;
 }
@@ -551,6 +554,8 @@ export type KernelInit = (
   effectIconSize: number,
   friendRoot: number,
   features: number,
+  whisperPointer: number,
+  whisperSize: number,
 ) => number;
 export type KernelDispatch = (
   kind: number,
@@ -777,6 +782,8 @@ export async function createKernel(
             : 0),
         overrides.friendRoot ?? 0,
         features,
+        overrides.whisperPointer ?? ((features & COMPANION_FEATURE_BITS.whisperObservation) !== 0 ? ADDRESSES.whispers : 0),
+        overrides.whisperSize ?? ((features & COMPANION_FEATURE_BITS.whisperObservation) !== 0 ? COMPANION_ABI.whispers.bytes : 0),
       );
     },
     tick: (skillBarFrameId = 0, skillTimer = 0, effectsFrameHash = 0) => exports.dispatch(

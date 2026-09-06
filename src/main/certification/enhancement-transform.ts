@@ -169,7 +169,8 @@ function resolveEnhancementTransform(
   const chatAliases = build.chatAliases!;
   const chatFiltering = build.chatFiltering!;
   const resignAction = build.resignAction!;
-  const hasActionQueue = capabilities.resignAction || capabilities.teamApply
+  const whisperChat = build.whisperChat!;
+  const hasActionQueue = capabilities.whisperChat || capabilities.resignAction || capabilities.teamApply
     || capabilities.travelAction
     || capabilities.xunlaiAction
     || capabilities.characterSwitchAction
@@ -375,6 +376,10 @@ function resolveEnhancementTransform(
         fail(`${fact} reader body does not match its semantic fingerprint`);
       }
     }
+  }
+  if (capabilities.whisperChat) {
+    resolveHook("Whisper native sender", whisperChat.functionIndex, whisperChat.params, whisperChat.results);
+    if (bodyHash(whisperChat.functionIndex) !== whisperChat.bodySha256) fail("Whisper native sender changed");
   }
   if (capabilities.resignAction) {
     resolveHook("Resign native sender", resignAction.functionIndex, resignAction.params, resignAction.results);
@@ -598,6 +603,7 @@ function resolveEnhancementTransform(
     travelAction,
     gameThread,
     resignAction,
+    whisperChat,
     chatAliases,
     chatFiltering,
     quickItemMoveResolution,
@@ -667,6 +673,8 @@ function assembleEnhancementTransform(
   const travelPayloadGlobalIndex = capabilities.travelAction ? allocateGlobals(1) : 0;
   const travelEnabledGlobalIndex = capabilities.travelAction ? allocateGlobals(1) : 0;
   const travelToggleGlobalIndex = capabilities.travelAction ? allocateGlobals(1) : 0;
+  const whisperPointerGlobalIndex = capabilities.whisperChat ? allocateGlobals(1) : 0;
+  const whisperEnabledGlobalIndex = capabilities.whisperChat ? allocateGlobals(1) : 0;
   const resignEnabledGlobalIndex = capabilities.resignAction ? allocateGlobals(1) : 0;
   const tradeEnabledGlobalIndex = capabilities.chatAliases ? allocateGlobals(1) : 0;
   const tradeToggleGlobalIndex = capabilities.chatAliases ? allocateGlobals(1) : 0;
@@ -718,6 +726,8 @@ function assembleEnhancementTransform(
   const travelToggleTypeIndex = capabilities.travelAction
     ? appendType({ params: [], results: [0x7f] })
     : null;
+  const whisperConfigureTypeIndex = capabilities.whisperChat ? appendType({ params: [0x7f, 0x7f], results: [0x7f] }) : null;
+  const whisperEnqueueTypeIndex = capabilities.whisperChat ? appendType({ params: [], results: [0x7f] }) : null;
   const resignConfigureTypeIndex = capabilities.resignAction ? appendType({ params: [0x7f], results: [0x7f] }) : null;
   const resignEnqueueTypeIndex = capabilities.resignAction ? appendType({ params: [], results: [0x7f] }) : null;
   const tradeConfigureTypeIndex = capabilities.chatAliases
@@ -862,6 +872,9 @@ function assembleEnhancementTransform(
       travelConfigure: travelConfigureTypeIndex,
       travelToggle: travelToggleTypeIndex,
       tradeConfigure: tradeConfigureTypeIndex,
+      whisperDispatch: dispatchTypeIndex,
+      whisperConfigure: whisperConfigureTypeIndex,
+      whisperEnqueue: whisperEnqueueTypeIndex,
       resignConfigure: resignConfigureTypeIndex,
       resignEnqueue: resignEnqueueTypeIndex,
       tradeToggle: tradeToggleTypeIndex,
@@ -877,6 +890,9 @@ function assembleEnhancementTransform(
       travelPayload: travelPayloadGlobalIndex,
       travelEnabled: travelEnabledGlobalIndex,
       travelToggle: travelToggleGlobalIndex,
+      whisperHook: hookGlobalIndex,
+      whisperPointer: whisperPointerGlobalIndex,
+      whisperEnabled: whisperEnabledGlobalIndex,
       resignEnabled: resignEnabledGlobalIndex,
       tradeEnabled: tradeEnabledGlobalIndex,
       tradeToggle: tradeToggleGlobalIndex,
