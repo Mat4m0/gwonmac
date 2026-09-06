@@ -184,7 +184,8 @@ Tools. Its shortcut defaults to **Command-Shift-R** and can be changed or cleare
 in the same row. Turning off Resign or Tools disables it immediately.
 
 Press the shortcut for **Resign** in PvE. Press Enter to confirm sending
-`/resign`, or Escape to cancel. Close other windows and text fields first.
+`/resign`, or click **Resign** in the in-game dialog. Escape, **Cancel**, the close
+button, and clicking outside cancel. Close text fields first.
 The action stops if chat contains text or you interrupt it.
 
 Character names and search text are not saved.

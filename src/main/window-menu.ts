@@ -227,36 +227,11 @@ export function showQuitOrReloadGame(
   );
 }
 
-const activeResignDialogs = new WeakSet<BrowserWindow>();
 
 export async function showResignGame(host: WindowHost, win: BrowserWindow): Promise<void> {
   if (!featureActivationRequested("resign", await host.getSettings())) return;
-  if (activeResignDialogs.has(win)) return;
-  activeResignDialogs.add(win);
-  try {
-    await resetGameInput(win);
-    const result = await dialog.showMessageBox(win, {
-      type: "warning",
-      buttons: ["Resign", "Cancel"],
-      defaultId: 0,
-      cancelId: 1,
-      noLink: true,
-      message: "Resign from this instance?",
-      detail: "Sends /resign in Guild Wars chat. This can end your current attempt.",
-    });
-    if (result.response !== 0 || win.isDestroyed()) return;
-    if (!featureActivationRequested("resign", await host.getSettings())) return;
-    const outcome = await sendRendererCommand(win, { type: "game.resign" });
-    if (outcome !== "completed" && !win.isDestroyed()) {
-      await dialog.showMessageBox(win, {
-        type: "warning", buttons: ["OK"],
-        message: "Resign was not completed",
-        detail: "Return to Guild Wars in PvE, close other windows, and check chat before trying again.",
-      });
-    }
-  } finally {
-    activeResignDialogs.delete(win);
-  }
+  await resetGameInput(win);
+  await sendRendererCommand(win, { type: "game.resign" });
 }
 
 function showReloadGame(host: WindowHost, win: BrowserWindow): Promise<void> {

@@ -125,7 +125,7 @@
       }
       case 'game.resign':
         if (!window.gwNative.init.enhancementSelection.tools) return 'unhandled';
-        await (await import('./resign.js')).resignFromGame();
+        await (await import('./resign.js')).showResignConfirmation();
         break;
       case 'filesystem.sync':
         await new Promise<void>((resolve, reject) => {
