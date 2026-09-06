@@ -276,15 +276,15 @@ onBeforeUnmount(() => {
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
         <span v-if="unread" class="whisper-back-count">{{ unread > 99 ? '99+' : unread }}</span>
       </button>
-      <div class="whisper-heading">
+      <div class="whisper-heading" :data-conversation="selected ? '' : undefined">
         <h2>{{ selected?.name ?? 'Whispers' }}</h2>
         <small v-if="selectedFriend" class="whisper-presence-label"><span class="whisper-presence" :data-presence="selectedFriend.status" />{{ presenceLabel(selectedFriend.status) }}</small>
       </div>
       <details ref="optionsMenu" class="whisper-options">
         <summary data-variant="quiet" class="ui-button whisper-control whisper-icon" aria-label="Chat options" title="Chat options"><svg viewBox="0 0 24 24" aria-hidden="true"><circle class="whisper-icon-dot" cx="5" cy="12" r="1.5"/><circle class="whisper-icon-dot" cx="12" cy="12" r="1.5"/><circle class="whisper-icon-dot" cx="19" cy="12" r="1.5"/></svg></summary>
-        <div class="whisper-menu">
+        <div class="ui-raised ui-scroll whisper-menu">
           <label for="whisper-sound">Sound alerts</label>
-          <select id="whisper-sound" :value="state.sound" @change="soundChange"><option value="off">Off</option><option value="background">When chat is in background</option><option value="every">Every incoming whisper</option></select>
+          <select id="whisper-sound" class="ui-select" :value="state.sound" @change="soundChange"><option value="off">Off</option><option value="background">When chat is in background</option><option value="every">Every incoming whisper</option></select>
           <button v-if="selected" data-variant="quiet" class="ui-button whisper-control" :aria-pressed="selected.muted" @click="session.mute(selected.key)">{{ selected.muted ? 'Unmute this conversation' : 'Mute this conversation' }}</button>
           <button v-if="selected" data-variant="quiet" class="ui-button whisper-control whisper-danger" :disabled="selected.sending" :aria-label="`Close conversation with ${selected.name}`" @click="close(selected.key)">Close conversation</button>
           <div class="whisper-menu-divider" />
@@ -299,20 +299,20 @@ onBeforeUnmount(() => {
     <p v-if="!state.available" class="whisper-notice" role="status">Unavailable here. Use original chat.</p>
     <p v-if="state.missed" class="whisper-notice" role="status">{{ state.missed }} messages could not be kept. Check original chat.</p>
     <div v-if="closing" class="whisper-notice" role="alert"><p>Discard the unsent draft and close this conversation?</p><div class="whisper-inline"><button data-variant="quiet" class="ui-button whisper-control whisper-danger" @click="close(closing, true)">Discard and close</button><button data-variant="quiet" class="ui-button whisper-control" @click="closing = null">Keep chatting</button></div></div>
-    <div v-show="!selected" class="whisper-picker">
-      <form class="whisper-search" @submit.prevent="open(search)"><label class="whisper-sr-only" for="whisper-person">Character name</label><input id="whisper-person" v-model="search" maxlength="20" placeholder="Find a friend or enter a name" autocomplete="off"/><button data-variant="quiet" class="ui-button whisper-control" type="submit" :disabled="!search.trim()">Chat</button></form>
+    <div v-show="!selected" class="ui-scroll whisper-picker">
+      <form class="ui-input-group whisper-search" @submit.prevent="open(search)"><label class="whisper-sr-only" for="whisper-person">Character name</label><input id="whisper-person" v-model="search" maxlength="20" placeholder="Find a friend or enter a name" autocomplete="off"/><button data-variant="primary" class="ui-button whisper-control" type="submit" :disabled="!search.trim()">Chat</button></form>
       <p v-if="pickerError" class="whisper-notice" role="alert">{{ pickerError }}</p>
-      <h3 v-if="!state.conversations.length">Start a conversation</h3>
+      <p v-if="!state.conversations.length" class="whisper-empty whisper-onboarding">Start a conversation with a friend, or enter any character name above.</p>
       <template v-if="state.conversations.length">
         <h3>Conversations</h3>
-        <div v-for="conversation in state.conversations.filter(c => c.name.toLocaleLowerCase().includes(search.toLocaleLowerCase()))" :key="conversation.key" class="whisper-person">
+        <div v-for="conversation in state.conversations.filter(c => c.name.toLocaleLowerCase().includes(search.toLocaleLowerCase()))" :key="conversation.key" class="whisper-person" :data-unread="whisperUnread(conversation) ? '' : undefined">
           <button data-variant="quiet" class="ui-button whisper-control whisper-person-open" @click="open(conversation.name)"><span class="whisper-person-main"><span v-if="friendFor(conversation.name)" class="whisper-presence" :data-presence="friendFor(conversation.name)!.status" /><span class="whisper-person-copy"><strong>{{ conversation.name }}</strong><small>{{ conversation.draft ? 'Draft: ' + conversation.draft : conversation.messages.at(-1)?.message || 'No messages yet' }}</small></span></span><span v-if="whisperUnread(conversation)" class="whisper-count">{{ whisperUnread(conversation) }}</span></button>
           <button data-variant="quiet" class="ui-button whisper-control whisper-icon" :aria-label="`Close conversation with ${conversation.name}`" :disabled="conversation.sending" @click="close(conversation.key)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button>
         </div>
       </template>
       <h3>Available friends</h3>
-      <p v-if="state.friends.status !== 'ready'" class="whisper-empty">Friends unavailable. Enter a character name to chat.</p>
-      <p v-else-if="!friends.length" class="whisper-empty">No friends available.</p>
+      <p v-if="state.friends.status !== 'ready'" class="whisper-empty">Friends are unavailable. You can still message any character above.</p>
+      <p v-else-if="!friends.length" class="whisper-empty">Friends who are online appear here. You can still message any character above.</p>
       <button v-for="friend in friends" :key="friend.key" data-variant="quiet" class="ui-button whisper-control whisper-person-open" @click="open(friend.character || friend.alias)"><span class="whisper-person-main"><span class="whisper-presence" :data-presence="friend.status" /><span class="whisper-person-copy"><strong>{{ friend.character || friend.alias }}</strong><small v-if="friend.character && friend.alias !== friend.character">{{ friend.alias }}</small></span></span><small class="whisper-status-copy">{{ presenceLabel(friend.status) }}</small></button>
       <template v-if="recent.length">
         <h3>Recent people</h3>
@@ -321,7 +321,7 @@ onBeforeUnmount(() => {
     </div>
     <template v-for="conversation in state.conversations" :key="conversation.key">
       <div v-show="state.selected === conversation.key" class="whisper-conversation">
-        <div class="whisper-transcript" data-transcript :data-transcript-key="conversation.key" :hidden="state.selected !== conversation.key" tabindex="0" :aria-label="`Messages with ${conversation.name}`" @scroll="markVisibleRead" @focus="markVisibleRead">
+        <div class="ui-scroll whisper-transcript" data-transcript :data-transcript-key="conversation.key" :hidden="state.selected !== conversation.key" tabindex="0" :aria-label="`Messages with ${conversation.name}`" @scroll="markVisibleRead" @focus="markVisibleRead">
           <p v-if="conversation.trimmed" class="whisper-empty">Earlier messages remain in original chat.</p>
           <p v-if="!conversation.messages.length" class="whisper-empty">Say hello to {{ conversation.name }}.</p>
           <article v-for="(message, index) in conversation.messages" :key="message.id" class="whisper-message" :data-direction="message.direction" :data-grouped="index > 0 && conversation.messages[index - 1]?.direction === message.direction && message.id !== firstUnreadFor(conversation.key) ? '' : undefined" :data-first-unread="message.id === firstUnreadFor(conversation.key) ? '' : undefined">
@@ -333,7 +333,7 @@ onBeforeUnmount(() => {
         <p v-if="conversation.error" class="whisper-notice" role="alert">{{ conversation.error }}</p>
         <form class="whisper-compose" @submit.prevent="submit(conversation.key)">
           <label class="whisper-sr-only" :for="`draft-${conversation.key}`">Message {{ conversation.name }}</label>
-          <div class="whisper-input-row"><input :id="`draft-${conversation.key}`" :value="conversation.draft" placeholder="Message…" autocomplete="off" @input="draftInput(conversation.key, $event)" @keydown="cycleHistory(conversation.key, $event)"/><button data-variant="primary" class="ui-button whisper-control whisper-send" :disabled="!state.available || conversation.sending || !conversation.draft.trim() || conversation.draft.length > maxLength" type="submit" :aria-label="conversation.sending ? 'Submitting…' : 'Send'" :title="conversation.sending ? 'Submitting…' : 'Send'"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg><span class="whisper-sr-only">{{ conversation.sending ? 'Submitting…' : 'Send' }}</span></button></div>
+          <div class="ui-input-group whisper-input-row"><input :id="`draft-${conversation.key}`" :value="conversation.draft" placeholder="Message…" autocomplete="off" @input="draftInput(conversation.key, $event)" @keydown="cycleHistory(conversation.key, $event)"/><button data-variant="primary" class="ui-button whisper-control whisper-send" :disabled="!state.available || conversation.sending || !conversation.draft.trim() || conversation.draft.length > maxLength" type="submit" :aria-label="conversation.sending ? 'Submitting…' : 'Send'" :title="conversation.sending ? 'Submitting…' : 'Send'"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg><span class="whisper-sr-only">{{ conversation.sending ? 'Submitting…' : 'Send' }}</span></button></div>
           <small v-if="conversation.draft.length > maxLength - 20" :class="{ 'whisper-danger': conversation.draft.length > maxLength }">{{ conversation.draft.length }}/{{ maxLength }}{{ conversation.draft.length > maxLength ? ' · Shorten your message to send.' : '' }}</small>
         </form>
       </div>
@@ -349,69 +349,75 @@ onBeforeUnmount(() => {
 .ui-reading-surface :focus-visible { outline: 2px solid var(--ui-focus); outline-offset: 2px; }
 .ui-reading-surface ::selection { background: var(--ui-accent); color: var(--ui-accent-ink); }
 .ui-reading-surface small { color: var(--ui-text-muted); font: 12px/1.5 var(--ui-font-reading); }
-.ui-reading-surface input, .ui-reading-surface select { min-width: 0; width: 100%; color: var(--ui-text); caret-color: var(--ui-focus); font: inherit; border: 1px solid var(--ui-line-soft); border-radius: var(--ui-radius); background: var(--ui-well-fill); padding: 9px 12px; }
+.ui-reading-surface input, .ui-reading-surface select { min-width: 0; width: 100%; color: var(--ui-text); caret-color: var(--ui-focus); font: inherit; }
 .ui-reading-surface input::placeholder { color: var(--ui-text-muted); opacity: 1; }
-.whisper-window { position: fixed; width: 340px; height: 400px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); display: flex; flex-direction: column; pointer-events: auto; isolation: isolate; }
-.whisper-head { display: flex; align-items: center; gap: 2px; min-height: 44px; padding: 4px 8px; border-bottom: 1px solid var(--ui-line-soft); background: var(--ui-title-fill); border-radius: var(--ui-radius-lg) var(--ui-radius-lg) 0 0; cursor: grab; }
+.whisper-window { position: fixed; width: 340px; height: 360px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); display: flex; flex-direction: column; pointer-events: auto; isolation: isolate; }
+.whisper-head { display: flex; align-items: center; gap: 2px; min-height: 42px; padding: 4px 8px; border-bottom: 1px solid var(--ui-line-soft); background: var(--ui-title-fill); border-radius: var(--ui-radius) var(--ui-radius) 0 0; cursor: grab; }
 .whisper-heading { flex: 1; min-width: 0; margin: 0 6px; display: flex; align-items: baseline; gap: 8px; }
-.whisper-head h2 { min-width: 0; font: var(--ui-font-weight-semibold) 15px/1.3 var(--ui-font-interface); color: var(--ui-text); margin: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.whisper-head h2 { min-width: 0; font: var(--ui-font-weight-semibold) 15px/1.3 var(--ui-font-interface); color: var(--ui-text-bright); margin: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.whisper-heading[data-conversation] h2 { color: var(--ui-chat-incoming-accent); }
 .whisper-presence-label { display: flex; align-items: center; gap: 5px; line-height: 1.25 !important; flex: 0 0 auto; }
 .whisper-icon { width: 30px; height: 30px; min-height: 30px; padding: 0; flex-shrink: 0; position: relative; line-height: 0; }
 .ui-reading-surface .whisper-icon svg { display: block; width: 18px; height: 18px; }
 .ui-reading-surface .whisper-icon-dot { fill: currentColor; stroke: none; }
 .whisper-launcher { position: fixed; width: 36px; height: 36px; min-height: 36px; border-radius: var(--ui-radius-pill); pointer-events: auto; touch-action: none; padding: 8px; }
 .ui-reading-surface.whisper-launcher svg { width: 19px; height: 19px; fill: currentColor; stroke: none; }
-.whisper-badge, .whisper-count { min-width: 20px; padding: 1px 5px; border-radius: var(--ui-radius-lg); background: var(--ui-danger); color: var(--ui-text); font: 600 12px/18px var(--ui-font-reading); text-align: center; }
+.whisper-badge, .whisper-count { min-width: 20px; padding: 1px 5px; border-radius: var(--ui-radius-lg); background: var(--ui-chat-incoming-accent); color: var(--ui-accent-ink); font: 600 12px/18px var(--ui-font-reading); text-align: center; box-shadow: 0 0 0 1px color-mix(in srgb, var(--ui-chat-incoming-accent) 36%, var(--ui-outline)); }
 .whisper-badge { position: absolute; top: -5px; right: -6px; min-width: 18px; padding: 0 4px; font-size: 10px; line-height: 17px; }
-.whisper-back-count { position: absolute; bottom: -3px; right: -2px; font-size: 10px; color: var(--ui-focus); }
+.whisper-back-count { position: absolute; right: -2px; bottom: -2px; min-width: 15px; padding: 0 3px; border-radius: var(--ui-radius-pill); background: var(--ui-chat-incoming-accent); color: var(--ui-accent-ink); font: 600 9px/15px var(--ui-font-reading); text-align: center; box-shadow: 0 0 0 1px var(--ui-well-fill); }
 .whisper-bubble { max-width: 80%; padding: 6px 10px; font-size: 13px; line-height: 1.4; }
-.whisper-picker, .whisper-transcript { overflow: auto; scrollbar-width: thin; scrollbar-color: var(--ui-line-soft) transparent; }
+.whisper-picker, .whisper-transcript { overflow: auto; }
 .whisper-picker { padding: 10px 10px 12px; flex: 1; min-height: 0; }
 .whisper-search, .whisper-inline { display: flex; gap: 8px; }
-.whisper-search input { flex: 1; }
-.whisper-picker h3 { font: 600 11px/1.5 var(--ui-font-reading); color: var(--ui-text-muted); margin: 14px 6px 4px; letter-spacing: .01em; }
-.whisper-person { display: flex; align-items: center; gap: 2px; }
+.whisper-search { padding: 4px; border-radius: var(--ui-radius); }
+.whisper-search input { flex: 1; padding: 4px 8px; }
+.whisper-search button { min-height: 30px; padding-inline: 12px; border-radius: var(--ui-radius-sm); }
+.whisper-search button:disabled, .whisper-send:disabled { opacity: .45; }
+.whisper-picker h3 { font: 600 11px/1.5 var(--ui-font-reading); color: color-mix(in srgb, var(--ui-accent) 74%, var(--ui-text-muted)); margin: 16px 6px 5px; letter-spacing: .01em; }
+.whisper-person { position: relative; display: flex; align-items: center; gap: 2px; border-radius: var(--ui-radius-sm); }
+.whisper-person[data-unread] { background: color-mix(in srgb, var(--ui-chat-incoming-accent) 8%, transparent); box-shadow: inset 1px 0 var(--ui-chat-incoming-accent); }
 .whisper-person-open { display: flex; align-items: center; justify-content: space-between; width: 100%; min-width: 0; min-height: 36px; padding: 4px 6px; text-align: left; }
 .whisper-person-main { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .whisper-person-copy { min-width: 0; }
-.whisper-person-open strong { font-weight: 500; }
-.whisper-person-open small { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; max-width: 240px; }
+.whisper-person-open strong { color: var(--ui-text-bright); font-weight: 500; }
+.whisper-person-open small { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; max-width: 240px; color: var(--ui-text-faint); }
 .whisper-person-open > small { flex-shrink: 0; }
 .whisper-presence { width: 8px; height: 8px; border-radius: var(--ui-radius-pill); flex: 0 0 auto; background: var(--ui-text-faint); box-shadow: 0 0 0 2px color-mix(in srgb, var(--ui-text-faint) 15%, transparent); }
 .whisper-presence[data-presence="online"] { background: var(--ui-success); box-shadow: 0 0 0 2px color-mix(in srgb, var(--ui-success) 16%, transparent); }
 .whisper-presence[data-presence="away"] { background: var(--ui-warning); box-shadow: 0 0 0 2px color-mix(in srgb, var(--ui-warning) 16%, transparent); }
 .whisper-presence[data-presence="do-not-disturb"] { background: var(--ui-danger); box-shadow: 0 0 0 2px color-mix(in srgb, var(--ui-danger) 16%, transparent); }
 .whisper-presence[data-presence="offline"] { background: var(--ui-text-faint); }
-.whisper-status-copy { margin-left: 10px; }
+.whisper-status-copy { margin-left: 10px; color: var(--ui-text-muted) !important; }
 .whisper-conversation { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .whisper-transcript { flex: 1; min-height: 40px; padding: 12px 10px; overscroll-behavior: contain; scroll-padding-block: 12px; background: var(--ui-well-fill); box-shadow: inset 0 1px 0 var(--ui-edge), inset 0 -1px 0 var(--ui-edge); }
 .whisper-message { display: flex; flex-direction: column; align-items: flex-start; margin-top: 10px; }
 .whisper-message:first-of-type { margin-top: 0; }
 .whisper-message[data-grouped] { margin-top: 4px; }
 .whisper-message[data-direction="outgoing"] { align-items: flex-end; }
-.whisper-unread-marker { align-self: stretch; display: flex; align-items: center; gap: 12px; margin: 0 0 16px; text-align: center; }
-.whisper-unread-marker::before, .whisper-unread-marker::after { content: ''; height: 1px; background: var(--ui-line-soft); flex: 1; }
+.whisper-unread-marker { align-self: stretch; display: flex; align-items: center; gap: 12px; margin: 0 0 16px; color: var(--ui-chat-incoming-accent) !important; text-align: center; }
+.whisper-unread-marker::before, .whisper-unread-marker::after { content: ''; height: 1px; background: color-mix(in srgb, var(--ui-chat-incoming-accent) 42%, transparent); flex: 1; }
 .whisper-compose { padding: 8px 10px 10px; }
-.whisper-input-row { display: flex; align-items: center; gap: 6px; padding: 4px; border: 1px solid var(--ui-line-soft); border-radius: var(--ui-radius-pill); background: var(--ui-well-fill); }
-.whisper-input-row input { border: 0; background: transparent; padding: 6px 10px; flex: 1; border-radius: var(--ui-radius-swell); }
+.whisper-input-row { display: flex; align-items: center; gap: 6px; padding: 4px; border-radius: var(--ui-radius-pill); }
+.whisper-input-row input { padding: 4px 8px; flex: 1; border-radius: var(--ui-radius-swell); }
 .whisper-input-row:has(input:focus-visible) { outline: 2px solid var(--ui-focus); outline-offset: 2px; }
 .ui-reading-surface .whisper-input-row input:focus-visible { outline: none; box-shadow: none; }
 .whisper-send { border-radius: var(--ui-radius-pill); min-height: 32px; width: 32px; height: 32px; padding: 6px; flex-shrink: 0; }
 .whisper-compose > small { display: block; text-align: right; margin-top: 4px; }
-.whisper-latest { align-self: center; color: var(--ui-focus); }
-.whisper-empty { color: var(--ui-text-muted); margin: 8px 0; font-size: 13px; }
+.whisper-latest { align-self: center; color: var(--ui-chat-incoming-accent); }
+.whisper-empty { max-width: 32ch; color: var(--ui-text-muted); margin: 8px 6px; font-size: 12px; line-height: 1.45; text-wrap: pretty; }
+.whisper-onboarding { margin-top: 10px; }
 .whisper-notice { margin: 0; padding: 6px 12px; font-size: 12px; background: var(--ui-well-fill); }
 .whisper-notice p { margin: 0 0 8px; }
 .whisper-danger { color: var(--ui-danger) !important; }
 .whisper-options { position: relative; cursor: default; }
 .whisper-options summary { list-style: none; }
 .whisper-options summary::-webkit-details-marker { display: none; }
-.whisper-menu { position: absolute; top: 42px; right: 0; width: 260px; max-height: min(360px, calc(100vh - 130px)); overflow: auto; padding: 12px; background: var(--ui-chat-incoming-fill); border-radius: var(--ui-radius-lg); box-shadow: var(--ui-shadow); z-index: 2; }
+.whisper-menu { position: absolute; top: 34px; right: 0; width: 238px; max-height: min(330px, calc(100vh - 120px)); overflow: auto; padding: 10px; z-index: 2; }
 .whisper-menu label { display: block; margin-bottom: 6px; font-weight: 500; }
 .whisper-menu select { font-size: 12px; margin-bottom: 8px; }
 .whisper-menu button { width: 100%; justify-content: flex-start; text-align: left; }
 .whisper-menu small { display: block; padding: 0 12px 8px; }
-.whisper-menu p { font-size: 12px; color: var(--ui-text-muted); margin: 12px 0 0; }
+.whisper-menu p { padding: 8px 8px 0; border-top: 1px solid var(--ui-line-soft); font-size: 11px; line-height: 1.45; color: var(--ui-text-faint); margin: 8px 0 0; }
 .whisper-menu-divider { height: 1px; background: var(--ui-line-soft); margin: 8px 0; }
 .whisper-resize { position: absolute; bottom: 1px; right: 1px; width: 16px; height: 16px; padding: 0; border: 0; background: transparent; color: var(--ui-text-muted); cursor: nwse-resize; }
 .whisper-resize svg { width: 16px; height: 16px; }

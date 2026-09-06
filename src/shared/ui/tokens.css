@@ -430,9 +430,15 @@
 
 /* Reading surfaces use quieter paint while inheriting the selected palette. */
 :root {
-  --ui-chat-incoming-fill: color-mix(in srgb, var(--ui-text) 9%, var(--ui-well));
-  --ui-chat-outgoing-fill: var(--ui-selection-fill);
-  --ui-chat-incoming-ink: var(--ui-text);
-  --ui-chat-outgoing-ink: var(--ui-selection-ink);
+  /* Guild Wars renders an incoming whisper with a blue correspondent and the
+   * player's reply in green. The companion keeps those identities quieter so
+   * they remain readable over the game without becoming combat feedback. */
+  --ui-chat-incoming-accent: color-mix(in srgb, var(--ui-info) 78%, var(--ui-text-bright));
+  --ui-chat-outgoing-accent: color-mix(in srgb, var(--ui-success) 58%, var(--ui-text-bright));
+  --ui-chat-incoming-fill: color-mix(in srgb, var(--ui-info) 12%, var(--ui-well-fill));
+  --ui-chat-outgoing-fill: color-mix(in srgb, var(--ui-success) 16%, var(--ui-well-fill));
+  --ui-chat-incoming-ink: var(--ui-text-bright);
+  --ui-chat-outgoing-ink: var(--ui-chat-outgoing-accent);
+  --ui-frame-quiet: var(--ui-ring-quiet);
   --ui-frame-quiet-width: 1px;
 }

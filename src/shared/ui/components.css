@@ -1352,7 +1352,11 @@ button.ui-chip[aria-disabled="true"] {
 
 /* Compact reading windows keep the theme's edge without ornamental corners.
  * This is opt-in; existing Tools windows retain their established material. */
-.ui-frame[data-variant="quiet"]::before { padding: var(--ui-frame-quiet-width); }
+.ui-frame[data-variant="quiet"] { border-radius: var(--ui-radius); }
+.ui-frame[data-variant="quiet"]::before {
+  padding: var(--ui-frame-quiet-width);
+  background: var(--ui-frame-quiet);
+}
 .ui-frame[data-variant="quiet"]::after { display: none; }
 .ui-reading-surface { font-family: var(--ui-font-reading); text-shadow: none; }
 .ui-reading-surface :where(button, input, select, small) { font-family: var(--ui-font-reading); text-shadow: none; }
@@ -1365,9 +1369,11 @@ button.ui-chip[aria-disabled="true"] {
   text-shadow: none;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-chat-incoming-accent) 18%, transparent);
 }
 .ui-chat-bubble[data-direction="outgoing"] {
   border-radius: var(--ui-radius-swell) var(--ui-radius-swell) var(--ui-radius-sm) var(--ui-radius-swell);
   background: var(--ui-chat-outgoing-fill), var(--ui-well);
   color: var(--ui-chat-outgoing-ink);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-chat-outgoing-accent) 24%, transparent);
 }
