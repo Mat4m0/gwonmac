@@ -174,9 +174,10 @@ styles. Deleting a custom style requires confirmation.
 Press **Command-R** to open **Switch Character** from a playable outpost.
 The search bar is shown for every account size. Initial focus remains on the
 current character. Press Left or Up for the previous character. Press Right or
-Down for the next character. Start typing to move focus to search. The number
-keys 1–9 and 0 switch to the first ten characters. Press **Command-Shift-R** to
-reload Guild Wars.
+Down for the next character. Start typing a character name or primary profession
+to move focus to search. Secondary professions are not searched. The number keys
+1–9 and 0 switch to the first ten characters. Press **Command-Shift-R** to reload
+Guild Wars.
 
 Character names and search text are not saved.
 

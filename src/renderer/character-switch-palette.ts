@@ -79,7 +79,10 @@ export function searchCharacters(
   const terms = term.split(/\s+/u);
   return Object.freeze(rows.filter(({ character }) => {
     const name = normaliseCharacterQuery(character.name);
-    return terms.every((candidate) => name.includes(candidate));
+    const profession = professionPresentation(character.primaryProfession);
+    return terms.every((candidate) => name.includes(candidate))
+      || (profession !== null
+        && normaliseCharacterQuery(profession.name).includes(term));
   }));
 }
 
