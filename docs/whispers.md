@@ -1,6 +1,6 @@
 # Whispers
 
-Status: implementation in progress on the whisper integration stack.
+Status: implemented locally; live gameplay validation remains with Matthias.
 
 Whispers is an optional, session-only companion to the original Guild Wars
 chat. Original chat remains authoritative and fully usable. The companion
@@ -16,6 +16,11 @@ replace chat handlers, block messages, or maintain a second delivery history.
    friends, cleanup, sound, and combined interactive verification.
 
 Both layers include their own tests and documentation. Publication is separate.
+
+Enable **Whispers** in launcher Tools settings (off by default). The panel is
+available in PvE while Tools is enabled. `pnpm tools:dev` with `?whispers` opens
+the same Vue surface with local scenario controls; those controls never send
+game messages.
 
 ## Acceptance criteria
 
@@ -57,13 +62,38 @@ boundary without widening the argument-free Resign command.
 GWToolbox++ `ChatSettings` identifies outgoing whispers in the global channel
 by encoded template `0x76e`; incoming-only channel observation is insufficient.
 External native-client facts are research leads, not WebAssembly authority.
-Current-client certification and executable tests must establish the exact
-packet layout, text grammar and producer before enabling either direction.
+The current outgoing producer supplies a numeric argument before recipient and
+message. The parser consumes that bounded u32 prefix before reading either
+string. Certification binds this producer, its template mapping and the native
+encoder; integration tests cover echo confirmation and clearing the draft.
+
+## Presentation and limits
+
+Incoming bubbles align left; replies align right. Both follow the selected Tools
+UI theme and wrap long text. The header names the person; each message retains
+an accessible author label. Back opens the people list. Sound and cleanup are
+in the options menu. There are no invented delivery or
+read receipts. Original game links remain available in original chat.
+
+The native sender accepts at most 137 UTF-16 units for the whole encoded line,
+including recipient and separators. The composer displays the resulting body
+limit (up to 120 units) and refuses excess text without truncation.
+
+The view holds at most 32 open conversations and 200 messages per conversation.
+Overflow is disclosed in the panel. Close read conversations keeps unread chats,
+drafts and pending submissions. The picker shows online, away and do-not-disturb friends; offline friends are
+hidden. Friends use the latest observed snapshot for this session; pausing the observer does not add friends to recent people.
+Temporary loading or PvP hides the surface and disables sending. Leaving the
+game, changing character, or turning the feature off clears its session data.
 
 ## Verification boundary
 
 Offline generated-WASM and companion tests prove bounds, refusal, ordering,
 original-call preservation and lifecycle. The Tools fixture exercises the real
-Vue surface with synthetic messages. A narrow live two-account check is still
+Vue surface with synthetic messages. The repository check suite, production build, complete integration suite,
+compiled-kernel contract check, and current official-client whisper
+certification/mutation tests passed. Browser exploration covered sending,
+original-chat echo, focus, drafts, close guards, dragging and bubble wrapping.
+A narrow live two-account check is still
 required to establish current-game semantics; automated fixtures cannot claim
 that check passed. Do not send a live test message to an unspecified person.

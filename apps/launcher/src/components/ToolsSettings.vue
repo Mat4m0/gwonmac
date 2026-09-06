@@ -12,6 +12,7 @@ const emit = defineEmits<{ maps: [] }>();
 const message = ref("");
 const hasActiveGames = computed(() => props.snapshot.profiles.some(profile => profile.state !== "ready" && profile.state !== "failed"));
 const features: Record<GlobalTool, { label: string; description: string; action?: ShortcutAction }> = {
+  whispers: { label: "Whispers", description: "A movable whisper panel alongside original chat. Conversations last for this session only." },
   resign: { label: "Resign", description: "Ask before sending /resign in PvE. Enter confirms; Escape cancels.", action: "game.resign" },
   "character-switch": { label: "Character Switch", description: "Search and browse every character. Available without optional Tools.", action: "character.switch" },
   "build-management": { label: "Build Library", description: "Save and load skill builds.", action: "tools.toggle" },

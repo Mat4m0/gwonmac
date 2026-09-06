@@ -1349,3 +1349,25 @@ button.ui-chip[aria-disabled="true"] {
   border: 0;
   white-space: nowrap;
 }
+
+/* Compact reading windows keep the theme's edge without ornamental corners.
+ * This is opt-in; existing Tools windows retain their established material. */
+.ui-frame[data-variant="quiet"]::before { padding: var(--ui-frame-quiet-width); }
+.ui-frame[data-variant="quiet"]::after { display: none; }
+.ui-reading-surface { font-family: var(--ui-font-reading); text-shadow: none; }
+.ui-reading-surface :where(button, input, select, small) { font-family: var(--ui-font-reading); text-shadow: none; }
+.ui-chat-bubble {
+  padding: var(--ui-space-2) var(--ui-space-3);
+  border-radius: var(--ui-radius-swell) var(--ui-radius-swell) var(--ui-radius-swell) var(--ui-radius-sm);
+  background: var(--ui-chat-incoming-fill);
+  color: var(--ui-chat-incoming-ink);
+  font: var(--ui-font-size)/1.5 var(--ui-font-reading);
+  text-shadow: none;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.ui-chat-bubble[data-direction="outgoing"] {
+  border-radius: var(--ui-radius-swell) var(--ui-radius-swell) var(--ui-radius-sm) var(--ui-radius-swell);
+  background: var(--ui-chat-outgoing-fill), var(--ui-well);
+  color: var(--ui-chat-outgoing-ink);
+}

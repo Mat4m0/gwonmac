@@ -427,3 +427,12 @@
     --ui-selection-ink: HighlightText;
   }
 }
+
+/* Reading surfaces use quieter paint while inheriting the selected palette. */
+:root {
+  --ui-chat-incoming-fill: color-mix(in srgb, var(--ui-text) 9%, var(--ui-well));
+  --ui-chat-outgoing-fill: var(--ui-selection-fill);
+  --ui-chat-incoming-ink: var(--ui-text);
+  --ui-chat-outgoing-ink: var(--ui-selection-ink);
+  --ui-frame-quiet-width: 1px;
+}

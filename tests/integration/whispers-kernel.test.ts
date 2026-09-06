@@ -4,6 +4,9 @@ import { ADDRESSES, createKernel, installGameGraph, kernelExports } from "../fix
 import { COMPANION_ABI, COMPANION_DISPATCH_KINDS, COMPANION_FEATURE_BITS } from "../../src/shared/companion-abi.ts";
 import { readCompanionWhispers } from "../../src/renderer/companion-whisper-snapshot.ts";
 
+import { createWhisperInstallation } from "../../src/renderer/whisper-installation.ts";
+import { createWhisperSession } from "../../src/shared/whisper-session.ts";
+import { WHISPER_MAILBOX } from "../../src/shared/whispers.ts";
 
 const flags = COMPANION_FEATURE_BITS.whisperObservation | COMPANION_FEATURE_BITS.playRegionObservation;
 const packet = 0x64000;
@@ -98,4 +101,36 @@ test("outgoing native numeric metadata stays separate from recipient and body", 
   }
   assert.equal(k.read().rejectedCount, 5);
   assert.equal(k.read().messages.length, 4);
+});
+
+
+test("native outgoing echo completes submission, clears the draft, and adds one bubble", async () => {
+  const k = await fixture();
+  const adapter = createWhisperInstallation({
+    enhancement_configure_whispers: () => 1,
+    enhancement_send_whisper: () => {
+      k.view.setUint32(ADDRESSES.whispers + COMPANION_ABI.whispers.snapshotBytes + WHISPER_MAILBOX.status, 2, true);
+      return 1;
+    },
+  }, true);
+  adapter.allocate(() => ADDRESSES.whispers);
+  adapter.initialize(k.memory);
+  adapter.setEnabled(true);
+  const session = createWhisperSession(adapter.send);
+  adapter.subscribe((messages, missed) => session.observe(messages, missed));
+  session.setAvailable(true); session.open("Test Friend");
+  session.setDraft("test friend", "A reply");
+  try {
+    const submission = session.send("test friend");
+    assert.equal(session.state.conversations[0]?.sending, true);
+    k.observe(10, "A reply", "Test Friend", 0x76e);
+    adapter.poll();
+    await submission;
+    assert.equal(session.state.conversations[0]?.draft, "");
+    assert.equal(session.state.conversations[0]?.error, "");
+    assert.equal(session.state.conversations[0]?.messages.length, 1);
+    assert.equal(session.state.missed, 0);
+    adapter.poll();
+    assert.equal(session.state.conversations[0]?.messages.length, 1);
+  } finally { adapter.dispose(() => {}); session.dispose(); }
 });

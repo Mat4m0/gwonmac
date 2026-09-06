@@ -432,6 +432,7 @@ export interface AppSettings {
   characterSwitchEnabled: boolean;
   /** Allow the confirmed PvE resign shortcut when Tools are enabled. */
   resignEnabled: boolean;
+  whispersEnabled: boolean;
   /** Show the canonical profession icon and profession names in Character Switch. */
   characterSwitchProfession: boolean;
   /** Show the character's certified level in Character Switch. */
@@ -605,6 +606,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   travelPalette: true,
   characterSwitchEnabled: true,
   resignEnabled: false,
+  whispersEnabled: false,
   characterSwitchProfession: true,
   characterSwitchLevel: true,
   characterSwitchLocation: true,

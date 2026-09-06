@@ -181,3 +181,19 @@ Check narrow, wide, short, transparent, and opaque states. Check the live
 Settings dialog too. Body text must have a contrast ratio of at least 4.5:1.
 Large text must have a ratio of at least 3:1. Test minimum opacity over bright,
 detailed game artwork.
+
+## Compact reading surfaces
+
+Whispers uses the shared `.ui-frame` with `data-variant="quiet"`: the theme's
+edge remains, with no ornamental corner highlights. This opt-in variant also
+supports future compact reading windows without changing existing Tools.
+`.ui-reading-surface` uses the selected Reading font without text shadows;
+the title keeps Interface typography. Quiet buttons keep secondary actions
+subordinate to messages. `.ui-chat-bubble` owns incoming and outgoing material,
+using shared text, well and selection tokens for Classic, Modern and Custom.
+
+The messenger shows one conversation at a time. Back opens the people list;
+sound, mute and cleanup live in the options menu. The author appears once in
+the header and remains available to assistive technology on each message.
+Incoming messages align left, replies right, and consecutive bubbles group
+with tighter spacing. Keep settings and explanatory copy out of the transcript.
