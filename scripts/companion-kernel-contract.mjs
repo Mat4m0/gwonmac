@@ -107,7 +107,9 @@ export const COMPANION_KERNEL_DYLINK0 = Object.freeze([
   // someone saying why. One page is still the ceiling, and this remains far
   // under it.
   // 3969 -> 3984: whisper ring publication state; ring/mailbox are host-owned.
-  0x01, 0x05, 0x90, 0x1f, 0x02, 0x00, 0x00,
+  // 3984 -> 3988: bounded write-with-sender parsing aligns one native word;
+  //               names still publish into the existing host-owned ring.
+  0x01, 0x05, 0x94, 0x1f, 0x02, 0x00, 0x00,
 ]);
 
 const WASM_PAGE_BYTES = 65_536;

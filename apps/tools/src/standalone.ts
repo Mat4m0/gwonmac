@@ -61,6 +61,7 @@ if (params.has("whispers")) {
   action("Simulate original chat reply", () => session.observe([{ id: ++id, sender: "Romi Ranger", message: "Yes, joining you now.", direction: "outgoing" }]));
   action("Simulate trade whisper", () => session.observe([{ id: ++id, sender: `Trader ${id}`, message: "Still selling?", direction: "incoming" }]));
   action("Simulate chat names", () => session.observe([
+    { id: ++id, sender: "Madvillain Goes Pre", direction: "participant" },
     { id: ++id, sender: "Moon D Eden", direction: "participant" },
     { id: ++id, sender: "Ancient N Chains", direction: "participant" },
     { id: ++id, sender: "Fureur Verte", direction: "participant" },

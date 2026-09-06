@@ -1,7 +1,8 @@
 //! Exact whisper chat-log observation for the certified client build.
 //!
-//! The UI event is shared rendered text, so this module accepts only channel
-//! 14 or the outgoing global template, with a bounded control-code shape. It copies the sender and message
+//! The UI events carry either shared rendered whisper text or a separate public
+//! chat sender. This module accepts only the known player-chat channels and
+//! bounded control-code shapes. It copies whisper content or public sender names
 //! into its own bounded host region before the ephemeral game pointer expires.
 
 use core::ptr::write_volatile;
@@ -39,6 +40,32 @@ unsafe fn rendered_units(pointer: u32) -> Option<u32> {
         }
     }
     None
+}
+
+// Public player chat is written through the certified "with sender" packet.
+// Its sender is an independent encoded string: TEXT_STYLE, SENDER_STYLE, name,
+// CONTROL_END, NUL. Accept the shorter SENDER_STYLE form too because the game
+// itself can supply already-styled sender text.
+unsafe fn encoded_sender(pointer: u32) -> Option<(u32, u32)> {
+    if pointer == 0 || pointer & 1 != 0 { return None; }
+    let maximum = (WHISPER_SENDER_UNITS + 3) as u32;
+    let mut units = None;
+    for index in 0..=maximum {
+        let address = indexed(pointer, index, 2)?;
+        if unsafe { read_u16(address)? } == 0 { units = Some(index); break; }
+    }
+    let units = units?;
+    if units < 3 || unsafe { read_u16(indexed(pointer, units - 1, 2)?) } != Some(CONTROL_END) {
+        return None;
+    }
+    let first = unsafe { read_u16(pointer)? };
+    let start = if first == TEXT_STYLE
+        && unsafe { read_u16(indexed(pointer, 1, 2)?) } == Some(SENDER_STYLE) { 2 }
+        else if first == SENDER_STYLE { 1 }
+        else { return None; };
+    let name_units = units.checked_sub(start + 1)?;
+    if name_units == 0 || name_units > WHISPER_SENDER_UNITS as u32 { return None; }
+    Some((start, name_units))
 }
 
 // The outgoing producer encodes a u32 argument before its two string arguments.
@@ -177,7 +204,8 @@ pub(crate) unsafe fn initialize(pointer: u32) {
 }
 
 pub(crate) unsafe fn observe(message: u32, wparam: u32) {
-    if message != 0x1000_007f || wparam == 0 || wparam & 3 != 0 || !contains(wparam, 8) {
+    if !matches!(message, 0x1000_007f | 0x1000_0080)
+        || wparam == 0 || wparam & 3 != 0 || !contains(wparam, 8) {
         return;
     }
     let channel = unsafe { read_u32(wparam) };
@@ -185,6 +213,16 @@ pub(crate) unsafe fn observe(message: u32, wparam: u32) {
         Some(ALLIANCE_CHANNEL) | Some(ALLIES_CHANNEL) | Some(ALL_CHANNEL)
             | Some(GUILD_CHANNEL) | Some(GROUP_CHANNEL) | Some(TRADE_CHANNEL));
     if channel != Some(INCOMING_WHISPER_CHANNEL) && channel != Some(GLOBAL_CHANNEL) && !participant {
+        return;
+    }
+    if message == 0x1000_0080 {
+        if !participant || !contains(wparam, 12) { return; }
+        let sender = offset(wparam, 8).and_then(|at| unsafe { read_u32(at) });
+        let Some((sender, (sender_start, sender_units))) = sender
+            .and_then(|sender| unsafe { encoded_sender(sender) }.map(|shape| (sender, shape)))
+        else { return; };
+        if !unsafe { valid_utf16(sender, sender_start, sender_units) } { return; }
+        unsafe { append(sender, sender_start, sender_units, 0, 0, false, true) };
         return;
     }
     let text = offset(wparam, 4).and_then(|at| unsafe { read_u32(at) });

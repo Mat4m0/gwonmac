@@ -137,9 +137,12 @@ it("shows available friends without hiding offline conversations", async () => {
   wrapper.unmount();
 });
 
-it("suggests recent chat participants and supports keyboard completion", async () => {
+it("suggests friends or recent chat participants and lets either source be disabled", async () => {
   const session = createWhisperSession(async () => {});
   session.setAvailable(true); session.showPicker();
+  session.updateFriends({ status: "ready", sequence: 1, generation: 1, friends: [
+    { key: "friend", character: "Moon Friend", alias: "Moon Friend", status: "online", mapId: 133 },
+  ] });
   session.observe([
     { id: 1, sender: "Moon D Eden", direction: "participant" },
     { id: 2, sender: "Ancient N Chains", direction: "participant" },
@@ -148,8 +151,17 @@ it("suggests recent chat participants and supports keyboard completion", async (
   const field = wrapper.get<HTMLInputElement>("#whisper-person");
   await field.setValue("mo");
   expect(wrapper.text()).toContain("Moon D Eden");
-  expect(wrapper.text()).toContain("Seen in chat");
+  expect(wrapper.text()).toContain("Moon Friend");
+  expect(wrapper.text()).toContain("Friend · Online");
+  expect(wrapper.text()).toContain("Chat");
   expect(wrapper.text()).not.toContain("Ancient N Chains");
+  const sourceButtons = wrapper.findAll(".whisper-source-toggle");
+  await sourceButtons[1]!.trigger("click");
+  expect(wrapper.text()).not.toContain("Moon D Eden");
+  expect(wrapper.text()).toContain("Moon Friend");
+  await sourceButtons[0]!.trigger("click");
+  expect(wrapper.text()).toContain("Suggestions are off");
+  await sourceButtons[1]!.trigger("click");
   await field.trigger("keydown", { key: "Tab" });
   expect(field.element.value).toBe("Moon D Eden");
   await wrapper.get("form.whisper-search").trigger("submit");

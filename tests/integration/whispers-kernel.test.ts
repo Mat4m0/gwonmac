@@ -11,6 +11,7 @@ import { WHISPER_MAILBOX, type ObservedChatEvent } from "../../src/shared/whispe
 const flags = COMPANION_FEATURE_BITS.whisperObservation | COMPANION_FEATURE_BITS.playRegionObservation;
 const packet = 0x64000;
 const text = 0x64100;
+const senderText = 0x64300;
 const messageBody = (event: ObservedChatEvent) => "message" in event ? event.message : undefined;
 async function fixture() {
   const k = await createKernel();
@@ -23,12 +24,20 @@ async function fixture() {
     for (let i = 0; i < line.length; i++) k.view.setUint16(text + i * 2, line.charCodeAt(i), true);
     k.uiEvent(0x1000007f, packet, 0);
   };
+  const observeWithSender = (channel: number, sender: string) => {
+    k.view.setUint32(packet, channel, true);
+    k.view.setUint32(packet + 4, 0, true);
+    k.view.setUint32(packet + 8, senderText, true);
+    const encoded = `\u0108\u0107${sender}\x01\0`;
+    for (let i = 0; i < encoded.length; i++) k.view.setUint16(senderText + i * 2, encoded.charCodeAt(i), true);
+    k.uiEvent(0x10000080, packet, 0);
+  };
   const read = (cursor = 0) => {
     const state = readCompanionWhispers(k.memory.buffer, ADDRESSES.whispers, cursor);
     assert.equal(state.status, "ready");
     return state;
   };
-  return { ...k, observe, read };
+  return { ...k, observe, observeWithSender, read };
 }
 
 test("whisper observer keeps native directions, identical messages and bounded overflow", async () => {
@@ -59,6 +68,17 @@ test("player chat channels publish bounded participant names without message bod
   k.observe(12, "x".repeat(121), "Ignored Long Body");
   k.observe(12, "body", "x".repeat(21));
   assert.equal(k.read().rejectedCount, 0, "optional participant discovery never becomes a missed-whisper warning");
+});
+
+test("public chat with a separate encoded sender publishes the character name", async () => {
+  const k = await fixture();
+  k.observeWithSender(3, "Madvillain Goes Pre");
+  k.observeWithSender(12, "Moon D Eden");
+  assert.deepEqual(k.read().messages, [
+    { id: 1, sender: "Madvillain Goes Pre", direction: "participant" },
+    { id: 2, sender: "Moon D Eden", direction: "participant" },
+  ]);
+  assert.equal(k.read().rejectedCount, 0);
 });
 
 test("whisper observer refuses malformed, disabled and unsupported-region events", async () => {

@@ -48,10 +48,12 @@ game messages.
 - Friends reuse the existing certified observer. Recent people contains at most
   ten closed non-friend conversations in which the player sent a message.
   Remove and Clear recent affect contact suggestions only.
-- The same bounded chat-log event observes names from Alliance, Allies, All,
-  Guild, Group, Trade, and Whisper chat. Non-whisper message bodies are discarded
-  in the native ring; the picker retains only the 50 most recent valid character
-  names for session-only prefix and word completion.
+- The bounded chat observer reads whispers and the certified write-with-sender
+  event used by public player chat. It observes names from Alliance, Allies,
+  All, Guild, Group, Trade, and Whisper chat. Non-whisper message bodies are
+  discarded in the native ring; the picker retains only the 50 most recent valid
+  character names for session-only prefix and word completion. Friends and Chat
+  are the only completion sources and either can be switched off in the picker.
 - Sound offers Off, Background and Every incoming whisper. Muting a person
   suppresses sound while retaining unread badges. There are no notification cards.
 - Unsupported client facts withdraw the optional feature. Original Guild Wars

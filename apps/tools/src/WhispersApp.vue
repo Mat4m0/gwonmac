@@ -21,6 +21,8 @@ const windowStyle = computed(() => ({
 }));
 const search = ref("");
 const suggestionIndex = ref(-1);
+const suggestFriends = ref(true);
+const suggestChat = ref(true);
 const pickerError = ref("");
 const closing = ref<string | null>(null);
 const optionsMenu = ref<HTMLDetailsElement | null>(null);
@@ -72,27 +74,24 @@ const friends = computed(() => state.value.friends.status === "ready"
   ? state.value.friends.friends.filter(f => (f.status === "online" || f.status === "away" || f.status === "do-not-disturb") && !openKeys.value.has(whisperPersonKey(f.character || f.alias))
     && `${f.character} ${f.alias}`.toLocaleLowerCase().includes(search.value.toLocaleLowerCase())) : []);
 const recent = computed(() => state.value.recent.filter(p => p.name.toLocaleLowerCase().includes(search.value.toLocaleLowerCase())));
-type Suggestion = Readonly<{ key: string; name: string; detail: string; searchable: string; priority: number; activity: number }>;
+type Suggestion = Readonly<{ key: string; name: string; source: "friend" | "chat"; detail: string; searchable: string; priority: number; activity: number }>;
 const suggestions = computed(() => {
   const query = search.value.trim().toLocaleLowerCase("en-US");
   if (!query) return [];
   const people = new Map<string, Suggestion>();
   const add = (person: Suggestion) => { if (!people.has(person.key)) people.set(person.key, person); };
-  for (const conversation of state.value.conversations) add({
-    key: conversation.key, name: conversation.name, detail: "Conversation",
-    searchable: conversation.name, priority: 0, activity: conversation.activity,
-  });
-  for (const friend of observedFriends.value) {
-    const name = friend.character || friend.alias;
-    add({ key: whisperPersonKey(name), name, detail: presenceLabel(friend.status),
-      searchable: `${name} ${friend.alias}`, priority: 1, activity: 0 });
+  if (suggestFriends.value) {
+    for (const friend of observedFriends.value) {
+      const name = friend.character || friend.alias;
+      add({ key: whisperPersonKey(name), name, source: "friend", detail: `Friend · ${presenceLabel(friend.status)}`,
+        searchable: `${name} ${friend.alias}`, priority: 0, activity: 0 });
+    }
   }
-  for (const person of state.value.participants) add({
-    ...person, detail: "Seen in chat", searchable: person.name, priority: 2,
-  });
-  for (const person of state.value.recent) add({
-    ...person, detail: "Recent", searchable: person.name, priority: 3,
-  });
+  if (suggestChat.value) {
+    for (const person of state.value.participants) add({
+      ...person, source: "chat", detail: "Chat", searchable: person.name, priority: 1,
+    });
+  }
   const matchRank = (person: Suggestion) => {
     const value = person.searchable.toLocaleLowerCase("en-US");
     if (value === query) return 0;
@@ -367,12 +366,16 @@ onBeforeUnmount(() => {
     <div v-show="!selected" class="ui-scroll whisper-picker">
       <form class="ui-input-group whisper-search" @submit.prevent="submitSearch"><label class="whisper-sr-only" for="whisper-person">Character name</label><input id="whisper-person" v-model="search" maxlength="20" placeholder="Find a friend or enter a name" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="whisper-suggestions" :aria-expanded="Boolean(search.trim() && suggestions.length)" :aria-activedescendant="suggestionIndex >= 0 ? `whisper-suggestion-${suggestionIndex}` : undefined" @input="searchInput" @keydown="searchKeydown"/><button data-variant="primary" class="ui-button whisper-control" type="submit" :disabled="!search.trim()">Chat</button></form>
       <p v-if="pickerError" class="whisper-notice" role="alert">{{ pickerError }}</p>
+      <div class="whisper-source-filters" role="group" aria-label="Suggestion sources">
+        <span>Suggest from</span>
+        <button data-variant="quiet" class="ui-button whisper-control whisper-source-toggle" type="button" :aria-pressed="suggestFriends" @click="suggestFriends = !suggestFriends; suggestionIndex = -1">Friends</button>
+        <button data-variant="quiet" class="ui-button whisper-control whisper-source-toggle" type="button" :aria-pressed="suggestChat" @click="suggestChat = !suggestChat; suggestionIndex = -1">Chat</button>
+      </div>
       <template v-if="search.trim()">
-        <h3>Suggestions</h3>
         <div v-if="suggestions.length" id="whisper-suggestions" role="listbox" aria-label="Character suggestions">
-          <button v-for="(person, index) in suggestions" :id="`whisper-suggestion-${index}`" :key="person.key" data-variant="quiet" class="ui-button whisper-control whisper-person-open whisper-suggestion" role="option" :aria-selected="suggestionIndex === index" @click="open(person.name)"><span class="whisper-person-main"><span v-if="friendFor(person.name)" class="whisper-presence" :data-presence="friendFor(person.name)!.status"/><strong>{{ person.name }}</strong></span><small>{{ person.detail }}</small></button>
+          <button v-for="(person, index) in suggestions" :id="`whisper-suggestion-${index}`" :key="person.key" data-variant="quiet" class="ui-button whisper-control whisper-person-open whisper-suggestion" role="option" :aria-selected="suggestionIndex === index" @click="open(person.name)"><span class="whisper-person-main"><span v-if="person.source === 'friend' && friendFor(person.name)" class="whisper-presence" :data-presence="friendFor(person.name)!.status"/><strong>{{ person.name }}</strong></span><small>{{ person.detail }}</small></button>
         </div>
-        <p v-else class="whisper-empty">No known names match. Press Chat to use this exact character name.</p>
+        <p v-else class="whisper-empty">{{ !suggestFriends && !suggestChat ? 'Suggestions are off.' : 'No matching friends or chat names.' }} Press Chat to use this exact name.</p>
         <p v-if="suggestions.length" class="whisper-completion-hint">↑↓ choose · Tab completes</p>
       </template>
       <template v-else>
@@ -483,6 +486,10 @@ onBeforeUnmount(() => {
 .whisper-onboarding { margin-top: 10px; }
 .whisper-completion-hint { margin: 8px 6px 0; color: var(--ui-text-faint); font-size: 11px; }
 .whisper-suggestion[aria-selected="true"] { background: var(--ui-selection-fill); color: var(--ui-selection-ink); }
+.whisper-source-filters { display: flex; align-items: center; gap: 4px; min-width: 0; margin: 8px 6px 10px; color: var(--ui-text-muted); }
+.whisper-source-filters > span { margin-right: auto; font-size: 11px; }
+.whisper-source-toggle { min-height: 24px; padding: 2px 8px; font-size: 11px; }
+.whisper-source-toggle[aria-pressed="true"] { background: var(--ui-selection-fill); color: var(--ui-selection-ink); box-shadow: inset 0 0 0 1px var(--ui-line); }
 .whisper-notice { margin: 0; padding: 6px 12px; font-size: 12px; background: var(--ui-well-fill); }
 .whisper-notice p { margin: 0 0 8px; }
 .whisper-danger { color: var(--ui-danger) !important; }
