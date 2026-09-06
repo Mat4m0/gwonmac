@@ -25,7 +25,7 @@ unsafe fn rendered_units(pointer: u32) -> Option<u32> {
     if pointer == 0 || pointer & 1 != 0 {
         return None;
     }
-    let maximum = (2 + WHISPER_SENDER_UNITS + 2 + WHISPER_MESSAGE_UNITS + 1) as u32;
+    let maximum = (6 + WHISPER_SENDER_UNITS + 2 + WHISPER_MESSAGE_UNITS + 1) as u32;
     for index in 0..=maximum {
         let address = indexed(pointer, index, 2)?;
         if unsafe { read_u16(address)? } == 0 {
@@ -35,30 +35,41 @@ unsafe fn rendered_units(pointer: u32) -> Option<u32> {
     None
 }
 
-unsafe fn parse(pointer: u32) -> Option<(u32, u32, u32)> {
+// The outgoing producer encodes a u32 argument before its two string arguments.
+// Numeric digits use base 0x7f00, with bit 15 marking continuation; the final
+// digit has no end marker. Incoming whispers start directly with SENDER_STYLE.
+unsafe fn sender_start(pointer: u32, outgoing: bool) -> Option<u32> {
+    if !outgoing { return Some(2); }
+    if unsafe { read_u16(indexed(pointer, 1, 2)?) } != Some(0x0101) { return None; }
+    let mut value = 0u32;
+    for index in 2..5 {
+        let unit = unsafe { read_u16(indexed(pointer, index, 2)?)? };
+        let digit = (unit & 0x7fff).checked_sub(0x0100)? as u32;
+        value = value.checked_mul(0x7f00)?.checked_add(digit)?;
+        if unit & 0x8000 == 0 { return Some(index + 2); }
+    }
+    None
+}
+
+unsafe fn parse(pointer: u32, outgoing: bool) -> Option<(u32, u32, u32, u32)> {
     let units = unsafe { rendered_units(pointer)? };
-    if units < 7
-        || unsafe { read_u16(indexed(pointer, 1, 2)?) } != Some(SENDER_STYLE)
+    let sender_start = unsafe { sender_start(pointer, outgoing)? };
+    if units < sender_start + 5
+        || unsafe { read_u16(indexed(pointer, sender_start - 1, 2)?) } != Some(SENDER_STYLE)
         || unsafe { read_u16(indexed(pointer, units - 1, 2)?) } != Some(CONTROL_END)
     {
         return None;
     }
-    let maximum_separator = 2 + WHISPER_SENDER_UNITS as u32;
-    for separator in 3..=maximum_separator.min(units.saturating_sub(4)) {
+    let maximum_separator = sender_start + WHISPER_SENDER_UNITS as u32;
+    for separator in sender_start + 1..=maximum_separator.min(units.saturating_sub(4)) {
         if unsafe { read_u16(indexed(pointer, separator, 2)?) } == Some(CONTROL_END)
             && unsafe { read_u16(indexed(pointer, separator + 1, 2)?) } == Some(TEXT_STYLE)
         {
-            let sender_units = separator - 2;
+            let sender_units = separator - sender_start;
             let message_start = separator + 2;
             let message_units = units - message_start - 1;
-            if sender_units == 0
-                || sender_units > WHISPER_SENDER_UNITS as u32
-                || message_units == 0
-                || message_units > WHISPER_MESSAGE_UNITS as u32
-            {
-                return None;
-            }
-            return Some((sender_units, message_start, message_units));
+            if message_units == 0 || message_units > WHISPER_MESSAGE_UNITS as u32 { return None; }
+            return Some((sender_start, sender_units, message_start, message_units));
         }
     }
     None
@@ -96,7 +107,7 @@ unsafe fn publish_header() {
     }
 }
 
-unsafe fn append(text: u32, sender_units: u32, message_start: u32, message_units: u32, outgoing: bool) {
+unsafe fn append(text: u32, sender_start: u32, sender_units: u32, message_start: u32, message_units: u32, outgoing: bool) {
     let id = unsafe { WRITE_COUNT }.wrapping_add(1).max(1);
     let index = (id as usize - 1) % WHISPER_SLOT_COUNT;
     let snapshot = unsafe { POINTER as *mut WhisperSnapshot };
@@ -111,7 +122,7 @@ unsafe fn append(text: u32, sender_units: u32, message_start: u32, message_units
         );
         for index in 0..WHISPER_SENDER_UNITS {
             let value = if index < sender_units as usize {
-                read_u16(indexed(text, index as u32 + 2, 2).unwrap_or(0)).unwrap_or(0)
+                read_u16(indexed(text, index as u32 + sender_start, 2).unwrap_or(0)).unwrap_or(0)
             } else {
                 0
             };
@@ -162,17 +173,17 @@ pub(crate) unsafe fn observe(message: u32, wparam: u32) {
     if outgoing && text.and_then(|p| unsafe { read_u16(p) }) != Some(OUTGOING_TEMPLATE) {
         return;
     }
-    let Some((text, (sender_units, message_start, message_units))) =
-        text.and_then(|text| unsafe { parse(text) }.map(|shape| (text, shape)))
+    let Some((text, (sender_start, sender_units, message_start, message_units))) =
+        text.and_then(|text| unsafe { parse(text, outgoing) }.map(|shape| (text, shape)))
     else {
         unsafe { reject() };
         return;
     };
-    if !unsafe { valid_utf16(text, 2, sender_units) }
+    if !unsafe { valid_utf16(text, sender_start, sender_units) }
         || !unsafe { valid_utf16(text, message_start, message_units) } {
         unsafe { reject() }; return;
     }
-    unsafe { append(text, sender_units, message_start, message_units, outgoing) };
+    unsafe { append(text, sender_start, sender_units, message_start, message_units, outgoing) };
 }
 
 /// Rechecks the canonical game state on enqueue and at the native drain.

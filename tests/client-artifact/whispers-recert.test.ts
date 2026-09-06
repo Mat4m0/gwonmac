@@ -16,7 +16,7 @@ test("whisper certification binds the current sender, copier and observer encode
   assert.equal(isLocalClientVerification(result, result.officialSha256, requested), true);
   assert.ok(result.enhancementBuild?.whisperChat);
   const imported = wasmEvidence(bytes)!.moduleView().functionImportCount;
-  for (const changed of [358, 11733, 5865, 5871, 7875]) {
+  for (const changed of [358, 11733, 11731, 8841, 5779, 5865, 5871, 7875]) {
     const sections = splitSections(bytes);
     const bodies = parseCode(sectionById(sections, 10));
     const body = bodies[changed - imported]!;

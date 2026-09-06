@@ -4,6 +4,7 @@ import { ADDRESSES, createKernel, installGameGraph, kernelExports } from "../fix
 import { COMPANION_ABI, COMPANION_DISPATCH_KINDS, COMPANION_FEATURE_BITS } from "../../src/shared/companion-abi.ts";
 import { readCompanionWhispers } from "../../src/renderer/companion-whisper-snapshot.ts";
 
+
 const flags = COMPANION_FEATURE_BITS.whisperObservation | COMPANION_FEATURE_BITS.playRegionObservation;
 const packet = 0x64000;
 const text = 0x64100;
@@ -11,10 +12,10 @@ async function fixture() {
   const k = await createKernel();
   installGameGraph(k.view);
   assert.equal(k.init({ features: flags }), 1);
-  const observe = (channel = 14, body = "hello", sender = "Test Friend", template = 1) => {
+  const observe = (channel = 14, body = "hello", sender = "Test Friend", template = 1, metadata = "\u0101\u0100") => {
     k.view.setUint32(packet, channel, true);
     k.view.setUint32(packet + 4, text, true);
-    const line = String.fromCharCode(template, 0x107) + sender + "\x01\u0108" + body + "\x01\0";
+    const line = String.fromCharCode(template) + (channel === 10 ? metadata : "") + "\u0107" + sender + "\x01\u0108" + body + "\x01\0";
     for (let i = 0; i < line.length; i++) k.view.setUint16(text + i * 2, line.charCodeAt(i), true);
     k.uiEvent(0x1000007f, packet, 0);
   };
@@ -81,4 +82,20 @@ test("native send authorization is scoped to its mailbox, character, map and act
   assert.equal(gate(1), 3);
   k.view.setUint32(mailbox, 7, true);
   assert.equal(gate(0, mailbox + 4), 7, "an arbitrary mailbox is never written");
+});
+
+
+test("outgoing native numeric metadata stays separate from recipient and body", async () => {
+  const k = await fixture();
+  for (const metadata of ["\u0101\u0100", "\u0101\u7fff", "\u0101\u8101\u0100", "\u0101\u8104\u8893\u04ff"]) {
+    k.observe(10, "A reply 🌿", "Test Friend", 0x76e, metadata);
+  }
+  assert.equal(k.read().rejectedCount, 0);
+  assert.equal(k.read().messages.length, 4);
+  assert.ok(k.read().messages.every(m => m.sender === "Test Friend" && m.message === "A reply 🌿" && m.direction === "outgoing"));
+  for (const metadata of ["", "\u0102\u0100", "\u0101\u00ff", "\u0101\u8101\u8101\u8101", "\u0101\uffff\uffff\u7fff"]) {
+    k.observe(10, "No", "Test Friend", 0x76e, metadata);
+  }
+  assert.equal(k.read().rejectedCount, 5);
+  assert.equal(k.read().messages.length, 4);
 });

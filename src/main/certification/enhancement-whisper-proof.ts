@@ -21,5 +21,16 @@ export function deriveWhisperChat(module: ModuleShape) {
     || uniqueExactFunction(module,
       "013e7a049e0be2d3e4597d1feee0bad39f0ba1fe1d5ffd82cf35397630264e10",
       ["i32", "i32", "i32", "i32"], ["i32"]) !== 5871) return null;
+  // Outgoing packet 46 maps result 2 to template 1646 (encoded 0x76e).
+  // Its encoder arguments are numeric metadata, recipient, then message.
+  if (uniqueExactFunction(module,
+    "a5fc88ce65502cd25f36d42cb9fdf9fb2b43a97fca11cca84fc1ae7683f6c94d",
+    ["i32", "i32"], []) !== 11731
+    || uniqueExactFunction(module,
+      "6694fdf5dc2395af5adab5e60840eba7467316720b57c4e3a64f4526bb027b5c",
+      ["i32"], ["i32"]) !== 8841
+    || uniqueExactFunction(module,
+      "891338b8d47c134f1c659501c6775f5355f596716d6b56f9defddc1f0fbad665",
+      ["i32", "i32", "i32", "i32", "i32"], ["i32"]) !== 5779) return null;
   return deriveResignAction(module);
 }
