@@ -1,16 +1,19 @@
 /** Covers the real component's conversation lifetime and focus behavior. */
 import { mount, flushPromises } from "@vue/test-utils";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { nextTick } from "vue";
 import WhispersApp from "./WhispersApp.vue";
 import { createWhisperSession } from "../../../src/shared/whisper-session";
 
 afterEach(() => {
+  vi.restoreAllMocks();
   window.localStorage.clear();
   document.body.replaceChildren();
 });
 
 it("restores the Messenger window and icon positions in the current profile", async () => {
+  const viewportWidth = vi.spyOn(window, "innerWidth", "get").mockReturnValue(1_024);
+  const viewportHeight = vi.spyOn(window, "innerHeight", "get").mockReturnValue(768);
   const session = createWhisperSession(async () => {});
   session.setAvailable(true);
   const wrapper = mount(WhispersApp, { props: { session }, attachTo: document.body });
@@ -27,6 +30,20 @@ it("restores the Messenger window and icon positions in the current profile", as
   const launcher = wrapper.get<HTMLButtonElement>(".whisper-launcher");
   await launcher.trigger("keydown", { key: "ArrowRight", altKey: true });
   expect(launcher.attributes("style")).toContain("left: 36px");
+  Object.defineProperty(launcher.element, "setPointerCapture", { value: () => {} });
+  launcher.element.dispatchEvent(new PointerEvent("pointerdown", {
+    bubbles: true, button: 0, clientX: 36, clientY: 160, pointerId: 2,
+  }));
+  launcher.element.dispatchEvent(new PointerEvent("pointermove", {
+    clientX: 900, clientY: 700, pointerId: 2,
+  }));
+  launcher.element.dispatchEvent(new PointerEvent("pointerup", { pointerId: 2 }));
+  viewportWidth.mockReturnValue(1_400);
+  viewportHeight.mockReturnValue(1_000);
+  window.dispatchEvent(new Event("resize"));
+  await nextTick();
+  expect(launcher.attributes("style")).toContain("left: 1276px");
+  expect(launcher.attributes("style")).toContain("top: 932px");
 
   const header = wrapper.get<HTMLElement>(".whisper-head").element;
   Object.defineProperty(header, "setPointerCapture", { value: () => {} });
@@ -46,7 +63,8 @@ it("restores the Messenger window and icon positions in the current profile", as
     props: { session: restoredSession },
     attachTo: document.body,
   });
-  expect(restored.get(".whisper-launcher").attributes("style")).toContain("left: 36px");
+  expect(restored.get(".whisper-launcher").attributes("style")).toContain("left: 1276px");
+  expect(restored.get(".whisper-launcher").attributes("style")).toContain("top: 932px");
   expect(restored.get("#whisper-window").attributes("style")).toContain("left: 122px");
   expect(restored.get("#whisper-window").attributes("style")).toContain("top: 130px");
   restored.unmount();

@@ -23,8 +23,9 @@ type StoredFloatingWindowPlacement = Readonly<{
 
 type StoredFloatingPosition = Readonly<{
   formatVersion: 1;
-  left: number;
-  top: number;
+  corner: "top-left" | "top-right" | "bottom-left" | "bottom-right";
+  x: number;
+  y: number;
 }>;
 
 const ratio = (value: unknown): value is number =>
@@ -100,20 +101,35 @@ export function restoreFloatingPosition(
   size: Readonly<{ width: number; height: number }>,
 ): Readonly<{ left: number; top: number }> | null {
   const stored = storedRecord(serialized);
-  if (!stored || stored.formatVersion !== 1 || !ratio(stored.left) || !ratio(stored.top)) {
+  if (
+    !stored
+    || stored.formatVersion !== 1
+    || !["top-left", "top-right", "bottom-left", "bottom-right"].includes(String(stored.corner))
+    || typeof stored.x !== "number"
+    || !Number.isFinite(stored.x)
+    || stored.x < 0
+    || typeof stored.y !== "number"
+    || !Number.isFinite(stored.y)
+    || stored.y < 0
+  ) {
     return null;
   }
   const available = usable(viewport);
   if (available.width === 0 || available.height === 0 || size.width <= 0 || size.height <= 0) {
     return null;
   }
+  const corner = stored.corner as StoredFloatingPosition["corner"];
+  const horizontalRange = Math.max(0, available.width - size.width);
+  const verticalRange = Math.max(0, available.height - size.height);
+  const x = clamp(stored.x, 0, horizontalRange);
+  const y = clamp(stored.y, 0, verticalRange);
   return {
-    left: viewport.margin + Math.round(
-      stored.left * Math.max(0, available.width - size.width),
-    ),
-    top: viewport.margin + Math.round(
-      stored.top * Math.max(0, available.height - size.height),
-    ),
+    left: corner.endsWith("left")
+      ? viewport.margin + x
+      : viewport.width - viewport.margin - size.width - x,
+    top: corner.startsWith("top")
+      ? viewport.margin + y
+      : viewport.height - viewport.margin - size.height - y,
   };
 }
 
@@ -128,14 +144,17 @@ export function serializeFloatingPosition(
   }
   const horizontalRange = Math.max(0, available.width - size.width);
   const verticalRange = Math.max(0, available.height - size.height);
+  const left = clamp(position.left - viewport.margin, 0, horizontalRange);
+  const right = horizontalRange - left;
+  const top = clamp(position.top - viewport.margin, 0, verticalRange);
+  const bottom = verticalRange - top;
+  const horizontal = left <= right ? "left" : "right";
+  const vertical = top <= bottom ? "top" : "bottom";
   return JSON.stringify({
     formatVersion: 1,
-    left: horizontalRange === 0
-      ? 0
-      : clamp((position.left - viewport.margin) / horizontalRange, 0, 1),
-    top: verticalRange === 0
-      ? 0
-      : clamp((position.top - viewport.margin) / verticalRange, 0, 1),
+    corner: `${vertical}-${horizontal}`,
+    x: horizontal === "left" ? left : right,
+    y: vertical === "top" ? top : bottom,
   } satisfies StoredFloatingPosition);
 }
 

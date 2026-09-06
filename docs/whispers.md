@@ -37,9 +37,9 @@ game messages.
   clear when the client session ends. They never enter IPC, files or diagnostics.
 - A movable person icon shows unread messages without stealing focus. Collapse
   restores the same recipient and keeps drafts. Close discards a conversation,
-  with an inline guard for an unsent draft. The icon position and Messenger
-  window geometry persist as viewport-relative values in the current account
-  profile, so resizing the game window preserves their placement.
+  with an inline guard for an unsent draft. The Messenger window geometry and
+  icon position persist in the current account profile. The icon keeps its
+  pixel distance from the nearest corner when the game window changes size.
 - A conversation opens at its first unread message once. Its exact reading
   position and keyboard focus then survive updates, conversation switches and
   collapse/reopen. A jump-to-latest control appears without pulling a reader

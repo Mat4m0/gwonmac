@@ -54,7 +54,7 @@ const iconViewport = () => ({
   height: window.innerHeight,
   margin: VIEWPORT_MARGIN,
 });
-function restoredIconPosition() {
+function savedIconPosition() {
   let serialized: string | null = null;
   try { serialized = window.localStorage.getItem(ICON_PLACEMENT_KEY); }
   catch { /* Browser storage refusal leaves the icon at its ordinary default. */ }
@@ -63,9 +63,9 @@ function restoredIconPosition() {
     iconViewport(),
     { width: ICON_SIZE, height: ICON_SIZE },
   );
-  return restored ? { left: restored.left, top: restored.top } : { left: 20, top: 160 };
+  return restored ? { left: restored.left, top: restored.top } : null;
 }
-const icon = ref(restoredIconPosition());
+const icon = ref(savedIconPosition() ?? { left: 20, top: 160 });
 const iconButton = ref<HTMLButtonElement | null>(null);
 const atBottom = ref(true);
 const initializedTranscripts = new Set<string>();
@@ -316,6 +316,11 @@ function fitIcon() {
   icon.value = fitted;
   if (changed) persistIconPosition();
 }
+function restoreIconAfterResize() {
+  const restored = savedIconPosition();
+  if (restored) icon.value = restored;
+  fitIcon();
+}
 let dragged = false;
 function dragIcon(event: PointerEvent) {
   if (event.button !== 0) return;
@@ -355,7 +360,7 @@ function moveIcon(event: KeyboardEvent) {
 }
 onMounted(() => {
   document.addEventListener("pointerdown", dismissOptions);
-  window.addEventListener("resize", fitIcon); window.addEventListener("focus", markVisibleRead);
+  window.addEventListener("resize", restoreIconAfterResize); window.addEventListener("focus", markVisibleRead);
   window.addEventListener("pagehide", persistIconPosition);
   // Game interaction unlocks sound too; opening this panel is not required.
   document.addEventListener("pointerdown", enableAudio, { once: true });
@@ -364,7 +369,7 @@ onMounted(() => {
 });
 onBeforeUnmount(() => {
   document.removeEventListener("pointerdown", dismissOptions);
-  unsubscribe(); window.removeEventListener("resize", fitIcon); window.removeEventListener("focus", markVisibleRead);
+  unsubscribe(); window.removeEventListener("resize", restoreIconAfterResize); window.removeEventListener("focus", markVisibleRead);
   window.removeEventListener("pagehide", persistIconPosition); persistIconPosition();
   document.removeEventListener("pointerdown", enableAudio); document.removeEventListener("keydown", enableAudio);
   void audio?.close();
