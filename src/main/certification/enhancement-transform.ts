@@ -168,7 +168,8 @@ function resolveEnhancementTransform(
   const travelAction = build.travelAction!;
   const chatAliases = build.chatAliases!;
   const chatFiltering = build.chatFiltering!;
-  const hasActionQueue = capabilities.teamApply
+  const resignAction = build.resignAction!;
+  const hasActionQueue = capabilities.resignAction || capabilities.teamApply
     || capabilities.travelAction
     || capabilities.xunlaiAction
     || capabilities.characterSwitchAction
@@ -374,6 +375,10 @@ function resolveEnhancementTransform(
         fail(`${fact} reader body does not match its semantic fingerprint`);
       }
     }
+  }
+  if (capabilities.resignAction) {
+    resolveHook("Resign native sender", resignAction.functionIndex, resignAction.params, resignAction.results);
+    if (bodyHash(resignAction.functionIndex) !== resignAction.bodySha256) fail("Resign native sender changed");
   }
   const storageSlashParserHook = capabilities.chatAliases
     ? resolveHook(
@@ -592,6 +597,7 @@ function resolveEnhancementTransform(
     xunlaiAction,
     travelAction,
     gameThread,
+    resignAction,
     chatAliases,
     chatFiltering,
     quickItemMoveResolution,
@@ -661,6 +667,7 @@ function assembleEnhancementTransform(
   const travelPayloadGlobalIndex = capabilities.travelAction ? allocateGlobals(1) : 0;
   const travelEnabledGlobalIndex = capabilities.travelAction ? allocateGlobals(1) : 0;
   const travelToggleGlobalIndex = capabilities.travelAction ? allocateGlobals(1) : 0;
+  const resignEnabledGlobalIndex = capabilities.resignAction ? allocateGlobals(1) : 0;
   const tradeEnabledGlobalIndex = capabilities.chatAliases ? allocateGlobals(1) : 0;
   const tradeToggleGlobalIndex = capabilities.chatAliases ? allocateGlobals(1) : 0;
   const chatFilterMaskGlobalIndex = capabilities.chatFiltering ? allocateGlobals(1) : 0;
@@ -711,6 +718,8 @@ function assembleEnhancementTransform(
   const travelToggleTypeIndex = capabilities.travelAction
     ? appendType({ params: [], results: [0x7f] })
     : null;
+  const resignConfigureTypeIndex = capabilities.resignAction ? appendType({ params: [0x7f], results: [0x7f] }) : null;
+  const resignEnqueueTypeIndex = capabilities.resignAction ? appendType({ params: [], results: [0x7f] }) : null;
   const tradeConfigureTypeIndex = capabilities.chatAliases
     ? appendType({ params: [0x7f], results: [0x7f] })
     : null;
@@ -853,6 +862,8 @@ function assembleEnhancementTransform(
       travelConfigure: travelConfigureTypeIndex,
       travelToggle: travelToggleTypeIndex,
       tradeConfigure: tradeConfigureTypeIndex,
+      resignConfigure: resignConfigureTypeIndex,
+      resignEnqueue: resignEnqueueTypeIndex,
       tradeToggle: tradeToggleTypeIndex,
       characterEnqueue: characterEnqueueTypeIndex,
       characterConfigure: characterConfigureTypeIndex,
@@ -866,6 +877,7 @@ function assembleEnhancementTransform(
       travelPayload: travelPayloadGlobalIndex,
       travelEnabled: travelEnabledGlobalIndex,
       travelToggle: travelToggleGlobalIndex,
+      resignEnabled: resignEnabledGlobalIndex,
       tradeEnabled: tradeEnabledGlobalIndex,
       tradeToggle: tradeToggleGlobalIndex,
       characterPayload: characterPayloadGlobalIndex,

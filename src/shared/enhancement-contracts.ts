@@ -158,6 +158,13 @@ const CAPABILITY_DEFINITIONS = Object.freeze([
     configOwners: ["skill-slots"],
     hooks: [],
   },
+  {
+    id: "resignAction",
+    requiresAll: ["playRegionObservation"],
+    requiresAny: [],
+    configOwners: [],
+    hooks: [],
+  },
 ] as const);
 for (const contract of CAPABILITY_DEFINITIONS) {
   Object.freeze(contract.requiresAll);
@@ -183,7 +190,7 @@ export const ENHANCEMENT_CAPABILITY_FIELDS = Object.freeze(
 export type EnhancementCapabilities = Readonly<Record<EnhancementCapability, boolean>>;
 
 const MAX_CAPABILITY_MASK = (1 << ENHANCEMENT_CAPABILITY_FIELDS.length) - 1;
-const CAPABILITY_PROFILE = /^features-([0-9a-f]{2,4})$/;
+const CAPABILITY_PROFILE = /^features-([0-9a-f]{2,5})$/;
 
 /** A compact transform identity whose hex mask follows the registry order. */
 export type EnhancementCapabilityProfile = `features-${string}`;
@@ -251,6 +258,7 @@ export const NO_ENHANCEMENT_CAPABILITIES: EnhancementCapabilities = Object.freez
   quickItemMove: false,
   playerEffectObservation: false,
   effectIconGeometry: false,
+  resignAction: false,
 });
 
 function isExactBooleanRecord<Key extends string>(
@@ -291,6 +299,7 @@ export function parseEnhancementCapabilities(
     quickItemMove: value.quickItemMove,
     playerEffectObservation: value.playerEffectObservation,
     effectIconGeometry: value.effectIconGeometry,
+    resignAction: value.resignAction,
   });
 }
 
@@ -327,7 +336,7 @@ export const ENHANCEMENT_CAPABILITY_PRESETS = Object.freeze({
   // Developer-only session: exact player effects plus the already-certified
   // roster projection needed to correlate later party-effect evidence.
   effectObserver: capabilitiesFromMask(0xc204),
-  all: capabilitiesFromMask(0xffff),
+  all: capabilitiesFromMask(0x1ffff),
 });
 
 /** The two capability sets shipped by Core and Tools release launches. */
@@ -342,7 +351,7 @@ export {
   ENHANCEMENT_LAYOUT_WORD_COUNT,
   ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT,
 } from "./enhancement-config.js";
-export const ENHANCEMENT_TRANSFORM_ABI = 53;
+export const ENHANCEMENT_TRANSFORM_ABI = 54;
 
 export const ENHANCEMENT_CHAT_FILTER_MASKS = Object.freeze({
   allyDrops: 1,

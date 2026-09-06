@@ -54,6 +54,7 @@ describe("companion policy source", () => {
         playRegionState: { status: "waiting", reason: "memory" },
         policy: {
           characterSwitch: true,
+      resign: false,
           cartography: false,
           tools: false,
           buildLibrary: false,

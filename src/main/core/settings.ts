@@ -290,6 +290,7 @@ export function parseSettings(raw: unknown): AppSettings {
     "chatFilterHallOfHeroes",
     "chatFilterTitleAchievements",
     "characterSwitchEnabled",
+    "resignEnabled",
     "characterSwitchProfession",
     "characterSwitchLevel",
     "characterSwitchLocation",

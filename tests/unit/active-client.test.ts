@@ -34,6 +34,7 @@ function generation(wasmPath: string, size: number): ClientGeneration {
         skillCooldownObservation: { status: "off" },
         playerEffectObservation: { status: "off" },
         effectIconGeometry: { status: "off" },
+        resignAction: { status: "off" },
       },
     },
     extendedMemory: supported

@@ -29,8 +29,16 @@ Current integrated features are:
   substring of the canonical profession name and does not search the secondary
   profession. Character focus remains primary until typing starts a search.
   Direct 1–9 and 0 shortcuts select the first ten characters. The exact
-  companion projection owns the live records. Reload Guild Wars uses
-  Command-Shift-R.
+  companion projection owns the live records. Reload Guild Wars is in the View
+  menu.
+
+- **Resign**: an optional Tools switch, off by default. Its configurable shortcut
+  defaults to Command-Shift-R and opens a small in-game confirmation before sending the fixed `/resign` command
+  through the certified native chat sender in PvE. It does not type into chat.
+  Turning off Resign or Tools disables the command and cancels a queued request.
+  Enter or the Resign button confirms. Escape, Cancel, the close button, an
+  outside click, and losing window focus dismiss without sending.
+  A changed native chat path withdraws Resign until its exact bodies are reviewed.
 
 - **Build Library** (Beta): host-owned build and team authoring. Command-B
   opens it when both Tools Beta and Build Library are enabled, and its Apply

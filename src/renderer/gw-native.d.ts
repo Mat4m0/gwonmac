@@ -299,6 +299,7 @@ declare global {
       travelPalette: boolean;
       targetReadout: boolean;
       characterSwitchEnabled: boolean;
+      resignEnabled: boolean;
       cartographyEnabled: boolean;
       cartographyOverlayEnabled: boolean;
       cartographyGridEnabled: boolean;

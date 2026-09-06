@@ -223,6 +223,7 @@ function enhancementCache(
     travelAction: capabilities.travelAction,
     xunlaiAction: capabilities.xunlaiAction,
     chatAliases: capabilities.chatAliases,
+    resignAction: capabilities.resignAction,
     skillSlotGeometry: capabilities.skillSlotGeometry,
     skillCooldownObservation: capabilities.skillCooldownObservation,
     playerEffectObservation: capabilities.playerEffectObservation,

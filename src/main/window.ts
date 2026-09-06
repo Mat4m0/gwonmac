@@ -58,6 +58,7 @@ import {
   installApplicationMenu,
   showQuitOrReloadGame,
   updateToolsMenuItems,
+  showResignGame,
 } from "./window-menu.js";
 import {
   installWindowShortcuts,
@@ -636,6 +637,7 @@ export function createMainWindow(
   installWindowShortcuts(win, {
     run(action) {
       if (action === "character.switch") void toggleCharacterSwitch(win);
+      else if (action === "game.resign") return showResignGame(host, win);
       else if (action === "tools.toggle") void toggleTools(win);
       else if (action === "trade.toggle") void toggleTrade(win);
       else if (action === "storage.open") void openStorage(win);

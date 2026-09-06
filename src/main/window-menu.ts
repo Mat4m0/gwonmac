@@ -80,12 +80,13 @@ export function installNativeApplicationMenu(
 
 type ToolMenuSettings = Pick<AppSettings,
   "gwonmacTools" | "buildLibrary" | "tradeChat" | "xunlaiStorage"
-  | "travelPalette" | "characterSwitchEnabled" | "shortcutOverrides">;
+  | "travelPalette" | "characterSwitchEnabled" | "resignEnabled" | "shortcutOverrides">;
 const TOOL_MENU_FEATURES: Readonly<Record<string, { feature: FeatureId; action: ShortcutAction }>> = {
   "toggle-tools": { feature: "buildLibrary", action: "tools.toggle" },
   "toggle-trade": { feature: "tradeChat", action: "trade.toggle" },
   "open-xunlai-storage": { feature: "xunlaiStorage", action: "storage.open" },
   "open-travel": { feature: "travel", action: "travel.open" },
+  "resign-game": { feature: "resign", action: "game.resign" },
   "switch-character": { feature: "characterSwitch", action: "character.switch" },
 };
 // Electron makes accelerators immutable. Retain the existing menu builder,
@@ -224,6 +225,13 @@ export function showQuitOrReloadGame(
     win,
     () => showQuitOrReloadGameOnce(host, win),
   );
+}
+
+
+export async function showResignGame(host: WindowHost, win: BrowserWindow): Promise<void> {
+  if (!featureActivationRequested("resign", await host.getSettings())) return;
+  await resetGameInput(win);
+  await sendRendererCommand(win, { type: "game.resign" });
 }
 
 function showReloadGame(host: WindowHost, win: BrowserWindow): Promise<void> {
@@ -450,9 +458,14 @@ export function installApplicationMenu(actions: ApplicationMenuActions, settings
           click: withGameOwner((win) => toggleCharacterSwitch(win)),
         },
         {
+          id: "resign-game",
+          label: "Resign…",
+          enabled: false,
+          click: withGameOwner((win) => showResignGame(host, win)),
+        },
+        {
           id: "reload-game",
           label: "Reload Guild Wars…",
-          accelerator: "CmdOrCtrl+Shift+R",
           click: withGameOwner((win) => showReloadGame(host, win)),
         },
         ...(dev

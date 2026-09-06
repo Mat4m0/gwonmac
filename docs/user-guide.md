@@ -176,8 +176,17 @@ The search bar is shown for every account size. Initial focus remains on the
 current character. Press Left or Up for the previous character. Press Right or
 Down for the next character. Start typing a character name or primary profession
 to move focus to search. Secondary professions are not searched. The number keys
-1–9 and 0 switch to the first ten characters. Press **Command-Shift-R** to reload
-Guild Wars.
+1–9 and 0 switch to the first ten characters. Use **View → Reload Guild Wars**
+to reload.
+
+Enable **Resign** in **Settings → Tools**. It is off by default and requires
+Tools. Its shortcut defaults to **Command-Shift-R** and can be changed or cleared
+in the same row. Turning off Resign or Tools disables it immediately.
+
+Press the shortcut for **Resign** in PvE. Press Enter to confirm sending
+`/resign`, or click **Resign** in the in-game dialog. Escape, **Cancel**, the close
+button, and clicking outside cancel. Close text fields first.
+The action stops if chat contains text or you interrupt it.
 
 Character names and search text are not saved.
 

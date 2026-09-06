@@ -2,6 +2,7 @@
  * Feature-owned rewrite contributions consumed by the Enhancement assembler.
  * Generic WASM section assembly remains outside this module.
  */
+import { resignConfigure, resignEnqueue, resignExecute, resignDrain } from "./enhancement-resign-transform.js";
 import {
   professionTraceReader,
   tracedPacketSender,
@@ -84,6 +85,7 @@ export function featureExportNames(
           ...(travelAction.guildHall ? [travelAction.guildHall.enqueueExport] : []),
         ]
       : []),
+    ...(capabilities.resignAction ? ["enhancement_configure_resign", "enhancement_resign"] : []),
     ...(capabilities.chatAliases
       ? ["enhancement_configure_trade_toggle", "enhancement_take_trade_toggle"]
       : []),
@@ -103,6 +105,8 @@ export type TransformTypeIndices = Readonly<{
   travelEnqueue: number | null;
   travelConfigure: number | null;
   travelToggle: number | null;
+  resignConfigure: number | null;
+  resignEnqueue: number | null;
   tradeConfigure: number | null;
   tradeToggle: number | null;
   characterEnqueue: number | null;
@@ -118,6 +122,7 @@ export type TransformGlobalIndices = Readonly<{
   travelPayload: number;
   travelEnabled: number;
   travelToggle: number;
+  resignEnabled: number;
   tradeEnabled: number;
   tradeToggle: number;
   characterPayload: number;
@@ -268,6 +273,19 @@ export function applyFeatureContributions(
         bodies[storageSlashParserHook.localIndex]!,
       )
     : null;
+  const resignExecuteIndex = capabilities.resignAction
+    ? appendFunction(required(typeIndices.commandDrain, "Resign execution type"),
+        resignExecute(resolution.resignAction.functionIndex)) : null;
+  if (capabilities.resignAction) {
+    addedFunctionExports.push(
+      { name: "enhancement_configure_resign", index: appendFunction(
+        required(typeIndices.resignConfigure, "Resign configure type"),
+        resignConfigure(globalIndices.commandPending, globalIndices.resignEnabled)) },
+      { name: "enhancement_resign", index: appendFunction(
+        required(typeIndices.resignEnqueue, "Resign enqueue type"),
+        resignEnqueue(globalIndices.commandPending, globalIndices.resignEnabled)) },
+    );
+  }
   const drainFunctionIndex = appendFunction(
     required(typeIndices.commandDrain, "command drain function type"),
     commandDrain(
@@ -326,6 +344,8 @@ export function applyFeatureContributions(
             quickItemMove.globals,
             quickItemMove.handlerIndex,
           ),
+      resignExecuteIndex === null ? null
+        : resignDrain(globalIndices.commandPending, globalIndices.resignEnabled, resignExecuteIndex),
     ),
   );
   nextBodies[commandDrainBoundary.localIndex] = commandBoundary(

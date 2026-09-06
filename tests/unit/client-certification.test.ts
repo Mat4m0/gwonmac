@@ -27,6 +27,7 @@ const ALL_CAPABILITIES = Object.freeze({
   skillCooldownObservation: false,
   playerEffectObservation: false,
     effectIconGeometry: false,
+    resignAction: false,
   playRegionObservation: true,
     preGameControls: false,
     characterSwitchAction: false,

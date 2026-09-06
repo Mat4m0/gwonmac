@@ -16,6 +16,7 @@
  * `isLocalClientVerification` re-validates every field of a result that crossed
  * the process boundary. Profile state is never consulted.
  */
+import { deriveResignAction } from "./enhancement-resign-proof.js";
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import {
@@ -642,7 +643,7 @@ function deriveEnhancementBuild(
     : null;
   const includePreGame = requestedCapabilities.preGameControls
     && preGameControls !== null;
-  const wantsLocal = requestedCapabilities.partyObservation
+  const wantsLocal = requestedCapabilities.resignAction || requestedCapabilities.partyObservation
     || requestedCapabilities.teamApply
     || requestedCapabilities.travelAction
     || requestedCapabilities.xunlaiAction
@@ -702,6 +703,10 @@ function deriveEnhancementBuild(
     && playerEffects !== null
     && locatedLocal?.observationLayout != null
     && locatedLocal.uiDispatcher != null;
+  const resignAction = requestedCapabilities.resignAction
+    ? deriveResignAction(context.moduleView()) : null;
+  const includeResign = resignAction !== null && includePlayRegion
+    && locatedLocal?.gameThread != null;
   const includeEffectIcons = requestedCapabilities.effectIconGeometry
     && includePlayRegion
     && includePlayerEffects
@@ -724,6 +729,8 @@ function deriveEnhancementBuild(
   );
   const completeFailures: LocalFeatureFailures = Object.freeze({
     ...failures,
+    ...(requestedCapabilities.resignAction && !includeResign
+      ? { resignAction: changedFeature("resignAction", "resign.native-chat-path") } : {}),
     ...(requestedCapabilities.preGameControls && !includePreGame
       ? {
           preGameControls: changedFeature(
@@ -777,7 +784,7 @@ function deriveEnhancementBuild(
   });
   const localContributes = includeParty || includeTeam || includeTravel
     || includeXunlai || includeAliases || includeChatFiltering
-    || includeCharacterSwitch || includeQuickItemMove || includePlayerEffects;
+    || includeCharacterSwitch || includeQuickItemMove || includePlayerEffects || includeResign;
   const source = includeCursor
     ? locatedCursor
     : includePlayRegion
@@ -895,7 +902,8 @@ function deriveEnhancementBuild(
       targetObservation: Object.freeze({ layout: locatedTarget.targetLayout }),
     } : {}),
     ...(localContributes ? { uiDispatcher: locatedLocal!.uiDispatcher! } : {}),
-    ...(includeTeam || includeTravel || includeXunlai || includeCharacterSwitch
+    ...(includeResign ? { resignAction: resignAction! } : {}),
+    ...(includeResign || includeTeam || includeTravel || includeXunlai || includeCharacterSwitch
       ? { gameThread: locatedLocal!.gameThread! }
       : {}),
     ...(includeTravel ? { travelAction: locatedLocal!.travelAction! } : {}),
@@ -932,6 +940,7 @@ function deriveEnhancementBuild(
     quickItemMove: includeQuickItemMove,
     playerEffectObservation: includePlayerEffects,
     effectIconGeometry: includeEffectIcons,
+    resignAction: includeResign,
   });
   const effective = intersectEnhancementCapabilities(requestedCapabilities, maximum);
   const profile = enhancementCapabilityProfile(effective);

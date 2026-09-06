@@ -75,11 +75,12 @@ export function installSurfaceController(
   };
 
   const onKeyDown = (event: KeyboardEvent) => {
-    if (document.querySelector("dialog:modal") !== null) return;
+    const nativeModal = document.querySelector("dialog:modal");
     const surface = topmost();
-    if (!surface) return;
+    if (!surface || (nativeModal !== null && nativeModal !== surface.root)) return;
 
     if (event.key === "Escape") {
+      if (nativeModal !== null) return; // The native cancel event owns dismissal.
       claim(event);
       surface.dismiss();
       return;

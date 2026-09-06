@@ -29,6 +29,7 @@ export const UNSUPPORTED_ALL_CAPABILITIES: EnhancementCapabilities = Object.free
   skillCooldownObservation: false,
   playerEffectObservation: false,
     effectIconGeometry: false,
+    resignAction: false,
 });
 export const CURSOR_ONLY: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
@@ -47,6 +48,7 @@ export const CURSOR_ONLY: EnhancementCapabilities = Object.freeze({
   skillCooldownObservation: false,
   playerEffectObservation: false,
     effectIconGeometry: false,
+    resignAction: false,
 });
 export const CURSOR_TARGET: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
@@ -65,6 +67,7 @@ export const CURSOR_TARGET: EnhancementCapabilities = Object.freeze({
   skillCooldownObservation: false,
   playerEffectObservation: false,
     effectIconGeometry: false,
+    resignAction: false,
 });
 export const TARGET_ONLY: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
@@ -83,6 +86,7 @@ export const TARGET_ONLY: EnhancementCapabilities = Object.freeze({
   skillCooldownObservation: false,
   playerEffectObservation: false,
     effectIconGeometry: false,
+    resignAction: false,
 });
 export const STORAGE_ONLY: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
@@ -101,6 +105,7 @@ export const STORAGE_ONLY: EnhancementCapabilities = Object.freeze({
   skillCooldownObservation: false,
   playerEffectObservation: false,
     effectIconGeometry: false,
+    resignAction: false,
 });
 export const CURSOR_TOOLBOX: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
@@ -119,6 +124,7 @@ export const CURSOR_TOOLBOX: EnhancementCapabilities = Object.freeze({
   skillCooldownObservation: false,
   playerEffectObservation: false,
     effectIconGeometry: false,
+    resignAction: false,
 });
 export const NO_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: false,
@@ -137,6 +143,7 @@ export const NO_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   skillCooldownObservation: false,
   playerEffectObservation: false,
     effectIconGeometry: false,
+    resignAction: false,
 });
 export const CURSOR_TOOLBOX_COMMANDS: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
@@ -155,6 +162,7 @@ export const CURSOR_TOOLBOX_COMMANDS: EnhancementCapabilities = Object.freeze({
   skillCooldownObservation: false,
   playerEffectObservation: false,
     effectIconGeometry: false,
+    resignAction: false,
 });
 export const CURSOR_TARGET_TOOLBOX_COMMANDS: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
@@ -173,6 +181,7 @@ export const CURSOR_TARGET_TOOLBOX_COMMANDS: EnhancementCapabilities = Object.fr
   skillCooldownObservation: false,
   playerEffectObservation: false,
     effectIconGeometry: false,
+    resignAction: false,
 });
 export const CURSOR_TOOLBOX_STORAGE: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
@@ -191,6 +200,7 @@ export const CURSOR_TOOLBOX_STORAGE: EnhancementCapabilities = Object.freeze({
   skillCooldownObservation: false,
   playerEffectObservation: false,
     effectIconGeometry: false,
+    resignAction: false,
 });
 export const PARTY_DIRTY_MESSAGES = Object.freeze([
   0x1000_0038,

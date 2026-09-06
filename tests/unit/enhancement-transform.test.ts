@@ -55,6 +55,7 @@ const PARTY_ONLY: EnhancementCapabilities = Object.freeze({
   skillCooldownObservation: false,
   playerEffectObservation: false,
     effectIconGeometry: false,
+    resignAction: false,
 });
 
 const EFFECT_ONLY: EnhancementCapabilities = Object.freeze({
@@ -74,6 +75,7 @@ const EFFECT_ONLY: EnhancementCapabilities = Object.freeze({
   quickItemMove: false,
   playerEffectObservation: true,
     effectIconGeometry: false,
+    resignAction: false,
 });
 
 describe("targeted Enhancement WebAssembly transform", () => {
@@ -334,6 +336,7 @@ describe("targeted Enhancement WebAssembly transform", () => {
           skillCooldownObservation: false,
           playerEffectObservation: false,
     effectIconGeometry: false,
+    resignAction: false,
         },
       ),
       /capability profile is not certified/,

@@ -22,6 +22,7 @@ describe("keyboard shortcuts", () => {
     }), {
       "cartography.grid.toggle": null,
       "cartography.walkability.toggle": null,
+      "game.resign": DEFAULT_SHORTCUTS["game.resign"],
       "character.switch": DEFAULT_SHORTCUTS["character.switch"],
       "tools.toggle": { key: "k", shift: true, option: false },
       "trade.toggle": DEFAULT_SHORTCUTS["trade.toggle"],
@@ -78,7 +79,7 @@ describe("keyboard shortcuts", () => {
     assert.equal(shortcutReserved({ key: "1", shift: false, option: false }), true);
     assert.equal(shortcutReserved({ key: "0", shift: false, option: false }), false);
     assert.equal(shortcutReserved({ key: "r", shift: false, option: false }), false);
-    assert.equal(shortcutReserved({ key: "r", shift: true, option: false }), true);
+    assert.equal(shortcutReserved({ key: "r", shift: true, option: false }), false);
     assert.equal(shortcutConflict(
       "tools.toggle",
       DEFAULT_SHORTCUTS["storage.open"],

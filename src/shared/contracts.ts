@@ -430,6 +430,8 @@ export interface AppSettings {
   travelPalette: boolean;
   /** Allow the Core Character Switch surface independently of optional Tools. */
   characterSwitchEnabled: boolean;
+  /** Allow the confirmed PvE resign shortcut when Tools are enabled. */
+  resignEnabled: boolean;
   /** Show the canonical profession icon and profession names in Character Switch. */
   characterSwitchProfession: boolean;
   /** Show the character's certified level in Character Switch. */
@@ -599,6 +601,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   quickItemMove: false,
   travelPalette: true,
   characterSwitchEnabled: true,
+  resignEnabled: false,
   characterSwitchProfession: true,
   characterSwitchLevel: true,
   characterSwitchLocation: true,
@@ -798,6 +801,7 @@ export interface ClientCompatibility {
     skillCooldownObservation: OptionalFeatureStatus;
     playerEffectObservation: OptionalFeatureStatus;
     effectIconGeometry: OptionalFeatureStatus;
+    resignAction: OptionalFeatureStatus;
     playRegionObservation: OptionalFeatureStatus;
     preGameControls: OptionalFeatureStatus;
     characterSwitchAction: OptionalFeatureStatus;
@@ -1003,6 +1007,7 @@ export type RendererCommand =
   | { type: "storage.open" }
   | { type: "travel.toggle" }
   | { type: "character.toggle" }
+  | { type: "game.resign" }
   | { type: "filesystem.sync" }
   | { type: "input.trace"; enabled: boolean }
   | { type: "diagnostics.toggle" }

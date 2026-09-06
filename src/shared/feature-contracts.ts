@@ -24,6 +24,7 @@ type FeatureBooleanSetting = BooleanSetting & (
   | "effectTimersEnabled"
   | "cartographyEnabled"
   | "characterSwitchEnabled"
+  | "resignEnabled"
 );
 type FeatureActivation =
   | Readonly<{ kind: "master"; setting: FeatureBooleanSetting }>
@@ -55,6 +56,10 @@ export const FEATURE_SELECTION_POLICIES = defineFeatureSelectionPolicies({
   characterSwitch: {
     activation: { kind: "independent", setting: "characterSwitchEnabled" },
     region: "any",
+  },
+  resign: {
+    activation: { kind: "setting", setting: "resignEnabled", master: "gwonmacTools" },
+    region: "pve",
   },
   cartography: {
     activation: { kind: "setting", setting: "cartographyEnabled", master: "gwonmacTools" },
