@@ -43,10 +43,16 @@ test("embedded whispers open on the first click and retain draft input when rais
     await expect(field).toHaveValue("Keep my draft here");
     await panel.locator('[aria-label="Chat options"]').click();
     const opacity = panel.getByRole("slider", { name: "Background" });
+    const fullPanelBackground = await panel.evaluate(element => getComputedStyle(element).backgroundColor);
+    const fullTranscriptBackground = await transcript.evaluate(element => getComputedStyle(element).backgroundColor);
     const bounds = await opacity.boundingBox();
     if (!bounds) throw new Error("Background slider is not visible");
     await opacity.click({ position: { x: bounds.width * 0.2, y: bounds.height / 2 } });
     await expect(opacity).toHaveValue("30");
+    await expect.poll(() => panel.evaluate(element => getComputedStyle(element).backgroundColor))
+      .not.toBe(fullPanelBackground);
+    await expect.poll(() => transcript.evaluate(element => getComputedStyle(element).backgroundColor))
+      .not.toBe(fullTranscriptBackground);
     await panel.getByRole("button", { name: "Collapse whispers" }).click();
     await expect(panel).toBeHidden();
     await page.getByRole("button", { name: /Whispers, 0 unread/ }).click();

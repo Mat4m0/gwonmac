@@ -17,7 +17,7 @@ const selected = computed(() => state.value.conversations.find(c => c.key === st
 const unread = computed(() => state.value.conversations.reduce((total, c) => total + whisperUnread(c), 0));
 const windowStyle = computed(() => ({
   ...(panelStyle.value ?? {}),
-  "--whisper-background-opacity": String(state.value.backgroundOpacity / 100),
+  "--whisper-background-percent": `${state.value.backgroundOpacity}%`,
 }));
 const search = ref("");
 const suggestionIndex = ref(-1);
@@ -429,7 +429,7 @@ onBeforeUnmount(() => {
 .ui-reading-surface small { color: var(--ui-text-muted); font: 12px/1.5 var(--ui-font-reading); }
 .ui-reading-surface input, .ui-reading-surface select { min-width: 0; width: 100%; color: var(--ui-text); caret-color: var(--ui-focus); font: inherit; }
 .ui-reading-surface input::placeholder { color: var(--ui-text-muted); opacity: 1; }
-.whisper-window { --whisper-background-opacity: 1; --ui-effective-panel-opacity: calc(var(--ui-panel-opacity) * var(--whisper-background-opacity)); position: fixed; width: 340px; height: 360px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); display: flex; flex-direction: column; pointer-events: auto; isolation: isolate; }
+.whisper-window { --whisper-background-percent: 100%; position: fixed; width: 340px; height: 360px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); display: flex; flex-direction: column; pointer-events: auto; isolation: isolate; background: color-mix(in srgb, var(--ui-panel-fill) var(--whisper-background-percent), transparent); }
 .whisper-head { display: flex; align-items: center; gap: 2px; min-height: 42px; padding: 4px 8px; border-bottom: 1px solid var(--ui-line-soft); background: var(--ui-title-fill); border-radius: var(--ui-radius) var(--ui-radius) 0 0; cursor: grab; }
 .whisper-heading { flex: 1; min-width: 0; margin: 0 6px; display: flex; align-items: baseline; gap: 8px; }
 .whisper-head h2 { min-width: 0; font: var(--ui-font-weight-semibold) 15px/1.3 var(--ui-font-interface); color: var(--ui-text-bright); margin: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
@@ -467,7 +467,7 @@ onBeforeUnmount(() => {
 .whisper-presence[data-presence="offline"] { background: var(--ui-text-faint); }
 .whisper-status-copy { margin-left: 10px; color: var(--ui-text-muted) !important; }
 .whisper-conversation { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.whisper-transcript { flex: 1; min-height: 40px; padding: 12px 10px; overscroll-behavior: contain; scroll-padding-block: 12px; background: color-mix(in srgb, var(--ui-well-fill) calc(var(--whisper-background-opacity) * 100%), transparent); box-shadow: inset 0 1px 0 var(--ui-edge), inset 0 -1px 0 var(--ui-edge); }
+.whisper-transcript { flex: 1; min-height: 40px; padding: 12px 10px; overscroll-behavior: contain; scroll-padding-block: 12px; background: color-mix(in srgb, var(--ui-well-fill) var(--whisper-background-percent), transparent); box-shadow: inset 0 1px 0 var(--ui-edge), inset 0 -1px 0 var(--ui-edge); }
 .whisper-message { display: flex; flex-direction: column; align-items: flex-start; margin-top: 10px; }
 .whisper-message:first-of-type { margin-top: 0; }
 .whisper-message[data-grouped] { margin-top: 4px; }

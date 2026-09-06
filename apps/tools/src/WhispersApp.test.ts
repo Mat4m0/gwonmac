@@ -176,6 +176,6 @@ it("changes only the messenger background opacity multiplier", async () => {
   await wrapper.get('[aria-label="Chat options"]').trigger("click");
   await wrapper.get("#whisper-opacity").setValue(20);
   expect(session.state.backgroundOpacity).toBe(20);
-  expect(wrapper.get("#whisper-window").attributes("style")).toContain("--whisper-background-opacity: 0.2");
+  expect(wrapper.get("#whisper-window").attributes("style")).toContain("--whisper-background-percent: 20%");
   wrapper.unmount();
 });
