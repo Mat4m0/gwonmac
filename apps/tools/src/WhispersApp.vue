@@ -429,8 +429,9 @@ onBeforeUnmount(() => {
 .ui-reading-surface small { color: var(--ui-text-muted); font: 12px/1.5 var(--ui-font-reading); }
 .ui-reading-surface input, .ui-reading-surface select { min-width: 0; width: 100%; color: var(--ui-text); caret-color: var(--ui-focus); font: inherit; }
 .ui-reading-surface input::placeholder { color: var(--ui-text-muted); opacity: 1; }
-.whisper-window { --whisper-background-percent: 100%; position: fixed; width: 340px; height: 360px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); display: flex; flex-direction: column; pointer-events: auto; isolation: isolate; background: color-mix(in srgb, var(--ui-panel-fill) var(--whisper-background-percent), transparent); }
-.whisper-head { display: flex; align-items: center; gap: 2px; min-height: 42px; padding: 4px 8px; border-bottom: 1px solid var(--ui-line-soft); background: var(--ui-title-fill); border-radius: var(--ui-radius) var(--ui-radius) 0 0; cursor: grab; }
+.whisper-window { --whisper-background-percent: 100%; --whisper-panel-fill: color-mix(in srgb, var(--ui-panel-fill) var(--whisper-background-percent), transparent); --whisper-well-fill: color-mix(in srgb, var(--ui-well-fill) var(--whisper-background-percent), transparent); --whisper-incoming-fill: color-mix(in srgb, var(--ui-chat-incoming-fill) var(--whisper-background-percent), transparent); --whisper-outgoing-fill: color-mix(in srgb, var(--ui-chat-outgoing-fill) var(--whisper-background-percent), transparent); --whisper-edge: color-mix(in srgb, var(--ui-outline) var(--whisper-background-percent), transparent); --whisper-line: color-mix(in srgb, var(--ui-line-soft) var(--whisper-background-percent), transparent); position: fixed; width: 340px; height: 360px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); display: flex; flex-direction: column; pointer-events: auto; isolation: isolate; background: transparent; box-shadow: 0 0 0 1px var(--whisper-edge); }
+.whisper-window::before { background: color-mix(in srgb, var(--ui-text-muted) var(--whisper-background-percent), transparent); }
+.whisper-head { display: flex; align-items: center; gap: 2px; min-height: 42px; padding: 4px 8px; border-bottom: 1px solid var(--whisper-line); background: var(--whisper-panel-fill); border-radius: var(--ui-radius) var(--ui-radius) 0 0; cursor: grab; }
 .whisper-heading { flex: 1; min-width: 0; margin: 0 6px; display: flex; align-items: baseline; gap: 8px; }
 .whisper-head h2 { min-width: 0; font: var(--ui-font-weight-semibold) 15px/1.3 var(--ui-font-interface); color: var(--ui-text-bright); margin: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .whisper-heading[data-conversation] h2 { color: var(--ui-chat-incoming-accent); }
@@ -443,11 +444,12 @@ onBeforeUnmount(() => {
 .whisper-badge, .whisper-count { min-width: 20px; padding: 1px 5px; border-radius: var(--ui-radius-lg); background: var(--ui-chat-incoming-accent); color: var(--ui-accent-ink); font: 600 12px/18px var(--ui-font-reading); text-align: center; box-shadow: 0 0 0 1px color-mix(in srgb, var(--ui-chat-incoming-accent) 36%, var(--ui-outline)); }
 .whisper-badge { position: absolute; top: -5px; right: -6px; min-width: 18px; padding: 0 4px; font-size: 10px; line-height: 17px; }
 .whisper-back-count { position: absolute; right: -2px; bottom: -2px; min-width: 15px; padding: 0 3px; border-radius: var(--ui-radius-pill); background: var(--ui-chat-incoming-accent); color: var(--ui-accent-ink); font: 600 9px/15px var(--ui-font-reading); text-align: center; box-shadow: 0 0 0 1px var(--ui-well-fill); }
-.whisper-bubble { max-width: 80%; padding: 6px 10px; font-size: 13px; line-height: 1.4; }
+.whisper-bubble { max-width: 80%; padding: 6px 10px; font-size: 13px; line-height: 1.4; background: var(--whisper-incoming-fill); box-shadow: inset 0 0 0 1px color-mix(in srgb, color-mix(in srgb, var(--ui-chat-incoming-accent) 18%, transparent) var(--whisper-background-percent), transparent); }
+.whisper-bubble[data-direction="outgoing"] { background: var(--whisper-outgoing-fill); box-shadow: inset 0 0 0 1px color-mix(in srgb, color-mix(in srgb, var(--ui-chat-outgoing-accent) 24%, transparent) var(--whisper-background-percent), transparent); }
 .whisper-picker, .whisper-transcript { overflow: auto; }
-.whisper-picker { padding: 10px 10px 12px; flex: 1; min-height: 0; }
+.whisper-picker { padding: 10px 10px 12px; flex: 1; min-height: 0; background: var(--whisper-panel-fill); }
 .whisper-search, .whisper-inline { display: flex; gap: 8px; }
-.whisper-search { padding: 4px; border-radius: var(--ui-radius); }
+.whisper-search { padding: 4px; border-color: var(--whisper-edge); border-radius: var(--ui-radius); background: var(--whisper-well-fill); box-shadow: inset 0 0 0 1px var(--whisper-line); }
 .whisper-search input { flex: 1; padding: 4px 8px; }
 .whisper-search button { min-height: 30px; padding-inline: 12px; border-radius: var(--ui-radius-sm); }
 .whisper-search button:disabled, .whisper-send:disabled { opacity: .45; }
@@ -467,42 +469,45 @@ onBeforeUnmount(() => {
 .whisper-presence[data-presence="offline"] { background: var(--ui-text-faint); }
 .whisper-status-copy { margin-left: 10px; color: var(--ui-text-muted) !important; }
 .whisper-conversation { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.whisper-transcript { flex: 1; min-height: 40px; padding: 12px 10px; overscroll-behavior: contain; scroll-padding-block: 12px; background: color-mix(in srgb, var(--ui-well-fill) var(--whisper-background-percent), transparent); box-shadow: inset 0 1px 0 var(--ui-edge), inset 0 -1px 0 var(--ui-edge); }
+.whisper-transcript { flex: 1; min-height: 40px; padding: 12px 10px; overscroll-behavior: contain; scroll-padding-block: 12px; background: var(--whisper-well-fill); box-shadow: inset 0 1px 0 var(--whisper-line), inset 0 -1px 0 var(--whisper-line); }
 .whisper-message { display: flex; flex-direction: column; align-items: flex-start; margin-top: 10px; }
 .whisper-message:first-of-type { margin-top: 0; }
 .whisper-message[data-grouped] { margin-top: 4px; }
 .whisper-message[data-direction="outgoing"] { align-items: flex-end; }
 .whisper-unread-marker { align-self: stretch; display: flex; align-items: center; gap: 12px; margin: 0 0 16px; color: var(--ui-chat-incoming-accent) !important; text-align: center; }
 .whisper-unread-marker::before, .whisper-unread-marker::after { content: ''; height: 1px; background: color-mix(in srgb, var(--ui-chat-incoming-accent) 42%, transparent); flex: 1; }
-.whisper-compose { padding: 8px 10px 10px; }
-.whisper-input-row { display: flex; align-items: center; gap: 6px; padding: 4px; border-radius: var(--ui-radius-pill); }
+.whisper-compose { padding: 8px 10px 10px; background: var(--whisper-panel-fill); }
+.whisper-input-row { display: flex; align-items: center; gap: 6px; padding: 4px; border-color: var(--whisper-edge); border-radius: var(--ui-radius-pill); background: var(--whisper-well-fill); box-shadow: inset 0 0 0 1px var(--whisper-line); }
 .whisper-input-row input { padding: 4px 8px; flex: 1; border-radius: var(--ui-radius-swell); }
 .whisper-input-row:has(input:focus-visible) { outline: 2px solid var(--ui-focus); outline-offset: 2px; }
 .ui-reading-surface .whisper-input-row input:focus-visible { outline: none; box-shadow: none; }
-.whisper-send { border-radius: var(--ui-radius-pill); min-height: 32px; width: 32px; height: 32px; padding: 6px; flex-shrink: 0; }
+.whisper-send { border-radius: var(--ui-radius-pill); min-height: 32px; width: 32px; height: 32px; padding: 6px; flex-shrink: 0; background: var(--whisper-outgoing-fill) !important; }
 .whisper-compose > small { display: block; text-align: right; margin-top: 4px; }
 .whisper-latest { align-self: center; color: var(--ui-chat-incoming-accent); }
 .whisper-empty { max-width: 32ch; color: var(--ui-text-muted); margin: 8px 6px; font-size: 12px; line-height: 1.45; text-wrap: pretty; }
 .whisper-onboarding { margin-top: 10px; }
 .whisper-completion-hint { margin: 8px 6px 0; color: var(--ui-text-faint); font-size: 11px; }
-.whisper-suggestion[aria-selected="true"] { background: var(--ui-selection-fill); color: var(--ui-selection-ink); }
+.whisper-suggestion[aria-selected="true"] { background: var(--whisper-incoming-fill); color: var(--ui-selection-ink); }
 .whisper-source-filters { display: flex; align-items: center; gap: 4px; min-width: 0; margin: 8px 6px 10px; color: var(--ui-text-muted); }
 .whisper-source-filters > span { margin-right: auto; font-size: 11px; }
 .whisper-source-toggle { min-height: 24px; padding: 2px 8px; font-size: 11px; }
-.whisper-source-toggle[aria-pressed="true"] { background: var(--ui-selection-fill); color: var(--ui-selection-ink); box-shadow: inset 0 0 0 1px var(--ui-line); }
-.whisper-notice { margin: 0; padding: 6px 12px; font-size: 12px; background: var(--ui-well-fill); }
+.whisper-source-toggle[aria-pressed="true"] { background: var(--whisper-incoming-fill); color: var(--ui-selection-ink); box-shadow: inset 0 0 0 1px var(--whisper-line); }
+.whisper-notice { margin: 0; padding: 6px 12px; font-size: 12px; background: var(--whisper-well-fill); }
 .whisper-notice p { margin: 0 0 8px; }
 .whisper-danger { color: var(--ui-danger) !important; }
 .whisper-options { position: relative; cursor: default; }
 .whisper-options summary { list-style: none; }
 .whisper-options summary::-webkit-details-marker { display: none; }
-.whisper-menu { position: absolute; top: 34px; right: 0; width: 238px; max-height: min(330px, calc(100vh - 120px)); overflow: auto; padding: 10px; z-index: 2; }
+.whisper-menu { position: absolute; top: 34px; right: 0; width: 238px; max-height: min(330px, calc(100vh - 120px)); overflow: auto; padding: 10px; z-index: 2; border-color: var(--whisper-edge); background: var(--whisper-panel-fill); box-shadow: 0 0 0 1px var(--whisper-edge); }
 .whisper-menu > label { display: block; margin-bottom: 6px; font-weight: 500; }
 .whisper-menu select { font-size: 12px; margin-bottom: 8px; }
 .whisper-menu .whisper-opacity { margin: 6px 2px 10px; }
 .whisper-menu button { width: 100%; justify-content: flex-start; text-align: left; }
 .whisper-menu small { display: block; padding: 0 12px 8px; }
-.whisper-menu-divider { height: 1px; background: var(--ui-line-soft); margin: 8px 0; }
+.whisper-menu-divider { height: 1px; background: var(--whisper-line); margin: 8px 0; }
+.whisper-window .whisper-control[data-variant="primary"] { border-color: var(--whisper-edge); background: var(--whisper-outgoing-fill); box-shadow: 0 0 0 1px var(--whisper-edge); }
+.whisper-window .whisper-control[data-variant="quiet"]:hover:not(:disabled) { background: color-mix(in srgb, var(--ui-hover) var(--whisper-background-percent), transparent); }
+.whisper-window .whisper-control[data-variant="quiet"]:active:not(:disabled) { background: color-mix(in srgb, var(--ui-pressed-layer) var(--whisper-background-percent), transparent); }
 .whisper-resize { position: absolute; bottom: 1px; right: 1px; width: 16px; height: 16px; padding: 0; border: 0; background: transparent; color: var(--ui-text-muted); cursor: nwse-resize; }
 .whisper-resize svg { width: 16px; height: 16px; }
 .whisper-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
