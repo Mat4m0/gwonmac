@@ -69,6 +69,10 @@ const handlerState = Object.freeze({
   frameItem20: 17,
   frameQuantity: 18,
   uiMessage: 19,
+  storageFrame: 25,
+  frameCalls: 26,
+  originalCalls: 27,
+  storageCalls: 28,
 });
 
 const storageState = Object.freeze({
@@ -89,16 +93,18 @@ function handlerModule(): Uint8Array {
   const certificate = build.quickItemMove!;
   const layout = { ...build.preGameControls!.layout, contextRoot: 32, gameContextSlot: 0 };
   const types = concat(
-    uleb(5),
+    uleb(6),
     op(0x60), uleb(1), op(0x7f), uleb(1), op(0x7f),
     op(0x60), uleb(3), op(0x7f, 0x7f, 0x7f), uleb(0),
     op(0x60), uleb(2), op(0x7f, 0x7f), uleb(1), op(0x7f),
     op(0x60), uleb(4), op(0x7f, 0x7f, 0x7f, 0x7f), uleb(0),
     op(0x60), uleb(3), op(0x7f, 0x7f, 0x7f), uleb(1), op(0x7f),
+    op(0x60), uleb(0), uleb(0),
   );
   const returnGlobal = (index: number) => concat(uleb(0), global(index), op(0x0b));
   const frameDispatch = concat(
     uleb(0),
+    global(handlerState.frameCalls), i32(1), op(0x6a), setGlobal(handlerState.frameCalls),
     local(1), setGlobal(handlerState.frameMessage),
     local(2), load(4), setGlobal(handlerState.frameAction),
     local(2), load(12), setGlobal(handlerState.frameItem12),
@@ -113,6 +119,7 @@ function handlerModule(): Uint8Array {
   );
   const storageExecutor = concat(
     uleb(0),
+    global(handlerState.storageCalls), i32(1), op(0x6a), setGlobal(handlerState.storageCalls),
     local(0), setGlobal(handlerState.storageItem),
     local(1), setGlobal(handlerState.storageQuantity),
     local(2), setGlobal(handlerState.storageDirection),
@@ -141,17 +148,18 @@ function handlerModule(): Uint8Array {
     WASM_HEADER,
     encodeSection({ id: 1, body: types }),
     encodeSection({ id: 3, body: concat(
-      uleb(9), uleb(0), uleb(0), uleb(1), uleb(0), uleb(2), uleb(3), uleb(2), uleb(4), uleb(2),
+      uleb(15), uleb(0), uleb(0), uleb(1), uleb(0), uleb(2), uleb(3), uleb(2), uleb(4), uleb(2),
+      uleb(2), uleb(5), uleb(1), uleb(1), uleb(2), uleb(0),
     ) }),
     encodeSection({ id: 5, body: concat(uleb(1), op(0x00), uleb(1)) }),
     encodeSection({ id: 6, body: concat(
-      uleb(23), mutableGlobal(1), mutableGlobal(1), mutableGlobal(2_048),
-      mutableGlobal(1), mutableGlobal(1), mutableGlobal(), mutableGlobal(),
+      uleb(29), mutableGlobal(1), mutableGlobal(1), mutableGlobal(2_048),
+      mutableGlobal(), mutableGlobal(1), mutableGlobal(), mutableGlobal(),
       mutableGlobal(256), ...Array.from({ length: 12 }, () => mutableGlobal()),
-      mutableGlobal(), mutableGlobal(), mutableGlobal(),
+      ...Array.from({ length: 9 }, () => mutableGlobal()),
     ) }),
     encodeSection({ id: 7, body: concat(
-      uleb(12 + stateExports.length),
+      uleb(16 + stateExports.length),
       exported("memory", 0x02, 0), exported("handler", 0x00, 8),
       exported("itemLookup", 0x00, 0), exported("storageExecutor", 0x00, 7),
       exported("enabled", 0x03, globals.enabled),
@@ -161,18 +169,29 @@ function handlerModule(): Uint8Array {
       exported("intentModifiers", 0x03, globals.intentModifiers),
       exported("pending", 0x03, 20), exported("pendingItem", 0x03, 21),
       exported("pendingFrame", 0x03, 22),
+      exported("drain", 0x00, 10), exported("click", 0x00, 12),
+      exported("configure", 0x00, 13), exported("setModifiers", 0x00, 14),
       ...stateExports,
     ) }),
     encodeSection({ id: 10, body: encodeCode([
       returnGlobal(handlerState.itemPointer),
       concat(uleb(0), i32(0), op(0x0b)),
       uiDispatcher,
-      returnGlobal(handlerState.cartFrame),
+      concat(uleb(0), local(0), i32(certificate.tradeCartFrameHash), op(0x46, 0x04, 0x7f),
+        global(handlerState.cartFrame), op(0x05),
+        local(0), i32(certificate.storageFrameHash), op(0x46, 0x04, 0x7f),
+          global(handlerState.storageFrame), op(0x05), i32(0), op(0x0b, 0x0b, 0x0b)),
       concat(uleb(0), i32(1), op(0x0b)),
       frameDispatch,
       findAncestor,
       storageExecutor,
       body,
+      quickItemMoveDispatch(globals, 8, 7),
+      concat(uleb(0), quickItemMoveDrain(20, 21, globals, 9), op(0x0b)),
+      concat(uleb(0), global(handlerState.originalCalls), i32(1), op(0x6a), setGlobal(handlerState.originalCalls), op(0x0b)),
+      quickItemMoveSlotWrapper(11, 8, false, 0),
+      quickItemMoveConfigure(globals, 20),
+      quickItemMoveModifiers(globals),
     ]) }),
   );
 }
@@ -480,116 +499,189 @@ test("captured clicks drain once from the deferred game-thread branch", async ()
   assert.equal(exportedGlobal("calls").value, 1);
 });
 
-test("handler routes inventory, storage, own offers, and partner offers safely", async () => {
+async function clickFixture() {
   const instance = await instantiate(handlerModule());
-  const exports = instance.exports as Record<string, WebAssembly.ExportValue>;
-  const memory = exports.memory as WebAssembly.Memory;
-  const handler = exports.handler as (itemId: number, frameId: number) => number;
-  const state = (nameValue: keyof typeof handlerState) => exports[nameValue] as WebAssembly.Global;
-  const view = new DataView(memory.buffer);
+  const exports = instance.exports;
+  const view = new DataView((exports.memory as WebAssembly.Memory).buffer);
+  const state = (key: keyof typeof handlerState) => exports[key] as WebAssembly.Global;
+  const pending = exports.pending as WebAssembly.Global;
+  const u32 = (address: number, value: number) => view.setUint32(address, value, true);
   const itemId = 1_234;
   const item = 256;
   const bag = 512;
   const game = 160;
   const trade = 768;
   const offer = 896;
-  view.setUint32(32, 128, true);
-  view.setUint32(128, game, true);
-  view.setUint32(item + 12, bag, true);
+  u32(32, 128); u32(128, game); u32(item + 12, bag);
   view.setUint16(item + 76, 9, true);
-  view.setUint32(bag + 4, 1, true);
-  assert.equal((exports.enabled as WebAssembly.Global).value, 1);
-  assert.equal((exports.modifiers as WebAssembly.Global).value, 1);
-  assert.equal((exports.scratch as WebAssembly.Global).value, 2_048);
-  assert.equal(state("itemPointer").value, item);
-  assert.equal((exports.itemLookup as (id: number) => number)(itemId), item);
-
-  view.setUint32(bag, 1, true);
-  state("cartFrame").value = 1;
-  (exports.draining as WebAssembly.Global).value = 0;
-  assert.equal(handler(itemId, 10), 1);
-  assert.equal((exports.pending as WebAssembly.Global).value, -20);
-  assert.equal((exports.pendingItem as WebAssembly.Global).value, itemId);
-  assert.equal((exports.pendingFrame as WebAssembly.Global).value, 10);
-  assert.equal(state("storageDirection").value, 0, "the UI callback must not move synchronously");
-  (exports.pending as WebAssembly.Global).value = 0;
-  (exports.draining as WebAssembly.Global).value = 1;
-  state("cartFrame").value = 0;
-
-  const resetSignals = () => {
-    for (const key of ["storageItem", "storageQuantity", "storageDirection", "frameMessage",
-      "frameAction", "frameItem12", "frameItem20", "frameQuantity", "uiMessage"] as const) {
-      state(key).value = 0;
-    }
-    state("cartAncestor").value = 0;
-    state("dialogAncestor").value = 0;
-    view.setUint32(game + 0x58, 0, true);
+  u32(bag, 1); u32(bag + 4, 1);
+  // The real inventory wrapper resolves an item from the callback's slot list.
+  u32(64 + 4, 49); u32(64 + 8, 4_096); u32(4_096, 4_128);
+  u32(4_128 + 8, 4_192); u32(4_128 + 16, 1); u32(4_192, itemId);
+  u32(96, 10); u32(96 + 4, 2); u32(96 + 8, 7);
+  const click = () => (exports.click as (message: number, action: number, context: number) => void)(64, 96, 0);
+  const drain = exports.drain as () => void;
+  const setTrade = (flags: number, source: "inventory" | "own" | "partner" = "inventory") => {
+    u32(game + 0x58, trade); u32(trade, flags);
+    u32(trade + 20, offer); u32(trade + 28, source === "own" ? 1 : 0); u32(offer, itemId);
+    state("cartFrame").value = 1_000;
+    state("cartAncestor").value = source === "own" ? 1_000 : 0;
+    state("dialogAncestor").value = source === "inventory" ? 0 : 2_000;
   };
+  const noMoves = () => {
+    assert.equal(state("frameCalls").value, 0, "no native trade action");
+    assert.equal(state("storageCalls").value, 0, "no storage fallback");
+    assert.equal(state("uiMessage").value, 0, "no quantity prompt");
+  };
+  return { exports, view, u32, state, pending, itemId, item, bag, game, trade, offer, click, drain, setTrade, noMoves };
+}
 
-  (exports.enabled as WebAssembly.Global).value = 0;
-  assert.equal(handler(itemId, 10), 0);
-  assert.equal(state("storageDirection").value, 0);
-  (exports.enabled as WebAssembly.Global).value = 1;
-  (exports.modifiers as WebAssembly.Global).value = 0;
-  (exports.intentModifiers as WebAssembly.Global).value = 0;
-  assert.equal(handler(itemId, 10), 0);
-  assert.equal(state("storageDirection").value, 0);
-  (exports.modifiers as WebAssembly.Global).value = 1;
-  (exports.intentModifiers as WebAssembly.Global).value = 1;
+test("locked and unknown trade states consume inventory and cart shortcuts without native fallthrough", async () => {
+  for (const flags of [2, 3, 4, 5, 6, 7, 8, 9, 0xffff_ffff]) {
+    for (const source of ["inventory", "own", "partner"] as const) {
+      for (const storage of [0, 1_500]) {
+        for (const modifiers of [1, 3]) {
+          const f = await clickFixture();
+          f.setTrade(flags, source);
+          f.state("storageFrame").value = storage;
+          (f.exports.setModifiers as (value: number) => number)(modifiers);
+          f.click(); f.click(); f.drain();
+          assert.equal(f.pending.value, 0);
+          f.noMoves();
+          assert.equal(f.state("originalCalls").value, 0, `flags=${flags}, source=${source}, storage=${storage}, modifiers=${modifiers}`);
+        }
+      }
+    }
+  }
+});
 
-  resetSignals();
-  view.setUint32(bag, 1, true);
-  const inventoryResult = handler(itemId, 10);
-  assert.equal(state("storageDirection").value, 1);
-  assert.equal(state("storageQuantity").value, 9);
-  assert.equal(inventoryResult, 1);
+test("editable trade adds and removes once; partner offers never move", async () => {
+  for (const source of ["inventory", "own", "partner"] as const) {
+    for (const storage of [0, 1_500]) {
+      for (const modifiers of [1, 3]) {
+        const f = await clickFixture(); f.setTrade(1, source);
+        f.state("storageFrame").value = storage;
+        (f.exports.setModifiers as (value: number) => number)(modifiers);
+        f.click(); f.noMoves();
+        f.drain(); f.drain();
+        assert.equal(f.pending.value, 0);
+        assert.equal(f.state("storageCalls").value, 0);
+        assert.equal(f.state("originalCalls").value, 0);
+        if (source === "partner") { f.noMoves(); continue; }
+        assert.equal(f.state("frameCalls").value, 1);
+        assert.equal(f.state("frameAction").value, source === "own" ? 9 : 2);
+        assert.equal(f.state(source === "own" ? "frameItem12" : "frameItem20").value, f.itemId);
+        if (source === "inventory") assert.equal(f.state("frameQuantity").value, modifiers === 3 ? 0 : 9);
+      }
+    }
+  }
+});
 
-  resetSignals();
-  (exports.modifiers as WebAssembly.Global).value = 3;
-  (exports.intentModifiers as WebAssembly.Global).value = 3;
-  assert.equal(handler(itemId, 10), 1);
-  assert.equal(state("storageDirection").value, 1);
-  assert.equal(state("storageQuantity").value, 9);
-  (exports.modifiers as WebAssembly.Global).value = 1;
-  (exports.intentModifiers as WebAssembly.Global).value = 1;
+test("trade intent cancels when locked, closed, replaced or reclassified before draining", async () => {
+  for (const source of ["inventory", "own"] as const) {
+    for (const change of ["submitted", "accepted", "combined", "unknown", "closed", "missing", "cartGone", "cartReplaced", "sourceMoved", "partner"] as const) {
+      const f = await clickFixture(); f.setTrade(1, source);
+      f.state("storageFrame").value = 1_500;
+      f.click(); assert.equal(f.pending.value, -20); f.noMoves();
+      switch (change) {
+        case "submitted": f.u32(f.trade, 3); break;
+        case "accepted": f.u32(f.trade, 5); break;
+        case "combined": f.u32(f.trade, 7); break;
+        case "unknown": f.u32(f.trade, 9); break;
+        case "closed": f.u32(f.trade, 0); break;
+        case "missing": f.u32(f.game + 0x58, 0); break;
+        case "cartGone": f.state("cartFrame").value = 0; break;
+        case "cartReplaced": f.state("cartFrame").value = 1_100; break;
+        case "sourceMoved":
+          f.u32(f.bag, 4); f.state("cartAncestor").value = 0; f.state("dialogAncestor").value = 0; break;
+        case "partner": f.state("cartAncestor").value = 0; f.state("dialogAncestor").value = 2_000; break;
+      }
+      f.drain(); f.drain(); f.noMoves();
+      assert.equal(f.pending.value, 0, change);
+      assert.equal((f.exports.draining as WebAssembly.Global).value, 0);
+    }
+  }
+});
 
-  resetSignals();
-  view.setUint32(bag, 4, true);
-  view.setUint32(game + 0x58, trade, true);
-  view.setUint32(trade, 3, true);
-  assert.equal(handler(itemId, 10), 1);
-  assert.equal(state("storageDirection").value, 2, "storage withdrawal wins during trade");
+test("storage withdrawals remain available during locked trades and deposits never turn into offers", async () => {
+  for (const flags of [0, 1, 3, 5, 7, 9]) {
+    for (const bagType of [4, 5]) {
+      const f = await clickFixture(); f.setTrade(flags);
+      f.state("storageFrame").value = 1_500; f.u32(f.bag, bagType);
+      f.click(); f.noMoves(); f.drain();
+      assert.equal(f.state("storageCalls").value, 1);
+      assert.equal(f.state("storageDirection").value, 2);
+      assert.equal(f.state("frameCalls").value, 0);
+    }
+  }
+  for (const flags of [1, 3]) {
+    const f = await clickFixture(); f.state("storageFrame").value = 1_500;
+    f.click(); assert.equal(f.pending.value, -20);
+    f.setTrade(flags); f.drain(); f.noMoves();
+  }
+  const f = await clickFixture(); f.state("storageFrame").value = 1_500;
+  f.click(); f.drain();
+  assert.equal(f.state("storageCalls").value, 1);
+  assert.equal(f.state("storageDirection").value, 1);
+});
 
-  resetSignals();
-  view.setUint32(bag, 1, true);
-  view.setUint32(game + 0x58, trade, true);
-  view.setUint32(trade, 3, true);
-  view.setUint32(trade + 20, offer, true);
-  view.setUint32(trade + 28, 0, true);
-  state("cartFrame").value = 1_000;
-  assert.equal(handler(itemId, 10), 1);
-  assert.equal(state("frameAction").value, 2);
-  assert.equal(state("frameItem20").value, itemId);
-  assert.equal(state("frameQuantity").value, 9);
+test("trade edits reject full, duplicate, absent and malformed offer rows", async () => {
+  for (const refusal of ["full", "duplicate", "untradable", "absent", "oversized", "nullRows", "outOfBounds"] as const) {
+    const f = await clickFixture(); f.setTrade(1, refusal === "absent" ? "own" : "inventory");
+    switch (refusal) {
+      case "full": f.u32(f.trade + 28, 7); f.u32(f.offer, 999); break;
+      case "duplicate": f.u32(f.trade + 28, 1); break;
+      case "untradable": f.u32(f.item + 0x28, 0x100); break;
+      case "absent": f.u32(f.offer, 999); break;
+      case "oversized": f.u32(f.trade + 28, 0xffff_ffff); break;
+      case "nullRows": f.u32(f.trade + 28, 1); f.u32(f.trade + 20, 0); break;
+      case "outOfBounds": f.u32(f.trade + 28, 1); f.u32(f.trade + 20, 65_532); break;
+    }
+    f.click(); f.drain(); f.noMoves();
+  }
+});
 
-  resetSignals();
-  state("cartAncestor").value = 1_000;
-  view.setUint32(game + 0x58, trade, true);
-  view.setUint32(trade, 1, true);
-  view.setUint32(trade + 20, offer, true);
-  view.setUint32(trade + 28, 1, true);
-  view.setUint32(offer, itemId, true);
-  assert.equal(handler(itemId, 10), 1);
-  assert.equal(state("frameAction").value, 9);
-  assert.equal(state("frameItem12").value, itemId);
+test("busy or disabled quick moves do not replay; Change Offer enables new clicks", async () => {
+  const f = await clickFixture(); f.setTrade(1);
+  f.click(); f.click(); f.drain(); f.drain();
+  assert.equal(f.state("frameCalls").value, 1);
+  assert.equal(f.state("originalCalls").value, 0);
+  f.click();
+  (f.exports.configure as (enabled: number, scratch: number) => number)(0, 2_048);
+  f.drain(); assert.equal(f.pending.value, 0);
+  assert.equal(f.state("frameCalls").value, 1);
+  f.click(); assert.equal(f.state("originalCalls").value, 1, "disabled feature preserves native clicks");
+  (f.exports.configure as (enabled: number, scratch: number) => number)(1, 2_048);
+  (f.exports.setModifiers as (value: number) => number)(1);
+  f.setTrade(3); f.click(); assert.equal(f.pending.value, 0);
+  f.setTrade(1); f.drain(); assert.equal(f.state("frameCalls").value, 1, "unlock does not replay rejected clicks");
+  f.click(); f.drain(); assert.equal(f.state("frameCalls").value, 2);
+});
 
-  resetSignals();
-  state("dialogAncestor").value = 2_000;
-  view.setUint32(game + 0x58, trade, true);
-  view.setUint32(trade, 1, true);
-  assert.equal(handler(itemId, 10), 0);
-  assert.equal(state("storageDirection").value, 0, "partner offers remain untouched");
-  assert.equal(state("frameMessage").value, 0);
+test("ordinary clicks pass through and unavailable destinations cannot capture or replay moves", async () => {
+  const f = await clickFixture(); f.setTrade(1);
+  (f.exports.setModifiers as (value: number) => number)(0);
+  f.click(); f.drain(); f.noMoves();
+  assert.equal(f.state("originalCalls").value, 1);
+  (f.exports.setModifiers as (value: number) => number)(1);
+  f.pending.value = 123;
+  f.click(); f.drain(); f.noMoves();
+  assert.equal(f.pending.value, 123, "another native command retains its mailbox");
+  f.pending.value = 0;
+  f.state("cartFrame").value = 0;
+  f.click(); f.drain(); f.noMoves();
+  assert.equal(f.pending.value, 0);
+  f.setTrade(1, "own"); f.state("cartAncestor").value = 1_100;
+  f.click(); f.drain(); f.noMoves();
+  assert.equal(f.pending.value, 0, "an obsolete cart cannot target its replacement");
+
+  const storage = await clickFixture();
+  storage.click(); storage.drain(); storage.noMoves();
+  assert.equal(storage.state("originalCalls").value, 1, "closed storage leaves the native click alone");
+  storage.state("storageFrame").value = 1_500;
+  storage.click(); storage.state("storageFrame").value = 0;
+  storage.drain(); storage.noMoves();
+  assert.equal(storage.pending.value, 0);
 });
 
 

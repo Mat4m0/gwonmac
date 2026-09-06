@@ -123,8 +123,23 @@ Stack matching follows Toolbox's model-file, dye, and encoded-name checks and
 requires stackable items. Name reads are bounded. Control-Shift-click opens one
 native quantity prompt at the source, as in Toolbox. Its selected amount enters
 the same stack-first transfer path at the deferred game-thread boundary. Another
-native move cancels prompt ownership. Unrelated native moves pass through;
-trade behavior is unchanged.
+native move cancels prompt ownership. Unrelated native moves pass through.
+
+Trade edits require the exact initiated state, as in GWCA's Wasm TradeMgr.
+Submitted, accepted, and unknown trade states consume inventory and cart
+shortcuts without adding, removing, or depositing items. Partner offers never
+move. Storage withdrawals remain available while an offer is locked.
+The deferred command retains its action and target cart in its existing
+mailbox. Execution rechecks the source, trade state, and cart. A changed route
+or cart cancels the click instead of selecting another destination. Selecting
+Change Offer permits new clicks; rejected clicks are never replayed.
+
+The trade tests execute the generated slot wrapper, handler, and drain together.
+They distinguish storage and trade frames, check refusal without native
+fallthrough, and exercise offer/window changes between capture and execution.
+The real-client artifact test validates certification separately. Before release,
+confirm submitted-offer clicks and Change Offer recovery in a developer build,
+with storage open and closed. Automated fixtures do not establish live gameplay.
 
 The renderer sends two modifier bits and owns the scratch region defined by
 [the shared contract](../src/shared/quick-item-move-contract.ts). Its 64 temporary
