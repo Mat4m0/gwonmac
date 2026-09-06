@@ -15,7 +15,12 @@ const { panel, resizeGrip, panelStyle, startDrag } = useFloatingWindow({
 });
 const selected = computed(() => state.value.conversations.find(c => c.key === state.value.selected));
 const unread = computed(() => state.value.conversations.reduce((total, c) => total + whisperUnread(c), 0));
+const windowStyle = computed(() => ({
+  ...(panelStyle.value ?? {}),
+  "--whisper-background-opacity": String(state.value.backgroundOpacity / 100),
+}));
 const search = ref("");
+const suggestionIndex = ref(-1);
 const pickerError = ref("");
 const closing = ref<string | null>(null);
 const optionsMenu = ref<HTMLDetailsElement | null>(null);
@@ -67,6 +72,39 @@ const friends = computed(() => state.value.friends.status === "ready"
   ? state.value.friends.friends.filter(f => (f.status === "online" || f.status === "away" || f.status === "do-not-disturb") && !openKeys.value.has(whisperPersonKey(f.character || f.alias))
     && `${f.character} ${f.alias}`.toLocaleLowerCase().includes(search.value.toLocaleLowerCase())) : []);
 const recent = computed(() => state.value.recent.filter(p => p.name.toLocaleLowerCase().includes(search.value.toLocaleLowerCase())));
+type Suggestion = Readonly<{ key: string; name: string; detail: string; searchable: string; priority: number; activity: number }>;
+const suggestions = computed(() => {
+  const query = search.value.trim().toLocaleLowerCase("en-US");
+  if (!query) return [];
+  const people = new Map<string, Suggestion>();
+  const add = (person: Suggestion) => { if (!people.has(person.key)) people.set(person.key, person); };
+  for (const conversation of state.value.conversations) add({
+    key: conversation.key, name: conversation.name, detail: "Conversation",
+    searchable: conversation.name, priority: 0, activity: conversation.activity,
+  });
+  for (const friend of observedFriends.value) {
+    const name = friend.character || friend.alias;
+    add({ key: whisperPersonKey(name), name, detail: presenceLabel(friend.status),
+      searchable: `${name} ${friend.alias}`, priority: 1, activity: 0 });
+  }
+  for (const person of state.value.participants) add({
+    ...person, detail: "Seen in chat", searchable: person.name, priority: 2,
+  });
+  for (const person of state.value.recent) add({
+    ...person, detail: "Recent", searchable: person.name, priority: 3,
+  });
+  const matchRank = (person: Suggestion) => {
+    const value = person.searchable.toLocaleLowerCase("en-US");
+    if (value === query) return 0;
+    if (value.startsWith(query)) return 1;
+    if (value.split(/\s+/u).some(word => word.startsWith(query))) return 2;
+    return value.includes(query) ? 3 : 4;
+  };
+  return [...people.values()].filter(person => matchRank(person) < 4)
+    .sort((a, b) => matchRank(a) - matchRank(b) || a.priority - b.priority
+      || b.activity - a.activity || a.name.localeCompare(b.name))
+    .slice(0, 8);
+});
 const maxLength = computed(() => Math.min(WHISPER_MESSAGE_UNITS, WHISPER_LINE_UNITS - (selected.value?.name.length ?? 0) - 2));
 function open(name: string) {
   try {
@@ -74,6 +112,30 @@ function open(name: string) {
     void nextTick(() => document.getElementById(`draft-${state.value.selected}`)?.focus());
   }
   catch (error) { pickerError.value = error instanceof Error ? error.message : "Enter a character name."; }
+}
+function searchInput() {
+  suggestionIndex.value = -1;
+  pickerError.value = "";
+}
+function searchKeydown(event: KeyboardEvent) {
+  if (event.isComposing) return;
+  if (event.key === "Escape" && search.value) {
+    event.preventDefault(); search.value = ""; suggestionIndex.value = -1; return;
+  }
+  if (event.key === "Tab" && suggestions.value.length) {
+    event.preventDefault(); search.value = suggestions.value[0]!.name; suggestionIndex.value = 0; return;
+  }
+  if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+  if (!suggestions.value.length) return;
+  event.preventDefault();
+  suggestionIndex.value = event.key === "ArrowDown"
+    ? (suggestionIndex.value + 1) % suggestions.value.length
+    : (suggestionIndex.value <= 0 ? suggestions.value.length : suggestionIndex.value) - 1;
+  void nextTick(() => document.getElementById(`whisper-suggestion-${suggestionIndex.value}`)
+    ?.scrollIntoView({ block: "nearest" }));
+}
+function submitSearch() {
+  open(suggestions.value[suggestionIndex.value]?.name ?? search.value);
 }
 function draftInput(key: string, event: Event) {
   historyNavigation.delete(key);
@@ -208,6 +270,9 @@ function soundChange(event: Event) {
   props.session.setSound(value);
   if (value !== "off") enableAudio();
 }
+function opacityChange(event: Event) {
+  props.session.setBackgroundOpacity(Number((event.target as HTMLInputElement).value));
+}
 function fitIcon() {
   icon.value = { left: Math.max(8, Math.min(window.innerWidth - 40, icon.value.left)),
     top: Math.max(8, Math.min(window.innerHeight - 40, icon.value.top)) };
@@ -270,7 +335,7 @@ onBeforeUnmount(() => {
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3C6.49 3 2 6.59 2 11c0 2.91 1.9 5.51 5 6.93V21c0 .38.21.73.55.89c.14.07.29.11.45.11c.21 0 .42-.07.6-.2l3.74-2.8c5.36-.14 9.66-3.68 9.66-8s-4.49-8-10-8"/></svg>
     <span v-if="unread" class="whisper-badge" aria-hidden="true">{{ unread > 99 ? '99+' : unread }}</span>
   </button>
-  <section v-show="visible" id="whisper-window" ref="panel" class="ui-frame ui-reading-surface whisper-window" data-variant="quiet" :style="panelStyle" aria-label="Whispers" @keydown="escapeOptions">
+  <section v-show="visible" id="whisper-window" ref="panel" class="ui-frame ui-reading-surface whisper-window" data-variant="quiet" :style="windowStyle" aria-label="Whispers" @keydown="escapeOptions">
     <header class="whisper-head" @pointerdown="startDrag">
       <button v-if="selected" data-variant="quiet" class="ui-button whisper-control whisper-icon" aria-label="Conversations" title="Conversations" @click="showPicker">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
@@ -285,13 +350,13 @@ onBeforeUnmount(() => {
         <div class="ui-raised ui-scroll whisper-menu">
           <label for="whisper-sound">Sound alerts</label>
           <select id="whisper-sound" class="ui-select" :value="state.sound" @change="soundChange"><option value="off">Off</option><option value="background">When chat is in background</option><option value="every">Every incoming whisper</option></select>
+          <label class="ui-range-field whisper-opacity" for="whisper-opacity"><span><span>Background</span><output>{{ state.backgroundOpacity }}%</output></span><input id="whisper-opacity" class="ui-range" type="range" min="15" max="100" step="5" :value="state.backgroundOpacity" @input="opacityChange"/></label>
           <button v-if="selected" data-variant="quiet" class="ui-button whisper-control" :aria-pressed="selected.muted" @click="session.mute(selected.key)">{{ selected.muted ? 'Unmute this conversation' : 'Mute this conversation' }}</button>
           <button v-if="selected" data-variant="quiet" class="ui-button whisper-control whisper-danger" :disabled="selected.sending" :aria-label="`Close conversation with ${selected.name}`" @click="close(selected.key)">Close conversation</button>
           <div class="whisper-menu-divider" />
           <button data-variant="quiet" class="ui-button whisper-control" @click="session.closeRead()">Close read conversations</button>
           <small>Keeps unread chats and drafts.</small>
           <button v-if="state.recent.length" data-variant="quiet" class="ui-button whisper-control" @click="session.clearRecent()">Clear recent people</button>
-          <p>Chats stay in this session only. Sound adds to the game's alerts.</p>
         </div>
       </details>
       <button data-variant="quiet" class="ui-button whisper-control whisper-icon" aria-label="Collapse whispers" title="Minimize" @click="session.setVisible(false)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg></button>
@@ -300,8 +365,17 @@ onBeforeUnmount(() => {
     <p v-if="state.missed" class="whisper-notice" role="status">{{ state.missed }} messages could not be kept. Check original chat.</p>
     <div v-if="closing" class="whisper-notice" role="alert"><p>Discard the unsent draft and close this conversation?</p><div class="whisper-inline"><button data-variant="quiet" class="ui-button whisper-control whisper-danger" @click="close(closing, true)">Discard and close</button><button data-variant="quiet" class="ui-button whisper-control" @click="closing = null">Keep chatting</button></div></div>
     <div v-show="!selected" class="ui-scroll whisper-picker">
-      <form class="ui-input-group whisper-search" @submit.prevent="open(search)"><label class="whisper-sr-only" for="whisper-person">Character name</label><input id="whisper-person" v-model="search" maxlength="20" placeholder="Find a friend or enter a name" autocomplete="off"/><button data-variant="primary" class="ui-button whisper-control" type="submit" :disabled="!search.trim()">Chat</button></form>
+      <form class="ui-input-group whisper-search" @submit.prevent="submitSearch"><label class="whisper-sr-only" for="whisper-person">Character name</label><input id="whisper-person" v-model="search" maxlength="20" placeholder="Find a friend or enter a name" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="whisper-suggestions" :aria-expanded="Boolean(search.trim() && suggestions.length)" :aria-activedescendant="suggestionIndex >= 0 ? `whisper-suggestion-${suggestionIndex}` : undefined" @input="searchInput" @keydown="searchKeydown"/><button data-variant="primary" class="ui-button whisper-control" type="submit" :disabled="!search.trim()">Chat</button></form>
       <p v-if="pickerError" class="whisper-notice" role="alert">{{ pickerError }}</p>
+      <template v-if="search.trim()">
+        <h3>Suggestions</h3>
+        <div v-if="suggestions.length" id="whisper-suggestions" role="listbox" aria-label="Character suggestions">
+          <button v-for="(person, index) in suggestions" :id="`whisper-suggestion-${index}`" :key="person.key" data-variant="quiet" class="ui-button whisper-control whisper-person-open whisper-suggestion" role="option" :aria-selected="suggestionIndex === index" @click="open(person.name)"><span class="whisper-person-main"><span v-if="friendFor(person.name)" class="whisper-presence" :data-presence="friendFor(person.name)!.status"/><strong>{{ person.name }}</strong></span><small>{{ person.detail }}</small></button>
+        </div>
+        <p v-else class="whisper-empty">No known names match. Press Chat to use this exact character name.</p>
+        <p v-if="suggestions.length" class="whisper-completion-hint">↑↓ choose · Tab completes</p>
+      </template>
+      <template v-else>
       <p v-if="!state.conversations.length" class="whisper-empty whisper-onboarding">Start a conversation with a friend, or enter any character name above.</p>
       <template v-if="state.conversations.length">
         <h3>Conversations</h3>
@@ -317,6 +391,7 @@ onBeforeUnmount(() => {
       <template v-if="recent.length">
         <h3>Recent people</h3>
         <div v-for="person in recent" :key="person.key" class="whisper-person"><button data-variant="quiet" class="ui-button whisper-control whisper-person-open" @click="open(person.name)">{{ person.name }}</button><button data-variant="quiet" class="ui-button whisper-control whisper-icon" :aria-label="`Remove ${person.name} from recent people`" @click="session.removeRecent(person.key)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button></div>
+      </template>
       </template>
     </div>
     <template v-for="conversation in state.conversations" :key="conversation.key">
@@ -351,7 +426,7 @@ onBeforeUnmount(() => {
 .ui-reading-surface small { color: var(--ui-text-muted); font: 12px/1.5 var(--ui-font-reading); }
 .ui-reading-surface input, .ui-reading-surface select { min-width: 0; width: 100%; color: var(--ui-text); caret-color: var(--ui-focus); font: inherit; }
 .ui-reading-surface input::placeholder { color: var(--ui-text-muted); opacity: 1; }
-.whisper-window { position: fixed; width: 340px; height: 360px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); display: flex; flex-direction: column; pointer-events: auto; isolation: isolate; }
+.whisper-window { --whisper-background-opacity: 1; --ui-effective-panel-opacity: calc(var(--ui-panel-opacity) * var(--whisper-background-opacity)); position: fixed; width: 340px; height: 360px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); display: flex; flex-direction: column; pointer-events: auto; isolation: isolate; }
 .whisper-head { display: flex; align-items: center; gap: 2px; min-height: 42px; padding: 4px 8px; border-bottom: 1px solid var(--ui-line-soft); background: var(--ui-title-fill); border-radius: var(--ui-radius) var(--ui-radius) 0 0; cursor: grab; }
 .whisper-heading { flex: 1; min-width: 0; margin: 0 6px; display: flex; align-items: baseline; gap: 8px; }
 .whisper-head h2 { min-width: 0; font: var(--ui-font-weight-semibold) 15px/1.3 var(--ui-font-interface); color: var(--ui-text-bright); margin: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
@@ -375,7 +450,7 @@ onBeforeUnmount(() => {
 .whisper-search button:disabled, .whisper-send:disabled { opacity: .45; }
 .whisper-picker h3 { font: 600 11px/1.5 var(--ui-font-reading); color: color-mix(in srgb, var(--ui-accent) 74%, var(--ui-text-muted)); margin: 16px 6px 5px; letter-spacing: .01em; }
 .whisper-person { position: relative; display: flex; align-items: center; gap: 2px; border-radius: var(--ui-radius-sm); }
-.whisper-person[data-unread] { background: color-mix(in srgb, var(--ui-chat-incoming-accent) 8%, transparent); box-shadow: inset 1px 0 var(--ui-chat-incoming-accent); }
+.whisper-person[data-unread] { background: color-mix(in srgb, var(--ui-chat-incoming-accent) 8%, transparent); }
 .whisper-person-open { display: flex; align-items: center; justify-content: space-between; width: 100%; min-width: 0; min-height: 36px; padding: 4px 6px; text-align: left; }
 .whisper-person-main { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .whisper-person-copy { min-width: 0; }
@@ -389,7 +464,7 @@ onBeforeUnmount(() => {
 .whisper-presence[data-presence="offline"] { background: var(--ui-text-faint); }
 .whisper-status-copy { margin-left: 10px; color: var(--ui-text-muted) !important; }
 .whisper-conversation { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.whisper-transcript { flex: 1; min-height: 40px; padding: 12px 10px; overscroll-behavior: contain; scroll-padding-block: 12px; background: var(--ui-well-fill); box-shadow: inset 0 1px 0 var(--ui-edge), inset 0 -1px 0 var(--ui-edge); }
+.whisper-transcript { flex: 1; min-height: 40px; padding: 12px 10px; overscroll-behavior: contain; scroll-padding-block: 12px; background: color-mix(in srgb, var(--ui-well-fill) calc(var(--whisper-background-opacity) * 100%), transparent); box-shadow: inset 0 1px 0 var(--ui-edge), inset 0 -1px 0 var(--ui-edge); }
 .whisper-message { display: flex; flex-direction: column; align-items: flex-start; margin-top: 10px; }
 .whisper-message:first-of-type { margin-top: 0; }
 .whisper-message[data-grouped] { margin-top: 4px; }
@@ -406,6 +481,8 @@ onBeforeUnmount(() => {
 .whisper-latest { align-self: center; color: var(--ui-chat-incoming-accent); }
 .whisper-empty { max-width: 32ch; color: var(--ui-text-muted); margin: 8px 6px; font-size: 12px; line-height: 1.45; text-wrap: pretty; }
 .whisper-onboarding { margin-top: 10px; }
+.whisper-completion-hint { margin: 8px 6px 0; color: var(--ui-text-faint); font-size: 11px; }
+.whisper-suggestion[aria-selected="true"] { background: var(--ui-selection-fill); color: var(--ui-selection-ink); }
 .whisper-notice { margin: 0; padding: 6px 12px; font-size: 12px; background: var(--ui-well-fill); }
 .whisper-notice p { margin: 0 0 8px; }
 .whisper-danger { color: var(--ui-danger) !important; }
@@ -413,11 +490,11 @@ onBeforeUnmount(() => {
 .whisper-options summary { list-style: none; }
 .whisper-options summary::-webkit-details-marker { display: none; }
 .whisper-menu { position: absolute; top: 34px; right: 0; width: 238px; max-height: min(330px, calc(100vh - 120px)); overflow: auto; padding: 10px; z-index: 2; }
-.whisper-menu label { display: block; margin-bottom: 6px; font-weight: 500; }
+.whisper-menu > label { display: block; margin-bottom: 6px; font-weight: 500; }
 .whisper-menu select { font-size: 12px; margin-bottom: 8px; }
+.whisper-menu .whisper-opacity { margin: 6px 2px 10px; }
 .whisper-menu button { width: 100%; justify-content: flex-start; text-align: left; }
 .whisper-menu small { display: block; padding: 0 12px 8px; }
-.whisper-menu p { padding: 8px 8px 0; border-top: 1px solid var(--ui-line-soft); font-size: 11px; line-height: 1.45; color: var(--ui-text-faint); margin: 8px 0 0; }
 .whisper-menu-divider { height: 1px; background: var(--ui-line-soft); margin: 8px 0; }
 .whisper-resize { position: absolute; bottom: 1px; right: 1px; width: 16px; height: 16px; padding: 0; border: 0; background: transparent; color: var(--ui-text-muted); cursor: nwse-resize; }
 .whisper-resize svg { width: 16px; height: 16px; }

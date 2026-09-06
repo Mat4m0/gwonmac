@@ -18,6 +18,14 @@ export interface ObservedWhisper {
   readonly direction: WhisperDirection;
 }
 
+export interface ObservedChatParticipant {
+  readonly id: number;
+  readonly sender: string;
+  readonly direction: "participant";
+}
+
+export type ObservedChatEvent = ObservedWhisper | ObservedChatParticipant;
+
 function hasControl(value: string): boolean {
   return Array.from(value).some(unit => unit.charCodeAt(0) < 32 || unit.charCodeAt(0) === 127);
 }

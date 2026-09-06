@@ -33,7 +33,7 @@ game messages.
   preserve the draft and never replay automatically.
 - Native observation owns displayed outgoing messages. Queue acceptance is
   not a delivery receipt. Guild Wars does not expose remote read receipts.
-- Messages, drafts and recent contact metadata remain in renderer memory and
+- Messages, drafts, recent contacts, and chat-participant suggestions remain in renderer memory and
   clear when the client session ends. They never enter IPC, files or diagnostics.
 - A movable person icon shows unread messages without stealing focus. Collapse
   restores the same recipient and keeps drafts. Close discards a conversation,
@@ -48,6 +48,10 @@ game messages.
 - Friends reuse the existing certified observer. Recent people contains at most
   ten closed non-friend conversations in which the player sent a message.
   Remove and Clear recent affect contact suggestions only.
+- The same bounded chat-log event observes names from Alliance, Allies, All,
+  Guild, Group, Trade, and Whisper chat. Non-whisper message bodies are discarded
+  in the native ring; the picker retains only the 50 most recent valid character
+  names for session-only prefix and word completion.
 - Sound offers Off, Background and Every incoming whisper. Muting a person
   suppresses sound while retaining unread badges. There are no notification cards.
 - Unsupported client facts withdraw the optional feature. Original Guild Wars
@@ -74,10 +78,13 @@ encoder; integration tests cover echo confirmation and clearing the draft.
 
 ## Presentation and limits
 
-Incoming bubbles align left; replies align right. Both follow the selected Tools
+Incoming bubbles align left; replies align right. Both use bright text and follow the selected Tools
 UI theme and wrap long text. The header names the person; each message retains
 an accessible author label. Back opens the people list. Sound and cleanup are
-in the options menu. There are no invented delivery or
+in the options menu. A local Background slider reduces only this messenger's
+broad panel and transcript paint to 15% of the selected global panel opacity;
+text, controls, bubbles, and the raised menu stay legible. The multiplier is
+session-only and does not replace the saved appearance preference. There are no invented delivery or
 read receipts. Original game links remain available in original chat.
 
 The native sender accepts at most 137 UTF-16 units for the whole encoded line,

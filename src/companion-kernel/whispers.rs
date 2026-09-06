@@ -11,6 +11,12 @@ use crate::memory::{contains, indexed, offset, read_u16, read_u32};
 
 const INCOMING_WHISPER_CHANNEL: u32 = 14;
 const GLOBAL_CHANNEL: u32 = 10;
+const ALLIANCE_CHANNEL: u32 = 0;
+const ALLIES_CHANNEL: u32 = 1;
+const ALL_CHANNEL: u32 = 3;
+const GUILD_CHANNEL: u32 = 9;
+const GROUP_CHANNEL: u32 = 11;
+const TRADE_CHANNEL: u32 = 12;
 const OUTGOING_TEMPLATE: u16 = 0x076e;
 const SENDER_STYLE: u16 = 0x0107;
 const TEXT_STYLE: u16 = 0x0108;
@@ -107,7 +113,15 @@ unsafe fn publish_header() {
     }
 }
 
-unsafe fn append(text: u32, sender_start: u32, sender_units: u32, message_start: u32, message_units: u32, outgoing: bool) {
+unsafe fn append(
+    text: u32,
+    sender_start: u32,
+    sender_units: u32,
+    message_start: u32,
+    message_units: u32,
+    outgoing: bool,
+    participant: bool,
+) {
     let id = unsafe { WRITE_COUNT }.wrapping_add(1).max(1);
     let index = (id as usize - 1) % WHISPER_SLOT_COUNT;
     let snapshot = unsafe { POINTER as *mut WhisperSnapshot };
@@ -118,7 +132,9 @@ unsafe fn append(text: u32, sender_start: u32, sender_units: u32, message_start:
         write_volatile(&mut slot.id, 0);
         write_volatile(
             &mut slot.sender_and_message_units,
-            sender_units | message_units << 16 | if outgoing { 1 << 31 } else { 0 },
+            sender_units
+                | if participant { 1 << 30 } else { message_units << 16 }
+                | if outgoing { 1 << 31 } else { 0 },
         );
         for index in 0..WHISPER_SENDER_UNITS {
             let value = if index < sender_units as usize {
@@ -129,7 +145,7 @@ unsafe fn append(text: u32, sender_start: u32, sender_units: u32, message_start:
             write_volatile(&mut slot.sender[index], value);
         }
         for index in 0..WHISPER_MESSAGE_UNITS {
-            let value = if index < message_units as usize {
+            let value = if !participant && index < message_units as usize {
                 read_u16(indexed(text, message_start + index as u32, 2).unwrap_or(0)).unwrap_or(0)
             } else {
                 0
@@ -165,7 +181,10 @@ pub(crate) unsafe fn observe(message: u32, wparam: u32) {
         return;
     }
     let channel = unsafe { read_u32(wparam) };
-    if channel != Some(INCOMING_WHISPER_CHANNEL) && channel != Some(GLOBAL_CHANNEL) {
+    let participant = matches!(channel,
+        Some(ALLIANCE_CHANNEL) | Some(ALLIES_CHANNEL) | Some(ALL_CHANNEL)
+            | Some(GUILD_CHANNEL) | Some(GROUP_CHANNEL) | Some(TRADE_CHANNEL));
+    if channel != Some(INCOMING_WHISPER_CHANNEL) && channel != Some(GLOBAL_CHANNEL) && !participant {
         return;
     }
     let text = offset(wparam, 4).and_then(|at| unsafe { read_u32(at) });
@@ -176,14 +195,15 @@ pub(crate) unsafe fn observe(message: u32, wparam: u32) {
     let Some((text, (sender_start, sender_units, message_start, message_units))) =
         text.and_then(|text| unsafe { parse(text, outgoing) }.map(|shape| (text, shape)))
     else {
-        unsafe { reject() };
+        if !participant { unsafe { reject() }; }
         return;
     };
     if !unsafe { valid_utf16(text, sender_start, sender_units) }
-        || !unsafe { valid_utf16(text, message_start, message_units) } {
-        unsafe { reject() }; return;
+        || (!participant && !unsafe { valid_utf16(text, message_start, message_units) }) {
+        if !participant { unsafe { reject() }; }
+        return;
     }
-    unsafe { append(text, sender_start, sender_units, message_start, message_units, outgoing) };
+    unsafe { append(text, sender_start, sender_units, message_start, message_units, outgoing, participant) };
 }
 
 /// Rechecks the canonical game state on enqueue and at the native drain.

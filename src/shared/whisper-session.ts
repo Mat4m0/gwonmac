@@ -2,7 +2,7 @@
  * Owns the disposable whisper view derived from this game's observed chat log.
  * Unread and recent contacts are derived from these records; nothing is stored.
  */
-import { whisperLine, type ObservedWhisper } from "./whispers.js";
+import { whisperLine, type ObservedChatEvent, type ObservedWhisper } from "./whispers.js";
 import type { TravelFriends } from "./friends.js";
 
 export type WhisperSound = "off" | "background" | "every";
@@ -14,17 +14,19 @@ export type WhisperConversation = Readonly<{
 type RecentPerson = Readonly<{ key: string; name: string; activity: number }>;
 export type WhisperSessionState = Readonly<{
   conversations: readonly WhisperConversation[]; recent: readonly RecentPerson[];
+  participants: readonly RecentPerson[];
   friends: TravelFriends; selected: string | null; visible: boolean;
-  available: boolean; sound: WhisperSound; missed: number;
+  available: boolean; sound: WhisperSound; backgroundOpacity: number; missed: number;
 }>;
 export const whisperPersonKey = (name: string) => name.trim().toLocaleLowerCase("en-US");
 export const whisperUnread = (conversation: WhisperConversation) => conversation.messages
   .filter(message => message.direction === "incoming" && message.id > conversation.readThrough).length;
-const initial = (): WhisperSessionState => ({ conversations: [], recent: [],
+const initial = (): WhisperSessionState => ({ conversations: [], recent: [], participants: [],
   friends: { status: "waiting", reason: "unavailable" }, selected: null,
-  visible: false, available: false, sound: "background", missed: 0 });
+  visible: false, available: false, sound: "background", backgroundOpacity: 100, missed: 0 });
 const MAX_CONVERSATIONS = 32;
 const MAX_MESSAGES = 200;
+const MAX_PARTICIPANTS = 50;
 
 export function createWhisperSession(send: (recipient: string, message: string) => Promise<void>) {
   let state = initial();
@@ -49,6 +51,14 @@ export function createWhisperSession(send: (recipient: string, message: string) 
     publish({ conversations: [...state.conversations, conversation], recent: state.recent.filter(p => p.key !== key) });
     return conversation;
   };
+  const rememberParticipant = (name: string, activity: number) => {
+    try { whisperLine(name, "x"); } catch { return; }
+    const key = whisperPersonKey(name);
+    publish({ participants: [
+      { key, name: name.trim(), activity },
+      ...state.participants.filter(person => person.key !== key),
+    ].slice(0, MAX_PARTICIPANTS) });
+  };
   const api = {
     get state() { return state; },
     subscribe(listener: (state: WhisperSessionState) => void) {
@@ -58,6 +68,11 @@ export function createWhisperSession(send: (recipient: string, message: string) 
     setAvailable(available: boolean) { if (available !== state.available) publish({ available }); },
     setVisible(visible: boolean) { publish({ visible }); },
     setSound(sound: WhisperSound) { publish({ sound }); },
+    setBackgroundOpacity(backgroundOpacity: number) {
+      if (Number.isInteger(backgroundOpacity) && backgroundOpacity >= 15 && backgroundOpacity <= 100) {
+        publish({ backgroundOpacity });
+      }
+    },
     updateFriends(friends: TravelFriends) {
       // The shared observer pauses outside the picker. Retain this session's last
       // observed friends so closing a conversation does not misclassify a friend.
@@ -73,10 +88,14 @@ export function createWhisperSession(send: (recipient: string, message: string) 
       publish({ selected: conversation.key, visible: true });
     },
     showPicker() { publish({ selected: null, visible: true }); },
-    observe(messages: readonly ObservedWhisper[], missed = 0) {
+    observe(messages: readonly ObservedChatEvent[], missed = 0) {
       let overflow = missed;
       const audible: ObservedWhisper[] = [];
       for (const message of messages) {
+        if (message.direction === "participant") {
+          rememberParticipant(message.sender, message.id);
+          continue;
+        }
         const conversation = ensure(message.sender);
         if (!conversation) { overflow++; continue; }
         if (conversation.messages.some(m => m.id === message.id)) continue;

@@ -60,6 +60,11 @@ if (params.has("whispers")) {
   action("Simulate incoming", () => session.observe([{ id: ++id, sender: "Romi Ranger", message: "Ready for another mission?", direction: "incoming" }]));
   action("Simulate original chat reply", () => session.observe([{ id: ++id, sender: "Romi Ranger", message: "Yes, joining you now.", direction: "outgoing" }]));
   action("Simulate trade whisper", () => session.observe([{ id: ++id, sender: `Trader ${id}`, message: "Still selling?", direction: "incoming" }]));
+  action("Simulate chat names", () => session.observe([
+    { id: ++id, sender: "Moon D Eden", direction: "participant" },
+    { id: ++id, sender: "Ancient N Chains", direction: "participant" },
+    { id: ++id, sender: "Fureur Verte", direction: "participant" },
+  ]));
   const theme = document.createElement("select");
   theme.className = "ui-select"; theme.setAttribute("aria-label", "Preview theme");
   for (const [value, label] of [["guild-wars", "Classic"], ["obsidian", "Modern"]] as const) {

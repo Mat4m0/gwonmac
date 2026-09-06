@@ -3,6 +3,7 @@
  * it exposes no generic memory or UI-event reader.
  */
 import { COMPANION_ABI } from "../shared/companion-abi.js";
+import type { ObservedChatEvent } from "../shared/whispers.js";
 
 export const COMPANION_WHISPER_ABI = COMPANION_ABI.whispers.abi;
 export const COMPANION_WHISPER_BYTES = COMPANION_ABI.whispers.bytes;
@@ -64,31 +65,35 @@ export function readCompanionWhispers(
     return Object.freeze({ status: "waiting" as const, reason: "snapshot" as const });
   }
   const firstAvailable = Math.max(previousWriteCount + 1, writeCount - SLOT_COUNT + 1);
-  const messages: Readonly<{ id: number; sender: string; message: string; direction: "incoming" | "outgoing" }>[] = [];
+  const messages: ObservedChatEvent[] = [];
   for (let id = firstAvailable; id <= writeCount; id += 1) {
     const slot = HEADER_BYTES + ((id - 1) % SLOT_COUNT) * SLOT_BYTES;
     const units = view.getUint32(slot + 4, true);
     const senderUnits = units & 0xffff;
-    const messageUnits = (units >>> 16) & 0x7fff;
+    const messageUnits = (units >>> 16) & 0x3fff;
+    const participant = (units & 0x4000_0000) !== 0;
+    const outgoing = (units & 0x8000_0000) !== 0;
     if (
       view.getUint32(slot, true) !== id
       || senderUnits < 1
       || senderUnits > SENDER_UNITS
-      || messageUnits < 1
-      || messageUnits > MESSAGE_UNITS
+      || (participant ? messageUnits !== 0 || outgoing : messageUnits < 1 || messageUnits > MESSAGE_UNITS)
     ) {
       return Object.freeze({ status: "waiting" as const, reason: "snapshot" as const });
     }
     const sender = decodeUtf16(view, slot + 8, senderUnits);
-    const message = decodeUtf16(
-      view,
-      slot + 8 + SENDER_UNITS * 2,
-      messageUnits,
-    );
-    if (sender === null || message === null) {
+    if (sender === null) {
       return Object.freeze({ status: "waiting" as const, reason: "snapshot" as const });
     }
-    messages.push(Object.freeze({ id, sender, message, direction: units >>> 31 ? "outgoing" : "incoming" }));
+    if (participant) {
+      messages.push(Object.freeze({ id, sender, direction: "participant" }));
+      continue;
+    }
+    const message = decodeUtf16(view, slot + 8 + SENDER_UNITS * 2, messageUnits);
+    if (message === null) {
+      return Object.freeze({ status: "waiting" as const, reason: "snapshot" as const });
+    }
+    messages.push(Object.freeze({ id, sender, message, direction: outgoing ? "outgoing" : "incoming" }));
   }
   const secondSequence = view.getUint32(8, true);
   if (firstSequence !== secondSequence || (secondSequence & 1) !== 0) {

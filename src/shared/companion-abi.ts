@@ -7,7 +7,7 @@ export const COMPANION_ABI = Object.freeze({
   config: Object.freeze({ bytes: 532 }),
   snapshot: Object.freeze({ abi: 4, bytes: 64 }),
   friends: Object.freeze({ abi: 1, bytes: 12_312, slots: 128, nameUnits: 20 }),
-  whispers: Object.freeze({ abi: 1, bytes: 9_828, snapshotBytes: 9_236, slots: 32, nameUnits: 20, messageUnits: 120 }),
+  whispers: Object.freeze({ abi: 2, bytes: 9_828, snapshotBytes: 9_236, slots: 32, nameUnits: 20, messageUnits: 120 }),
   travelUnlockWords: 28,
   cursor: Object.freeze({ abi: 1, bytes: 4_160 }),
   toolbox: Object.freeze({ abi: 4, bytes: 64 }),

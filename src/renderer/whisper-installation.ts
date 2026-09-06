@@ -3,10 +3,10 @@
  * Only game-observed log records leave this adapter; no IPC or files are used.
  */
 import { COMPANION_ABI } from "../shared/companion-abi.js";
-import { WHISPER_MAILBOX as M, whisperLine, type ObservedWhisper } from "../shared/whispers.js";
+import { WHISPER_MAILBOX as M, whisperLine, type ObservedChatEvent } from "../shared/whispers.js";
 import { readCompanionWhispers } from "./companion-whisper-snapshot.js";
 
-type Listener = (messages: readonly ObservedWhisper[], missed: number) => void;
+type Listener = (messages: readonly ObservedChatEvent[], missed: number) => void;
 export function createWhisperInstallation(exports: WebAssembly.Exports, available: boolean) {
   const configure = available ? exports.enhancement_configure_whispers : null;
   const enqueue = available ? exports.enhancement_send_whisper : null;

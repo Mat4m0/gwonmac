@@ -6,11 +6,12 @@ import { readCompanionWhispers } from "../../src/renderer/companion-whisper-snap
 
 import { createWhisperInstallation } from "../../src/renderer/whisper-installation.ts";
 import { createWhisperSession } from "../../src/shared/whisper-session.ts";
-import { WHISPER_MAILBOX } from "../../src/shared/whispers.ts";
+import { WHISPER_MAILBOX, type ObservedChatEvent } from "../../src/shared/whispers.ts";
 
 const flags = COMPANION_FEATURE_BITS.whisperObservation | COMPANION_FEATURE_BITS.playRegionObservation;
 const packet = 0x64000;
 const text = 0x64100;
+const messageBody = (event: ObservedChatEvent) => "message" in event ? event.message : undefined;
 async function fixture() {
   const k = await createKernel();
   installGameGraph(k.view);
@@ -33,15 +34,31 @@ async function fixture() {
 test("whisper observer keeps native directions, identical messages and bounded overflow", async () => {
   const k = await fixture();
   k.observe(); k.observe(); k.observe(10, "reply", "Test Friend", 0x76e);
-  k.observe(10, "unrelated"); k.observe(0, "local chat");
-  assert.deepEqual(k.read().messages.map(m => [m.id, m.direction, m.message]), [
+  k.observe(10, "unrelated"); k.observe(7, "screen warning");
+  assert.deepEqual(k.read().messages.map(m => [m.id, m.direction, messageBody(m)]), [
     [1, "incoming", "hello"], [2, "incoming", "hello"], [3, "outgoing", "reply"],
   ]);
   assert.equal(k.read(3).messages.length, 0);
   for (let i = 0; i < 35; i++) k.observe(14, String(i));
   assert.equal(k.read(3).dropped, 3);
-  assert.equal(k.read(3).messages[0]?.message, "3");
+  assert.equal(messageBody(k.read(3).messages[0]!), "3");
   assert.equal(k.read(3).messages.length, 32);
+});
+
+test("player chat channels publish bounded participant names without message bodies", async () => {
+  const k = await fixture();
+  for (const [index, channel] of [0, 1, 3, 9, 11, 12].entries()) {
+    k.observe(channel, `Private body ${index}`, `Chat Person ${index}`);
+  }
+  assert.deepEqual(k.read().messages, [0, 1, 2, 3, 4, 5].map(index => ({
+    id: index + 1,
+    sender: `Chat Person ${index}`,
+    direction: "participant",
+  })));
+  assert.equal(JSON.stringify(k.read().messages).includes("Private body"), false);
+  k.observe(12, "x".repeat(121), "Ignored Long Body");
+  k.observe(12, "body", "x".repeat(21));
+  assert.equal(k.read().rejectedCount, 0, "optional participant discovery never becomes a missed-whisper warning");
 });
 
 test("whisper observer refuses malformed, disabled and unsupported-region events", async () => {
@@ -54,7 +71,7 @@ test("whisper observer refuses malformed, disabled and unsupported-region events
   k.observe(14, "hello", "\udfff");
   assert.equal(k.read().rejectedCount, 4);
   k.observe(14, "Grüße 🌿");
-  assert.equal(k.read().messages[0]?.message, "Grüße 🌿");
+  assert.equal(messageBody(k.read().messages[0]!), "Grüße 🌿");
   k.activeFeatures(COMPANION_FEATURE_BITS.playRegionObservation);
   k.observe();
   assert.equal(k.read().writeCount, 1);
@@ -95,7 +112,8 @@ test("outgoing native numeric metadata stays separate from recipient and body", 
   }
   assert.equal(k.read().rejectedCount, 0);
   assert.equal(k.read().messages.length, 4);
-  assert.ok(k.read().messages.every(m => m.sender === "Test Friend" && m.message === "A reply 🌿" && m.direction === "outgoing"));
+  assert.ok(k.read().messages.every(m => m.direction === "outgoing"
+    && m.sender === "Test Friend" && m.message === "A reply 🌿"));
   for (const metadata of ["", "\u0102\u0100", "\u0101\u00ff", "\u0101\u8101\u8101\u8101", "\u0101\uffff\uffff\u7fff"]) {
     k.observe(10, "No", "Test Friend", 0x76e, metadata);
   }

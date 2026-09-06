@@ -728,7 +728,7 @@ pub(crate) const WHISPER_MESSAGE_UNITS: usize = 120;
 pub(crate) const WHISPER_SNAPSHOT_BYTES: u32 = size_of::<WhisperSnapshot>() as u32;
 pub(crate) const WHISPER_BYTES: u32 = WHISPER_SNAPSHOT_BYTES + 592;
 pub(crate) const WHISPER_MAGIC: u32 = 0x4857_5747;
-pub(crate) const WHISPER_ABI_AND_SIZE: u32 = (WHISPER_BYTES << 16) | 1;
+pub(crate) const WHISPER_ABI_AND_SIZE: u32 = (WHISPER_BYTES << 16) | 2;
 
 #[repr(C)]
 pub(crate) struct WhisperSlot {

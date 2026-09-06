@@ -438,7 +438,7 @@
   --ui-chat-incoming-fill: color-mix(in srgb, var(--ui-info) 12%, var(--ui-well-fill));
   --ui-chat-outgoing-fill: color-mix(in srgb, var(--ui-success) 16%, var(--ui-well-fill));
   --ui-chat-incoming-ink: var(--ui-text-bright);
-  --ui-chat-outgoing-ink: var(--ui-chat-outgoing-accent);
+  --ui-chat-outgoing-ink: var(--ui-text-bright);
   --ui-frame-quiet: var(--ui-ring-quiet);
   --ui-frame-quiet-width: 1px;
 }

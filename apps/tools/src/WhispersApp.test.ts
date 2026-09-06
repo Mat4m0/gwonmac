@@ -136,3 +136,34 @@ it("shows available friends without hiding offline conversations", async () => {
   expect(wrapper.text()).toContain("Offline Friend");
   wrapper.unmount();
 });
+
+it("suggests recent chat participants and supports keyboard completion", async () => {
+  const session = createWhisperSession(async () => {});
+  session.setAvailable(true); session.showPicker();
+  session.observe([
+    { id: 1, sender: "Moon D Eden", direction: "participant" },
+    { id: 2, sender: "Ancient N Chains", direction: "participant" },
+  ]);
+  const wrapper = mount(WhispersApp, { props: { session }, attachTo: document.body });
+  const field = wrapper.get<HTMLInputElement>("#whisper-person");
+  await field.setValue("mo");
+  expect(wrapper.text()).toContain("Moon D Eden");
+  expect(wrapper.text()).toContain("Seen in chat");
+  expect(wrapper.text()).not.toContain("Ancient N Chains");
+  await field.trigger("keydown", { key: "Tab" });
+  expect(field.element.value).toBe("Moon D Eden");
+  await wrapper.get("form.whisper-search").trigger("submit");
+  expect(session.state.selected).toBe("moon d eden");
+  wrapper.unmount();
+});
+
+it("changes only the messenger background opacity multiplier", async () => {
+  const session = createWhisperSession(async () => {});
+  session.setAvailable(true); session.setVisible(true);
+  const wrapper = mount(WhispersApp, { props: { session }, attachTo: document.body });
+  await wrapper.get('[aria-label="Chat options"]').trigger("click");
+  await wrapper.get("#whisper-opacity").setValue(20);
+  expect(session.state.backgroundOpacity).toBe(20);
+  expect(wrapper.get("#whisper-window").attributes("style")).toContain("--whisper-background-opacity: 0.2");
+  wrapper.unmount();
+});

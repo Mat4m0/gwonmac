@@ -74,3 +74,24 @@ test("muted incoming still increments unread and session bounds are explicit", (
   assert.equal(session.state.conversations.length, 32);
   assert.equal(session.state.missed, 9);
 });
+
+test("chat participants become bounded session-only suggestions without conversations", () => {
+  const session = createWhisperSession(async () => {});
+  for (let index = 0; index < 55; index++) {
+    session.observe([{ id: index + 1, sender: `Person ${index}`, direction: "participant" }]);
+  }
+  session.observe([{ id: 60, sender: "Person 20", direction: "participant" }]);
+  session.observe([{ id: 61, sender: "Not,A Character", direction: "participant" }]);
+  assert.equal(session.state.conversations.length, 0);
+  assert.equal(session.state.participants.length, 50);
+  assert.equal(session.state.participants[0]?.name, "Person 20");
+  assert.equal(session.state.participants.some(person => person.name === "Person 0"), false);
+  assert.equal(session.state.participants.some(person => person.name === "Not,A Character"), false);
+  session.setBackgroundOpacity(15);
+  assert.equal(session.state.backgroundOpacity, 15);
+  session.setBackgroundOpacity(14);
+  assert.equal(session.state.backgroundOpacity, 15);
+  session.reset();
+  assert.equal(session.state.participants.length, 0);
+  assert.equal(session.state.backgroundOpacity, 100);
+});
