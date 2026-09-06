@@ -14,6 +14,7 @@ export function createResignDialog(
     .resign-panel { position: fixed; top: clamp(160px, 23vh, 280px); left: 50%;
       width: min(440px, calc(100vw - 32px)); max-height: calc(77vh - 24px);
       display: flex; flex-direction: column; overflow: hidden; transform: translateX(-50%); }
+    .resign-panel > .ui-panel-head { border-top-left-radius: inherit; border-top-right-radius: inherit; }
     .resign-panel .ui-panel-body { display: grid; gap: var(--ui-space-3); }
     .resign-panel p { margin: 0; }
     .resign-panel .ui-panel-foot { justify-content: flex-end; }
