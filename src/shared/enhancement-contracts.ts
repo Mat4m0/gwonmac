@@ -169,7 +169,10 @@ const CAPABILITY_DEFINITIONS = Object.freeze([
     id: "whisperChat",
     requiresAll: ["playRegionObservation", "chatFiltering"],
     requiresAny: [],
-    configOwners: [],
+    // Player chat carries a player number rather than a sender string. Reuse
+    // the independently certified world-player table to resolve that number;
+    // the capability still gains no storage command export.
+    configOwners: ["observation", "storage"],
     hooks: ["ui"],
   },
 ] as const);

@@ -963,9 +963,11 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, c: u32, d
             }
             unsafe {
                 let layout = LAYOUT;
-                if ACTIVE_FEATURES & FEATURE_WHISPER_OBSERVATION != 0
-                    && matches!(resolve_game(layout), GameState::Ready { play_region: PLAY_REGION_PVE, .. })
-                { whispers::observe(a, b); }
+                if ACTIVE_FEATURES & FEATURE_WHISPER_OBSERVATION != 0 {
+                    if let GameState::Ready { game, play_region: PLAY_REGION_PVE, .. } = resolve_game(layout) {
+                        whispers::observe(layout, game, a, b);
+                    }
+                }
                 if ACTIVE_FEATURES & FEATURE_TOOLBOX_FOUNDATION != 0 {
                     toolbox::observe_ui(layout, a, b);
                 }

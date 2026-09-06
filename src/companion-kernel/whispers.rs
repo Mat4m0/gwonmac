@@ -8,7 +8,7 @@
 use core::ptr::write_volatile;
 
 use crate::abi::*;
-use crate::memory::{contains, indexed, offset, read_u16, read_u32};
+use crate::memory::{checked_mul, contains, indexed, offset, pointer, read_u16, read_u32};
 
 const INCOMING_WHISPER_CHANNEL: u32 = 14;
 const GLOBAL_CHANNEL: u32 = 10;
@@ -22,6 +22,10 @@ const OUTGOING_TEMPLATE: u16 = 0x076e;
 const SENDER_STYLE: u16 = 0x0107;
 const TEXT_STYLE: u16 = 0x0108;
 const CONTROL_END: u16 = 0x0001;
+// The certified Player row is 0x50 bytes. Its plain UTF-16 character-name
+// pointer follows the encoded-name pointer and is the same field used by
+// PlayerMgr::GetPlayerName(player_number).
+const PLAYER_NAME_POINTER: u32 = 0x28;
 
 static mut POINTER: u32 = 0;
 static mut SEQUENCE: u32 = 0;
@@ -121,6 +125,44 @@ unsafe fn valid_utf16(pointer: u32, start: u32, units: u32) -> bool {
     !high
 }
 
+unsafe fn player_name(layout: Layout, game: u32, player_number: u32) -> Option<(u32, u32)> {
+    if player_number == 0
+        || layout.world_context == 0
+        || layout.world_players == 0
+        || layout.player_record_stride < 0x50
+        || layout.player_record_stride > 256
+        || layout.player_record_number + 4 > layout.player_record_stride
+        || PLAYER_NAME_POINTER + 4 > layout.player_record_stride
+    {
+        return None;
+    }
+    let world_required = layout.world_players.checked_add(12)?;
+    let world = offset(game, layout.world_context)
+        .and_then(|at| unsafe { pointer(at, world_required) })?;
+    let players = offset(world, layout.world_players)?;
+    let buffer = unsafe { read_u32(players) }?;
+    let capacity = unsafe { read_u32(offset(players, 4)?) }?;
+    let size = unsafe { read_u32(offset(players, 8)?) }?;
+    if size == 0 || size > capacity || player_number >= size || capacity > 2_048
+        || buffer == 0 || buffer & 3 != 0
+        || !contains(buffer, checked_mul(capacity, layout.player_record_stride)?)
+    {
+        return None;
+    }
+    let record = indexed(buffer, player_number, layout.player_record_stride)?;
+    if unsafe { read_u32(offset(record, layout.player_record_number)?) } != Some(player_number) {
+        return None;
+    }
+    let name = unsafe { read_u32(offset(record, PLAYER_NAME_POINTER)?) }?;
+    if name == 0 || name & 1 != 0 { return None; }
+    for units in 1..=WHISPER_SENDER_UNITS as u32 {
+        if unsafe { read_u16(indexed(name, units, 2)?) } == Some(0) {
+            return unsafe { valid_utf16(name, 0, units) }.then_some((name, units));
+        }
+    }
+    None
+}
+
 unsafe fn reject() {
     unsafe { REJECTED_COUNT = REJECTED_COUNT.saturating_add(1) };
     unsafe { publish_header() };
@@ -203,8 +245,8 @@ pub(crate) unsafe fn initialize(pointer: u32) {
     unsafe { publish_header() };
 }
 
-pub(crate) unsafe fn observe(message: u32, wparam: u32) {
-    if !matches!(message, 0x1000_007f | 0x1000_0080)
+pub(crate) unsafe fn observe(layout: Layout, game: u32, message: u32, wparam: u32) {
+    if !matches!(message, 0x1000_007f | 0x1000_0080 | 0x1000_0082)
         || wparam == 0 || wparam & 3 != 0 || !contains(wparam, 8) {
         return;
     }
@@ -213,6 +255,15 @@ pub(crate) unsafe fn observe(message: u32, wparam: u32) {
         Some(ALLIANCE_CHANNEL) | Some(ALLIES_CHANNEL) | Some(ALL_CHANNEL)
             | Some(GUILD_CHANNEL) | Some(GROUP_CHANNEL) | Some(TRADE_CHANNEL));
     if channel != Some(INCOMING_WHISPER_CHANNEL) && channel != Some(GLOBAL_CHANNEL) && !participant {
+        return;
+    }
+    if message == 0x1000_0082 {
+        if !participant || !contains(wparam, 12) { return; }
+        let Some((name, name_units)) = offset(wparam, 8)
+            .and_then(|at| unsafe { read_u32(at) })
+            .and_then(|player_number| unsafe { player_name(layout, game, player_number) })
+        else { return; };
+        unsafe { append(name, 0, name_units, 0, 0, false, true) };
         return;
     }
     if message == 0x1000_0080 {

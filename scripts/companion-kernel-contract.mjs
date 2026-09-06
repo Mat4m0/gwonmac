@@ -109,7 +109,9 @@ export const COMPANION_KERNEL_DYLINK0 = Object.freeze([
   // 3969 -> 3984: whisper ring publication state; ring/mailbox are host-owned.
   // 3984 -> 3988: bounded write-with-sender parsing aligns one native word;
   //               names still publish into the existing host-owned ring.
-  0x01, 0x05, 0x94, 0x1f, 0x02, 0x00, 0x00,
+  // 3988 -> 3985: normal player-chat sender resolution adds no static state;
+  //               the linker repacks the existing private data by three bytes.
+  0x01, 0x05, 0x91, 0x1f, 0x02, 0x00, 0x00,
 ]);
 
 const WASM_PAGE_BYTES = 65_536;

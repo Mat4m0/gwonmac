@@ -153,7 +153,7 @@ test("the capability registry is the ordered wire vocabulary", () => {
       id: "whisperChat",
       requiresAll: ["playRegionObservation", "chatFiltering"],
       requiresAny: [],
-      configOwners: [],
+      configOwners: ["observation", "storage"],
       hooks: ["ui"],
     },
   ]);

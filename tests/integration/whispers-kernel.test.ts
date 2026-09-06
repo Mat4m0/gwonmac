@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ADDRESSES, createKernel, installGameGraph, kernelExports } from "../fixtures/enhancements.ts";
+import { ADDRESSES, createKernel, DETAIL, installGameGraph, kernelExports, setConfigField } from "../fixtures/enhancements.ts";
 import { COMPANION_ABI, COMPANION_DISPATCH_KINDS, COMPANION_FEATURE_BITS } from "../../src/shared/companion-abi.ts";
 import { readCompanionWhispers } from "../../src/renderer/companion-whisper-snapshot.ts";
 
@@ -15,6 +15,7 @@ const senderText = 0x64300;
 const messageBody = (event: ObservedChatEvent) => "message" in event ? event.message : undefined;
 async function fixture() {
   const k = await createKernel();
+  setConfigField(k.config, "worldContext", DETAIL.worldContext);
   installGameGraph(k.view);
   assert.equal(k.init({ features: flags }), 1);
   const observe = (channel = 14, body = "hello", sender = "Test Friend", template = 1, metadata = "\u0101\u0100") => {
@@ -32,12 +33,18 @@ async function fixture() {
     for (let i = 0; i < encoded.length; i++) k.view.setUint16(senderText + i * 2, encoded.charCodeAt(i), true);
     k.uiEvent(0x10000080, packet, 0);
   };
+  const observePlayer = (channel: number, playerNumber = 42) => {
+    k.view.setUint32(packet, channel, true);
+    k.view.setUint32(packet + 4, text, true);
+    k.view.setUint32(packet + 8, playerNumber, true);
+    k.uiEvent(0x10000082, packet, 0);
+  };
   const read = (cursor = 0) => {
     const state = readCompanionWhispers(k.memory.buffer, ADDRESSES.whispers, cursor);
     assert.equal(state.status, "ready");
     return state;
   };
-  return { ...k, observe, observeWithSender, read };
+  return { ...k, observe, observeWithSender, observePlayer, read };
 }
 
 test("whisper observer keeps native directions, identical messages and bounded overflow", async () => {
@@ -77,6 +84,16 @@ test("public chat with a separate encoded sender publishes the character name", 
   assert.deepEqual(k.read().messages, [
     { id: 1, sender: "Madvillain Goes Pre", direction: "participant" },
     { id: 2, sender: "Moon D Eden", direction: "participant" },
+  ]);
+  assert.equal(k.read().rejectedCount, 0);
+});
+
+test("normal player chat resolves its sender through the live player table", async () => {
+  const k = await fixture();
+  k.observePlayer(12);
+  k.observePlayer(3, 63);
+  assert.deepEqual(k.read().messages, [
+    { id: 1, sender: "Fixture Player", direction: "participant" },
   ]);
   assert.equal(k.read().rejectedCount, 0);
 });
