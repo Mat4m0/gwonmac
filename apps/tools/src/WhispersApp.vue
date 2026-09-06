@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import { whisperPersonKey, whisperUnread, type WhisperSession, type WhisperSound } from "../../../src/shared/whisper-session";
 import { WHISPER_LINE_UNITS, WHISPER_MESSAGE_UNITS } from "../../../src/shared/whispers";
+import type { FriendPresence, TravelFriend } from "../../../src/shared/friends";
 import { useFloatingWindow } from "./use-floating-window";
 
 const props = defineProps<{ session: WhisperSession }>();
@@ -34,10 +35,33 @@ function showPicker() {
 }
 const icon = ref({ left: 20, top: 160 });
 const iconButton = ref<HTMLButtonElement | null>(null);
-const firstUnread = ref<number | null>(null);
 const atBottom = ref(true);
+const initializedTranscripts = new Set<string>();
+const firstUnreadByConversation = new Map<string, number | null>();
+const scrollPositions = new Map<string, number>();
+const historyNavigation = new Map<string, { index: number; originalDraft: string }>();
 const activeLog = () => panel.value?.querySelector<HTMLElement>('[data-transcript]:not([hidden])') ?? null;
+const transcriptFor = (key: string) => [...(panel.value?.querySelectorAll<HTMLElement>("[data-transcript-key]") ?? [])]
+  .find(log => log.dataset.transcriptKey === key) ?? null;
 const openKeys = computed(() => new Set(state.value.conversations.map(c => c.key)));
+const observedFriends = computed(() => state.value.friends.status === "ready" ? state.value.friends.friends : []);
+function friendFor(name: string): TravelFriend | undefined {
+  const key = whisperPersonKey(name);
+  return observedFriends.value.find(friend => whisperPersonKey(friend.character) === key || whisperPersonKey(friend.alias) === key);
+}
+const selectedFriend = computed(() => selected.value ? friendFor(selected.value.name) : undefined);
+const presenceLabel = (status: FriendPresence) => ({
+  online: "Online", away: "Away", "do-not-disturb": "Do not disturb",
+  offline: "Offline", unknown: "Status unknown",
+})[status];
+const firstUnreadFor = (key: string) => firstUnreadByConversation.get(key) ?? null;
+watch(() => state.value.conversations.map(conversation => conversation.key), keys => {
+  const active = new Set(keys);
+  for (const key of initializedTranscripts) if (!active.has(key)) initializedTranscripts.delete(key);
+  for (const store of [firstUnreadByConversation, scrollPositions, historyNavigation]) {
+    for (const key of store.keys()) if (!active.has(key)) store.delete(key);
+  }
+});
 const friends = computed(() => state.value.friends.status === "ready"
   ? state.value.friends.friends.filter(f => (f.status === "online" || f.status === "away" || f.status === "do-not-disturb") && !openKeys.value.has(whisperPersonKey(f.character || f.alias))
     && `${f.character} ${f.alias}`.toLocaleLowerCase().includes(search.value.toLocaleLowerCase())) : []);
@@ -49,6 +73,39 @@ function open(name: string) {
     void nextTick(() => document.getElementById(`draft-${state.value.selected}`)?.focus());
   }
   catch (error) { pickerError.value = error instanceof Error ? error.message : "Enter a character name."; }
+}
+function draftInput(key: string, event: Event) {
+  historyNavigation.delete(key);
+  props.session.setDraft(key, (event.target as HTMLInputElement).value);
+}
+function cycleHistory(key: string, event: KeyboardEvent) {
+  if (event.isComposing || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return;
+  const conversation = state.value.conversations.find(item => item.key === key);
+  if (!conversation) return;
+  const history = conversation.messages.filter(message => message.direction === "outgoing").map(message => message.message);
+  const current = historyNavigation.get(key);
+  if (!history.length || (event.key === "ArrowDown" && !current)) return;
+  event.preventDefault();
+  if (event.key === "ArrowUp") {
+    const next = current ? Math.max(0, current.index - 1) : history.length - 1;
+    historyNavigation.set(key, { index: next, originalDraft: current?.originalDraft ?? conversation.draft });
+    props.session.setDraft(key, history[next]!);
+  } else if (current && current.index < history.length - 1) {
+    const next = current.index + 1;
+    historyNavigation.set(key, { ...current, index: next });
+    props.session.setDraft(key, history[next]!);
+  } else if (current) {
+    historyNavigation.delete(key);
+    props.session.setDraft(key, current.originalDraft);
+  }
+  const input = event.currentTarget as HTMLInputElement;
+  void nextTick(() => {
+    input.setSelectionRange(input.value.length, input.value.length);
+  });
+}
+function submit(key: string) {
+  historyNavigation.delete(key);
+  void props.session.send(key);
 }
 function close(key: string, discard = false) {
   const restoreKeyboard = panel.value?.contains(document.activeElement);
@@ -64,6 +121,7 @@ function close(key: string, discard = false) {
 function markVisibleRead() {
   const log = activeLog();
   if (!log || !selected.value || !visible.value) return;
+  scrollPositions.set(selected.value.key, log.scrollTop);
   atBottom.value = log.scrollHeight - log.scrollTop - log.clientHeight < 12;
   if (atBottom.value && document.hasFocus()) {
     const last = selected.value.messages.at(-1);
@@ -76,13 +134,28 @@ async function latest() {
   if (log) log.scrollTop = log.scrollHeight;
   markVisibleRead();
 }
-watch(() => state.value.selected, async () => {
+watch(() => state.value.selected, async (key, previousKey) => {
   closing.value = null;
-  firstUnread.value = selected.value?.messages.find(m => m.direction === "incoming" && m.id > selected.value!.readThrough)?.id ?? null;
+  if (previousKey) {
+    const previousLog = transcriptFor(previousKey);
+    if (previousLog) scrollPositions.set(previousKey, previousLog.scrollTop);
+  }
+  const conversation = selected.value;
+  if (!conversation) return;
+  const firstVisit = !initializedTranscripts.has(conversation.key);
+  if (firstVisit) {
+    initializedTranscripts.add(conversation.key);
+    firstUnreadByConversation.set(conversation.key,
+      conversation.messages.find(m => m.direction === "incoming" && m.id > conversation.readThrough)?.id ?? null);
+  }
   await nextTick();
   const log = activeLog();
-  const marker = log?.querySelector<HTMLElement>('[data-first-unread]');
-  if (log && marker) log.scrollTop += marker.getBoundingClientRect().top - log.getBoundingClientRect().top;
+  if (firstVisit && log) {
+    const marker = log.querySelector<HTMLElement>('[data-first-unread]');
+    log.scrollTop = marker ? marker.offsetTop - 12 : log.scrollHeight;
+  } else if (log) {
+    log.scrollTop = scrollPositions.get(key!) ?? log.scrollTop;
+  }
   markVisibleRead();
 });
 watch(() => [state.value.selected, selected.value?.messages.at(-1)?.id] as const, async (next, previous) => {
@@ -91,7 +164,17 @@ watch(() => [state.value.selected, selected.value?.messages.at(-1)?.id] as const
   if (follow) await latest();
   else markVisibleRead();
 });
-watch(visible, async value => { if (value) { await nextTick(); markVisibleRead(); } });
+watch(visible, async value => {
+  if (!value) {
+    const log = activeLog();
+    if (log && selected.value) scrollPositions.set(selected.value.key, log.scrollTop);
+    return;
+  }
+  await nextTick();
+  const log = activeLog();
+  if (log && selected.value) log.scrollTop = scrollPositions.get(selected.value.key) ?? log.scrollTop;
+  markVisibleRead();
+});
 
 let audio: AudioContext | null = null;
 let lastSoundId = Math.max(0, ...state.value.conversations.flatMap(c => c.messages.map(m => m.id)));
@@ -190,7 +273,10 @@ onBeforeUnmount(() => {
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg>
         <span v-if="unread" class="whisper-back-count">{{ unread > 99 ? '99+' : unread }}</span>
       </button>
-      <h2>{{ selected?.name ?? 'Whispers' }}</h2>
+      <div class="whisper-heading">
+        <h2>{{ selected?.name ?? 'Whispers' }}</h2>
+        <small v-if="selectedFriend" class="whisper-presence-label"><span class="whisper-presence" :data-presence="selectedFriend.status" />{{ presenceLabel(selectedFriend.status) }}</small>
+      </div>
       <details ref="optionsMenu" class="whisper-options">
         <summary data-variant="quiet" class="ui-button whisper-control whisper-icon" aria-label="Chat options" title="Chat options"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></summary>
         <div class="whisper-menu">
@@ -217,14 +303,14 @@ onBeforeUnmount(() => {
       <template v-if="state.conversations.length">
         <h3>Conversations</h3>
         <div v-for="conversation in state.conversations.filter(c => c.name.toLocaleLowerCase().includes(search.toLocaleLowerCase()))" :key="conversation.key" class="whisper-person">
-          <button data-variant="quiet" class="ui-button whisper-control whisper-person-open" @click="open(conversation.name)"><span><strong>{{ conversation.name }}</strong><small>{{ conversation.draft ? 'Draft: ' + conversation.draft : conversation.messages.at(-1)?.message || 'No messages yet' }}</small></span><span v-if="whisperUnread(conversation)" class="whisper-count">{{ whisperUnread(conversation) }}</span></button>
+          <button data-variant="quiet" class="ui-button whisper-control whisper-person-open" @click="open(conversation.name)"><span class="whisper-person-main"><span v-if="friendFor(conversation.name)" class="whisper-presence" :data-presence="friendFor(conversation.name)!.status" /><span class="whisper-person-copy"><strong>{{ conversation.name }}</strong><small>{{ conversation.draft ? 'Draft: ' + conversation.draft : conversation.messages.at(-1)?.message || 'No messages yet' }}</small></span></span><span v-if="whisperUnread(conversation)" class="whisper-count">{{ whisperUnread(conversation) }}</span></button>
           <button data-variant="quiet" class="ui-button whisper-control whisper-icon" :aria-label="`Close conversation with ${conversation.name}`" :disabled="conversation.sending" @click="close(conversation.key)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button>
         </div>
       </template>
-      <h3>Online friends</h3>
+      <h3>Available friends</h3>
       <p v-if="state.friends.status !== 'ready'" class="whisper-empty">Friends unavailable. Enter a character name to chat.</p>
-      <p v-else-if="!friends.length" class="whisper-empty">No friends online.</p>
-      <button v-for="friend in friends" :key="friend.key" data-variant="quiet" class="ui-button whisper-control whisper-person-open" @click="open(friend.character || friend.alias)"><span><strong>{{ friend.character || friend.alias }}</strong><small v-if="friend.character && friend.alias !== friend.character">{{ friend.alias }}</small></span><small>{{ friend.status }}</small></button>
+      <p v-else-if="!friends.length" class="whisper-empty">No friends available.</p>
+      <button v-for="friend in friends" :key="friend.key" data-variant="quiet" class="ui-button whisper-control whisper-person-open" @click="open(friend.character || friend.alias)"><span class="whisper-person-main"><span class="whisper-presence" :data-presence="friend.status" /><span class="whisper-person-copy"><strong>{{ friend.character || friend.alias }}</strong><small v-if="friend.character && friend.alias !== friend.character">{{ friend.alias }}</small></span></span><small class="whisper-status-copy">{{ presenceLabel(friend.status) }}</small></button>
       <template v-if="recent.length">
         <h3>Recent people</h3>
         <div v-for="person in recent" :key="person.key" class="whisper-person"><button data-variant="quiet" class="ui-button whisper-control whisper-person-open" @click="open(person.name)">{{ person.name }}</button><button data-variant="quiet" class="ui-button whisper-control whisper-icon" :aria-label="`Remove ${person.name} from recent people`" @click="session.removeRecent(person.key)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button></div>
@@ -232,19 +318,19 @@ onBeforeUnmount(() => {
     </div>
     <template v-for="conversation in state.conversations" :key="conversation.key">
       <div v-show="state.selected === conversation.key" class="whisper-conversation">
-        <div class="whisper-transcript" data-transcript :hidden="state.selected !== conversation.key" tabindex="0" :aria-label="`Messages with ${conversation.name}`" @scroll="markVisibleRead" @focus="markVisibleRead">
+        <div class="whisper-transcript" data-transcript :data-transcript-key="conversation.key" :hidden="state.selected !== conversation.key" tabindex="0" :aria-label="`Messages with ${conversation.name}`" @scroll="markVisibleRead" @focus="markVisibleRead">
           <p v-if="conversation.trimmed" class="whisper-empty">Earlier messages remain in original chat.</p>
           <p v-if="!conversation.messages.length" class="whisper-empty">Say hello to {{ conversation.name }}.</p>
-          <article v-for="(message, index) in conversation.messages" :key="message.id" class="whisper-message" :data-direction="message.direction" :data-grouped="index > 0 && conversation.messages[index - 1]?.direction === message.direction && message.id !== firstUnread ? '' : undefined" :data-first-unread="message.id === firstUnread ? '' : undefined">
-            <small v-if="message.id === firstUnread" class="whisper-unread-marker">New messages</small>
+          <article v-for="(message, index) in conversation.messages" :key="message.id" class="whisper-message" :data-direction="message.direction" :data-grouped="index > 0 && conversation.messages[index - 1]?.direction === message.direction && message.id !== firstUnreadFor(conversation.key) ? '' : undefined" :data-first-unread="message.id === firstUnreadFor(conversation.key) ? '' : undefined">
+            <small v-if="message.id === firstUnreadFor(conversation.key)" class="whisper-unread-marker">New messages</small>
             <div class="ui-chat-bubble whisper-bubble" :data-direction="message.direction"><span class="whisper-sr-only">{{ message.direction === 'outgoing' ? 'You' : conversation.name }}: </span>{{ message.message }}</div>
           </article>
         </div>
         <button v-if="!atBottom && whisperUnread(conversation)" data-variant="quiet" class="ui-button whisper-control whisper-latest" @click="latest">{{ whisperUnread(conversation) }} new · Show latest</button>
         <p v-if="conversation.error" class="whisper-notice" role="alert">{{ conversation.error }}</p>
-        <form class="whisper-compose" @submit.prevent="session.send(conversation.key)">
+        <form class="whisper-compose" @submit.prevent="submit(conversation.key)">
           <label class="whisper-sr-only" :for="`draft-${conversation.key}`">Message {{ conversation.name }}</label>
-          <div class="whisper-input-row"><input :id="`draft-${conversation.key}`" :value="conversation.draft" placeholder="Message…" autocomplete="off" @input="session.setDraft(conversation.key, ($event.target as HTMLInputElement).value)"/><button data-variant="primary" class="ui-button whisper-control whisper-send" :disabled="!state.available || conversation.sending || !conversation.draft.trim() || conversation.draft.length > maxLength" type="submit" :aria-label="conversation.sending ? 'Submitting…' : 'Send'" :title="conversation.sending ? 'Submitting…' : 'Send'"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg><span class="whisper-sr-only">{{ conversation.sending ? 'Submitting…' : 'Send' }}</span></button></div>
+          <div class="whisper-input-row"><input :id="`draft-${conversation.key}`" :value="conversation.draft" placeholder="Message…" autocomplete="off" @input="draftInput(conversation.key, $event)" @keydown="cycleHistory(conversation.key, $event)"/><button data-variant="primary" class="ui-button whisper-control whisper-send" :disabled="!state.available || conversation.sending || !conversation.draft.trim() || conversation.draft.length > maxLength" type="submit" :aria-label="conversation.sending ? 'Submitting…' : 'Send'" :title="conversation.sending ? 'Submitting…' : 'Send'"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg><span class="whisper-sr-only">{{ conversation.sending ? 'Submitting…' : 'Send' }}</span></button></div>
           <small v-if="conversation.draft.length > maxLength - 20" :class="{ 'whisper-danger': conversation.draft.length > maxLength }">{{ conversation.draft.length }}/{{ maxLength }}{{ conversation.draft.length > maxLength ? ' · Shorten your message to send.' : '' }}</small>
         </form>
       </div>
@@ -264,7 +350,9 @@ onBeforeUnmount(() => {
 .ui-reading-surface input::placeholder { color: var(--ui-text-muted); opacity: 1; }
 .whisper-window { position: fixed; width: 360px; height: 420px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); display: flex; flex-direction: column; pointer-events: auto; isolation: isolate; }
 .whisper-head { display: flex; align-items: center; gap: 4px; padding: 6px 10px; border-bottom: 1px solid var(--ui-line-soft); background: var(--ui-title-fill); border-radius: var(--ui-radius-lg) var(--ui-radius-lg) 0 0; cursor: grab; }
-.whisper-head h2 { font: var(--ui-font-weight-semibold) 16px/1.4 var(--ui-font-interface); color: var(--ui-text); margin: 0 4px; flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.whisper-heading { flex: 1; min-width: 0; margin: 0 4px; }
+.whisper-head h2 { font: var(--ui-font-weight-semibold) 16px/1.3 var(--ui-font-interface); color: var(--ui-text); margin: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.whisper-presence-label { display: flex; align-items: center; gap: 5px; line-height: 1.25 !important; }
 .whisper-icon { width: 34px; height: 34px; padding: 7px; flex-shrink: 0; position: relative; }
 .whisper-launcher { position: fixed; width: 44px; height: 44px; border-radius: var(--ui-radius-pill); pointer-events: auto; touch-action: none; padding: 10px; }
 .whisper-launcher svg { width: 24px; height: 24px; }
@@ -273,18 +361,25 @@ onBeforeUnmount(() => {
 .whisper-back-count { position: absolute; bottom: -3px; right: -2px; font-size: 10px; color: var(--ui-focus); }
 .whisper-bubble { max-width: 86%; }
 .whisper-picker, .whisper-transcript { overflow: auto; scrollbar-width: thin; scrollbar-color: var(--ui-line-soft) transparent; }
-.whisper-picker { padding: 10px 12px; flex: 1; min-height: 0; }
+.whisper-picker { padding: 8px 10px 10px; flex: 1; min-height: 0; }
 .whisper-search, .whisper-inline { display: flex; gap: 8px; }
 .whisper-search input { flex: 1; }
-.whisper-picker h3 { font: 600 12px/1.5 var(--ui-font-reading); color: var(--ui-text-muted); margin: 14px 0 4px; }
+.whisper-picker h3 { font: 600 11px/1.5 var(--ui-font-reading); color: var(--ui-text-muted); margin: 12px 6px 3px; text-transform: uppercase; letter-spacing: .04em; }
 .whisper-person { display: flex; align-items: center; gap: 2px; }
-.whisper-person-open { display: flex; justify-content: space-between; width: 100%; min-width: 0; padding: 5px 6px; text-align: left; }
-.whisper-person-open > span:first-child { min-width: 0; }
+.whisper-person-open { display: flex; align-items: center; justify-content: space-between; width: 100%; min-width: 0; min-height: 38px; padding: 4px 6px; text-align: left; }
+.whisper-person-main { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.whisper-person-copy { min-width: 0; }
 .whisper-person-open strong { font-weight: 500; }
 .whisper-person-open small { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; max-width: 240px; }
 .whisper-person-open > small { flex-shrink: 0; }
+.whisper-presence { width: 8px; height: 8px; border-radius: var(--ui-radius-pill); flex: 0 0 auto; background: var(--ui-text-faint); box-shadow: 0 0 0 2px color-mix(in srgb, var(--ui-text-faint) 15%, transparent); }
+.whisper-presence[data-presence="online"] { background: var(--ui-success); box-shadow: 0 0 0 2px color-mix(in srgb, var(--ui-success) 16%, transparent); }
+.whisper-presence[data-presence="away"] { background: var(--ui-warning); box-shadow: 0 0 0 2px color-mix(in srgb, var(--ui-warning) 16%, transparent); }
+.whisper-presence[data-presence="do-not-disturb"] { background: var(--ui-danger); box-shadow: 0 0 0 2px color-mix(in srgb, var(--ui-danger) 16%, transparent); }
+.whisper-presence[data-presence="offline"] { background: var(--ui-text-faint); }
+.whisper-status-copy { margin-left: 10px; }
 .whisper-conversation { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.whisper-transcript { flex: 1; min-height: 40px; padding: 12px; }
+.whisper-transcript { flex: 1; min-height: 40px; padding: 12px; overscroll-behavior: contain; scroll-padding-block: 12px; }
 .whisper-message { display: flex; flex-direction: column; align-items: flex-start; margin-top: 12px; }
 .whisper-message:first-of-type { margin-top: 0; }
 .whisper-message[data-grouped] { margin-top: 4px; }

@@ -46,6 +46,8 @@ if (params.has("whispers")) {
   session.setAvailable(true);
   session.updateFriends({ status: "ready", sequence: 1, generation: 1, friends: [
     { key: "romi", character: "Romi Ranger", alias: "Romi", status: "online", mapId: 133 },
+    { key: "kai", character: "Kai Storm", alias: "Kai", status: "away", mapId: 133 },
+    { key: "eve", character: "Eve Mesmer", alias: "Eve", status: "do-not-disturb", mapId: 133 },
     { key: "gwon", character: "Gwon Warrior", alias: "Gwon", status: "offline", mapId: 0 },
   ] });
   mountWhispers(target, { session });

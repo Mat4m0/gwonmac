@@ -26,6 +26,39 @@ it("keeps recipient, input DOM, draft and focus across incoming updates", async 
   wrapper.unmount();
 });
 
+it("restores each transcript position and cycles observed sent messages", async () => {
+  const session = createWhisperSession(async () => {});
+  session.setAvailable(true);
+  session.observe([
+    { id: 1, sender: "Test Friend", message: "First reply", direction: "outgoing" },
+    { id: 2, sender: "Test Friend", message: "Second reply", direction: "outgoing" },
+  ]);
+  session.showPicker();
+  const wrapper = mount(WhispersApp, { props: { session }, attachTo: document.body });
+  session.open("Test Friend");
+  await flushPromises();
+  const transcript = wrapper.get<HTMLElement>("[data-transcript]").element;
+  transcript.scrollTop = 37;
+  await wrapper.get("[data-transcript]").trigger("scroll");
+  session.showPicker();
+  await nextTick();
+  session.open("Test Friend");
+  await flushPromises();
+  expect(transcript.scrollTop).toBe(37);
+
+  const field = wrapper.get<HTMLInputElement>('input[id="draft-test friend"]');
+  await field.setValue("Unsent thought");
+  await field.trigger("keydown", { key: "ArrowUp" });
+  expect(field.element.value).toBe("Second reply");
+  await field.trigger("keydown", { key: "ArrowUp" });
+  expect(field.element.value).toBe("First reply");
+  await field.trigger("keydown", { key: "ArrowDown" });
+  expect(field.element.value).toBe("Second reply");
+  await field.trigger("keydown", { key: "ArrowDown" });
+  expect(field.element.value).toBe("Unsent thought");
+  wrapper.unmount();
+});
+
 it("requires draft discard to close and only observed outgoing clears a submitted draft", async () => {
   let finish: () => void = () => {};
   const session = createWhisperSession(() => new Promise<void>(resolve => { finish = resolve; }));
@@ -52,7 +85,7 @@ it("requires draft discard to close and only observed outgoing clears a submitte
 });
 
 
-it("shows only online friends without hiding existing conversations", async () => {
+it("shows available friends without hiding offline conversations", async () => {
   const session = createWhisperSession(async () => {});
   session.setAvailable(true); session.showPicker();
   session.updateFriends({ status: "ready", sequence: 1, generation: 1, friends: [
@@ -61,10 +94,15 @@ it("shows only online friends without hiding existing conversations", async () =
     { key: "c", character: "Away Friend", alias: "Away Friend", status: "away", mapId: 133 },
   ] });
   const wrapper = mount(WhispersApp, { props: { session }, attachTo: document.body });
+  expect(wrapper.text()).toContain("Available friends");
   expect(wrapper.text()).toContain("Online Friend");
+  expect(wrapper.text()).toContain("Online");
   expect(wrapper.text()).toContain("Away Friend");
+  expect(wrapper.text()).toContain("Away");
   expect(wrapper.text()).not.toContain("Offline Friend");
-  session.open("Offline Friend"); session.showPicker(); await nextTick();
+  session.open("Offline Friend"); await nextTick();
+  expect(wrapper.text()).toContain("Offline");
+  session.showPicker(); await nextTick();
   expect(wrapper.text()).toContain("Offline Friend");
   wrapper.unmount();
 });

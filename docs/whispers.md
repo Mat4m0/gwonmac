@@ -38,8 +38,13 @@ game messages.
 - A movable person icon shows unread messages without stealing focus. Collapse
   restores the same recipient and keeps drafts. Close discards a conversation,
   with an inline guard for an unsent draft.
-- Unread conversations open at the first unread message. Reading position and
-  keyboard focus survive updates and conversation switches.
+- A conversation opens at its first unread message once. Its exact reading
+  position and keyboard focus then survive updates, conversation switches and
+  collapse/reopen. A jump-to-latest control appears without pulling a reader
+  away from older messages.
+- Up and Down in the companion composer cycle observed outgoing messages and
+  return to the unfinished draft. Original chat keeps its native message
+  history because the host continues forwarding its arrow-key events unchanged.
 - Friends reuse the existing certified observer. Recent people contains at most
   ten closed non-friend conversations in which the player sent a message.
   Remove and Clear recent affect contact suggestions only.
@@ -81,8 +86,11 @@ limit (up to 120 units) and refuses excess text without truncation.
 
 The view holds at most 32 open conversations and 200 messages per conversation.
 Overflow is disclosed in the panel. Close read conversations keeps unread chats,
-drafts and pending submissions. The picker shows online, away and do-not-disturb friends; offline friends are
-hidden. Friends use the latest observed snapshot for this session; pausing the observer does not add friends to recent people.
+drafts and pending submissions. The picker shows online, away and do-not-disturb
+friends with explicit presence; offline friends are hidden. An existing
+conversation shows a friend's offline state when known. Friends use the latest
+observed snapshot for this session; pausing the observer does not add friends
+to recent people.
 Temporary loading or PvP hides the surface and disables sending. Leaving the
 game, changing character, or turning the feature off clears its session data.
 
