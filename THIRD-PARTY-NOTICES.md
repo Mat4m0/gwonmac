@@ -115,6 +115,30 @@ Open Font License 1.1 through `@fontsource-variable/inter` 5.3.0. GWonMac
 ships the unmodified variable-weight language subsets. The complete license is
 included as `COPYING-INTER` in the packaged application's Resources directory.
 
+## Boxicons
+
+The Whispers launcher uses the solid message icon from
+[Boxicons](https://github.com/box-icons/boxicons-core). Boxicons is copyright
+(c) 2026 Boxicons and is distributed under the MIT License:
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
 ## Kenney Input Prompts
 
 `src/renderer/images/playstation-controller-prompts.png` is composed from the

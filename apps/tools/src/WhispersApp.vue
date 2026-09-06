@@ -11,7 +11,7 @@ const unsubscribe = props.session.subscribe(value => { state.value = value; });
 const visible = computed(() => state.value.visible);
 const { panel, resizeGrip, panelStyle, startDrag } = useFloatingWindow({
   mode: "embedded", visible, initialPosition: { left: 72, top: 80 },
-  minWidth: 300, minHeight: 320, viewportMargin: 8,
+  minWidth: 288, minHeight: 300, viewportMargin: 8,
 });
 const selected = computed(() => state.value.conversations.find(c => c.key === state.value.selected));
 const unread = computed(() => state.value.conversations.reduce((total, c) => total + whisperUnread(c), 0));
@@ -39,6 +39,7 @@ const atBottom = ref(true);
 const initializedTranscripts = new Set<string>();
 const firstUnreadByConversation = new Map<string, number | null>();
 const scrollPositions = new Map<string, number>();
+const liveEdgeByConversation = new Map<string, boolean>();
 const historyNavigation = new Map<string, { index: number; originalDraft: string }>();
 const activeLog = () => panel.value?.querySelector<HTMLElement>('[data-transcript]:not([hidden])') ?? null;
 const transcriptFor = (key: string) => [...(panel.value?.querySelectorAll<HTMLElement>("[data-transcript-key]") ?? [])]
@@ -58,7 +59,7 @@ const firstUnreadFor = (key: string) => firstUnreadByConversation.get(key) ?? nu
 watch(() => state.value.conversations.map(conversation => conversation.key), keys => {
   const active = new Set(keys);
   for (const key of initializedTranscripts) if (!active.has(key)) initializedTranscripts.delete(key);
-  for (const store of [firstUnreadByConversation, scrollPositions, historyNavigation]) {
+  for (const store of [firstUnreadByConversation, scrollPositions, liveEdgeByConversation, historyNavigation]) {
     for (const key of store.keys()) if (!active.has(key)) store.delete(key);
   }
 });
@@ -122,7 +123,8 @@ function markVisibleRead() {
   const log = activeLog();
   if (!log || !selected.value || !visible.value) return;
   scrollPositions.set(selected.value.key, log.scrollTop);
-  atBottom.value = log.scrollHeight - log.scrollTop - log.clientHeight < 12;
+  atBottom.value = log.scrollHeight - log.scrollTop - log.clientHeight < 24;
+  liveEdgeByConversation.set(selected.value.key, atBottom.value);
   if (atBottom.value && document.hasFocus()) {
     const last = selected.value.messages.at(-1);
     if (last) props.session.markRead(selected.value.key, last.id);
@@ -159,7 +161,8 @@ watch(() => state.value.selected, async (key, previousKey) => {
   markVisibleRead();
 });
 watch(() => [state.value.selected, selected.value?.messages.at(-1)?.id] as const, async (next, previous) => {
-  const follow = next[0] === previous?.[0] && atBottom.value && visible.value && document.hasFocus();
+  const follow = next[0] === previous?.[0] && visible.value
+    && (next[0] ? (liveEdgeByConversation.get(next[0]) ?? atBottom.value) : false);
   await nextTick();
   if (follow) await latest();
   else markVisibleRead();
@@ -206,8 +209,8 @@ function soundChange(event: Event) {
   if (value !== "off") enableAudio();
 }
 function fitIcon() {
-  icon.value = { left: Math.max(8, Math.min(window.innerWidth - 48, icon.value.left)),
-    top: Math.max(8, Math.min(window.innerHeight - 48, icon.value.top)) };
+  icon.value = { left: Math.max(8, Math.min(window.innerWidth - 40, icon.value.left)),
+    top: Math.max(8, Math.min(window.innerHeight - 40, icon.value.top)) };
 }
 let dragged = false;
 function dragIcon(event: PointerEvent) {
@@ -264,13 +267,13 @@ onBeforeUnmount(() => {
   <button ref="iconButton" class="ui-button ui-reading-surface whisper-launcher" :style="{ left: `${icon.left}px`, top: `${icon.top}px` }"
     :aria-label="`Whispers, ${unread} unread. Drag to move, or use Alt and arrow keys.`" :aria-expanded="visible" aria-controls="whisper-window"
     title="Whispers · drag to move" @pointerdown="dragIcon" @keydown="moveIcon" @click="toggle">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7" r="4"/><path d="M4 21v-3a8 8 0 0 1 16 0v3"/></svg>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3C6.49 3 2 6.59 2 11c0 2.91 1.9 5.51 5 6.93V21c0 .38.21.73.55.89c.14.07.29.11.45.11c.21 0 .42-.07.6-.2l3.74-2.8c5.36-.14 9.66-3.68 9.66-8s-4.49-8-10-8"/></svg>
     <span v-if="unread" class="whisper-badge" aria-hidden="true">{{ unread > 99 ? '99+' : unread }}</span>
   </button>
   <section v-show="visible" id="whisper-window" ref="panel" class="ui-frame ui-reading-surface whisper-window" data-variant="quiet" :style="panelStyle" aria-label="Whispers" @keydown="escapeOptions">
     <header class="whisper-head" @pointerdown="startDrag">
       <button v-if="selected" data-variant="quiet" class="ui-button whisper-control whisper-icon" aria-label="Conversations" title="Conversations" @click="showPicker">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
         <span v-if="unread" class="whisper-back-count">{{ unread > 99 ? '99+' : unread }}</span>
       </button>
       <div class="whisper-heading">
@@ -278,7 +281,7 @@ onBeforeUnmount(() => {
         <small v-if="selectedFriend" class="whisper-presence-label"><span class="whisper-presence" :data-presence="selectedFriend.status" />{{ presenceLabel(selectedFriend.status) }}</small>
       </div>
       <details ref="optionsMenu" class="whisper-options">
-        <summary data-variant="quiet" class="ui-button whisper-control whisper-icon" aria-label="Chat options" title="Chat options"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></summary>
+        <summary data-variant="quiet" class="ui-button whisper-control whisper-icon" aria-label="Chat options" title="Chat options"><svg viewBox="0 0 24 24" aria-hidden="true"><circle class="whisper-icon-dot" cx="5" cy="12" r="1.5"/><circle class="whisper-icon-dot" cx="12" cy="12" r="1.5"/><circle class="whisper-icon-dot" cx="19" cy="12" r="1.5"/></svg></summary>
         <div class="whisper-menu">
           <label for="whisper-sound">Sound alerts</label>
           <select id="whisper-sound" :value="state.sound" @change="soundChange"><option value="off">Off</option><option value="background">When chat is in background</option><option value="every">Every incoming whisper</option></select>
@@ -291,7 +294,7 @@ onBeforeUnmount(() => {
           <p>Chats stay in this session only. Sound adds to the game's alerts.</p>
         </div>
       </details>
-      <button data-variant="quiet" class="ui-button whisper-control whisper-icon" aria-label="Collapse whispers" title="Minimize" @click="session.setVisible(false)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 16h14"/></svg></button>
+      <button data-variant="quiet" class="ui-button whisper-control whisper-icon" aria-label="Collapse whispers" title="Minimize" @click="session.setVisible(false)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg></button>
     </header>
     <p v-if="!state.available" class="whisper-notice" role="status">Unavailable here. Use original chat.</p>
     <p v-if="state.missed" class="whisper-notice" role="status">{{ state.missed }} messages could not be kept. Check original chat.</p>
@@ -348,25 +351,27 @@ onBeforeUnmount(() => {
 .ui-reading-surface small { color: var(--ui-text-muted); font: 12px/1.5 var(--ui-font-reading); }
 .ui-reading-surface input, .ui-reading-surface select { min-width: 0; width: 100%; color: var(--ui-text); caret-color: var(--ui-focus); font: inherit; border: 1px solid var(--ui-line-soft); border-radius: var(--ui-radius); background: var(--ui-well-fill); padding: 9px 12px; }
 .ui-reading-surface input::placeholder { color: var(--ui-text-muted); opacity: 1; }
-.whisper-window { position: fixed; width: 360px; height: 420px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); display: flex; flex-direction: column; pointer-events: auto; isolation: isolate; }
-.whisper-head { display: flex; align-items: center; gap: 4px; padding: 6px 10px; border-bottom: 1px solid var(--ui-line-soft); background: var(--ui-title-fill); border-radius: var(--ui-radius-lg) var(--ui-radius-lg) 0 0; cursor: grab; }
-.whisper-heading { flex: 1; min-width: 0; margin: 0 4px; }
-.whisper-head h2 { font: var(--ui-font-weight-semibold) 16px/1.3 var(--ui-font-interface); color: var(--ui-text); margin: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.whisper-presence-label { display: flex; align-items: center; gap: 5px; line-height: 1.25 !important; }
-.whisper-icon { width: 34px; height: 34px; padding: 7px; flex-shrink: 0; position: relative; }
-.whisper-launcher { position: fixed; width: 44px; height: 44px; border-radius: var(--ui-radius-pill); pointer-events: auto; touch-action: none; padding: 10px; }
-.whisper-launcher svg { width: 24px; height: 24px; }
+.whisper-window { position: fixed; width: 340px; height: 400px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); display: flex; flex-direction: column; pointer-events: auto; isolation: isolate; }
+.whisper-head { display: flex; align-items: center; gap: 2px; min-height: 44px; padding: 4px 8px; border-bottom: 1px solid var(--ui-line-soft); background: var(--ui-title-fill); border-radius: var(--ui-radius-lg) var(--ui-radius-lg) 0 0; cursor: grab; }
+.whisper-heading { flex: 1; min-width: 0; margin: 0 6px; display: flex; align-items: baseline; gap: 8px; }
+.whisper-head h2 { min-width: 0; font: var(--ui-font-weight-semibold) 15px/1.3 var(--ui-font-interface); color: var(--ui-text); margin: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.whisper-presence-label { display: flex; align-items: center; gap: 5px; line-height: 1.25 !important; flex: 0 0 auto; }
+.whisper-icon { width: 30px; height: 30px; min-height: 30px; padding: 0; flex-shrink: 0; position: relative; line-height: 0; }
+.ui-reading-surface .whisper-icon svg { display: block; width: 18px; height: 18px; }
+.ui-reading-surface .whisper-icon-dot { fill: currentColor; stroke: none; }
+.whisper-launcher { position: fixed; width: 36px; height: 36px; min-height: 36px; border-radius: var(--ui-radius-pill); pointer-events: auto; touch-action: none; padding: 8px; }
+.ui-reading-surface.whisper-launcher svg { width: 19px; height: 19px; fill: currentColor; stroke: none; }
 .whisper-badge, .whisper-count { min-width: 20px; padding: 1px 5px; border-radius: var(--ui-radius-lg); background: var(--ui-danger); color: var(--ui-text); font: 600 12px/18px var(--ui-font-reading); text-align: center; }
-.whisper-badge { position: absolute; top: -4px; right: -5px; }
+.whisper-badge { position: absolute; top: -5px; right: -6px; min-width: 18px; padding: 0 4px; font-size: 10px; line-height: 17px; }
 .whisper-back-count { position: absolute; bottom: -3px; right: -2px; font-size: 10px; color: var(--ui-focus); }
-.whisper-bubble { max-width: 86%; }
+.whisper-bubble { max-width: 80%; padding: 6px 10px; font-size: 13px; line-height: 1.4; }
 .whisper-picker, .whisper-transcript { overflow: auto; scrollbar-width: thin; scrollbar-color: var(--ui-line-soft) transparent; }
-.whisper-picker { padding: 8px 10px 10px; flex: 1; min-height: 0; }
+.whisper-picker { padding: 10px 10px 12px; flex: 1; min-height: 0; }
 .whisper-search, .whisper-inline { display: flex; gap: 8px; }
 .whisper-search input { flex: 1; }
-.whisper-picker h3 { font: 600 11px/1.5 var(--ui-font-reading); color: var(--ui-text-muted); margin: 12px 6px 3px; text-transform: uppercase; letter-spacing: .04em; }
+.whisper-picker h3 { font: 600 11px/1.5 var(--ui-font-reading); color: var(--ui-text-muted); margin: 14px 6px 4px; letter-spacing: .01em; }
 .whisper-person { display: flex; align-items: center; gap: 2px; }
-.whisper-person-open { display: flex; align-items: center; justify-content: space-between; width: 100%; min-width: 0; min-height: 38px; padding: 4px 6px; text-align: left; }
+.whisper-person-open { display: flex; align-items: center; justify-content: space-between; width: 100%; min-width: 0; min-height: 36px; padding: 4px 6px; text-align: left; }
 .whisper-person-main { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .whisper-person-copy { min-width: 0; }
 .whisper-person-open strong { font-weight: 500; }
@@ -379,15 +384,15 @@ onBeforeUnmount(() => {
 .whisper-presence[data-presence="offline"] { background: var(--ui-text-faint); }
 .whisper-status-copy { margin-left: 10px; }
 .whisper-conversation { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.whisper-transcript { flex: 1; min-height: 40px; padding: 12px; overscroll-behavior: contain; scroll-padding-block: 12px; }
-.whisper-message { display: flex; flex-direction: column; align-items: flex-start; margin-top: 12px; }
+.whisper-transcript { flex: 1; min-height: 40px; padding: 12px 10px; overscroll-behavior: contain; scroll-padding-block: 12px; background: var(--ui-well-fill); box-shadow: inset 0 1px 0 var(--ui-edge), inset 0 -1px 0 var(--ui-edge); }
+.whisper-message { display: flex; flex-direction: column; align-items: flex-start; margin-top: 10px; }
 .whisper-message:first-of-type { margin-top: 0; }
 .whisper-message[data-grouped] { margin-top: 4px; }
 .whisper-message[data-direction="outgoing"] { align-items: flex-end; }
 .whisper-unread-marker { align-self: stretch; display: flex; align-items: center; gap: 12px; margin: 0 0 16px; text-align: center; }
 .whisper-unread-marker::before, .whisper-unread-marker::after { content: ''; height: 1px; background: var(--ui-line-soft); flex: 1; }
-.whisper-compose { padding: 6px 12px 12px; }
-.whisper-input-row { display: flex; align-items: center; gap: 8px; padding: 5px; border: 1px solid var(--ui-line-soft); border-radius: var(--ui-radius-pill); background: var(--ui-well-fill); }
+.whisper-compose { padding: 8px 10px 10px; }
+.whisper-input-row { display: flex; align-items: center; gap: 6px; padding: 4px; border: 1px solid var(--ui-line-soft); border-radius: var(--ui-radius-pill); background: var(--ui-well-fill); }
 .whisper-input-row input { border: 0; background: transparent; padding: 6px 10px; flex: 1; border-radius: var(--ui-radius-swell); }
 .whisper-input-row:has(input:focus-visible) { outline: 2px solid var(--ui-focus); outline-offset: 2px; }
 .ui-reading-surface .whisper-input-row input:focus-visible { outline: none; box-shadow: none; }

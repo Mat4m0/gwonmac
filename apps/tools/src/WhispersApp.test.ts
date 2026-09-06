@@ -59,6 +59,36 @@ it("restores each transcript position and cycles observed sent messages", async 
   wrapper.unmount();
 });
 
+it("follows incoming messages only while the reader is at the live edge", async () => {
+  const session = createWhisperSession(async () => {});
+  session.setAvailable(true);
+  session.observe([{ id: 1, sender: "Test Friend", message: "First", direction: "incoming" }]);
+  const wrapper = mount(WhispersApp, { props: { session }, attachTo: document.body });
+  session.open("Test Friend");
+  await flushPromises();
+  const transcript = wrapper.get<HTMLElement>("[data-transcript]");
+  let contentHeight = 200;
+  Object.defineProperties(transcript.element, {
+    clientHeight: { configurable: true, get: () => 100 },
+    scrollHeight: { configurable: true, get: () => contentHeight },
+  });
+
+  transcript.element.scrollTop = 100;
+  await transcript.trigger("scroll");
+  contentHeight = 240;
+  session.observe([{ id: 2, sender: "Test Friend", message: "Second", direction: "incoming" }]);
+  await flushPromises();
+  expect(transcript.element.scrollTop).toBe(240);
+
+  transcript.element.scrollTop = 20;
+  await transcript.trigger("scroll");
+  contentHeight = 280;
+  session.observe([{ id: 3, sender: "Test Friend", message: "Third", direction: "incoming" }]);
+  await flushPromises();
+  expect(transcript.element.scrollTop).toBe(20);
+  wrapper.unmount();
+});
+
 it("requires draft discard to close and only observed outgoing clears a submitted draft", async () => {
   let finish: () => void = () => {};
   const session = createWhisperSession(() => new Promise<void>(resolve => { finish = resolve; }));
