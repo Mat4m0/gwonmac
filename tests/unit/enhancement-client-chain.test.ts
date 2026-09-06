@@ -32,6 +32,8 @@ const NO_CAPABILITIES = Object.freeze({
   chatFiltering: false,
   skillSlotGeometry: false,
   skillCooldownObservation: false,
+  playerEffectObservation: false,
+    effectIconGeometry: false,
 });
 describe("Enhancement client chain", () => {
   it("source-pins every executable capability profile", () => {
@@ -87,6 +89,8 @@ describe("Enhancement client chain", () => {
         chatFiltering: false,
         skillSlotGeometry: false,
         skillCooldownObservation: false,
+        playerEffectObservation: false,
+    effectIconGeometry: false,
       },
     ]) {
       assert.equal(enhancementCapabilityProfile(unsupported), null);

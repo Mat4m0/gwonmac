@@ -296,6 +296,7 @@ export function parseSettings(raw: unknown): AppSettings {
     "targetReadout",
     "skillKeyLabelsEnabled",
     "skillCooldownOverlayEnabled",
+    "effectTimersEnabled",
     "extendedMemoryEnabled",
     "autoRelogAfterReload",
   ] as const) {

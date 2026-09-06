@@ -457,6 +457,7 @@ export async function assertCleanupSafetyGates() {
             skillKeyLabelsEnabled: false,
             skillCooldownOverlayEnabled: true,
             quickItemMove: false,
+            effectTimersEnabled: false,
             skillCooldownColor: { kind: "preset", preset: "red" } as const,
             chatFiltersEnabled: false,
             chatFilterAllyDrops: false,
@@ -857,6 +858,7 @@ export async function assertToolboxFoundationLifecycle() {
         chatFilterHallOfHeroes: false,
         chatFilterTitleAchievements: false,
         quickItemMove: false,
+        effectTimersEnabled: false,
         skillCooldownColor: { kind: "preset", preset: "red" } as const,
       });
       const runtime = await installCertifiedCompanion(
@@ -1428,6 +1430,7 @@ export async function assertRollbackAfterTablePublication() {
           skillKeyLabelsEnabled: false,
           skillCooldownOverlayEnabled: true,
           quickItemMove: false,
+          effectTimersEnabled: false,
           skillCooldownColor: { kind: "preset", preset: "red" } as const,
           chatFiltersEnabled: false,
           chatFilterAllyDrops: false,

@@ -21,6 +21,10 @@ export function effectiveCapabilities(
     skillSlotGeometry: features.skillSlotGeometry.status === "available",
     skillCooldownObservation:
       features.skillCooldownObservation.status === "available",
+    playerEffectObservation:
+      features.playerEffectObservation.status === "available",
+    effectIconGeometry:
+      features.effectIconGeometry.status === "available",
     playRegionObservation:
       features.playRegionObservation.status === "available",
     preGameControls: features.preGameControls.status === "available",

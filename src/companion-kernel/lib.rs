@@ -47,6 +47,8 @@ mod friend_session;
 mod friends;
 mod memory;
 mod party;
+mod player_effects;
+mod effect_icons;
 mod play_region;
 mod skill_cooldowns;
 mod skill_slots;
@@ -100,6 +102,12 @@ fn valid_toolbox_messages(layout: Layout) -> bool {
         }
     }
     true
+}
+
+fn valid_effect_messages(layout: Layout) -> bool {
+    layout.effect_dirty_messages.iter().enumerate().all(|(index, message)| {
+        *message != 0 && !layout.effect_dirty_messages[..index].contains(message)
+    })
 }
 
 fn square_root(value: f32) -> f32 {
@@ -718,6 +726,10 @@ pub unsafe extern "C" fn companion_init(
     character_list_size: u32,
     friend_ptr: u32,
     friend_size: u32,
+    player_effect_ptr: u32,
+    player_effect_size: u32,
+    effect_icon_ptr: u32,
+    effect_icon_size: u32,
     friend_root: u32,
     features: u32,
 ) -> u32 {
@@ -733,12 +745,29 @@ pub unsafe extern "C" fn companion_init(
             && features & FEATURE_PLAY_REGION_OBSERVATION == 0
         || features & FEATURE_SKILL_COOLDOWN_OBSERVATION != 0
             && features & FEATURE_PLAY_REGION_OBSERVATION == 0
+        || features & FEATURE_PLAYER_EFFECT_OBSERVATION != 0
+            && features & FEATURE_PLAY_REGION_OBSERVATION == 0
+        || features & FEATURE_EFFECT_ICON_GEOMETRY != 0
+            && (features & FEATURE_PLAY_REGION_OBSERVATION == 0
+                || features & FEATURE_PLAYER_EFFECT_OBSERVATION == 0)
         || features & FEATURE_FRIEND_OBSERVATION != 0
             && (features & FEATURE_PLAY_REGION_OBSERVATION == 0
                 || friend_root == 0 || friend_root & 3 != 0 || !contains(friend_root, 12))
         || features & FEATURE_FRIEND_OBSERVATION == 0 && friend_root != 0
         || !valid_region(features & FEATURE_FRIEND_OBSERVATION != 0,
             friend_ptr, friend_size, friends::SNAPSHOT_BYTES)
+        || !valid_region(
+            features & FEATURE_PLAYER_EFFECT_OBSERVATION != 0,
+            player_effect_ptr,
+            player_effect_size,
+            PLAYER_EFFECT_BYTES,
+        )
+        || !valid_region(
+            features & FEATURE_EFFECT_ICON_GEOMETRY != 0,
+            effect_icon_ptr,
+            effect_icon_size,
+            EFFECT_ICON_BYTES,
+        )
         || config_size != CONFIG_BYTES
         || config_ptr & 3 != 0
         || !contains(config_ptr, config_size)
@@ -805,6 +834,9 @@ pub unsafe extern "C" fn companion_init(
     if features & FEATURE_TOOLBOX_FOUNDATION != 0 && !valid_toolbox_messages(layout) {
         return 0;
     }
+    if features & FEATURE_PLAYER_EFFECT_OBSERVATION != 0 && !valid_effect_messages(layout) {
+        return 0;
+    }
     // SAFETY: each `initialize` takes the region its feature flag made
     // `valid_region` demand, so the pointer it stores is non-null, aligned, and
     // large enough for the snapshot it will publish.
@@ -834,6 +866,12 @@ pub unsafe extern "C" fn companion_init(
         }
         if features & FEATURE_SKILL_COOLDOWN_OBSERVATION != 0 {
             skill_cooldowns::initialize(skill_cooldown_ptr);
+        }
+        if features & FEATURE_PLAYER_EFFECT_OBSERVATION != 0 {
+            player_effects::initialize(player_effect_ptr);
+        }
+        if features & FEATURE_EFFECT_ICON_GEOMETRY != 0 {
+            effect_icons::initialize(effect_icon_ptr);
         }
         if features & FEATURE_PLAY_REGION_OBSERVATION != 0 {
             play_region::initialize(play_region_ptr);
@@ -880,6 +918,20 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, c: u32, d
             if active & FEATURE_SKILL_COOLDOWN_OBSERVATION != 0 {
                 unsafe { skill_cooldowns::tick(layout, c) };
             }
+            if features & FEATURE_PLAYER_EFFECT_OBSERVATION != 0 {
+                if active & FEATURE_PLAYER_EFFECT_OBSERVATION != 0 {
+                    unsafe { player_effects::tick(layout, c, TICK_COUNT) };
+                } else {
+                    unsafe { player_effects::inactive(c, TICK_COUNT, active) };
+                }
+            }
+            if features & FEATURE_EFFECT_ICON_GEOMETRY != 0 {
+                if active & FEATURE_EFFECT_ICON_GEOMETRY != 0 {
+                    unsafe { effect_icons::tick(layout, d, TICK_COUNT) };
+                } else {
+                    unsafe { effect_icons::inactive(TICK_COUNT) };
+                }
+            }
             if active & FEATURE_PLAY_REGION_OBSERVATION != 0 {
                 unsafe { play_region::tick(layout) };
             }
@@ -909,6 +961,9 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, c: u32, d
                 if ACTIVE_FEATURES & FEATURE_TOOLBOX_FOUNDATION != 0 {
                     toolbox::observe_ui(layout, a, b);
                 }
+                if ACTIVE_FEATURES & FEATURE_PLAYER_EFFECT_OBSERVATION != 0 {
+                    player_effects::observe_ui(layout, a);
+                }
             }
         }
         DISPATCH_FRIEND_LIFECYCLE => {
@@ -936,6 +991,11 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, c: u32, d
                     && a & FEATURE_PLAY_REGION_OBSERVATION == 0
                 || a & FEATURE_SKILL_COOLDOWN_OBSERVATION != 0
                     && a & FEATURE_PLAY_REGION_OBSERVATION == 0
+                || a & FEATURE_PLAYER_EFFECT_OBSERVATION != 0
+                    && a & FEATURE_PLAY_REGION_OBSERVATION == 0
+                || a & FEATURE_EFFECT_ICON_GEOMETRY != 0
+                    && (a & FEATURE_PLAY_REGION_OBSERVATION == 0
+                        || a & FEATURE_PLAYER_EFFECT_OBSERVATION == 0)
             {
                 return;
             }
@@ -950,6 +1010,11 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, c: u32, d
                     party::mark_dirty();
                 }
             }
+            if previous & FEATURE_PLAYER_EFFECT_OBSERVATION == 0
+                && a & FEATURE_PLAYER_EFFECT_OBSERVATION != 0
+            {
+                unsafe { player_effects::mark_dirty() };
+            }
         }
         _ => {}
     }
@@ -957,7 +1022,7 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, c: u32, d
 
 #[no_mangle]
 pub extern "C" fn companion_abi() -> u32 {
-    23
+    24
 }
 
 #[no_mangle]
@@ -1008,6 +1073,16 @@ pub extern "C" fn companion_character_list_bytes() -> u32 {
 #[no_mangle]
 pub extern "C" fn companion_friend_bytes() -> u32 {
     friends::SNAPSHOT_BYTES
+}
+
+#[no_mangle]
+pub extern "C" fn companion_player_effect_bytes() -> u32 {
+    PLAYER_EFFECT_BYTES
+}
+
+#[no_mangle]
+pub extern "C" fn companion_effect_icon_bytes() -> u32 {
+    EFFECT_ICON_BYTES
 }
 
 #[no_mangle]

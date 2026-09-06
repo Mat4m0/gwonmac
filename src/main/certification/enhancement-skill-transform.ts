@@ -31,6 +31,12 @@ type SkillSlotGeometryCertificate = NonNullable<
 type SkillCooldownCertificate = NonNullable<
   KnownEnhancementBuild["skillCooldownObservation"]
 >;
+type PlayerEffectCertificate = NonNullable<
+  KnownEnhancementBuild["playerEffectObservation"]
+>;
+type EffectGeometryCertificate = NonNullable<
+  KnownEnhancementBuild["effectIconGeometry"]
+>;
 
 export type EnhancementSkillTransformResolution = Readonly<{
   geometry: Readonly<{
@@ -42,6 +48,15 @@ export type EnhancementSkillTransformResolution = Readonly<{
     certificate: SkillCooldownCertificate;
     reader: ResolvedSkillFunction;
     timer: ResolvedSkillFunction;
+  }> | null;
+  effects: Readonly<{
+    certificate: PlayerEffectCertificate;
+    timer: ResolvedSkillFunction;
+  }> | null;
+  effectGeometry: Readonly<{
+    certificate: EffectGeometryCertificate;
+    initializer: ResolvedSkillFunction;
+    constructor: ResolvedSkillFunction;
   }> | null;
 }>;
 
@@ -137,7 +152,61 @@ export function resolveEnhancementSkillTransform(options: Readonly<{
     cooldown = { certificate, reader, timer };
   }
 
-  return { geometry, cooldown };
+  let effects: EnhancementSkillTransformResolution["effects"] = null;
+  if (capabilities.playerEffectObservation) {
+    const certificate = build.playerEffectObservation
+      ?? fail("player effect observation is not certified");
+    const timer = resolveFunction(
+      "precise effect timer", certificate.timer.functionIndex,
+      certificate.timer.params, certificate.timer.results,
+    );
+    if (bodyHash(bodies, importCount, certificate.timer.functionIndex, fail)
+      !== certificate.timer.bodySha256) fail("effect timer body does not match its certificate");
+    for (const functionCertificate of [
+      ...certificate.accessors,
+      certificate.mutations.addTimed,
+      certificate.mutations.renewTimed,
+      certificate.mutations.remove,
+    ]) {
+      if (bodyHash(bodies, importCount, functionCertificate.functionIndex, fail)
+        !== functionCertificate.bodySha256) {
+        fail("effect collection body does not match its certificate");
+      }
+    }
+    effects = { certificate, timer };
+  }
+
+  let effectGeometry: EnhancementSkillTransformResolution["effectGeometry"] = null;
+  if (capabilities.effectIconGeometry) {
+    const certificate = build.effectIconGeometry
+      ?? fail("effect icon geometry is not certified");
+    const initializer = resolveFunction(
+      "Effects initializer", certificate.initializer.functionIndex,
+      certificate.initializer.params, certificate.initializer.results,
+    );
+    const constructor = resolveFunction(
+      "Effects frame constructor", certificate.constructor.functionIndex,
+      certificate.constructor.params, certificate.constructor.results,
+    );
+    if (bodyHash(bodies, importCount, certificate.initializer.functionIndex, fail)
+        !== certificate.initializer.bodySha256
+      || bodyHash(bodies, importCount, certificate.constructor.functionIndex, fail)
+        !== certificate.constructor.bodySha256
+      || bodyHash(bodies, importCount, certificate.childBuilder.functionIndex, fail)
+        !== certificate.childBuilder.bodySha256) {
+      fail("Effects frame bodies do not match their certificates");
+    }
+    const operand = certificate.initializer.constructorCallOperand;
+    const body = bodies[initializer.localIndex]!;
+    const expected = paddedIndex(certificate.constructor.functionIndex);
+    if (body[operand - 1] !== 0x10
+      || expected.some((byte, index) => body[operand + index] !== byte)) {
+      fail("Effects constructor call site does not match its certificate");
+    }
+    effectGeometry = { certificate, initializer, constructor };
+  }
+
+  return { geometry, cooldown, effects, effectGeometry };
 }
 
 /** Append the capture wrapper and replace only the certified call operand. */

@@ -153,6 +153,7 @@ export const GLOBAL_TOOLS = [
   "character-switch", "build-management", "quick-travel", "xunlai-storage", "quick-item-move",
   "trade-chat", "maps", "target-readout", "skill-key-labels", "skill-cooldowns",
   "chat-filters",
+  "effect-timers",
 ] as const;
 export type GlobalTool = (typeof GLOBAL_TOOLS)[number];
 export const GLOBAL_TOOL_FEATURES = Object.freeze({
@@ -167,6 +168,7 @@ export const GLOBAL_TOOL_FEATURES = Object.freeze({
   "skill-key-labels": "skillKeyLabels",
   "skill-cooldowns": "skillCooldowns",
   "chat-filters": "chatFilters",
+  "effect-timers": "effectTimers",
 } satisfies Record<GlobalTool, FeatureId>);
 export const LAUNCHER_EXTERNAL_LINKS = ["github", "bugReport", "featureRequest", "discord", "arenaNetSupport", "donate", "releases"] as const;
 export type LauncherExternalLink = (typeof LAUNCHER_EXTERNAL_LINKS)[number];

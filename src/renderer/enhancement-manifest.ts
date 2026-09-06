@@ -13,7 +13,7 @@
 import {
   enhancementCapabilitiesRequested,
   ENHANCEMENT_CONFIG_WORD_COUNT,
-  ENHANCEMENT_LAYOUT_WORD_COUNT,
+  ENHANCEMENT_EFFECT_DIRTY_MESSAGE_COUNT,
   ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT,
   ENHANCEMENT_TRANSFORM_ABI,
   enhancementConfigWordActive,
@@ -23,9 +23,14 @@ import {
   type EnhancementCapabilities,
   type EnhancementHooks,
 } from "../shared/enhancement-contracts.js";
+import {
+  ENHANCEMENT_DISPATCHER_CONFIG_START,
+  ENHANCEMENT_EFFECT_DIRTY_CONFIG_START,
+  ENHANCEMENT_PARTY_DIRTY_CONFIG_START,
+} from "../shared/enhancement-config.js";
 
-const MESSAGE_CONFIG_START = ENHANCEMENT_LAYOUT_WORD_COUNT;
-const PARTY_DIRTY_CONFIG_START = MESSAGE_CONFIG_START + 3;
+const MESSAGE_CONFIG_START = ENHANCEMENT_DISPATCHER_CONFIG_START;
+const PARTY_DIRTY_CONFIG_START = ENHANCEMENT_PARTY_DIRTY_CONFIG_START;
 
 /** The validated subset of the derived module's fixed evidence. */
 export type EnhancementManifest = Readonly<{
@@ -125,15 +130,17 @@ export function decodeEnhancementManifest(
     });
     const expectedHooks = enhancementHooksFor(capabilities);
     const configWords = value.configWords;
-    const messages = capabilities.partyObservation
+    const messages = selectedHooks.ui
       ? exactRecord(value.messages, [
           "playerChat",
           "hideHeroPanel",
           "showHeroPanel",
           "partyDirty",
+          "effectDirty",
         ])
       : null;
     const partyDirty = messages?.partyDirty;
+    const effectDirty = messages?.effectDirty;
     if (
       value.transformAbi !== ENHANCEMENT_TRANSFORM_ABI
       || !uint32(value.buildId, false)
@@ -158,8 +165,8 @@ export function decodeEnhancementManifest(
         ))
       || (hooks.ui !== null
         && !functionEvidence(hooks.ui, ["i32", "i32", "i32"], false))
-      || (!capabilities.partyObservation && value.messages !== null)
-      || (capabilities.partyObservation
+      || (!selectedHooks.ui && value.messages !== null)
+      || (selectedHooks.ui
         && (
           messages === null
           || ![
@@ -168,21 +175,34 @@ export function decodeEnhancementManifest(
             messages.showHeroPanel,
           ].every((message) => uint32(message, false))
           || !Array.isArray(partyDirty)
-          || partyDirty.length !== ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT
+          || partyDirty.length !== (capabilities.partyObservation
+            ? ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT
+            : 0)
           || !partyDirty.every((message: unknown) => uint32(message, false))
+          || !Array.isArray(effectDirty)
+          || effectDirty.length !== (capabilities.playerEffectObservation
+            ? ENHANCEMENT_EFFECT_DIRTY_MESSAGE_COUNT
+            : 0)
+          || !effectDirty.every((message: unknown) => uint32(message, false))
           || new Set([
             messages.playerChat,
             messages.hideHeroPanel,
             messages.showHeroPanel,
             ...partyDirty,
-          ]).size !== ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT + 3
-          || configWords[MESSAGE_CONFIG_START] !== messages.playerChat
-          || configWords[MESSAGE_CONFIG_START + 1] !== messages.hideHeroPanel
-          || configWords[MESSAGE_CONFIG_START + 2] !== messages.showHeroPanel
-          || partyDirty.some(
+            ...effectDirty,
+          ]).size !== partyDirty.length + effectDirty.length + 3
+          || (capabilities.partyObservation
+            && (configWords[MESSAGE_CONFIG_START] !== messages.playerChat
+              || configWords[MESSAGE_CONFIG_START + 1] !== messages.hideHeroPanel
+              || configWords[MESSAGE_CONFIG_START + 2] !== messages.showHeroPanel))
+          || (capabilities.partyObservation && partyDirty.some(
             (message: number, index: number) =>
               configWords[PARTY_DIRTY_CONFIG_START + index] !== message,
-          )
+          ))
+          || (capabilities.playerEffectObservation && effectDirty.some(
+            (message: number, index: number) =>
+              configWords[ENHANCEMENT_EFFECT_DIRTY_CONFIG_START + index] !== message,
+          ))
         ))
       || (expectedCapabilities !== undefined
         && !sameEnhancementCapabilities(capabilities, expectedCapabilities))

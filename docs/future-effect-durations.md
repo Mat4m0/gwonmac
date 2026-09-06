@@ -1,39 +1,36 @@
-# Future research: skill effects and debuffs
+# Future research: party and hostile effects
 
-This is not part of the cooldown feature. Recharge state answers when a skill
-can be used again. Effects, enchantments, conditions, and hexes describe state
-on agents and need separate certification, policy, data contracts, and UI.
+Exact controlled-player effect timers are now a separate certified Tool; see
+[Controlled-player effect timers](effect-timers.md). This document owns only the
+remaining party-awareness and hostile-agent questions. Recharge state answers
+when a skill can be used again and remains a different capability.
 
 ## Evidence and open questions
 
-Toolbox reads the player's effect collection in local
-`GWToolboxpp/GWToolboxdll/Widgets/SkillbarWidget.cpp:157-209`. It matches each
-effect's `skill_id` to a bar skill, derives time remaining, can keep the longest
-match, and has a special multiple-effect path at lines 231-257. It explicitly
-does not treat a skill typed as a hex as a friendly player effect. GWCA derives
-effect time from the same precise skill timer in local
-`GWCA/Source/Skill.cpp:27-33`.
+Toolbox's player-effect reader in local
+`GWToolboxpp/GWToolboxdll/Widgets/SkillbarWidget.cpp:157-257` helped establish
+the controlled-player hypothesis, but it does not prove party or hostile-agent
+semantics. Its choice not to treat a skill typed as a hex as a friendly player
+effect is one reason these wider surfaces must remain separate.
 
 Those sources are leads only. Before implementation, exact JSPi proof must
 answer:
 
-1. Which bounded collection contains effects Guild Wars legitimately exposes
-   for the player and party?
-2. Which fields prove effect identity, source/target agent, duration, start
-   timestamp, and removal?
-3. Can one skill create multiple simultaneous records, and what stable identity
-   distinguishes them?
-4. Which condition, hex, and other debuff facts are actually exposed to the
+1. Do other rows in the certified collection map completely and uniquely to
+   current party members, including heroes and henchmen?
+2. Which party fields prove effect identity, source/target agent, duration,
+   start timestamp, removal, death, travel, and roster changes?
+3. Which condition, hex, and other debuff facts are actually exposed to the
    local player, especially in PvP?
-5. Which reviewed functions update or consume each field in the exact client?
+4. Does hostile state expose exact stock-visible skill and duration data, or
+   only broad flags such as “hexed” and “conditioned”?
+5. Which reviewed functions update or consume each candidate field in the exact
+   client?
 
-## Recommended capability split
+## Remaining capability split
 
-- Start with friendly player enchantment/effect durations only if exact client
-  functions uniquely prove the bounded collection and timer relationship.
-- Represent multiple records explicitly; do not collapse them to one duration
-  in the observation layer. A presentation may later choose the longest only as
-  a documented derived view.
+- Keep controlled-player records and presentation decisions inside their existing
+  certified boundary; do not broaden it to party or hostile agents.
 - Treat party effects and hostile-agent debuffs as separate capabilities. Do
   not infer them from skill-bar recharge or animation state.
 - Keep the present PvP-map restriction and Guild Hall exception by default.
@@ -47,3 +44,8 @@ answer:
 The research output should first be a proof report and read-only diagnostics.
 Only after live evidence confirms semantics should a new UI or durable setting
 be proposed.
+
+The retained `effect-observer` session already records the certified roster
+beside player effects for solo, hero-added, and hero-removed checkpoints. That
+is identity-correlation evidence only. A later party-effect spike must still
+prove each non-player effect row and its lifecycle independently.

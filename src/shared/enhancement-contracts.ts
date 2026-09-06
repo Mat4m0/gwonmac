@@ -22,6 +22,7 @@ export const ENHANCEMENT_PROGRAMS = [
   "toolbox-commands",
   "xunlai-storage",
   "reconnect-probe",
+  "effect-observer",
 ] as const;
 
 export type EnhancementProgram = (typeof ENHANCEMENT_PROGRAMS)[number];
@@ -141,6 +142,22 @@ const CAPABILITY_DEFINITIONS = Object.freeze([
     configOwners: [],
     hooks: [],
   },
+  {
+    id: "playerEffectObservation",
+    requiresAll: ["playRegionObservation"],
+    requiresAny: [],
+    configOwners: ["observation", "player-effects"],
+    hooks: ["ui"],
+  },
+  {
+    // Geometry has its own proof, but it consumes the bounded player-effect
+    // projection to decide which native children are relevant.
+    id: "effectIconGeometry",
+    requiresAll: ["playRegionObservation", "playerEffectObservation"],
+    requiresAny: [],
+    configOwners: ["skill-slots"],
+    hooks: [],
+  },
 ] as const);
 for (const contract of CAPABILITY_DEFINITIONS) {
   Object.freeze(contract.requiresAll);
@@ -232,6 +249,8 @@ export const NO_ENHANCEMENT_CAPABILITIES: EnhancementCapabilities = Object.freez
   characterSwitchAction: false,
   chatFiltering: false,
   quickItemMove: false,
+  playerEffectObservation: false,
+  effectIconGeometry: false,
 });
 
 function isExactBooleanRecord<Key extends string>(
@@ -270,6 +289,8 @@ export function parseEnhancementCapabilities(
     characterSwitchAction: value.characterSwitchAction,
     chatFiltering: value.chatFiltering,
     quickItemMove: value.quickItemMove,
+    playerEffectObservation: value.playerEffectObservation,
+    effectIconGeometry: value.effectIconGeometry,
   });
 }
 
@@ -302,7 +323,11 @@ export const ENHANCEMENT_CAPABILITY_PRESETS = Object.freeze({
   cursorParty: capabilitiesFromMask(0x285),
   storage: capabilitiesFromMask(0x270),
   partyCommandsStorage: capabilitiesFromMask(0x2fc),
-  all: capabilitiesFromMask(0x3fff),
+  effects: capabilitiesFromMask(0xc200),
+  // Developer-only session: exact player effects plus the already-certified
+  // roster projection needed to correlate later party-effect evidence.
+  effectObserver: capabilitiesFromMask(0xc204),
+  all: capabilitiesFromMask(0xffff),
 });
 
 /** The two capability sets shipped by Core and Tools release launches. */
@@ -313,10 +338,11 @@ export const RELEASE_ENHANCEMENT_CAPABILITIES = Object.freeze({
 
 export {
   ENHANCEMENT_CONFIG_WORD_COUNT,
+  ENHANCEMENT_EFFECT_DIRTY_MESSAGE_COUNT,
   ENHANCEMENT_LAYOUT_WORD_COUNT,
   ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT,
 } from "./enhancement-config.js";
-export const ENHANCEMENT_TRANSFORM_ABI = 52;
+export const ENHANCEMENT_TRANSFORM_ABI = 53;
 
 export const ENHANCEMENT_CHAT_FILTER_MASKS = Object.freeze({
   allyDrops: 1,
@@ -362,6 +388,7 @@ export function enhancementCapabilitiesFor(
     // The reload probe needs the same bounded pre-game and play-region readers
     // that required Core installs in production.
     case "reconnect-probe": return ENHANCEMENT_CAPABILITY_PRESETS.reconnect;
+    case "effect-observer": return ENHANCEMENT_CAPABILITY_PRESETS.effectObserver;
   }
 }
 

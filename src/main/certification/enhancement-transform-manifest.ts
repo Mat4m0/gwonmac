@@ -27,6 +27,7 @@ export function buildEnhancementManifestSection(
   const selectedHooks = enhancementHooksFor(capabilities);
   const cursorEvent = build.cursorEvent;
   const partyObservation = build.partyObservation;
+  const playerEffectObservation = build.playerEffectObservation;
   const uiDispatcher = build.uiDispatcher;
   const json = new TextEncoder().encode(JSON.stringify({
     transformAbi: ENHANCEMENT_TRANSFORM_ABI,
@@ -63,7 +64,12 @@ export function buildEnhancementManifestSection(
           playerChat: uiDispatcher!.playerChatMessage,
           hideHeroPanel: uiDispatcher!.hideHeroPanelMessage,
           showHeroPanel: uiDispatcher!.showHeroPanelMessage,
-          partyDirty: partyObservation!.partyDirtyMessages,
+          partyDirty: capabilities.partyObservation
+            ? partyObservation!.partyDirtyMessages
+            : [],
+          effectDirty: capabilities.playerEffectObservation
+            ? playerEffectObservation!.dirtyMessages
+            : [],
         }
       : null,
     configWords: enhancementConfigWords(build, capabilities),

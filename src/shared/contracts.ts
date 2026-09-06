@@ -456,6 +456,8 @@ export interface AppSettings {
   chatFilterTitleAchievements: boolean;
   /** Show Guild Wars' observed recharge state as display-only countdowns. */
   skillCooldownOverlayEnabled: boolean;
+  /** Show exact remaining durations over the controlled player's native Effects icons. */
+  effectTimersEnabled: boolean;
   /** One curated or exact RGB color shared by all eight cooldown labels. */
   skillCooldownColor: SkillCooldownColor;
   /** Request the certified 4 GB client module on the next Guild Wars launch. */
@@ -610,6 +612,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   chatFilterHallOfHeroes: true,
   chatFilterTitleAchievements: true,
   skillCooldownOverlayEnabled: true,
+  effectTimersEnabled: false,
   skillCooldownColor: DEFAULT_SKILL_COOLDOWN_COLOR,
   extendedMemoryEnabled: false,
   autoRelogAfterReload: false,
@@ -793,6 +796,8 @@ export interface ClientCompatibility {
     chatAliases: OptionalFeatureStatus;
     skillSlotGeometry: OptionalFeatureStatus;
     skillCooldownObservation: OptionalFeatureStatus;
+    playerEffectObservation: OptionalFeatureStatus;
+    effectIconGeometry: OptionalFeatureStatus;
     playRegionObservation: OptionalFeatureStatus;
     preGameControls: OptionalFeatureStatus;
     characterSwitchAction: OptionalFeatureStatus;

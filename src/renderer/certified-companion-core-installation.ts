@@ -313,6 +313,8 @@ export async function installCoreCertifiedCompanion(
         party: core.party,
         skillSlots: extension?.kernelRegions.skillSlots ?? { pointer: 0, bytes: 0 },
         skillCooldowns: extension?.kernelRegions.skillCooldowns ?? { pointer: 0, bytes: 0 },
+        playerEffects: extension?.kernelRegions.playerEffects ?? { pointer: 0, bytes: 0 },
+        effectIcons: extension?.kernelRegions.effectIcons ?? { pointer: 0, bytes: 0 },
         friends: extension?.kernelRegions.friends ?? { pointer: 0, bytes: 0 },
         playRegion: { pointer: playRegions.pointer, bytes: playRegions.bytes },
         characterList: core.characterList,
@@ -380,6 +382,8 @@ export async function installCoreCertifiedCompanion(
       partyPointer: extensionSession?.observer.pointers.party ?? 0,
       skillSlotPointer: extensionSession?.observer.pointers.skillSlots ?? 0,
       skillCooldownPointer: extensionSession?.observer.pointers.skillCooldowns ?? 0,
+      playerEffectPointer: extensionSession?.observer.pointers.playerEffects ?? 0,
+      effectIconPointer: extensionSession?.observer.pointers.effectIcons ?? 0,
       playRegionPointer: playRegions.pointer,
       characterListPointer: core.characterList.pointer,
       hertz: 0,
@@ -433,6 +437,8 @@ export async function installCoreCertifiedCompanion(
       extensionSession?.observer.readers ?? null,
       firstObservation,
       characterConsumer,
+      extensionSession?.observer.playerEffects ?? null,
+      extensionSession?.observer.effectIcons ?? null,
     );
 
     const installation = coreInstallations + 1;
@@ -455,7 +461,10 @@ export async function installCoreCertifiedCompanion(
       get cursor() { return cursor?.state ?? null; },
       get readout() { return null; },
       get toolbox() { return null; },
+      get party() { return null; },
       get xunlaiAccess() { return null; },
+      get playerEffects() { return null; },
+      get effectIcons() { return null; },
     };
     const runtime = Object.freeze(
       extensionSession?.createRuntime(baseRuntime) ?? baseRuntime,
