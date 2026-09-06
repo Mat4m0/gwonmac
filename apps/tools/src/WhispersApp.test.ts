@@ -5,7 +5,52 @@ import { nextTick } from "vue";
 import WhispersApp from "./WhispersApp.vue";
 import { createWhisperSession } from "../../../src/shared/whisper-session";
 
-afterEach(() => { document.body.replaceChildren(); });
+afterEach(() => {
+  window.localStorage.clear();
+  document.body.replaceChildren();
+});
+
+it("restores the Messenger window and icon positions in the current profile", async () => {
+  const session = createWhisperSession(async () => {});
+  session.setAvailable(true);
+  const wrapper = mount(WhispersApp, { props: { session }, attachTo: document.body });
+  const panel = wrapper.get<HTMLElement>("#whisper-window").element;
+  Object.defineProperties(panel, {
+    offsetWidth: { configurable: true, get: () => 340 },
+    offsetHeight: { configurable: true, get: () => 360 },
+  });
+  panel.getBoundingClientRect = () => ({
+    x: 72, y: 80, left: 72, top: 80, right: 412, bottom: 440,
+    width: 340, height: 360, toJSON: () => ({}),
+  });
+
+  const launcher = wrapper.get<HTMLButtonElement>(".whisper-launcher");
+  await launcher.trigger("keydown", { key: "ArrowRight", altKey: true });
+  expect(launcher.attributes("style")).toContain("left: 36px");
+
+  const header = wrapper.get<HTMLElement>(".whisper-head").element;
+  Object.defineProperty(header, "setPointerCapture", { value: () => {} });
+  header.dispatchEvent(new PointerEvent("pointerdown", {
+    bubbles: true, clientX: 100, clientY: 100, pointerId: 1,
+  }));
+  header.dispatchEvent(new PointerEvent("pointermove", {
+    clientX: 150, clientY: 150, pointerId: 1,
+  }));
+  header.dispatchEvent(new PointerEvent("pointerup", { pointerId: 1 }));
+  window.dispatchEvent(new PageTransitionEvent("pagehide"));
+  wrapper.unmount();
+
+  const restoredSession = createWhisperSession(async () => {});
+  restoredSession.setAvailable(true);
+  const restored = mount(WhispersApp, {
+    props: { session: restoredSession },
+    attachTo: document.body,
+  });
+  expect(restored.get(".whisper-launcher").attributes("style")).toContain("left: 36px");
+  expect(restored.get("#whisper-window").attributes("style")).toContain("left: 122px");
+  expect(restored.get("#whisper-window").attributes("style")).toContain("top: 130px");
+  restored.unmount();
+});
 
 it("keeps recipient, input DOM, draft and focus across incoming updates", async () => {
   const session = createWhisperSession(async () => {});

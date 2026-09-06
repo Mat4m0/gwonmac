@@ -4,14 +4,23 @@ import { whisperPersonKey, whisperUnread, type WhisperSession, type WhisperSound
 import { WHISPER_LINE_UNITS, WHISPER_MESSAGE_UNITS } from "../../../src/shared/whispers";
 import type { FriendPresence, TravelFriend } from "../../../src/shared/friends";
 import { useFloatingWindow } from "./use-floating-window";
+import {
+  restoreFloatingWindowPlacement,
+  serializeFloatingWindowPlacement,
+} from "./floating-window-placement";
 
 const props = defineProps<{ session: WhisperSession }>();
+const WINDOW_PLACEMENT_KEY = "gwonmac.whispers-window-placement";
+const ICON_PLACEMENT_KEY = "gwonmac.whispers-icon-placement";
+const ICON_SIZE = 36;
+const VIEWPORT_MARGIN = 8;
 const state = shallowRef(props.session.state);
 const unsubscribe = props.session.subscribe(value => { state.value = value; });
 const visible = computed(() => state.value.visible);
 const { panel, resizeGrip, panelStyle, startDrag } = useFloatingWindow({
   mode: "embedded", visible, initialPosition: { left: 72, top: 80 },
-  minWidth: 288, minHeight: 300, viewportMargin: 8,
+  minWidth: 288, minHeight: 300, viewportMargin: VIEWPORT_MARGIN,
+  placementStorageKey: WINDOW_PLACEMENT_KEY,
 });
 const selected = computed(() => state.value.conversations.find(c => c.key === state.value.selected));
 const unread = computed(() => state.value.conversations.reduce((total, c) => total + whisperUnread(c), 0));
@@ -40,7 +49,23 @@ function showPicker() {
   props.session.showPicker();
   void nextTick(() => document.getElementById("whisper-person")?.focus());
 }
-const icon = ref({ left: 20, top: 160 });
+const iconViewport = () => ({
+  width: window.innerWidth,
+  height: window.innerHeight,
+  margin: VIEWPORT_MARGIN,
+});
+function restoredIconPosition() {
+  let serialized: string | null = null;
+  try { serialized = window.localStorage.getItem(ICON_PLACEMENT_KEY); }
+  catch { /* Browser storage refusal leaves the icon at its ordinary default. */ }
+  const restored = restoreFloatingWindowPlacement(
+    serialized,
+    iconViewport(),
+    { width: ICON_SIZE, height: ICON_SIZE },
+  );
+  return restored ? { left: restored.left, top: restored.top } : { left: 20, top: 160 };
+}
+const icon = ref(restoredIconPosition());
 const iconButton = ref<HTMLButtonElement | null>(null);
 const atBottom = ref(true);
 const initializedTranscripts = new Set<string>();
@@ -272,9 +297,24 @@ function soundChange(event: Event) {
 function opacityChange(event: Event) {
   props.session.setBackgroundOpacity(Number((event.target as HTMLInputElement).value));
 }
+function persistIconPosition() {
+  const serialized = serializeFloatingWindowPlacement({
+    ...icon.value,
+    width: ICON_SIZE,
+    height: ICON_SIZE,
+  }, iconViewport());
+  if (serialized === null) return;
+  try { window.localStorage.setItem(ICON_PLACEMENT_KEY, serialized); }
+  catch { /* A UI preference must not make the surface unusable when storage fails. */ }
+}
 function fitIcon() {
-  icon.value = { left: Math.max(8, Math.min(window.innerWidth - 40, icon.value.left)),
-    top: Math.max(8, Math.min(window.innerHeight - 40, icon.value.top)) };
+  const fitted = {
+    left: Math.max(VIEWPORT_MARGIN, Math.min(window.innerWidth - ICON_SIZE - VIEWPORT_MARGIN, icon.value.left)),
+    top: Math.max(VIEWPORT_MARGIN, Math.min(window.innerHeight - ICON_SIZE - VIEWPORT_MARGIN, icon.value.top)),
+  };
+  const changed = fitted.left !== icon.value.left || fitted.top !== icon.value.top;
+  icon.value = fitted;
+  if (changed) persistIconPosition();
 }
 let dragged = false;
 function dragIcon(event: PointerEvent) {
@@ -290,6 +330,7 @@ function dragIcon(event: PointerEvent) {
     icon.value = { left: start.left + e.clientX - start.x, top: start.top + e.clientY - start.y }; fitIcon();
   };
   const finish = () => {
+    if (dragged) persistIconPosition();
     button.removeEventListener("pointermove", move);
     button.removeEventListener("pointerup", finish);
     button.removeEventListener("pointercancel", cancel);
@@ -310,10 +351,12 @@ function moveIcon(event: KeyboardEvent) {
   event.preventDefault();
   icon.value = { left: icon.value.left + (event.key === "ArrowRight" ? 16 : event.key === "ArrowLeft" ? -16 : 0),
     top: icon.value.top + (event.key === "ArrowDown" ? 16 : event.key === "ArrowUp" ? -16 : 0) }; fitIcon();
+  persistIconPosition();
 }
 onMounted(() => {
   document.addEventListener("pointerdown", dismissOptions);
   window.addEventListener("resize", fitIcon); window.addEventListener("focus", markVisibleRead);
+  window.addEventListener("pagehide", persistIconPosition);
   // Game interaction unlocks sound too; opening this panel is not required.
   document.addEventListener("pointerdown", enableAudio, { once: true });
   document.addEventListener("keydown", enableAudio, { once: true });
@@ -322,6 +365,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   document.removeEventListener("pointerdown", dismissOptions);
   unsubscribe(); window.removeEventListener("resize", fitIcon); window.removeEventListener("focus", markVisibleRead);
+  window.removeEventListener("pagehide", persistIconPosition); persistIconPosition();
   document.removeEventListener("pointerdown", enableAudio); document.removeEventListener("keydown", enableAudio);
   void audio?.close();
 });
