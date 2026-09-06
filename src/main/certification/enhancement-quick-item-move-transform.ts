@@ -54,13 +54,16 @@ const ITEM_CONTEXT_OFFSET = Object.freeze({ inventory: 0xf8 });
 const ITEM_ARRAY_OFFSET = Object.freeze({ buffer: 0xb8, size: 0xc0 });
 const ITEM_BYTES = 0x54;
 const TRADE_OFFSET = Object.freeze({ flags: 0, playerItems: 0x14, playerItemCount: 0x1c });
-const TRADE_INITIATED_FLAG = 1;
+// GWCA's Wasm TradeMgr permits add/remove only in this exact state. The
+// native GmTradeCart add path asserts !playerAdded || !m_isDisabled.
+const TRADE_EDITABLE_FLAGS = 1;
 const TRADE_MAX_ITEMS = 7;
 const STORAGE_PANE = Object.freeze({ count: 15, material: 14 });
 const NUMBER_PREFERENCE_STORAGE_PANE = 20;
 const MATERIAL_SLOT_COUNT = 42;
 const NOT_TRADABLE_INTERACTION = 0x100;
 const MOVE_DIRECTION = Object.freeze({ store: 1, withdraw: 2 });
+const CLICK_ACTION = Object.freeze({ ...MOVE_DIRECTION, addToTrade: 3, removeFromTrade: 4 });
 const ITEM_MOUSE_ACTION = Object.freeze({
   addToTrade: 2,
   mouseUp: 7,
@@ -641,84 +644,102 @@ const effectiveModifiers = (g: QuickItemMoveGlobals) => concat(
 export function quickItemMoveHandler(c: QuickHandlerConfig): Uint8Array {
   const g = c.globals;
   return concat(
-    // params item id, frame id; locals item, bag, contexts, game, trade, cart, dialog, rows, count, index, scratch, qty
-    uleb(1), uleb(12), op(0x7f),
+    // params item id, frame id; locals item, bag, contexts, game, trade, cart,
+    // dialog, rows, count, index, scratch, quantity, action, trade flags
+    uleb(1), uleb(14), op(0x7f),
     global(g.enabled), op(0x45), effectiveModifiers(g), i32(1),
       op(0x71, 0x45, 0x72, 0x04, 0x40), ret(0), op(0x0b),
     global(g.scratch), op(0x45, 0x04, 0x40), ret(0), op(0x0b),
-    local(0), call(c.itemLookup), setLocal(2), local(2), op(0x45, 0x04, 0x40), ret(0), op(0x0b),
-    local(2), load(ITEM_OFFSET.bag), setLocal(3), local(3), op(0x45, 0x04, 0x40), ret(0), op(0x0b),
-    i32(c.layout.contextRoot), load(), setLocal(4), local(4), op(0x45, 0x04, 0x40), ret(0), op(0x0b),
-    local(4), load(c.layout.gameContextSlot * 4), setLocal(5), local(5), op(0x45, 0x04, 0x40), ret(0), op(0x0b),
+    local(0), call(c.itemLookup), setLocal(2), requireMemory(2, ITEM_BYTES),
+    local(2), load(ITEM_OFFSET.bag), setLocal(3), requireMemory(3, BAG_OFFSET.itemCount + 4),
+    i32(c.layout.contextRoot), load(), setLocal(4), requireMemory(4, c.layout.gameContextSlot * 4 + 4),
+    local(4), load(c.layout.gameContextSlot * 4), setLocal(5), requireMemory(5, GAME_CONTEXT_OFFSET.trade + 4),
     local(5), load(GAME_CONTEXT_OFFSET.trade), setLocal(6),
-    // UI callbacks only capture intent. Native UI messages are sent from the
-    // certified recurring game-thread boundary on the next frame.
-    global(g.draining), op(0x45, 0x04, 0x40),
-      local(6), op(0x04, 0x7f),
-        local(6), load(TRADE_OFFSET.flags), i32(TRADE_INITIATED_FLAG), op(0x71, 0x45, 0x45),
-      op(0x05), i32(0), op(0x0b),
-      i32(c.certificate.storageFrameHash), call(c.findFrame), op(0x45, 0x45, 0x72, 0x45),
-      op(0x04, 0x40), ret(0), op(0x0b),
-      global(c.pendingGlobal), op(0x04, 0x40), ret(0), op(0x0b),
+    local(6), op(0x04, 0x40),
+      requireMemory(6, TRADE_OFFSET.playerItemCount + 4),
+      local(6), load(TRADE_OFFSET.flags), setLocal(15),
+    op(0x0b),
+    // Classify the source independently of permission to edit the offer.
+    // A locked/unknown trade must never turn an inventory or cart click into
+    // a storage deposit. Consume those shortcuts without native fallthrough.
+    local(15), op(0x04, 0x40),
+      local(1), i32(c.certificate.tradeCartFrameHash), call(c.findAncestor), setLocal(7),
+      local(1), i32(c.certificate.tradeDialogFrameHash), call(c.findAncestor), setLocal(8),
+      local(7), op(0x04, 0x40),
+        i32(CLICK_ACTION.removeFromTrade), setLocal(14),
+      op(0x05),
+        local(8), op(0x04, 0x40), ret(1), op(0x0b),
+        local(3), load(), i32(BAG_TYPE.inventory), op(0x46, 0x04, 0x40),
+          i32(CLICK_ACTION.addToTrade), setLocal(14),
+        op(0x0b),
+      op(0x0b),
+      local(14), op(0x04, 0x40),
+        local(15), i32(TRADE_EDITABLE_FLAGS), op(0x47, 0x04, 0x40), ret(1), op(0x0b),
+        i32(c.certificate.tradeCartFrameHash), call(c.findFrame), setLocal(8),
+        local(8), op(0x45, 0x04, 0x40), ret(1), op(0x0b),
+        local(7), op(0x04, 0x40),
+          local(7), local(8), op(0x47, 0x04, 0x40), ret(1), op(0x0b),
+        op(0x0b), local(8), setLocal(7),
+      op(0x0b),
+    op(0x0b),
+    local(14), op(0x45, 0x04, 0x40),
+      local(3), load(), i32(BAG_TYPE.storage), op(0x46),
+        local(3), load(), i32(BAG_TYPE.materialStorage), op(0x46, 0x72, 0x04, 0x40),
+        i32(CLICK_ACTION.withdraw), setLocal(14),
+      op(0x05),
+        local(3), load(), i32(BAG_TYPE.inventory), op(0x47, 0x04, 0x40), ret(0), op(0x0b),
+        i32(CLICK_ACTION.store), setLocal(14),
+      op(0x0b),
+      i32(c.certificate.storageFrameHash), call(c.findFrame), op(0x45, 0x04, 0x40), ret(0), op(0x0b),
+    op(0x0b),
+    // UI callbacks capture only intent. The spare mailbox words retain the
+    // action and cart identity; a changed route/window cancels on the next
+    // game-thread tick instead of moving the item somewhere else.
+    global(g.draining), op(0x04, 0x40),
+      local(14), global(c.argumentGlobalBase + 2), op(0x47),
+      local(7), global(c.argumentGlobalBase + 3), op(0x47, 0x72, 0x04, 0x40), ret(1), op(0x0b),
+    op(0x05),
+      global(c.pendingGlobal), op(0x04, 0x40), ret(1), op(0x0b),
       global(g.scratch), i32(0), store(QUICK_ITEM_MOVE_PROMPT.quantity),
-      local(0), setGlobal(c.argumentGlobalBase),
-      local(1), setGlobal(c.argumentGlobalBase + 1),
+      local(0), setGlobal(c.argumentGlobalBase), local(1), setGlobal(c.argumentGlobalBase + 1),
+      local(14), setGlobal(c.argumentGlobalBase + 2), local(7), setGlobal(c.argumentGlobalBase + 3),
       global(g.modifiers), setGlobal(g.intentModifiers),
       i32(QUICK_ITEM_MOVE_COMMAND), setGlobal(c.pendingGlobal), ret(1),
     op(0x0b),
-    local(6), op(0x04, 0x40),
-      local(6), load(TRADE_OFFSET.flags), i32(TRADE_INITIATED_FLAG),
-        op(0x71, 0x45, 0x45, 0x04, 0x40),
-        // Frame ancestry is relevant only to an active trade. Avoid touching
-        // transient trade UI records during ordinary storage clicks.
-        local(1), i32(c.certificate.tradeCartFrameHash), call(c.findAncestor), setLocal(7),
-        local(1), i32(c.certificate.tradeDialogFrameHash), call(c.findAncestor), setLocal(8),
-        // Own cart click removes only an id present in the player's offer array.
-        local(7), op(0x04, 0x40),
-          local(6), load(TRADE_OFFSET.playerItems), setLocal(9),
-            local(6), load(TRADE_OFFSET.playerItemCount), setLocal(10), i32(0), setLocal(11),
-          op(0x02, 0x40, 0x03, 0x40), local(11), local(10), op(0x4f, 0x0d), uleb(1),
-            local(9), local(11), i32(8), op(0x6c, 0x6a), load(), local(0), op(0x46, 0x04, 0x40),
-              global(g.scratch), setLocal(12), local(12), i32(0), store(),
-                local(12), i32(ITEM_MOUSE_ACTION.removeFromTrade), store(4),
-                local(12), i32(ITEM_MOUSE_ACTION.state), store(8),
-                local(12), local(0), store(12), local(12), i32(0), store(16),
-              local(7), i32(c.frameDispatchOffset), op(0x6a), i32(UI_MESSAGE.frameMouseAction),
-                local(12), i32(0), call(c.frameDispatch), ret(1),
-            op(0x0b), local(11), i32(1), op(0x6a), setLocal(11), op(0x0c), uleb(0),
-          op(0x0b, 0x0b), ret(0),
-        op(0x0b),
-        // Any other trade descendant is the partner cart and is never changed.
-        local(8), op(0x04, 0x40), ret(0), op(0x0b),
-        // Inventory takes trade precedence while both windows are open.
-        local(3), load(), i32(BAG_TYPE.inventory), op(0x46, 0x04, 0x40),
-          local(2), load(ITEM_OFFSET.interaction), i32(NOT_TRADABLE_INTERACTION), op(0x71, 0x04, 0x40), ret(0), op(0x0b),
-          local(6), load(TRADE_OFFSET.playerItemCount), i32(TRADE_MAX_ITEMS), op(0x4f, 0x04, 0x40), ret(0), op(0x0b),
-          local(6), load(TRADE_OFFSET.playerItems), setLocal(9), i32(0), setLocal(11),
-          op(0x02, 0x40, 0x03, 0x40), local(11), local(6), load(TRADE_OFFSET.playerItemCount), op(0x4f, 0x0d), uleb(1),
-            local(9), local(11), i32(8), op(0x6c, 0x6a), load(), local(0), op(0x46, 0x04, 0x40), ret(0), op(0x0b),
-            local(11), i32(1), op(0x6a), setLocal(11), op(0x0c), uleb(0),
-          op(0x0b, 0x0b),
-          i32(c.certificate.tradeCartFrameHash), call(c.findFrame), setLocal(7), local(7), op(0x45, 0x04, 0x40), ret(0), op(0x0b),
-          global(g.scratch), setLocal(12), local(12), i32(0), store(),
-            local(12), i32(ITEM_MOUSE_ACTION.addToTrade), store(4),
-            local(12), i32(ITEM_MOUSE_ACTION.state), store(8),
-            local(12), local(12), i32(20), op(0x6a), store(12),
-            local(12), i32(0), store(16), local(12), local(0), store(20),
-          effectiveModifiers(g), i32(2), op(0x71), op(0x04, 0x7f), i32(0), op(0x05),
-            local(2), load16(ITEM_OFFSET.quantity), op(0x0b), setLocal(13), local(12), local(13), store(24),
-          local(7), i32(c.frameDispatchOffset), op(0x6a), i32(UI_MESSAGE.frameMouseAction),
-            local(12), i32(0), call(c.frameDispatch), ret(1),
-        op(0x0b),
+    local(14), i32(CLICK_ACTION.addToTrade), op(0x4f, 0x04, 0x40),
+      local(6), load(TRADE_OFFSET.playerItemCount), setLocal(10),
+      local(10), i32(TRADE_MAX_ITEMS), op(0x4b, 0x04, 0x40), ret(1), op(0x0b),
+      local(6), load(TRADE_OFFSET.playerItems), setLocal(9),
+      local(10), op(0x04, 0x40),
+        local(9), op(0x45), local(9), memoryBytes(), local(10), i32(8), op(0x6c, 0x6b, 0x4b, 0x72, 0x04, 0x40),
+          ret(1), op(0x0b),
       op(0x0b),
+      // One bounded membership scan serves both add and remove.
+      op(0x02, 0x40, 0x03, 0x40),
+        local(11), local(10), op(0x4f, 0x0d), uleb(1),
+        local(9), local(11), i32(8), op(0x6c, 0x6a), load(), local(0), op(0x46, 0x0d), uleb(1),
+        local(11), i32(1), op(0x6a), setLocal(11), op(0x0c), uleb(0),
+      op(0x0b, 0x0b),
+      global(g.scratch), setLocal(12),
+      local(14), i32(CLICK_ACTION.removeFromTrade), op(0x46, 0x04, 0x40),
+        local(11), local(10), op(0x4f, 0x04, 0x40), ret(1), op(0x0b),
+        local(12), i32(0), store(), local(12), i32(ITEM_MOUSE_ACTION.removeFromTrade), store(4),
+        local(12), i32(ITEM_MOUSE_ACTION.state), store(8),
+        local(12), local(0), store(12), local(12), i32(0), store(16),
+      op(0x05),
+        local(11), local(10), op(0x49), local(10), i32(TRADE_MAX_ITEMS), op(0x4f, 0x72),
+        local(2), load(ITEM_OFFSET.interaction), i32(NOT_TRADABLE_INTERACTION), op(0x71, 0x72, 0x04, 0x40), ret(1), op(0x0b),
+        local(12), i32(0), store(), local(12), i32(ITEM_MOUSE_ACTION.addToTrade), store(4),
+        local(12), i32(ITEM_MOUSE_ACTION.state), store(8),
+        local(12), local(12), i32(20), op(0x6a), store(12),
+        local(12), i32(0), store(16), local(12), local(0), store(20),
+        effectiveModifiers(g), i32(2), op(0x71), op(0x04, 0x7f), i32(0), op(0x05),
+          local(2), load16(ITEM_OFFSET.quantity), op(0x0b), setLocal(13), local(12), local(13), store(24),
+      op(0x0b),
+      local(7), i32(c.frameDispatchOffset), op(0x6a), i32(UI_MESSAGE.frameMouseAction),
+        local(12), i32(0), call(c.frameDispatch), ret(1),
     op(0x0b),
-    // Storage items always withdraw, even during a trade.
-    local(3), load(), i32(BAG_TYPE.storage), op(0x46),
-      local(3), load(), i32(BAG_TYPE.materialStorage), op(0x46, 0x72, 0x04, 0x40),
-      i32(MOVE_DIRECTION.withdraw), setLocal(11),
-    op(0x05), local(3), load(), i32(BAG_TYPE.inventory), op(0x46, 0x04, 0x40),
-      i32(MOVE_DIRECTION.store), setLocal(11), op(0x05), ret(0), op(0x0b), op(0x0b),
-    local(0), local(2), load16(ITEM_OFFSET.quantity), local(11), call(c.storageExecutor), op(0x0b),
+    local(0), local(2), load16(ITEM_OFFSET.quantity), local(14), call(c.storageExecutor), op(0x0b),
   );
 }
 

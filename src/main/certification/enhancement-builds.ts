@@ -36,17 +36,17 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
       // ENHANCEMENT_TRANSFORM_ABI or any config word changes.
       outputSha256: Object.freeze({
         "features-601":
-          "06e7e534f680cc1ec2c049229b1a7c5e0c8379a46b68ebd8269b972484a22424",
+          "01fbd2857f9df5456237f1182c898d2edc541e438018d08b6fd85edc1223da99",
         "features-e01":
-          "771c917b5bd59b9d96ae404dac7a8156c3c8b97ffff3914c323f13e4672aa4f6",
+          "134becd3f6dab64df1b7db6a19a008981fc8f1bf4d187e2a27571e892e8c302c",
         "features-fff":
-          "421914a8add1c9cd6d88f0124d943a296260bb9e459700d11ab71a9cfc40ae2a",
+          "8de1f98f1bab9478f757908a8f9139937555aa704a387a8f8a09d537cff5604d",
         "features-1fff":
-          "5aa56c8aadeaddf490948811558cb70fd4528d54109de20167794c75ca50b301",
+          "ba0d15ac088c13ab97d1b8675e685bc87c5698e6461372c3933f72c710ed6ea3",
         "features-2fff":
-          "f4570ddbd87c876ac6fecbadd5db957108689922efa9077b6c06bac3aab5a350",
+          "24d891930002b81435c9faae86dc84ecc54c2b33036b1be1bb00065c71bab836",
         "features-3fff":
-          "6d843b14c4b468452e7277b9f00a1a2defeaece3a6596d066de331a53b9da0a9",
+          "fd88cc4f63af870026e3e12399b602dc79a8a7ab97f399cdb1151f58c446a605",
       }),
       programId: 1,
       // The verifier derives this bounded identity from the exact module; it is
