@@ -164,6 +164,26 @@ describe("native effect icon geometry", () => {
     }]);
   });
 
+  it("hides hour-long placeholders by original duration, preserving ordinary timers", () => {
+    const geometry = readCompanionEffectIcons(iconSnapshot(), 0);
+    const canvas = {
+      getBoundingClientRect: () => ({ left: 0, top: 0, width: 800, height: 600 }),
+    } as HTMLCanvasElement;
+    for (const durationMs of [3_600_000, 10_000_000]) {
+      const effects = readCompanionPlayerEffects(effectSnapshot([
+        { ...FINITE, durationMs, appliedAtGameMs: 0 },
+      ]), 0);
+      assert.deepEqual(projectEffectTimerLabels(effects, geometry, canvas), []);
+    }
+    for (const durationMs of [62_000, 3_599_999]) {
+      const effects = readCompanionPlayerEffects(effectSnapshot([
+        { ...FINITE, durationMs, appliedAtGameMs: 5_000 },
+        { ...FINITE, effectId: 10, durationMs: 10_000_000 },
+      ]), 0);
+      assert.equal(projectEffectTimerLabels(effects, geometry, canvas)?.length, 1);
+    }
+  });
+
   it("withdraws labels for indefinite-only and unavailable inputs", () => {
     const geometry = readCompanionEffectIcons(iconSnapshot(), 0);
     const canvas = {
