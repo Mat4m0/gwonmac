@@ -1,6 +1,6 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { LauncherNativeApi } from "@shared/launcher-contracts";
+import type { LauncherNativeApi, LauncherSnapshot } from "@shared/launcher-contracts";
 import App from "./App.vue";
 import { fixtureSnapshot } from "./fixtures";
 
@@ -21,6 +21,38 @@ afterEach(() => {
 });
 
 describe("unified launcher shell", () => {
+  it("keeps a live window-close update when the initial snapshot arrives late", async () => {
+    const stale: LauncherSnapshot = {
+      ...fixtureSnapshot,
+      revision: 10,
+      preferences: { ...fixtureSnapshot.preferences, lastPlayPage: "accounts" },
+      profiles: fixtureSnapshot.profiles.map(profile => ({ ...profile, state: "running" })),
+    };
+    const closed: LauncherSnapshot = {
+      ...stale,
+      revision: 11,
+      profiles: stale.profiles.map(profile => ({ ...profile, state: "ready" })),
+    };
+    let publish: (snapshot: LauncherSnapshot) => void = () => undefined;
+    const unsubscribe = vi.fn();
+    installNative({
+      state: {
+        onChange(listener: typeof publish) { publish = listener; return unsubscribe; },
+        async get() { publish(closed); return stale; },
+      },
+      experience: { updatePreferences: vi.fn(async () => undefined) },
+    });
+    const wrapper = mount(App);
+    await flushPromises();
+    expect(wrapper.get(".accounts-page").text()).toContain("0 open");
+    expect(wrapper.findAll(".account-state").every(row => row.text() === "Ready")).toBe(true);
+    publish(stale);
+    await flushPromises();
+    expect(wrapper.get(".accounts-page").text()).toContain("0 open");
+    wrapper.unmount();
+    expect(unsubscribe).toHaveBeenCalledOnce();
+  });
+
   it("retains a refused save for an exact retry and locks conflicting edits", async () => {
     const update = vi.fn().mockRejectedValueOnce(new Error("disk")).mockResolvedValueOnce(undefined);
     installNative({ settings: { update } });
@@ -94,7 +126,7 @@ describe("unified launcher shell", () => {
     await wrapper.get('button[aria-label="Settings"]').trigger("click");
     expect(wrapper.get(".settings-content h1").text()).toBe("Updates");
     await wrapper.findAll("nav button")[1]!.trigger("click");
-    expect(wrapper.get(".accounts-page h1").text()).toBe("Game windows");
+    expect(wrapper.get(".accounts-page h1").text()).toBe("Accounts");
     expect(wrapper.text()).toContain("Main account");
   });
 

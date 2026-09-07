@@ -11,7 +11,7 @@ import type {
   LauncherPreferencesPatch,
   LauncherProfileAppearance,
 } from "../../shared/launcher-contracts.js";
-import { LAUNCHER_PROFILE_ICONS } from "../../shared/launcher-contracts.js";
+import { LAUNCHER_PROFILE_ICONS, parseLauncherPlayPage } from "../../shared/launcher-contracts.js";
 import type { ProfileId } from "../../shared/multiple-accounts.js";
 import { parseProfileId } from "../../shared/multiple-accounts.js";
 import { writeAtomicJson } from "./atomic-file.js";
@@ -151,6 +151,7 @@ export function parseLauncherState(value: unknown): LauncherStateDocument {
       : boolean(source.preferencesResetPending, "preferences reset notice"),
     selectedProfileIds: source.selectedProfileIds.map(parseProfileId),
     preferences: {
+      ...(preferences.lastPlayPage === undefined ? {} : { lastPlayPage: parseLauncherPlayPage(preferences.lastPlayPage) }),
       content: {
         news: boolean(content.news, "News visibility"),
         dailies: boolean(content.dailies, "Dailies visibility"),
@@ -273,7 +274,7 @@ export class LauncherStateStore {
       const content = { ...current.preferences.content, ...patch.content };
       if (!content.news && !content.dailies) content.first = "news";
       else if (!content[content.first]) content.first = content.news ? "news" : "dailies";
-      return { ...current, preferences: { content } };
+      return { ...current, preferences: { ...current.preferences, ...patch, content } };
     });
   }
 

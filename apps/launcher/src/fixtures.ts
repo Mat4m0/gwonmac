@@ -114,11 +114,29 @@ export const fixtureSnapshot: LauncherSnapshot = {
   contentAvailability: { news: "fixture", dailies: "fixture", knownIssues: "fixture", feedback: "fixture" },
 };
 
-export type LauncherFixtureScenario = "default" | "fresh" | "preparing" | "repair" | "offline" | "update" | "failed" | "production";
+export type LauncherFixtureScenario = "accounts" | "default" | "fresh" | "preparing" | "repair" | "offline" | "update" | "failed" | "production";
 
 export function fixtureSnapshotFor(search: string): LauncherSnapshot {
   const requested = new URLSearchParams(search).get("fixture") as LauncherFixtureScenario | null;
   switch (requested) {
+    case "accounts":
+      return {
+        ...fixtureSnapshot,
+        experience: { ...fixtureSnapshot.experience, showMigrationNotice: false },
+        readiness: { state: "playable", backgroundDownload: null },
+        selectedProfileIds: [fixtureSnapshot.profiles[1]!.id],
+        profiles: [
+          { ...fixtureSnapshot.profiles[0]!, name: "Main", state: "running" },
+          { ...fixtureSnapshot.profiles[1]!, name: "Heroes", state: "ready" },
+          ...["Reforged", "Storage A", "Storage B", "Storage C", "Trading"].map((name, index) => ({
+            ...fixtureSnapshot.profiles[0]!,
+            id: parseProfileId(`ba46cb0e-55c2-4c05-9808-5c35ce83b0b${index + 1}`),
+            name,
+            state: "ready" as const,
+          })),
+        ],
+      };
+
     case "fresh":
       return {
         ...fixtureSnapshot,

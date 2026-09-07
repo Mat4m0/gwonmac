@@ -50,6 +50,18 @@ affects only that account. Closing the last game shows the launcher. Clicking
 the Dock icon restores the most recent launcher or game window that you used.
 If that window has closed, the next most recent game window is restored.
 
+The launcher remembers whether you last chose **Home** or **Accounts**, along
+with its window size, position, and fullscreen or maximized state. Visiting
+Settings does not change your starting page.
+
+On **Accounts**, check accounts to open together with the large launch button.
+Use **Play** beside any account to open only that account. This keeps your
+selected group unchanged. The Home account picker offers the same individual
+actions. **Show** brings an existing game forward; **Try again** retries a
+failed account; **Cancel** removes a waiting launch. **Edit** lets you change
+an account's name, icon, and color. The native **Accounts** menu also opens or
+shows named accounts while you are playing.
+
 ## Home content
 
 Home can show News and Dailies. Open **Settings → Content** to enable either

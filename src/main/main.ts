@@ -130,7 +130,8 @@ import {
   bootstrapAccountWorkspace,
   loadAccountMode,
 } from "./core/multiple-accounts.js";
-import { createLauncherWindow } from "./accounts-window.js";
+import { refreshNativeAccountsMenu } from "./window-menu.js";
+import { createLauncherWindow, prepareLauncherWindowState } from "./accounts-window.js";
 import { MultipleAccountsController } from "./multiple-accounts-controller.js";
 import { WindowCoordinator } from "./window-coordinator.js";
 import { GameReloader } from "./game-reload.js";
@@ -486,6 +487,21 @@ function buildWindowHost(
     revealLauncher: (destination) => {
       revealLauncher(destination);
     },
+    accounts: {
+      profiles: () => launcherOrchestrator?.snapshot().profiles ?? [],
+      activate: async (id) => {
+        const orchestrator = launcherOrchestrator;
+        const profile = orchestrator?.snapshot().profiles.find(candidate => candidate.id === id && !candidate.archived);
+        if (!orchestrator || !profile) return;
+        if (profile.state === "running") await orchestrator.show(id);
+        else if (profile.state === "ready" || profile.state === "failed") {
+          await orchestrator.play([id]);
+          if (windowRegistry.focusedWindow() && orchestrator.snapshot().profiles.some(candidate => candidate.id === id && candidate.state === "running")) {
+            await orchestrator.show(id);
+          }
+        }
+      },
+    },
     gameWindowClosed: () => {
       windowCoordinator.afterGameClosed();
     },
@@ -797,6 +813,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     publish: (snapshot) => {
       const launcher = windowRegistry.launcherWindow();
       if (launcher) sendIfLive(launcher, LAUNCHER_IPC.stateEvent, snapshot);
+      refreshNativeAccountsMenu();
     },
   });
 
@@ -842,7 +859,8 @@ if (primaryInstance) void app.whenReady().then(async () => {
       if (!created) throw new Error("Created account was not published");
       if (appearance) await launcherOrchestrator!.updateAppearance(created.id, appearance);
     },
-    updateAppearance: async ({ id, icon, color }) => {
+    updateProfile: async ({ id, name, icon, color }) => {
+      await accounts.rename(id, name);
       await launcherOrchestrator!.updateAppearance(id, { icon, color });
     },
     setSelection: (ids) => launcherOrchestrator!.setSelection(ids),
@@ -1043,16 +1061,18 @@ if (primaryInstance) void app.whenReady().then(async () => {
     await stopDiagnostics();
   });
 
+  await prepareLauncherWindowState();
   const win = createLauncherWindow(
     protocolDeps,
     windowCoordinator,
     revealLauncher,
+    host.accounts,
   );
   app.dock?.setMenu(Menu.buildFromTemplate([
     {
       id: "show-launcher",
       label: "Show Launcher",
-      click: () => revealLauncher("home"),
+      click: () => revealLauncher(),
     },
   ]));
   let automaticUpdateCheckInFlight = false;
@@ -1151,7 +1171,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
   });
   app.on("activate", () => {
     if (!windowCoordinator.restoreMostRecentWindow()) {
-      createLauncherWindow(protocolDeps, windowCoordinator, revealLauncher);
+      createLauncherWindow(protocolDeps, windowCoordinator, revealLauncher, host.accounts);
     }
   });
   app.on("child-process-gone", (_event, details) => {

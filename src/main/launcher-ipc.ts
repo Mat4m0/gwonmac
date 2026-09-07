@@ -11,7 +11,7 @@ import type {
   LauncherPreferencesPatch,
   LauncherExternalLink,
   LauncherProfileCreateInput,
-  ProfileAppearanceUpdate,
+  LauncherProfileUpdate,
   ShortcutReplacement,
 } from "../shared/launcher-contracts.js";
 import {
@@ -44,7 +44,7 @@ export interface LauncherIpcContext {
   readonly connected: () => void;
   readonly snapshot: () => LauncherSnapshot;
   readonly create: (input: LauncherProfileCreateInput) => Promise<void>;
-  readonly updateAppearance: (input: ProfileAppearanceUpdate) => Promise<void>;
+  readonly updateProfile: (input: LauncherProfileUpdate) => Promise<void>;
   readonly setSelection: (ids: readonly ProfileId[]) => Promise<void>;
   readonly play: (ids: readonly ProfileId[]) => Promise<void>;
   readonly show: (id: ProfileId) => Promise<void>;
@@ -112,13 +112,14 @@ const setup = one((value: unknown): boolean => {
   if (Object.keys(source).length !== 1 || typeof source.enableTools !== "boolean") throw new Error("setup request is invalid");
   return source.enableTools;
 });
-const appearance = one((value: unknown): ProfileAppearanceUpdate => {
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("appearance must be an object");
+const profileUpdate = one((value: unknown): LauncherProfileUpdate => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("profile update must be an object");
   const source = value as Record<string, unknown>;
-  if (Object.keys(source).some((key) => !["id", "icon", "color"].includes(key))) throw new Error("appearance has an unknown field");
+  if (Object.keys(source).some((key) => !["id", "name", "icon", "color"].includes(key))) throw new Error("profile update has an unknown field");
   const id = parseProfileId(source.id);
-  if (typeof source.icon !== "string" || typeof source.color !== "string") throw new Error("appearance is invalid");
-  return { id, icon: source.icon, color: source.color };
+  const name = parseProfileName(source.name);
+  const appearance = parseLauncherProfileAppearance({ icon: source.icon, color: source.color });
+  return { id, name, ...appearance };
 });
 const toolUpdate = one((value: unknown): GlobalToolUpdate => {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Tool update must be an object");
@@ -144,7 +145,7 @@ export function registerLauncherIpc(ctx: LauncherIpcContext): void {
       return ctx.snapshot();
     }, "launcher"),
     profilesCreate: channel(profileCreate, (_win, input) => ctx.create(input), "launcher"),
-    profilesUpdateAppearance: channel(appearance, (_win, input) => ctx.updateAppearance(input), "launcher"),
+    profilesUpdate: channel(profileUpdate, (_win, input) => ctx.updateProfile(input), "launcher"),
     profilesSetSelection: channel(profileIds, (_win, ids) => ctx.setSelection(ids), "launcher"),
     profilesPlay: channel(profileIds, (_win, ids) => ctx.play(ids), "launcher"),
     profilesShow: channel(profileId, (_win, id) => ctx.show(id), "launcher"),

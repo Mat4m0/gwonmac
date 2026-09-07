@@ -17,6 +17,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   toggle: [id: ProfileId];
   show: [id: ProfileId];
+  play: [id: ProfileId];
+  cancel: [id: ProfileId];
   action: [];
   manage: [];
   gameFiles: [];
@@ -30,6 +32,9 @@ const pickerButton = ref<HTMLButtonElement | null>(null);
 
 const visibleProfiles = computed(() => props.snapshot.profiles.filter((profile) => !profile.archived));
 const selectedProfiles = computed(() => visibleProfiles.value.filter((profile) => props.selected.includes(profile.id)));
+const selectionSummary = computed(() => selectedProfiles.value.length === 1
+  ? selectedProfiles.value[0]!.name
+  : `${selectedProfiles.value.length} selected`);
 const closedSelected = computed(() => selectedProfiles.value.filter((profile) => profile.state !== "running"));
 const waiting = computed(() => selectedProfiles.value.some((profile) => profile.state === "queued"));
 const starting = computed(() => selectedProfiles.value.some((profile) => profile.state === "opening" || profile.state === "checking"));
@@ -178,6 +183,11 @@ function onKeydown(event: KeyboardEvent) {
   closePicker();
 }
 
+function play(id: ProfileId) {
+  if (props.snapshot.readiness.state === "repair-required") closePicker(false);
+  emit("play", id);
+}
+
 function manage() {
   closePicker(false);
   emit("manage");
@@ -186,7 +196,7 @@ function manage() {
 watch(pickerOpen, async (open) => {
   if (!open) return;
   await nextTick();
-  pickerWrap.value?.querySelector<HTMLElement>('[role="checkbox"]')?.focus();
+  pickerWrap.value?.querySelector<HTMLElement>('[role="checkbox"]:not(:disabled), .profile-action:not(:disabled)')?.focus();
 });
 
 onMounted(() => {
@@ -217,15 +227,23 @@ onBeforeUnmount(() => {
       </div>
     </div>
     <div ref="pickerWrap" class="picker-wrap">
-      <button ref="pickerButton" class="account-picker" :aria-label="`Choose accounts, ${selectedProfiles.length} selected`" aria-haspopup="true" :aria-expanded="pickerOpen" aria-controls="profile-picker" @click="pickerOpen = !pickerOpen"><Users /><span aria-hidden="true"><small>Accounts</small><strong>{{ selectedProfiles.length }} selected</strong></span><ChevronDown aria-hidden="true" /></button>
+      <button ref="pickerButton" class="account-picker" :class="{ expanded: pickerOpen }" :aria-label="`Choose accounts, ${selectionSummary}`" :aria-expanded="pickerOpen" aria-controls="profile-picker" @click="pickerOpen = !pickerOpen"><Users /><span aria-hidden="true"><small>Accounts</small><strong :title="selectionSummary">{{ selectionSummary }}</strong></span><ChevronDown aria-hidden="true" /></button>
       <div v-if="pickerOpen" id="profile-picker" class="profile-picker" role="group" aria-label="Choose accounts">
-        <strong>Choose accounts</strong>
-        <div v-for="profile in visibleProfiles" :key="profile.id" class="profile-choice">
-          <button class="profile-toggle" role="checkbox" :aria-checked="selected.includes(profile.id)" @click="emit('toggle', profile.id)">
-            <span aria-hidden="true" class="checkbox" :class="{ checked: selected.includes(profile.id) }"><Check v-if="selected.includes(profile.id)" /></span>
-            <span><b>{{ profile.name }}</b><small>{{ profileStatus(profile) }}</small></span>
-          </button>
-          <button v-if="profile.state === 'running'" class="show-profile" :aria-label="`Show ${profile.name}`" @click="emit('show', profile.id)">Show</button>
+        <div class="picker-heading"><strong>Accounts</strong><span>Select accounts to play together, or launch one.</span></div>
+        <div class="profile-list">
+          <div v-for="profile in visibleProfiles" :key="profile.id" class="profile-choice" :class="{ selected: selected.includes(profile.id) }">
+            <button class="profile-toggle" role="checkbox" :disabled="selected.length === 1 && selected.includes(profile.id)" :title="selected.length === 1 && selected.includes(profile.id) ? 'Select another account before removing this one' : undefined" :aria-checked="selected.includes(profile.id)" :aria-label="`Select ${profile.name}`" @click="emit('toggle', profile.id)">
+              <span aria-hidden="true" class="checkbox" :class="{ checked: selected.includes(profile.id) }"><Check v-if="selected.includes(profile.id)" /></span>
+              <span class="profile-copy"><b>{{ profile.name }}</b><small><span v-if="profile.state === 'running'" class="profile-open-dot" aria-hidden="true" />{{ profileStatus(profile) }}</small></span>
+            </button>
+            <button v-if="profile.state === 'running'" class="profile-action" :aria-label="`Show ${profile.name}`" @click="emit('show', profile.id)">Show</button>
+            <button v-else-if="profile.state === 'ready' || profile.state === 'failed'" class="profile-action" :disabled="busy" :aria-label="`${snapshot.readiness.state === 'repair-required' ? 'Repair game files for' : profile.state === 'failed' ? 'Try again for' : 'Play'} ${profile.name}`" @click="play(profile.id)">
+              <RotateCcw v-if="profile.state === 'failed' || snapshot.readiness.state === 'repair-required'" aria-hidden="true" /><Play v-else aria-hidden="true" />
+              {{ snapshot.readiness.state === 'repair-required' ? 'Repair' : profile.state === 'failed' ? 'Try again' : 'Play' }}
+            </button>
+            <button v-else-if="profile.state === 'queued'" class="profile-action" :aria-label="`Cancel waiting for ${profile.name}`" @click="emit('cancel', profile.id)"><X aria-hidden="true" />Cancel</button>
+            <button v-else class="profile-action profile-waiting" disabled :aria-label="`${profile.name}: ${profileStatus(profile)}`"><Clock3 aria-hidden="true" />Opening</button>
+          </div>
         </div>
         <button class="manage" @click="manage"><Settings />Manage accounts</button>
       </div>

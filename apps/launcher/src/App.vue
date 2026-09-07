@@ -18,6 +18,7 @@ import type { LauncherDestination, LauncherSnapshot } from "@shared/launcher-con
 import type { LauncherPreferencesPatch, LauncherSettingsPatch } from "@shared/launcher-contracts";
 import type { CacheInfo } from "@shared/contracts";
 import type { ProfileId } from "@shared/multiple-accounts";
+import { parseProfileName, profileNameKey } from "@shared/multiple-accounts";
 import { fixtureSnapshotFor } from "./fixtures";
 import AccountsView from "./components/AccountsView.vue";
 import BaseModal from "./components/BaseModal.vue";
@@ -120,6 +121,9 @@ async function focusSettingsHeading() {
 const selected = ref<ProfileId[]>([...snapshot.value.selectedProfileIds]);
 const addOpen = ref(false);
 const appearanceProfile = ref<ProfileId | null>(null);
+const appearanceName = ref("");
+const appearanceError = ref("");
+const appearanceSaving = ref(false);
 const appearanceIcon = ref("swords");
 const appearanceColor = ref("#9a6638");
 const newName = ref("");
@@ -140,21 +144,41 @@ let unsubscribeNavigation: (() => void) | undefined;
 let migrationNoticeTimer: ReturnType<typeof setTimeout> | undefined;
 
 const native = window.launcherNative;
+let navigationRequested = false;
+// Browser previews remember only navigation in this tab. Native preferences
+// remain the production owner, with no browser-storage fallback.
+if (!native && import.meta.env.MODE === "development") {
+  const remembered = sessionStorage.getItem("launcher-preview-page");
+  if (remembered === "home" || remembered === "accounts") route.value = remembered;
+}
+watch(route, (page) => {
+  if (page !== "home" && page !== "accounts") return;
+  if (!native) {
+    if (import.meta.env.MODE === "development") sessionStorage.setItem("launcher-preview-page", page);
+    return;
+  }
+  if (snapshot.value.preferences.lastPlayPage === page) return;
+  void runAction("The starting page could not be remembered.", () => native.experience.updatePreferences({ lastPlayPage: page }));
+});
 const synchronized = ref(!native);
 const fixtureContent = computed(() => snapshot.value.contentAvailability.news === "fixture");
 onMounted(async () => {
   if (!native) return;
   unsubscribeNavigation = native.navigation.onRequest(navigateFromMain);
+  // Subscribe before fetching: a window can close while the initial snapshot
+  // crosses IPC. Revision ordering also refuses a late, older response.
+  let receivedRevision = -1;
+  const applySnapshot = (next: LauncherSnapshot) => {
+    if (next.revision < receivedRevision) return;
+    receivedRevision = next.revision;
+    snapshot.value = next;
+    selected.value = [...next.selectedProfileIds];
+  };
+  unsubscribe = native.state.onChange(applySnapshot);
   try {
-    const initial = await native.state.get();
-    snapshot.value = initial;
-    selected.value = [...initial.selectedProfileIds];
+    applySnapshot(await native.state.get());
+    if (!navigationRequested) route.value = snapshot.value.preferences.lastPlayPage ?? "home";
     synchronized.value = true;
-    unsubscribe = native.state.onChange((next) => {
-      if (next.revision < snapshot.value.revision) return;
-      snapshot.value = next;
-      selected.value = [...next.selectedProfileIds];
-    });
   } catch {
     startupError.value = true;
   }
@@ -216,6 +240,20 @@ async function primaryAction() {
   }
 }
 
+async function playProfile(id: ProfileId) {
+  const profile = snapshot.value.profiles.find(candidate => candidate.id === id);
+  if (!profile || profile.archived || (profile.state !== "ready" && profile.state !== "failed")) return;
+  if (snapshot.value.readiness.state === "repair-required") {
+    openSettings("game-files");
+    return;
+  }
+  await runAction("This account could not be opened. Try again.", () => native?.profiles.play([id]));
+}
+
+async function cancelProfile(id: ProfileId) {
+  await runAction("The waiting account could not be cancelled.", () => native?.profiles.cancelQueued([id]));
+}
+
 async function showProfile(id: ProfileId) {
   await runAction(
     "The game window could not be shown.",
@@ -237,16 +275,42 @@ async function createProfile() {
 
 function editAppearance(profile: LauncherSnapshot["profiles"][number]) {
   appearanceProfile.value = profile.id;
+  appearanceName.value = profile.name;
+  appearanceError.value = "";
   appearanceIcon.value = profile.appearance.icon;
   appearanceColor.value = profile.appearance.color;
 }
 
 async function saveAppearance() {
-  if (!appearanceProfile.value) return;
-  await runAction("The account appearance could not be saved.", async () => {
-    await native?.profiles.updateAppearance({ id: appearanceProfile.value!, icon: appearanceIcon.value, color: appearanceColor.value });
+  const id = appearanceProfile.value;
+  if (!id || appearanceSaving.value) return;
+  appearanceError.value = "";
+  let name: string;
+  try {
+    name = parseProfileName(appearanceName.value);
+    if (snapshot.value.profiles.some(profile => profile.id !== id && profileNameKey(profile.name) === profileNameKey(name))) {
+      appearanceError.value = "Another account already uses this name.";
+      return;
+    }
+  } catch {
+    appearanceError.value = "Enter a name of 1–48 characters without control characters.";
+    return;
+  }
+  appearanceSaving.value = true;
+  try {
+    if (native) await native.profiles.update({ id, name, icon: appearanceIcon.value, color: appearanceColor.value });
+    else snapshot.value = {
+      ...snapshot.value,
+      profiles: snapshot.value.profiles.map(profile => profile.id === id
+        ? { ...profile, name, appearance: { icon: appearanceIcon.value, color: appearanceColor.value } }
+        : profile),
+    };
     appearanceProfile.value = null;
-  });
+  } catch {
+    appearanceError.value = "The account could not be fully saved. Some changes may already be saved. Try again.";
+  } finally {
+    appearanceSaving.value = false;
+  }
 }
 
 async function archiveAppearanceProfile() {
@@ -265,8 +329,9 @@ function openSettings(section: SettingsRoute = settingsRoute.value) {
 }
 
 function navigateFromMain(destination: LauncherDestination) {
+  navigationRequested = true;
   if (destination === "settings") openSettings();
-  else route.value = "home";
+  else route.value = destination;
 }
 
 function selectSettings(section: SettingsRoute) {
@@ -396,7 +461,7 @@ async function resetGameFiles() {
 <template>
   <div v-if="startupError" class="launcher-boot launcher-error" role="alert"><AlertTriangle /><h1>The launcher could not open</h1><p>Your accounts and game files were not changed.</p><button class="primary" @click="retryStartup">Try again</button></div>
   <div v-else-if="!synchronized" class="launcher-boot" role="status">Opening launcher…</div>
-  <div v-else class="app-shell" :class="{ 'settings-shell': route === 'settings' }" :data-intro-step="snapshot.experience.introduction === 'pending' ? introStep : undefined">
+  <div v-else class="app-shell" :class="{ 'settings-shell': route === 'settings', 'accounts-shell': route === 'accounts' }" :data-intro-step="snapshot.experience.introduction === 'pending' ? introStep : undefined">
     <LauncherHeader :route="route" @navigate="route = $event" @settings="openSettings()" @external="openExternal" />
 
     <section v-if="route !== 'settings'" class="funding-banner" aria-label="Project funding">
@@ -413,10 +478,14 @@ async function resetGameFiles() {
       <AccountsView
         v-else-if="route === 'accounts'"
         :profiles="snapshot.profiles"
+        :selected="selected"
+        :readiness="snapshot.readiness"
+        @toggle="toggleProfile"
         @add="addOpen = true"
         @customize="editAppearance"
         @show="showProfile"
-        @play="id => runAction('This account could not be opened. Try again.', () => native?.profiles.play([id]))"
+        @play="playProfile"
+        @cancel="cancelProfile"
         @restore="id => runAction('The account could not be restored.', () => native?.profiles.restore(id))"
         @delete="id => runAction('The account could not be deleted.', () => native?.profiles.delete(id))"
       />
@@ -497,6 +566,8 @@ async function resetGameFiles() {
       :update-dismissed="updateBannerDismissed"
       :viewing-game-files="route === 'settings' && settingsRoute === 'game-files'"
       @toggle="toggleProfile"
+      @play="playProfile"
+        @cancel="cancelProfile"
       @show="showProfile"
       @action="primaryAction"
       @manage="route = 'accounts'"
@@ -510,8 +581,8 @@ async function resetGameFiles() {
       <form @submit.prevent="createProfile"><div class="modal-head"><h2 id="add-account-title">Add account</h2><button type="button" class="icon-button" aria-label="Close" @click="addOpen = false"><X /></button></div><p>This opens another separate Guild Wars window. Sign-in stays inside the game.</p><label>Name<input v-model="newName" autofocus maxlength="48" placeholder="Second account" /></label><details><summary>Appearance</summary><fieldset class="icon-options"><legend>Icon</legend><button v-for="(component, icon) in profileIcons" :key="icon" type="button" :aria-label="icon" :aria-pressed="newIcon === icon" :class="{ selected: newIcon === icon }" @click="newIcon = icon"><component :is="component" /></button></fieldset><fieldset class="color-options"><legend>Color</legend><button v-for="color in ['#9a6638', '#496b58', '#46658a', '#76558b', '#9a4f4f', '#76703c', '#4c777d', '#6f6258']" :key="color" type="button" :aria-label="`Use ${color}`" :aria-pressed="newColor === color" :class="{ selected: newColor === color }" :style="{ background: color }" @click="newColor = color" /><ColorControl label="Custom account color" :value="newColor" @change="newColor = $event" /></fieldset></details><div class="form-actions"><button type="button" class="secondary" @click="addOpen = false">Cancel</button><button class="primary" :disabled="!newName.trim()">Add account</button></div></form>
     </BaseModal>
 
-    <BaseModal v-if="appearanceProfile" labelledby="appearance-title" @close="appearanceProfile = null">
-      <form @submit.prevent="saveAppearance"><div class="modal-head"><h2 id="appearance-title">Edit account</h2><button type="button" class="icon-button" aria-label="Close" @click="appearanceProfile = null"><X /></button></div><p>Choose how this account appears in the launcher.</p><fieldset class="icon-options"><legend>Icon</legend><button v-for="(component, icon) in profileIcons" :key="icon" type="button" :aria-label="icon" :aria-pressed="appearanceIcon === icon" :class="{ selected: appearanceIcon === icon }" @click="appearanceIcon = icon"><component :is="component" /></button></fieldset><fieldset class="color-options"><legend>Color</legend><button v-for="color in ['#9a6638', '#496b58', '#46658a', '#76558b', '#9a4f4f', '#76703c', '#4c777d', '#6f6258']" :key="color" type="button" :aria-label="`Use ${color}`" :aria-pressed="appearanceColor === color" :class="{ selected: appearanceColor === color }" :style="{ background: color }" @click="appearanceColor = color" /><ColorControl label="Custom account color" :value="appearanceColor" @change="appearanceColor = $event" /></fieldset><div v-if="canArchiveAppearanceProfile" class="archive-account-row"><span><strong>Archive account</strong><small>Hide this account without deleting its data.</small></span><button type="button" class="archive-button" @click="archiveAppearanceProfile"><Archive />Archive</button></div><div class="form-actions"><button type="button" class="secondary" @click="appearanceProfile = null">Cancel</button><button class="primary">Save</button></div></form>
+    <BaseModal v-if="appearanceProfile" labelledby="appearance-title" :dismissible="!appearanceSaving" @close="appearanceProfile = null">
+      <form @submit.prevent="saveAppearance"><fieldset class="account-edit-fields" :disabled="appearanceSaving"><div class="modal-head"><h2 id="appearance-title">Edit account</h2><button type="button" class="icon-button" aria-label="Close" :disabled="appearanceSaving" @click="appearanceProfile = null"><X /></button></div><p>Choose a name and appearance you can recognize at a glance.</p><label>Name<input v-model="appearanceName" maxlength="48" required :disabled="appearanceSaving" :aria-invalid="!!appearanceError" :aria-describedby="appearanceError ? 'account-edit-error' : undefined" /></label><p v-if="appearanceError" id="account-edit-error" class="account-edit-error" role="alert">{{ appearanceError }}</p><fieldset class="icon-options"><legend>Icon</legend><button v-for="(component, icon) in profileIcons" :key="icon" type="button" :aria-label="icon" :aria-pressed="appearanceIcon === icon" :class="{ selected: appearanceIcon === icon }" @click="appearanceIcon = icon"><component :is="component" /></button></fieldset><fieldset class="color-options"><legend>Color</legend><button v-for="color in ['#9a6638', '#496b58', '#46658a', '#76558b', '#9a4f4f', '#76703c', '#4c777d', '#6f6258']" :key="color" type="button" :aria-label="`Use ${color}`" :aria-pressed="appearanceColor === color" :class="{ selected: appearanceColor === color }" :style="{ background: color }" @click="appearanceColor = color" /><ColorControl label="Custom account color" :value="appearanceColor" @change="appearanceColor = $event" /></fieldset><div v-if="canArchiveAppearanceProfile" class="archive-account-row"><span><strong>Archive account</strong><small>Hide this account without deleting its data.</small></span><button type="button" class="archive-button" @click="archiveAppearanceProfile"><Archive />Archive</button></div><div class="form-actions"><button type="button" class="secondary" :disabled="appearanceSaving" @click="appearanceProfile = null">Cancel</button><button class="primary" :disabled="appearanceSaving">{{ appearanceSaving ? 'Saving…' : 'Save changes' }}</button></div></fieldset></form>
     </BaseModal>
 
     <div v-if="snapshot.experience.preferencesReset" class="toast"><AlertTriangle /><div><strong>Launcher preferences were reset.</strong><span>Your accounts, saved login, game files, builds, and templates were not changed.</span></div><button class="icon-button" aria-label="Dismiss" @click="dismissPreferencesReset"><X /></button></div>
