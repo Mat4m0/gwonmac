@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { LauncherNativeApi, LauncherSnapshot } from "@shared/launcher-contracts";
 import App from "./App.vue";
 import { fixtureSnapshot } from "./fixtures";
+import { funding } from "./funding";
 
 function installNative(overrides: Record<string, unknown>): LauncherNativeApi {
   const native = {
@@ -114,6 +115,13 @@ describe("unified launcher shell", () => {
     const wrapper = mount(App);
 
     expect(wrapper.get(".funding-banner").text()).toContain("Support gwonmac");
+    const progress = wrapper.get('[role="progressbar"][aria-label="Project funding"]');
+    expect(progress.attributes("aria-valuenow")).toBe(String(funding.raisedEuros));
+    expect(progress.attributes("aria-valuemax")).toBe(String(funding.goalEuros));
+    expect(progress.attributes("aria-valuetext")).toBe(`€${funding.raisedEuros} of €${funding.goalEuros} funded`);
+    expect(progress.text()).toContain(`€${funding.raisedEuros}`);
+    expect(progress.text()).toContain(`€${funding.goalEuros}`);
+    expect(progress.get("i").attributes("style")).toContain(`${Math.min(100, funding.raisedEuros / funding.goalEuros * 100)}%`);
     expect(wrapper.get(".funding-banner").text()).not.toContain("yearly project costs");
     expect(wrapper.get(".funding-banner").text()).not.toContain("Downloading game files");
     expect(wrapper.get(".launchbar").text()).toContain("Downloading game files");

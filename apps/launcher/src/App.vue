@@ -20,6 +20,7 @@ import type { CacheInfo } from "@shared/contracts";
 import type { ProfileId } from "@shared/multiple-accounts";
 import { parseProfileName, profileNameKey } from "@shared/multiple-accounts";
 import { fixtureSnapshotFor } from "./fixtures";
+import { funding } from "./funding";
 import AccountsView from "./components/AccountsView.vue";
 import BaseModal from "./components/BaseModal.vue";
 import FeedbackView from "./components/FeedbackView.vue";
@@ -161,7 +162,6 @@ watch(route, (page) => {
   void runAction("The starting page could not be remembered.", () => native.experience.updatePreferences({ lastPlayPage: page }));
 });
 const synchronized = ref(!native);
-const fixtureContent = computed(() => snapshot.value.contentAvailability.news === "fixture");
 onMounted(async () => {
   if (!native) return;
   unsubscribeNavigation = native.navigation.onRequest(navigateFromMain);
@@ -466,8 +466,8 @@ async function resetGameFiles() {
 
     <section v-if="route !== 'settings'" class="funding-banner" aria-label="Project funding">
       <div><strong>Support gwonmac</strong></div>
-      <div class="funding-progress" :aria-label="fixtureContent ? '€42 of €125 funded' : '€125 yearly cost'">
-        <span>{{ fixtureContent ? '€42' : 'Yearly costs' }}</span><div><i :style="{ width: fixtureContent ? '34%' : '0%' }" /></div><span>€125</span>
+      <div class="funding-progress" role="progressbar" aria-label="Project funding" :aria-valuenow="funding.raisedEuros" :aria-valuemax="funding.goalEuros" :aria-valuemin="0" :aria-valuetext="`€${funding.raisedEuros} of €${funding.goalEuros} funded`">
+        <span>€{{ funding.raisedEuros }}</span><div><i :style="{ width: `${Math.min(100, funding.raisedEuros / funding.goalEuros * 100)}%` }" /></div><span>€{{ funding.goalEuros }}</span>
       </div>
       <button @click="openExternal('donate')">Support</button>
     </section>
