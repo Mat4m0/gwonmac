@@ -56,6 +56,14 @@ only the boundary it executed.
 See [Development and rollout](docs/development-workflow.md) for the complete
 branch and release model.
 
+### Development apps
+
+Follow the [startup procedure](docs/development-workflow.md#start-and-hand-off-a-development-app).
+Do not select `Electron` or `com.github.Electron`, or open `Electron.app` directly.
+Verify the running worktree and profile before attaching UI tools.
+Hand off the real launcher visibly open; use **Window → Show Launcher** after
+game checks. Preserve existing sessions; do not restart them to reveal a window.
+
 ## Sources of truth
 
 Code and tests own exact schemas, values, hashes, limits, and accepted states.
