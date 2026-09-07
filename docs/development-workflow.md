@@ -84,6 +84,15 @@ launcher; restore it with **Window → Show Launcher**. Do not click Play merely
 to verify startup. Report the worktree, launch mode, and profile. Rebuild before
 checking changed compiled code; preserve the session requested for handoff.
 
+## Update project funding
+
+Edit `raisedEuros` and `goalEuros` in
+[`apps/launcher/src/funding.ts`](../apps/launcher/src/funding.ts).
+Use the confirmed euro totals and keep the goal greater than zero. The launcher
+uses these figures for the visible amounts, accessible description, and bar.
+Run `pnpm --filter @gwonmac/launcher-ui test` and `pnpm run check`.
+The new totals reach installed apps with the next application update.
+
 ## Disposable launcher fixtures
 
 Use `pnpm launcher:fixture` to open a fresh launcher against a temporary

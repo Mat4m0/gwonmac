@@ -32,7 +32,7 @@ nav button.active { color: #f7d180; background: rgba(232, 183, 92, .08); }
 .funding-banner span { color: var(--muted); font-size: 12px; white-space: nowrap; }
 .funding-progress { min-width: 0; display: grid; grid-template-columns: auto minmax(80px, 1fr) auto; align-items: center; gap: 9px; }
 .funding-progress div { height: 6px; overflow: hidden; border-radius: 99px; background: rgba(255,255,255,.1); }
-.funding-progress i { display: block; width: 34%; height: 100%; background: linear-gradient(90deg, #c77c2b, #f0c869); }
+.funding-progress i { display: block; height: 100%; background: linear-gradient(90deg, #c77c2b, #f0c869); }
 .funding-banner button, .secondary { padding: 8px 12px; border-radius: 9px; border: 1px solid var(--line); background: var(--control); }
 main { width: 100%; min-width: 0; min-height: 0; overflow: hidden; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(450px, .85fr); }
 main.artwork-only { grid-template-columns: 1fr; }
