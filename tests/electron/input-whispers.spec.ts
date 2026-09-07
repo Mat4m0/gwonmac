@@ -82,3 +82,36 @@ test("embedded whispers open on the first click and retain draft input when rais
     await expect(field).toHaveValue("Keep my draft here");
   } finally { await closeOffline(fixture); }
 });
+
+
+test("whisper toggle focuses the picker or draft and returns focus to the game", async () => {
+  const fixture = await launchPlayableClient("gw-whispers-shortcut-e2e-");
+  try {
+    const { page } = fixture;
+    await startGameInput(page);
+    await page.evaluate(async () => {
+      document.getElementById("loading")?.classList.add("gone");
+      const modelPath = "./shared/whisper-session.js";
+      const surfacePath = "./whisper-surface.js";
+      const model = await import(modelPath);
+      const surface = await import(surfacePath);
+      const session = model.createWhisperSession(async () => {});
+      session.setAvailable(true);
+      surface.createWhisperSurface(document.body, session);
+    });
+    await expect(page.locator("#whisper-window")).toBeAttached();
+    const toggle = () => page.evaluate(() => window.dispatchEvent(new CustomEvent("gw:whispers-toggle", { cancelable: true })));
+    await toggle();
+    await expect(page.locator("#whisper-person")).toBeFocused();
+    await page.locator("#whisper-person").fill("Test Friend");
+    await page.locator(".whisper-search").getByRole("button", { name: "Chat", exact: true }).click();
+    const draft = page.getByRole("textbox", { name: "Message Test Friend" });
+    await draft.fill("Unsent draft");
+    await toggle();
+    await expect(page.locator("#whisper-window")).toBeHidden();
+    await expect(page.locator("#canvas")).toBeFocused();
+    await toggle();
+    await expect(draft).toBeFocused();
+    await expect(draft).toHaveValue("Unsent draft");
+  } finally { await closeOffline(fixture); }
+});

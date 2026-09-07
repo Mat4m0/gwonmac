@@ -6,6 +6,7 @@ import { DEFAULT_SHORTCUTS, SHORTCUT_LABELS, shortcutConflict, shortcutDisplay, 
 
 const props = defineProps<{
   action: ShortcutAction;
+  suggestedBinding?: ShortcutBinding | undefined;
   shortcuts: LauncherSnapshot["shortcuts"];
   api?: LauncherNativeApi["tools"] | undefined;
   disabled?: boolean;
@@ -61,6 +62,7 @@ async function capture() {
 <template>
   <div class="shortcut-setting" :aria-label="`${label} shortcut`">
     <span class="visually-hidden">Shortcut</span>
+    <button v-if="suggestedBinding && !shortcuts[action]" class="secondary" :disabled="disabled || capturing" @click="choose(suggestedBinding)">Enable {{ shortcutDisplay(suggestedBinding) }}</button>
     <button class="secondary shortcut-value" :disabled="disabled || capturing" :aria-label="`Change ${label} shortcut`" @click="capture"><kbd>{{ capturing ? 'Listening…' : shortcutDisplay(shortcuts[action]) }}</kbd><span aria-hidden="true">Change</span></button>
     <details class="shortcut-options" @keydown.esc.prevent="($event.currentTarget as HTMLDetailsElement).open = false"><summary :aria-label="`${label} shortcut options`" title="Shortcut options"><Ellipsis /></summary><div class="shortcut-actions">
       <button class="text-link" :disabled="disabled || capturing || !shortcuts[action]" :aria-label="`Clear ${label} shortcut`" @click="save(null)">Clear</button>

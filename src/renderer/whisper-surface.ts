@@ -18,6 +18,17 @@ export function createWhisperSurface(parent: HTMLElement, session: WhisperSessio
   const nonActivating = createNonActivatingSurface(root, () => canvas);
   const surface = window.gwSurfaces.register({ root, priority: 4,
     dismiss: () => session.setVisible(false) });
+  const toggle = (event: Event) => {
+    if (!enabled || !session.state.available) return;
+    event.preventDefault();
+    session.setVisible(!session.state.visible);
+    if (session.state.visible) requestAnimationFrame(() => {
+      if (disposed || !enabled || !session.state.visible) return;
+      const id = session.state.selected ? `draft-${session.state.selected}` : "whisper-person";
+      root.querySelector<HTMLInputElement>(`input[id="${CSS.escape(id)}"]`)?.focus({ preventScroll: true });
+    });
+  };
+  window.addEventListener("gw:whispers-toggle", toggle);
   let visible = false;
   let enabled = true;
   let disposed = false;
@@ -53,6 +64,7 @@ export function createWhisperSurface(parent: HTMLElement, session: WhisperSessio
     },
     dispose() {
       if (disposed) return;
+      window.removeEventListener("gw:whispers-toggle", toggle);
       disposed = true; unsubscribe(); app?.dispose(); surface.dispose();
       if (root.contains(document.activeElement)) nonActivating.releaseKeyboard();
       nonActivating.dispose(); root.remove();

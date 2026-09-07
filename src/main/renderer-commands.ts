@@ -174,6 +174,11 @@ export async function toggleTrade(win: BrowserWindow): Promise<void> {
   }
 }
 
+/** Toggle the optional whisper messenger in this game window. */
+export async function toggleWhispers(win: BrowserWindow): Promise<void> {
+  await sendRendererCommand(win, { type: "whispers.toggle" });
+}
+
 /**
  * Ask the certified game-thread command queue to open Xunlai storage.
  *

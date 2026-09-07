@@ -1011,6 +1011,7 @@ export type RendererCommand =
   | { type: "accounts.settings.open" }
   | { type: "tools.toggle" }
   | { type: "trade.toggle" }
+  | { type: "whispers.toggle" }
   | { type: "storage.open" }
   | { type: "travel.toggle" }
   | { type: "character.toggle" }

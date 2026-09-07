@@ -22,6 +22,13 @@ available in PvE while Tools is enabled. `pnpm tools:dev` with `?whispers` opens
 the same Vue surface with local scenario controls; those controls never send
 game messages.
 
+The Whispers shortcut is unassigned by default. In launcher Tools settings,
+**Enable ⌘⇧W** assigns the suggested binding; Change records another combination
+and Clear disables it. Existing shortcut conflict and reserved-key checks apply.
+It works only in the active game window while Whispers is available. Opening
+focuses the selected draft or people search; toggling closed returns focus to
+the game. Shortcut preferences use the existing global shortcut overrides.
+
 ## Acceptance criteria
 
 - Incoming and outgoing whispers appear once in the companion, including
