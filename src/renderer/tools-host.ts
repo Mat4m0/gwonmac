@@ -3,7 +3,7 @@
  * Toolbox overlay.
  *
  * This module is deliberately thin. The overlay already owns the boundary —
- * the toggle chord, the event stops, pointer-lock release, the cursor mirror,
+ * the toggle command, the event stops, pointer-lock release, the cursor mirror,
  * focus transfer and teardown — so a tool needs none of that again. An earlier
  * version of this file created its own root element beside the canvas and
  * re-implemented the input protection; two boundaries around one panel is how

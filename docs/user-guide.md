@@ -118,6 +118,9 @@ layout. Horizontal is the default and follows the character-selection order.
 The search bar is shown by default and can be hidden there. The layout and search
 choices last for the current app session.
 
+Build Library defaults to **Command-B**. **Control-Shift-Space** remains a
+Guild Wars control for calling the selected target without attacking.
+
 Shortcuts use macOS Command combinations such as Command-T. Normal editing and
 application shortcuts such as Command-C, Command-V, Command-Q, and Command-W
 remain reserved. If a new or restored shortcut conflicts with any feature,
