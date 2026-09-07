@@ -3,6 +3,7 @@
  * Main and renderer consume this one model so interception and presentation agree.
  */
 export const SHORTCUT_ACTIONS = [
+  "game.call-target",
   "game.resign",
   "character.switch",
   "tools.toggle",
@@ -33,6 +34,7 @@ export type ShortcutCaptureResult =
   | Readonly<{ status: "invalid" }>;
 
 export const DEFAULT_SHORTCUTS = Object.freeze({
+    "game.call-target": Object.freeze({ key: "g", shift: false, option: false }),
     "game.resign": Object.freeze({ key: "r", shift: true, option: false }),
     "character.switch": Object.freeze({ key: "r", shift: false, option: false }),
     "tools.toggle": Object.freeze({ key: "b", shift: false, option: false }),
@@ -46,6 +48,7 @@ export const DEFAULT_SHORTCUTS = Object.freeze({
 
 export const SHORTCUT_LABELS: Readonly<Record<ShortcutAction, string>> =
   Object.freeze({
+    "game.call-target": "Call target",
     "game.resign": "Resign",
     "character.switch": "Switch Character",
     "tools.toggle": "Build Library",
@@ -101,6 +104,11 @@ export function resolveShortcuts(
   overrides: ShortcutOverrides,
 ): Readonly<Record<ShortcutAction, ShortcutBinding | null>> {
   return Object.freeze({
+    // An existing custom Command-G binding keeps priority over this new default.
+    "game.call-target": overrides["game.call-target"] === undefined
+      ? Object.values(overrides).some(binding => shortcutEquals(binding ?? null, DEFAULT_SHORTCUTS["game.call-target"]))
+        ? null : DEFAULT_SHORTCUTS["game.call-target"]
+      : overrides["game.call-target"],
     "game.resign": overrides["game.resign"] === undefined
       ? DEFAULT_SHORTCUTS["game.resign"] : overrides["game.resign"],
     "character.switch": overrides["character.switch"] === undefined

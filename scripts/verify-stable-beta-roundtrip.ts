@@ -407,6 +407,7 @@ const candidateSettingsDomains = Array.from(
       characterSwitchEnabled: cycle(booleanValues, index),
       resignEnabled: cycle(booleanValues, index),
       whispersEnabled: cycle(booleanValues, index),
+      callTargetEnabled: cycle(booleanValues, index),
       cartographyEnabled: cycle(booleanValues, index + 1),
       cartographyOverlayEnabled: cycle(booleanValues, index),
       cartographyGridEnabled: cycle(booleanValues, index + 1),

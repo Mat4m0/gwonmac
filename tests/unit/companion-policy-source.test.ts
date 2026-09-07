@@ -56,6 +56,7 @@ describe("companion policy source", () => {
           characterSwitch: true,
       resign: false,
       whispers: false,
+      callTarget: false,
           cartography: false,
           tools: false,
           buildLibrary: false,

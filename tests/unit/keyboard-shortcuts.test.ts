@@ -22,6 +22,7 @@ describe("keyboard shortcuts", () => {
     }), {
       "cartography.grid.toggle": null,
       "cartography.walkability.toggle": null,
+      "game.call-target": DEFAULT_SHORTCUTS["game.call-target"],
       "game.resign": DEFAULT_SHORTCUTS["game.resign"],
       "character.switch": DEFAULT_SHORTCUTS["character.switch"],
       "tools.toggle": { key: "k", shift: true, option: false },
@@ -30,6 +31,14 @@ describe("keyboard shortcuts", () => {
       "storage.open": null,
       "travel.open": DEFAULT_SHORTCUTS["travel.open"],
     });
+  });
+
+  it("keeps an existing Command-G binding ahead of the new target-call default", () => {
+    const overrides = { "tools.toggle": DEFAULT_SHORTCUTS["game.call-target"] };
+    assert.equal(resolveShortcuts(overrides)["game.call-target"], null);
+    assert.deepEqual(resolveShortcuts(overrides)["tools.toggle"], overrides["tools.toggle"]);
+    assert.equal(resolveShortcuts({ "game.call-target": null })["game.call-target"], null);
+    assert.deepEqual(resolveShortcuts({ "game.call-target": { key: "j", shift: false, option: false } })["game.call-target"], { key: "j", shift: false, option: false });
   });
 
   it("stores only differences from defaults", () => {

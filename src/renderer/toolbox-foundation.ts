@@ -27,8 +27,6 @@ const OVERLAY_CSS = `
 }
 `;
 
-const TOGGLE_CODE = "Space";
-
 export interface MountedTool {
   setVisible(visible: boolean): void;
   setActive?(active: boolean): void;
@@ -176,19 +174,6 @@ export function createToolboxFoundation(
     }, true);
   }
 
-  const onToggleChord = (event: KeyboardEvent) => {
-    if (
-      !availability.builds
-      || event.code !== TOGGLE_CODE
-      || !event.ctrlKey
-      || !event.shiftKey
-      || event.altKey
-      || event.metaKey
-    ) return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    toggle(builds);
-  };
   const onBuildsCommand = (event: Event) => {
     if (!availability.builds) return;
     event.preventDefault();
@@ -215,7 +200,6 @@ export function createToolboxFoundation(
   mirrorCursor();
   window.addEventListener("gw:tools-toggle", onBuildsCommand);
   window.addEventListener("gw:trade-toggle", onTradeCommand);
-  window.addEventListener("keydown", onToggleChord, true);
 
   return {
     update(next: ToolboxState) {
@@ -238,7 +222,6 @@ export function createToolboxFoundation(
       cursorMirror.disconnect();
       window.removeEventListener("gw:tools-toggle", onBuildsCommand);
       window.removeEventListener("gw:trade-toggle", onTradeCommand);
-      window.removeEventListener("keydown", onToggleChord, true);
       window.dispatchEvent(new CustomEvent("gw:input-reset"));
       if (root.contains(document.activeElement)) canvas.focus({ preventScroll: true });
       style.remove();
