@@ -281,6 +281,7 @@ export type LauncherReadiness =
   | { readonly state: "offline-playable" };
 
 export interface LauncherSnapshot {
+  readonly funding: Readonly<{ raisedEuros: number; goalEuros: number }>;
   readonly revision: number;
   readonly experience: Readonly<{
     installationKind: LauncherInstallationKind;

@@ -86,12 +86,22 @@ checking changed compiled code; preserve the session requested for handoff.
 
 ## Update project funding
 
-Edit `raisedEuros` and `goalEuros` in
-[`apps/launcher/src/funding.ts`](../apps/launcher/src/funding.ts).
-Use the confirmed euro totals and keep the goal greater than zero. The launcher
-uses these figures for the visible amounts, accessible description, and bar.
-Run `pnpm --filter @gwonmac/launcher-ui test` and `pnpm run check`.
-The new totals reach installed apps with the next application update.
+Edit [`src/shared/funding.json`](../src/shared/funding.json) on GitHub and merge
+the change into `main`. Set `raisedEuros` to the confirmed amount and
+`goalEuros` to the target, using whole euros. The goal must be greater than zero.
+Keep only these two fields. No app release or website deployment is needed.
+
+The launcher fetches this exact file from GitHub when its window first
+connects. Restart the app to check a changed amount; GitHub caching can delay
+its appearance. Fetching never blocks startup or Play. Invalid responses and
+network failures leave the displayed figures unchanged. Each app ships a copy
+of the same file as its offline fallback. A successful fetch updates memory
+for the current session; no separate disk cache is stored.
+
+This requires an app version with remote funding support. Older versions keep
+their bundled figures. Validate changes with
+`node --import ./scripts/ts-hook.mjs --test tests/unit/launcher-funding.test.ts`
+and `pnpm run check`.
 
 ## Disposable launcher fixtures
 
