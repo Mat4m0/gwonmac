@@ -10,7 +10,7 @@
 import {
   app,
   autoUpdater,
-  BrowserWindow,
+  type BrowserWindow,
   dialog,
   Menu,
   Notification,
@@ -496,7 +496,7 @@ function buildWindowHost(
         if (profile.state === "running") await orchestrator.show(id);
         else if (profile.state === "ready" || profile.state === "failed") {
           await orchestrator.play([id]);
-          if (BrowserWindow.getFocusedWindow() && orchestrator.snapshot().profiles.some(candidate => candidate.id === id && candidate.state === "running")) {
+          if (windowRegistry.focusedWindow() && orchestrator.snapshot().profiles.some(candidate => candidate.id === id && candidate.state === "running")) {
             await orchestrator.show(id);
           }
         }
