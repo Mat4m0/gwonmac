@@ -95,26 +95,24 @@ async function useSecrets(
     appPath,
     productName: channelConfig.productName,
     userData: profile,
-    openFirstProfile: true,
   });
+  let gamePage = running.page;
   try {
-    let gamePage = running.page;
-    if (accountName !== "Main account") {
-      const launcher = running.launcherPage;
-      if (!launcher) throw new Error("the signed app did not expose the unified launcher");
-      let target = (await launcher.evaluate(() => window.launcherNative.state.get()))
+    // Open only the account under test; an unfinished Main launch blocks the queue.
+    const launcher = running.launcherPage;
+    if (!launcher) throw new Error("the signed app did not expose the unified launcher");
+    let target = (await launcher.evaluate(() => window.launcherNative.state.get()))
+      .profiles.find((candidate) => candidate.name === accountName);
+    if (!target) {
+      await launcher.evaluate(
+        (name) => window.launcherNative.profiles.create({ name }),
+        accountName,
+      );
+      target = (await launcher.evaluate(() => window.launcherNative.state.get()))
         .profiles.find((candidate) => candidate.name === accountName);
-      if (!target) {
-        await launcher.evaluate(
-          (name) => window.launcherNative.profiles.create({ name }),
-          accountName,
-        );
-        target = (await launcher.evaluate(() => window.launcherNative.state.get()))
-          .profiles.find((candidate) => candidate.name === accountName);
-      }
-      if (!target) throw new Error(`could not create signed test account ${accountName}`);
-      gamePage = await openPackagedProfile(running, target.id);
     }
+    if (!target) throw new Error(`could not create signed test account ${accountName}`);
+    gamePage = await openPackagedProfile(running, target.id);
     console.log(`signed keychain: ${accountName}: ${action}: invoking`);
     const result = await gamePage.evaluate(
       async ({ action: next, value }) => {
@@ -154,7 +152,7 @@ async function useSecrets(
     return result;
   } finally {
     console.log(`signed keychain: ${accountName}: ${action}: closing`);
-    await closePackagedApp(running);
+    await closePackagedApp({ ...running, page: gamePage });
     console.log(`signed keychain: ${accountName}: ${action}: closed`);
   }
 }
