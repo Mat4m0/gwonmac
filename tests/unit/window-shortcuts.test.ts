@@ -18,6 +18,39 @@ type ShortcutInput = Pick<
 >;
 
 describe("window shortcut input", () => {
+  it("keeps Call target opt-in, consumes repeats, and supports clearing or rebinding", () => {
+    let dispatch!: (event: { preventDefault(): void }, input: ShortcutInput) => void;
+    const win = { webContents: { on: (_name: string, listener: typeof dispatch) => { dispatch = listener; } }, on() { return win; } } as unknown as BrowserWindow;
+    const actions: string[] = [];
+    installWindowShortcuts(win, { run: action => { actions.push(action); }, edit() {}, quitOrReload() {} });
+    const send = (type: "keyDown" | "keyUp", code = "KeyG", repeat = false) => {
+      let claimed = false;
+      dispatch({ preventDefault() { claimed = true; } }, { type, code, key: code.slice(3), meta: true, control: false, shift: false, alt: false, isAutoRepeat: repeat });
+      return claimed;
+    };
+    updateWindowShortcuts(win, DEFAULT_SETTINGS);
+    assert.equal(send("keyDown"), false);
+    updateWindowShortcuts(win, { ...DEFAULT_SETTINGS, gwonmacTools: true });
+    assert.equal(send("keyDown"), false);
+    updateWindowShortcuts(win, { ...DEFAULT_SETTINGS, callTargetEnabled: true });
+    assert.equal(send("keyDown"), false);
+    const enabled = { ...DEFAULT_SETTINGS, gwonmacTools: true, callTargetEnabled: true };
+    updateWindowShortcuts(win, enabled);
+    assert.equal(send("keyDown"), true);
+    assert.equal(send("keyDown", "KeyG", true), true);
+    assert.equal(send("keyUp"), true);
+    assert.deepEqual(actions, ["game.call-target"]);
+    updateWindowShortcuts(win, { ...enabled, shortcutOverrides: { "game.call-target": null } });
+    assert.equal(send("keyDown"), false);
+    updateWindowShortcuts(win, { ...enabled, shortcutOverrides: { "game.call-target": { key: "j", shift: false, option: false } } });
+    assert.equal(send("keyDown"), false);
+    assert.equal(send("keyDown", "KeyJ"), true);
+    assert.equal(send("keyUp", "KeyJ"), true);
+    updateWindowShortcuts(win, { ...enabled, callTargetEnabled: false });
+    assert.equal(send("keyDown"), false);
+    assert.deepEqual(actions, ["game.call-target", "game.call-target"]);
+  });
+
   it("leaves Whispers off until assigned, and gates, rebinds, and clears it", () => {
     let dispatch!: (event: { preventDefault(): void }, input: ShortcutInput) => void;
     const win = { webContents: { on: (_name: string, listener: typeof dispatch) => { dispatch = listener; } }, on() { return win; } } as unknown as BrowserWindow;

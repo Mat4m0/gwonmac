@@ -301,6 +301,7 @@ declare global {
       characterSwitchEnabled: boolean;
       resignEnabled: boolean;
       whispersEnabled: boolean;
+      callTargetEnabled: boolean;
       cartographyEnabled: boolean;
       cartographyOverlayEnabled: boolean;
       cartographyGridEnabled: boolean;

@@ -126,6 +126,10 @@
         if (result.error !== undefined) throw result.error;
         break;
       }
+      case 'game.call-target':
+        if (!window.gwNative.init.enhancementSelection.tools) return 'unhandled';
+        if (!dispatch('gw:call-target')) return 'unhandled';
+        break;
       case 'game.resign':
         if (!window.gwNative.init.enhancementSelection.tools) return 'unhandled';
         await (await import('./resign.js')).showResignConfirmation();

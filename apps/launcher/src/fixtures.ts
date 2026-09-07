@@ -31,6 +31,7 @@ export const fixtureSnapshot: LauncherSnapshot = {
     features: {
       resign: { enabled: false },
       whispers: { enabled: false },
+      "call-target": { enabled: false },
       "character-switch": { enabled: true },
       "build-management": { enabled: true },
       "quick-travel": { enabled: true },

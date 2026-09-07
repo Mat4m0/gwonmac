@@ -26,6 +26,7 @@ type FeatureBooleanSetting = BooleanSetting & (
   | "characterSwitchEnabled"
   | "resignEnabled"
   | "whispersEnabled"
+  | "callTargetEnabled"
 );
 type FeatureActivation =
   | Readonly<{ kind: "master"; setting: FeatureBooleanSetting }>
@@ -61,6 +62,10 @@ export const FEATURE_SELECTION_POLICIES = defineFeatureSelectionPolicies({
   whispers: {
     activation: { kind: "setting", setting: "whispersEnabled", master: "gwonmacTools" },
     region: "pve",
+  },
+  callTarget: {
+    activation: { kind: "setting", setting: "callTargetEnabled", master: "gwonmacTools" },
+    region: "any",
   },
   resign: {
     activation: { kind: "setting", setting: "resignEnabled", master: "gwonmacTools" },

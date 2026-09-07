@@ -95,6 +95,7 @@ safety limits, storage, and troubleshooting.
 Tools are global. The same master switch, Tool switches, and shortcuts apply to
 every account. The launcher exposes:
 
+- **Call target** — opt in to a shortcut for calling a target without attacking;
 - **Build Library** — save and organize builds and teams;
 - **Quick Travel** — search reviewed destinations, online friends, and your Guild Hall;
 - **Xunlai Storage** — open storage in supported PvE outposts;
@@ -120,6 +121,14 @@ choices last for the current app session.
 
 Build Library defaults to **Command-B**. **Control-Shift-Space** remains a
 Guild Wars control for calling the selected target without attacking.
+
+**Call target** is off by default. Enable it in **Settings → Tools** with
+**Enable Tools** on. Its shortcut defaults to **Command-G** and can be changed
+or cleared. It works while the game has keyboard focus. It sends Control-Shift-Space, so it requires the default Guild Wars
+controls for targeting, suppressing an action, and attacking/interacting. It does
+not run while typing or on login and character-selection screens. Existing
+custom Command-G shortcuts keep their binding; choose another Call target
+shortcut if Command-G was already assigned.
 
 Shortcuts use macOS Command combinations such as Command-T. Normal editing and
 application shortcuts such as Command-C, Command-V, Command-Q, and Command-W

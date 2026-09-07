@@ -433,6 +433,8 @@ export interface AppSettings {
   /** Allow the confirmed PvE resign shortcut when Tools are enabled. */
   resignEnabled: boolean;
   whispersEnabled: boolean;
+  /** Opt-in Command shortcut for the default target-call chord. */
+  callTargetEnabled: boolean;
   /** Show the canonical profession icon and profession names in Character Switch. */
   characterSwitchProfession: boolean;
   /** Show the character's certified level in Character Switch. */
@@ -607,6 +609,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   characterSwitchEnabled: true,
   resignEnabled: false,
   whispersEnabled: false,
+  callTargetEnabled: false,
   characterSwitchProfession: true,
   characterSwitchLevel: true,
   characterSwitchLocation: true,
@@ -1015,6 +1018,7 @@ export type RendererCommand =
   | { type: "storage.open" }
   | { type: "travel.toggle" }
   | { type: "character.toggle" }
+  | { type: "game.call-target" }
   | { type: "game.resign" }
   | { type: "filesystem.sync" }
   | { type: "input.trace"; enabled: boolean }
