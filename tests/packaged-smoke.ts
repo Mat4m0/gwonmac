@@ -270,7 +270,6 @@ try {
       gameBridge: typeof (window as Window & { gwNative?: unknown }).gwNative,
       revision: snapshot.revision,
       setup: snapshot.experience.setup,
-      introduction: snapshot.experience.introduction,
       profiles: snapshot.profiles.map(({ id, name, state }) => ({ id, name, state })),
     };
   });
@@ -288,13 +287,8 @@ try {
       window.launcherNative.experience.completeSetup({ enableTools: false })
     );
   }
-  if (initial.introduction === "pending") {
-    await launcher.evaluate(() =>
-      window.launcherNative.experience.completeIntroduction()
-    );
-  }
   await launcher.waitForFunction(() =>
-    !document.querySelector(".modal-backdrop, .intro-callout")
+    !document.querySelector(".modal-backdrop")
   );
 
   const synchronizedName = "Packaged smoke account";

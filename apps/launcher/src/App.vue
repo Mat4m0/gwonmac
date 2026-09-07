@@ -132,8 +132,6 @@ const newIcon = ref("swords");
 const newColor = ref("#9a6638");
 const busy = ref(false);
 const setupStep = ref<1 | 2>(1);
-const introStep = ref(0);
-const introCallout = ref<HTMLElement | null>(null);
 const updateBannerDismissed = ref(false);
 const operationError = ref("");
 const startupError = ref(false);
@@ -188,11 +186,6 @@ onBeforeUnmount(() => {
   unsubscribeNavigation?.();
   clearTimeout(migrationNoticeTimer);
 });
-watch([synchronized, () => snapshot.value.experience.introduction], async ([ready, introduction]) => {
-  if (!ready || introduction !== "pending") return;
-  await nextTick();
-  introCallout.value?.focus();
-}, { immediate: true });
 watch([synchronized, () => snapshot.value.experience.showMigrationNotice], ([ready, show]) => {
   clearTimeout(migrationNoticeTimer);
   migrationNoticeTimer = undefined;
@@ -385,11 +378,6 @@ async function completeSetup(enableTools: boolean) {
   snapshot.value = { ...snapshot.value, experience: { ...snapshot.value.experience, setup: "complete" } };
 }
 
-async function completeIntroduction() {
-  if (native) await runAction("The introduction could not be closed.", () => native.experience.completeIntroduction());
-  else snapshot.value = { ...snapshot.value, experience: { ...snapshot.value.experience, introduction: "complete" } };
-}
-
 async function dismissMigrationNotice() {
   clearTimeout(migrationNoticeTimer);
   migrationNoticeTimer = undefined;
@@ -461,7 +449,7 @@ async function resetGameFiles() {
 <template>
   <div v-if="startupError" class="launcher-boot launcher-error" role="alert"><AlertTriangle /><h1>The launcher could not open</h1><p>Your accounts and game files were not changed.</p><button class="primary" @click="retryStartup">Try again</button></div>
   <div v-else-if="!synchronized" class="launcher-boot" role="status">Opening launcher…</div>
-  <div v-else class="app-shell" :class="{ 'settings-shell': route === 'settings', 'accounts-shell': route === 'accounts' }" :data-intro-step="snapshot.experience.introduction === 'pending' ? introStep : undefined">
+  <div v-else class="app-shell" :class="{ 'settings-shell': route === 'settings', 'accounts-shell': route === 'accounts' }">
     <LauncherHeader :route="route" @navigate="route = $event" @settings="openSettings()" @external="openExternal" />
 
     <section v-if="route !== 'settings'" class="funding-banner" aria-label="Project funding">
@@ -594,12 +582,5 @@ async function resetGameFiles() {
         <template v-else><h2 id="setup-title">Optional Tools</h2><p>Build Management saves team builds. Quick Travel opens a map search. Xunlai Storage opens storage in supported outposts.</p><p><strong>Tools apply to every account.</strong></p><p class="setup-note">If you enable Tools, the app restarts once to finish setup.</p><div class="form-actions spread"><button class="secondary" @click="setupStep = 1">Back</button><span /><button class="secondary" @click="completeSetup(false)">Not now</button><button class="primary" @click="completeSetup(true)">Enable Tools</button></div></template>
       </div>
     </BaseModal>
-
-    <aside v-else-if="snapshot.experience.introduction === 'pending'" ref="introCallout" class="intro-callout" :class="`step-${introStep}`" aria-label="Launcher introduction" tabindex="-1" @keydown.esc="completeIntroduction">
-      <span>{{ introStep + 1 }} of 3</span>
-      <strong>{{ ['Choose the accounts to open', 'Read news or check dailies', 'Find help and report problems'][introStep] }}</strong>
-      <p>{{ ['The launcher remembers your selection.', 'You can hide either section in Content settings.', 'Known Issues shows workarounds. Feedback opens the current support channels.'][introStep] }}</p>
-      <div class="form-actions"><button class="text-link" @click="completeIntroduction">Skip</button><button v-if="introStep > 0" class="secondary" @click="introStep -= 1">Back</button><button class="primary" @click="introStep === 2 ? completeIntroduction() : introStep += 1">{{ introStep === 2 ? 'Done' : 'Next' }}</button></div>
-    </aside>
   </div>
 </template>

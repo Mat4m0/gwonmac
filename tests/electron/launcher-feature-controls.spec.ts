@@ -9,7 +9,6 @@ test("feature controls preserve preferences and validate native commands", async
   try {
     await page.evaluate(async () => {
       await window.launcherNative.experience.completeSetup({ enableTools: false });
-      await window.launcherNative.experience.completeIntroduction();
     });
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     await page.getByRole("button", { name: "Tools", exact: true }).click();
@@ -83,7 +82,6 @@ test("existing custom map styles can be selected, edited and extended", async ()
   try {
     await page.evaluate(async () => {
       await window.launcherNative.experience.completeSetup({ enableTools: false });
-      await window.launcherNative.experience.completeIntroduction();
       await window.launcherNative.tools.setMasterEnabled(true);
     });
     await page.getByRole("button", { name: "Settings", exact: true }).click();
@@ -129,7 +127,6 @@ test("map styles offer usable color and numeric controls at normal size and 200%
   try {
     await page.evaluate(async () => {
       await window.launcherNative.experience.completeSetup({ enableTools: false });
-      await window.launcherNative.experience.completeIntroduction();
       await window.launcherNative.tools.setMasterEnabled(true);
     });
     await page.getByRole("button", { name: "Settings", exact: true }).click();

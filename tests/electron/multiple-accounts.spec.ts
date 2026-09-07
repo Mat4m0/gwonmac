@@ -356,7 +356,6 @@ test("applies launcher settings to every open profile and reflects in-game chang
     // Assert the subscribed launcher UI too, not only its fresh snapshot API.
     await fixture.page.evaluate(async () => {
       await window.launcherNative.experience.completeSetup({ enableTools: false });
-      await window.launcherNative.experience.completeIntroduction();
     });
     await fixture.page.getByRole("button", { name: "Settings", exact: true }).click();
     await fixture.page.getByRole("button", { name: "Maps", exact: true }).click();

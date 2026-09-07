@@ -20,7 +20,6 @@ import { Mutex } from "./mutex.js";
 
 const FORMAT_VERSION = 1;
 const SETUP_VERSION = 1;
-const INTRODUCTION_VERSION = 1;
 const DOCUMENT_MODE = 0o600;
 const DEFAULT_COLOR = "#9a6638";
 const DEFAULT_ICON = "swords";
@@ -34,7 +33,6 @@ export interface LauncherStateDocument {
   readonly formatVersion: 1;
   readonly installationKind: LauncherInstallationKind;
   readonly setupVersion: number;
-  readonly introductionVersion: number;
   readonly migrationNoticeDismissed: boolean;
   /** Remains durable until the player dismisses the recovery notice flow. */
   readonly preferencesResetPending: boolean;
@@ -80,7 +78,6 @@ function defaults(
     formatVersion: FORMAT_VERSION,
     installationKind: kind,
     setupVersion: fresh ? 0 : SETUP_VERSION,
-    introductionVersion: fresh ? 0 : INTRODUCTION_VERSION,
     migrationNoticeDismissed: fresh,
     preferencesResetPending,
     selectedProfileIds: [],
@@ -142,7 +139,6 @@ export function parseLauncherState(value: unknown): LauncherStateDocument {
     formatVersion: FORMAT_VERSION,
     installationKind: parseKind(source.installationKind),
     setupVersion: version(source.setupVersion, "setup version"),
-    introductionVersion: version(source.introductionVersion, "introduction version"),
     migrationNoticeDismissed: boolean(source.migrationNoticeDismissed, "migration notice"),
     // Additive within the candidate-owned document. Older candidate writes
     // predate durable recovery acknowledgement and therefore mean no notice.
@@ -242,14 +238,6 @@ export class LauncherStateStore {
 
   async completeSetup(): Promise<void> {
     await this.save((current) => ({ ...current, setupVersion: SETUP_VERSION }));
-  }
-
-  async completeIntroduction(): Promise<void> {
-    await this.save((current) => ({ ...current, introductionVersion: INTRODUCTION_VERSION }));
-  }
-
-  async replayIntroduction(): Promise<void> {
-    await this.save((current) => ({ ...current, introductionVersion: 0 }));
   }
 
   async updateAppearance(profileId: ProfileId, appearance: LauncherProfileAppearance): Promise<void> {

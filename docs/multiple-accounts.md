@@ -65,6 +65,14 @@ preferences were reset** pending across restarts until the player dismisses
 the recovery notices. Ordinary read failures remain fatal and are never
 treated as corruption.
 
+The guided launcher tour has been removed. Existing `introductionVersion`
+fields are ignored on load and disappear on the next presentation save;
+setup completion, account selection, and preferences remain intact. No account
+or game data changes. Before testing a rollback to a tour-era candidate, keep
+a copy of `launcher-state.json`: that older parser requires the removed field
+and otherwise resets presentation preferences. Restore that copy with the app
+closed if rolling back. This is a hard cutover, with no compatibility writer.
+
 ## Existing installation adoption
 
 The first unified launch publishes the workspace atomically and idempotently:
