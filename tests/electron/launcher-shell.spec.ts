@@ -39,7 +39,6 @@ test("the Vue launcher owns a narrow frozen bridge and offline subtree", async (
     if (await fixture.page.getByRole("button", { name: "Continue" }).isVisible()) {
       await fixture.page.getByRole("button", { name: "Continue" }).click();
       await fixture.page.getByRole("button", { name: "Not now" }).click();
-      await fixture.page.getByRole("button", { name: "Skip" }).click();
     }
   } finally {
     await closeOffline(fixture);
