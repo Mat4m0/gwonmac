@@ -43,7 +43,7 @@ export const LAUNCHER_IPC = Object.freeze({
   stateEvent: "gw:launcher:state:event",
   navigationEvent: "gw:launcher:navigation:event",
   profilesCreate: "gw:launcher:profiles:create",
-  profilesUpdateAppearance: "gw:launcher:profiles:updateAppearance",
+  profilesUpdate: "gw:launcher:profiles:update",
   profilesSetSelection: "gw:launcher:profiles:setSelection",
   profilesPlay: "gw:launcher:profiles:play",
   profilesShow: "gw:launcher:profiles:show",
@@ -81,7 +81,7 @@ export const LAUNCHER_IPC = Object.freeze({
   updatesRestartAndInstall: "gw:launcher:updates:restartAndInstall",
 } as const);
 
-export type LauncherDestination = "home" | "settings";
+export type LauncherDestination = "home" | "accounts" | "settings";
 
 export type LauncherInstallationKind =
   | "fresh"
@@ -91,7 +91,15 @@ export type LauncherInstallationKind =
 
 export type LauncherContentKind = "news" | "dailies";
 
+export type LauncherPlayPage = "home" | "accounts";
+
+export function parseLauncherPlayPage(value: unknown): LauncherPlayPage {
+  if (value !== "home" && value !== "accounts") throw new Error("launcher play page is invalid");
+  return value;
+}
+
 export interface LauncherPreferences {
+  readonly lastPlayPage?: LauncherPlayPage;
   readonly content: Readonly<{
     news: boolean;
     dailies: boolean;
@@ -133,6 +141,7 @@ export type LauncherNewsState =
   | Readonly<{ status: "offline"; stories: readonly LauncherNewsStory[] }>;
 
 export interface LauncherPreferencesPatch {
+  readonly lastPlayPage?: LauncherPlayPage;
   readonly content?: Partial<LauncherPreferences["content"]>;
 }
 
@@ -223,7 +232,8 @@ export interface LauncherSettings {
 }
 
 export type LauncherSettingsPatch = Partial<LauncherSettings>;
-export interface ProfileAppearanceUpdate extends LauncherProfileAppearance {
+export interface LauncherProfileUpdate extends LauncherProfileAppearance {
+  readonly name: string;
   readonly id: ProfileId;
 }
 export interface LauncherProfileCreateInput {
@@ -314,7 +324,7 @@ export interface LauncherNativeApi {
   };
   readonly profiles: {
     create(input: LauncherProfileCreateInput): Promise<void>;
-    updateAppearance(input: ProfileAppearanceUpdate): Promise<void>;
+    update(input: LauncherProfileUpdate): Promise<void>;
     setSelection(ids: readonly ProfileId[]): Promise<void>;
     play(ids: readonly ProfileId[]): Promise<void>;
     show(id: ProfileId): Promise<void>;
@@ -490,8 +500,9 @@ function exactObject(value: unknown, allowed: readonly string[], label: string):
 }
 
 export function parseLauncherPreferencesPatch(value: unknown): LauncherPreferencesPatch {
-  const source = exactObject(value, ["content"], "launcher preferences patch");
-  if (source.content === undefined) return {};
+  const source = exactObject(value, ["content", "lastPlayPage"], "launcher preferences patch");
+  const page = source.lastPlayPage === undefined ? {} : { lastPlayPage: parseLauncherPlayPage(source.lastPlayPage) };
+  if (source.content === undefined) return page;
   const content = exactObject(
     source.content,
     ["news", "dailies", "first", "officialNews", "reforgedNews", "eventNews", "autoRotateNews"],
@@ -516,5 +527,5 @@ export function parseLauncherPreferencesPatch(value: unknown): LauncherPreferenc
     if (content.first !== "news" && content.first !== "dailies") throw new Error("first content must be news or dailies");
     patch.first = content.first;
   }
-  return { content: patch };
+  return { ...page, content: patch };
 }

@@ -11,6 +11,7 @@ import {
 import { parseProfileId } from "../../src/shared/multiple-accounts.ts";
 import {
   parseLauncherExternalLink,
+  parseLauncherPreferencesPatch,
   parseLauncherProfileAppearance,
   parseLauncherSettingsPatch,
 } from "../../src/shared/launcher-contracts.ts";
@@ -29,6 +30,18 @@ async function fixture(): Promise<string> {
 }
 
 describe("launcher presentation state", () => {
+  it("persists the starting page across content changes and restart", async () => {
+    const path = await fixture();
+    const loaded = await loadOrCreateLauncherState(path, "migrated-multi");
+    const store = new LauncherStateStore(path, loaded.document);
+    await store.updatePreferences(parseLauncherPreferencesPatch({ lastPlayPage: "accounts" }));
+    await store.updatePreferences({ content: { autoRotateNews: false } });
+    const restarted = await loadOrCreateLauncherState(path, "migrated-multi");
+    assert.equal(restarted.document.preferences.lastPlayPage, "accounts");
+    assert.equal(restarted.document.preferences.content.autoRotateNews, false);
+    assert.throws(() => parseLauncherPreferencesPatch({ lastPlayPage: "settings" }));
+  });
+
   it("validates account appearance before profile creation", () => {
     assert.deepEqual(parseLauncherProfileAppearance({ icon: "map", color: "#496b58" }), { icon: "map", color: "#496b58" });
     assert.throws(() => parseLauncherProfileAppearance({ icon: "url", color: "#496b58" }));

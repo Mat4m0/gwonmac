@@ -27,7 +27,7 @@ const launcherApi = {
   },
   profiles: {
     create: (input) => ipcRenderer.invoke(LAUNCHER_IPC.profilesCreate, input),
-    updateAppearance: (input) => ipcRenderer.invoke(LAUNCHER_IPC.profilesUpdateAppearance, input),
+    update: (input) => ipcRenderer.invoke(LAUNCHER_IPC.profilesUpdate, input),
     setSelection: (ids) => ipcRenderer.invoke(LAUNCHER_IPC.profilesSetSelection, ids),
     play: (ids) => ipcRenderer.invoke(LAUNCHER_IPC.profilesPlay, ids),
     show: (id) => ipcRenderer.invoke(LAUNCHER_IPC.profilesShow, id),

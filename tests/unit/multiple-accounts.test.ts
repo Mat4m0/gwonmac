@@ -29,6 +29,17 @@ import { AppError } from "../../src/shared/errors.js";
 const ID = "2d31e565-9fc8-4dde-9fd4-9d644f8283ae";
 
 describe("Multiple Accounts documents", () => {
+  it("preserves an adopted account name and refuses ambiguous ownership", () => {
+    const workspace = {
+      ...addMultiProfile(createMultiWorkspace(), { id: ID, name: "Heroes", templates: "shared", builds: "private" }),
+      legacyPrimaryProfileId: LEGACY_PRIMARY_PROFILE_ID,
+      legacyPrimaryProfileName: "Main",
+    };
+    assert.deepEqual(parseMultiWorkspace(workspace), workspace);
+    assert.throws(() => parseMultiWorkspace({ ...workspace, legacyPrimaryProfileName: "heroes" }));
+    assert.throws(() => parseMultiWorkspace({ ...workspace, legacyPrimaryProfileId: null }));
+  });
+
   it("keeps a missing mode and workspace on the legacy Single path", async () => {
     const dir = await mkdtemp(join(tmpdir(), "gw-accounts-"));
     assert.equal(await loadAccountMode(join(dir, "launcher-mode.json")), "single");

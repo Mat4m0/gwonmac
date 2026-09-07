@@ -58,7 +58,7 @@ async function expectNoHorizontalClipping(
     fixture.page.getByRole("button", { name: "Settings" }),
     fixture.page.getByRole("button", { name: "Add account" }),
     fixture.page.locator(".account-card").first().getByRole("button", { name: "Edit" }),
-    fixture.page.locator(".account-card").first().getByRole("button", { name: "Play" }),
+    fixture.page.locator(".account-card").first().getByRole("button", { name: /^Repair game files for / }),
     fixture.page.locator(".launchbar .launch"),
   ];
   for (const control of criticalControls) {

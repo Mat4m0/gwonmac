@@ -115,6 +115,17 @@ async function fixture(options: { allowUnreadyLaunch?: boolean } = {}) {
 }
 
 describe("main-owned launcher orchestration", () => {
+  it("keeps the remembered launch group when another account is opened directly", async () => {
+    const value = await fixture();
+    await value.orchestrator.setSelection([first]);
+    await value.orchestrator.play([second]);
+    assert.deepEqual(value.orchestrator.snapshot().selectedProfileIds, [first]);
+    value.activate();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(value.accounts.opened, [[second]]);
+    assert.deepEqual(value.orchestrator.snapshot().selectedProfileIds, [first]);
+  });
+
   it("queues without a client and drains the whole ordered batch once playable", async () => {
     const value = await fixture();
     await value.orchestrator.play([second, first]);

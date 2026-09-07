@@ -15,6 +15,8 @@ import type {
 import {
   LEGACY_PRIMARY_PROFILE_ID,
   profileNameKey,
+  parseProfileName,
+  parseMultiWorkspace,
   type AccountWorkspace,
   type MultiWorkspace,
   type ProfileId,
@@ -44,6 +46,7 @@ import { resolveProfileStorage } from "./core/profile-storage.js";
 import {
   launchIssueForStage,
   ProfileRuntimeStore,
+  type ProfileRuntime,
 } from "./core/profile-runtime.js";
 import { SteamSessionStore } from "./core/steam-session.js";
 import { forgetRendererDiagnosticsOwner } from "./diagnostics.js";
@@ -97,6 +100,7 @@ export class MultipleAccountsController {
   }
 
   private legacyName(): string {
+    if (this.workspace.legacyPrimaryProfileName) return this.workspace.legacyPrimaryProfileName;
     const used = new Set(this.workspace.profiles.map((profile) => profileNameKey(profile.name)));
     for (const candidate of ["Main account", "Main account (legacy)"]) {
       if (!used.has(profileNameKey(candidate))) return candidate;
@@ -155,6 +159,17 @@ export class MultipleAccountsController {
     ).buildLibrary;
   }
 
+  private runtimeForProfile(profileId: ProfileId): ProfileRuntime {
+    const runtime = this.profileRuntime.get(profileId);
+    if (runtime.state !== "running") return runtime;
+    const win = windowRegistry.profileWindow(profileId);
+    if (!win) return { state: "ready" };
+    if (win.webContents.isDestroyed() || win.webContents.isCrashed()) {
+      return { state: "failed", launchIssue: "renderer-crash" };
+    }
+    return runtime;
+  }
+
   state(): AccountsState {
     const legacy = this.workspace.legacyPrimaryProfileId;
     return {
@@ -166,13 +181,13 @@ export class MultipleAccountsController {
               templates: "private" as const,
               builds: "private" as const,
               archived: false,
-              ...this.profileRuntime.get(legacy),
+              ...this.runtimeForProfile(legacy),
             }]
           : []),
         ...this.workspace.profiles
         .filter((profile) => !this.workspace.deletingProfileIds.includes(profile.id))
         .map((profile) => {
-        const runtime = this.profileRuntime.get(profile.id);
+        const runtime = this.runtimeForProfile(profile.id);
         return {
           id: profile.id,
           name: profile.name,
@@ -251,7 +266,7 @@ export class MultipleAccountsController {
   show(profileId: ProfileId): boolean {
     this.validateOpenable([profileId]);
     const win = windowRegistry.profileWindow(profileId);
-    if (!win) return false;
+    if (!win || this.runtimeForProfile(profileId).state !== "running") return false;
     this.options.windows.revealGame(win, { activateApp: true });
     this.options.windows.hideLauncher();
     return true;
@@ -286,19 +301,29 @@ export class MultipleAccountsController {
       if (result.opened && !canaryChecked) {
         if (this.options.clientRuntime.healthToken) {
           this.profileRuntime.set(profileId, "checking");
+          this.publish();
           try {
             await this.waitForCandidateCanary();
           } catch (error) {
-            this.profileRuntime.set(
-              profileId,
-              "failed",
-              launchIssueForStage("validating"),
-            );
+            if (windowRegistry.profileWindow(profileId) === result.win
+              && this.profileRuntime.get(profileId).state === "checking") {
+              this.profileRuntime.set(
+                profileId,
+                "failed",
+                launchIssueForStage("validating"),
+              );
+            }
             this.profileRuntime.releaseQueued(profileIds.slice(index + 1));
             this.publish();
             this.options.windows.revealLauncher({ activateApp: true });
             throw error;
           }
+        }
+        if (windowRegistry.profileWindow(profileId) !== result.win
+          || result.win.webContents.isDestroyed() || result.win.webContents.isCrashed()
+          || ["failed", "opening"].includes(this.profileRuntime.get(profileId).state)) {
+          firstFailure ??= new Error("The account window closed or stopped during startup");
+          continue;
         }
         this.profileRuntime.set(profileId, "running");
         canaryChecked = true;
@@ -336,6 +361,26 @@ export class MultipleAccountsController {
         throw error;
       }
       this.workspace = next as AccountWorkspace;
+      this.publish();
+      return this.state();
+    });
+  }
+
+  rename(profileId: ProfileId, input: string): Promise<AccountsState> {
+    return this.accountsLock.run(async () => {
+      const workspace = this.activeWorkspace();
+      const name = parseProfileName(input);
+      if (this.profileName(profileId) === name) return this.state();
+      if (this.state().profiles.some(profile => profile.id !== profileId && profileNameKey(profile.name) === profileNameKey(name))) {
+        throw new Error("Another account already uses this name");
+      }
+      const next = parseMultiWorkspace(profileId === workspace.legacyPrimaryProfileId
+        ? { ...workspace, legacyPrimaryProfileName: name }
+        : { ...workspace, profiles: workspace.profiles.map(profile => profile.id === profileId ? { ...profile, name } : profile) });
+      await saveMultiWorkspace(this.options.paths.multiWorkspace, next);
+      this.workspace = { ...next, legacyPrimaryProfileId: this.workspace.legacyPrimaryProfileId };
+      const win = windowRegistry.profileWindow(profileId);
+      if (win) setOwnedWindowTitle(win, `Guild Wars Reforged — ${name}`);
       this.publish();
       return this.state();
     });
@@ -520,7 +565,7 @@ export class MultipleAccountsController {
     );
     const profile = storage.kind === "isolated" ? this.profileFor(profileId) : null;
     let existing = windowRegistry.profileWindow(profileId);
-    const previous = this.profileRuntime.get(profileId);
+    const previous = this.runtimeForProfile(profileId);
     if (previous.state === "failed") {
       resetRendererRecovery(storage.windowState);
       if (existing && !existing.isDestroyed()) existing.destroy();
@@ -587,8 +632,12 @@ export class MultipleAccountsController {
         texturePackGeneration,
         onRendererRecoveryStart: () => {
           hubWasVisibleBeforeRecovery = windowRegistry.launcherWindow()?.isVisible() ?? false;
+          this.profileRuntime.set(profileId, "opening");
+          this.publish();
         },
         onRendererRecovered: () => {
+          this.profileRuntime.set(profileId, "running");
+          this.publish();
           if (!hubWasVisibleBeforeRecovery) windowRegistry.launcherWindow()?.hide();
         },
         onRendererFailure: () => {
@@ -610,6 +659,9 @@ export class MultipleAccountsController {
         this.waitForWindow(win),
         waitForGamePresentation(win),
       ]);
+      if (windowRegistry.profileWindow(profileId) !== win || win.webContents.isDestroyed() || win.webContents.isCrashed()) {
+        throw new Error("The account window stopped before startup completed");
+      }
       this.profileRuntime.set(profileId, "running");
       this.publish();
       return { win, opened: true };
