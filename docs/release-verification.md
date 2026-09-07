@@ -263,9 +263,10 @@ latest published Stable
 
 Each launch must report its exact version. Settings, Builds, Teams, window state,
 and profile-origin browser storage must remain readable and writable. No profile
-or chunk-directory reset can occur. The candidate must use only settings keys
-and values already owned by Stable. Returning Stable must preserve untouched
-values.
+or chunk-directory reset can occur. The candidate must preserve every
+Stable-owned settings key and its accepted values. Returning Stable must
+preserve untouched values. Additive candidate-only preferences may return to
+their safe defaults after a deliberate downgrade through the older Stable.
 
 For the unified-launcher cutover, the disposable cohort also contains a
 released Single Account mode document and a dormant Multiple Accounts
@@ -276,8 +277,10 @@ must leave all three documents byte-for-byte as the candidate left them. This
 is filesystem evidence only; the separate signed Keychain gate proves saved
 login continuity.
 
-This proof prevents a hidden compatibility store. A public candidate cannot be
-the first release that introduces a durable settings key that it writes.
+This proof compares settings through the keys owned by the rollback Stable.
+It refuses missing keys and changed Stable-owned values without adding a
+hidden compatibility store. It does not require the older Stable to preserve
+preferences that only the candidate owns.
 
 A feature-owned document is allowed only when the published Stable never reads,
 rewrites, or deletes that path. Travel uses this rule for
