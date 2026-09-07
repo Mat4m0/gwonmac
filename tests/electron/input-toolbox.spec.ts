@@ -212,11 +212,23 @@ test.describe("renderer Tools input", () => {
         // the game's global handlers. Events on Tools chrome must never reach
         // them; events on the game canvas always must, and a release for a
         // press the canvas received must arrive even when it lands elsewhere.
-        window.addEventListener("keydown", () => {
+        window.addEventListener("keydown", (event) => {
+          if (event.code === "Space") {
+            document.body.dataset.toolboxSpaceDown = JSON.stringify({
+              control: event.ctrlKey, shift: event.shiftKey,
+              prevented: event.defaultPrevented,
+            });
+          }
           gameKeys += 1;
           document.body.dataset.toolboxGameKeys = String(gameKeys);
         });
         window.addEventListener("keyup", (event) => {
+          if (event.code === "Space") {
+            document.body.dataset.toolboxSpaceUp = JSON.stringify({
+              control: event.ctrlKey, shift: event.shiftKey,
+              prevented: event.defaultPrevented,
+            });
+          }
           gameKeyUps += 1;
           document.body.dataset.toolboxGameKeyUps = String(gameKeyUps);
           document.body.dataset.toolboxLastKeyUp = event.code;
@@ -375,8 +387,27 @@ test.describe("renderer Tools input", () => {
       await expect(tool).toBeHidden();
       await expect(body).toHaveAttribute("data-toolbox-game-keys", "3");
 
-      await page.keyboard.press("Control+Shift+Space");
+      await page.evaluate(() => window.dispatchEvent(
+        new CustomEvent("gw:tools-toggle", { cancelable: true }),
+      ));
       await expect(tool).toBeVisible();
+
+      // Target calling belongs to Guild Wars, with the library open or closed.
+      for (const visible of [true, false]) {
+        if (!visible) await page.keyboard.press("Escape");
+        await page.keyboard.press("Control+Shift+Space");
+        const expected = JSON.stringify({ control: true, shift: true, prevented: false });
+        await expect(body).toHaveAttribute("data-toolbox-space-down", expected);
+        await expect(body).toHaveAttribute("data-toolbox-space-up", expected);
+        await expect(tool).toBeVisible({ visible });
+        await page.evaluate(() => {
+          delete document.body.dataset.toolboxSpaceDown;
+          delete document.body.dataset.toolboxSpaceUp;
+        });
+      }
+      await page.evaluate(() => window.dispatchEvent(
+        new CustomEvent("gw:tools-toggle", { cancelable: true }),
+      ));
 
       // The same Escape closes Tools after a game click left focus on canvas.
       const gameKeysBeforeCanvasEscape = await body.getAttribute(
@@ -389,8 +420,10 @@ test.describe("renderer Tools input", () => {
         gameKeysBeforeCanvasEscape ?? "",
       );
 
-      // The chord toggles from anywhere.
-      await page.keyboard.press("Control+Shift+Space");
+      // The app command toggles from anywhere.
+      await page.evaluate(() => window.dispatchEvent(
+        new CustomEvent("gw:tools-toggle", { cancelable: true }),
+      ));
       await expect(tool).toBeVisible();
 
       // A tool that hides itself has to say so, because the overlay cannot see
@@ -398,7 +431,9 @@ test.describe("renderer Tools input", () => {
       // and the next toggle closes an already-hidden tool.
       await page.getByRole("button", { name: "Close tool" }).click();
       await expect(tool).toBeHidden();
-      await page.keyboard.press("Control+Shift+Space");
+      await page.evaluate(() => window.dispatchEvent(
+        new CustomEvent("gw:tools-toggle", { cancelable: true }),
+      ));
       await expect(tool).toBeVisible();
 
       // The menu route: the main process sends `tools.toggle`, and the renderer
