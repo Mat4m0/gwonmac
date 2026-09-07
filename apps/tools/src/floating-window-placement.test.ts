@@ -1,7 +1,9 @@
 /** Unit coverage for normalized floating-window persistence and validation. */
 import { describe, expect, it } from "vitest";
 import {
+  restoreFloatingPosition,
   restoreFloatingWindowPlacement,
+  serializeFloatingPosition,
   serializeFloatingWindowPlacement,
 } from "./floating-window-placement";
 
@@ -9,6 +11,21 @@ const viewport = { width: 1_600, height: 1_000, margin: 32 };
 const minimum = { width: 520, height: 400 };
 
 describe("floating window placement", () => {
+  it("keeps a fixed-size control at the same pixel distance from its nearest corner", () => {
+    const size = { width: 36, height: 36 };
+    const stored = serializeFloatingPosition(
+      { left: 1_400, top: 800 },
+      viewport,
+      size,
+    );
+
+    expect(restoreFloatingPosition(
+      stored,
+      { width: 2_368, height: 1_452, margin: 32 },
+      size,
+    )).toEqual({ left: 2_168, top: 1_252 });
+  });
+
   it("round-trips a window in the same viewport", () => {
     const box = { left: 200, top: 100, width: 900, height: 600 };
 

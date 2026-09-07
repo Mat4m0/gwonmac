@@ -23,6 +23,7 @@ const capabilities: EnhancementCapabilities = Object.freeze({
   playerEffectObservation: false,
     effectIconGeometry: false,
     resignAction: false,
+    whisperChat: false,
   playRegionObservation: true,
     preGameControls: false,
     characterSwitchAction: false,
@@ -144,6 +145,7 @@ test("unselected skill facts stay absent and selected missing facts fail clearly
     playerEffectObservation: false,
     effectIconGeometry: false,
     resignAction: false,
+    whisperChat: false,
   });
   assert.deepEqual(unselected.labels, []);
   assert.deepEqual(unselected.resolution, {

@@ -65,6 +65,7 @@ class WindowShortcuts {
     "character.switch": null,
     "tools.toggle": null,
     "trade.toggle": null,
+    "whispers.toggle": null,
     "storage.open": null,
     "travel.open": null,
     "cartography.grid.toggle": null,
@@ -264,6 +265,7 @@ class WindowShortcuts {
     | "shortcutOverrides"
     | "characterSwitchEnabled"
     | "resignEnabled"
+    | "whispersEnabled"
     | "cartographyEnabled"
   >): void {
     const resolved = resolveShortcuts(settings.shortcutOverrides);
@@ -274,6 +276,7 @@ class WindowShortcuts {
       "tools.toggle": featureActivationRequested("buildLibrary", settings)
         ? resolved["tools.toggle"]
         : null,
+      "whispers.toggle": featureActivationRequested("whispers", settings) ? resolved["whispers.toggle"] : null,
       "trade.toggle": featureActivationRequested("tradeChat", settings)
         ? resolved["trade.toggle"]
         : null,

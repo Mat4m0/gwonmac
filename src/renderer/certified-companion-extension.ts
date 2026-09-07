@@ -91,6 +91,7 @@ export type PreparedCompanionExtension = Readonly<{
     playerEffects: KernelRegion;
     effectIcons: KernelRegion;
     friends: KernelRegion;
+    whispers?: KernelRegion;
     friendRoot: number;
   }>;
   activate(context: CompanionExtensionActivation): CompanionExtensionSession;

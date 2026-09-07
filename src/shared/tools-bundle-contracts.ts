@@ -3,6 +3,7 @@
  * Tools bundle. The runtime import uses a generated file name, so both builds
  * import these shapes directly instead of restating them on either side.
  */
+import type { WhisperSession } from "./whisper-session.js";
 import type { TravelFriends } from "./friends.js";
 import type { ToolboxObservation } from "./builds/live-party.js";
 import type { TeamApplyCommands } from "./builds/team-apply-runner.js";
@@ -75,6 +76,7 @@ export type TradeChatMountOptions = Readonly<{
 
 /** The exact named exports of the generated Tools module. */
 export type EmbeddedToolsBundle<Target> = Readonly<{
+  mountWhispers: (target: Target, options: { session: WhisperSession }) => { dispose(): void };
   mountToolsApp: (
     target: Target,
     options: ToolsAppMountOptions & Readonly<{ nativeApi: ToolsGwNativeApi }>,

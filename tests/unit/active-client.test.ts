@@ -35,6 +35,7 @@ function generation(wasmPath: string, size: number): ClientGeneration {
         playerEffectObservation: { status: "off" },
         effectIconGeometry: { status: "off" },
         resignAction: { status: "off" },
+        whisperChat: { status: "off" },
       },
     },
     extendedMemory: supported

@@ -307,6 +307,7 @@ export const ADDRESSES = Object.freeze({
   effectIcons: 0xcc40,
   agentEffectRows: 0xe000,
   effectRecords: 0xe800,
+  whispers: 0x6_0000,
   friends: 0x5_0000,
   friendRoot: 0x5_4000,
   friendArray: 0x5_4100,
@@ -328,6 +329,7 @@ export const ADDRESSES = Object.freeze({
   skillbarBuffer: 0x1_3000,
   attributeBuffer: 0x1_4000,
   playerRecordBuffer: 0x1_5000,
+  playerName: 0x1_5400,
   travelUnlockBuffer: 0x1_6000,
   guild: 0x1_7000,
   areaInfo: 0x20_0000,
@@ -366,6 +368,7 @@ export const DETAIL = Object.freeze({
   characterSkills: 0x710,
   players: 0x80c, playerStride: 0x50,
   playerAgentId: 0x00, playerAccessFlags: 0x34, playerNumber: 0x38,
+  playerName: 0x28,
   areaInfoType: 0x08,
 });
 export const PARTY_DIRTY_MESSAGES = Object.freeze([
@@ -512,6 +515,8 @@ export interface KernelOverrides {
   playerEffectSize?: number;
   effectIconPointer?: number;
   effectIconSize?: number;
+  whisperPointer?: number;
+  whisperSize?: number;
   friendRoot?: number;
   toolboxSize?: number;
 }
@@ -551,6 +556,8 @@ export type KernelInit = (
   effectIconSize: number,
   friendRoot: number,
   features: number,
+  whisperPointer: number,
+  whisperSize: number,
 ) => number;
 export type KernelDispatch = (
   kind: number,
@@ -777,6 +784,8 @@ export async function createKernel(
             : 0),
         overrides.friendRoot ?? 0,
         features,
+        overrides.whisperPointer ?? ((features & COMPANION_FEATURE_BITS.whisperObservation) !== 0 ? ADDRESSES.whispers : 0),
+        overrides.whisperSize ?? ((features & COMPANION_FEATURE_BITS.whisperObservation) !== 0 ? COMPANION_ABI.whispers.bytes : 0),
       );
     },
     tick: (skillBarFrameId = 0, skillTimer = 0, effectsFrameHash = 0) => exports.dispatch(
@@ -910,6 +919,11 @@ export function installGameGraph(view: DataView) {
     PLAYER_RECORD_INDEX,
     true,
   );
+  view.setUint32(PLAYER_RECORD_ADDRESS + DETAIL.playerName, ADDRESSES.playerName, true);
+  const playerName = "Fixture Player\0";
+  for (let index = 0; index < playerName.length; index++) {
+    view.setUint16(ADDRESSES.playerName + index * 2, playerName.charCodeAt(index), true);
+  }
   view.setUint32(ADDRESSES.partyContext + 0x54, ADDRESSES.partyInfo, true);
   view.setUint32(ADDRESSES.partyInfo + 0x24, ADDRESSES.heroBuffer, true);
   view.setUint32(ADDRESSES.partyInfo + 0x28, 2, true);

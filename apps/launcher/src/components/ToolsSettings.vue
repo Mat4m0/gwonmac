@@ -12,6 +12,7 @@ const emit = defineEmits<{ maps: [] }>();
 const message = ref("");
 const hasActiveGames = computed(() => props.snapshot.profiles.some(profile => profile.state !== "ready" && profile.state !== "failed"));
 const features: Record<GlobalTool, { label: string; description: string; action?: ShortcutAction }> = {
+  whispers: { label: "Whispers", description: "A movable whisper panel alongside original chat. Conversations last for this session only.", action: "whispers.toggle" },
   resign: { label: "Resign", description: "Ask before sending /resign in PvE. Enter confirms; Escape cancels.", action: "game.resign" },
   "character-switch": { label: "Character Switch", description: "Search and browse every character. Available without optional Tools.", action: "character.switch" },
   "build-management": { label: "Build Library", description: "Save and load skill builds.", action: "tools.toggle" },
@@ -63,7 +64,7 @@ function customColor(value: string) {
     <div class="setting-group feature-setting">
       <div class="feature-heading">
         <label :for="`tool-${tool}`"><strong>{{ features[tool].label }}</strong><small :id="`tool-${tool}-help`">{{ features[tool].description }}</small></label>
-        <ShortcutSetting v-if="features[tool].action" :action="features[tool].action!" :shortcuts="snapshot.shortcuts" :api="api?.tools" :perform-save="performSave" :disabled="!enabled(tool)" />
+        <ShortcutSetting v-if="features[tool].action" :action="features[tool].action!" :suggested-binding="tool === 'whispers' ? { key: 'w', shift: true, option: false } : undefined" :shortcuts="snapshot.shortcuts" :api="api?.tools" :perform-save="performSave" :disabled="!enabled(tool)" />
         <input :id="`tool-${tool}`" type="checkbox" :aria-label="features[tool].label" :aria-describedby="`tool-${tool}-help`" :checked="snapshot.tools.features[tool].enabled" :disabled="tool !== 'character-switch' && !snapshot.tools.configured" @change="perform(() => api?.tools.setFeature({ tool, enabled: ($event.target as HTMLInputElement).checked }), true)" />
       </div>
       <template v-if="enabled(tool)">

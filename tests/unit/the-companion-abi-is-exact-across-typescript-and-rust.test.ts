@@ -20,6 +20,7 @@ const rustKernelSource = readFileSync(
 );
 
 const FEATURE_NAMES = Object.freeze({
+  whisperObservation: "FEATURE_WHISPER_OBSERVATION",
   nativeCursor: "FEATURE_NATIVE_CURSOR",
   gameSnapshot: "FEATURE_GAME_SNAPSHOT",
   toolboxFoundation: "FEATURE_TOOLBOX_FOUNDATION",
@@ -34,6 +35,7 @@ const FEATURE_NAMES = Object.freeze({
 } as const);
 
 const DISPATCH_NAMES = Object.freeze({
+  whisperSendGate: "DISPATCH_WHISPER_SEND_GATE",
   tick: "DISPATCH_TICK",
   cursor: "DISPATCH_CURSOR",
   ui: "DISPATCH_UI",

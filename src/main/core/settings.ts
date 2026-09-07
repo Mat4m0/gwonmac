@@ -291,6 +291,7 @@ export function parseSettings(raw: unknown): AppSettings {
     "chatFilterTitleAchievements",
     "characterSwitchEnabled",
     "resignEnabled",
+    "whispersEnabled",
     "characterSwitchProfession",
     "characterSwitchLevel",
     "characterSwitchLocation",

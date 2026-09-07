@@ -96,6 +96,7 @@ export const LOCAL_FEATURE_INVARIANTS = Object.freeze({
     "local.game-thread-safe-point",
     "xunlai.data-window-anchors",
   ] as const),
+  whisperChat: Object.freeze([...SHARED_FEATURE_INVARIANTS, "whisper.native-chat-path"] as const),
   resignAction: Object.freeze([...SHARED_FEATURE_INVARIANTS, "resign.native-chat-path"] as const),
   chatAliases: Object.freeze([
     ...SHARED_FEATURE_INVARIANTS,
@@ -223,6 +224,8 @@ export interface LocalFeatureCertificateMap {
     core: EnhancementProofCore;
     xunlaiAction: CertifiedXunlaiAction;
   }> & RequiredBuildFact<"observationBase" | "uiDispatcher" | "gameThread">;
+  readonly whisperChat: Readonly<{ core: EnhancementProofCore }>
+    & RequiredBuildFact<"playRegionObservation" | "gameThread" | "uiDispatcher" | "chatFiltering" | "whisperChat">;
   readonly resignAction: Readonly<{ core: EnhancementProofCore }>
     & RequiredBuildFact<"playRegionObservation" | "gameThread" | "resignAction">;
   readonly chatAliases: Readonly<{ core: EnhancementProofCore }>
@@ -456,6 +459,11 @@ export function localFeatureVerdictsForBuild(
         }),
       })
     : null;
+  const whisperChat = effective?.whisperChat && core !== null
+      && build?.playRegionObservation !== undefined && build.gameThread !== undefined
+      && build.uiDispatcher !== undefined && build.chatFiltering !== undefined && build.whisperChat !== undefined
+    ? Object.freeze({ core, playRegionObservation: build.playRegionObservation, gameThread: build.gameThread,
+        uiDispatcher: build.uiDispatcher, chatFiltering: build.chatFiltering, whisperChat: build.whisperChat }) : null;
   const resignAction = effective?.resignAction && core !== null
       && build?.playRegionObservation !== undefined
       && build.gameThread !== undefined && build.resignAction !== undefined
@@ -600,6 +608,8 @@ export function localFeatureVerdictsForBuild(
       failures.xunlaiAction,
       "xunlai.data-window-anchors",
     ),
+    whisperChat: featureVerdict<"whisperChat">(inputSha256, requested.whisperChat, whisperChat,
+      failures.whisperChat, "whisper.native-chat-path"),
     resignAction: featureVerdict<"resignAction">(
       inputSha256, requested.resignAction, resignAction,
       failures.resignAction, "resign.native-chat-path",

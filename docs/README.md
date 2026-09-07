@@ -18,6 +18,7 @@ its rules.
 | What can diagnostics record and export? | [Diagnostics](diagnostics.md) |
 | How do agents develop, branch, stabilize, and roll out changes? | [Development and rollout](development-workflow.md) |
 | How do I change or recertify an Enhancement? | [Enhancement development](enhancement-development.md) |
+| How does the whisper companion stay in sync with original chat? | [Whispers](whispers.md) |
 | How are player skill cooldowns certified and displayed? | [Skill cooldowns](skill-cooldowns.md) |
 | How are controlled-player effect timers certified and displayed? | [Effect timers](effect-timers.md) |
 | How do the cartography grid and walkability overlay work? | [Cartography](cartography.md) |

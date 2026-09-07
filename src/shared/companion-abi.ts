@@ -3,10 +3,11 @@
  * Renderer, scripts, and tests derive their ABI constants from this descriptor.
  */
 export const COMPANION_ABI = Object.freeze({
-  kernel: 24,
+  kernel: 25,
   config: Object.freeze({ bytes: 532 }),
   snapshot: Object.freeze({ abi: 4, bytes: 64 }),
   friends: Object.freeze({ abi: 1, bytes: 12_312, slots: 128, nameUnits: 20 }),
+  whispers: Object.freeze({ abi: 2, bytes: 9_828, snapshotBytes: 9_236, slots: 32, nameUnits: 20, messageUnits: 120 }),
   travelUnlockWords: 28,
   cursor: Object.freeze({ abi: 1, bytes: 4_160 }),
   toolbox: Object.freeze({ abi: 4, bytes: 64 }),
@@ -31,6 +32,7 @@ export const COMPANION_FEATURE_BITS = Object.freeze({
   friendObservation: 1 << 8,
   playerEffectObservation: 1 << 9,
   effectIconGeometry: 1 << 10,
+  whisperObservation: 1 << 11,
 });
 
 export const COMPANION_DISPATCH_KINDS = Object.freeze({
@@ -39,6 +41,7 @@ export const COMPANION_DISPATCH_KINDS = Object.freeze({
   ui: 2,
   activeFeatures: 3,
   friendLifecycle: 4,
+  whisperSendGate: 5,
 });
 
 export const SKILL_GEOMETRY_NATIVE_REASONS = Object.freeze({

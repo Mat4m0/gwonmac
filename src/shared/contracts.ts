@@ -432,6 +432,7 @@ export interface AppSettings {
   characterSwitchEnabled: boolean;
   /** Allow the confirmed PvE resign shortcut when Tools are enabled. */
   resignEnabled: boolean;
+  whispersEnabled: boolean;
   /** Show the canonical profession icon and profession names in Character Switch. */
   characterSwitchProfession: boolean;
   /** Show the character's certified level in Character Switch. */
@@ -605,6 +606,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   travelPalette: true,
   characterSwitchEnabled: true,
   resignEnabled: false,
+  whispersEnabled: false,
   characterSwitchProfession: true,
   characterSwitchLevel: true,
   characterSwitchLocation: true,
@@ -806,6 +808,7 @@ export interface ClientCompatibility {
     playerEffectObservation: OptionalFeatureStatus;
     effectIconGeometry: OptionalFeatureStatus;
     resignAction: OptionalFeatureStatus;
+    whisperChat: OptionalFeatureStatus;
     playRegionObservation: OptionalFeatureStatus;
     preGameControls: OptionalFeatureStatus;
     characterSwitchAction: OptionalFeatureStatus;
@@ -1008,6 +1011,7 @@ export type RendererCommand =
   | { type: "accounts.settings.open" }
   | { type: "tools.toggle" }
   | { type: "trade.toggle" }
+  | { type: "whispers.toggle" }
   | { type: "storage.open" }
   | { type: "travel.toggle" }
   | { type: "character.toggle" }

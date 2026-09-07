@@ -50,6 +50,7 @@ import {
   openStorage,
   sendRendererCommand,
   toggleTrade,
+  toggleWhispers,
   toggleTools,
   toggleTravel,
   toggleCharacterSwitch,
@@ -660,6 +661,7 @@ export function createMainWindow(
       if (action === "character.switch") void toggleCharacterSwitch(win);
       else if (action === "game.resign") return showResignGame(host, win);
       else if (action === "tools.toggle") void toggleTools(win);
+      else if (action === "whispers.toggle") void toggleWhispers(win);
       else if (action === "trade.toggle") void toggleTrade(win);
       else if (action === "storage.open") void openStorage(win);
       else if (action === "travel.open") void toggleTravel(win);
