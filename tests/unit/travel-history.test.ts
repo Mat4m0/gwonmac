@@ -15,10 +15,27 @@ const characterB = travelCharacterKey("fedcba9876543210");
 
 describe("Travel history", () => {
   it("keeps ten unique reviewed destinations in most-recent order", () => {
-    const destinations = [148, 164, 165, 166, 163, 778, 81, 55, 20, 49, 109, 81, 85];
+    const destinations = [148, 164, 165, 166, 163, 779, 81, 55, 20, 49, 109, 81, 85];
     const history = destinations.reduce(recordVisitedTravel, Object.freeze([]) as readonly number[]);
-    assert.deepEqual(history, [85, 81, 109, 49, 20, 55, 778, 163, 166, 165]);
+    assert.deepEqual(history, [85, 81, 109, 49, 20, 55, 779, 163, 166, 165]);
     assert.throws(() => recordVisitedTravel(history, 2_000), /not reviewed/u);
+  });
+
+  it("reads and writes Piken through the Stable-compatible map ID", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "gw-travel-history-"));
+    const path = join(dir, "travel-history.json");
+    await writeFile(path, JSON.stringify({
+      formatVersion: 2,
+      characters: { [characterA]: [778] },
+    }));
+
+    const store = new TravelHistoryStore(path);
+    assert.deepEqual(await store.get(characterA), [779]);
+    await store.record(characterA, 779);
+    assert.deepEqual(JSON.parse(await readFile(path, "utf8")), {
+      formatVersion: 2,
+      characters: { [characterA]: [778] },
+    });
   });
 
   it("persists histories independently per character across store instances", async () => {
