@@ -54,6 +54,7 @@ import {
 import {
   ENHANCEMENT_CAPABILITY_PRESETS,
   enhancementCapabilitiesForProfile,
+  type EnhancementCapabilities,
 } from "../../src/shared/enhancement-contracts.js";
 import { inspectLocalActionRoleCandidates } from "../../src/main/certification/enhancement-local-actions-proof.js";
 import {
@@ -170,6 +171,8 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     quickItemMove: false,
     playerEffectObservation: false,
     effectIconGeometry: true,
+    resignAction: false,
+    whisperChat: false,
   });
   const verifyFeatureMutation = (candidate: Uint8Array) =>
     verifyLocalClientBytes(candidate, withoutCharacterSwitch);
@@ -190,7 +193,9 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     quickItemMove: true,
     playerEffectObservation: true,
     effectIconGeometry: true,
-  });
+    resignAction: true,
+    whisperChat: true,
+  } satisfies EnhancementCapabilities);
   // If this is a statically shipped build, the shape locator must still
   // reproduce that record exactly. Unknown builds are intentionally decided
   // by the local verifier instead of making this test demand a release.
@@ -328,7 +333,9 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     quickItemMove: false,
     playerEffectObservation: false,
     effectIconGeometry: false,
-  });
+    resignAction: false,
+    whisperChat: false,
+  } satisfies EnhancementCapabilities);
   assert.deepEqual(addressDecision.reasons, []);
   const addressTemplateBuild = addressDecision.templateSaveBuild;
   const addressEnhancementBuild = addressDecision.enhancementBuild;
@@ -353,7 +360,9 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     quickItemMove: false,
     playerEffectObservation: false,
     effectIconGeometry: false,
-  });
+    resignAction: false,
+    whisperChat: false,
+  } satisfies EnhancementCapabilities);
 
   const areaInfo = playRegionLocation.playRegionLayout.areaInfo;
   const areaLookupLocal = parsed.bodies.findIndex((body) =>
