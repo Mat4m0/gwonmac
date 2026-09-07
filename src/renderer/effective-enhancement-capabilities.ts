@@ -33,5 +33,6 @@ export function effectiveCapabilities(
     chatFiltering: features.chatFiltering.status === "available",
     quickItemMove: features.quickItemMove.status === "available",
     resignAction: features.resignAction.status === "available",
+    whisperChat: features.whisperChat.status === "available",
   });
 }

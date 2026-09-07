@@ -70,6 +70,7 @@ void app.whenReady().then(async () => {
           characterSwitchAction: false,
           chatFiltering: false,
           quickItemMove: false,
+          whisperChat: false,
         },
       });
   state.localVerifierCompleted = true;

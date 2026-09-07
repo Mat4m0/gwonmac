@@ -1,0 +1,271 @@
+/** Covers the real component's conversation lifetime and focus behavior. */
+import { mount, flushPromises } from "@vue/test-utils";
+import { afterEach, expect, it, vi } from "vitest";
+import { nextTick } from "vue";
+import WhispersApp from "./WhispersApp.vue";
+import { createWhisperSession } from "../../../src/shared/whisper-session";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  window.localStorage.clear();
+  document.body.replaceChildren();
+});
+
+it("restores the Messenger window and icon positions in the current profile", async () => {
+  const viewportWidth = vi.spyOn(window, "innerWidth", "get").mockReturnValue(1_024);
+  const viewportHeight = vi.spyOn(window, "innerHeight", "get").mockReturnValue(768);
+  const session = createWhisperSession(async () => {});
+  session.setAvailable(true);
+  const wrapper = mount(WhispersApp, { props: { session }, attachTo: document.body });
+  const panel = wrapper.get<HTMLElement>("#whisper-window").element;
+  Object.defineProperties(panel, {
+    offsetWidth: { configurable: true, get: () => 340 },
+    offsetHeight: { configurable: true, get: () => 360 },
+  });
+  panel.getBoundingClientRect = () => ({
+    x: 72, y: 80, left: 72, top: 80, right: 412, bottom: 440,
+    width: 340, height: 360, toJSON: () => ({}),
+  });
+
+  const launcher = wrapper.get<HTMLButtonElement>(".whisper-launcher");
+  await launcher.trigger("keydown", { key: "ArrowRight", altKey: true });
+  expect(launcher.attributes("style")).toContain("left: 36px");
+  Object.defineProperty(launcher.element, "setPointerCapture", { value: () => {} });
+  launcher.element.dispatchEvent(new PointerEvent("pointerdown", {
+    bubbles: true, button: 0, clientX: 36, clientY: 160, pointerId: 2,
+  }));
+  launcher.element.dispatchEvent(new PointerEvent("pointermove", {
+    clientX: 900, clientY: 700, pointerId: 2,
+  }));
+  launcher.element.dispatchEvent(new PointerEvent("pointerup", { pointerId: 2 }));
+  viewportWidth.mockReturnValue(1_400);
+  viewportHeight.mockReturnValue(1_000);
+  window.dispatchEvent(new Event("resize"));
+  await nextTick();
+  expect(launcher.attributes("style")).toContain("left: 1276px");
+  expect(launcher.attributes("style")).toContain("top: 932px");
+
+  const header = wrapper.get<HTMLElement>(".whisper-head").element;
+  Object.defineProperty(header, "setPointerCapture", { value: () => {} });
+  header.dispatchEvent(new PointerEvent("pointerdown", {
+    bubbles: true, clientX: 100, clientY: 100, pointerId: 1,
+  }));
+  header.dispatchEvent(new PointerEvent("pointermove", {
+    clientX: 150, clientY: 150, pointerId: 1,
+  }));
+  header.dispatchEvent(new PointerEvent("pointerup", { pointerId: 1 }));
+  window.dispatchEvent(new PageTransitionEvent("pagehide"));
+  wrapper.unmount();
+
+  const restoredSession = createWhisperSession(async () => {});
+  restoredSession.setAvailable(true);
+  const restored = mount(WhispersApp, {
+    props: { session: restoredSession },
+    attachTo: document.body,
+  });
+  expect(restored.get(".whisper-launcher").attributes("style")).toContain("left: 1276px");
+  expect(restored.get(".whisper-launcher").attributes("style")).toContain("top: 932px");
+  expect(restored.get("#whisper-window").attributes("style")).toContain("left: 122px");
+  expect(restored.get("#whisper-window").attributes("style")).toContain("top: 130px");
+  restored.unmount();
+});
+
+it("keeps recipient, input DOM, draft and focus across incoming updates", async () => {
+  const session = createWhisperSession(async () => {});
+  session.setAvailable(true); session.open("Test Friend");
+  const wrapper = mount(WhispersApp, { props: { session }, attachTo: document.body });
+  const field = wrapper.get('input[id="draft-test friend"]');
+  await field.setValue("A draft");
+  (field.element as HTMLInputElement).focus();
+  session.observe([{ id: 1, sender: "Other Friend", message: "Hello", direction: "incoming" }]);
+  await nextTick();
+  expect(document.activeElement).toBe(field.element);
+  expect(session.state.selected).toBe("test friend");
+  expect(wrapper.get('input[id="draft-test friend"]').element).toBe(field.element);
+  await wrapper.get('[aria-label="Collapse whispers"]').trigger("click");
+  expect(session.state.visible).toBe(false);
+  session.setVisible(true); await nextTick();
+  expect((field.element as HTMLInputElement).value).toBe("A draft");
+  wrapper.unmount();
+});
+
+it("restores each transcript position and cycles observed sent messages", async () => {
+  const session = createWhisperSession(async () => {});
+  session.setAvailable(true);
+  session.observe([
+    { id: 1, sender: "Test Friend", message: "First reply", direction: "outgoing" },
+    { id: 2, sender: "Test Friend", message: "Second reply", direction: "outgoing" },
+  ]);
+  session.showPicker();
+  const wrapper = mount(WhispersApp, { props: { session }, attachTo: document.body });
+  session.open("Test Friend");
+  await flushPromises();
+  const transcript = wrapper.get<HTMLElement>("[data-transcript]").element;
+  transcript.scrollTop = 37;
+  await wrapper.get("[data-transcript]").trigger("scroll");
+  session.showPicker();
+  await nextTick();
+  session.open("Test Friend");
+  await flushPromises();
+  expect(transcript.scrollTop).toBe(37);
+
+  const field = wrapper.get<HTMLInputElement>('input[id="draft-test friend"]');
+  await field.setValue("Unsent thought");
+  await field.trigger("keydown", { key: "ArrowUp" });
+  expect(field.element.value).toBe("Second reply");
+  await field.trigger("keydown", { key: "ArrowUp" });
+  expect(field.element.value).toBe("First reply");
+  await field.trigger("keydown", { key: "ArrowDown" });
+  expect(field.element.value).toBe("Second reply");
+  await field.trigger("keydown", { key: "ArrowDown" });
+  expect(field.element.value).toBe("Unsent thought");
+  wrapper.unmount();
+});
+
+it("follows incoming messages only while the reader is at the live edge", async () => {
+  const session = createWhisperSession(async () => {});
+  session.setAvailable(true);
+  session.observe([{ id: 1, sender: "Test Friend", message: "First", direction: "incoming" }]);
+  const wrapper = mount(WhispersApp, { props: { session }, attachTo: document.body });
+  session.open("Test Friend");
+  await flushPromises();
+  const transcript = wrapper.get<HTMLElement>("[data-transcript]");
+  let contentHeight = 200;
+  Object.defineProperties(transcript.element, {
+    clientHeight: { configurable: true, get: () => 100 },
+    scrollHeight: { configurable: true, get: () => contentHeight },
+  });
+
+  transcript.element.scrollTop = 100;
+  await transcript.trigger("scroll");
+  contentHeight = 240;
+  session.observe([{ id: 2, sender: "Test Friend", message: "Second", direction: "incoming" }]);
+  await flushPromises();
+  expect(transcript.element.scrollTop).toBe(240);
+
+  transcript.element.scrollTop = 20;
+  await transcript.trigger("scroll");
+  contentHeight = 280;
+  session.observe([{ id: 3, sender: "Test Friend", message: "Third", direction: "incoming" }]);
+  await flushPromises();
+  expect(transcript.element.scrollTop).toBe(20);
+  wrapper.unmount();
+});
+
+it("requires draft discard to close and only observed outgoing clears a submitted draft", async () => {
+  let finish: () => void = () => {};
+  const session = createWhisperSession(() => new Promise<void>(resolve => { finish = resolve; }));
+  session.setAvailable(true); session.open("Test Friend");
+  const wrapper = mount(WhispersApp, { props: { session }, attachTo: document.body });
+  await wrapper.get('input[id="draft-test friend"]').setValue("A draft");
+  await wrapper.get('[aria-label="Close conversation with Test Friend"]').trigger("click");
+  expect(wrapper.text()).toContain("Discard the unsent draft");
+  expect(session.state.conversations).toHaveLength(1);
+  const keep = wrapper.findAll("button").find(button => button.text() === "Keep chatting")!;
+  await keep.trigger("click");
+  await wrapper.get("form.whisper-compose").trigger("submit");
+  expect(wrapper.text()).toContain("Submitting…");
+  expect(session.state.conversations[0]?.messages).toHaveLength(0);
+  session.observe([{ id: 1, sender: "Test Friend", message: "A draft", direction: "outgoing" }]);
+  finish(); await flushPromises();
+  expect((wrapper.get('input[id="draft-test friend"]').element as HTMLInputElement).value).toBe("");
+  expect(wrapper.findAll("article")).toHaveLength(1);
+  await wrapper.get('[aria-label="Close conversation with Test Friend"]').trigger("click");
+  expect(session.state.conversations).toHaveLength(0);
+  expect(wrapper.get(".whisper-picker").text()).not.toContain("Conversations");
+  expect(session.state.recent.map(p => p.name)).toEqual(["Test Friend"]);
+  wrapper.unmount();
+});
+
+
+it("shows available friends without hiding offline conversations", async () => {
+  const session = createWhisperSession(async () => {});
+  session.setAvailable(true); session.showPicker();
+  session.updateFriends({ status: "ready", sequence: 1, generation: 1, friends: [
+    { key: "a", character: "Online Friend", alias: "Online Friend", status: "online", mapId: 133 },
+    { key: "b", character: "Offline Friend", alias: "Offline Friend", status: "offline", mapId: 0 },
+    { key: "c", character: "Away Friend", alias: "Away Friend", status: "away", mapId: 133 },
+  ] });
+  const wrapper = mount(WhispersApp, { props: { session }, attachTo: document.body });
+  expect(wrapper.text()).toContain("Available friends");
+  expect(wrapper.text()).toContain("Online Friend");
+  expect(wrapper.text()).toContain("Online");
+  expect(wrapper.text()).toContain("Away Friend");
+  expect(wrapper.text()).toContain("Away");
+  expect(wrapper.text()).not.toContain("Offline Friend");
+  session.open("Offline Friend"); await nextTick();
+  expect(wrapper.text()).toContain("Offline");
+  session.observe([{ id: 1, sender: "Offline Friend", message: "Hello", direction: "incoming" }]);
+  session.showPicker(); await nextTick();
+  expect(wrapper.text()).toContain("Offline Friend");
+  wrapper.unmount();
+});
+
+it("suggests friends or recent chat participants and lets either source be disabled", async () => {
+  const session = createWhisperSession(async () => {});
+  session.setAvailable(true); session.showPicker();
+  session.updateFriends({ status: "ready", sequence: 1, generation: 1, friends: [
+    { key: "friend", character: "Moon Friend", alias: "Moon Friend", status: "online", mapId: 133 },
+  ] });
+  session.observe([
+    { id: 1, sender: "Moon D Eden", direction: "participant" },
+    { id: 2, sender: "Ancient N Chains", direction: "participant" },
+  ]);
+  const wrapper = mount(WhispersApp, { props: { session }, attachTo: document.body });
+  const field = wrapper.get<HTMLInputElement>("#whisper-person");
+  await field.setValue("mo");
+  expect(wrapper.text()).toContain("Moon D Eden");
+  expect(wrapper.text()).toContain("Moon Friend");
+  expect(wrapper.text()).toContain("Friend · Online");
+  expect(wrapper.text()).toContain("Chat");
+  expect(wrapper.text()).not.toContain("Ancient N Chains");
+  const sourceButtons = wrapper.findAll(".whisper-source-toggle");
+  await sourceButtons[1]!.trigger("click");
+  expect(wrapper.text()).not.toContain("Moon D Eden");
+  expect(wrapper.text()).toContain("Moon Friend");
+  await sourceButtons[0]!.trigger("click");
+  expect(wrapper.text()).toContain("Suggestions are off");
+  await sourceButtons[1]!.trigger("click");
+  await field.trigger("keydown", { key: "Tab" });
+  expect(field.element.value).toBe("Moon D Eden");
+  await wrapper.get("form.whisper-search").trigger("submit");
+  expect(session.state.selected).toBe("moon d eden");
+  wrapper.unmount();
+});
+
+it("changes only the messenger background opacity multiplier", async () => {
+  const session = createWhisperSession(async () => {});
+  session.setAvailable(true); session.setVisible(true);
+  const wrapper = mount(WhispersApp, { props: { session }, attachTo: document.body });
+  await wrapper.get('[aria-label="Chat options"]').trigger("click");
+  await wrapper.get("#whisper-opacity").setValue(20);
+  expect(session.state.backgroundOpacity).toBe(20);
+  expect(wrapper.get("#whisper-window").attributes("style")).toContain("--whisper-background-percent: 20%");
+  wrapper.unmount();
+});
+
+
+it("lists only conversations with messages or an unfinished draft and keeps unused friends available", async () => {
+  const session = createWhisperSession(async () => {});
+  session.setAvailable(true);
+  session.updateFriends({ status: "ready", sequence: 1, generation: 1, friends: [
+    { key: "friend", character: "Unused Friend", alias: "Unused Friend", status: "online", mapId: 133 },
+  ] });
+  session.open("Unused Friend");
+  session.open("Empty Stranger");
+  session.open("Draft Friend");
+  session.setDraft("draft friend", "Unsent thought");
+  session.showPicker();
+  const wrapper = mount(WhispersApp, { props: { session }, attachTo: document.body });
+  const picker = wrapper.get(".whisper-picker");
+  expect(picker.findAll(".whisper-person")).toHaveLength(1);
+  expect(picker.text()).toContain("Draft: Unsent thought");
+  expect(picker.text()).toContain("Unused Friend");
+  expect(picker.text()).not.toContain("Empty Stranger");
+  expect(picker.text()).not.toContain("No messages yet");
+  session.observe([{ id: 1, sender: "Empty Stranger", message: "Hello", direction: "incoming" }]);
+  await nextTick();
+  expect(picker.findAll(".whisper-person")).toHaveLength(2);
+  expect(picker.text()).toContain("Empty Stranger");
+  wrapper.unmount();
+});

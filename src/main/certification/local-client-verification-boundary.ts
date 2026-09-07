@@ -149,6 +149,7 @@ function featureFailuresFromVerdicts(
   const teamApply = refusalForFeature("teamApply", verdicts.teamApply);
   const travelAction = refusalForFeature("travelAction", verdicts.travelAction);
   const xunlaiAction = refusalForFeature("xunlaiAction", verdicts.xunlaiAction);
+  const whisperChat = refusalForFeature("whisperChat", verdicts.whisperChat);
   const resignAction = refusalForFeature("resignAction", verdicts.resignAction);
   const chatAliases = refusalForFeature("chatAliases", verdicts.chatAliases);
   const chatFiltering = refusalForFeature(
@@ -200,6 +201,7 @@ function featureFailuresFromVerdicts(
     || quickItemMove === null
     || playerEffectObservation === null
     || effectIconGeometry === null
+    || whisperChat === null
     || resignAction === null
   ) return null;
   return Object.freeze({
@@ -219,6 +221,7 @@ function featureFailuresFromVerdicts(
     ...(quickItemMove ? { quickItemMove } : {}),
     ...(playerEffectObservation ? { playerEffectObservation } : {}),
     ...(effectIconGeometry ? { effectIconGeometry } : {}),
+    ...(whisperChat ? { whisperChat } : {}),
     ...(resignAction ? { resignAction } : {}),
   });
 }
@@ -703,6 +706,9 @@ function isAutomaticSemanticBuild(
     || !isIndex(build.tableSlot)
     || !isDigest(build.hookBodySha256)
   ) return false;
+  if (build.whisperChat !== undefined && (build.gameThread === undefined
+    || build.uiDispatcher === undefined || build.chatFiltering === undefined
+    || !isDeepStrictEqual(build.whisperChat, RESIGN_NATIVE_SENDER))) return false;
   if (build.resignAction !== undefined && (
     !build.playRegionObservation || !build.gameThread
     || !isDeepStrictEqual(build.resignAction, RESIGN_NATIVE_SENDER)

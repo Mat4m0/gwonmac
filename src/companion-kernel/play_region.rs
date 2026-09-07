@@ -88,7 +88,7 @@ unsafe fn observe_travel_unlocks(layout: Layout, game: u32) -> Option<[u32; TRAV
     Some(words)
 }
 
-unsafe fn current_character_key(layout: Layout, game: u32) -> Option<u64> {
+pub(crate) unsafe fn current_character_key(layout: Layout, game: u32) -> Option<u64> {
     if layout.character_uuid == 0 {
         return None;
     }

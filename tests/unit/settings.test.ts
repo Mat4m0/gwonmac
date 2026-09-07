@@ -48,6 +48,7 @@ describe("settings", () => {
       cartographyEnabled: true,
       characterSwitchEnabled: true,
       resignEnabled: false,
+      whispersEnabled: false,
       cartographyOverlayEnabled: false,
       cartographyGridEnabled: false,
       cartographyCompassGridEnabled: false,
@@ -160,6 +161,7 @@ describe("settings", () => {
       cartographyEnabled: true,
       characterSwitchEnabled: true,
       resignEnabled: false,
+      whispersEnabled: false,
       cartographyOverlayEnabled: false,
       cartographyGridEnabled: false,
       cartographyCompassGridEnabled: false,
@@ -646,6 +648,7 @@ describe("settings", () => {
       "uiPanelOpacity",
       "uiStyle",
       "updateTrack",
+      "whispersEnabled",
       "xunlaiStorage",
     ]);
     assert.equal(disk.formatVersion, 1);
@@ -722,6 +725,7 @@ describe("settings", () => {
       cartographyEnabled: true,
       characterSwitchEnabled: true,
       resignEnabled: false,
+      whispersEnabled: false,
       cartographyOverlayEnabled: false,
       cartographyGridEnabled: false,
       cartographyCompassGridEnabled: false,

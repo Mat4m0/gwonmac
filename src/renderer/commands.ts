@@ -92,6 +92,9 @@
           );
         }
         break;
+      case 'whispers.toggle':
+        if (!dispatch('gw:whispers-toggle')) return 'unhandled';
+        break;
       case 'trade.toggle':
         if (!dispatch('gw:trade-toggle')) {
           throw new Error('Trade Chat is not available right now.');

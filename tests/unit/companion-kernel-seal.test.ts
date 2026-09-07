@@ -88,6 +88,7 @@ describe("companion kernel build contract", () => {
       { name: "companion_friend_bytes", typeIndex: 2 },
       { name: "companion_player_effect_bytes", typeIndex: 2 },
       { name: "companion_effect_icon_bytes", typeIndex: 2 },
+      { name: "companion_whisper_bytes", typeIndex: 2 },
     ]);
   });
 
@@ -156,6 +157,7 @@ describe("companion kernel build contract", () => {
         COMPANION_KERNEL_EXPORT_VALUES.companion_skill_cooldown_bytes,
       companion_play_region_bytes: COMPANION_PLAY_REGION_BYTES,
       companion_character_list_bytes: 4_632,
+      companion_whisper_bytes: COMPANION_ABI.whispers.bytes,
       companion_friend_bytes: COMPANION_ABI.friends.bytes,
       companion_player_effect_bytes: COMPANION_ABI.playerEffects.bytes,
       companion_effect_icon_bytes: COMPANION_ABI.effectIcons.bytes,

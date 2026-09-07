@@ -22,6 +22,9 @@ import { createCompanionSequenceFeed } from "./companion-sequence-feed.js";
 import type { EnhancementCommandEnqueue } from "./enhancement-team-commands.js";
 import type * as TeamCommandsModule from "./enhancement-team-commands.js";
 import type { ProfessionCommandTraceReader } from "./profession-command-trace.js";
+import { createWhisperInstallation, type WhisperInstallation } from "./whisper-installation.js";
+import { createWhisperSession } from "../shared/whisper-session.js";
+import { createWhisperSurface } from "./whisper-surface.js";
 import { installResignCommand } from "./resign.js";
 import type { StorageInstallation } from "./enhancement-storage-installation.js";
 import type { TravelInstallation } from "./enhancement-travel-installation.js";
@@ -107,6 +110,7 @@ export async function prepareToolsCompanionExtension(
   program: EnhancementProgram,
 ): Promise<PreparedCompanionExtension> {
   const foundation = capabilities.partyObservation;
+  const whispers = createWhisperInstallation(exports, capabilities.whisperChat);
   const friendManifest = capabilities.travelAction ? decodeFriendObserverManifest(module) : null;
   let friendPointer = 0;
   let quickItemMovePointer = 0;
@@ -167,6 +171,7 @@ export async function prepareToolsCompanionExtension(
       (observeState ? COMPANION_FEATURE_BITS.gameSnapshot : 0)
       | (foundation ? COMPANION_FEATURE_BITS.toolboxFoundation : 0)
       | (capabilities.targetObservation ? COMPANION_FEATURE_BITS.targetObservation : 0)
+      | (capabilities.whisperChat ? COMPANION_FEATURE_BITS.whisperObservation : 0)
       | skills.certifiedFeatureFlags
       | (capabilities.playerEffectObservation
         ? COMPANION_FEATURE_BITS.playerEffectObservation : 0)
@@ -185,6 +190,7 @@ export async function prepareToolsCompanionExtension(
       allocated = true;
       if (friendManifest !== null) friendPointer = Number(malloc(COMPANION_ABI.friends.bytes));
       if (quickItemMove !== null) quickItemMovePointer = Number(malloc(QUICK_ITEM_MOVE_SCRATCH_BYTES));
+      whispers.allocate(malloc);
       slots?.allocate(malloc);
       cooldowns?.allocate(malloc);
       playerEffects.allocate(malloc);
@@ -203,6 +209,7 @@ export async function prepareToolsCompanionExtension(
       }
     },
     initialize(memory) {
+      whispers.initialize(memory);
       if (friendPointer !== 0) new Uint8Array(memory.buffer, friendPointer, COMPANION_ABI.friends.bytes).fill(0);
       if (quickItemMovePointer !== 0) {
         new Uint8Array(memory.buffer, quickItemMovePointer, QUICK_ITEM_MOVE_SCRATCH_BYTES).fill(0);
@@ -220,6 +227,7 @@ export async function prepareToolsCompanionExtension(
       storage?.initialize(memory); travel?.initialize();
     },
     ownedRegions: () => [
+      ...(whispers.region === null ? [] : [whispers.region]),
       ...(friendPointer === 0 ? [] : [{ name: "friend snapshot", pointer: friendPointer,
         size: COMPANION_ABI.friends.bytes, align: 4 as const }]),
       ...(quickItemMovePointer === 0 ? [] : [{ name: "Quick Item Move payload", pointer: quickItemMovePointer,
@@ -232,6 +240,7 @@ export async function prepareToolsCompanionExtension(
       ...(travel === null ? [] : [travel.region()]),
     ],
     kernelRegions: {
+      get whispers() { return { pointer: whispers.pointer, bytes: whispers.bytes }; },
       get friends() { return friendPointer === 0 ? EMPTY_REGION : { pointer: friendPointer, bytes: COMPANION_ABI.friends.bytes }; },
       friendRoot: friendManifest?.root ?? 0,
       get skillSlots() {
@@ -256,7 +265,7 @@ export async function prepareToolsCompanionExtension(
       const session = activateTools({ context, capabilities, program, foundation, observeState,
         skills, slots, cooldowns, playerEffects, effectIcons, enqueue, traceReader, teamCommands, storage,
         travel, configureTrade, takeTrade, configureChatFilters, friendPointer,
-        resignExports: capabilities.resignAction ? exports : null,
+        resignExports: capabilities.resignAction ? exports : null, whispers,
         quickItemMove, quickItemMovePointer });
       activated = true;
       return session;
@@ -270,6 +279,7 @@ export async function prepareToolsCompanionExtension(
         () => cooldowns?.release(free),
         () => playerEffects.release(free),
         () => effectIcons.release(free),
+        () => whispers.dispose(free),
         () => storage?.dispose(free),
         () => travel?.dispose(free),
       ]);
@@ -292,6 +302,7 @@ type ToolsInput = Readonly<{
   traceReader: ProfessionCommandTraceReader | null;
   teamCommands: typeof TeamCommandsModule | null;
   resignExports: WebAssembly.Exports | null;
+  whispers: WhisperInstallation;
   storage: StorageInstallation | null;
   travel: TravelInstallation | null;
   configureTrade: ((enabled: number) => number) | null;
@@ -306,6 +317,11 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
   const { context, capabilities, program, foundation, observeState, skills,
     slots, cooldowns, playerEffects, effectIcons, enqueue, traceReader, teamCommands, storage, travel,
     configureTrade, takeTrade, configureChatFilters } = input;
+  const whispers = input.whispers;
+  const whisperSession = createWhisperSession(whispers.send);
+  const unsubscribeWhispers = whispers.subscribe((messages, missed) => whisperSession.observe(messages, missed));
+  let whisperSurface: ReturnType<typeof createWhisperSurface> | null = null;
+  let whisperCharacter: string | null = null;
   const resign = input.resignExports ? installResignCommand(input.resignExports) : null;
   let activeFriendPointer = input.friendPointer;
   let activeQuickItemMovePointer = input.quickItemMovePointer;
@@ -345,16 +361,19 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
     status: "waiting" as const,
     reason: "unavailable" as const,
   });
-  const friendFeed = activeFriendPointer === 0 || travel === null
+  const friendFeed = activeFriendPointer === 0
     ? null
     : createCompanionSequenceFeed<TravelFriends>(waitingFriends, waitingFriends, {
       sameReadyState: (previous, next) =>
         companionFriendsSignature(previous) === companionFriendsSignature(next),
     });
-  const unsubscribeFriends = friendFeed?.subscribe((friends) => travel?.updateFriends(friends));
+  const unsubscribeFriends = friendFeed?.subscribe((friends) => {
+    travel?.updateFriends(friends); whisperSession.updateFriends(friends);
+  });
   const pollFriends = () => {
-    if (activeFriendPointer === 0 || travel === null || friendFeed === null) return;
-    const nextObservation = policy().travel && travel.observingFriends();
+    if (activeFriendPointer === 0 || friendFeed === null) return;
+    const nextObservation = (policy().travel && travel?.observingFriends() === true)
+      || (policy().whispers && whisperSession.state.visible && whisperSession.state.selected === null);
     if (nextObservation !== observingFriends) {
       observingFriends = nextObservation;
       if (!observingFriends) friendFeed.withdraw();
@@ -375,6 +394,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
       () => { unsubscribeEffectIcons?.(); unsubscribeEffectIcons = null; },
       () => { effectOverlay?.dispose(); effectOverlay = null; },
       () => { resign?.dispose(); },
+      () => { whispers.setEnabled(false); unsubscribeWhispers(); whisperSurface?.dispose(); whisperSurface = null; whisperSession.dispose(); },
       () => { configureTrade?.(0); },
       () => { configureChatFilters?.(0); },
       () => { quickItemMoveInstallation?.dispose(); quickItemMoveInstallation = null; },
@@ -489,10 +509,11 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
       | (capabilities.playRegionObservation ? COMPANION_FEATURE_BITS.playRegionObservation : 0)
       | (policy().targetReadout || cartographyActive()
         ? COMPANION_FEATURE_BITS.targetObservation : 0)
+      | (policy().whispers && capabilities.whisperChat ? COMPANION_FEATURE_BITS.whisperObservation : 0)
       | skills.activeFeatureFlags
       | (playerEffectsActive() ? COMPANION_FEATURE_BITS.playerEffectObservation : 0)
       | (effectIconsActive() ? COMPANION_FEATURE_BITS.effectIconGeometry : 0)
-      | (activeFriendPointer !== 0 && policy().travel && travel?.observingFriends() === true
+      | (activeFriendPointer !== 0 && observingFriends
         ? COMPANION_FEATURE_BITS.friendObservation : 0),
     0, 0, 0, 0,
   );
@@ -526,6 +547,27 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
     effectOverlay?.setEnabled(policy().effectTimers && effectIconsActive());
     syncObservers();
     resign?.update(policy().resign);
+    const region = snapshot().playRegionState;
+    if (region.status === "ready" && region.characterKey !== null) {
+      if (whisperCharacter !== null && whisperCharacter !== region.characterKey) {
+        whispers.setEnabled(false); whispers.poll(); whisperSession.reset();
+      }
+      whisperCharacter = region.characterKey;
+    } else if (region.status === "waiting" && region.reason === "game") {
+      whispers.setEnabled(false); whispers.poll(); whisperSession.reset(); whisperCharacter = null;
+    }
+    whispers.setEnabled(policy().whispers);
+    whisperSession.setAvailable(whispers.enabled);
+    if (policy().whispers && capabilities.whisperChat) {
+      whisperSurface ??= createWhisperSurface(document.body, whisperSession);
+      whisperSurface.setEnabled(true);
+      whisperSession.setAvailable(true);
+    } else {
+      whisperSurface?.setEnabled(false);
+      if (!snapshot().settings.whispersEnabled || !snapshot().settings.gwonmacTools) {
+        whisperSurface?.dispose(); whisperSurface = null; whisperSession.reset();
+      }
+    }
     syncStorage();
     syncTravel();
     quickItemMoveInstallation?.update(policy().quickItemMove);
@@ -554,6 +596,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
   return Object.freeze({
     observer: {
       pollers: [
+        { poll: () => whispers.poll(), enabled: () => true },
         ...(activeFriendPointer === 0 ? [] : [{ poll: pollFriends, enabled: () => true }]),
         ...(travel === null ? [] : [{
           poll: () => travel.poll(),
@@ -672,6 +715,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
     },
     releaseCallbackResources(free) {
       runCleanupSteps("Companion Tools callback cleanup failed", [
+        () => whispers.dispose(free),
         () => storage?.dispose(free),
         () => travel?.dispose(free),
         () => { if (activeQuickItemMovePointer !== 0) free(activeQuickItemMovePointer); activeQuickItemMovePointer = 0; },

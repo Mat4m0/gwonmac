@@ -18,6 +18,36 @@ type ShortcutInput = Pick<
 >;
 
 describe("window shortcut input", () => {
+  it("leaves Whispers off until assigned, and gates, rebinds, and clears it", () => {
+    let dispatch!: (event: { preventDefault(): void }, input: ShortcutInput) => void;
+    const win = { webContents: { on: (_name: string, listener: typeof dispatch) => { dispatch = listener; } }, on() { return win; } } as unknown as BrowserWindow;
+    const actions: string[] = [];
+    installWindowShortcuts(win, { run: action => { actions.push(action); }, edit() {}, quitOrReload() {} });
+    const press = (code = "KeyW") => {
+      let claimed = false;
+      const input: ShortcutInput = { type: "keyDown", code, key: code.slice(3), meta: true, control: false, shift: true, alt: false, isAutoRepeat: false };
+      dispatch({ preventDefault() { claimed = true; } }, input);
+      dispatch({ preventDefault() {} }, { ...input, type: "keyUp" });
+      return claimed;
+    };
+    const enabled = { ...DEFAULT_SETTINGS, gwonmacTools: true, whispersEnabled: true };
+    updateWindowShortcuts(win, enabled);
+    assert.equal(press(), false);
+    const assigned = { ...enabled, shortcutOverrides: { "whispers.toggle": { key: "w", shift: true, option: false } } };
+    updateWindowShortcuts(win, assigned);
+    assert.equal(press(), true);
+    updateWindowShortcuts(win, { ...assigned, whispersEnabled: false });
+    assert.equal(press(), false);
+    updateWindowShortcuts(win, { ...assigned, gwonmacTools: false });
+    assert.equal(press(), false);
+    updateWindowShortcuts(win, { ...enabled, shortcutOverrides: { "whispers.toggle": { key: "j", shift: true, option: false } } });
+    assert.equal(press(), false);
+    assert.equal(press("KeyJ"), true);
+    updateWindowShortcuts(win, { ...enabled, shortcutOverrides: { "whispers.toggle": null } });
+    assert.equal(press("KeyJ"), false);
+    assert.deepEqual(actions, ["whispers.toggle", "whispers.toggle"]);
+  });
+
   it("gates and rebinds Resign, and rearms after a native sheet consumes key-up", async () => {
     let dispatch!: (event: { preventDefault(): void }, input: ShortcutInput) => void;
     const win = { webContents: { on: (_name: string, listener: typeof dispatch) => { dispatch = listener; } }, on() { return win; } } as unknown as BrowserWindow;

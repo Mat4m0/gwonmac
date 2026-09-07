@@ -60,6 +60,8 @@ type CompanionKernelInit = (
   effectIconBytes: number,
   friendRoot: number,
   featureFlags: number,
+  whisperPointer: number,
+  whisperBytes: number,
 ) => number;
 
 type CompanionKernelDispatch = (
@@ -96,6 +98,7 @@ type CompanionKernelRequest = Readonly<{
     friends?: KernelRegion;
     playerEffects: KernelRegion;
     effectIcons: KernelRegion;
+    whispers?: KernelRegion;
   }>;
 }>;
 
@@ -181,6 +184,7 @@ function bindCompanionKernel(
     || characterListBytes() !== COMPANION_CHARACTER_LIST_BYTES
     || friendBytes() !== COMPANION_ABI.friends.bytes
     || playerEffectBytes() !== COMPANION_PLAYER_EFFECT_BYTES
+    || Number((exports.companion_whisper_bytes as () => number)()) !== COMPANION_ABI.whispers.bytes
     || effectIconBytes() !== COMPANION_EFFECT_ICON_BYTES
   ) {
     throw new Error("Companion kernel rejected its ABI");
@@ -213,6 +217,8 @@ function bindCompanionKernel(
     regions.effectIcons.bytes,
     request.friendRoot ?? 0,
     request.featureFlags,
+    regions.whispers?.pointer ?? 0,
+    regions.whispers?.bytes ?? 0,
   ) !== 1) {
     throw new Error("Companion kernel rejected its ABI");
   }

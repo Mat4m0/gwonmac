@@ -559,6 +559,7 @@ window.gwToolsSettings = () => Object.freeze({
   targetReadout: appSettings?.targetReadout ?? false,
   characterSwitchEnabled: appSettings?.characterSwitchEnabled ?? true,
   resignEnabled: appSettings?.resignEnabled ?? false,
+  whispersEnabled: appSettings?.whispersEnabled ?? false,
   cartographyEnabled: appSettings?.cartographyEnabled ?? true,
   cartographyOverlayEnabled: appSettings?.cartographyOverlayEnabled ?? false,
   cartographyGridEnabled: appSettings?.cartographyGridEnabled ?? false,

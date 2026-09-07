@@ -224,6 +224,7 @@ function enhancementCache(
     xunlaiAction: capabilities.xunlaiAction,
     chatAliases: capabilities.chatAliases,
     resignAction: capabilities.resignAction,
+    whisperChat: capabilities.whisperChat,
     skillSlotGeometry: capabilities.skillSlotGeometry,
     skillCooldownObservation: capabilities.skillCooldownObservation,
     playerEffectObservation: capabilities.playerEffectObservation,

@@ -25,6 +25,7 @@ describe("keyboard shortcuts", () => {
       "game.resign": DEFAULT_SHORTCUTS["game.resign"],
       "character.switch": DEFAULT_SHORTCUTS["character.switch"],
       "tools.toggle": { key: "k", shift: true, option: false },
+      "whispers.toggle": null,
       "trade.toggle": DEFAULT_SHORTCUTS["trade.toggle"],
       "storage.open": null,
       "travel.open": DEFAULT_SHORTCUTS["travel.open"],

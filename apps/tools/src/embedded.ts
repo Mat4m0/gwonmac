@@ -1,3 +1,4 @@
+import { mountWhispers } from "./whispers-mount";
 import { createNativeHost } from "./host";
 import { mountToolsApp as mount } from "./mount";
 import { createNativeTravelHost } from "./travel-host";
@@ -9,6 +10,7 @@ import type {
 } from "../../../src/shared/tools-bundle-contracts";
 
 const embedded: EmbeddedToolsBundle<HTMLElement> = Object.freeze({
+  mountWhispers,
   mountToolsApp: (target, { nativeApi, ...options }) => mount(target, {
     host: createNativeHost(
       nativeApi,
@@ -38,3 +40,4 @@ const embedded: EmbeddedToolsBundle<HTMLElement> = Object.freeze({
 });
 
 export const { mountToolsApp, mountTravelPalette, mountTradeChat } = embedded;
+export { mountWhispers };

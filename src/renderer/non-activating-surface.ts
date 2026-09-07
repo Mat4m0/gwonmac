@@ -29,9 +29,9 @@
 /**
  * Whether clicking this node should hand over the keyboard.
  *
- * Only text entry qualifies. A button, checkbox, radio or slider is a control
- * you operate, not a place you type, and treating it as focus-worthy is exactly
- * what makes a palette feel like a modal.
+ * Text entry and native ranges qualify. A range needs its uncancelled native
+ * mousedown for pointer dragging, and focus gives keyboard users its Arrow-key
+ * behavior. Other controls can operate without taking the game's keyboard.
  */
 function wantsKeyboard(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) return false;
@@ -52,7 +52,6 @@ const NON_TEXT_INPUT_TYPES = new Set([
   "file",
   "image",
   "radio",
-  "range",
   "reset",
   "submit",
 ]);

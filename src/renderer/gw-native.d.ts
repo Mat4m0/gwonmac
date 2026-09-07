@@ -300,6 +300,7 @@ declare global {
       targetReadout: boolean;
       characterSwitchEnabled: boolean;
       resignEnabled: boolean;
+      whispersEnabled: boolean;
       cartographyEnabled: boolean;
       cartographyOverlayEnabled: boolean;
       cartographyGridEnabled: boolean;

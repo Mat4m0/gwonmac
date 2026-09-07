@@ -16,6 +16,7 @@
  * `isLocalClientVerification` re-validates every field of a result that crossed
  * the process boundary. Profile state is never consulted.
  */
+import { deriveWhisperChat } from "./enhancement-whisper-proof.js";
 import { deriveResignAction } from "./enhancement-resign-proof.js";
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
@@ -643,7 +644,7 @@ function deriveEnhancementBuild(
     : null;
   const includePreGame = requestedCapabilities.preGameControls
     && preGameControls !== null;
-  const wantsLocal = requestedCapabilities.resignAction || requestedCapabilities.partyObservation
+  const wantsLocal = requestedCapabilities.whisperChat || requestedCapabilities.resignAction || requestedCapabilities.partyObservation
     || requestedCapabilities.teamApply
     || requestedCapabilities.travelAction
     || requestedCapabilities.xunlaiAction
@@ -703,6 +704,10 @@ function deriveEnhancementBuild(
     && playerEffects !== null
     && locatedLocal?.observationLayout != null
     && locatedLocal.uiDispatcher != null;
+  const whisperChat = requestedCapabilities.whisperChat
+    ? deriveWhisperChat(context.moduleView()) : null;
+  const includeWhispers = whisperChat !== null && includePlayRegion && includeChatFiltering
+    && locatedLocal?.gameThread != null;
   const resignAction = requestedCapabilities.resignAction
     ? deriveResignAction(context.moduleView()) : null;
   const includeResign = resignAction !== null && includePlayRegion
@@ -729,6 +734,8 @@ function deriveEnhancementBuild(
   );
   const completeFailures: LocalFeatureFailures = Object.freeze({
     ...failures,
+    ...(requestedCapabilities.whisperChat && !includeWhispers
+      ? { whisperChat: changedFeature("whisperChat", "whisper.native-chat-path") } : {}),
     ...(requestedCapabilities.resignAction && !includeResign
       ? { resignAction: changedFeature("resignAction", "resign.native-chat-path") } : {}),
     ...(requestedCapabilities.preGameControls && !includePreGame
@@ -825,6 +832,8 @@ function deriveEnhancementBuild(
       build: null,
       failures: Object.freeze({
         ...failures,
+        ...(requestedCapabilities.whisperChat && !includeWhispers
+          ? { whisperChat: changedFeature("whisperChat", "whisper.native-chat-path") } : {}),
         ...(requestedCapabilities.targetObservation
           ? {
               targetObservation: changedFeature(
@@ -902,8 +911,9 @@ function deriveEnhancementBuild(
       targetObservation: Object.freeze({ layout: locatedTarget.targetLayout }),
     } : {}),
     ...(localContributes ? { uiDispatcher: locatedLocal!.uiDispatcher! } : {}),
+    ...(includeWhispers ? { whisperChat: whisperChat! } : {}),
     ...(includeResign ? { resignAction: resignAction! } : {}),
-    ...(includeResign || includeTeam || includeTravel || includeXunlai || includeCharacterSwitch
+    ...(includeWhispers || includeResign || includeTeam || includeTravel || includeXunlai || includeCharacterSwitch
       ? { gameThread: locatedLocal!.gameThread! }
       : {}),
     ...(includeTravel ? { travelAction: locatedLocal!.travelAction! } : {}),
@@ -941,6 +951,7 @@ function deriveEnhancementBuild(
     playerEffectObservation: includePlayerEffects,
     effectIconGeometry: includeEffectIcons,
     resignAction: includeResign,
+    whisperChat: includeWhispers,
   });
   const effective = intersectEnhancementCapabilities(requestedCapabilities, maximum);
   const profile = enhancementCapabilityProfile(effective);

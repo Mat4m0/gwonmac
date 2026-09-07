@@ -172,7 +172,7 @@ export function createToolboxFoundation(
   const toggle = (slot: Slot) => slot.visible ? requestClose(slot) : setOpen(slot, true);
   for (const slot of slots()) {
     slot.host.addEventListener("pointerdown", () => {
-      if (slot.visible) activate(slot);
+      if (slot.visible) { activate(slot); }
     }, true);
   }
 

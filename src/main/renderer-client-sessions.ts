@@ -50,6 +50,7 @@ function projectCompatibility(
       playerEffectObservation: status("playerEffectObservation"),
       effectIconGeometry: status("effectIconGeometry"),
       resignAction: status("resignAction"),
+      whisperChat: status("whisperChat"),
       playRegionObservation: status("playRegionObservation"),
       preGameControls: status("preGameControls"),
       characterSwitchAction: status("characterSwitchAction"),

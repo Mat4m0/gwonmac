@@ -406,6 +406,7 @@ const candidateSettingsDomains = Array.from(
       uiPanelOpacity: cycle(opacityValues, index),
       characterSwitchEnabled: cycle(booleanValues, index),
       resignEnabled: cycle(booleanValues, index),
+      whispersEnabled: cycle(booleanValues, index),
       cartographyEnabled: cycle(booleanValues, index + 1),
       cartographyOverlayEnabled: cycle(booleanValues, index),
       cartographyGridEnabled: cycle(booleanValues, index + 1),

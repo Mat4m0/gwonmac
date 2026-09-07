@@ -7,6 +7,7 @@ export const SHORTCUT_ACTIONS = [
   "character.switch",
   "tools.toggle",
   "trade.toggle",
+  "whispers.toggle",
   "storage.open",
   "travel.open",
   "cartography.grid.toggle",
@@ -35,6 +36,7 @@ export const DEFAULT_SHORTCUTS = Object.freeze({
     "game.resign": Object.freeze({ key: "r", shift: true, option: false }),
     "character.switch": Object.freeze({ key: "r", shift: false, option: false }),
     "tools.toggle": Object.freeze({ key: "b", shift: false, option: false }),
+    "whispers.toggle": null,
     "trade.toggle": Object.freeze({ key: "k", shift: false, option: false }),
     "storage.open": Object.freeze({ key: "c", shift: true, option: false }),
     "travel.open": Object.freeze({ key: "t", shift: false, option: false }),
@@ -48,6 +50,7 @@ export const SHORTCUT_LABELS: Readonly<Record<ShortcutAction, string>> =
     "character.switch": "Switch Character",
     "tools.toggle": "Build Library",
     "trade.toggle": "Trade Chat",
+    "whispers.toggle": "Whispers",
     "storage.open": "Open Xunlai storage",
     "travel.open": "Travel",
     "cartography.grid.toggle": "Exploration grid",
@@ -106,6 +109,7 @@ export function resolveShortcuts(
     "tools.toggle": overrides["tools.toggle"] === undefined
       ? DEFAULT_SHORTCUTS["tools.toggle"]
       : overrides["tools.toggle"],
+    "whispers.toggle": overrides["whispers.toggle"] ?? null,
     "trade.toggle": overrides["trade.toggle"] === undefined
       ? DEFAULT_SHORTCUTS["trade.toggle"]
       : overrides["trade.toggle"],

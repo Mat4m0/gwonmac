@@ -474,6 +474,9 @@ export class ClientRuntime {
           supported.playerEffectObservation,
           preparationFailed,
         ),
+        whisperChat: optionalFeatureStatus(
+          requested.whisperChat, effective.whisperChat, supported.whisperChat, preparationFailed,
+        ),
         resignAction: optionalFeatureStatus(
           requested.resignAction, effective.resignAction, supported.resignAction, preparationFailed,
         ),
