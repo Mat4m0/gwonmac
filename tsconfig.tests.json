@@ -11,6 +11,7 @@
   // rather than by an `include` glob, so `tsconfig.json` stays the one place
   // that decides what `src` means.
   "compilerOptions": {
+    "resolveJsonModule": true,
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",

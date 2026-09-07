@@ -1,3 +1,4 @@
+import funding from "@shared/funding.json";
 import type { LauncherSnapshot } from "@shared/launcher-contracts";
 import { DEFAULT_SETTINGS } from "@shared/contracts";
 import { resolveShortcuts } from "@shared/keyboard-shortcuts";
@@ -6,6 +7,7 @@ import { LEGACY_PRIMARY_PROFILE_ID, parseProfileId } from "@shared/multiple-acco
 
 export const fixtureSnapshot: LauncherSnapshot = {
   revision: 1,
+  funding,
   experience: {
     installationKind: "migrated-single",
     setup: "complete",

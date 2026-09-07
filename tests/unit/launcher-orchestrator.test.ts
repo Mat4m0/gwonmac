@@ -1,3 +1,4 @@
+import funding from "../../src/shared/funding.json" with { type: "json" };
 import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -90,6 +91,7 @@ async function fixture(options: { allowUnreadyLaunch?: boolean } = {}) {
     getProgress: () => progress,
     getAppUpdate: () => ({ phase: "idle", currentVersion: "1.0.0" }),
     getSettings: () => DEFAULT_SETTINGS,
+    getFunding: () => funding,
     getNews: () => ({ status: "loading", stories: [] }),
     toolsLoaded: () => false,
     developmentFixtures: true,

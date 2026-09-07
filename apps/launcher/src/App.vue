@@ -20,7 +20,6 @@ import type { CacheInfo } from "@shared/contracts";
 import type { ProfileId } from "@shared/multiple-accounts";
 import { parseProfileName, profileNameKey } from "@shared/multiple-accounts";
 import { fixtureSnapshotFor } from "./fixtures";
-import { funding } from "./funding";
 import AccountsView from "./components/AccountsView.vue";
 import BaseModal from "./components/BaseModal.vue";
 import FeedbackView from "./components/FeedbackView.vue";
@@ -59,6 +58,7 @@ const allSettingsGroups: readonly {
 // Native snapshots are replaced as a whole. Deep Vue proxies cannot cross
 // Electron's context bridge when a saved preset is reused in an edit.
 const snapshot = shallowRef<LauncherSnapshot>(fixtureSnapshotFor(window.location.search));
+const funding = computed(() => snapshot.value.funding);
 const settingsGroups = allSettingsGroups;
 const settingsContent = ref<HTMLElement | null>(null);
 const settingsSaveState = ref<"idle" | "saving" | "failed" | "saved">("idle");
@@ -454,7 +454,7 @@ async function resetGameFiles() {
 
     <section v-if="route !== 'settings'" class="funding-banner" aria-label="Project funding">
       <div><strong>Support gwonmac</strong></div>
-      <div class="funding-progress" role="progressbar" aria-label="Project funding" :aria-valuenow="funding.raisedEuros" :aria-valuemax="funding.goalEuros" :aria-valuemin="0" :aria-valuetext="`€${funding.raisedEuros} of €${funding.goalEuros} funded`">
+      <div class="funding-progress" role="progressbar" aria-label="Project funding" :aria-valuenow="Math.min(funding.raisedEuros, funding.goalEuros)" :aria-valuemax="funding.goalEuros" :aria-valuemin="0" :aria-valuetext="`€${funding.raisedEuros} of €${funding.goalEuros} funded`">
         <span>€{{ funding.raisedEuros }}</span><div><i :style="{ width: `${Math.min(100, funding.raisedEuros / funding.goalEuros * 100)}%` }" /></div><span>€{{ funding.goalEuros }}</span>
       </div>
       <button @click="openExternal('donate')">Support</button>

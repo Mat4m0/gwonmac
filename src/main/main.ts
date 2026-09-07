@@ -44,6 +44,7 @@ import { AUTOMATION_COMMAND } from "../shared/automation.js";
 import { ClientRuntime } from "./client-runtime.js";
 import { RendererClientSessions } from "./renderer-client-sessions.js";
 import { loadSettings } from "./core/settings.js";
+import { BUNDLED_FUNDING, fetchLauncherFunding } from "./core/launcher-funding.js";
 import { LauncherNewsService } from "./core/launcher-news.js";
 import {
   loadDiagnosticProfile,
@@ -570,6 +571,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     paths.launcherState,
     loadedLauncherState.document,
   );
+  let launcherFunding = BUNDLED_FUNDING;
   const launcherNews = new LauncherNewsService({
     cachePath: paths.launcherNewsCache,
     fetch: (url, init) => net.fetch(url, init),
@@ -805,6 +807,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     getProgress: () => clientRuntime.progress,
     getAppUpdate: () => appUpdaterController!.getState(),
     getSettings: () => currentSettings ?? settings,
+    getFunding: () => launcherFunding,
     getNews: (track, contentPreferences) => launcherNews.snapshot(track, contentPreferences),
     toolsLoaded: () => enhancementSelection.tools,
     getTexturePacks: () => texturePacks.snapshot(),
@@ -850,6 +853,11 @@ if (primaryInstance) void app.whenReady().then(async () => {
     connected: () => {
       logEvent({ k: "launcher.connected" });
       void launcherNews.refresh().then(() => launcherOrchestrator!.publish());
+      void fetchLauncherFunding((url, init) => net.fetch(url, init)).then((funding) => {
+        if (!funding) return;
+        launcherFunding = funding;
+        launcherOrchestrator!.publish();
+      });
     },
     snapshot: () => launcherOrchestrator!.snapshot(),
     create: async ({ name, appearance }) => {

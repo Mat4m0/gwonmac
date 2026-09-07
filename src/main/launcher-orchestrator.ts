@@ -35,6 +35,7 @@ export interface LauncherOrchestratorOptions {
   readonly hasActiveClient: () => boolean;
   readonly getProgress: () => DownloadProgress;
   readonly getAppUpdate: () => AppUpdateState;
+  readonly getFunding: () => LauncherSnapshot["funding"];
   readonly getSettings: () => AppSettings;
   readonly getNews: (track: AppSettings["updateTrack"], preferences: LauncherSnapshot["preferences"]) => LauncherSnapshot["news"];
   readonly toolsLoaded: () => boolean;
@@ -70,6 +71,7 @@ export class LauncherOrchestrator {
     const fixture = this.options.developmentFixtures ? "fixture" as const : "placeholder" as const;
     return {
       revision: this.revision,
+      funding: this.options.getFunding(),
       experience: {
         installationKind: document.installationKind,
         setup: document.setupVersion > 0 ? "complete" : "pending",

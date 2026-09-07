@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { LauncherNativeApi, LauncherSnapshot } from "@shared/launcher-contracts";
 import App from "./App.vue";
 import { fixtureSnapshot } from "./fixtures";
-import { funding } from "./funding";
+import funding from "@shared/funding.json";
 
 function installNative(overrides: Record<string, unknown>): LauncherNativeApi {
   const native = {
@@ -126,6 +126,25 @@ describe("unified launcher shell", () => {
     expect(wrapper.get(".funding-banner").text()).not.toContain("Downloading game files");
     expect(wrapper.get(".launchbar").text()).toContain("Downloading game files");
     expect(wrapper.find(".priority-banner").exists()).toBe(false);
+  });
+
+  it("updates funding from the native snapshot and caps a fully funded bar", async () => {
+    let publish: (snapshot: LauncherSnapshot) => void = () => undefined;
+    installNative({ state: {
+      get: async () => fixtureSnapshot,
+      onChange(listener: typeof publish) { publish = listener; return () => undefined; },
+    } });
+    const wrapper = mount(App);
+    await flushPromises();
+    publish({ ...fixtureSnapshot, revision: fixtureSnapshot.revision + 1, funding: { raisedEuros: 160, goalEuros: 150 } });
+    await flushPromises();
+    const progress = wrapper.get('[role="progressbar"][aria-label="Project funding"]');
+    expect(progress.attributes("aria-valuetext")).toBe("€160 of €150 funded");
+    expect(progress.attributes("aria-valuenow")).toBe("150");
+    expect(progress.get("i").attributes("style")).toContain("100%");
+    expect(progress.text()).toContain("€160");
+    expect(progress.text()).toContain("€150");
+    wrapper.unmount();
   });
 
   it("keeps Home focused on content and moves account management to Accounts", async () => {
