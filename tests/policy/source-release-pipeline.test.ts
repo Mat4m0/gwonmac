@@ -344,8 +344,8 @@ test("the Stable rollback proof respects the Build Library feature gate", () => 
 test("the Stable domain proof writes through the candidate rollback serializer", () => {
   const roundTrip = read("scripts/verify-stable-beta-roundtrip.ts");
   const domainProof = roundTrip.slice(
-    roundTrip.indexOf("async function proveStableAcceptsCandidateSettingDomains"),
-    roundTrip.indexOf("const sortedKeys"),
+    roundTrip.indexOf("async function proveStablePreservesOwnedSettingDomains"),
+    roundTrip.indexOf("async function readCoreCanonical"),
   );
 
   assert.match(
@@ -356,6 +356,7 @@ test("the Stable domain proof writes through the candidate rollback serializer",
     domainProof,
     /JSON\.stringify\(\{ formatVersion: 1, \.\.\.settings \}\)/,
   );
+  assert.match(domainProof, /projectStableOwnedSettings\(settings, stableBaseline\)/);
 });
 
 test("the Stable rollback proof preserves unified-launcher cutover documents", () => {

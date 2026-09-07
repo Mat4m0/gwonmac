@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   canonicalizeStableSettings,
+  projectStableOwnedSettings,
   validateCandidateSettings,
 } from "../../scripts/release-settings-compatibility.ts";
 
@@ -50,6 +51,28 @@ describe("release settings compatibility", () => {
         { disk: true },
       ),
       /formatVersion changed/u,
+    );
+  });
+
+  it("projects additive candidate settings through the rollback Stable's ownership", () => {
+    const stable = { renderScale: 2, buildLibrary: false };
+    assert.deepEqual(
+      projectStableOwnedSettings(
+        { ...stable, cartographyOverlayEnabled: true },
+        stable,
+      ),
+      stable,
+    );
+    assert.deepEqual(
+      projectStableOwnedSettings(
+        { ...stable, renderScale: 1.5, cartographyOverlayEnabled: true },
+        stable,
+      ),
+      { renderScale: 1.5, buildLibrary: false },
+    );
+    assert.throws(
+      () => projectStableOwnedSettings({ renderScale: 2 }, stable),
+      /omit Stable-owned key buildLibrary/u,
     );
   });
 });
