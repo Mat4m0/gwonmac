@@ -54,6 +54,36 @@ reduce branch drift. Do not add a hidden feature flag for unfinished code.
 A merge to `main` does not require an application release. Several completed
 changes can wait for one planned release.
 
+## Start and hand off a development app
+
+Run from the intended worktree:
+
+- `pnpm dev`: real app; uses the existing `Guild Wars` profile by default.
+- `pnpm dev:signed`: signed Dev package with persistent login; requires Apple signing configuration.
+- `pnpm launcher:fixture fresh`: disposable offline launcher, not a playable client.
+- `pnpm tools:dev`: standalone browser UI, not the application.
+
+For isolated real-app checks, build successfully, then launch with an explicit
+application path and disposable profile:
+
+```bash
+pnpm build &&
+  dev_profile=$(mktemp -d "${TMPDIR:-/tmp}/gwonmac-dev.XXXXXX") &&
+  GW_BACKGROUND_LAUNCH=0 pnpm exec electron "$PWD" --user-data-dir="$dev_profile"
+```
+
+Reuse that profile during the task. It may download game data; saved login is
+memory-only. Do not copy player data without authorization.
+
+Use `cua.getState()` for discovery. Confirm the process working directory and
+profile, then attach through its debugger or exact running app path. App lookup
+can launch bare Electron if the process is absent; its welcome page is not gwonmac.
+
+Verify `gw://app/launcher/index.html` before handoff. Starting the game hides the
+launcher; restore it with **Window → Show Launcher**. Do not click Play merely
+to verify startup. Report the worktree, launch mode, and profile. Rebuild before
+checking changed compiled code; preserve the session requested for handoff.
+
 ## Disposable launcher fixtures
 
 Use `pnpm launcher:fixture` to open a fresh launcher against a temporary
