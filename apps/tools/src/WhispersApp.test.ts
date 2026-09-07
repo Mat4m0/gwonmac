@@ -172,7 +172,7 @@ it("requires draft discard to close and only observed outgoing clears a submitte
   expect(wrapper.findAll("article")).toHaveLength(1);
   await wrapper.get('[aria-label="Close conversation with Test Friend"]').trigger("click");
   expect(session.state.conversations).toHaveLength(0);
-  expect(wrapper.text()).toContain("Start a conversation");
+  expect(wrapper.get(".whisper-picker").text()).not.toContain("Conversations");
   expect(session.state.recent.map(p => p.name)).toEqual(["Test Friend"]);
   wrapper.unmount();
 });
@@ -195,6 +195,7 @@ it("shows available friends without hiding offline conversations", async () => {
   expect(wrapper.text()).not.toContain("Offline Friend");
   session.open("Offline Friend"); await nextTick();
   expect(wrapper.text()).toContain("Offline");
+  session.observe([{ id: 1, sender: "Offline Friend", message: "Hello", direction: "incoming" }]);
   session.showPicker(); await nextTick();
   expect(wrapper.text()).toContain("Offline Friend");
   wrapper.unmount();
@@ -240,5 +241,31 @@ it("changes only the messenger background opacity multiplier", async () => {
   await wrapper.get("#whisper-opacity").setValue(20);
   expect(session.state.backgroundOpacity).toBe(20);
   expect(wrapper.get("#whisper-window").attributes("style")).toContain("--whisper-background-percent: 20%");
+  wrapper.unmount();
+});
+
+
+it("lists only conversations with messages or an unfinished draft and keeps unused friends available", async () => {
+  const session = createWhisperSession(async () => {});
+  session.setAvailable(true);
+  session.updateFriends({ status: "ready", sequence: 1, generation: 1, friends: [
+    { key: "friend", character: "Unused Friend", alias: "Unused Friend", status: "online", mapId: 133 },
+  ] });
+  session.open("Unused Friend");
+  session.open("Empty Stranger");
+  session.open("Draft Friend");
+  session.setDraft("draft friend", "Unsent thought");
+  session.showPicker();
+  const wrapper = mount(WhispersApp, { props: { session }, attachTo: document.body });
+  const picker = wrapper.get(".whisper-picker");
+  expect(picker.findAll(".whisper-person")).toHaveLength(1);
+  expect(picker.text()).toContain("Draft: Unsent thought");
+  expect(picker.text()).toContain("Unused Friend");
+  expect(picker.text()).not.toContain("Empty Stranger");
+  expect(picker.text()).not.toContain("No messages yet");
+  session.observe([{ id: 1, sender: "Empty Stranger", message: "Hello", direction: "incoming" }]);
+  await nextTick();
+  expect(picker.findAll(".whisper-person")).toHaveLength(2);
+  expect(picker.text()).toContain("Empty Stranger");
   wrapper.unmount();
 });

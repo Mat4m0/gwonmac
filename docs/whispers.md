@@ -87,7 +87,8 @@ UI theme and wrap long text. The header names the person; each message retains
 an accessible author label. Back opens the people list. Sound and cleanup are
 in the options menu. A local Background slider reduces only this messenger's
 broad panel and transcript paint to 15% of the selected global panel opacity;
-text, controls, bubbles, and the raised menu stay legible. The multiplier is
+text and controls stay legible. The options menu uses an opaque theme surface,
+independent of both background opacity settings. The multiplier is
 session-only and does not replace the saved appearance preference. There are no invented delivery or
 read receipts. Original game links remain available in original chat.
 
@@ -98,7 +99,9 @@ limit (up to 120 units) and refuses excess text without truncation.
 The view holds at most 32 open conversations and 200 messages per conversation.
 Overflow is disclosed in the panel. Close read conversations keeps unread chats,
 drafts and pending submissions. The picker shows online, away and do-not-disturb
-friends with explicit presence; offline friends are hidden. An existing
+friends with explicit presence; offline friends are hidden. The continue list
+excludes conversations without messages, drafts, or pending submissions. Opening
+a person without chatting does not remove them from available friends. An existing
 conversation shows a friend's offline state when known. Friends use the latest
 observed snapshot for this session; pausing the observer does not add friends
 to recent people.

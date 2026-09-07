@@ -76,7 +76,8 @@ const historyNavigation = new Map<string, { index: number; originalDraft: string
 const activeLog = () => panel.value?.querySelector<HTMLElement>('[data-transcript]:not([hidden])') ?? null;
 const transcriptFor = (key: string) => [...(panel.value?.querySelectorAll<HTMLElement>("[data-transcript-key]") ?? [])]
   .find(log => log.dataset.transcriptKey === key) ?? null;
-const openKeys = computed(() => new Set(state.value.conversations.map(c => c.key)));
+const continuedConversations = computed(() => state.value.conversations.filter(c => c.messages.length || c.draft || c.sending));
+const openKeys = computed(() => new Set(continuedConversations.value.map(c => c.key)));
 const observedFriends = computed(() => state.value.friends.status === "ready" ? state.value.friends.friends : []);
 function friendFor(name: string): TravelFriend | undefined {
   const key = whisperPersonKey(name);
@@ -428,17 +429,16 @@ onBeforeUnmount(() => {
         <p v-if="suggestions.length" class="whisper-completion-hint">↑↓ choose · Tab completes</p>
       </template>
       <template v-else>
-      <p v-if="!state.conversations.length" class="whisper-empty whisper-onboarding">Start a conversation with a friend, or enter any character name above.</p>
-      <template v-if="state.conversations.length">
+      <template v-if="continuedConversations.length">
         <h3>Conversations</h3>
-        <div v-for="conversation in state.conversations.filter(c => c.name.toLocaleLowerCase().includes(search.toLocaleLowerCase()))" :key="conversation.key" class="whisper-person" :data-unread="whisperUnread(conversation) ? '' : undefined">
+        <div v-for="conversation in continuedConversations" :key="conversation.key" class="whisper-person" :data-unread="whisperUnread(conversation) ? '' : undefined">
           <button data-variant="quiet" class="ui-button whisper-control whisper-person-open" @click="open(conversation.name)"><span class="whisper-person-main"><span v-if="friendFor(conversation.name)" class="whisper-presence" :data-presence="friendFor(conversation.name)!.status" /><span class="whisper-person-copy"><strong>{{ conversation.name }}</strong><small>{{ conversation.draft ? 'Draft: ' + conversation.draft : conversation.messages.at(-1)?.message || 'No messages yet' }}</small></span></span><span v-if="whisperUnread(conversation)" class="whisper-count">{{ whisperUnread(conversation) }}</span></button>
           <button data-variant="quiet" class="ui-button whisper-control whisper-icon" :aria-label="`Close conversation with ${conversation.name}`" :disabled="conversation.sending" @click="close(conversation.key)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button>
         </div>
       </template>
       <h3>Available friends</h3>
-      <p v-if="state.friends.status !== 'ready'" class="whisper-empty">Friends are unavailable. You can still message any character above.</p>
-      <p v-else-if="!friends.length" class="whisper-empty">Friends who are online appear here. You can still message any character above.</p>
+      <p v-if="state.friends.status !== 'ready'" class="whisper-empty">Friends are unavailable.</p>
+      <p v-else-if="!friends.length" class="whisper-empty">Friends who are online appear here.</p>
       <button v-for="friend in friends" :key="friend.key" data-variant="quiet" class="ui-button whisper-control whisper-person-open" @click="open(friend.character || friend.alias)"><span class="whisper-person-main"><span class="whisper-presence" :data-presence="friend.status" /><span class="whisper-person-copy"><strong>{{ friend.character || friend.alias }}</strong><small v-if="friend.character && friend.alias !== friend.character">{{ friend.alias }}</small></span></span><small class="whisper-status-copy">{{ presenceLabel(friend.status) }}</small></button>
       <template v-if="recent.length">
         <h3>Recent people</h3>
@@ -534,7 +534,6 @@ onBeforeUnmount(() => {
 .whisper-compose > small { display: block; text-align: right; margin-top: 4px; }
 .whisper-latest { align-self: center; color: var(--ui-chat-incoming-accent); }
 .whisper-empty { max-width: 32ch; color: var(--ui-text-muted); margin: 8px 6px; font-size: 12px; line-height: 1.45; text-wrap: pretty; }
-.whisper-onboarding { margin-top: 10px; }
 .whisper-completion-hint { margin: 8px 6px 0; color: var(--ui-text-faint); font-size: 11px; }
 .whisper-suggestion[aria-selected="true"] { background: var(--whisper-incoming-fill); color: var(--ui-selection-ink); }
 .whisper-source-filters { display: flex; align-items: center; gap: 4px; min-width: 0; margin: 8px 6px 10px; color: var(--ui-text-muted); }
@@ -547,7 +546,7 @@ onBeforeUnmount(() => {
 .whisper-options { position: relative; cursor: default; }
 .whisper-options summary { list-style: none; }
 .whisper-options summary::-webkit-details-marker { display: none; }
-.whisper-menu { position: absolute; top: 34px; right: 0; width: 238px; max-height: min(330px, calc(100vh - 120px)); overflow: auto; padding: 10px; z-index: 2; border-color: var(--whisper-edge); background: var(--whisper-panel-fill); box-shadow: 0 0 0 1px var(--whisper-edge); }
+.whisper-menu { --whisper-background-percent: 100%; position: absolute; top: 34px; right: 0; width: 238px; max-height: min(330px, calc(100vh - 120px)); overflow: auto; padding: 10px; z-index: 2; border-color: var(--ui-outline); background: var(--ui-well); box-shadow: 0 0 0 1px var(--ui-outline); }
 .whisper-menu > label { display: block; margin-bottom: 6px; font-weight: 500; }
 .whisper-menu select { font-size: 12px; margin-bottom: 8px; }
 .whisper-menu .whisper-opacity { margin: 6px 2px 10px; }
