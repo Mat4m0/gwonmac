@@ -175,7 +175,6 @@ test("fresh startup creates Main and adds an account without restart", async () 
     await expect(fixture.page).toHaveURL("gw://app/launcher/index.html");
     await fixture.page.getByRole("button", { name: "Continue" }).click();
     await fixture.page.getByRole("button", { name: "Not now" }).click();
-    await fixture.page.getByRole("button", { name: "Skip" }).click();
     await expect(fixture.page.getByRole("button", { name: "Play" })).toBeVisible();
     await fixture.page.getByRole("button", { name: "Accounts", exact: true }).click();
     await expect(fixture.page.getByRole("heading", { name: "Main account", exact: true })).toBeVisible();
@@ -356,7 +355,6 @@ test("applies launcher settings to every open profile and reflects in-game chang
     // Assert the subscribed launcher UI too, not only its fresh snapshot API.
     await fixture.page.evaluate(async () => {
       await window.launcherNative.experience.completeSetup({ enableTools: false });
-      await window.launcherNative.experience.completeIntroduction();
     });
     await fixture.page.getByRole("button", { name: "Settings", exact: true }).click();
     await fixture.page.getByRole("button", { name: "Maps", exact: true }).click();
@@ -533,7 +531,6 @@ test("the account workspace survives a full application restart", async () => {
   try {
     await first.page.getByRole("button", { name: "Continue" }).click();
     await first.page.getByRole("button", { name: "Not now" }).click();
-    await first.page.getByRole("button", { name: "Skip" }).click();
     await first.page.getByRole("button", { name: "Accounts", exact: true }).click();
     await first.page.getByRole("button", { name: "Add account" }).click();
     await first.page.getByLabel("Name").fill("Second account");
@@ -562,7 +559,6 @@ test("global map settings live in the launcher and survive restart", async () =>
   try {
     await first.page.getByRole("button", { name: "Continue" }).click();
     await first.page.getByRole("button", { name: "Not now" }).click();
-    await first.page.getByRole("button", { name: "Skip" }).click();
     await first.page.getByRole("button", { name: "Settings" }).click();
     await first.page.getByRole("button", { name: "Maps", exact: true }).click();
     await expect(first.page.getByText("Tools are off", { exact: true })).toBeVisible();
@@ -603,7 +599,6 @@ test("renderer recovery stays inside one profile and leaves the launcher alive",
   try {
     await fixture.page.getByRole("button", { name: "Continue" }).click();
     await fixture.page.getByRole("button", { name: "Not now" }).click();
-    await fixture.page.getByRole("button", { name: "Skip" }).click();
     await fixture.page.evaluate(async () => {
       const id = (await window.launcherNative.state.get()).profiles[0]!.id;
       window.__concurrentProfileOpen = window.launcherNative.profiles.play([id]);
@@ -682,7 +677,6 @@ test("mandatory client repair blocks Play without rejecting and stays global", a
   try {
     await fixture.page.getByRole("button", { name: "Continue" }).click();
     await fixture.page.getByRole("button", { name: "Not now" }).click();
-    await fixture.page.getByRole("button", { name: "Skip" }).click();
     await expect(fixture.page.getByText("Game files need repair").first()).toBeVisible({
       timeout: 30_000,
     });

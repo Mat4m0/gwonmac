@@ -9,7 +9,6 @@ export const fixtureSnapshot: LauncherSnapshot = {
   experience: {
     installationKind: "migrated-single",
     setup: "complete",
-    introduction: "complete",
     showMigrationNotice: true,
     preferencesReset: false,
   },
@@ -140,7 +139,7 @@ export function fixtureSnapshotFor(search: string): LauncherSnapshot {
     case "fresh":
       return {
         ...fixtureSnapshot,
-        experience: { installationKind: "fresh", setup: "pending", introduction: "pending", showMigrationNotice: false, preferencesReset: false },
+        experience: { installationKind: "fresh", setup: "pending", showMigrationNotice: false, preferencesReset: false },
         profiles: [fixtureSnapshot.profiles[0]!],
         selectedProfileIds: [fixtureSnapshot.profiles[0]!.id],
         tools: {

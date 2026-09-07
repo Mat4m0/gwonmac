@@ -301,20 +301,22 @@ describe("unified launcher shell", () => {
     expect(wrapper.find(".settings-community-links").exists()).toBe(false);
   });
 
-  it("keeps Tools off unless a fresh player explicitly enables them", async () => {
-    const completeSetup = vi.fn(async () => undefined);
+  it("opens the launcher after setup and keeps Tools off unless explicitly enabled", async () => {
+    let publish: (snapshot: LauncherSnapshot) => void = () => undefined;
+    const completeSetup = vi.fn(async () => {
+      publish({ ...fresh, revision: fresh.revision + 1, experience: { ...fresh.experience, setup: "complete" } });
+    });
     const fresh = {
       ...fixtureSnapshot,
       experience: {
         ...fixtureSnapshot.experience,
         installationKind: "fresh" as const,
         setup: "pending" as const,
-        introduction: "pending" as const,
         showMigrationNotice: false,
       },
     };
     installNative({
-      state: { get: async () => fresh, onChange: () => () => undefined },
+      state: { get: async () => fresh, onChange(listener: typeof publish) { publish = listener; return () => undefined; } },
       experience: { completeSetup },
     });
     const wrapper = mount(App);
@@ -326,6 +328,10 @@ describe("unified launcher shell", () => {
     document.querySelectorAll<HTMLButtonElement>(".setup-card .secondary")[1]!.click();
     await flushPromises();
     expect(completeSetup).toHaveBeenCalledWith({ enableTools: false });
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(wrapper.get(".launchbar").text()).toContain("Play");
+    expect(wrapper.find(".intro-callout").exists()).toBe(false);
+    wrapper.unmount();
   });
 
   it("asks before replacing another Tool shortcut", async () => {

@@ -70,8 +70,6 @@ test("the built launcher preload exposes every launcher command and nothing else
   await api.profiles.restore(id);
   await api.profiles.delete(id);
   await api.experience.completeSetup({ enableTools: false });
-  await api.experience.completeIntroduction();
-  await api.experience.replayIntroduction();
   await api.experience.dismissMigrationNotice();
   await api.experience.dismissPreferencesReset();
   await api.experience.updatePreferences({ content: { dailies: false } });

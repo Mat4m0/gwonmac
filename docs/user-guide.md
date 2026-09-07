@@ -18,7 +18,8 @@ and Apple notarization.
 The launcher prepares and verifies the official Guild Wars client. It does not
 ship ArenaNet game files. A fresh installation has one profile named **Main
 account**. The first start explains the application and asks whether to enable
-optional Tools. Tools are off unless you enable them.
+optional Tools. Tools are off unless you enable them. After setup, the launcher
+opens directly without a guided tour.
 
 An update from an older version does not show first-run setup. The launcher
 keeps the existing account data and shows a short confirmation instead.

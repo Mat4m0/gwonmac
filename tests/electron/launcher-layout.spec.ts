@@ -80,7 +80,6 @@ test("minimum window and 200% zoom keep primary launcher controls reachable", as
   try {
     await fixture.page.getByRole("button", { name: "Continue" }).click();
     await fixture.page.getByRole("button", { name: "Not now" }).click();
-    await fixture.page.getByRole("button", { name: "Skip" }).click();
     await fixture.page.getByRole("button", { name: "Accounts", exact: true }).click();
     await fixture.page.getByRole("button", { name: "Add account" }).click();
     const dialog = fixture.page.getByRole("dialog", { name: "Add account" });

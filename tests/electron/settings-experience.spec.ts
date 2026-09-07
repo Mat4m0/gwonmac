@@ -9,7 +9,6 @@ test("failed map edits remain visibly unsaved and can be retried or reverted at 
   try {
     await page.evaluate(async () => {
       await window.launcherNative.experience.completeSetup({ enableTools: false });
-      await window.launcherNative.experience.completeIntroduction();
     });
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     await page.locator("aside").getByRole("button", { name: "Maps", exact: true }).click();
@@ -59,7 +58,6 @@ test("settings navigation has one scroll owner and compact controls at supported
   try {
     await page.evaluate(async () => {
       await window.launcherNative.experience.completeSetup({ enableTools: false });
-      await window.launcherNative.experience.completeIntroduction();
     });
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     for (const size of [{ width: 1180, height: 760, zoom: 1 }, { width: 900, height: 640, zoom: 1 }, { width: 1180, height: 760, zoom: 2 }, { width: 900, height: 640, zoom: 2 }]) {

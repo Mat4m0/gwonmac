@@ -889,8 +889,6 @@ if (primaryInstance) void app.whenReady().then(async () => {
         app.quit();
       }
     },
-    completeIntroduction: () => launcherOrchestrator!.completeIntroduction(),
-    replayIntroduction: () => launcherOrchestrator!.replayIntroduction(),
     updatePreferences: (patch) => launcherOrchestrator!.updatePreferences(patch),
     openNews: (id) => launcherNews.open(id),
     updateSettings: async (patch: LauncherSettingsPatch) => {

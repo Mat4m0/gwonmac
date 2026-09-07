@@ -54,8 +54,6 @@ export const LAUNCHER_IPC = Object.freeze({
   experienceDismissMigration: "gw:launcher:experience:dismissMigration",
   experienceDismissPreferencesReset: "gw:launcher:experience:dismissPreferencesReset",
   experienceCompleteSetup: "gw:launcher:experience:completeSetup",
-  experienceCompleteIntroduction: "gw:launcher:experience:completeIntroduction",
-  experienceReplayIntroduction: "gw:launcher:experience:replayIntroduction",
   experienceUpdatePreferences: "gw:launcher:experience:updatePreferences",
   settingsUpdate: "gw:launcher:settings:update",
   settingsReset: "gw:launcher:settings:reset",
@@ -287,7 +285,6 @@ export interface LauncherSnapshot {
   readonly experience: Readonly<{
     installationKind: LauncherInstallationKind;
     setup: "pending" | "complete";
-    introduction: "pending" | "complete";
     showMigrationNotice: boolean;
     preferencesReset: boolean;
   }>;
@@ -335,8 +332,6 @@ export interface LauncherNativeApi {
   };
   readonly experience: {
     completeSetup(input: { readonly enableTools: boolean }): Promise<void>;
-    completeIntroduction(): Promise<void>;
-    replayIntroduction(): Promise<void>;
     dismissMigrationNotice(): Promise<void>;
     dismissPreferencesReset(): Promise<void>;
     updatePreferences(patch: LauncherPreferencesPatch): Promise<void>;

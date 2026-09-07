@@ -73,7 +73,6 @@ export class LauncherOrchestrator {
       experience: {
         installationKind: document.installationKind,
         setup: document.setupVersion > 0 ? "complete" : "pending",
-        introduction: document.introductionVersion > 0 ? "complete" : "pending",
         showMigrationNotice:
           document.installationKind !== "fresh" && !document.migrationNoticeDismissed,
         preferencesReset: document.preferencesResetPending,
@@ -234,16 +233,6 @@ export class LauncherOrchestrator {
 
   async dismissPreferencesReset(): Promise<void> {
     await this.options.state.dismissPreferencesReset();
-    this.publish();
-  }
-
-  async completeIntroduction(): Promise<void> {
-    await this.options.state.completeIntroduction();
-    this.publish();
-  }
-
-  async replayIntroduction(): Promise<void> {
-    await this.options.state.replayIntroduction();
     this.publish();
   }
 

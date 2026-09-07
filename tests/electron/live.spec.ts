@@ -119,10 +119,6 @@ test.describe("live client", () => {
           await window.launcherNative.experience.completeSetup({ enableTools: false });
           state = await window.launcherNative.state.get();
         }
-        if (state.experience.introduction === "pending") {
-          await window.launcherNative.experience.completeIntroduction();
-          state = await window.launcherNative.state.get();
-        }
         const profile = state.profiles.find((candidate) => !candidate.archived);
         if (!profile) throw new Error("live fixture has no account profile");
         return profile.id;

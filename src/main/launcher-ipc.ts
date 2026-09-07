@@ -55,8 +55,6 @@ export interface LauncherIpcContext {
   readonly dismissMigrationNotice: () => Promise<void>;
   readonly dismissPreferencesReset: () => Promise<void>;
   readonly completeSetup: (enableTools: boolean) => Promise<void>;
-  readonly completeIntroduction: () => Promise<void>;
-  readonly replayIntroduction: () => Promise<void>;
   readonly updatePreferences: (patch: LauncherPreferencesPatch) => Promise<void>;
   readonly updateSettings: (patch: LauncherSettingsPatch) => Promise<void>;
   readonly resetSettings: (win: BrowserWindow) => Promise<void>;
@@ -156,8 +154,6 @@ export function registerLauncherIpc(ctx: LauncherIpcContext): void {
     experienceDismissMigration: channel(nothing, () => ctx.dismissMigrationNotice(), "launcher"),
     experienceDismissPreferencesReset: channel(nothing, () => ctx.dismissPreferencesReset(), "launcher"),
     experienceCompleteSetup: channel(setup, (_win, enableTools) => ctx.completeSetup(enableTools), "launcher"),
-    experienceCompleteIntroduction: channel(nothing, () => ctx.completeIntroduction(), "launcher"),
-    experienceReplayIntroduction: channel(nothing, () => ctx.replayIntroduction(), "launcher"),
     experienceUpdatePreferences: channel(one(parseLauncherPreferencesPatch), (_win, patch) => ctx.updatePreferences(patch), "launcher"),
     settingsUpdate: channel(one(parseLauncherSettingsPatch), (_win, patch) => ctx.updateSettings(patch), "launcher"),
     settingsReset: channel(nothing, (win) => ctx.resetSettings(win), "launcher"),
