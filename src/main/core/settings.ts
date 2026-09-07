@@ -292,6 +292,7 @@ export function parseSettings(raw: unknown): AppSettings {
     "characterSwitchEnabled",
     "resignEnabled",
     "whispersEnabled",
+    "callTargetEnabled",
     "characterSwitchProfession",
     "characterSwitchLevel",
     "characterSwitchLocation",

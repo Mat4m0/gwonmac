@@ -2,6 +2,7 @@
  * Renderer-owned game input. The Emscripten host installs this once before its
  * glue loads; native interruptions all converge on releaseAll().
  */
+import { featureActivationRequested } from '../shared/feature-contracts.js';
 import {
   dispatchHeldKeyRelease,
   HeldKeys,
@@ -492,6 +493,49 @@ export const installGameInput = ({
       ? { ...common, owner, code: event.code }
       : { ...common, owner });
   };
+
+  window.addEventListener('gw:call-target', (event) => {
+    const context = window.gwCharacterSwitch?.context;
+    if (!featureActivationRequested('callTarget', window.gwToolsSettings())
+      || !document.hasFocus() || document.activeElement !== canvas
+      || (context !== 'outpost' && context !== 'pve-explorable' && context !== 'pvp-explorable')
+      || heldKeys.get('Space')) return;
+    event.preventDefault();
+    // The client tracks modifier transitions, not just the flags on Space.
+    // Borrow held modifiers and restore Option after the fixed game chord.
+    let control = !!(heldKeys.get('ControlLeft') || heldKeys.get('ControlRight'));
+    let shift = !!(heldKeys.get('ShiftLeft') || heldKeys.get('ShiftRight'));
+    let alt = !!(heldKeys.get('AltLeft') || heldKeys.get('AltRight'));
+    const altKeys = ['AltLeft', 'AltRight'].flatMap(code => {
+      const held = heldKeys.get(code);
+      return held ? [held] : [];
+    });
+    const send = (input: { key: string; code: string; keyCode: number; location: number }, down: boolean) => {
+      if (input.key === 'Control') control = down;
+      if (input.key === 'Shift') shift = down;
+      if (input.key === 'Alt') alt = down;
+      const keyEvent = new KeyboardEvent(down ? 'keydown' : 'keyup', {
+        ...input, bubbles: true, cancelable: true,
+        ctrlKey: control, shiftKey: shift, altKey: alt, metaKey: false,
+      });
+      Object.defineProperties(keyEvent, {
+        charCode: { value: 0 }, keyCode: { value: input.keyCode }, which: { value: input.keyCode },
+      });
+      canvas.dispatchEvent(keyEvent);
+    };
+    const added = [
+      ...(!control ? [{ key: 'Control', code: 'ControlLeft', keyCode: 17, location: 1 }] : []),
+      ...(!shift ? [{ key: 'Shift', code: 'ShiftLeft', keyCode: 16, location: 1 }] : []),
+      { key: ' ', code: 'Space', keyCode: 32, location: 0 },
+    ];
+    for (const input of altKeys) send(input, false);
+    try {
+      for (const input of added) send(input, true);
+    } finally {
+      for (const input of added.reverse()) send(input, false);
+      for (const input of altKeys) send(input, true);
+    }
+  });
 
   window.addEventListener('keydown', (event) => {
     if (!event.isTrusted) return;

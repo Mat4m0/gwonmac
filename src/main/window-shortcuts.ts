@@ -61,6 +61,7 @@ const textEditCommand = (input: Electron.Input): GameTextEditCommand | null => {
 class WindowShortcuts {
   readonly #actions: ShortcutActions;
   #shortcuts = resolveShortcuts({
+    "game.call-target": null,
     "game.resign": null,
     "character.switch": null,
     "tools.toggle": null,
@@ -266,10 +267,12 @@ class WindowShortcuts {
     | "characterSwitchEnabled"
     | "resignEnabled"
     | "whispersEnabled"
+    | "callTargetEnabled"
     | "cartographyEnabled"
   >): void {
     const resolved = resolveShortcuts(settings.shortcutOverrides);
     this.#shortcuts = {
+      "game.call-target": featureActivationRequested("callTarget", settings) ? resolved["game.call-target"] : null,
       "game.resign": featureActivationRequested("resign", settings) ? resolved["game.resign"] : null,
       "character.switch": featureActivationRequested("characterSwitch", settings)
         ? resolved["character.switch"] : null,

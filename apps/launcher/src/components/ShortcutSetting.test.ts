@@ -8,7 +8,7 @@ function api() {
   return {
     setMasterEnabled: vi.fn(), setFeature: vi.fn(), restartToApply: vi.fn(),
     restoreDefaultShortcut: vi.fn(),
-    captureShortcut: vi.fn(async () => ({ status: "captured" as const, binding: { key: "g", shift: false, option: false } })),
+    captureShortcut: vi.fn(async () => ({ status: "captured" as const, binding: { key: "j", shift: false, option: false } })),
     replaceShortcut: vi.fn(async () => undefined),
   } satisfies LauncherNativeApi["tools"];
 }
@@ -32,8 +32,8 @@ describe("Shortcut setting", () => {
     expect(wrapper.text()).toContain("Not set");
     await wrapper.get(".secondary").trigger("click");
     await flushPromises();
-    expect(tools.replaceShortcut).toHaveBeenCalledWith({ action: "cartography.grid.toggle", binding: { key: "g", shift: false, option: false } });
-    await wrapper.setProps({ shortcuts: { ...DEFAULT_SHORTCUTS, "cartography.grid.toggle": { key: "g", shift: false, option: false } } });
+    expect(tools.replaceShortcut).toHaveBeenCalledWith({ action: "cartography.grid.toggle", binding: { key: "j", shift: false, option: false } });
+    await wrapper.setProps({ shortcuts: { ...DEFAULT_SHORTCUTS, "cartography.grid.toggle": { key: "j", shift: false, option: false } } });
     await wrapper.get('[aria-label="Clear Exploration grid shortcut"]').trigger("click");
     expect(tools.replaceShortcut).toHaveBeenLastCalledWith({ action: "cartography.grid.toggle", binding: null });
   });
