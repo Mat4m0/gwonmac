@@ -6,7 +6,7 @@ import { describe, it } from "node:test";
 import { ELITE_LOCATIONS } from "../../src/shared/elite-locations.js";
 import { EliteTrackingStore } from "../../src/main/core/elite-tracking.js";
 import {
-  EMPTY_ELITE_TRACKING, changeEliteTracking, eliteLearned, parseEliteTracking, parseEliteUpdate,
+  EMPTY_ELITE_TRACKING, changeEliteTracking, eliteContinent, eliteLearned, parseEliteTracking, parseEliteUpdate,
 } from "../../src/shared/elite-skills.js";
 import { travelCharacterKey } from "../../src/shared/travel-history.js";
 
@@ -20,6 +20,11 @@ describe("elite capture plans", () => {
     assert.equal(ELITE_LOCATIONS.length, 925);
     assert.equal(new Set(ELITE_LOCATIONS.map((entry) => entry.id)).size, 925);
     assert.equal(new Set(ELITE_LOCATIONS.map((entry) => entry.skillId)).size, 302);
+    assert.equal(eliteContinent("Tyria"), 0);
+    assert.equal(eliteContinent("Eye of the North"), 0);
+    assert.equal(eliteContinent("Cantha"), 2);
+    assert.equal(eliteContinent("Elona"), 4);
+    assert.equal(ELITE_LOCATIONS.find((entry) => entry.boss === "Flame Djinn")?.region, "Eye of the North");
     assert.equal(lissah.skillId, 338);
     assert.equal(lissah.region, "Eye of the North");
     assert.deepEqual(lissah.points, [[6442, 1596]]);

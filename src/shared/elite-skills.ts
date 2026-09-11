@@ -106,7 +106,7 @@ export function changeEliteTracking(
 }
 
 export function eliteContinent(region: EliteRegion): number {
-  return region === "Cantha" ? 2 : region === "Elona" ? 3 : 0;
+  return region === "Cantha" ? 2 : region === "Elona" ? 4 : 0;
 }
 export function eliteLearned(
   skillId: number, observed: Readonly<{ knownThrough: number; unlocked: ReadonlySet<number> }> | null,

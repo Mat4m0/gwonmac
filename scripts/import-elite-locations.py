@@ -12,8 +12,14 @@ HEADER = SOURCE / 'GWToolboxdll/Widgets/WorldMapWidget_Constants.h'
 text = HEADER.read_text()
 assert hashlib.sha256(HEADER.read_bytes()).hexdigest() == 'ecf7a506e4b213578b4669c56d310b6ab81d3d4164b93a607102bbf012ba8d5f', 'Review a changed source before importing'
 
+ENUM_HASHES = {
+    'Skills': '2a13a9f46241308fba1ee52af9b1fc56f988042a82594fe5a0dc8d037531310c',
+    'Maps': 'dab0d410d4e0c937cfd6cdf32f7c53877fa554423e58914b199550c4256b06a5',
+}
 def enum(name):
-    source = (SOURCE / f'Dependencies/GWCA/include/GWCA/Constants/{name}.h').read_text()
+    path = SOURCE / f'Dependencies/GWCA/include/GWCA/Constants/{name}.h'
+    assert hashlib.sha256(path.read_bytes()).hexdigest() == ENUM_HASHES[name], f'Review changed {name} IDs before importing'
+    source = path.read_text()
     body = source.split('enum class ', 1)[1].split('{', 1)[1].split('};', 1)[0]
     body = re.sub(r'/\*.*?\*/|//[^\n]*', '', body, flags=re.S)
     result, number = {}, -1
@@ -43,7 +49,7 @@ for match in pattern.finditer(text):
     if area == 'Issnur_Isles': region = 'Elona'
     if area == 'Tsumei_Village_Winds_of_Change__A_Treatys_a_Treaty': region = 'Cantha'
     if area == 'Prophets_Path': region = 'Tyria'
-    if area == 'Rragars_Menagerie_Level_1': region = 'Eye of the North'
+    if area == 'Catacombs_of_Kathandrax_Level_1': region = 'Eye of the North'
     if area == 'War_in_Kryta_Divinity_Coast': region = 'Tyria'
     boss, note = literal(boss), literal(note) if note else None
     points = [[int(x), int(y)] for x, y in re.findall(r'\{\s*(-?\d+),\s*(-?\d+)\s*\}', coords)]
