@@ -17,6 +17,7 @@ import {
   MISSION_MAP_FRAME_SPIKE_SCALARS,
   MISSION_MAP_PROJECTION_SPIKE_SCALARS,
   WORLD_MAP_FRAME_SPIKE_SCALARS,
+  WORLD_MAP_FRAME_SPIKE_GLOBALS,
   WORLD_MAP_ANCHOR_SPIKE_GLOBALS,
   WORLD_MAP_ANCHOR_SPIKE_SCALARS,
 } from "../../shared/cartography-spike.js";
@@ -38,6 +39,7 @@ import {
   type Section,
 } from "../core/wasm-binary.js";
 import { functionBodySha256, wasmEvidence } from "./wasm-evidence.js";
+import { worldMapDisplayStateAddress } from "./world-map-visibility-proof.js";
 import {
   CARTOGRAPHY_MEMORY_LAYOUTS,
   COMPASS_CERTIFICATE,
@@ -57,6 +59,7 @@ import {
   rewriteExactTableSlot,
   worldMapAnchorObserver,
   worldMapEventWrapper,
+  worldMapVisibilityObserver,
   type CartographyContextGlobals,
   type CartographyMemoryLayout,
   type CompassGlobals,
@@ -72,7 +75,7 @@ declare const WebAssembly: {
   Module: new (bytes: Uint8Array) => object;
 };
 
-export const CARTOGRAPHY_SPIKE_TRANSFORM_ABI = 30;
+export const CARTOGRAPHY_SPIKE_TRANSFORM_ABI = 31;
 export type CartographyMemoryLayoutId = keyof typeof CARTOGRAPHY_MEMORY_LAYOUTS;
 
 const mutableI32 = () => Uint8Array.of(0x7f, 0x01, 0x41, 0x00, 0x0b);
@@ -245,6 +248,8 @@ export function transformCartographySpikeWasm(
   });
   const evidence = wasmEvidence(input) ?? fail("invalid WebAssembly input");
   const module = evidence.moduleView();
+  const worldMapDisplayState = worldMapDisplayStateAddress(evidence)
+    ?? fail("World Map display-state certificate changed");
   if (
     functionBodySha256(module, COMPASS_CERTIFICATE.renderFunction)
       !== COMPASS_CERTIFICATE.renderBodySha256
@@ -276,6 +281,7 @@ export function transformCartographySpikeWasm(
     ...WORLD_MAP_FRAME_SPIKE_SCALARS,
   ];
   const functionNames = [
+    WORLD_MAP_FRAME_SPIKE_GLOBALS.observe,
     CARTOGRAPHY_CONTEXT_GLOBALS.observe,
     COMPASS_FRAME_SPIKE_GLOBALS.observe,
     MISSION_MAP_FRAME_SPIKE_GLOBALS.observe,
@@ -321,6 +327,7 @@ export function transformCartographySpikeWasm(
   const explorationReadWordFunction = firstFunction + 6;
   const anchorObserverFunction = firstFunction + 7;
   const worldEventWrapperFunction = firstFunction + 8;
+  const worldVisibilityObserverFunction = firstFunction + 9;
 
   const compassRender = bodies[compassRenderLocal]?.slice()
     ?? fail("Compass render body is missing");
@@ -377,6 +384,7 @@ export function transformCartographySpikeWasm(
       allocated.context.areaEpoch,
       worldCertificate,
     ),
+    worldMapVisibilityObserver(allocated.world, worldMapDisplayState),
   );
   const nextFunctionTypes = [
     ...functionTypes,
@@ -389,6 +397,7 @@ export function transformCartographySpikeWasm(
     readWordType,
     voidType,
     worldDispatcherType,
+    voidType,
   ];
 
   const contextEntries = [
@@ -424,6 +433,7 @@ export function transformCartographySpikeWasm(
     [WORLD_MAP_FRAME_SPIKE_SCALARS, allocated.firstWorld],
   ] as const;
   const functionPlans = [
+    [WORLD_MAP_FRAME_SPIKE_GLOBALS.observe, worldVisibilityObserverFunction],
     [CARTOGRAPHY_CONTEXT_GLOBALS.observe, contextObserverFunction],
     [COMPASS_FRAME_SPIKE_GLOBALS.observe, compassObserverFunction],
     [MISSION_MAP_FRAME_SPIKE_GLOBALS.observe, missionObserverFunction],

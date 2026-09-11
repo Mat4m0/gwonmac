@@ -131,6 +131,7 @@ export const MISSION_MAP_PROJECTION_SPIKE_SCALARS = Object.freeze([
 ]);
 
 export const WORLD_MAP_FRAME_SPIKE_GLOBALS = Object.freeze({
+  observe: "gwonmac_world_map_frame_spike_observe",
   status: "gwonmac_world_map_frame_spike_status",
   sequence: "gwonmac_world_map_frame_spike_sequence",
   generation: "gwonmac_world_map_frame_spike_generation",

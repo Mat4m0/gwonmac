@@ -42,6 +42,12 @@ describe("Elite Skills", () => {
     expect(wrapper.find('.elite-panel').exists()).toBe(false);
     expect(wrapper.get('.elite-mission-tracker').text()).toContain('Lissah');
     expect(wrapper.findAll('.elite-marker')).toHaveLength(1);
+    await wrapper.get('.elite-marker').trigger('pointerenter');
+    expect(wrapper.find('.elite-preview').exists()).toBe(true);
+    await wrapper.setProps({ view: { ...eliteFixtureView(true), mission: null } });
+    expect(wrapper.find('.elite-preview').exists()).toBe(false);
+    expect(wrapper.find('.elite-marker').exists()).toBe(false);
+    expect(wrapper.find('.elite-mission-tracker').exists()).toBe(false);
     const missionView = eliteFixtureView(true);
     await wrapper.setProps({ view: { ...missionView, mission: { box: missionView.mission!.box, transform: null } } });
     expect(wrapper.findAll('.elite-marker')).toHaveLength(0);

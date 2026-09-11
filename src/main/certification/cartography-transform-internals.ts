@@ -458,7 +458,7 @@ export function nativeFrameObserver(
     local(5), i32Load(certificate.frameId), globalSet(globals.frameId),
     local(5), i32Load(certificate.frameState), Uint8Array.of(0x22), uleb(3),
     i32(4), Uint8Array.of(0x71, 0x45, 0x45),
-    local(3), i32(0x200), Uint8Array.of(0x71, 0x45, 0x71), globalSet(globals.visible),
+    local(3), i32(0x208), Uint8Array.of(0x71, 0x45, 0x71), globalSet(globals.visible),
     local(5), f32Load(certificate.frameViewportWidth), globalSet(globals.viewportWidth),
     local(5), f32Load(certificate.frameViewportHeight), globalSet(globals.viewportHeight),
     local(5), f32Load(certificate.frameScreenLeft), globalSet(globals.left),
@@ -547,6 +547,22 @@ export function missionMapEventWrapper(
     globalGet(globals.sequence), i32(1), Uint8Array.of(0x6a), globalSet(globals.sequence),
     i32(1), globalSet(globals.status),
     Uint8Array.of(0x0b),
+  );
+}
+
+/** Withdraw the retained World Map frame as soon as native closing begins. */
+export function worldMapVisibilityObserver(
+  globals: Pick<WorldMapGlobals, "visible" | "sequence">,
+  stateAddress: number,
+): Uint8Array {
+  return concat(
+    Uint8Array.of(0x00),
+    globalGet(globals.visible), Uint8Array.of(0x04, 0x40),
+      i32(stateAddress), i32Load(), i32(0x80000), Uint8Array.of(0x71, 0x45, 0x04, 0x40),
+        i32(0), globalSet(globals.visible),
+        globalGet(globals.sequence), i32(1), Uint8Array.of(0x6a), globalSet(globals.sequence),
+      Uint8Array.of(0x0b),
+    Uint8Array.of(0x0b, 0x0b),
   );
 }
 
