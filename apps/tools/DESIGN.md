@@ -83,6 +83,36 @@ weight families use the same semantic weight tokens at 500, 600, and 700.
   directly. Tabs and modal dialogs currently use these thin wrappers. Native
   buttons, fields, checks, ranges, and simple selects stay native.
 
+### Map planner
+
+Elite skills extends the shared frames, controls, skill slots, and skill details.
+Classic, Modern, and Custom keep the same layout and interaction. Interface
+type serves controls, Reading serves encounter notes, and Data serves marker
+counts. Capture data and tracking behavior belong in
+[`docs/elite-skills.md`](../../docs/elite-skills.md).
+
+- Anchor the trigger and planner inside the world map's upper-right corner.
+  Keep the planner compact (356px, capped by viewport width) and within the
+  available map height. Search and filters precede flat skill rows; opening a
+  skill replaces the list with details and capture locations.
+- At short viewport heights (700px or less), scroll the whole planner so
+  errors, search, results, and footer remain reachable. At taller heights,
+  results and details scroll inside the panel. Hide pointer previews at
+  narrow widths (650px or less).
+- Keep markers compact (28px). Combine nearby locations into a counted,
+  selectable group, including neighbors across grouping-cell boundaries.
+  Distinguish the active boss with an accent outline and text label; a target
+  outside the view uses a dashed edge marker and an explicit label.
+- Hover or keyboard focus previews a skill; activation opens persistent
+  details. Keep previews non-interactive. Search and selection are immediate.
+- Keyboard opening moves focus to search or the detail Back control. Back
+  restores the result row when available, and closing returns focus to the
+  map trigger or tracker control. Buttons use the shared bright two-pixel
+  focus outline, separate from the active marker's accent outline.
+- Place the compact mission tracker inside the mission map's upper-left
+  corner. Keep its target, status, and manage action together. Empty map
+  space remains outside the overlay's pointer hit area.
+
 ### Control states
 
 - A default button is a routine command such as Export, Copy, Open, or Browse.

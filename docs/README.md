@@ -22,6 +22,7 @@ its rules.
 | How are player skill cooldowns certified and displayed? | [Skill cooldowns](skill-cooldowns.md) |
 | How are controlled-player effect timers certified and displayed? | [Effect timers](effect-timers.md) |
 | How do the cartography grid and walkability overlay work? | [Cartography](cartography.md) |
+| How do elite capture markers and character plans work? | [Elite skills](elite-skills.md) |
 | How do I certify every cartography layer in a live game? | [Live cartography certification](live-cartography-certification.md) |
 | What remains to research for party and hostile effects? | [Future effect and debuff research](future-effect-durations.md) |
 | How do application releases, Stable, and Beta work? | [Release verification](release-verification.md) |

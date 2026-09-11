@@ -1,7 +1,5 @@
 import { ref, type Ref } from "vue";
 import {
-  SKILL_CATALOGUE_ROUTE,
-  SKILL_ICON_ROUTE,
   type GwNativeApi,
 } from "../../../src/shared/contracts";
 import {
@@ -13,7 +11,6 @@ import {
   skillId,
 } from "../../../src/shared/builds/library";
 import { parseBuildLibrary } from "../../../src/shared/builds/parse-library";
-import { parseSkillCatalogue } from "../../../src/shared/skill-catalogue";
 import type {
   TeamApplyPlan,
   TeamApplyResult,
@@ -36,8 +33,8 @@ import { devTrace } from "./dev-trace";
 import { teamApplyRuntimeProblemMessage } from "./team-apply-presentation";
 import {
   createSkillCatalogue,
+  loadInstalledSkills,
   type SkillCatalogue,
-  type SkillPresentation,
 } from "./skill-catalog";
 
 const PUBLISH_UNAVAILABLE =
@@ -261,22 +258,7 @@ export function createNativeHost(
   // indistinguishable from a rendering bug, which is exactly how a missing
   // protocol route once cost an afternoon.
   const loadSkills = async () => {
-    const response = await fetch(`gw://app/${SKILL_CATALOGUE_ROUTE}`);
-    if (!response.ok) {
-      throw new Error(
-        `The skill catalogue is unavailable (${response.status}). Guild Wars `
-        + "may still be downloading; the console records why.",
-      );
-    }
-    const parsed: SkillPresentation[] = parseSkillCatalogue(await response.json())
-      .map(({ hasIcon, ...record }) => {
-        const id = skillId(record.id);
-        return {
-          ...record,
-          id,
-          iconUrl: hasIcon ? `gw://app/${SKILL_ICON_ROUTE(id)}` : null,
-        };
-      });
+    const parsed = await loadInstalledSkills();
     skills.replace(parsed);
     devTrace(development, "skills.loaded", { count: parsed.length });
   };

@@ -219,6 +219,11 @@ const INVOCATIONS: Invocation[] = [
     channel: IPC.travelPreferencesSet,
   },
   {
+    path: "eliteTracking.openWiki",
+    args: [{ locationId: "abcdef0123456789", page: "boss" }],
+    channel: IPC.eliteWikiOpen,
+  },
+  {
     path: "eliteTracking.get",
     args: [{ characterKey: "0123456789abcdef" }],
     channel: IPC.eliteTrackingGet,

@@ -2,6 +2,7 @@
  * Prepares the optional half of a certified companion installation. Core owns
  * the shared kernel transaction and calls this extension only in Tools mode.
  */
+import { createEliteMapInstallation } from "./elite-map-installation.js";
 import { COMPANION_ABI, COMPANION_DISPATCH_KINDS, COMPANION_FEATURE_BITS } from "../shared/companion-abi.js";
 import {
   ENHANCEMENT_CHAT_FILTER_MASKS,
@@ -262,7 +263,7 @@ export async function prepareToolsCompanionExtension(
       },
     },
     activate(context) {
-      const session = activateTools({ context, capabilities, program, foundation, observeState,
+      const session = activateTools({ mapExports: exports, context, capabilities, program, foundation, observeState,
         skills, slots, cooldowns, playerEffects, effectIcons, enqueue, traceReader, teamCommands, storage,
         travel, configureTrade, takeTrade, configureChatFilters, friendPointer,
         resignExports: capabilities.resignAction ? exports : null, whispers,
@@ -288,6 +289,7 @@ export async function prepareToolsCompanionExtension(
 }
 
 type ToolsInput = Readonly<{
+  mapExports: WebAssembly.Exports;
   context: CompanionExtensionActivation;
   capabilities: EnhancementCapabilities;
   program: EnhancementProgram;
@@ -341,12 +343,17 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
   const effectIconsActive = () => capabilities.effectIconGeometry
     && (program === "effect-observer" || policy().effectTimers);
   const playRegion = () => snapshot().playRegion;
-  const cartographyActive = () => {
-    const settings = window.gwToolsSettings();
-    return policy().cartography && (settings.cartographyOverlayEnabled || settings.cartographyGridEnabled);
-  };
   let companionState: CompanionSnapshot | null = null;
   let party: ToolboxObservation | null = null;
+  const eliteMaps = createEliteMapInstallation({ exports: input.mapExports,
+    state: () => {
+      const region = snapshot().playRegionState;
+      return { region, observation: party ?? { status: "waiting" },
+        onWorldMap: region.status === "ready" && companionState?.status === "ready"
+          && companionState.mapId === region.mapId && companionState.onWorldMap };
+    },
+  });
+  let eliteIdentity = "";
   let readout: ReturnType<typeof tools.createTargetReadout> | null = null;
   let toolbox: ReturnType<typeof tools.createToolboxLifecycle> | null = null;
   let professionTrace: ReturnType<typeof tools.createProfessionCommandTrace> | null = null;
@@ -387,6 +394,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
     [
       () => { readout?.dispose(); readout = null; },
       () => toolbox?.dispose(),
+      () => eliteMaps.dispose(),
       () => skills.disposePresentation(),
       () => slots?.dispose(),
       () => cooldowns?.dispose(),
@@ -507,7 +515,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
     (capabilities.nativeCursor ? COMPANION_FEATURE_BITS.nativeCursor : 0)
       | (foundation && policy().tools ? COMPANION_FEATURE_BITS.toolboxFoundation : 0)
       | (capabilities.playRegionObservation ? COMPANION_FEATURE_BITS.playRegionObservation : 0)
-      | (policy().targetReadout || cartographyActive()
+      | (policy().targetReadout || policy().cartography
         ? COMPANION_FEATURE_BITS.targetObservation : 0)
       | (policy().whispers && capabilities.whisperChat ? COMPANION_FEATURE_BITS.whisperObservation : 0)
       | skills.activeFeatureFlags
@@ -570,6 +578,10 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
     }
     syncStorage();
     syncTravel();
+    const eliteRegion = snapshot().playRegionState;
+    const nextEliteIdentity = eliteRegion.status === "ready" ? `${eliteRegion.characterKey}:${eliteRegion.mapId}` : "";
+    if (nextEliteIdentity !== eliteIdentity) { party = null; eliteIdentity = nextEliteIdentity; }
+    eliteMaps.update(policy().cartography);
     quickItemMoveInstallation?.update(policy().quickItemMove);
   };
   const syncPolicy = (reason: "region" | "settings") => {
@@ -608,7 +620,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
         }]),
       ],
       state: observeState ? {
-        enabled: () => policy().targetReadout || policy().xunlaiStorage || cartographyActive(),
+        enabled: () => policy().targetReadout || policy().xunlaiStorage || policy().cartography,
         update: (state) => {
           companionState = state;
           updateCartographyPlayerState(state);
@@ -616,7 +628,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
           syncStorage();
         },
       } : null,
-      toolbox: foundation ? { enabled: () => policy().buildLibrary || program === "effect-observer",
+      toolbox: foundation ? { enabled: () => policy().buildLibrary || policy().cartography || program === "effect-observer",
         update: (state) => { party = state; professionTrace?.poll(state); toolbox?.update(state); } } : null,
       observeState,
       publishState: program === "target-observer",
