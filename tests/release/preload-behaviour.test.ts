@@ -219,6 +219,16 @@ const INVOCATIONS: Invocation[] = [
     channel: IPC.travelPreferencesSet,
   },
   {
+    path: "eliteTracking.get",
+    args: [{ characterKey: "0123456789abcdef" }],
+    channel: IPC.eliteTrackingGet,
+  },
+  {
+    path: "eliteTracking.update",
+    args: [{ characterKey: "0123456789abcdef", change: { kind: "track", skillId: 338 } }],
+    channel: IPC.eliteTrackingUpdate,
+  },
+  {
     path: "travelHistory.get",
     args: [{ characterKey: "0123456789abcdef" }],
     channel: IPC.travelHistoryGet,
@@ -463,6 +473,7 @@ test("the Core preload exposes no optional Tools namespace or channel", () => {
     "trade",
     "travelPreferences",
     "travelHistory",
+    "eliteTracking",
     "buildLibrary",
   ]) {
     assert.equal(

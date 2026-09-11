@@ -8,6 +8,10 @@
  * @param {<T>(channel: string, callback: (value: T) => void) => () => void} listen
  */
 function installToolsApi(api, ipcRenderer, IPC, listen) {
+api.eliteTracking = {
+  get: (value) => ipcRenderer.invoke(IPC.eliteTrackingGet, value),
+  update: (value) => ipcRenderer.invoke(IPC.eliteTrackingUpdate, value),
+};
 api.trade = {
   subscribe: (source) => ipcRenderer.invoke(IPC.tradeSubscribe, source),
   unsubscribe: () => ipcRenderer.invoke(IPC.tradeUnsubscribe),
