@@ -3,15 +3,16 @@
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import type { EliteMapView } from "../../../src/shared/elite-map";
 import { ELITE_LOCATIONS } from "../../../src/shared/elite-locations";
-import { ELITE_REGIONS, eliteContinent, eliteLearned, type EliteLocation } from "../../../src/shared/elite-skills";
+import { eliteContinent, eliteLearned, type EliteLocation, type EliteViewPreferences } from "../../../src/shared/elite-skills";
 import { guildWarsMapName } from "../../../src/shared/guild-wars-map-names";
 import { liveParty, unavailableParty } from "../../../src/shared/builds/live-party";
 import { PROFESSIONS } from "../../../src/shared/builds/heroes";
-import { skillId } from "../../../src/shared/builds/library";
+import { skillId, type Profession } from "../../../src/shared/builds/library";
 import type { SkillCatalogue, SkillPresentation } from "./skill-catalog";
 import { useEliteTracking, type EliteTrackingHost } from "./use-elite-tracking";
 import SkillDetails from "./components/SkillDetails.vue";
 import EliteMarkers from "./components/EliteMarkers.vue";
+import EliteFilters from "./components/EliteFilters.vue";
 import "./styles/elite-skills.css";
 const props = defineProps<{
   view: EliteMapView; catalogue: SkillCatalogue; catalogueVersion: number;
@@ -22,44 +23,72 @@ const props = defineProps<{
 const emit = defineEmits<{ openChange: [open: boolean] }>();
 const open = ref(false);
 const wikiProblem = ref("");
-const markersEnabled = ref(true);
-const search = ref("");
-const profession = ref("");
-const region = ref("");
-const hideLearned = ref(true);
-const mode = ref<"browse" | "tracked">("browse");
 const selectedId = ref<number | null>(null);
 const root = ref<HTMLElement | null>(null);
 const mapTrigger = ref<HTMLButtonElement | null>(null);
 const detailBack = ref<HTMLButtonElement | null>(null);
-const manageTracked = ref<HTMLButtonElement | null>(null);
-const searchInput = ref<HTMLInputElement | null>(null);
+const filters = ref<InstanceType<typeof EliteFilters> | null>(null);
+const panel = ref<HTMLElement | null>(null);
+let resultsScroll = 0;
 const character = computed(() => props.view.characterKey);
 const plan = useEliteTracking(character, props.trackingHost);
 const { tracking, busy, loaded, problem } = plan;
+const preferences = computed(() => tracking.value.view);
+function updatePreferences(value: Partial<EliteViewPreferences>) {
+  plan.change({ kind: "view", view: { ...preferences.value, ...value } });
+}
+function resetFilters() {
+  updatePreferences({ search: "", professions: { kind: "all" }, region: "", mode: "browse", hideLearned: false, focusedSkill: null });
+}
 const party = shallowRef(unavailableParty());
 watch(() => props.view.observation, (observation) => { party.value = liveParty(observation); }, { immediate: true });
 const detailsSkill = computed(() => selectedId.value === null ? null : skill(selectedId.value));
 const active = computed(() => ELITE_LOCATIONS.find((entry) => entry.id === tracking.value.activeLocation) ?? null);
-const blocked = computed(() => busy.value || !loaded.value || problem.value !== "");
-const preview = ref<{ location: EliteLocation; x: number; y: number } | null>(null);
+const blocked = computed(() => !loaded.value || problem.value !== "");
+const preview = ref<{ location: EliteLocation; x: number; y: number; keyboard: boolean } | null>(null);
+const previewElement = ref<HTMLElement | null>(null);
+let previewClose: ReturnType<typeof setTimeout> | undefined;
+function keepPreview() { clearTimeout(previewClose); }
+function hidePreview() {
+  keepPreview();
+  previewClose = setTimeout(() => { preview.value = null; }, 100);
+}
+function dismissPreview(event: KeyboardEvent) {
+  if (!preview.value) return;
+  keepPreview(); preview.value = null;
+  event.preventDefault(); event.stopPropagation();
+}
 function skill(id: number): SkillPresentation {
   void props.catalogueVersion;
   return props.catalogue.get(skillId(id));
 }
 const learned = (id: number) => eliteLearned(id, party.value.characterSkills);
 const tracked = (id: number) => tracking.value.skills.includes(id);
+const selectedProfessions = computed(() => {
+  const filter = preferences.value.professions;
+  if (filter.kind === "all") return null;
+  if (filter.kind === "custom") return filter.values;
+  return party.value.player?.professions?.filter((value): value is Profession => value !== null) ?? [];
+});
+const filterSummary = computed(() => {
+  const pref = preferences.value;
+  return [pref.focusedSkill !== null ? skill(pref.focusedSkill).name : pref.search ? `“${pref.search}”` : "",
+    pref.mode === "tracked" ? "Tracked" : "",
+    selectedProfessions.value === null ? "All professions" : selectedProfessions.value.length
+      ? selectedProfessions.value.map(name => PROFESSIONS[name].name).join(" + ") : "My professions unavailable",
+    pref.hideLearned ? "Hide learned" : "", pref.region].filter(Boolean).join(" · ");
+});
 const normalized = (text: string) => text.normalize("NFKD").replace(/\p{M}/gu, "").toLocaleLowerCase();
 const matching = computed(() => {
-  const needle = normalized(search.value.trim());
+  const needle = normalized(preferences.value.search.trim());
   return ELITE_LOCATIONS.filter((entry) => {
     const info = skill(entry.skillId);
     if (!props.catalogue.has(skillId(entry.skillId)) || !info.elite) return false;
-    if (profession.value && info.profession !== profession.value) return false;
-    if (region.value && entry.region !== region.value) return false;
-    if (mode.value === "tracked" && !tracked(entry.skillId)) return false;
-    // A tracked skill stays visible long enough to inspect its new learned state.
-    if (mode.value === "browse" && hideLearned.value && learned(entry.skillId) === "learned" && !tracked(entry.skillId)) return false;
+    if (selectedProfessions.value && (!info.profession || !selectedProfessions.value.includes(info.profession))) return false;
+    if (preferences.value.focusedSkill !== null && entry.skillId !== preferences.value.focusedSkill) return false;
+    if (preferences.value.region && entry.region !== preferences.value.region) return false;
+    if (preferences.value.mode === "tracked" && !tracked(entry.skillId)) return false;
+    if (preferences.value.hideLearned && learned(entry.skillId) === "learned") return false;
     return !needle || normalized(`${info.name} ${info.attribute ?? ""} ${entry.boss} ${guildWarsMapName(entry.mapId)}`).includes(needle);
   });
 });
@@ -74,16 +103,12 @@ const results = computed(() => {
 });
 const selectedLocations = computed(() => ELITE_LOCATIONS.filter((entry) => entry.skillId === selectedId.value)
   .sort((a, b) => Number(b.mapId === props.view.mapId) - Number(a.mapId === props.view.mapId) || a.boss.localeCompare(b.boss)));
-const mapLocations = computed(() => selectedId.value !== null
-  ? selectedLocations.value : matching.value);
-const worldLocations = computed(() => mapLocations.value.filter((entry) => eliteContinent(entry.region) === props.view.world?.continent));
-const missionLocations = computed(() => ELITE_LOCATIONS.filter((entry) => entry.mapId === props.view.mapId && tracked(entry.skillId)
-  && (active.value?.skillId !== entry.skillId || active.value.id === entry.id)));
+const worldLocations = computed(() => matching.value.filter((entry) => eliteContinent(entry.region) === props.view.world?.continent));
+const missionLocations = computed(() => matching.value.filter((entry) => entry.mapId === props.view.mapId));
 const missionSurface = computed(() => {
   const mission = props.view.mission;
   return mission?.transform ? { box: mission.box, transform: mission.transform } : null;
 });
-const showWorldMarkers = computed(() => markersEnabled.value);
 const panelStyle = computed(() => {
   const box = props.view.world?.box;
   return box ? { top: `${box.top + 12}px`, right: `${Math.max(12, window.innerWidth - box.left - box.width + 12)}px`,
@@ -91,15 +116,15 @@ const panelStyle = computed(() => {
 });
 const trackerStyle = computed(() => {
   const box = props.view.mission?.box;
-  return box ? { left: `${box.left + 8}px`, top: `${box.top + 8}px`, width: `${Math.max(140, Math.min(292, box.width - 16))}px` } : {};
+  return box ? { left: `${box.left + 8}px`, top: `${box.top + 8}px`, right: "auto", maxWidth: `${Math.max(140, box.width - 16)}px` } : {};
 });
 const missionMessage = computed(() => {
   if (!tracking.value.missionMap) return "Mission map markers are off.";
-  if (!active.value) return "Choose a boss to focus your hunt.";
+  if (props.view.mission && !props.view.mission.transform) return "Boss markers are unavailable in this area. Use the capture notes.";
+  if (!active.value) return `${new Set(missionLocations.value.map(entry => entry.skillId)).size} matching skills in this area.`;
   if (active.value.points.length === 0) return "Boss position unavailable. Use the encounter notes.";
   if (active.value.mapId !== props.view.mapId) return `Target is in ${guildWarsMapName(active.value.mapId)}.`;
-  if (!props.view.mission) return "Open the mission map to see tracked bosses.";
-  if (!props.view.mission.transform) return "Boss markers are unavailable in this area. Use the capture notes.";
+  if (!props.view.mission) return "Open the mission map to see capture locations.";
   return "Known spawn location; this is not a live boss position.";
 });
 async function showWiki(location: EliteLocation, page: "boss" | "skill") {
@@ -107,12 +132,13 @@ async function showWiki(location: EliteLocation, page: "boss" | "skill") {
   try { await props.openWiki(location, page); }
   catch { wikiProblem.value = "The wiki could not open. Try the link again."; }
 }
-function setOpen(value: boolean, keyboard = false) {
-  open.value = value; preview.value = null;
+function setOpen(value: boolean, keyboard = false, remember = true) {
+  if (remember) updatePreferences({ panelOpen: value });
+  keepPreview(); open.value = value; preview.value = null;
   emit("openChange", value);
   if (keyboard) void nextTick(() => {
-    const target = value ? selectedId.value === null ? searchInput.value : detailBack.value
-      : mapTrigger.value ?? manageTracked.value;
+    const target = value ? selectedId.value === null ? filters.value?.searchInput : detailBack.value
+      : mapTrigger.value;
     target?.focus({ preventScroll: true });
   });
 }
@@ -121,32 +147,53 @@ function browse(event?: MouseEvent) {
 }
 function find(id: number) {
   if (!ELITE_LOCATIONS.some((entry) => entry.skillId === id)) return;
-  selectedId.value = id; search.value = "";
+  selectedId.value = id;
+  focusSkill(id);
   browse();
 }
 function selectLocation(location: EliteLocation, keyboard = false) {
+  resultsScroll = panel.value?.scrollTop ?? resultsScroll;
   selectedId.value = location.skillId;
+  void nextTick(() => { if (panel.value) panel.value.scrollTop = 0; });
   setOpen(true, keyboard);
 }
-function inspect(location: EliteLocation | null, x: number, y: number) {
-  preview.value = location ? { location, x: Math.max(8, Math.min(window.innerWidth - 312, x + 20)),
-    y: Math.max(8, Math.min(window.innerHeight - 350, y + 16)) } : null;
+function inspect(location: EliteLocation | null, x: number, y: number, keyboard = false) {
+  if (!location) { hidePreview(); return; }
+  keepPreview();
+  const next = { location, x: Math.max(8, Math.min(window.innerWidth - 328, x + 20)),
+    y: Math.max(8, Math.min(window.innerHeight - 200, y + 16)), keyboard };
+  preview.value = next;
+  const shown = preview.value;
+  void nextTick(() => {
+    if (preview.value !== shown || !previewElement.value) return;
+    next.y = Math.max(8, Math.min(next.y, window.innerHeight - previewElement.value.offsetHeight - 8));
+    preview.value = { ...next };
+  });
 }
 function inspectRow(location: EliteLocation, event: PointerEvent | FocusEvent) {
   if (!(event.currentTarget instanceof HTMLElement)) return;
   const box = event.currentTarget.getBoundingClientRect();
-  inspect(location, box.left - 332, box.top - 16);
+  inspect(location, box.left - 352, box.top - 16, event.type === "focus");
 }
 function showDetails(id: number, event: MouseEvent) {
+  resultsScroll = panel.value?.scrollTop ?? 0;
   selectedId.value = id; preview.value = null;
-  if (event.detail === 0) void nextTick(() => detailBack.value?.focus({ preventScroll: true }));
+  void nextTick(() => {
+    if (panel.value) panel.value.scrollTop = 0;
+    if (event.detail === 0) detailBack.value?.focus({ preventScroll: true });
+  });
+}
+function focusSkill(id: number) {
+  updatePreferences({ search: "", focusedSkill: id, professions: { kind: "all" }, region: "", mode: "browse", hideLearned: false, worldMap: true });
 }
 function back(event?: MouseEvent) {
   const id = selectedId.value;
   selectedId.value = null;
-  if (event?.detail === 0) void nextTick(() => {
+  void nextTick(() => {
+    if (panel.value) panel.value.scrollTop = resultsScroll;
+    if (event?.detail !== 0) return;
     const row = root.value?.querySelector<HTMLButtonElement>(`[data-skill-id="${id}"]`);
-    (row ?? searchInput.value)?.focus({ preventScroll: true });
+    (row ?? filters.value?.searchInput)?.focus({ preventScroll: true });
   });
 }
 function close(event?: MouseEvent) {
@@ -155,43 +202,51 @@ function close(event?: MouseEvent) {
 }
 function cannotCapture(location: EliteLocation) { return /impossible to capture/i.test(location.note ?? ""); }
 function toggleTrack(id: number) { void plan.change({ kind: tracked(id) ? "remove" : "track", skillId: id }); }
-watch(character, () => { selectedId.value = null; preview.value = null; });
-watch(() => props.view.world, (value, previous) => { if (!value && previous) setOpen(false); });
-watch(() => props.view.mission, (value, previous) => { if (!value && previous) preview.value = null; });
-let choseDefaultProfession = false;
-watch(() => party.value.player?.professions, (pair) => {
-  if (!choseDefaultProfession && pair) { profession.value = pair[0]; choseDefaultProfession = true; }
-}, { immediate: true });
-onBeforeUnmount(plan.dispose);
+watch(character, () => { selectedId.value = null; preview.value = null; resultsScroll = 0; setOpen(false, false, false); });
+watch(() => [Boolean(props.view.world), loaded.value] as const, ([world, ready], [previous]) => {
+  if (!world && previous) setOpen(false, false, false);
+  else if (world && ready) setOpen(preferences.value.panelOpen, false, false);
+});
+watch(() => props.view.mission, (value, previous) => {
+  if (!value && previous) { preview.value = null; if (!props.view.world) setOpen(false, false, false); }
+});
+onBeforeUnmount(() => { keepPreview(); plan.dispose(); });
 defineExpose({ find, close });
 </script>
 <template>
-  <div ref="root" class="elite-skills-root">
-    <EliteMarkers v-if="view.world && showWorldMarkers" :surface="view.world" :locations="open ? worldLocations : ELITE_LOCATIONS.filter(entry => tracked(entry.skillId) && eliteContinent(entry.region) === view.world?.continent)"
-      :active-location="tracking.activeLocation" :catalogue="catalogue" label="Elite capture locations on world map" @select="selectLocation" @inspect="inspect" />
-    <EliteMarkers v-if="missionSurface && tracking.missionMap" :surface="missionSurface" :locations="missionLocations"
-      :active-location="tracking.activeLocation" :catalogue="catalogue" label="Tracked capture locations on mission map" @select="selectLocation" @inspect="inspect" />
-    <button v-if="view.world && !open" ref="mapTrigger" class="ui-button elite-map-trigger" :style="panelStyle" aria-label="Open Elite Skills" @click="browse">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 8 9-8 9-8-9Z"/><path d="M12 8v8M8 12h8"/></svg>
-      Elite skills <span v-if="tracking.skills.length">{{ tracking.skills.length }}</span>
-    </button>
+  <div ref="root" class="elite-skills-root" @keydown.esc="dismissPreview">
+    <EliteMarkers v-if="view.world && preferences.worldMap && (!character || loaded)" :surface="view.world" :locations="worldLocations"
+      :active-location="tracking.activeLocation" :preview-location-id="preview?.location.id ?? null" :catalogue="catalogue" label="Elite capture locations on world map" @select="selectLocation" @inspect="inspect" />
+    <EliteMarkers v-if="missionSurface && tracking.missionMap && (!character || loaded)" :surface="missionSurface" :locations="missionLocations"
+      :active-location="tracking.activeLocation" :preview-location-id="preview?.location.id ?? null" :catalogue="catalogue" label="Elite capture locations on mission map" @select="selectLocation" @inspect="inspect" />
+    <div v-if="(view.world || view.mission) && !open" class="ui-frame elite-map-summary" :style="view.world ? panelStyle : trackerStyle">
+      <label class="elite-visibility" title="Show elites on this map"><input type="checkbox" aria-label="Show elites" :checked="view.world ? preferences.worldMap : tracking.missionMap" :disabled="!!character && !loaded"
+        @change="view.world ? updatePreferences({ worldMap: !preferences.worldMap }) : plan.change({ kind: 'mission-map', show: !tracking.missionMap })"></label>
+      <button ref="mapTrigger" class="ui-button elite-map-trigger" aria-label="Open Elite Skills" :aria-expanded="false"
+        :title="[filterSummary, view.mission && !view.world ? [active?.boss, missionMessage].filter(Boolean).join(' · ') : ''].filter(Boolean).join(' — ')" @click="browse">
+        Elite skills<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg>
+      </button>
+      <span v-if="problem" class="elite-summary-problem" role="alert" :title="loaded ? 'Changes are not saved. Open Elite Skills to retry.' : 'Your setup could not load. Open Elite Skills to retry.'"
+        :aria-label="loaded ? 'Changes are not saved. Open Elite Skills to retry.' : 'Your setup could not load. Open Elite Skills to retry.'">!</span>
+    </div>
     <section v-if="open" class="ui-frame elite-panel" :style="panelStyle" aria-label="Elite skills">
       <header class="ui-panel-head">
-        <button v-if="detailsSkill" ref="detailBack" class="ui-button elite-back" @click="back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg>Back to skills</button>
+        <button v-if="detailsSkill" ref="detailBack" class="ui-button elite-back" @click="back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg>Back to results</button>
         <h2 v-else>Elite skills</h2>
-        <button class="ui-button" aria-label="Close Elite Skills" @click="close">Close</button>
+        <button class="ui-button" aria-label="Collapse Elite Skills" @click="close">Collapse</button>
       </header>
+      <div ref="panel" class="ui-scroll elite-panel-content">
       <div v-if="problem" class="elite-message" role="alert">
         <p>{{ problem }}</p><button class="ui-button" :disabled="busy" @click="plan.retry">Retry</button>
-        <button v-if="loaded" class="ui-link" @click="plan.dismissError">Keep saved plan</button>
+        <button v-if="loaded" class="ui-link" @click="plan.dismissError">Restore saved setup</button>
       </div>
       <p v-if="wikiProblem" class="elite-message" role="alert">{{ wikiProblem }}</p>
       <div v-if="catalogueProblem" class="elite-message" role="status"><p>{{ catalogueProblem }}</p><button class="ui-link" @click="reloadSkills">Reload skills</button></div>
       <p v-if="catalogueVersion === 0 && !catalogueProblem" class="elite-save-state" role="status">Loading skill details…</p>
       <p v-if="!view.characterKey" class="elite-message">Select a PvE character to save a capture plan. You can still browse.</p>
-      <p v-else-if="busy" class="elite-save-state" role="status">{{ loaded ? 'Saving plan…' : 'Loading your plan…' }}</p>
+      <p v-else class="elite-save-state" role="status">{{ busy ? loaded ? 'Saving setup…' : 'Loading your setup…' : problem ? 'Changes not saved' : 'Saved for this character' }}</p>
       <template v-if="detailsSkill">
-        <div class="elite-detail-toolbar"><button class="ui-button" :aria-pressed="tracked(detailsSkill.id)" :disabled="blocked" @click="toggleTrack(detailsSkill.id)">{{ tracked(detailsSkill.id) ? 'Stop tracking skill' : 'Track skill' }}</button></div>
+        <div class="elite-detail-toolbar"><button class="ui-button" :aria-pressed="tracked(detailsSkill.id)" :disabled="blocked" @click="toggleTrack(detailsSkill.id)">{{ tracked(detailsSkill.id) ? 'Stop tracking skill' : 'Track skill' }}</button><button class="ui-button" :disabled="!!character && !loaded" @click="focusSkill(detailsSkill.id)">Show only this skill</button></div>
         <div class="ui-scroll elite-detail-scroll">
           <SkillDetails :skill="detailsSkill" />
           <p class="elite-learned" :data-learned="learned(detailsSkill.id)">{{ learned(detailsSkill.id) === 'learned' ? 'Learned by this character' : learned(detailsSkill.id) === 'not-learned' ? 'Not learned by this character' : 'Learned status unavailable' }}</p>
@@ -208,19 +263,14 @@ defineExpose({ find, close });
         </div>
       </template>
       <template v-else>
-        <div class="elite-search-controls">
-          <label class="elite-search"><span class="elite-field-label">Search skill, boss or area</span><input ref="searchInput" v-model="search" type="search" class="ui-input" placeholder="Try Eviscerate or a boss name" /></label>
-          <div class="elite-filters"><label><span class="elite-field-label">Profession</span><select v-model="profession" class="ui-select"><option value="">All professions</option><option v-for="(facts, name) in PROFESSIONS" :key="name" :value="name">{{ facts.name }}</option></select></label>
-            <label><span class="elite-field-label">Capture region</span><select v-model="region" class="ui-select"><option value="">All regions</option><option v-for="name in ELITE_REGIONS" :key="name">{{ name }}</option></select></label></div>
-          <label class="elite-check"><input v-model="hideLearned" type="checkbox" /> Hide learned skills</label>
-          <p v-if="!party.characterSkills" class="elite-support">Learned status unavailable. All matching skills stay visible.</p>
-          <div class="elite-modes" role="group" aria-label="Skills to show"><button class="ui-button" :aria-pressed="mode === 'browse'" @click="mode = 'browse'">Browse</button><button class="ui-button" :aria-pressed="mode === 'tracked'" @click="mode = 'tracked'">Tracked <span>{{ tracking.skills.length }}</span></button></div>
-        </div>
+        <EliteFilters ref="filters" :preferences="preferences" :tracked-count="tracking.skills.length" :disabled="!!character && !loaded"
+          :my-professions="party.player?.professions ?? null" :learned-available="!!party.characterSkills" :summary="filterSummary"
+          @change="updatePreferences" @reset="resetFilters" />
         <div class="elite-results-heading"><span>{{ results.length }} {{ results.length === 1 ? 'skill' : 'skills' }}</span></div>
-        <div class="ui-scroll elite-results">
-          <div v-if="!results.length" class="ui-empty"><strong>{{ mode === 'tracked' && !tracking.skills.length ? 'Plan your first capture' : 'No matching skills' }}</strong><p>{{ mode === 'tracked' && !tracking.skills.length ? 'Browse skills and track one you want to learn.' : 'Try another name or clear the filters.' }}</p><button class="ui-button" @click="search = ''; profession = ''; region = ''; mode = 'browse'; hideLearned = false">Show all skills</button></div>
+        <div class="elite-results">
+          <div v-if="!results.length" class="ui-empty"><strong>{{ preferences.mode === 'tracked' && !tracking.skills.length ? 'Plan your first capture' : 'No matching skills' }}</strong><p>{{ preferences.mode === 'tracked' && !tracking.skills.length ? 'Browse skills and track one you want to learn.' : 'Try another name or clear the filters.' }}</p><button class="ui-button" @click="resetFilters">Show all skills</button></div>
           <div v-for="result in results" :key="result.skill.id" class="elite-result">
-            <button class="elite-result-main" :data-skill-id="result.skill.id" @click="showDetails(result.skill.id, $event)" @pointerenter="inspectRow(result.locations[0]!, $event)" @pointerleave="preview = null" @focus="inspectRow(result.locations[0]!, $event)" @blur="preview = null">
+            <button class="elite-result-main" :data-skill-id="result.skill.id" :aria-describedby="preview?.location.skillId === result.skill.id ? 'elite-skill-preview' : undefined" @click="showDetails(result.skill.id, $event)" @pointerenter="inspectRow(result.locations[0]!, $event)" @pointerleave="hidePreview" @focus="inspectRow(result.locations[0]!, $event)" @blur="hidePreview">
               <span class="ui-slot elite-skill-icon" :data-profession="result.skill.profession" data-elite><img v-if="result.skill.iconUrl" :src="result.skill.iconUrl" alt="" draggable="false"><span v-else>{{ result.skill.profession?.slice(0, 1) ?? '?' }}</span></span>
               <span><strong>{{ result.skill.name }}</strong><small>{{ result.skill.profession ? PROFESSIONS[result.skill.profession].name : 'Profession unavailable' }} · {{ result.locations.length }} {{ result.locations.length === 1 ? 'location' : 'locations' }}</small><small v-if="learned(result.skill.id) === 'learned'">Learned</small></span>
             </button>
@@ -228,20 +278,19 @@ defineExpose({ find, close });
           </div>
         </div>
       </template>
+      </div>
       <footer class="elite-panel-footer">
-        <label class="elite-check"><input type="checkbox" :checked="tracking.missionMap" :disabled="blocked" @change="plan.change({ kind: 'mission-map', show: !tracking.missionMap })"> Show tracked on mission map</label>
+        <label class="elite-check"><input type="checkbox" :checked="tracking.missionMap" :disabled="blocked" @change="plan.change({ kind: 'mission-map', show: !tracking.missionMap })"> Show elites on mission map</label>
         <p v-if="active">{{ missionMessage }}</p>
         <p v-else-if="!view.world">Open the world map to view capture locations.</p>
-        <label class="elite-check"><input v-model="markersEnabled" type="checkbox"> Show world map markers</label>
+        <label class="elite-check"><input type="checkbox" :checked="preferences.worldMap" :disabled="!!character && !loaded" @change="updatePreferences({ worldMap: !preferences.worldMap })"> Show world map markers</label>
       </footer>
     </section>
-    <aside v-if="view.mission && tracking.skills.length && !view.world && !open" class="ui-frame elite-mission-tracker" :style="trackerStyle" aria-label="Elite skill tracker">
-      <strong>{{ active ? skill(active.skillId).name : `${tracking.skills.length} tracked skills` }}</strong>
-      <span v-if="active">{{ active.boss }}</span><p>{{ missionMessage }}</p><button ref="manageTracked" class="ui-link" @click="mode = 'tracked'; browse($event)">Manage tracked skills</button>
-    </aside>
-    <aside v-if="preview" class="ui-frame elite-preview" :style="{ left: `${preview.x}px`, top: `${preview.y}px` }" role="tooltip">
-      <SkillDetails :skill="skill(preview.location.skillId)" />
-      <p>{{ preview.location.boss }} · {{ guildWarsMapName(preview.location.mapId) }}</p>
+    <aside v-if="preview" id="elite-skill-preview" ref="previewElement" class="ui-frame elite-preview" :data-keyboard="preview.keyboard ? '' : undefined" @pointerenter="keepPreview" @pointerleave="hidePreview" :style="{ left: `${preview.x}px`, top: `${preview.y}px` }" role="tooltip">
+      <div class="ui-scroll elite-preview-content">
+        <SkillDetails :skill="skill(preview.location.skillId)" />
+        <p>{{ preview.location.boss }} · {{ guildWarsMapName(preview.location.mapId) }}</p>
+      </div>
     </aside>
   </div>
 </template>

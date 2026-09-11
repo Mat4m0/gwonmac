@@ -6,7 +6,7 @@ import { describe, it } from "node:test";
 import { ELITE_LOCATIONS } from "../../src/shared/elite-locations.js";
 import { EliteTrackingStore } from "../../src/main/core/elite-tracking.js";
 import {
-  EMPTY_ELITE_TRACKING, changeEliteTracking, eliteContinent, eliteLearned, parseEliteTracking, parseEliteUpdate,
+  DEFAULT_ELITE_VIEW, EMPTY_ELITE_TRACKING, changeEliteTracking, eliteContinent, eliteLearned, parseEliteTracking, parseEliteUpdate,
 } from "../../src/shared/elite-skills.js";
 import { travelCharacterKey } from "../../src/shared/travel-history.js";
 
@@ -61,6 +61,45 @@ describe("elite capture plans", () => {
       assert.deepEqual(await restart.get(join(dir, "profile-b.json"), characterA), EMPTY_ELITE_TRACKING);
       await writeFile(path, "broken");
       assert.deepEqual(await restart.get(path, characterA), EMPTY_ELITE_TRACKING);
+    } finally { await rm(dir, { recursive: true, force: true }); }
+  });
+});
+
+
+describe("elite view persistence", () => {
+  it("validates bounded preferences and rejects malformed or unknown choices", () => {
+    const valid = { ...DEFAULT_ELITE_VIEW, search: "Hundred Blades", professions: { kind: "custom", values: ["W", "R"] } };
+    const parse = (view: unknown) => parseEliteUpdate({ characterKey: characterA, change: { kind: "view", view } });
+    assert.doesNotThrow(() => parse(valid));
+    for (const patch of [
+      { search: "x".repeat(201) }, { search: 1 }, { region: "Unknown" }, { worldMap: 1 }, { panelOpen: null },
+      { hideLearned: "yes" }, { mode: "all" }, { focusedSkill: -1 }, { focusedSkill: 1.5 }, { extra: true },
+      { professions: { kind: "custom", values: [] } }, { professions: { kind: "custom", values: ["W", "W"] } },
+      { professions: { kind: "custom", values: ["Warrior"] } }, { professions: { kind: "mine", values: ["W"] } },
+    ]) assert.throws(() => parse({ ...valid, ...patch }));
+    assert.throws(() => changeEliteTracking(EMPTY_ELITE_TRACKING,
+      { kind: "view", view: { ...DEFAULT_ELITE_VIEW, focusedSkill: 9999 } }, ELITE_LOCATIONS));
+  });
+  it("restores all preferences after a store restart without replacing capture plans", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "gwonmac-elite-view-"));
+    const path = join(dir, "tracking.json");
+    try {
+      // Existing capture plans can have no saved map preferences.
+      await writeFile(path, JSON.stringify({ formatVersion: 1, characters: {
+        [characterA]: { skills: [338], activeLocation: lissah.id, missionMap: false },
+      } }));
+      const store = new EliteTrackingStore();
+      assert.deepEqual((await store.get(path, characterA)).view, DEFAULT_ELITE_VIEW);
+      const view = { ...DEFAULT_ELITE_VIEW, search: "Hundred Blades", professions: { kind: "mine" as const },
+        panelOpen: true, worldMap: false, region: "Cantha" as const, hideLearned: false, mode: "tracked" as const };
+      await store.update(path, { characterKey: characterA, change: { kind: "view", view } });
+      const restart = new EliteTrackingStore();
+      const saved = await restart.get(path, characterA);
+      assert.deepEqual(saved.view, view);
+      assert.deepEqual(saved.skills, [338]);
+      assert.equal(saved.activeLocation, lissah.id);
+      assert.equal(saved.missionMap, false);
+      assert.deepEqual(await restart.get(path, characterB), EMPTY_ELITE_TRACKING);
     } finally { await rm(dir, { recursive: true, force: true }); }
   });
 });

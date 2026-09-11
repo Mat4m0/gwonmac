@@ -2,24 +2,38 @@
 .elite-skills-root { position: fixed; inset: 0; z-index: 4; pointer-events: none; color: var(--ui-text); font: var(--ui-font-size) / var(--ui-line-height) var(--ui-font); }
 .elite-skills-root *, .elite-skills-root *::before, .elite-skills-root *::after { box-sizing: border-box; }
 .elite-skills-root svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-.elite-panel, .elite-map-trigger { position: fixed; top: 16px; right: 16px; pointer-events: auto; }
-.elite-map-trigger { display: flex; align-items: center; gap: var(--ui-space-2); }
+.elite-skills-root .elite-panel, .elite-skills-root .elite-map-summary { position: fixed; top: 16px; right: 16px; pointer-events: auto; }
+.elite-map-summary { display: flex; align-items: center; width: max-content; max-width: calc(100vw - 24px); padding: 4px; background: var(--ui-panel-fill); }
+.elite-visibility { display: grid; place-items: center; width: 40px; height: 40px; cursor: pointer; }
+.elite-visibility input { margin: 0; accent-color: var(--ui-accent); cursor: inherit; }
+.elite-map-trigger { display: inline-flex; align-items: center; gap: var(--ui-space-2); min-height: 40px; white-space: nowrap; }
+.elite-map-trigger svg { width: 14px; height: 14px; }
+.elite-summary-problem { padding-inline: var(--ui-space-2); color: var(--ui-accent); font-weight: bold; }
 .elite-panel { display: flex; flex-direction: column; width: min(356px, calc(100vw - 24px)); max-height: calc(100dvh - 32px); background: var(--ui-panel-fill); overflow: hidden; }
 .elite-panel .ui-panel-head { position: sticky; top: 0; z-index: 3; background-color: var(--ui-panel-fill); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+.elite-panel-content { min-height: 0; overflow-y: auto; flex: 1; }
 .elite-panel h2 { margin: 0; color: var(--ui-text-bright); font-size: var(--ui-font-size-lg); }
 .elite-back { display: inline-flex; align-items: center; gap: var(--ui-space-1); }
-.elite-search-controls { display: grid; gap: var(--ui-space-3); padding: var(--ui-space-4); }
-.elite-search, .elite-filters label { display: grid; gap: var(--ui-space-1); min-width: 0; }
+.elite-search-controls { border: 0; margin: 0; min-width: 0; display: grid; gap: var(--ui-space-3); padding: var(--ui-space-4); }
+.elite-search { display: grid; gap: var(--ui-space-1); min-width: 0; }
 .elite-field-label { color: var(--ui-text-muted); font-size: var(--ui-font-size-sm); }
-.elite-search input, .elite-filters select { width: 100%; min-width: 0; }
-.elite-filters { display: grid; grid-template-columns: 1fr 1fr; gap: var(--ui-space-2); }
+.elite-search input, .elite-search select { width: 100%; min-width: 0; }
+.elite-profession-controls { display: grid; gap: var(--ui-space-2); }
+.elite-profession-choices { display: grid; grid-template-columns: 1fr 1fr; gap: var(--ui-space-2); padding-block: var(--ui-space-2); }
+.elite-active-filters { display: flex; align-items: baseline; gap: var(--ui-space-2); font-size: var(--ui-font-size-sm); color: var(--ui-text-muted); }
+.elite-active-filters span { flex: 1; overflow-wrap: anywhere; }
+.elite-active-filters button { flex-shrink: 0; }
+.elite-clear-search { justify-self: start; }
+.elite-more-filters summary { cursor: pointer; color: var(--ui-text-muted); font-size: var(--ui-font-size-sm); }
+.elite-more-filters[open] summary { margin-bottom: var(--ui-space-2); }
 .elite-check { display: flex; align-items: center; gap: var(--ui-space-2); font-size: var(--ui-font-size-sm); cursor: pointer; }
 .elite-check input { accent-color: var(--ui-accent); }
 .elite-modes { display: flex; gap: var(--ui-space-2); }
 .elite-modes .ui-button { flex: 1; }
+.elite-profession-controls .elite-modes .ui-button:nth-child(2) { flex: 1.7; }
 .elite-modes span { margin-left: var(--ui-space-2); font-variant-numeric: tabular-nums; }
 .elite-results-heading { display: flex; align-items: center; justify-content: space-between; padding: 0 var(--ui-space-4) var(--ui-space-2); color: var(--ui-text-muted); font-size: var(--ui-font-size-sm); }
-.elite-results { min-height: 100px; overflow-y: auto; flex: 1 1 auto; padding: 0 var(--ui-space-2) var(--ui-space-2); }
+.elite-results { padding: 0 var(--ui-space-2) var(--ui-space-2); }
 .elite-result { display: flex; align-items: center; min-height: 64px; border-bottom: 1px solid var(--ui-line); }
 .elite-result-main { display: flex; flex: 1; gap: var(--ui-space-3); padding: var(--ui-space-2); align-items: center; min-width: 0; text-align: left; color: var(--ui-text); background: transparent; border: 0; border-radius: var(--ui-radius-sm); font: inherit; cursor: pointer; }
 .elite-result-main:hover { background: var(--ui-hover); }
@@ -30,9 +44,8 @@
 .elite-skill-icon img { width: 100%; height: 100%; object-fit: cover; }
 .elite-track-button { width: 34px; padding: 6px; flex-shrink: 0; }
 .elite-track-button[aria-pressed="true"] svg { fill: var(--ui-accent); }
-.elite-detail-toolbar { display: flex; gap: var(--ui-space-2); justify-content: space-between; align-items: center; padding: var(--ui-space-3) var(--ui-space-4); }
-.elite-detail-scroll { min-height: 80px; overflow-y: auto; padding: var(--ui-space-4); }
-.skill-details { display: grid; gap: var(--ui-space-3); }
+.elite-detail-toolbar { display: flex; flex-wrap: wrap; gap: var(--ui-space-2); justify-content: space-between; align-items: center; padding: var(--ui-space-3) var(--ui-space-4); }
+.elite-detail-scroll { padding: var(--ui-space-4); }
 .elite-detail-scroll h3 { color: var(--ui-text-bright); font-size: var(--ui-font-size); margin: var(--ui-space-5) 0 var(--ui-space-2); }
 .elite-location { padding: var(--ui-space-3) 0; border-top: 1px solid var(--ui-line); }
 .elite-location-heading { display: flex; gap: var(--ui-space-2); justify-content: space-between; color: var(--ui-text-bright); }
@@ -56,21 +69,21 @@
 .elite-marker--active { outline: 2px solid var(--ui-accent); z-index: 1; }
 .elite-marker--outside { border-style: dashed; }
 .elite-marker-label { position: absolute; top: 32px; width: max-content; max-width: 180px; padding: 3px 6px; background: var(--ui-panel-fill); color: var(--ui-text-bright); font-size: var(--ui-font-size-sm); pointer-events: none; }
-.elite-mission-tracker { display: grid; gap: var(--ui-space-1); position: fixed; padding: var(--ui-space-3); background: var(--ui-panel-fill); pointer-events: auto; }
-.elite-mission-tracker strong { color: var(--ui-text-bright); }
-.elite-mission-tracker p { margin: var(--ui-space-1) 0; color: var(--ui-text-muted); font-size: var(--ui-font-size-sm); }
-.elite-mission-tracker .ui-link { justify-self: start; }
-.elite-preview { position: fixed; width: 300px; max-height: 340px; overflow: hidden; pointer-events: none; padding: var(--ui-space-4); background: var(--ui-panel-fill); z-index: 2; }
-.elite-preview > p { margin-bottom: 0; font-size: var(--ui-font-size-sm); color: var(--ui-text-muted); }
+.elite-preview { position: fixed; display: flex; width: min(320px, calc(100vw - 16px)); max-height: min(480px, calc(100dvh - 16px)); overflow: hidden; pointer-events: auto; background: var(--ui-panel-fill); z-index: 2; }
+.elite-preview-content { min-width: 0; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: var(--ui-space-4); flex: 1; }
+.elite-preview-content > p { margin-bottom: 0; font-size: var(--ui-font-size-sm); color: var(--ui-text-muted); }
 .elite-preview .inspector-identity { display: grid; }
 .elite-skills-root button:focus-visible { outline: 2px solid var(--ui-focus); outline-offset: 2px; }
-@media (max-width: 650px) { .elite-preview { display: none; } .elite-panel { right: 12px !important; } }
+@media (max-width: 650px) { .elite-panel { right: 12px !important; } }
 @media (max-height: 600px) { .elite-search-controls { gap: var(--ui-space-2); padding: var(--ui-space-2) var(--ui-space-3); } .elite-panel-footer { padding: var(--ui-space-2) var(--ui-space-3); } }
 
 .elite-panel .inspector-identity { display: grid; }
 
-/* Short native map frames scroll as one panel so errors cannot displace controls. */
-@media (max-height: 700px) {
-  .elite-panel { display: block; overflow-y: auto; }
-  .elite-panel .elite-results, .elite-panel .elite-detail-scroll { overflow: visible; min-height: 0; }
+/* Enter gently; native map closure still removes the preview in the same render. */
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .elite-preview:not([data-keyboard]) { transition: opacity 125ms cubic-bezier(0.19, 1, 0.22, 1), transform 125ms cubic-bezier(0.19, 1, 0.22, 1); }
+  @starting-style {
+    .elite-preview:not([data-keyboard]) { opacity: 0; transform: translateY(3px); }
+  }
 }
+.elite-result-main:hover .elite-skill-icon, .elite-result-main:focus-visible .elite-skill-icon { outline: 1px solid var(--ui-focus); outline-offset: 2px; }
