@@ -84,23 +84,18 @@ describe("Elite Skills", () => {
     expect(markers[0]?.outside).toBe(true);
     expect(markers[0]!.x).toBeLessThan(view.mission!.box.width);
   });
-  it("keeps adjacent-cell groups separated and preserves the active target", () => {
+  it("keeps nearby and alternate positions as individual skill markers", () => {
     const surface = { box: { left: 0, top: 0, width: 400, height: 300 },
       transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 } };
     const locations = [
-      { ...lissah, id: 'a', points: [[35, 80]] as const },
+      { ...lissah, id: 'a', points: [[35, 80], [36, 80]] as const },
       { ...lissah, id: 'b', points: [[37, 80]] as const },
-      { ...lissah, id: 'c', points: [[72, 80]] as const },
     ];
     const markers = eliteMarkers(locations, surface, 'b');
-    expect(markers[0]!.active).toBe(true);
-    expect(markers[0]!.locations[0]!.id).toBe('b');
-    expect(markers.flatMap(marker => marker.locations).map(location => location.id).sort()).toEqual(['a', 'b', 'c']);
-    for (const [index, marker] of markers.entries()) {
-      for (const other of markers.slice(index + 1)) {
-        expect(Math.abs(marker.x - other.x) >= 36 || Math.abs(marker.y - other.y) >= 36).toBe(true);
-      }
-    }
+    expect(markers.map(marker => [marker.key, marker.x, marker.location.id])).toEqual([
+      ['a:0', 35, 'a'], ['a:1', 36, 'a'], ['b:0', 37, 'b'],
+    ]);
+    expect(markers.filter(marker => marker.active).map(marker => marker.location.id)).toEqual(['b']);
   });
   it("maintains keyboard focus through opening, details, back, and collapse", async () => {
     const wrapper = await planner();
@@ -108,10 +103,11 @@ describe("Elite Skills", () => {
     await wrapper.get('input[type="search"]').setValue('Eviscerate');
     const row = wrapper.get('.elite-result-main');
     await row.trigger('click', { detail: 0 });
-    expect(document.activeElement).toBe(wrapper.get('.elite-detail-toolbar .ui-link').element);
-    await wrapper.get('.elite-detail-toolbar .ui-link').trigger('click', { detail: 0 });
+    expect(document.activeElement).toBe(wrapper.get('.elite-back').element);
+    await wrapper.get('.elite-back').trigger('click', { detail: 0 });
     expect(document.activeElement).toBe(wrapper.get('.elite-result-main').element);
-    await wrapper.get('[aria-label="Collapse Elite Skills"]').trigger('click', { detail: 0 });
+    expect(wrapper.get<HTMLInputElement>('input[type="search"]').element.value).toBe('Eviscerate');
+    await wrapper.get('[aria-label="Close Elite Skills"]').trigger('click', { detail: 0 });
     expect(document.activeElement).toBe(wrapper.get('.elite-map-trigger').element);
     wrapper.unmount();
   });

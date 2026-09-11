@@ -29,7 +29,6 @@ const region = ref("");
 const hideLearned = ref(true);
 const mode = ref<"browse" | "tracked">("browse");
 const selectedId = ref<number | null>(null);
-const group = ref<readonly EliteLocation[] | null>(null);
 const root = ref<HTMLElement | null>(null);
 const mapTrigger = ref<HTMLButtonElement | null>(null);
 const detailBack = ref<HTMLButtonElement | null>(null);
@@ -66,7 +65,7 @@ const matching = computed(() => {
 });
 const results = computed(() => {
   const bySkill = new Map<number, EliteLocation[]>();
-  for (const entry of group.value ?? matching.value) {
+  for (const entry of matching.value) {
     const entries = bySkill.get(entry.skillId) ?? [];
     entries.push(entry); bySkill.set(entry.skillId, entries);
   }
@@ -76,7 +75,7 @@ const results = computed(() => {
 const selectedLocations = computed(() => ELITE_LOCATIONS.filter((entry) => entry.skillId === selectedId.value)
   .sort((a, b) => Number(b.mapId === props.view.mapId) - Number(a.mapId === props.view.mapId) || a.boss.localeCompare(b.boss)));
 const mapLocations = computed(() => selectedId.value !== null
-  ? selectedLocations.value : group.value ?? matching.value);
+  ? selectedLocations.value : matching.value);
 const worldLocations = computed(() => mapLocations.value.filter((entry) => eliteContinent(entry.region) === props.view.world?.continent));
 const missionLocations = computed(() => ELITE_LOCATIONS.filter((entry) => entry.mapId === props.view.mapId && tracked(entry.skillId)
   && (active.value?.skillId !== entry.skillId || active.value.id === entry.id)));
@@ -122,12 +121,11 @@ function browse(event?: MouseEvent) {
 }
 function find(id: number) {
   if (!ELITE_LOCATIONS.some((entry) => entry.skillId === id)) return;
-  selectedId.value = id; group.value = null; search.value = "";
+  selectedId.value = id; search.value = "";
   browse();
 }
-function selectLocations(locations: readonly EliteLocation[], keyboard = false) {
-  if (locations.length === 1) { selectedId.value = locations[0]!.skillId; group.value = null; }
-  else { selectedId.value = null; group.value = locations; }
+function selectLocation(location: EliteLocation, keyboard = false) {
+  selectedId.value = location.skillId;
   setOpen(true, keyboard);
 }
 function inspect(location: EliteLocation | null, x: number, y: number) {
@@ -145,7 +143,7 @@ function showDetails(id: number, event: MouseEvent) {
 }
 function back(event?: MouseEvent) {
   const id = selectedId.value;
-  selectedId.value = null; group.value = null;
+  selectedId.value = null;
   if (event?.detail === 0) void nextTick(() => {
     const row = root.value?.querySelector<HTMLButtonElement>(`[data-skill-id="${id}"]`);
     (row ?? searchInput.value)?.focus({ preventScroll: true });
@@ -157,7 +155,6 @@ function close(event?: MouseEvent) {
 }
 function cannotCapture(location: EliteLocation) { return /impossible to capture/i.test(location.note ?? ""); }
 function toggleTrack(id: number) { void plan.change({ kind: tracked(id) ? "remove" : "track", skillId: id }); }
-watch([search, profession, region, mode], () => { group.value = null; });
 watch(character, () => { selectedId.value = null; preview.value = null; });
 watch(() => props.view.world, (value, previous) => { if (!value && previous) setOpen(false); });
 let choseDefaultProfession = false;
@@ -170,17 +167,18 @@ defineExpose({ find, close });
 <template>
   <div ref="root" class="elite-skills-root">
     <EliteMarkers v-if="view.world && showWorldMarkers" :surface="view.world" :locations="open ? worldLocations : ELITE_LOCATIONS.filter(entry => tracked(entry.skillId) && eliteContinent(entry.region) === view.world?.continent)"
-      :active-location="tracking.activeLocation" :catalogue="catalogue" label="Elite capture locations on world map" @select="selectLocations" @inspect="inspect" />
+      :active-location="tracking.activeLocation" :catalogue="catalogue" label="Elite capture locations on world map" @select="selectLocation" @inspect="inspect" />
     <EliteMarkers v-if="missionSurface && tracking.missionMap" :surface="missionSurface" :locations="missionLocations"
-      :active-location="tracking.activeLocation" :catalogue="catalogue" label="Tracked capture locations on mission map" @select="selectLocations" @inspect="inspect" />
+      :active-location="tracking.activeLocation" :catalogue="catalogue" label="Tracked capture locations on mission map" @select="selectLocation" @inspect="inspect" />
     <button v-if="view.world && !open" ref="mapTrigger" class="ui-button elite-map-trigger" :style="panelStyle" aria-label="Open Elite Skills" @click="browse">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 8 9-8 9-8-9Z"/><path d="M12 8v8M8 12h8"/></svg>
       Elite skills <span v-if="tracking.skills.length">{{ tracking.skills.length }}</span>
     </button>
     <section v-if="open" class="ui-frame elite-panel" :style="panelStyle" aria-label="Elite skills">
       <header class="ui-panel-head">
-        <div><h2>Elite skills</h2><p>Find your next capture</p></div>
-        <button class="ui-button" data-icon aria-label="Collapse Elite Skills" @click="close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+        <button v-if="detailsSkill" ref="detailBack" class="ui-button elite-back" @click="back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg>Back to skills</button>
+        <h2 v-else>Elite skills</h2>
+        <button class="ui-button" aria-label="Close Elite Skills" @click="close">Close</button>
       </header>
       <div v-if="problem" class="elite-message" role="alert">
         <p>{{ problem }}</p><button class="ui-button" :disabled="busy" @click="plan.retry">Retry</button>
@@ -192,8 +190,7 @@ defineExpose({ find, close });
       <p v-if="!view.characterKey" class="elite-message">Select a PvE character to save a capture plan. You can still browse.</p>
       <p v-else-if="busy" class="elite-save-state" role="status">{{ loaded ? 'Saving plan…' : 'Loading your plan…' }}</p>
       <template v-if="detailsSkill">
-        <div class="elite-detail-toolbar"><button ref="detailBack" class="ui-link" @click="back">Back to results</button>
-          <button class="ui-button" :aria-pressed="tracked(detailsSkill.id)" :disabled="blocked" @click="toggleTrack(detailsSkill.id)">{{ tracked(detailsSkill.id) ? 'Stop tracking skill' : 'Track skill' }}</button></div>
+        <div class="elite-detail-toolbar"><button class="ui-button" :aria-pressed="tracked(detailsSkill.id)" :disabled="blocked" @click="toggleTrack(detailsSkill.id)">{{ tracked(detailsSkill.id) ? 'Stop tracking skill' : 'Track skill' }}</button></div>
         <div class="ui-scroll elite-detail-scroll">
           <SkillDetails :skill="detailsSkill" />
           <p class="elite-learned" :data-learned="learned(detailsSkill.id)">{{ learned(detailsSkill.id) === 'learned' ? 'Learned by this character' : learned(detailsSkill.id) === 'not-learned' ? 'Not learned by this character' : 'Learned status unavailable' }}</p>
@@ -218,7 +215,7 @@ defineExpose({ find, close });
           <p v-if="!party.characterSkills" class="elite-support">Learned status unavailable. All matching skills stay visible.</p>
           <div class="elite-modes" role="group" aria-label="Skills to show"><button class="ui-button" :aria-pressed="mode === 'browse'" @click="mode = 'browse'">Browse</button><button class="ui-button" :aria-pressed="mode === 'tracked'" @click="mode = 'tracked'">Tracked <span>{{ tracking.skills.length }}</span></button></div>
         </div>
-        <div class="elite-results-heading"><span>{{ group ? 'Locations in this group' : `${results.length} ${results.length === 1 ? "skill" : "skills"}` }}</span><button v-if="group" class="ui-link" @click="group = null">All results</button></div>
+        <div class="elite-results-heading"><span>{{ results.length }} {{ results.length === 1 ? 'skill' : 'skills' }}</span></div>
         <div class="ui-scroll elite-results">
           <div v-if="!results.length" class="ui-empty"><strong>{{ mode === 'tracked' && !tracking.skills.length ? 'Plan your first capture' : 'No matching skills' }}</strong><p>{{ mode === 'tracked' && !tracking.skills.length ? 'Browse skills and track one you want to learn.' : 'Try another name or clear the filters.' }}</p><button class="ui-button" @click="search = ''; profession = ''; region = ''; mode = 'browse'; hideLearned = false">Show all skills</button></div>
           <div v-for="result in results" :key="result.skill.id" class="elite-result">

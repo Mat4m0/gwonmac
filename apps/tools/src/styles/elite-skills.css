@@ -5,9 +5,9 @@
 .elite-panel, .elite-map-trigger { position: fixed; top: 16px; right: 16px; pointer-events: auto; }
 .elite-map-trigger { display: flex; align-items: center; gap: var(--ui-space-2); }
 .elite-panel { display: flex; flex-direction: column; width: min(356px, calc(100vw - 24px)); max-height: calc(100dvh - 32px); background: var(--ui-panel-fill); overflow: hidden; }
-.elite-panel .ui-panel-head { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+.elite-panel .ui-panel-head { position: sticky; top: 0; z-index: 3; background-color: var(--ui-panel-fill); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
 .elite-panel h2 { margin: 0; color: var(--ui-text-bright); font-size: var(--ui-font-size-lg); }
-.elite-panel header p { margin: 3px 0 0; color: var(--ui-text-muted); font-size: var(--ui-font-size-sm); }
+.elite-back { display: inline-flex; align-items: center; gap: var(--ui-space-1); }
 .elite-search-controls { display: grid; gap: var(--ui-space-3); padding: var(--ui-space-4); }
 .elite-search, .elite-filters label { display: grid; gap: var(--ui-space-1); min-width: 0; }
 .elite-field-label { color: var(--ui-text-muted); font-size: var(--ui-font-size-sm); }
@@ -52,10 +52,9 @@
 .elite-markers { position: fixed; pointer-events: none; overflow: hidden; }
 .elite-marker { position: absolute; display: grid; place-items: center; width: 28px; height: 28px; padding: 2px; transform: translate(-50%, -50%); border: 1px solid var(--ui-outline); background: var(--ui-panel-fill); border-radius: var(--ui-radius-sm); color: var(--ui-text-bright); pointer-events: auto; cursor: pointer; }
 .elite-marker img { width: 22px; height: 22px; }
-.elite-marker:hover { z-index: 2; outline: 2px solid var(--ui-focus); }
+.elite-marker:hover, .elite-marker:focus-visible { z-index: 2; outline: 2px solid var(--ui-focus); }
 .elite-marker--active { outline: 2px solid var(--ui-accent); z-index: 1; }
 .elite-marker--outside { border-style: dashed; }
-.elite-marker-count { font: var(--ui-font-size-sm) var(--ui-font-mono); }
 .elite-marker-label { position: absolute; top: 32px; width: max-content; max-width: 180px; padding: 3px 6px; background: var(--ui-panel-fill); color: var(--ui-text-bright); font-size: var(--ui-font-size-sm); pointer-events: none; }
 .elite-mission-tracker { display: grid; gap: var(--ui-space-1); position: fixed; padding: var(--ui-space-3); background: var(--ui-panel-fill); pointer-events: auto; }
 .elite-mission-tracker strong { color: var(--ui-text-bright); }

@@ -87,8 +87,8 @@ weight families use the same semantic weight tokens at 500, 600, and 700.
 
 Elite skills extends the shared frames, controls, skill slots, and skill details.
 Classic, Modern, and Custom keep the same layout and interaction. Interface
-type serves controls, Reading serves encounter notes, and Data serves marker
-counts. Capture data and tracking behavior belong in
+type serves controls and Reading serves encounter notes. Capture data and
+tracking behavior belong in
 [`docs/elite-skills.md`](../../docs/elite-skills.md).
 
 - Anchor the trigger and planner inside the world map's upper-right corner.
@@ -99,12 +99,14 @@ counts. Capture data and tracking behavior belong in
   errors, search, results, and footer remain reachable. At taller heights,
   results and details scroll inside the panel. Hide pointer previews at
   narrow widths (650px or less).
-- Keep markers compact (28px). Combine nearby locations into a counted,
-  selectable group, including neighbors across grouping-cell boundaries.
+- Keep each known position as an individual skill icon (28px). Do not combine
+  nearby markers into numbers or add an intermediate group view.
   Distinguish the active boss with an accent outline and text label; a target
   outside the view uses a dashed edge marker and an explicit label.
 - Hover or keyboard focus previews a skill; activation opens persistent
   details. Keep previews non-interactive. Search and selection are immediate.
+- Keep **Back to skills** and **Close** in a sticky header, including short
+  windows. Returning to skills preserves search and filters.
 - Keyboard opening moves focus to search or the detail Back control. Back
   restores the result row when available, and closing returns focus to the
   map trigger or tracker control. Buttons use the shared bright two-pixel
