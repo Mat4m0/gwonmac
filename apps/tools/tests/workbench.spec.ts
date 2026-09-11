@@ -320,7 +320,7 @@ test("uses the inline catalogue for filters, mechanics, elite replacement, and k
   await expect(page.locator(".skill-result .ui-chip").filter({ hasText: "Elite" }).first()).toBeVisible();
   await page.getByRole("searchbox", { name: "Search skills" }).fill("Cry of Frustration");
   await page.locator(".skill-result").first().click();
-  await expect(page.getByText("Recharge", { exact: true })).toBeVisible();
+  await expect(page.getByRole("img", { name: "Recharge", exact: true })).toBeVisible();
   await expect(page.locator(".skill-description")).toContainText(
     "Cry of Frustration demonstrates the client-owned skill description",
   );
