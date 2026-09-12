@@ -67,13 +67,74 @@ test("the Guild Wars nibble stream decodes every printable ASCII glyph", () => {
 });
 
 test("alternating runs cannot overrun a glyph", () => {
-  // top=0, width=2, height=2, mode=0, then runs of two lit and two clear.
+  // top=0, width=2, height=2, mode=0, then runs of two clear and two lit.
   const glyphs = decodeGameFontRange(repeatedGlyph([0x10, 0x01, 0x11]));
-  assert.deepEqual([...glyphs[0]!.pixels], [0xff, 0xff, 0x00, 0x00]);
+  assert.deepEqual([...glyphs[0]!.pixels], [0x00, 0x00, 0xff, 0xff]);
   assert.throws(
     () => decodeGameFontRange(repeatedGlyph([0x00, 0x00, 0x1f])),
     /run exceeds its bitmap/,
   );
+});
+
+test("binary symbols preserve the first run's polarity in both strikes", () => {
+  // Synthetic 3x3 + and = masks, plus solid | and _ strokes. These exercise
+  // both starting alphas without including any proprietary glyph bytes.
+  const plus = packedNibbles([0, 2, 2, 0, 0, 0, 0, 2, 0, 0, 0]);
+  const equals = packedNibbles([0, 2, 2, 15, 2, 2, 2]);
+  const bar = packedNibbles([0, 0, 2, 15, 2]);
+  const underscore = packedNibbles([3, 2, 0, 15, 2]);
+  const masks = new Map([
+    ["+", { bytes: plus, pixels: [0, 255, 0, 255, 255, 255, 0, 255, 0] }],
+    ["=", { bytes: equals, pixels: [255, 255, 255, 0, 0, 0, 255, 255, 255] }],
+    ["|", { bytes: bar, pixels: [255, 255, 255] }],
+    ["_", { bytes: underscore, pixels: [255, 255, 255] }],
+  ]);
+  const source = Array.from({ length: GLYPH_COUNT }, () => plus);
+  for (const [character, mask] of masks) source[character.charCodeAt(0) - 0x21] = mask.bytes;
+  for (const strike of [undefined, GUILD_WARS_DISPLAY_FONT]) {
+    const glyphs = decodeGameFontRange(Uint8Array.from(source.flat()), strike);
+    for (const [character, mask] of masks) {
+      assert.deepEqual([...glyphs[character.charCodeAt(0) - 0x21]!.pixels], mask.pixels, character);
+    }
+  }
+});
+
+test("palette glyphs retain all alpha levels and endpoint runs", () => {
+  const source = packedNibbles([
+    0, 15, 2, 0, 1, // width=24, height=1, palette mode
+    0, 4, // five transparent pixels
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
+    15, 4, // five opaque pixels
+  ]);
+  for (let mode = 1; mode < 15; mode++) {
+    const variant = [...source];
+    variant[2] = (variant[2]! & 0xf0) | mode;
+    const glyphs = decodeGameFontRange(repeatedGlyph(variant));
+    assert.deepEqual([...glyphs[0]!.pixels], [
+      0, 0, 0, 0, 0,
+      0x66, 0x79, 0x8d, 0x97, 0xa5, 0xaf, 0xbd,
+      0xc6, 0xce, 0xd6, 0xde, 0xe7, 0xef, 0xf7,
+      255, 255, 255, 255, 255,
+    ]);
+  }
+});
+
+test("long binary runs cross rows without losing polarity", () => {
+  // 24x2 bitmap: 32 opaque pixels, then 16 transparent pixels.
+  const source = packedNibbles([0, 15, 2, 1, 15, 15, 15, 1, 15, 0]);
+  assert.deepEqual(
+    [...decodeGameFontRange(repeatedGlyph(source))[0]!.pixels],
+    [...Array<number>(32).fill(255), ...Array<number>(16).fill(0)],
+  );
+});
+
+test("truncated, extra, and incomplete ranges are refused", () => {
+  assert.throws(() => decodeGameFontRange(Uint8Array.of(0)), /ended inside a nibble/);
+  assert.throws(() => decodeGameFontRange(Uint8Array.of(0, 0xf0)), /ended inside a nibble/);
+  assert.throws(() => decodeGameFontRange(Uint8Array.of(0, 0xf0, 0)), /instead of 94/);
+  assert.throws(() => decodeGameFontRange(Uint8Array.from([
+    ...repeatedGlyph([0, 0xf0, 0]), 0, 0xf0, 0,
+  ])), /95 glyphs instead of 94/);
 });
 
 test("the converted result is a complete checksummed TrueType font", () => {
@@ -95,17 +156,17 @@ test("the original display strike builds as a separate browser family", () => {
     font,
     buildGuildWarsTrueType(repeatedGlyph([0x00, 0x10, 0x01]), {
       strike: GUILD_WARS_DISPLAY_FONT,
-      outlineThreshold: 0xe0,
+      outlineThreshold: 0xc4,
     }),
   );
 });
 
 test("the measured contour remains the default and calibration inputs are bounded", () => {
-  const strike = repeatedGlyph([0x00, 0x00, 0x00]);
+  const strike = repeatedGlyph([0x00, 0xf0, 0x00]);
   const font = buildGuildWarsTrueType(strike);
   assert.deepEqual(
     font,
-    buildGuildWarsTrueType(strike, { outlineThreshold: 0xa0 }),
+    buildGuildWarsTrueType(strike, { outlineThreshold: 0xb4 }),
   );
   assert.notDeepEqual(
     font,
@@ -134,6 +195,39 @@ test("a narrow numeral gets balanced proportional spacing", () => {
   const advance = (character: string) =>
     font.readUInt16BE(hmtx + glyphId(character) * 4);
   assert.ok(advance("1") < advance("2"));
+});
+
+test("every character maps to an outline with its actual left bearing", () => {
+  // Give each character a stem at a different inset. Check the encoded cmap,
+  // metrics and outline together so an otherwise valid font cannot silently
+  // shift punctuation or map a symbol to the next character.
+  const source = Array.from({ length: GLYPH_COUNT }, (_, index) => {
+    const inset = index % 4;
+    const pixels = Array.from({ length: 7 }, (_, x) => x === inset ? 15 : 0);
+    return packedNibbles([0, 6, 0, 1, ...pixels.flatMap((alpha) => [alpha, 0])]);
+  });
+  const font = buildGuildWarsTrueType(Uint8Array.from(source.flat()), {
+    outlineSampleScale: 1,
+  });
+  const cmap = tableOffset(font, "cmap") + 12;
+  const glyf = tableOffset(font, "glyf");
+  const loca = tableOffset(font, "loca");
+  const hmtx = tableOffset(font, "hmtx");
+  assert.equal(font.readUInt16BE(cmap), 4);
+  assert.equal(font.readUInt16BE(cmap + 14), 0x7e);
+  assert.equal(font.readUInt16BE(cmap + 20), 0x20);
+  const delta = font.readInt16BE(cmap + 24);
+  for (let character = 0x21; character <= 0x7e; character++) {
+    const id = character + delta;
+    assert.equal(id, character - 0x21 + 2);
+    const outline = glyf + font.readUInt32BE(loca + id * 4);
+    assert.equal(font.readInt16BE(outline), 1, `visible ${String.fromCharCode(character)}`);
+    const left = font.readInt16BE(outline + 2);
+    assert.equal(font.readInt16BE(hmtx + id * 4 + 2), left);
+    if (character < 0x30 || character > 0x39) {
+      assert.equal(left, Math.round(((character - 0x21) % 4) * 1024 / 24));
+    }
+  }
 });
 
 test("an unsupported font is refused once for its immutable client generation", async () => {

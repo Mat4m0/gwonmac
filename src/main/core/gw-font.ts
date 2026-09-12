@@ -61,9 +61,9 @@ export const GUILD_WARS_FONT_METRICS = GUILD_WARS_BODY_FONT;
 const MAX_RECTANGLES_PER_GLYPH = 2_048;
 const MAX_TOTAL_RECTANGLES = 65_536;
 const UNITS_PER_EM = 1024;
-// Measured by `pnpm font:calibrate` against the original grayscale strike.
-const BODY_OUTLINE_THRESHOLD = 0xa0;
-const DISPLAY_OUTLINE_THRESHOLD = 0xe0;
+// Measured by `pnpm font:calibrate` across all 94 decoded glyphs.
+const BODY_OUTLINE_THRESHOLD = 0xb4;
+const DISPLAY_OUTLINE_THRESHOLD = 0xc4;
 const OUTLINE_SAMPLE_SCALE = 4;
 
 export interface GameFontBuildOptions {
@@ -149,7 +149,7 @@ function decodeGlyph(
   while (written < pixelCount) {
     let length: number;
     if (mode === 0 || mode === 15) {
-      alpha ^= 0xff;
+      // The mode is the first run's alpha, not the previous run's alpha.
       length = input.run();
     } else {
       const value = input.read();
@@ -161,6 +161,7 @@ function decodeGlyph(
     }
     pixels.fill(alpha, written, written + length);
     written += length;
+    if (mode === 0 || mode === 15) alpha ^= 0xff;
   }
   return { glyph: { top, width, height, pixels }, bytes: input.bytesRead };
 }
@@ -267,8 +268,8 @@ function interpolatedAlpha(
 /**
  * Trace the game's grayscale mask on a quarter-pixel grid, then merge equal
  * horizontal runs into outline rectangles. The interpolation retains where a
- * soft edge crosses half opacity; tracing the source pixels directly produced
- * the visibly stepped curves the bitmap's alpha levels were meant to hide.
+ * soft edge crosses the calibrated threshold. Tracing source pixels directly
+ * produced the stepped curves the bitmap's alpha levels were meant to hide.
  */
 function bitmapRectangles(
   glyph: GameGlyph,
@@ -512,6 +513,11 @@ export function buildGuildWarsTrueType(
   }
   const advances = metrics.map(({ advance }) =>
     Math.max(1, Math.round(advance * UNITS_PER_EM / strike.em)));
+  // Use the outline's xMin as its left bearing to preserve the source inset
+  // and satisfy head's xMin/lsb flag. Zero shifts padded glyphs left in Chromium.
+  const leftBearings = glyfParts.map((glyph) => glyph.readInt16BE(2));
+  const rightBearings = glyfParts.map((glyph, index) =>
+    advances[index]! - glyph.readInt16BE(6));
   const maxRectangles = Math.max(0, ...rectangles.map((value) => value.length));
   const ascent = Math.round(strike.baseline * UNITS_PER_EM / strike.em);
   const descent = Math.round((strike.baseline - strike.em) * UNITS_PER_EM / strike.em);
@@ -537,9 +543,9 @@ export function buildGuildWarsTrueType(
   hhea.writeInt16BE(descent, 6);
   hhea.writeInt16BE(lineGap, 8);
   hhea.writeUInt16BE(Math.max(...advances), 10);
-  hhea.writeInt16BE(0, 12);
-  hhea.writeInt16BE(0, 14);
-  hhea.writeInt16BE(Math.max(...advances), 16);
+  hhea.writeInt16BE(Math.min(...leftBearings), 12);
+  hhea.writeInt16BE(Math.min(...rightBearings), 14);
+  hhea.writeInt16BE(Math.max(...glyfParts.map((glyph) => glyph.readInt16BE(6))), 16);
   hhea.writeInt16BE(1, 18);
   hhea.writeInt16BE(0, 20);
   hhea.writeUInt16BE(sourceGlyphs.length, 34);
@@ -562,7 +568,8 @@ export function buildGuildWarsTrueType(
     ["glyf", Buffer.concat(glyfParts)],
     ["head", head],
     ["hhea", hhea],
-    ["hmtx", Buffer.concat(advances.map((advance) => Buffer.concat([u16(advance), i16(0)])))],
+    ["hmtx", Buffer.concat(advances.map((advance, index) =>
+      Buffer.concat([u16(advance), i16(leftBearings[index]!)])))],
     ["loca", Buffer.concat(loca.map(u32))],
     ["maxp", maxp],
     ["name", nameTable(strike)],
