@@ -735,7 +735,7 @@
   to { opacity: 0.78; }
 }
 
-@container (max-width: 760px) {
+@container (max-width: 700px) {
   .trade-window { min-width: 0; }
   .trade-toolbar {
     grid-template-columns: 1fr;

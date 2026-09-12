@@ -60,6 +60,61 @@
   text-shadow: var(--ui-text-shadow);
 }
 
+/* The Classic reconstruction is decoration only. Its cut-out centre lets the
+ * saved panel opacity paint once. Modern retains the original CSS frame. */
+.ui-frame-artwork {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: var(--ui-z-frame);
+  display: var(--ui-art-display);
+}
+.ui-frame.ui-art-frame {
+  padding: var(--ui-art-padding);
+  background: var(--ui-art-fill);
+  box-shadow: var(--ui-art-shadow);
+}
+.ui-frame.ui-art-frame::before {
+  inset: var(--ui-art-surface-inset);
+  padding: var(--ui-art-surface-width);
+  border-radius: var(--ui-art-surface-radius);
+  background: var(--ui-art-surface-fill);
+  mask: var(--ui-art-surface-mask);
+  -webkit-mask: var(--ui-art-surface-mask);
+  z-index: var(--ui-art-surface-z);
+}
+.ui-frame.ui-art-frame::after { display: var(--ui-art-corners); }
+.ui-frame.ui-art-frame > .ui-window-head {
+  position: var(--ui-art-head-position);
+  inset: var(--ui-art-head-inset);
+  height: var(--ui-art-head-height);
+  min-height: var(--ui-art-head-min-height);
+  padding: var(--ui-art-head-padding);
+  border: var(--ui-art-head-border);
+  border-radius: var(--ui-art-head-radius);
+  background: var(--ui-art-head-fill);
+  box-shadow: var(--ui-art-head-shadow);
+}
+.ui-frame.ui-art-frame > .ui-window-head .ui-panel-title {
+  font-size: var(--ui-art-title-size);
+  line-height: var(--ui-type-body-line);
+}
+.ui-frame.ui-art-frame > .ui-window-head .ui-button {
+  min-height: var(--ui-art-head-control-height);
+}
+.ui-frame.ui-art-frame > .ui-window-head .ui-button[data-icon] {
+  width: var(--ui-art-head-control-height);
+}
+.ui-frame.ui-art-frame > .ui-window-head .ui-field-hint {
+  display: var(--ui-art-head-detail-display);
+}
+@media (forced-colors: active) {
+  .ui-frame-artwork { visibility: hidden; }
+  .ui-art-frame { outline: 1px solid CanvasText; }
+}
+
 /* Top-level task dialogs share one modal treatment. Their owners decide only
  * content, close policy, and initial focus; the renderer surface controller
  * owns backdrop dismissal, input isolation, and focus restoration. */

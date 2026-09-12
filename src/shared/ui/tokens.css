@@ -14,6 +14,31 @@
 :root {
   color-scheme: dark;
 
+  /* The artwork frame and CSS frame share one geometry/material projection. */
+  --ui-art-display: block;
+  --ui-art-padding: 48px 20px 24px;
+  --ui-art-fill: transparent;
+  --ui-art-shadow: none;
+  --ui-art-surface-inset: 46px 18px 16px;
+  --ui-art-surface-width: 0;
+  --ui-art-surface-radius: 0;
+  --ui-art-surface-fill: var(--ui-panel-fill);
+  --ui-art-surface-mask: none;
+  --ui-art-surface-z: -1;
+  --ui-art-corners: none;
+  --ui-art-head-position: absolute;
+  --ui-art-head-inset: 10px 20px auto;
+  --ui-art-head-height: 29px;
+  --ui-art-head-min-height: 0;
+  --ui-art-head-padding: 0 6px;
+  --ui-art-head-border: 0;
+  --ui-art-head-radius: 0;
+  --ui-art-head-fill: transparent;
+  --ui-art-head-shadow: none;
+  --ui-art-title-size: var(--ui-type-body-size);
+  --ui-art-head-control-height: 26px;
+  --ui-art-head-detail-display: none;
+
   /* Measured materials. */
   --gw-bone-hi: #f4efe2;
   --gw-bone: #d9d2c0;
@@ -328,6 +353,29 @@
  * chrome in favour of warm-black tonal depth and quiet gilt.
  * The selector lives here—and only here—so every surface changes together. */
 :root[data-ui-style="obsidian"] {
+  --ui-art-display: none;
+  --ui-art-padding: 6px 7px 8px;
+  --ui-art-fill: var(--ui-panel-fill);
+  --ui-art-shadow: 0 0 0 1px var(--ui-outline), inset 0 1px 0 var(--ui-edge-inner), var(--ui-frame-inset), var(--ui-shadow);
+  --ui-art-surface-inset: 0;
+  --ui-art-surface-width: var(--ui-frame-width);
+  --ui-art-surface-radius: var(--ui-radius-lg);
+  --ui-art-surface-fill: var(--ui-frame);
+  --ui-art-surface-mask: var(--ui-mask-paint) content-box, var(--ui-mask-paint);
+  --ui-art-surface-z: var(--ui-z-frame);
+  --ui-art-corners: block;
+  --ui-art-head-position: relative;
+  --ui-art-head-inset: auto;
+  --ui-art-head-height: auto;
+  --ui-art-head-min-height: 42px;
+  --ui-art-head-padding: 5px 9px;
+  --ui-art-head-border: var(--ui-frame-width) solid transparent;
+  --ui-art-head-radius: var(--ui-radius);
+  --ui-art-head-fill: var(--ui-title-fill) padding-box, var(--ui-frame) border-box;
+  --ui-art-head-shadow: var(--ui-title-shadow);
+  --ui-art-title-size: var(--ui-type-window-size);
+  --ui-art-head-control-height: var(--ui-control-height);
+  --ui-art-head-detail-display: block;
   --ui-border-width: 0px;
   --ui-frame-width: 0px;
 

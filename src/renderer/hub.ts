@@ -2,6 +2,7 @@
  * Owns the Core command palette, its search focus and transient modal lifetime.
  * Optional Tools contributes local results and views without entering Core's imports.
  */
+import { attachClassicFrame } from '../shared/ui/frame.js';
 import { resolveShortcuts, shortcutDisplay } from '../shared/keyboard-shortcuts.js';
 import { openHubSettings } from "./hub-settings.js";
 import { createHubAccounts } from './hub-accounts.js';
@@ -19,11 +20,11 @@ export function createHub(parent: HTMLElement) {
   root.dataset.page = "home";
   root.setAttribute('aria-label', 'Hub');
   root.innerHTML = `<section class="hub-panel ui-frame">
-    <header class="hub-heading"><button class="ui-button" data-variant="quiet" aria-label="Back" hidden>←</button><span class="hub-name">Hub</span><span class="hub-caption">Command palette</span><button class="ui-button hub-close" data-variant="quiet" aria-label="Close Hub">Esc</button></header>
+    <header class="hub-heading ui-window-head"><button class="ui-button" data-variant="quiet" aria-label="Back" hidden>←</button><span class="hub-name">Hub</span><span class="hub-caption">Command palette</span><button class="ui-button hub-close" data-icon aria-label="Close Hub" title="Close Hub (Escape)">×</button></header>
     <div class="hub-search"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 8 10-8 10L4 12 12 2Zm0 5v10M8 12h8"/></svg><input type="text" role="combobox" aria-label="Search people, places, builds" aria-autocomplete="list" aria-controls="hub-results" aria-expanded="true" placeholder="Search people, places, builds…" autocomplete="off" spellcheck="false" maxlength="120"></div>
     <div class="hub-rate-controls" hidden></div><div class="hub-results ui-scroll" id="hub-results" role="listbox" aria-label="Results"></div>
     <pre class="hub-preview ui-scroll" hidden></pre><div class="hub-view" hidden></div><p class="hub-status" role="status" hidden></p>
-    <footer class="hub-footer"><button class="hub-primary ui-button" data-variant="quiet"></button><span class="hub-count"></span><button class="hub-actions ui-button" data-variant="quiet">Actions</button></footer>
+    <footer class="hub-footer"><button class="hub-primary ui-button" data-variant="primary"></button><span class="hub-count"></span><button class="hub-actions ui-button" data-variant="quiet">Actions</button></footer>
   </section>`;
   parent.append(root);
   const required = <T extends Element>(selector: string) => {
@@ -31,6 +32,7 @@ export function createHub(parent: HTMLElement) {
     if (!element) throw new Error(`Hub control missing: ${selector}`);
     return element;
   };
+  const disposeFrame = attachClassicFrame(required<HTMLElement>('.hub-panel'));
   const input = required<HTMLInputElement>('input');
   const search = required<HTMLElement>('.hub-search');
   const list = required<HTMLElement>('.hub-results');
@@ -352,7 +354,7 @@ export function createHub(parent: HTMLElement) {
       disposeView = mount(content, back);
       if (!content.contains(document.activeElement)) content.querySelector<HTMLElement>('input,select,button,[tabindex="0"]')?.focus();
     },
-    dispose() { close(); for (const unsubscribe of sources.values()) unsubscribe(); sources.clear(); modal.dispose(); root.remove(); window.removeEventListener('blur', onBlur); window.removeEventListener('gw:tools-settings', onSettings); },
+    dispose() { close(); disposeFrame(); for (const unsubscribe of sources.values()) unsubscribe(); sources.clear(); modal.dispose(); root.remove(); window.removeEventListener('blur', onBlur); window.removeEventListener('gw:tools-settings', onSettings); },
   };
   presenter.attach(createHubAccounts(presenter, { get: () => window.gwNative.accounts.get(), open: request => window.gwNative.accounts.open(request) }));
   presenter.attach(createHubCalculator({

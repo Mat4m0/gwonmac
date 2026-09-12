@@ -31,6 +31,7 @@ import SkillBar from "./components/SkillBar.vue";
 import TeamDetail from "./components/TeamDetail.vue";
 import UiDialog from "./ui/UiDialog.vue";
 import { navigateRows, navigateTabs } from "./tab-keyboard";
+import { useClassicFrame } from "./ui/use-classic-frame";
 import { useFloatingWindow } from "./use-floating-window";
 
 const props = defineProps<{
@@ -247,6 +248,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKeydown);
 });
+useClassicFrame(panel);
 </script>
 
 <template>

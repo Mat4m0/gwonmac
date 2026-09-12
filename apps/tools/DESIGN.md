@@ -44,8 +44,9 @@ truth:
 2. **Semantic** owns paired surface/foreground roles, text roles, borders,
    selection, hover, pressed, focus, commands, feedback, and profession data.
 3. **Material** projects Classic or Modern paint, edge construction, radius,
-   and shadow onto those semantic roles. Material never changes layout,
-   density, typography, or behavior.
+   and shadow onto those semantic roles. Window chrome reserves space for the
+   Classic artwork or Modern title bar. Material does not change outer window
+   geometry, content ordering, typography preferences, or behavior.
 
 The four typography roles are Display for identity, Interface for labels and
 controls, Reading for prose and messages, and Data for codes, shortcuts,
@@ -62,7 +63,15 @@ weight families use the same semantic weight tokens at 500, 600, and 700.
 
 ## Component rules
 
-- Use `.ui-frame` for a framed panel.
+- Use `.ui-frame` for a framed panel. Hub and floating work windows attach
+  [`frame.ts`](../../src/shared/ui/frame.ts) for the accepted Classic artwork.
+  Vue windows use `useClassicFrame`. Both use the shared `--ui-art-*` chrome
+  projection. The canvas is decorative and is removed on disposal. Its empty
+  centre preserves one application of the saved panel material and opacity.
+  Source regions and asset notices are in the
+  [frame provenance](../../src/shared/ui/frame/README.md).
+- Embed tools without another outer frame, close control or resize grip.
+  Reparent the existing tool and preserve its state when docking or detaching.
 - Use `.ui-well` for a recessed content surface.
 - Use `.ui-raised` for a pressable raised surface.
 - Do not add a generic Card. Panes, sidebars, toolbars, and sections are

@@ -35,6 +35,8 @@ const ASSETS = [
 const SHARED_ASSETS = [
   ["src/shared/ui/tokens.css", "ui/tokens.css"],
   ["src/shared/ui/components.css", "ui/components.css"],
+  ["src/shared/ui/frame/body.png", "shared/ui/frame/body.png"],
+  ["src/shared/ui/frame/header.png", "shared/ui/frame/header.png"],
   ["src/shared/images/professions/1.png", "shared/images/professions/1.png"],
   ["src/shared/images/professions/2.png", "shared/images/professions/2.png"],
   ["src/shared/images/professions/3.png", "shared/images/professions/3.png"],
