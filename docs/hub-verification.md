@@ -401,3 +401,52 @@ kernel verifiers, arm64 packaging and both packaged smoke checks. Its local log
 is `/tmp/gwonmac-live-trade-fix-gate.log`. The final guard cancelling a queued
 item search when opening player listings was then checked with the 19-test Trade
 suite, targeted lint, a fresh development build and the live retest above.
+
+## Hub experience polish — 13 September 2026
+
+The follow-up implements the experience review in the existing app on
+`feat/hub-overhaul-flows`, preserving the fixed Guild Wars frame and the current
+feature/state owners:
+
+- `187c2fdc` contains team previews, clarifies Home/search/navigation, displays
+  resolved shortcuts, filters unavailable Home travel recents, and pairs each
+  Maps layer switch with its opacity control. Maps follows external settings
+  changes and restores the saved value after a failed edit, with an inline retry
+  path.
+- `59e73fd9` gives the Trade ledger and team roster more room. At the tested
+  1280 × 720 viewport, the Hub displays five complete Trade offers or three
+  complete team members with skill bars. Whisper seller remains primary;
+  secondary offer actions and team options expand on demand. Pop out and Open
+  in Hub retain the same tool, selected offer and team edits.
+- `6a5bf952` removes Back when a directly opened view has no parent, keeps the
+  narrow header usable, and adds the supported Trade query example.
+
+Browser exploration inspected Home, Trade actions, team search/editor and Maps.
+Focused regressions cover preview containment at 1280/640/390 widths, short
+windows, resolved and cleared shortcuts, command hints, Maps external updates
+and save recovery, Trade selection during docking, persisted team edits, and
+reachable team options/actions. These use synthetic game and market state; no
+Whisper, travel or build application was issued to the running game in this pass.
+
+### Verification provenance
+
+The complete `pnpm verify` gate passed at `59e73fd9` in a separate detached
+checkout: type checks, lint, links, 1,756 unit, 182 policy, 205 Tools, 81 Launcher,
+111 integration, 30 release/preload, 97 browser and 158 offline Electron checks
+(one live-only check skipped), both kernel verifiers, arm64 packaging and both
+packaged smoke checks. The log is `/tmp/gwonmac-hub-polish-verify.log`.
+
+The final navigation changes at `6a5bf952` passed `pnpm run check` with the same
+unit/policy/Tools/Launcher counts, a fresh production build, the compiled Electron
+Hub input/focus test, and the full 97-test browser suite. Packaging was not rerun
+for that final header/example adjustment. Final logs are
+`/tmp/gwonmac-polish-final-check.log`, `/tmp/gwonmac-polish-final-build.log`,
+`/tmp/gwonmac-polish-final-input.log` and
+`/tmp/gwonmac-polish-final-browser.log`.
+
+Local screenshots are retained in ignored `test-results/hub-polish/`. The
+synthetic browser preview is left running at `http://127.0.0.1:4194/?hub`.
+The existing live game process was preserved on its earlier build; this polish
+does not add evidence for live combat, graphics performance, VoiceOver or human
+usability acceptance. The temporary verification checkout is removed after its
+tests finish. All changes are local commits; no publication or merge is included.

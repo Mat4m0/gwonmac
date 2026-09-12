@@ -206,8 +206,19 @@ Use existing `pnpm run check`, the Tools Hub browser journeys after integration,
 - [WAI-ARIA combobox guidance](https://www.w3.org/WAI/ARIA/apg/patterns/combobox/) supports keeping text editing and result navigation distinct, with the active result exposed to assistive technology.
 - [WCAG contrast guidance](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html) supplies the text contrast thresholds. The local study demonstrates why game backdrops must be part of the comparison.
 
-## Scope and next action
+## Scope and delivery status
 
 Keep native DDS skin replacement, extra themes, new daily/planning features, framework migration and v2 out of this delivery. The HTML companion can match Guild Wars visually without changing ArenaNet's native interface textures.
 
-Start implementation with steps 1–4 as a bounded first milestone: preserve and integrate the Hub, establish baselines, then deliver Home and Travel in the original frame. Review that actual working result before extending the same system to the remaining flows. This establishes both visual fidelity and usable interaction early, while the current owners and player data remain intact.
+The integrated overhaul and the follow-up polish are implemented in the existing
+gwonmac app as of 13 September 2026. The original frame, shared controls and
+existing feature owners now cover the journeys above. The post-playtest polish
+adds compact team previews, more visible Trade offers and team members, clear
+Back/Actions/Pop out behavior, Home context and command examples, and paired Maps
+layer/opacity controls. Task state remains with the existing tools when they move
+between Hub and floating presentation.
+
+The [verification record](hub-verification.md) distinguishes the earlier live
+outpost checks from the final polish's browser, offline Electron and packaging
+evidence. These local commits are ready for review; release publication and human
+gameplay/accessibility acceptance remain separate from implementation completion.
