@@ -1,11 +1,13 @@
 /** Exercises the production timer surface and settings through offline Electron. */
 import { expect, test, type Page } from "@playwright/test";
-import { closeOffline, launchOffline, launchPlayableClient } from "./fixtures.mjs";
+import { closeOffline, launchOffline } from "./fixtures.mjs";
 
 type OverlayModule = typeof import("../../src/renderer/alcohol-timer-overlay.js");
 type Timer = ReturnType<OverlayModule["createAlcoholTimerOverlay"]>;
 declare global { interface Window { alcoholFixture: Timer } }
+// The overlay consumes supplied snapshots; these tests need only the offline shell.
 async function showTimer(page: Page) {
+  await expect(page.locator("#loading-label")).toHaveText("Game data could not be prepared.");
   await page.evaluate(async () => {
     document.getElementById("loading")?.classList.add("gone");
     const url: string = "gw://app/alcohol-timer-overlay.js";
@@ -25,7 +27,7 @@ async function showTimer(page: Page) {
   });
 }
 test("timer dragging, cancellation, stable corner, locking and reload", async () => {
-  const fixture = await launchPlayableClient("gw-alcohol-position-");
+  const fixture = await launchOffline("gw-alcohol-position-");
   try {
     const { page } = fixture;
     await showTimer(page);
@@ -83,7 +85,7 @@ test("timer dragging, cancellation, stable corner, locking and reload", async ()
 });
 
 test("timer picks the bottom-right corner and preserves gaps through resize and lock", async () => {
-  const fixture = await launchPlayableClient("gw-alcohol-corner-");
+  const fixture = await launchOffline("gw-alcohol-corner-");
   try {
     const { page } = fixture;
     await showTimer(page);
@@ -122,7 +124,7 @@ test("timer picks the bottom-right corner and preserves gaps through resize and 
 });
 
 test("legacy Effects offsets migrate once without following later effect rows", async () => {
-  const fixture = await launchPlayableClient("gw-alcohol-migration-");
+  const fixture = await launchOffline("gw-alcohol-migration-");
   try {
     const { page } = fixture;
     await page.evaluate(() => window.gwNative.settings.set({ alcoholTimerPosition: { x: 20, y: 10, locked: true } }));
