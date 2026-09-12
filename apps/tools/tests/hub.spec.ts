@@ -1,5 +1,15 @@
 import { expect, test } from '@playwright/test';
 
+test('calculator retains labelled values when optional currency artwork fails', async ({ page }) => {
+  await page.route('**/images/currency/*.png*', route => route.abort());
+  await page.goto('/?hub');
+  await page.getByRole('combobox', { name: 'Search people, places, builds' }).fill('1250 gold in p');
+  const result = page.locator('#hub').getByRole('option');
+  await expect(result).toContainText('1.25 platinum');
+  await expect(result.locator('.hub-conversion-art')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Copy result/ })).toBeEnabled();
+});
+
 test('Hub searches, restores the query after actions, and hands off explicitly', async ({ page }) => {
   await page.goto('/?hub');
   const dialog = page.getByRole('dialog', { name: 'Hub', exact: true });
@@ -385,7 +395,7 @@ test('Travel Enter from an empty search uses the selected recent destination',as
 test('Travel carousel arrows browse without executing and preserve query caret editing',async({page})=>{
   await page.goto('/?hub');
   const root=page.getByRole('combobox',{name:'Search people, places, builds'});
-  await root.fill('travel');await root.press('ArrowRight');
+  await root.fill('travel');await root.press('Enter');
   const search=page.getByRole('combobox',{name:'Destination, phrase, or friend'});
   await expect(search).toBeFocused();
   await search.fill('kamadan');
@@ -393,9 +403,13 @@ test('Travel carousel arrows browse without executing and preserve query caret e
   await search.press('ArrowLeft');await expect(search).toHaveValue('kamadan');
   await expect(search).toBeVisible();
   await search.evaluate(element=>{if(element instanceof HTMLInputElement)element.setSelectionRange(0,0);});
-  await search.press('ArrowLeft');await expect(search).toHaveValue('');
+  await search.press('ArrowLeft');await expect(search).toHaveValue('kamadan');
+  await search.press('End');await search.press('ArrowRight');
+  await expect(search).toHaveValue('kamadan');
+  await expect(page.locator('#hub .hub-view')).toBeVisible();
+  await search.press('Escape');await expect(search).toHaveValue('');
   await search.press('Escape');await expect(root).toBeVisible();
-  await root.fill('travel');await root.press('ArrowRight');
+  await root.fill('travel');await root.press('Enter');
   await search.press('ArrowRight');
   await expect(page.locator('.travel-history [aria-selected=true]')).toContainText('Kaineng Center');
   await expect(page.locator('#hub .hub-view')).toBeVisible();
@@ -457,7 +471,8 @@ test('Hub keeps its geometry across results, conversations and compact carousels
       await expect(page.locator('#app')).not.toHaveAttribute('data-sends');
       await expect.poll(() => panel.boundingBox()).toEqual(size);
       await draft.evaluate(input => { if (input instanceof HTMLInputElement) input.setSelectionRange(0, 0); });
-      await draft.press('ArrowLeft'); await expect(picker).toBeFocused();
+      await draft.press('ArrowLeft'); await expect(draft).toBeFocused();
+      await draft.press('Escape'); await expect(picker).toBeFocused();
     }
     if (['travel', 'switch character', 'whispers'].includes(query)) await page.getByRole('button', { name: 'Back', exact: true }).click();
     await expect(search).toBeVisible();
@@ -523,6 +538,8 @@ test('chat pops out and returns to Hub without losing its draft', async ({ page 
   await search.fill('whisper Foo'); await search.press('Enter');
   const draft = page.getByRole('textbox', { name: 'Message foo', exact: true });
   await expect(draft).toBeFocused(); await draft.fill('Keep my draft');
+  await draft.press('Home'); await draft.press('ArrowLeft');
+  await expect(draft).toBeVisible(); await expect(draft).toHaveValue('Keep my draft');
   await page.getByRole('button', { name: 'Pop out chat', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Hub', exact: true })).not.toBeVisible();
   await expect(draft).toBeVisible(); await expect(draft).toHaveValue('Keep my draft');
@@ -637,4 +654,16 @@ test('shortcut recorder presents each modifier and captures without opening anot
   await page.getByRole('button', { name: 'Back', exact: true }).click();
   await search.fill('switch character');
   await expect(page.locator('.hub-row')).toContainText('⌃⌥⇧F12');
+});
+
+
+test('Hub text arrows cannot execute an action or clear a query', async ({ page }) => {
+  await page.goto('/?hub');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  await search.fill('kamadan');
+  await search.press('ArrowRight');
+  await expect(page.locator('#hub')).toBeVisible();
+  await expect(page.locator('#app')).not.toHaveAttribute('data-action', /Travel/);
+  await search.press('Home'); await search.press('ArrowLeft');
+  await expect(search).toHaveValue('kamadan');
 });

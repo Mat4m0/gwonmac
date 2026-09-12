@@ -2,6 +2,9 @@
 // page has no renderer, so it loads them here. Importing them from `mount.ts`
 // instead would bundle a second copy of the design system into the embedded
 // `tools-app.css`, which is exactly the drift this system exists to prevent.
+// The fixture uses the same packaged fallback as the renderer.
+// eslint-disable-next-line no-restricted-imports
+import "../../../src/renderer/fonts.css";
 import "@fontsource-variable/inter/wght.css";
 import "../../../src/shared/ui/tokens.css";
 import "../../../src/shared/ui/components.css";

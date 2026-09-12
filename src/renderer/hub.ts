@@ -59,7 +59,7 @@ export function createHub(parent: HTMLElement) {
   function remember() { history.push({ scope, query: input.value, selected, scroll: list.scrollTop, view: activeView }); }
   function restoreParent() {
     const parent = history.pop();
-    if (!parent) { home(); return; }
+    if (!parent) { close(); return; }
     resetView(); scope = parent.scope;
     if (parent.view && (!parent.view.available || parent.view.available())) { const view = parent.view; presenter.showView(view.title, view.mount, view.available); history.pop(); return; } input.value = parent.query; caption.textContent = scope?.title ?? 'Command palette'; backButton.hidden = !scope; root.dataset.page = scope ? 'section' : 'home';
     input.placeholder = scope ? 'Search actions…' : 'Search people, places, builds…'; report(''); refresh(true); select(parent.selected); list.scrollTop = parent.scroll; input.focus();
@@ -201,7 +201,7 @@ export function createHub(parent: HTMLElement) {
         const from = document.createElement('span'); from.className = 'hub-currency hub-currency-from'; from.textContent = row.conversion.from;
         const to = document.createElement('span'); to.className = 'hub-currency hub-currency-to'; to.textContent = row.conversion.to;
         arrow.textContent = '→'; option.append(title, detail, source, from, to, arrow);
-        for (const [url,side] of [[row.conversion.iconFrom,'from'],[row.conversion.iconTo,'to']] as const) { if (!url) continue; const art=document.createElement('img'); art.src=url; art.alt=''; art.className=`hub-conversion-art hub-conversion-art-${side}`; option.append(art); }
+        for (const [url,side] of [[row.conversion.iconFrom,'from'],[row.conversion.iconTo,'to']] as const) { if (!url) continue; const art=document.createElement('img'); art.onerror=() => art.remove(); art.src=url; art.alt=''; art.className=`hub-conversion-art hub-conversion-art-${side}`; option.append(art); }
       } else {
         const type = document.createElement('span'); type.className = 'hub-row-type'; type.textContent = row.group === 'Tools' ? 'Tool' : row.group === 'Commands' ? 'Command' : row.group === 'Places' ? 'Outpost' : row.group === 'Characters' ? 'Character' : '';
         option.append(hubIcon(document, row), title, detail, type);
@@ -277,19 +277,15 @@ export function createHub(parent: HTMLElement) {
   input.addEventListener('input', () => { report(''); refresh(true); });
   input.addEventListener('keydown', event => {
     if (event.isComposing) return;
-    const plain = !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey;
-    const atEnd = input.selectionStart === input.value.length && input.selectionEnd === input.value.length;
-    const atStart = input.selectionStart === 0 && input.selectionEnd === 0;
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault(); const index = rows.findIndex(row => row.id === selected);
       select(rows[(index + (event.key === 'ArrowDown' ? 1 : -1) + rows.length) % rows.length]?.id ?? null, true);
-    } else if (event.key === 'Enter' || (event.key === 'ArrowRight' && plain && atEnd)) { event.preventDefault(); if (!event.repeat) void run(); }
-    else if(event.key === 'ArrowLeft' && plain && atStart && !event.repeat){event.preventDefault();if(scope)back();else if(input.value){input.value='';refresh(true);}else close();}
+    } else if (event.key === 'Enter') { event.preventDefault(); if (!event.repeat) void run(); }
   });
   const actions = () => {
     if (!root.open || document.querySelector('dialog:modal') !== root) return false;
     if (disposeView) return true;
-    if (scope) { home(); return true; }
+    if (scope) { back(); return true; }
     const row = rows.find(row => row.id === selected);
     if (!row) return true;
     if (isHubShortcuts([{ id: row.id, phrase: '', pinned: false }])) {
@@ -304,9 +300,7 @@ export function createHub(parent: HTMLElement) {
       ]); return true;
     }
     if (row.actions) { row.actions(); return true; }
-    if (!scope) restoreQuery = input.value;
-    root.dataset.page = 'section'; scope = { title: row.title, rows: () => [row] }; caption.textContent = row.title;
-    backButton.hidden = false; input.placeholder = 'Search actions…'; input.value = ''; refresh(true); input.focus(); return true;
+    presenter.showRows(row.title, () => [row]); return true;
   };
   required<HTMLButtonElement>('.hub-actions').onclick = actions;
   required<HTMLButtonElement>('.hub-close').onclick = close;
@@ -335,15 +329,17 @@ export function createHub(parent: HTMLElement) {
       };
     },
     showRows(title: string, getRows: () => readonly HubRow[]) {
-      if (!root.open) show();
+      const fromOpenHub = root.open;
+      if (!fromOpenHub) show();
       if (!scope) restoreQuery = input.value;
-      remember(); resetView(); scope = { title, rows: getRows }; root.dataset.page = 'section'; caption.textContent = title;
+      if (fromOpenHub) remember(); resetView(); scope = { title, rows: getRows }; root.dataset.page = 'section'; caption.textContent = title;
       backButton.hidden = false; input.placeholder = 'Search actions…'; input.value = ''; report(''); refresh(true); input.focus();
     },
     showView(title: string, mount: (target: HTMLElement, back: () => void) => () => void, available?: () => boolean) {
-      if (!root.open) show();
+      const fromOpenHub = root.open;
+      if (!fromOpenHub) show();
       if (!scope) restoreQuery = input.value;
-      remember();
+      if (fromOpenHub) remember();
       resetView();
       returnFromView = restoreParent;
       root.dataset.page = 'section'; caption.textContent = title; backButton.hidden = false;

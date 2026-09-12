@@ -30,7 +30,7 @@ export function showWhispersInHub(hub: Hub, root: HTMLElement, parent: HTMLEleme
     });
     return () => {
       mounted = false; stop(); cancelAnimationFrame(frame); root.removeEventListener('gw:whispers-back', goBack); root.removeEventListener('gw:whispers-popout', popOut);
-      root.classList.remove('hub-embedded-host'); parent.append(root); session.setVisible(false);
+      session.setVisible(false); root.classList.remove('hub-embedded-host'); parent.append(root);
     };
   }, () => !!window.gwToolsSettings?.().gwonmacTools && !!window.gwToolsSettings?.().whispersEnabled);
 }
@@ -39,6 +39,10 @@ export function showWhispersInHub(hub: Hub, root: HTMLElement, parent: HTMLEleme
 export function toggleHubWhispers(event: Event, hub: Hub, root: HTMLElement, parent: HTMLElement, session: WhisperSession) {
   event.preventDefault();
   const intent = event instanceof CustomEvent ? event.detail : undefined;
+  if (intent !== 'show' && intent !== 'dock' && !session.state.poppedOut && root.closest('#hub') && hub.visible) {
+    hub.close();
+    return;
+  }
   if (intent === 'dock' || !session.state.poppedOut) {
     showWhispersInHub(hub, root, parent, session);
     return;

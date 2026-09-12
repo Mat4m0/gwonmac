@@ -85,6 +85,7 @@ export const appearanceVariables = (
     variables["--ui-title-fill"] = theme.windowGradient
       ? `linear-gradient(180deg, color-mix(in srgb, ${theme.titlebar} 92%, ${theme.border}), ${theme.titlebar} 38%, color-mix(in srgb, ${theme.titlebar} 78%, ${theme.recessed}))`
       : `linear-gradient(${theme.titlebar}, ${theme.titlebar})`;
+    if (theme.material === "classic") variables["--ui-art-head-fill"] = variables["--ui-title-fill"];
   }
   if (theme.surface !== baseline.surface) {
     const raisedFill = theme.material === "modern"

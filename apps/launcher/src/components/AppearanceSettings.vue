@@ -35,7 +35,7 @@ async function importTheme() {
   <h2 class="appearance-heading">In-game panels</h2>
   <p>Style, font, and opacity update gwonmac panels in every open game window. Guild Wars menus keep their own appearance.</p>
   <div class="setting-group">
-    <label><span><strong>Panel style</strong></span><select :value="settings.uiStyle" @change="persist({ uiStyle: ($event.currentTarget as HTMLSelectElement).value as UiStyle })"><option value="guild-wars">Guild Wars</option><option value="obsidian">Obsidian</option><option value="custom">Custom</option></select></label>
+    <label><span><strong>Panel style</strong></span><select :value="settings.uiStyle" @change="persist({ uiStyle: ($event.currentTarget as HTMLSelectElement).value as UiStyle })"><option value="guild-wars">Guild Wars</option><option value="obsidian">Modern</option><option value="custom">Custom</option></select></label>
     <label><span><strong>Panel font</strong></span><select :value="settings.uiFont" @change="persist({ uiFont: ($event.currentTarget as HTMLSelectElement).value as UiFont })"><option v-for="font in UI_FONTS" :key="font" :value="font">{{ fonts[font] }}</option></select></label>
     <div class="setting-row"><span><strong>Panel opacity</strong></span><RangeControl label="Panel opacity" :value="settings.uiPanelOpacity" :min="UI_PANEL_OPACITY_MIN" :max="UI_PANEL_OPACITY_MAX" unit="%" @change="persist({ uiPanelOpacity: $event })" /></div>
     <PanelStylePreview :settings="settings" />

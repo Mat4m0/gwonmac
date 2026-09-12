@@ -7,7 +7,8 @@
 <!-- These are the files the app ships. Not a copy, not a mockup: this page
      links the same two stylesheets `src/renderer/index.html` links, and the
      Tools app imports. If it drifts, it drifts in both. Open it straight from
-     disk; there is no build step. -->
+     the Tools Vite server; it also serves the shared frame module. -->
+<link rel="stylesheet" href="../src/renderer/fonts.css">
 <link rel="stylesheet" href="../src/shared/ui/tokens.css">
 <link rel="stylesheet" href="../src/shared/ui/components.css">
 
@@ -112,6 +113,26 @@
 </div>
 
 <main class="stage">
+  <section>
+    <p class="band">Hub frame and task controls</p>
+    <div id="classic-frame-specimen" class="ui-frame ui-panel" style="width:min(780px,100%);height:380px;box-sizing:border-box">
+      <header class="ui-panel-head ui-window-head">
+        <button class="ui-button" data-variant="quiet" aria-label="Back">←</button>
+        <h2 class="ui-panel-title">Hub</h2>
+        <button class="ui-button" data-icon aria-label="Close Hub">×</button>
+      </header>
+      <label class="ui-input-group" style="margin:8px 0"><span aria-hidden="true">⌕</span><input aria-label="Search Hub specimen" placeholder="Search people, places, builds…"></label>
+      <div class="ui-tabs"><button class="ui-tab" aria-selected="true">Tools</button><button class="ui-tab">Recent</button></div>
+      <div class="ui-list ui-scroll" style="flex:1">
+        <button class="ui-row" aria-selected="true"><span class="ui-row-title">Travel</span><span class="ui-row-meta">Destinations and friends</span></button>
+        <button class="ui-row"><span class="ui-row-title">Build Library</span><span class="ui-row-meta">Skills and teams</span></button>
+        <label class="ui-check"><input type="checkbox" checked>Remember recent destinations</label>
+        <p class="ui-field-hint">Choose an item, then use its named action.</p>
+        <p class="ui-field-error" role="status">The action could not finish. Your selection is kept.</p>
+      </div>
+      <footer class="ui-panel-foot"><span class="ui-kbd">↵</span><button class="ui-button" data-variant="primary">Browse travel</button><button class="ui-button" data-variant="quiet">Actions</button></footer>
+    </div>
+  </section>
 
   <section>
     <p class="band">Typography roles</p>
@@ -328,6 +349,10 @@
 
 </main>
 
+<script type="module">
+  import { attachClassicFrame } from '../src/shared/ui/frame.ts';
+  attachClassicFrame(document.getElementById('classic-frame-specimen'));
+</script>
 <script>
 const root = document.documentElement;
 const KNOBS = [

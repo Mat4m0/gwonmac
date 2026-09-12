@@ -633,11 +633,10 @@ function onKeydown(event: KeyboardEvent): void {
   if (!props.visible || event.isComposing) return;
   const plainArrow = !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey;
   const atStart = event.target === input.value && input.value?.selectionStart === 0 && input.value.selectionEnd === 0;
-  const atEnd = event.target === input.value && input.value?.selectionStart === query.value.length && input.value.selectionEnd === query.value.length;
   if (props.inset && mode.value === 'travel' && !hasQuery.value && event.target === input.value && plainArrow && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
     event.preventDefault(); void moveActive(event.key === 'ArrowRight' ? 1 : -1); return;
   }
-  if (event.key === "Escape" || (event.key === "ArrowLeft" && plainArrow && atStart)) {
+  if (event.key === "Escape" || (event.key === "ArrowLeft" && plainArrow && atStart && !hasQuery.value)) {
     event.preventDefault();
     if (mode.value === "customize") void selectMode("travel");
     else if (hasQuery.value) {
@@ -651,7 +650,7 @@ function onKeydown(event: KeyboardEvent): void {
     void moveActive(event.key === "ArrowDown" ? 1 : -1);
     return;
   }
-  if (mode.value === "travel" && event.target === input.value && (event.key === "Enter" || (event.key === "ArrowRight" && plainArrow && atEnd))) {
+  if (mode.value === "travel" && event.target === input.value && event.key === "Enter") {
     if (event.repeat) { event.preventDefault(); return; }
     if (activeDestination.value !== null
       && selectable(activeDestination.value)

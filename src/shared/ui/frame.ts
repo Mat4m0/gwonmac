@@ -10,6 +10,7 @@ export function attachClassicFrame(panel: HTMLElement): () => void {
   const canvas = panel.ownerDocument.createElement('canvas');
   canvas.className = 'ui-frame-artwork';
   canvas.setAttribute('aria-hidden', 'true');
+  panel.classList.add('ui-art-frame');
   panel.prepend(canvas);
   const body = new Image();
   const header = new Image();
@@ -73,13 +74,13 @@ export function attachClassicFrame(panel: HTMLElement): () => void {
 
   void Promise.all([body.decode(), header.decode()]).then(() => {
     if (disposed) return;
-    panel.classList.add('ui-art-frame');
     observer = new ResizeObserver(draw);
     observer.observe(canvas);
     window.addEventListener('resize', draw);
     watchRatio();
   }).catch(() => {
     // A missing decorative asset leaves the existing CSS frame and all controls.
+    panel.classList.remove('ui-art-frame');
     canvas.remove();
   });
   return () => {

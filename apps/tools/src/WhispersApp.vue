@@ -5,6 +5,7 @@ import { TRAVEL_DESTINATIONS } from "../../../src/shared/travel-destinations";
 import { hubMatch } from "../../../src/shared/hub";
 import { WHISPER_LINE_UNITS, WHISPER_MESSAGE_UNITS } from "../../../src/shared/whispers";
 import type { FriendPresence, TravelFriend } from "../../../src/shared/friends";
+import { useClassicFrame } from "./ui/use-classic-frame";
 import { useFloatingWindow } from "./use-floating-window";
 import {
   restoreFloatingPosition,
@@ -59,7 +60,7 @@ function collapse() {
 function hubNavigation(event: KeyboardEvent) {
   if (!inHub() || event.defaultPrevented || event.isComposing || event.altKey || event.metaKey || event.ctrlKey || event.shiftKey) return;
   const input = event.target instanceof HTMLInputElement ? event.target : null;
-  const left = event.key === 'ArrowLeft' && (!input || input.selectionStart === 0 && input.selectionEnd === 0);
+  const left = event.key === 'ArrowLeft' && (!input || !input.value && input.selectionStart === 0 && input.selectionEnd === 0);
   if (event.key !== 'Escape' && !left) return;
   event.preventDefault(); event.stopPropagation();
   if (selected.value) showPicker(); else collapse();
@@ -297,17 +298,18 @@ watch(() => [state.value.selected, selected.value?.messages.at(-1)?.id] as const
   if (follow) await latest();
   else markVisibleRead();
 });
-watch(visible, async value => {
-  if (!value) {
+// Capture before a synchronous Hub reparent changes the scroll geometry.
+watch(() => [visible.value, state.value.poppedOut] as const, async ([value], [wasVisible]) => {
+  if (wasVisible) {
     const log = activeLog();
     if (log && selected.value) scrollPositions.set(selected.value.key, log.scrollTop);
-    return;
   }
+  if (!value) return;
   await nextTick();
   const log = activeLog();
   if (log && selected.value) log.scrollTop = scrollPositions.get(selected.value.key) ?? log.scrollTop;
   markVisibleRead();
-});
+}, { flush: "sync" });
 
 let audio: AudioContext | null = null;
 let lastSoundId = Math.max(0, ...state.value.conversations.flatMap(c => c.messages.map(m => m.id)));
@@ -427,6 +429,7 @@ onBeforeUnmount(() => {
   document.removeEventListener("pointerdown", enableAudio); document.removeEventListener("keydown", enableAudio);
   void audio?.close();
 });
+useClassicFrame(panel);
 </script>
 
 <template>
@@ -437,6 +440,10 @@ onBeforeUnmount(() => {
     <span v-if="unread" class="whisper-badge" aria-hidden="true">{{ unread > 99 ? '99+' : unread }}</span>
   </button>
   <section v-show="visible" id="whisper-window" ref="panel" class="ui-frame ui-reading-surface whisper-window" data-variant="quiet" :style="windowStyle" :data-chat-selected="Boolean(selected)" aria-label="Whispers" @keydown="escapeOptions">
+    <header class="ui-panel-head ui-window-head whisper-frame-head" @pointerdown="startDrag">
+      <h2 class="ui-panel-title">Whispers</h2>
+      <button class="ui-button" data-icon aria-label="Hide Whispers" @click="session.setVisible(false)">×</button>
+    </header>
     <div class="whisper-layout">
     <div v-show="!selected" class="ui-scroll whisper-picker" :data-searching="Boolean(search.trim())">
       <form class="ui-input-group whisper-search" @submit.prevent="submitSearch"><label class="whisper-sr-only" for="whisper-person">Character name</label><input id="whisper-person" v-model="search" maxlength="20" placeholder="Find a friend…" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="whisper-suggestions" :aria-expanded="Boolean(search.trim() && suggestions.length)" :aria-activedescendant="suggestionIndex >= 0 ? `whisper-suggestion-${suggestionIndex}` : undefined" @input="searchInput" @keydown="searchKeydown"/><button data-variant="primary" class="ui-button whisper-control" type="submit" :disabled="!search.trim()" aria-label="Whisper"><span class="whisper-compose-label">Whisper</span><svg class="whisper-compose-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5 4 4M4 20l4-1L21 6l-4-4L4 15v5Zm7-16H4v7"/></svg></button></form>
@@ -535,7 +542,15 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.whisper-layout,.whisper-chat-pane { display:contents; }
+/* Chat keeps its own saved background strength. Its sections paint once inside
+ * the decorative frame; docking suppresses only the additional outer chrome. */
+.whisper-window.ui-art-frame { --ui-art-fill:transparent; --ui-art-surface-fill:transparent; box-shadow:var(--ui-art-shadow); }
+.whisper-window.ui-art-frame::before { background:var(--ui-art-surface-fill); }
+.whisper-frame-head { display:var(--ui-art-display); align-items:center; cursor:grab; }
+.whisper-frame-head .ui-panel-title { display:inline-block; width:calc(100% - 36px); font-family:var(--ui-font-display); }
+
+.whisper-layout { display:flex; flex-direction:column; flex:1; min-height:0; background:var(--whisper-panel-fill); }
+.whisper-chat-pane { display:contents; }
 .whisper-avatar,.whisper-hub-empty,.whisper-compose-icon,.whisper-popout-action,.whisper-return-action { display:none; }
 .ui-reading-surface { color: var(--ui-text); font: 14px/1.5 var(--ui-font-reading); font-synthesis: none; text-shadow: none; color-scheme: dark; }
 .ui-reading-surface *, .ui-reading-surface *::before, .ui-reading-surface *::after { box-sizing: border-box; text-shadow: none; }
@@ -547,7 +562,7 @@ onBeforeUnmount(() => {
 .ui-reading-surface input::placeholder { color: var(--ui-text-muted); opacity: 1; }
 .whisper-window { --whisper-background-percent: 100%; --whisper-panel-fill: color-mix(in srgb, var(--ui-panel-fill) var(--whisper-background-percent), transparent); --whisper-well-fill: color-mix(in srgb, var(--ui-well) var(--whisper-background-percent), transparent); --whisper-incoming-fill: color-mix(in srgb, color-mix(in srgb, var(--ui-info) 12%, var(--ui-well)) var(--whisper-background-percent), transparent); --whisper-outgoing-fill: color-mix(in srgb, color-mix(in srgb, var(--ui-success) 16%, var(--ui-well)) var(--whisper-background-percent), transparent); --whisper-edge: color-mix(in srgb, var(--ui-outline) var(--whisper-background-percent), transparent); --whisper-line: color-mix(in srgb, var(--ui-line-soft) var(--whisper-background-percent), transparent); position: fixed; width: 340px; height: 360px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); display: flex; flex-direction: column; pointer-events: auto; isolation: isolate; background: transparent; box-shadow: 0 0 0 1px var(--whisper-edge); }
 .whisper-window::before { background: color-mix(in srgb, var(--ui-text-muted) var(--whisper-background-percent), transparent); }
-.whisper-head { display: flex; align-items: center; gap: 2px; min-height: 42px; padding: 4px 8px; border-bottom: 1px solid var(--whisper-line); background: var(--whisper-panel-fill); border-radius: var(--ui-radius) var(--ui-radius) 0 0; cursor: grab; }
+.whisper-head { display: flex; align-items: center; gap: 2px; min-height: 42px; padding: 4px 8px; border-bottom: 1px solid var(--whisper-line); background: transparent; border-radius: var(--ui-radius) var(--ui-radius) 0 0; cursor: grab; }
 .whisper-heading { flex: 1; min-width: 0; margin: 0 6px; display: flex; align-items: baseline; gap: 8px; }
 .whisper-head h2 { min-width: 0; font: var(--ui-font-weight-semibold) 15px/1.3 var(--ui-font-interface); color: var(--ui-text-bright); margin: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .whisper-heading[data-conversation] h2 { color: var(--ui-chat-incoming-accent); }
@@ -563,7 +578,7 @@ onBeforeUnmount(() => {
 .whisper-bubble { max-width: 80%; padding: 6px 10px; font-size: 13px; line-height: 1.4; background: var(--whisper-incoming-fill); box-shadow: inset 0 0 0 1px color-mix(in srgb, color-mix(in srgb, var(--ui-chat-incoming-accent) 18%, transparent) var(--whisper-background-percent), transparent); }
 .whisper-bubble[data-direction="outgoing"] { background: var(--whisper-outgoing-fill); box-shadow: inset 0 0 0 1px color-mix(in srgb, color-mix(in srgb, var(--ui-chat-outgoing-accent) 24%, transparent) var(--whisper-background-percent), transparent); }
 .whisper-picker, .whisper-transcript { overflow: auto; }
-.whisper-picker { padding: 10px 10px 12px; flex: 1; min-height: 0; background: var(--whisper-panel-fill); }
+.whisper-picker { padding: 10px 10px 12px; flex: 1; min-height: 0; background: transparent; }
 .whisper-search, .whisper-inline { display: flex; gap: 8px; }
 .whisper-search { padding: 4px; border-color: var(--whisper-edge); border-radius: var(--ui-radius); background: var(--whisper-well-fill); box-shadow: inset 0 0 0 1px var(--whisper-line); }
 .whisper-search input { flex: 1; padding: 4px 8px; }
@@ -585,14 +600,14 @@ onBeforeUnmount(() => {
 .whisper-presence[data-presence="offline"] { background: var(--ui-text-faint); }
 .whisper-status-copy { margin-left: 10px; color: var(--ui-text-muted) !important; }
 .whisper-conversation { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.whisper-transcript { flex: 1; min-height: 40px; padding: 12px 10px; overscroll-behavior: contain; scroll-padding-block: 12px; background: var(--whisper-panel-fill); box-shadow: inset 0 1px 0 var(--whisper-line), inset 0 -1px 0 var(--whisper-line); }
+.whisper-transcript { flex: 1; min-height: 40px; padding: 12px 10px; overscroll-behavior: contain; scroll-padding-block: 12px; background: transparent; box-shadow: inset 0 1px 0 var(--whisper-line), inset 0 -1px 0 var(--whisper-line); }
 .whisper-message { display: flex; flex-direction: column; align-items: flex-start; margin-top: 10px; }
 .whisper-message:first-of-type { margin-top: 0; }
 .whisper-message[data-grouped] { margin-top: 4px; }
 .whisper-message[data-direction="outgoing"] { align-items: flex-end; }
 .whisper-unread-marker { align-self: stretch; display: flex; align-items: center; gap: 12px; margin: 0 0 16px; color: var(--ui-chat-incoming-accent) !important; text-align: center; }
 .whisper-unread-marker::before, .whisper-unread-marker::after { content: ''; height: 1px; background: color-mix(in srgb, var(--ui-chat-incoming-accent) 42%, transparent); flex: 1; }
-.whisper-compose { padding: 8px 10px 10px; background: var(--whisper-panel-fill); }
+.whisper-compose { padding: 8px 10px 10px; background: transparent; }
 .whisper-input-row { display: flex; align-items: center; gap: 6px; padding: 4px; border-color: var(--whisper-edge); border-radius: var(--ui-radius-pill); background: var(--whisper-well-fill); box-shadow: inset 0 0 0 1px var(--whisper-line); }
 .whisper-input-row input { padding: 4px 8px; flex: 1; border-radius: var(--ui-radius-swell); }
 .whisper-input-row:has(input:focus-visible) { outline: 2px solid var(--ui-focus); outline-offset: 2px; }

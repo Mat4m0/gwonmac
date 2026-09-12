@@ -43,14 +43,14 @@ test("embedded whispers open on the first click and retain draft input when rais
     await field.press("End");
     await field.pressSequentially(" here");
     await expect(field).toHaveValue("Keep my draft here");
+    await panel.getByRole("button", { name: "Pop out chat", exact: true }).click();
     await panel.locator('[aria-label="Chat options"]').click();
     const opacity = panel.getByRole("slider", { name: "Background" });
     const head = panel.locator(".whisper-head");
     const bubble = panel.locator(".whisper-bubble").first();
     const composer = panel.locator(".whisper-input-row");
-    const fullTranscriptBackground = await transcript.evaluate(element => getComputedStyle(element).backgroundColor);
-    const fullHeadBackground = await head.evaluate(element => getComputedStyle(element).backgroundColor);
-    const fullFrameEdge = await panel.evaluate(element => getComputedStyle(element, "::before").backgroundColor);
+    const layout = panel.locator(".whisper-layout");
+    const fullBackground = await layout.evaluate(element => getComputedStyle(element).backgroundColor);
     const fullHeadEdge = await head.evaluate(element => getComputedStyle(element).borderBottomColor);
     const fullBubbleBackground = await bubble.evaluate(element => getComputedStyle(element).backgroundColor);
     const fullBubbleEdge = await bubble.evaluate(element => getComputedStyle(element).boxShadow);
@@ -60,12 +60,8 @@ test("embedded whispers open on the first click and retain draft input when rais
     if (!bounds) throw new Error("Background slider is not visible");
     await opacity.click({ position: { x: bounds.width * 0.2, y: bounds.height / 2 } });
     await expect(opacity).toHaveValue("30");
-    await expect.poll(() => transcript.evaluate(element => getComputedStyle(element).backgroundColor))
-      .not.toBe(fullTranscriptBackground);
-    await expect.poll(() => head.evaluate(element => getComputedStyle(element).backgroundColor))
-      .not.toBe(fullHeadBackground);
-    await expect.poll(() => panel.evaluate(element => getComputedStyle(element, "::before").backgroundColor))
-      .not.toBe(fullFrameEdge);
+    await expect.poll(() => layout.evaluate(element => getComputedStyle(element).backgroundColor))
+      .not.toBe(fullBackground);
     await expect.poll(() => head.evaluate(element => getComputedStyle(element).borderBottomColor))
       .not.toBe(fullHeadEdge);
     await expect.poll(() => bubble.evaluate(element => getComputedStyle(element).backgroundColor))

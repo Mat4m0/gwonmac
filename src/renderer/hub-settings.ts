@@ -35,7 +35,7 @@ export function openHubSettings(hub: Hub) {
       nav.append(button); return button;
     });
     function row(title: string, control: HTMLElement, detail = '') {
-      const label = doc.createElement('label'); label.className = 'hub-setting-row';
+      const label = doc.createElement('label'); label.className = control.matches('input[type=checkbox]') ? 'hub-setting-row ui-check' : 'hub-setting-row';
       const copy = doc.createElement('span'); const name = doc.createElement('strong'); name.textContent = title; copy.append(name);
       if (detail) { const hint = doc.createElement('small'); hint.textContent = detail; copy.append(hint); }
       if (control.matches('input,select,button')) control.setAttribute('aria-label', title); label.append(copy, control); body.append(label);
@@ -58,7 +58,7 @@ export function openHubSettings(hub: Hub) {
       input.value = String(snapshot?.settings[key]); input.onchange = () => { const chosen = options.find(choice => String(choice.value) === input.value); if (chosen) void save({ kind: 'settings', patch: { [key]: chosen.value } }, title); }; row(title, input, detail);
     }
     function range(title: string, key: keyof HubSettingsPatch, min = 0) {
-      const wrap = doc.createElement('span'); wrap.className = 'hub-setting-range'; const input = doc.createElement('input'); input.type = 'range'; input.min = String(min); input.max = '100'; input.value = String(snapshot?.settings[key] ?? 100); input.setAttribute('aria-label', title);
+      const wrap = doc.createElement('span'); wrap.className = 'hub-setting-range'; const input = doc.createElement('input'); input.type = 'range'; input.className = 'ui-range'; input.min = String(min); input.max = '100'; input.value = String(snapshot?.settings[key] ?? 100); input.setAttribute('aria-label', title);
       const output = doc.createElement('output'); output.textContent = `${input.value}%`; input.oninput = () => { output.textContent = `${input.value}%`; }; input.onchange = () => { void save({ kind: 'settings', patch: { [key]: Number(input.value) } }, title); }; wrap.append(input, output); row(title, wrap);
     }
     function chooseShortcut(action: ShortcutAction, binding: ShortcutBinding | null) {
@@ -78,12 +78,12 @@ export function openHubSettings(hub: Hub) {
         if (snapshot.tools.restartRequired) { const note = doc.createElement('p'); note.className = 'hub-settings-note'; note.textContent = 'Saved. Close your game windows and restart gwonmac to finish loading or unloading Tools.'; body.append(note); }
         for (const tool of GLOBAL_TOOLS) { const info = TOOL_PRESENTATION[tool]; toggle(info.label, snapshot.tools.features[tool].enabled, enabled => ({ kind: 'tool', tool, enabled }), info.description, tool !== 'character-switch' && !snapshot.tools.configured); }
       } else if (page === 'Appearance') {
-        select('Panel style', 'uiStyle', [{ label: 'Guild Wars', value: 'guild-wars' }, { label: 'Obsidian', value: 'obsidian' }, { label: 'Your custom theme', value: 'custom' }]);
+        select('Panel style', 'uiStyle', [{ label: 'Guild Wars', value: 'guild-wars' }, { label: 'Modern', value: 'obsidian' }, { label: 'Your custom theme', value: 'custom' }]);
         range('Panel opacity', 'uiPanelOpacity', UI_PANEL_OPACITY_MIN);
-        select('Panel font', 'uiFont', UI_FONTS.map(value => ({ label: value === 'guild-wars' ? 'Guild Wars' : value.charAt(0).toUpperCase() + value.slice(1), value })), 'Hub keeps its consistent system font. This changes other in-game panels.');
+        select('Panel font', 'uiFont', UI_FONTS.map(value => ({ label: value === 'guild-wars' ? 'Guild Wars' : value.charAt(0).toUpperCase() + value.slice(1), value })), 'Changes Hub and other in-game panels. Messages keep a readable text face.');
         settingToggle('Relog after reload', 'autoRelogAfterReload');
       } else if (page === 'Shortcuts') {
-        const hint = doc.createElement('p'); hint.textContent = 'Command R opens Hub. Changes apply to every account.'; body.append(hint);
+        const hint = doc.createElement('p'); hint.textContent = 'Changes apply to every account.'; body.append(hint);
         for (const action of SHORTCUT_ACTIONS) {
           const controls = doc.createElement('span'); controls.className = 'hub-setting-shortcut';
           const tool = action.startsWith('cartography.') ? 'maps' : GLOBAL_TOOLS.find(tool => TOOL_PRESENTATION[tool].action === action);
