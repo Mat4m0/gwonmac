@@ -575,7 +575,7 @@ window.gwToolsSettings = () => Object.freeze({
   quickItemMove: appSettings?.quickItemMove ?? false,
   effectTimersEnabled: appSettings?.effectTimersEnabled ?? false,
   alcoholTimerEnabled: appSettings?.alcoholTimerEnabled ?? false,
-  alcoholTimerPosition: appSettings?.alcoholTimerPosition ?? { x: 0, y: 10, locked: true },
+  alcoholTimerPosition: appSettings?.alcoholTimerPosition ?? Object.freeze({ corner: "top-left", x: 4, y: 58, locked: true }),
   skillCooldownColor: appSettings?.skillCooldownColor
     ?? Object.freeze({ kind: 'preset', preset: 'red' }),
 });

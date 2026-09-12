@@ -458,7 +458,7 @@ const candidateSettingsDomains = Array.from(
       quickItemMove: false,
       effectTimersEnabled: cycle(booleanValues, index + 1),
       alcoholTimerEnabled: cycle(booleanValues, index),
-      alcoholTimerPosition: { x: index * 10, y: 10, locked: true },
+      alcoholTimerPosition: { corner: "top-left", x: index * 10, y: 58, locked: true },
       skillCooldownColor: { kind: "preset", preset: "red" },
       extendedMemoryEnabled: cycle(booleanValues, index + 1),
       autoRelogAfterReload: cycle(booleanValues, index),

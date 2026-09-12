@@ -27,7 +27,7 @@ const features: Record<GlobalTool, { label: string; description: string; action?
   "skill-key-labels": { label: "Skill Key Labels", description: "Show your own control labels on the eight skill slots." },
   "skill-cooldowns": { label: "Skill Cooldowns", description: "Show numeric recharge timers on the skill bar." },
   "chat-filters": { label: "Chat Filters", description: "Hide selected system notices before they enter chat." },
-  "alcohol-timer": { label: "Alcohol Timer", description: "A quiet countdown below your Effects icons. Hidden when sober; amber in the last 15 seconds." },
+  "alcohol-timer": { label: "Alcohol Timer", description: "A quiet, movable alcohol countdown. Hidden when sober; amber in the last 15 seconds." },
   "effect-timers": { label: "Effect Timers", description: "Show exact remaining time on your native Effects icons." },
 };
 const characterDetails = [
@@ -76,7 +76,7 @@ function customColor(value: string) {
           <label v-for="detail in characterDetails" :key="detail.key"><span>{{ detail.label }}</span><input type="checkbox" :checked="snapshot.settings[detail.key]" @change="perform(() => save({ [detail.key]: ($event.target as HTMLInputElement).checked }))" /></label>
         </details>
         <div v-if="tool === 'maps'" class="feature-details"><button class="secondary" @click="emit('maps')">Customize Maps</button><p>Choose layers, styles, and shortcuts. Map shortcuts are unassigned by default.</p></div>
-        <div v-if="tool === 'alcohol-timer'" class="feature-details"><button class="secondary" @click="perform(() => save({ alcoholTimerPosition: { ...snapshot.settings.alcoholTimerPosition, locked: false } }))">Adjust position</button><button class="secondary" @click="perform(() => save({ alcoholTimerPosition: DEFAULT_ALCOHOL_TIMER_POSITION }))">Reset position</button><p>Drag the timer in a game window, then select its lock. Position follows your Effects icons.</p></div>
+        <div v-if="tool === 'alcohol-timer'" class="feature-details"><button class="secondary" @click="perform(() => save({ alcoholTimerPosition: { ...snapshot.settings.alcoholTimerPosition, locked: false } }))">Adjust position</button><button class="secondary" @click="perform(() => save({ alcoholTimerPosition: DEFAULT_ALCOHOL_TIMER_POSITION }))">Reset position</button><p>Drag the timer in a game window, then select its lock. Position stays fixed to the nearest game-window corner.</p></div>
         <SkillLabelsSettings v-if="tool === 'skill-key-labels'" :bindings="snapshot.settings.skillKeyBindings" :save="save" />
         <div v-if="tool === 'chat-filters'" class="chat-filter-details">
           <label v-for="filter in chatFilterDetails" :key="filter.key"><span>{{ filter.label }}</span><input type="checkbox" :checked="snapshot.settings[filter.key]" @change="perform(() => save({ [filter.key]: ($event.target as HTMLInputElement).checked }))" /></label>

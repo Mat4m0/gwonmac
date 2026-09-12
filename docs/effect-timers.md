@@ -85,9 +85,9 @@ Same-character loading hides the readout while its deadline continues. Logout,
 character changes, unsupported regions, or disabling the Tool clear the estimate.
 No alcohol state is saved to disk.
 
-The renderer places a small beer icon and `m:ss` directly below the last visible
-row of Effects icons. Empty reserved rows in the Effects panel add no gap.
-With no icons, the timer uses the top-left corner of the Effects panel.
+The renderer places a small beer icon and `m:ss` near the game viewport’s
+top-left corner by default, below one standard Effects row. Its position stays
+fixed when Effects icons appear, disappear, or move.
 The readout turns amber in the last 15 seconds and disappears at zero. There
 are no sounds or animations. Locked mode passes all pointer input to the game.
 
@@ -95,9 +95,13 @@ Enable **Settings → Tools → Alcohol Timer**, then select **Adjust position**
 An unlocked placeholder permits adjustment while sober. Drag the readout and
 select its lock, or focus it and use arrows, Shift+arrows, and Enter. Escape,
 lost pointer capture, or window blur cancels a drag. **Reset position** restores
-the initial placement and lock. Saved offsets use game UI coordinates relative
-to the visible icon group. They follow its movement and scale, and stay inside the
-game viewport. The preference is shared by the launcher's game windows.
+the initial placement and lock. Like the chat icon, dragging picks the nearest
+game-window corner and saves its horizontal and vertical pixel distances.
+Resizing preserves those distances, clamped inside a smaller viewport without
+overwriting the saved gaps. Locking does not change the readout’s size or position;
+its lock control appears on the left when the right edge has no room. The
+preference is shared by the launcher's game windows. Earlier developer-build
+offsets convert once at their current visible position when geometry is available.
 
 Automated evidence covers native countdown corrections, clock wrap, identity
 changes, notification rejection, snapshot validation, dragging, cancellation,

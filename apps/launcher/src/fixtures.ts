@@ -50,7 +50,7 @@ export const fixtureSnapshot: LauncherSnapshot = {
   },
   shortcuts: resolveShortcuts({}),
   settings: {
-    alcoholTimerPosition: { x: 0, y: 10, locked: true },
+    alcoholTimerPosition: { corner: "top-left", x: 4, y: 58, locked: true },
     uiStyle: DEFAULT_SETTINGS.uiStyle,
     uiFont: DEFAULT_SETTINGS.uiFont,
     uiCustomTheme: DEFAULT_SETTINGS.uiCustomTheme,

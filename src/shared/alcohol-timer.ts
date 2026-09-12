@@ -1,13 +1,16 @@
 /**
- * Owns the saved offset from the visible Effects icons, in game UI coordinates.
+ * Owns the alcohol timer’s saved pixel distance from a game-window corner.
  * Main and renderer share its bounded persistence contract and defaults.
  */
-export type AlcoholTimerPosition = Readonly<{ x: number; y: number; locked: boolean }>;
-export const DEFAULT_ALCOHOL_TIMER_POSITION: AlcoholTimerPosition = Object.freeze({ x: 0, y: 10, locked: true });
+import { isCornerPosition, type CornerPosition } from "./corner-position.js";
+/** The untagged form is accepted only to migrate this feature's developer builds. */
+export type AlcoholTimerPosition = Readonly<{ corner?: never; x: number; y: number; locked: boolean }> | (CornerPosition & Readonly<{ locked: boolean }>);
+export const DEFAULT_ALCOHOL_TIMER_POSITION: AlcoholTimerPosition = Object.freeze({ corner: "top-left", x: 4, y: 58, locked: true });
 export function isAlcoholTimerPosition(value: unknown): value is AlcoholTimerPosition {
   if (!value || typeof value !== "object") return false;
   const p = value as Partial<AlcoholTimerPosition>;
-  return Object.keys(value).sort().join(",") === "locked,x,y"
+  const keys = Object.keys(value).sort().join(",");
+  return (keys === "locked,x,y" || (keys === "corner,locked,x,y" && isCornerPosition(value)))
     && typeof p.x === "number" && Number.isFinite(p.x) && Math.abs(p.x) <= 32_768
     && typeof p.y === "number" && Number.isFinite(p.y) && Math.abs(p.y) <= 32_768
     && typeof p.locked === "boolean";

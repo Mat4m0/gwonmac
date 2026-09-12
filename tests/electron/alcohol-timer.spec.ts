@@ -24,7 +24,7 @@ async function showTimer(page: Page) {
     canvas.focus();
   });
 }
-test("timer dragging, cancellation, relative anchor, locking and reload", async () => {
+test("timer dragging, cancellation, stable corner, locking and reload", async () => {
   const fixture = await launchPlayableClient("gw-alcohol-position-");
   try {
     const { page } = fixture;
@@ -34,11 +34,12 @@ test("timer dragging, cancellation, relative anchor, locking and reload", async 
     const initial = (await root.boundingBox())!;
     await expect(root).toContainText("2:03");
     const canvasBounds = (await page.locator("#canvas").boundingBox())!;
-    expect(initial.y).toBeCloseTo(canvasBounds.y + canvasBounds.height * 110 / 800, 0);
+    expect(initial.x).toBeCloseTo(canvasBounds.x + 4, 0);
+    expect(initial.y).toBeCloseTo(canvasBounds.y + 58, 0);
     expect(await root.evaluate(el => {
       const r = el.getBoundingClientRect(); return el.contains(document.elementFromPoint(r.x + 10, r.y + 10));
     })).toBe(false);
-    await page.evaluate(() => window.alcoholFixture.setSettings({ x: 0, y: 10, locked: false }, true));
+    await page.evaluate(() => window.alcoholFixture.setSettings({ corner: "top-left", x: 4, y: 58, locked: false }, true));
     await handle.focus();
     await handle.press("ArrowRight"); await handle.press("ArrowRight"); await handle.press("Shift+ArrowDown");
     await expect.poll(() => page.evaluate(async () => (await window.gwNative.settings.get()).alcoholTimerPosition)).toMatchObject({ locked: false });
@@ -57,10 +58,16 @@ test("timer dragging, cancellation, relative anchor, locking and reload", async 
     await page.evaluate(() => window.alcoholFixture.setGeometry({ status: "ready", sequence: 4, generation: 1, frameId: 1,
       viewportWidth: 1000, viewportHeight: 800, anchor: { left: 200, right: 800, bottom: 300, top: 750 },
       icons: [{ skillId: 1, left: 200, right: 250, bottom: 700, top: 750 }] }));
-    expect((await root.boundingBox())!.x).toBeGreaterThan(dragged.x + 50);
+    expect(await root.boundingBox()).toEqual(dragged);
+    await page.evaluate(() => window.alcoholFixture.setGeometry({ status: "ready", sequence: 6, generation: 1, frameId: 1,
+      viewportWidth: 1000, viewportHeight: 800, anchor: { left: 200, right: 800, bottom: 300, top: 750 }, icons: [] }));
+    expect(await root.boundingBox()).toEqual(dragged);
+    await page.evaluate(() => window.alcoholFixture.setGeometry({ status: "waiting", reason: "memory" }));
+    expect(await root.boundingBox()).toEqual(dragged);
     await root.getByRole("button", { name: "Lock alcohol timer position" }).click();
     await expect.poll(() => page.evaluate(async () => (await window.gwNative.settings.get()).alcoholTimerPosition.locked)).toBe(true);
     await expect(handle).toBeDisabled();
+    expect(await root.boundingBox()).toEqual(dragged);
     expect(await root.evaluate(el => { const r = el.getBoundingClientRect(); return el.contains(document.elementFromPoint(r.x + 10, r.y + 10)); })).toBe(false);
     await page.screenshot({ path: test.info().outputPath("alcohol-locked.png") });
     await page.reload(); await showTimer(page); await expect(handle).toBeDisabled();
@@ -72,6 +79,66 @@ test("timer dragging, cancellation, relative anchor, locking and reload", async 
     await page.setViewportSize({ width: 320, height: 300 });
     const small = (await root.boundingBox())!; expect(small.x).toBeGreaterThanOrEqual(0); expect(small.x + small.width).toBeLessThanOrEqual(320);
     await page.screenshot({ path: test.info().outputPath("alcohol-adjust-small.png") });
+  } finally { await closeOffline(fixture); }
+});
+
+test("timer picks the bottom-right corner and preserves gaps through resize and lock", async () => {
+  const fixture = await launchPlayableClient("gw-alcohol-corner-");
+  try {
+    const { page } = fixture;
+    await showTimer(page);
+    await page.evaluate(() => window.alcoholFixture.setSettings({ corner: "top-left", x: 4, y: 58, locked: false }, true));
+    const root = page.locator("#alcohol-timer-overlay");
+    const handle = root.getByRole("button", { name: /^Move alcohol/ });
+    const bounds = (await page.locator("#canvas").boundingBox())!;
+    const initial = (await root.boundingBox())!;
+    const left = bounds.x + bounds.width - initial.width - 8;
+    const top = bounds.y + bounds.height - initial.height - 12;
+    await page.mouse.move(initial.x + 8, initial.y + 8); await page.mouse.down();
+    await page.mouse.move(left + 8, top + 8); await page.mouse.up();
+    await expect.poll(() => page.evaluate(async () => (await window.gwNative.settings.get()).alcoholTimerPosition))
+      .toEqual({ corner: "bottom-right", x: 8, y: 12, locked: false });
+    const placed = (await root.boundingBox())!;
+    const lock = root.getByRole("button", { name: "Lock alcohol timer position" });
+    expect((await lock.boundingBox())!.x).toBeLessThan(placed.x);
+    await lock.click();
+    await expect(handle).toBeDisabled();
+    expect(await root.boundingBox()).toEqual(placed);
+    await page.setViewportSize({ width: 640, height: 480 });
+    await expect.poll(async () => { const box = (await root.boundingBox())!; return box.x + box.width; }).toBeCloseTo(640 - 8, 0);
+    const smaller = (await root.boundingBox())!;
+    expect(smaller.x + smaller.width).toBeCloseTo(640 - 8, 0);
+    expect(smaller.y + smaller.height).toBeCloseTo(480 - 12, 0);
+    await page.screenshot({ path: test.info().outputPath("alcohol-bottom-right.png") });
+    await expect.poll(() => page.evaluate(async () => (await window.gwNative.settings.get()).alcoholTimerPosition.locked)).toBe(true);
+    await page.reload(); await showTimer(page);
+    expect(await root.boundingBox()).toEqual(smaller);
+    await page.evaluate(async () => {
+      window.alcoholFixture.setSettings({ ...(await window.gwNative.settings.get()).alcoholTimerPosition, locked: false }, true);
+      window.alcoholFixture.setAlcohol({ status: "ready", sequence: 4, gameTimer: 0, remainingMs: 0 });
+    });
+    expect(await root.boundingBox()).toEqual(smaller);
+  } finally { await closeOffline(fixture); }
+});
+
+test("legacy Effects offsets migrate once without following later effect rows", async () => {
+  const fixture = await launchPlayableClient("gw-alcohol-migration-");
+  try {
+    const { page } = fixture;
+    await page.evaluate(() => window.gwNative.settings.set({ alcoholTimerPosition: { x: 20, y: 10, locked: true } }));
+    await showTimer(page);
+    const root = page.locator("#alcohol-timer-overlay");
+    const bounds = (await page.locator("#canvas").boundingBox())!;
+    const migrated = (await root.boundingBox())!;
+    expect(migrated.x).toBeCloseTo(bounds.x + bounds.width * 120 / 1000, 0);
+    expect(migrated.y).toBeCloseTo(bounds.y + bounds.height * 110 / 800, 0);
+    await expect.poll(() => page.evaluate(async () => (await window.gwNative.settings.get()).alcoholTimerPosition))
+      .toMatchObject({ corner: "top-left", locked: true });
+    await page.evaluate(() => window.alcoholFixture.setGeometry({ status: "ready", sequence: 4, generation: 1, frameId: 1,
+      viewportWidth: 1000, viewportHeight: 800, anchor: { left: 100, right: 700, bottom: 300, top: 750 }, icons: [] }));
+    expect(await root.boundingBox()).toEqual(migrated);
+    await page.reload(); await showTimer(page);
+    expect(await root.boundingBox()).toEqual(migrated);
   } finally { await closeOffline(fixture); }
 });
 
@@ -89,6 +156,6 @@ test("launcher enables the timer and exposes adjust and reset", async () => {
     await expect.poll(async () => (await page.evaluate(() => window.launcherNative.state.get())).settings.alcoholTimerPosition.locked).toBe(false);
     await page.screenshot({ path: test.info().outputPath("alcohol-settings.png") });
     await page.getByRole("button", { name: "Reset position", exact: true }).click();
-    await expect.poll(async () => (await page.evaluate(() => window.launcherNative.state.get())).settings.alcoholTimerPosition).toEqual({ x: 0, y: 10, locked: true });
+    await expect.poll(async () => (await page.evaluate(() => window.launcherNative.state.get())).settings.alcoholTimerPosition).toEqual({ corner: "top-left", x: 4, y: 58, locked: true });
   } finally { await closeOffline(fixture); }
 });

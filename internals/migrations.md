@@ -1,5 +1,20 @@
 # Active migrations
 
+## Alcohol Timer corner placement
+
+- Why: earlier developer builds saved offsets relative to live Effects icons.
+  The timer now saves fixed pixel gaps from a game-window corner. The renderer
+  resolves each old offset once using Effects geometry and saves the equivalent
+  corner position, preserving existing adjustments.
+- Introduced: 2026-09-12, after developer commit `12da0dbd`.
+- Depends on it: developer profiles that saved `{ x, y, locked }` before this
+  change; the feature has not been published from this worktree.
+- Remove when: all known developer profiles have saved a `corner` field before
+  the first release of Alcohol Timer. Remove the untagged settings alternative,
+  legacy anchor helper, conversion tests, and this entry together. Rollback to
+  the earlier developer build requires restoring the previous settings backup.
+- Related issue: none yet.
+
 ## Adopted Main account storage
 
 - Why: the unified launcher must present released Single Account data as a
