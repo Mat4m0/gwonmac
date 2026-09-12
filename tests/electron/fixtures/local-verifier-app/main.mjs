@@ -7,15 +7,27 @@ const hostUrl = new URL(
   "../../../../build/main/certification/local-client-verifier-host.js",
   import.meta.url,
 );
+/** @type {typeof import("../../../../src/main/certification/local-client-verifier-host.ts")} */
+const verifier = await import(hostUrl.href);
+/** @type {typeof import("../../../../src/shared/enhancement-contracts.ts")} */
+const contracts = await import(new URL(
+  "../../../../build/shared/enhancement-contracts.js", import.meta.url,
+).href);
 const {
   verifyCartographyLocally,
   verifyClientLocally,
   verifyExtendedMemoryLocally,
   verifyNativeDoubleClickLocally,
-} = await import(hostUrl.href);
+} = verifier;
 
 const extendedArgs = process.argv.slice(-5);
 const compactArgs = process.argv.slice(-3);
+/** @param {number} index */
+function extendedArgument(index) {
+  const value = extendedArgs[index];
+  if (!value) throw new Error("extended-memory fixture requires paths and hashes");
+  return value;
+}
 const mode = extendedArgs[0] === "extended-memory"
   ? extendedArgs[0]
   : compactArgs[0];
@@ -34,10 +46,10 @@ state.localVerifierOutcome = null;
 void app.whenReady().then(async () => {
   state.localVerifierOutcome = mode === "extended-memory"
     ? await verifyExtendedMemoryLocally({
-        jsPath: extendedArgs[1],
-        jsInputSha256: extendedArgs[2],
-        wasmPath: extendedArgs[3],
-        wasmInputSha256: extendedArgs[4],
+        jsPath: extendedArgument(1),
+        jsInputSha256: extendedArgument(2),
+        wasmPath: extendedArgument(3),
+        wasmInputSha256: extendedArgument(4),
       })
     : mode === "native-double-click"
     ? await verifyNativeDoubleClickLocally({
@@ -53,6 +65,7 @@ void app.whenReady().then(async () => {
         officialWasmPath,
         officialSha256,
         requestedCapabilities: {
+          ...contracts.NO_ENHANCEMENT_CAPABILITIES,
           nativeCursor: true,
           targetObservation: true,
           partyObservation: true,
@@ -60,17 +73,7 @@ void app.whenReady().then(async () => {
           travelAction: true,
           xunlaiAction: true,
           chatAliases: true,
-          skillSlotGeometry: false,
-          skillCooldownObservation: false,
-          playerEffectObservation: false,
-          effectIconGeometry: false,
-          resignAction: false,
           playRegionObservation: true,
-          preGameControls: false,
-          characterSwitchAction: false,
-          chatFiltering: false,
-          quickItemMove: false,
-          whisperChat: false,
         },
       });
   state.localVerifierCompleted = true;
