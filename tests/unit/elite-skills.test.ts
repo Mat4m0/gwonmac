@@ -71,14 +71,20 @@ describe("elite view persistence", () => {
     const valid = { ...DEFAULT_ELITE_VIEW, search: "Hundred Blades", professions: { kind: "custom", values: ["W", "R"] } };
     const parse = (view: unknown) => parseEliteUpdate({ characterKey: characterA, change: { kind: "view", view } });
     assert.doesNotThrow(() => parse(valid));
+    assert.doesNotThrow(() => parse({ ...valid, professions: { kind: "custom", values: [] } }));
     for (const patch of [
-      { search: "x".repeat(201) }, { search: 1 }, { region: "Unknown" }, { worldMap: 1 }, { panelOpen: null },
+      { search: "x".repeat(201) }, { search: 1 }, { region: "Unknown" }, { worldMap: 1 }, { panelOpen: null }, { panelHeightRatio: 0 }, { panelHeightRatio: 1.1 }, { panelHeightRatio: NaN }, { panelHeightRatio: "0.8" },
       { hideLearned: "yes" }, { mode: "all" }, { focusedSkill: -1 }, { focusedSkill: 1.5 }, { extra: true },
-      { professions: { kind: "custom", values: [] } }, { professions: { kind: "custom", values: ["W", "W"] } },
+      { professions: { kind: "custom", values: ["W", "W"] } },
       { professions: { kind: "custom", values: ["Warrior"] } }, { professions: { kind: "mine", values: ["W"] } },
     ]) assert.throws(() => parse({ ...valid, ...patch }));
     assert.throws(() => changeEliteTracking(EMPTY_ELITE_TRACKING,
       { kind: "view", view: { ...DEFAULT_ELITE_VIEW, focusedSkill: 9999 } }, ELITE_LOCATIONS));
+  });
+  it("defaults height for saved preferences written before resizing was added", () => {
+    const { panelHeightRatio, ...view } = DEFAULT_ELITE_VIEW;
+    const parsed = parseEliteUpdate({ characterKey: characterA, change: { kind: "view", view } });
+    assert.deepEqual(parsed.change, { kind: "view", view: { ...view, panelHeightRatio } });
   });
   it("restores all preferences after a store restart without replacing capture plans", async () => {
     const dir = await mkdtemp(join(tmpdir(), "gwonmac-elite-view-"));
@@ -91,7 +97,7 @@ describe("elite view persistence", () => {
       const store = new EliteTrackingStore();
       assert.deepEqual((await store.get(path, characterA)).view, DEFAULT_ELITE_VIEW);
       const view = { ...DEFAULT_ELITE_VIEW, search: "Hundred Blades", professions: { kind: "mine" as const },
-        panelOpen: true, worldMap: false, region: "Cantha" as const, hideLearned: false, mode: "tracked" as const };
+        panelOpen: true, panelHeightRatio: 0.65, worldMap: false, region: "Cantha" as const, hideLearned: false, mode: "tracked" as const };
       await store.update(path, { characterKey: characterA, change: { kind: "view", view } });
       const restart = new EliteTrackingStore();
       const saved = await restart.get(path, characterA);
@@ -100,6 +106,9 @@ describe("elite view persistence", () => {
       assert.equal(saved.activeLocation, lissah.id);
       assert.equal(saved.missionMap, false);
       assert.deepEqual(await restart.get(path, characterB), EMPTY_ELITE_TRACKING);
+      const none = { ...view, professions: { kind: "custom" as const, values: [] } };
+      await restart.update(path, { characterKey: characterA, change: { kind: "view", view: none } });
+      assert.deepEqual((await new EliteTrackingStore().get(path, characterA)).view.professions, none.professions);
     } finally { await rm(dir, { recursive: true, force: true }); }
   });
 });

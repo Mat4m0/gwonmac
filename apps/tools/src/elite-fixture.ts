@@ -16,10 +16,14 @@ const fixtureSkills = [
 ] as const;
 export const ELITE_FIXTURE_SKILLS: readonly SkillPresentation[] = fixtureSkills.map(({ boss, name, profession, attribute }) => {
   const location = ELITE_LOCATIONS.find((entry) => entry.boss === boss)!;
+  const color = profession === "W" ? "#ad7431" : profession === "R" ? "#37774b" : "#416caa";
+  const initials = name.split(" ").map(part => part[0]).join("").slice(0, 2);
+  // Reproduce the client texture's baked-in 4px rim so marker polish is visible offline.
+  const iconUrl = `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#000"/><rect x="4" y="4" width="56" height="56" fill="${color}"/><path d="M4 60 60 4v56Z" fill="#000" opacity=".25"/><text x="32" y="40" text-anchor="middle" fill="#fff" font-family="sans-serif" font-size="24">${initials}</text></svg>`)}`;
   return { id: skillId(location.skillId), name, profession, attribute,
     elite: true, availability: "pve", energyCost: profession === "W" ? 0 : 5, adrenalineCost: profession === "W" ? 8 : 0, healthCost: 0, overcast: 0,
     activationSeconds: profession === "Mo" ? 0.75 : 0, aftercastSeconds: 0.75, rechargeSeconds: profession === "Mo" ? 2 : 0,
-    description: "Illustrative skill details for the offline fixture. In game, the exact description and costs come from the installed client.", iconUrl: null };
+    description: "Illustrative skill details for the offline fixture. In game, the exact description and costs come from the installed client.", iconUrl };
 });
 const characterA = travelCharacterKey("0123456789abcdef");
 const characterB = travelCharacterKey("fedcba9876543210");
@@ -41,9 +45,12 @@ export function mountEliteFixture(target: HTMLElement): void {
   controls.className = "elite-fixture-controls";
   controls.style.cssText = "position:fixed;left:24px;top:16px;display:flex;gap:8px;flex-wrap:wrap;z-index:5;right:24px";
   const label = document.createElement("strong"); label.textContent = "Elite Skills · offline map fixture"; controls.append(label);
-  let mission = false, otherCharacter = false, learned = false, failSave = false, mapOpen = true, secondary = 2;
+  let mission = false, otherCharacter = false, learned = false, failSave = false, mapOpen = true, secondary = 2, crowded = false;
+  const fullCatalogue = new URLSearchParams(window.location.search).has("fullCatalogue");
+  const skills = fullCatalogue ? [...new Set(ELITE_LOCATIONS.map(entry => entry.skillId))].map(id =>
+    ELITE_FIXTURE_SKILLS.find(skill => skill.id === id) ?? { ...ELITE_FIXTURE_SKILLS[0]!, id: skillId(id), name: `Fixture elite ${id}` }) : ELITE_FIXTURE_SKILLS;
   const app = mountEliteSkills(target, {
-    initialView: eliteFixtureView(), loadSkills: async () => ELITE_FIXTURE_SKILLS,
+    initialView: eliteFixtureView(), loadSkills: async () => skills,
     onOpenChange: () => {},
     openWiki: (entry, page) => { label.textContent = `Wiki action: ${page === "boss" ? entry.boss : entry.skillId}`; },
     tracking: {
@@ -66,11 +73,13 @@ export function mountEliteFixture(target: HTMLElement): void {
   map.textContent = "Native map artwork appears here in game. This fixture verifies overlay placement and interaction.";
   document.body.prepend(map);
   function update() {
-    const view = eliteFixtureView(mission, otherCharacter, learned, secondary);
+    const original = eliteFixtureView(mission, otherCharacter, learned, secondary);
+    const view = crowded && original.world ? { ...original, world: { ...original.world, transform: { a: 0.003, b: 0, c: 0, d: 0.003, e: 180, f: 180 } } } : original;
     app.update(mapOpen ? view : { ...view, world: null, mission: null });
   }
   for (const [name, run] of [
     ["World / mission map", () => { mission = !mission; update(); }],
+    ["Spread / overlap markers", () => { crowded = !crowded; update(); }],
     ["Close / open map", () => { mapOpen = !mapOpen; update(); }],
     ["Change secondary profession", () => { secondary = secondary === 2 ? 3 : 2; update(); }],
     ["Switch character", () => { otherCharacter = !otherCharacter; update(); }],

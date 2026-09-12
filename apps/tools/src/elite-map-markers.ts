@@ -3,6 +3,7 @@ import type { EliteLocation } from "../../../src/shared/elite-skills";
 import type { EliteMapSurface } from "../../../src/shared/elite-map";
 export type EliteMarker = Readonly<{
   key: string; x: number; y: number; location: EliteLocation;
+  locations: readonly EliteLocation[];
   active: boolean; outside: boolean;
 }>;
 export function eliteMarkers(
@@ -23,8 +24,22 @@ export function eliteMarkers(
       if (outside && !active) return;
       const x = Math.max(inset, Math.min(surface.box.width - inset, px));
       const y = Math.max(inset, Math.min(surface.box.height - inset, py));
-      markers.push({ key: `${location.id}:${index}`, x, y, location, active, outside });
+      markers.push({ key: `${location.id}:${index}`, x, y, location, locations: [location], active, outside });
     });
   }
-  return markers;
+  // Deduplicate artwork only where same-skill markers touch in the same map area.
+  // Keep source locations and positions intact for boss choices and capture targets.
+  const groups: EliteMarker[][] = [];
+  for (const marker of markers) {
+    const touching = groups.filter(group => group.some(other =>
+      other.location.skillId === marker.location.skillId && other.location.mapId === marker.location.mapId
+      && other.outside === marker.outside && Math.abs(other.x - marker.x) <= 24 && Math.abs(other.y - marker.y) <= 24));
+    const combined = [...touching.flat(), marker];
+    for (const group of touching) groups.splice(groups.indexOf(group), 1);
+    groups.push(combined);
+  }
+  return groups.map(group => {
+    const representative = group.find(marker => marker.active) ?? group[0]!;
+    return { ...representative, locations: [...new Map(group.map(marker => [marker.location.id, marker.location])).values()] };
+  });
 }

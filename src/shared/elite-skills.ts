@@ -18,11 +18,12 @@ export type EliteViewPreferences = Readonly<{
   mode: "browse" | "tracked";
   worldMap: boolean;
   panelOpen: boolean;
+  panelHeightRatio: number;
   focusedSkill: number | null;
 }>;
 export const DEFAULT_ELITE_VIEW: EliteViewPreferences = Object.freeze({
   search: "", professions: Object.freeze({ kind: "all" }), region: "",
-  hideLearned: true, mode: "browse", worldMap: true, panelOpen: false, focusedSkill: null,
+  hideLearned: true, mode: "browse", worldMap: true, panelOpen: false, panelHeightRatio: 0.8, focusedSkill: null,
 });
 export type EliteLocation = Readonly<{
   id: string;
@@ -63,7 +64,9 @@ function exact(value: Record<string, unknown>, keys: readonly string[]): void {
 }
 export function parseEliteView(value: unknown): EliteViewPreferences {
   const input = object(value);
-  exact(input, ["search", "professions", "region", "hideLearned", "mode", "worldMap", "panelOpen", "focusedSkill"]);
+  const keys = ["search", "professions", "region", "hideLearned", "mode", "worldMap", "panelOpen", "focusedSkill"];
+  exact(input, "panelHeightRatio" in input ? [...keys, "panelHeightRatio"] : keys);
+  const panelHeightRatio = "panelHeightRatio" in input ? input.panelHeightRatio : DEFAULT_ELITE_VIEW.panelHeightRatio;
   const filter = object(input.professions);
   let professions: EliteProfessionFilter;
   if (filter.kind === "all" || filter.kind === "mine") {
@@ -71,13 +74,14 @@ export function parseEliteView(value: unknown): EliteViewPreferences {
     professions = { kind: filter.kind };
   } else if (filter.kind === "custom") {
     exact(filter, ["kind", "values"]);
-    if (!Array.isArray(filter.values) || filter.values.length < 1 || filter.values.length > 10
+    if (!Array.isArray(filter.values) || filter.values.length > 10
       || !filter.values.every((value: unknown): value is Profession => typeof value === "string" && Object.hasOwn(PROFESSIONS, value))
       || new Set(filter.values).size !== filter.values.length) throw new TypeError("Invalid professions");
     professions = { kind: "custom", values: Object.freeze([...filter.values]) };
   } else throw new TypeError("Invalid profession filter");
   const region = input.region === "" ? "" : ELITE_REGIONS.find(region => region === input.region);
   if (typeof input.search !== "string" || input.search.length > 200
+    || typeof panelHeightRatio !== "number" || !Number.isFinite(panelHeightRatio) || panelHeightRatio < 0.2 || panelHeightRatio > 1
     || region === undefined
     || typeof input.hideLearned !== "boolean" || typeof input.worldMap !== "boolean" || typeof input.panelOpen !== "boolean"
     || (input.mode !== "browse" && input.mode !== "tracked")
@@ -85,7 +89,7 @@ export function parseEliteView(value: unknown): EliteViewPreferences {
       || input.focusedSkill < 1 || input.focusedSkill > 10_000))) throw new TypeError("Invalid map preferences");
   return Object.freeze({ search: input.search, professions: Object.freeze(professions),
     region, hideLearned: input.hideLearned, mode: input.mode,
-    worldMap: input.worldMap, panelOpen: input.panelOpen, focusedSkill: input.focusedSkill });
+    worldMap: input.worldMap, panelOpen: input.panelOpen, panelHeightRatio, focusedSkill: input.focusedSkill });
 }
 export function parseEliteCharacter(value: unknown): Readonly<{ characterKey: TravelCharacterKey }> {
   const input = object(value);
