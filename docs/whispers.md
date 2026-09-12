@@ -22,12 +22,16 @@ available in PvE while Tools is enabled. `pnpm tools:dev` with `?whispers` opens
 the same Vue surface with local scenario controls; those controls never send
 game messages.
 
-The Whispers shortcut is unassigned by default. In launcher Tools settings,
-**Enable ⌘⇧W** assigns the suggested binding; Change records another combination
-and Clear disables it. Existing shortcut conflict and reserved-key checks apply.
-It works only in the active game window while Whispers is available. Opening
-focuses the selected draft or people search; toggling closed returns focus to
-the game. Shortcut preferences use the existing global shortcut overrides.
+The default **Command-D** shortcut opens Whispers inside Hub. Existing custom
+bindings and cleared shortcuts are preserved. Person search, the shortcut and the
+unread launcher use the same mounted Vue conversation component. Hub reuses the
+session and transcript owner; there is no separate quick-whisper composer.
+
+In Hub, the people picker supports Up/Down and Enter/Right. Escape or Left at the
+start of the composer returns to people without discarding the draft. Normal text
+editing and outgoing-message history remain available. Chat options retain mute,
+sound and guarded conversation closing. Hub owns the window geometry and background;
+the standalone fixture retains floating-window placement and opacity controls.
 
 ## Acceptance criteria
 

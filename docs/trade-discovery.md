@@ -2,8 +2,13 @@
 
 Status: Accepted
 
-This document owns the product and interaction specification for the separate
+This document owns the product and interaction specification for the Hub Trade section and its detachable
 Trade Chat window in GWonMac.
+
+Hub opens this same mounted tool with Command-K or `trade <query>`. Detaching
+preserves its query and state. Hub currency conversions reuse its NPC quote source;
+observations older than five minutes are labelled Last observed.
+Hub also infers currency estimates from recent player advertisements as described below.
 
 ## Product decision
 
@@ -46,8 +51,7 @@ The first release does not include:
 - sending, repeating, or automating chat messages;
 - automatic whispers or trade actions;
 - a GWonMac marketplace, account, database, or backend;
-- player-market price estimation, item recognition from game state, or inventory
-  integration;
+- item recognition from game state or inventory integration;
 - saved searches, notifications, alerts, notes, tags, or ignored players;
 - regular expressions or a query language;
 - importing remote messages into the Guild Wars chat panel.
@@ -460,3 +464,40 @@ Do not add these until first-release use shows a concrete need:
    they add persistence, notification rules, and noise.
 Each follow-up needs its own acceptance criterion. None should delay the core
 find-and-contact experience.
+
+## Hub inferred currency estimates
+
+Hub reads the public Kamadan website's `/s/{query}/0/{timestamp}` endpoint through
+Trade's existing bounded HTTP owner. The fixed queries cover armbrace, arms,
+zkey, zaishen key, and ectos. Each demand reads at most two pages per query,
+25 messages per page. Paging stops at the 72-hour evidence boundary. Failures
+stop further requests. Concurrent callers share one request. Successful or empty
+snapshots stay in process memory for five minutes; there is no background polling.
+No account, new backend, or raw-network renderer capability is required.
+
+The parser accepts exact currency names, explicit per-item or per-stack prices,
+and explicit totals using `for` or `=`. A stack contains 250 items. It rejects
+ambiguous quantities, missing price units, unrelated Zaishen items, cross-game
+trades, and unknown text. It does not use fuzzy matching or an AI model.
+
+Only the latest advertisement per character name contributes. This conservative
+rule also prevents an older price returning when a newer advertisement has no price.
+Character names do not prove independent accounts. Each item, denomination, and
+WTB/WTS side is evaluated separately. At least five advertisers must agree within
+20% of the candidate median; at least 80% of observations must agree. The displayed
+rate is the exact median of that agreeing group. At least one contributing ad must
+be less than 24 hours old; none may be older than 72 hours. These thresholds reduce
+noise but cannot prove that a trade occurred or prevent coordinated advertisements.
+
+Results start with `~` and state **Inferred from median prices in recent Kamadan
+trade ads**. They identify seller asking prices or buyer offers, the advertiser
+count for each rate in a conversion, and the oldest contributing ad. Copy preserves
+this attribution. These are estimates, not ArenaNet rates or completed trades.
+Incomplete routes show **Not enough recent prices** inside Hub. They never mix
+NPC prices into a player-market route or ask the player to configure a rate.
+Manual rates remain an explicit optional override under Actions or `rates`.
+
+The browser workbench uses synthetic advertisements with the production estimator.
+Automated tests do not call the public service or store character names from live
+research. A bounded live endpoint probe on 2026-09-07 verified HTTP response shape
+and timestamp pagination; it did not verify completed trades or release permission.

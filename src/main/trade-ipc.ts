@@ -26,6 +26,7 @@ export type TradeInvokeChannel =
   | "tradeUnsubscribe"
   | "tradeSavedGet"
   | "tradeSavedSet"
+  | "marketRatesGet"
   | "traderQuotesGet"
   | "traderPriceHistoryGet"
   | "tradeSearch"
@@ -97,6 +98,11 @@ export function tradeChannelDefinitions(
     tradeSavedSet: channel(validated(parseTradeSavedState, "invalid trade saved state"), async (_win, value) => {
       requireEnabled();
       return ctx.setTradeSaved(value);
+    }),
+
+    marketRatesGet: channel(nothing, async () => {
+      requireEnabled();
+      return ctx.tradeChat.getMarketRates();
     }),
 
     traderQuotesGet: channel(nothing, async () => {

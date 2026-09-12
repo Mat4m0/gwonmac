@@ -13,15 +13,11 @@ function api() {
   } satisfies LauncherNativeApi["tools"];
 }
 describe("Shortcut setting", () => {
-  it("enables the suggested Whispers binding only on request and permits clearing", async () => {
+  it("shows the Whispers default and permits clearing it", async () => {
     const tools = api();
-    const binding = { key: "w", shift: true, option: false };
-    const wrapper = mount(ShortcutSetting, { props: { action: "whispers.toggle", suggestedBinding: binding, shortcuts: DEFAULT_SHORTCUTS, api: tools } });
+    const wrapper = mount(ShortcutSetting, { props: { action: "whispers.toggle", shortcuts: DEFAULT_SHORTCUTS, api: tools } });
+    expect(wrapper.text()).toContain("⌘D");
     expect(tools.replaceShortcut).not.toHaveBeenCalled();
-    expect(wrapper.text()).toContain("Not set");
-    await wrapper.findAll("button").find(button => button.text().startsWith("Enable"))!.trigger("click");
-    expect(tools.replaceShortcut).toHaveBeenCalledWith({ action: "whispers.toggle", binding });
-    await wrapper.setProps({ shortcuts: { ...DEFAULT_SHORTCUTS, "whispers.toggle": binding } });
     await wrapper.get('[aria-label="Clear Whispers shortcut"]').trigger("click");
     expect(tools.replaceShortcut).toHaveBeenLastCalledWith({ action: "whispers.toggle", binding: null });
     wrapper.unmount();

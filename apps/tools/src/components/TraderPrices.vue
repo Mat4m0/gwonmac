@@ -14,7 +14,7 @@ import {
   type TraderPriceCategory,
   type TraderItem,
   type TraderProfession,
-} from "../trader-catalog";
+} from "../../../../src/shared/trader-catalog";
 import PriceHistoryChart from "./PriceHistoryChart.vue";
 import TraderItemIcon from "./TraderItemIcon.vue";
 

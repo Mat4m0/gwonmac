@@ -257,6 +257,7 @@ const INVOCATIONS: Invocation[] = [
     args: [{ offers: [], players: [] }],
     channel: IPC.tradeSavedSet,
   },
+  { path: "trade.getMarketRates", args: [], channel: IPC.marketRatesGet },
   { path: "trade.getTraderQuotes", args: [], channel: IPC.traderQuotesGet },
   {
     path: "trade.getTraderPriceHistory",
@@ -376,6 +377,13 @@ const INVOCATIONS: Invocation[] = [
   },
   { path: "app.openExternal", args: ["bugReport"], channel: IPC.appOpenExternal },
   { path: "app.reveal", args: ["gameData"], channel: IPC.appRevealPath },
+  { path: "accounts.get", args: [], channel: IPC.hubAccountsGet },
+  { path: "accounts.open", args: [{ id: "e98a37bc-5211-4bc5-8094-0b1286b3c42d", mode: "open" }], channel: IPC.hubAccountOpen },
+  { path: "app.showLauncher", args: [], channel: IPC.appShowLauncher },
+  { path: "hubSettings.get", args: [], channel: IPC.hubSettingsGet },
+  { path: "hubSettings.update", args: [{ kind: "tool", tool: "whispers", enabled: false }], channel: IPC.hubSettingsUpdate },
+  { path: "hubSettings.capture", args: ["character.switch"], channel: IPC.hubShortcutCapture },
+  { path: "app.openSettings", args: [], channel: IPC.appOpenSettings },
   { path: "app.requestQuit", args: [], channel: IPC.appRequestQuit },
   {
     path: "app.reloadGame",

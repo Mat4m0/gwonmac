@@ -1,3 +1,5 @@
+/** Mounts one persistent library controller and its editor. */
+import type { HubPresenter } from '../../../src/shared/hub';
 import { createApp, h, ref } from "vue";
 import ToolsApp from "./ToolsApp.vue";
 import {
@@ -13,6 +15,7 @@ export function mountToolsApp(
   target: HTMLElement,
   options: {
     host: ToolsHost;
+    hub?: HubPresenter<HTMLElement>;
     mode: "standalone" | "embedded";
     initiallyVisible?: boolean;
     onVisibilityChange?: (visible: boolean) => void;
@@ -38,6 +41,7 @@ export function mountToolsApp(
         h(ToolsApp, {
           ref: tools,
           host: options.host,
+          ...(options.hub ? { hub: options.hub } : {}),
           mode: options.mode,
           visible: visible.value,
           active: active.value,

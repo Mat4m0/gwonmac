@@ -56,16 +56,16 @@ describe("character switch ordering", () => {
   });
 
   it("shows finite carousel ends before navigation wraps", () => {
-    assert.deepEqual(characterCarouselRows(0, 20), [null, null, null, 0, 1, 2, 3]);
+    assert.deepEqual(characterCarouselRows(0, 20), [0, 1, 2, 3, 4, 5, 6]);
     assert.deepEqual(characterCarouselRows(10, 20), [7, 8, 9, 10, 11, 12, 13]);
-    assert.deepEqual(characterCarouselRows(19, 20), [16, 17, 18, 19, null, null, null]);
+    assert.deepEqual(characterCarouselRows(19, 20), [13, 14, 15, 16, 17, 18, 19]);
   });
 
-  it("centres every character when the account fits in the visible slots", () => {
-    assert.deepEqual(characterCarouselRows(0, 5), [null, 0, 1, 2, 3, 4, null]);
-    assert.deepEqual(characterCarouselRows(4, 5), [null, 0, 1, 2, 3, 4, null]);
+  it("starts at the left edge when the account fits in the visible slots", () => {
+    assert.deepEqual(characterCarouselRows(0, 5), [0, 1, 2, 3, 4, null, null]);
+    assert.deepEqual(characterCarouselRows(4, 5), [0, 1, 2, 3, 4, null, null]);
     assert.deepEqual(characterCarouselRows(0, 5, 2), [0, 1, 2, 3, 4]);
-    assert.deepEqual(characterCarouselRows(0, 1), [null, null, null, 0, null, null, null]);
+    assert.deepEqual(characterCarouselRows(0, 1), [0, null, null, null, null, null, null]);
   });
 
   it("searches all 27 characters without changing their alphabetical order", () => {
@@ -95,7 +95,7 @@ describe("character switch ordering", () => {
     }
   });
 
-  it("matches reordered words and accents while preserving alphabetical order", () => {
+  it("matches reordered prefixes without accent guessing while preserving alphabetical order", () => {
     const account = Object.freeze([
       character("Á Candy Cane Shard", 2),
       character("Dhuum Survivor", 3),
@@ -107,12 +107,12 @@ describe("character switch ordering", () => {
       ["Á Candy Cane Shard"],
     );
     assert.deepEqual(
-      searchCharacters(ordered, "a candy").map(({ character: row }) => row.name),
+      searchCharacters(ordered, "á candy").map(({ character: row }) => row.name),
       ["Á Candy Cane Shard"],
     );
   });
 
-  it("matches primary profession substrings without searching secondaries", () => {
+  it("matches primary profession prefixes without searching secondaries", () => {
     const ordered = orderCharacters(Object.freeze([
       character("Alpha", 6),
       character("Helen", 1),
@@ -124,10 +124,10 @@ describe("character switch ordering", () => {
     const names = (query: string) => searchCharacters(ordered, query)
       .map(({ character: row }) => row.name);
 
-    assert.deepEqual(names("ele"), ["Alpha", "Helen"]);
-    assert.deepEqual(names("sin"), ["Shadow"]);
+    assert.deepEqual(names("ele"), ["Alpha"]);
+    assert.deepEqual(names("sin"), []);
     assert.deepEqual(names("rit"), ["Oracle"]);
     assert.deepEqual(names("rt"), []);
-    assert.deepEqual(names("alpha ele"), []);
+    assert.deepEqual(names("alpha ele"), ["Alpha"]);
   });
 });

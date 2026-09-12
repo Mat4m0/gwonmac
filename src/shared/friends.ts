@@ -16,3 +16,13 @@ export type TravelFriends = Readonly<{
   generation: number;
   friends: readonly TravelFriend[];
 }> | Readonly<{ status: "waiting"; reason: "unavailable" | "invalid" }>;
+
+/** Revalidate a selected identity after an asynchronous view load. */
+export function currentTravelFriend(
+  feed: TravelFriends, selected: TravelFriend, generation: number,
+): TravelFriend | null {
+  if (feed.status !== 'ready' || feed.generation !== generation) return null;
+  const current = feed.friends.find(friend => friend.key === selected.key);
+  return current && current.mapId === selected.mapId && current.character === selected.character
+    && current.status !== 'offline' && current.status !== 'unknown' ? current : null;
+}

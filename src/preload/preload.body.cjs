@@ -227,9 +227,20 @@ const api = {
     exportEvidence: (value) =>
       ipcRenderer.invoke(IPC.cartographyEvidenceExport, value),
   },
+  hubSettings: {
+    get: () => ipcRenderer.invoke(IPC.hubSettingsGet),
+    update: change => ipcRenderer.invoke(IPC.hubSettingsUpdate, change),
+    capture: action => ipcRenderer.invoke(IPC.hubShortcutCapture, action),
+  },
+  accounts: {
+    get: () => ipcRenderer.invoke(IPC.hubAccountsGet),
+    open: (request) => ipcRenderer.invoke(IPC.hubAccountOpen, request),
+  },
   app: {
     openExternal: (kind) => ipcRenderer.invoke(IPC.appOpenExternal, kind),
     reveal: (kind) => ipcRenderer.invoke(IPC.appRevealPath, kind),
+    showLauncher: () => ipcRenderer.invoke(IPC.appShowLauncher),
+    openSettings: () => ipcRenderer.invoke(IPC.appOpenSettings),
     requestQuit: () => ipcRenderer.invoke(IPC.appRequestQuit),
     reloadGame: (cause) => ipcRenderer.invoke(IPC.appReloadGame, cause),
     claimRelogIntent: () => ipcRenderer.invoke(IPC.appClaimRelogIntent),

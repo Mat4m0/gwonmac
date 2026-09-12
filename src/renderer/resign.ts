@@ -16,6 +16,12 @@ export function installResignCommand(exports: WebAssembly.Exports) {
   const command: NonNullable<typeof active> = { enabled: false, enqueue: () => Number(enqueue()), dialog: null };
   configure(0);
   active = command;
+  const show = (event: Event) => {
+    if (!command.enabled) return;
+    event.preventDefault();
+    showResignConfirmation();
+  };
+  window.addEventListener("gw:resign-show", show);
   return {
     update(enabled: boolean) {
       command.enabled = enabled;
@@ -23,6 +29,7 @@ export function installResignCommand(exports: WebAssembly.Exports) {
       configure(enabled ? 1 : 0);
     },
     dispose() {
+      window.removeEventListener("gw:resign-show", show);
       command.enabled = false;
       command.dialog?.dispose();
       configure(0);

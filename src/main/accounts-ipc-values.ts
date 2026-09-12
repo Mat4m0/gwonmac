@@ -2,6 +2,7 @@
  * Pure validation for the account-profile IPC surface.
  * The Electron boundary owns argument counts; this module owns account values.
  */
+import type { HubAccountRequest } from '../shared/accounts-contracts.js';
 import type {
   AccountProfileCreateRequest,
   AccountProfileRequest,
@@ -66,4 +67,11 @@ export function parseProfileIds(value: unknown): readonly ProfileId[] {
     throw new ValidationError("account profile selection contains duplicates");
   }
   return ids;
+}
+
+export function parseHubAccountRequest(value: unknown): HubAccountRequest {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new ValidationError('Invalid account request');
+  const input = value as Record<string, unknown>;
+  if (Object.keys(input).some(key => key !== 'id' && key !== 'mode') || (input.mode !== 'open' && input.mode !== 'replace')) throw new ValidationError('Invalid account action');
+  return { id: parseProfileId(input.id), mode: input.mode };
 }

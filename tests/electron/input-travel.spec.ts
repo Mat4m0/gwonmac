@@ -57,7 +57,7 @@ test.describe("renderer Travel input", () => {
         installation.poll();
       });
 
-      await expect(page.getByRole("dialog", { name: "Quick Travel" })).toBeVisible();
+      await expect(page.getByRole("dialog", { name: "Hub", exact: true })).toBeVisible();
     } finally {
       await closeOffline(fixture);
     }
@@ -90,7 +90,7 @@ test.describe("renderer Travel input", () => {
       });
 
       const canvas = page.locator("#canvas");
-      const palette = page.getByRole("dialog", { name: "Quick Travel" });
+      const palette = page.getByRole("dialog", { name: "Hub", exact: true });
       const search = page.getByRole("combobox", {
         name: "Destination, phrase, or friend",
       });
@@ -122,7 +122,7 @@ test.describe("renderer Travel input", () => {
         width: window.innerWidth,
         height: window.innerHeight,
       }));
-      const modalLayer = page.locator("#travel-palette-root");
+      const modalLayer = page.locator("#hub");
       const modalLayerBox = await modalLayer.boundingBox();
       expect(modalLayerBox).toEqual({
         x: 0,
@@ -177,10 +177,10 @@ test.describe("renderer Travel input", () => {
       await expect.poll(() => isDomActiveElement(search)).toBe(true);
       await page.keyboard.press("Tab");
       await expect.poll(() => page.evaluate(() =>
-        document.querySelector("#travel-palette-root")?.contains(document.activeElement),
+        document.querySelector("#hub")?.contains(document.activeElement),
       )).toBe(true);
 
-      await page.getByRole("button", { name: "Close Quick Travel" }).click();
+      await page.getByRole("button", { name: "Close Hub" }).click();
       await expect(palette).toBeHidden();
       await expect.poll(() => isDomActiveElement(canvas)).toBe(true);
 

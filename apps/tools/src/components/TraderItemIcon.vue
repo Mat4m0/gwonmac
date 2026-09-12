@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { traderItemIcon } from "../trader-assets";
-import type { TraderItem } from "../trader-catalog";
+import type { TraderItem } from "../../../../src/shared/trader-catalog";
 
 const props = defineProps<{ item: TraderItem; size?: "small" | "large" }>();
 const icon = computed(() => traderItemIcon(props.item));

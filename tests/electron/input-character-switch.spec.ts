@@ -353,7 +353,7 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
     await expect.poll(() => isDomActiveElement(
       dialog.getByRole("option", { name: /Private Alpha/u }),
     )).toBe(true);
-    await page.locator("#character-switch-root").click({ position: { x: 8, y: 8 } });
+    await page.locator("#hub").click({ position: { x: 8, y: 8 } });
     await expect(dialog).toBeHidden();
     await expect(page.locator("body")).not.toHaveAttribute("data-game-clicks", /.*/u);
 
@@ -426,12 +426,12 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
       palette.setEnabled(true);
       window.dispatchEvent(new CustomEvent("gw:travel-toggle", { cancelable: true, detail: {} }));
     });
-    const travel = page.getByRole("dialog", { name: "Quick Travel" });
+    const travel = page.getByRole("dialog", { name: "Hub", exact: true });
     await expect(travel).toBeVisible();
     await page.evaluate(() => window.dispatchEvent(
       new CustomEvent("gw:character-toggle", { cancelable: true }),
     ));
-    await expect(travel).toBeHidden();
+    await expect(travel).toBeVisible();
     await expect(dialog).toBeVisible();
     await page.evaluate(() => window.dispatchEvent(
       new CustomEvent("gw:travel-toggle", { cancelable: true, detail: {} }),

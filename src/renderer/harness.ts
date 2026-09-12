@@ -551,6 +551,8 @@ const emptySkillKeyBindings:
   import('../shared/contracts.js').AppSettings['skillKeyBindings'] =
     [null, null, null, null, null, null, null, null];
 window.gwToolsSettings = () => Object.freeze({
+  hubShortcuts: appSettings?.hubShortcuts ?? [],
+  shortcutOverrides: appSettings?.shortcutOverrides ?? {},
   gwonmacTools: appSettings?.gwonmacTools ?? false,
   buildLibrary: appSettings?.buildLibrary ?? true,
   tradeChat: appSettings?.tradeChat ?? true,
@@ -1400,6 +1402,7 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
     // artifact is available. Installing their owner here also still precedes
     // the official client's input hooks when a verified client does load.
     window.gwSurfaces = host.installSurfaceController(document);
+    window.gwHub = (await import('./hub.js')).createHub(document.body);
     window.dispatchEvent(new Event('gw:surfaces-ready'));
     installCharacterSwitchHost = characterSwitch.installCharacterSwitchHost;
     createClientHealthConfirmation =

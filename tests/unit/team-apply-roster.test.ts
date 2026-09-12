@@ -182,3 +182,35 @@ test("the count in a refusal is the work that landed, not the work attempted", a
     /1 change was confirmed before Apply stopped/,
   );
 });
+
+test('loading one player build never reconciles heroes or changes difficulty', async () => {
+  const { runBuildApply } = await import('../../src/shared/builds/team-apply-runner.ts');
+  const game = harness([{ hero: 6, agentId: 11, behaviour: 1, skills: null }]);
+  const { skillBarOf } = await import('../../src/shared/builds/library.ts');
+  await runBuildApply({ professions: ['W', 'R'], skills: skillBarOf(() => null), attributes: {} }, null, game.environment, 9);
+  assert.deepEqual(game.sent, []);
+});
+
+test('loading one hero build preserves the rest of the party', async () => {
+  const { runBuildApply } = await import('../../src/shared/builds/team-apply-runner.ts');
+  const { skillBarOf } = await import('../../src/shared/builds/library.ts');
+  const game = harness([{ hero: 6, agentId: 11, behaviour: 1, skills: [0,0,0,0,0,0,0,0] }, { hero: 7, agentId: 12, behaviour: 1, skills: null }]);
+  game.setHard(true);
+  await runBuildApply({ professions: ['W', 'R'], skills: skillBarOf(() => null), attributes: {} }, heroId(6), game.environment, 10);
+  assert.deepEqual(game.sent, []);
+  assert.equal(game.environment.party().hardMode, true);
+  assert.equal(game.environment.party().heroes.length, 2);
+});
+
+test('a replaced build target is refused before commands are submitted', async () => {
+  const { runBuildApply } = await import('../../src/shared/builds/team-apply-runner.ts');
+  const { skillBarOf } = await import('../../src/shared/builds/library.ts');
+  const game = harness([]);
+  let reads = 0;
+  const environment = { ...game.environment, party() {
+    if (++reads > 1) game.setPlayer({ agentId: 2, professions: [1,2], skills: null, attributes: [] });
+    return game.environment.party();
+  } };
+  await assert.rejects(runBuildApply({ professions: ['W', 'R'], skills: skillBarOf(() => null), attributes: {} }, null, environment, 11), /target changed/);
+  assert.deepEqual(game.sent, []);
+});

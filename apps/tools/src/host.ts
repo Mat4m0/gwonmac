@@ -9,6 +9,7 @@ import {
 } from "../../../src/shared/builds/live-party";
 import {
   skillId,
+  type HeroId,
 } from "../../../src/shared/builds/library";
 import { parseBuildLibrary } from "../../../src/shared/builds/parse-library";
 import type {
@@ -23,6 +24,7 @@ import type {
 import { encodeSkillTemplate } from "../../../src/shared/builds/skill-template";
 import {
   runTeamApply,
+  runBuildApply,
   TeamApplyPreflightRefusal,
   type TeamApplyCommands,
   type TeamApplyEvent,
@@ -76,6 +78,8 @@ export interface ToolsHost {
     plan: TeamApplyPlan,
     onEvent?: (event: TeamApplyEvent) => void,
   ): Promise<TeamApplyResult>;
+  applyBuild(build: Build, hero: HeroId | null, onEvent?: (event: TeamApplyEvent) => void): Promise<TeamApplyResult>;
+  loadTemplates(): Promise<readonly { path: string; contents: string }[]>;
   cancelApply(): void;
   /**
    * Why `applyTeam` cannot reach the running game, or `null` when it can.
@@ -210,6 +214,8 @@ export function createDemoHost(storage: Storage | null = null): ToolsHost {
       await new Promise((resolve) => setTimeout(resolve, 180));
       return { fileName: safeFileName(build.name), location: "Templates/Skills" };
     },
+    async loadTemplates() { return []; },
+    async applyBuild() { return { commandId: 1, completedChanges: 0, skippedSkills: [] }; },
     async applyTeam() {
       await new Promise((resolve) => setTimeout(resolve, 180));
       return { commandId: 1, completedChanges: 0, skippedSkills: [] };
@@ -247,6 +253,7 @@ export function createNativeHost(
   applyUnavailable: string | null,
   development = false,
   observationUnavailable: string | null = null,
+  readTemplates?: ToolsHost["loadTemplates"],
 ): ToolsHost {
   const party = ref(unavailableParty());
   // One counter per session, so a result can be tied to the request that asked
@@ -262,6 +269,101 @@ export function createNativeHost(
     skills.replace(parsed);
     devTrace(development, "skills.loaded", { count: parsed.length });
   };
+  async function execute(plan: TeamApplyPlan, onEvent?: (event: TeamApplyEvent) => void, single?: { build: Build; hero: HeroId | null }): Promise<TeamApplyResult> {
+      if (commands === null) {
+        throw new Error(applyUnavailable ?? "Applying a team is unavailable.");
+      }
+      if (activeApply !== null) {
+        throw new Error("A team is already being applied.");
+      }
+      const operation = new AbortController();
+      activeApply = operation;
+      const timeline: TeamApplyEvent[] = [];
+      Reflect.deleteProperty(window, "gwTeamApplyProbe");
+      const currentCommandId = ++commandId;
+      devTrace(development, "apply.start", {
+        commandId: currentCommandId,
+        mode: plan.mode,
+        configuredMembers: plan.members.filter((member) => member.build !== null).length,
+      });
+      try {
+        const environment = {
+          commands,
+          // Read through the ref rather than captured: the overlay rewrites it on
+          // every published change, and a captured value would let the sequence
+          // confirm each step against the party as it was before it started.
+          party: () => party.value,
+          signal: operation.signal,
+          onEvent: (event: TeamApplyEvent) => {
+            if (development) {
+              if (timeline.length === 64) timeline.shift();
+              timeline.push(event);
+            }
+            onEvent?.(event);
+          },
+        };
+        const result = single ? await runBuildApply(single.build, single.hero, environment, currentCommandId)
+          : await runTeamApply(plan, environment, currentCommandId);
+        devTrace(development, "apply.complete", {
+          commandId: currentCommandId,
+          completedChanges: result.completedChanges,
+          skippedSkills: result.skippedSkills.length,
+        });
+        return result;
+      } catch (cause) {
+        const reportedCause = cause instanceof TeamApplyPreflightRefusal
+          ? new Error(
+              `${teamApplyRuntimeProblemMessage(cause.problem)} 0 changes were confirmed.`,
+              { cause },
+            )
+          : cause;
+        if (cause instanceof TeamApplyPreflightRefusal) {
+          const event = Object.freeze({
+            state: "failed" as const,
+            message: (reportedCause as Error).message,
+            elapsedMs: 0,
+          });
+          if (development) {
+            if (timeline.length === 64) timeline.shift();
+            timeline.push(event);
+          }
+          onEvent?.(event);
+        }
+        const probe = teamApplyProbe(
+          plan,
+          party.value,
+          currentCommandId,
+          reportedCause,
+          timeline,
+        );
+        if (development) {
+          Reflect.set(window, "gwTeamApplyProbe", probe);
+          console.warn(`[tools] team Apply probe ${JSON.stringify(probe)}`);
+        } else {
+          console.warn(
+            "[tools] Team Apply failed",
+            reportedCause instanceof Error
+              ? reportedCause.message
+              : String(reportedCause),
+          );
+        }
+        devTrace(development, "apply.failed", {
+          commandId: currentCommandId,
+          reason: reportedCause instanceof Error
+            ? reportedCause.message
+            : String(reportedCause),
+        });
+        throw reportedCause;
+      } finally {
+        // A refused confirmation must not leave a packet armed to fire after
+        // the UI has already reported failure. Clearing an empty mailbox is a
+        // no-op; clearing a stuck one makes the failure final and the next
+        // Apply independent.
+        if (!operation.signal.aborted) commands.cancelPending();
+        if (activeApply === operation) activeApply = null;
+      }
+
+  }
   return {
     label: "Saved on this Mac",
     skills,
@@ -330,98 +432,11 @@ export function createNativeHost(
       });
       return published;
     },
-    async applyTeam(plan, onEvent) {
-      if (commands === null) {
-        throw new Error(applyUnavailable ?? "Applying a team is unavailable.");
-      }
-      if (activeApply !== null) {
-        throw new Error("A team is already being applied.");
-      }
-      const operation = new AbortController();
-      activeApply = operation;
-      const timeline: TeamApplyEvent[] = [];
-      Reflect.deleteProperty(window, "gwTeamApplyProbe");
-      const currentCommandId = ++commandId;
-      devTrace(development, "apply.start", {
-        commandId: currentCommandId,
-        mode: plan.mode,
-        configuredMembers: plan.members.filter((member) => member.build !== null).length,
-      });
-      try {
-        const result = await runTeamApply(plan, {
-          commands,
-          // Read through the ref rather than captured: the overlay rewrites it on
-          // every published change, and a captured value would let the sequence
-          // confirm each step against the party as it was before it started.
-          party: () => party.value,
-          signal: operation.signal,
-          onEvent: (event) => {
-            if (development) {
-              if (timeline.length === 64) timeline.shift();
-              timeline.push(event);
-            }
-            onEvent?.(event);
-          },
-        }, currentCommandId);
-        devTrace(development, "apply.complete", {
-          commandId: currentCommandId,
-          completedChanges: result.completedChanges,
-          skippedSkills: result.skippedSkills.length,
-        });
-        return result;
-      } catch (cause) {
-        const reportedCause = cause instanceof TeamApplyPreflightRefusal
-          ? new Error(
-              `${teamApplyRuntimeProblemMessage(cause.problem)} 0 changes were confirmed.`,
-              { cause },
-            )
-          : cause;
-        if (cause instanceof TeamApplyPreflightRefusal) {
-          const event = Object.freeze({
-            state: "failed" as const,
-            message: (reportedCause as Error).message,
-            elapsedMs: 0,
-          });
-          if (development) {
-            if (timeline.length === 64) timeline.shift();
-            timeline.push(event);
-          }
-          onEvent?.(event);
-        }
-        const probe = teamApplyProbe(
-          plan,
-          party.value,
-          currentCommandId,
-          reportedCause,
-          timeline,
-        );
-        if (development) {
-          Reflect.set(window, "gwTeamApplyProbe", probe);
-          console.warn(`[tools] team Apply probe ${JSON.stringify(probe)}`);
-        } else {
-          console.warn(
-            "[tools] Team Apply failed",
-            reportedCause instanceof Error
-              ? reportedCause.message
-              : String(reportedCause),
-          );
-        }
-        devTrace(development, "apply.failed", {
-          commandId: currentCommandId,
-          reason: reportedCause instanceof Error
-            ? reportedCause.message
-            : String(reportedCause),
-        });
-        throw reportedCause;
-      } finally {
-        // A refused confirmation must not leave a packet armed to fire after
-        // the UI has already reported failure. Clearing an empty mailbox is a
-        // no-op; clearing a stuck one makes the failure final and the next
-        // Apply independent.
-        if (!operation.signal.aborted) commands.cancelPending();
-        if (activeApply === operation) activeApply = null;
-      }
-    },
+    applyTeam: (plan, onEvent) => execute(plan, onEvent),
+    applyBuild: (build, hero, onEvent) => execute({ mode: 'none', members: hero === null
+      ? [{ hero, build, behaviour: null }]
+      : [{ hero: null, build: null, behaviour: null }, { hero, build, behaviour: null }] }, onEvent, { build, hero }),
+    async loadTemplates() { return readTemplates ? readTemplates() : (await api.profileTemplates.loadTemplates())?.entries ?? []; },
     async openStorage() {
       if (storage === null) {
         throw new Error("Storage is unavailable after this Guild Wars update.");

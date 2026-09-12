@@ -65,6 +65,14 @@
       || command.type === 'diagnostics.toggle'
     ) window.gwSurfaces?.dismissTransient();
     switch (command.type) {
+      case 'hub.settings':
+        if (!window.gwHub) return 'unhandled';
+        window.gwHub.openSettings();
+        break;
+      case 'hub.toggle':
+        if (!window.gwHub) return 'unhandled';
+        window.gwHub.toggle();
+        break;
       case 'input.reset':
         dispatch('gw:input-reset');
         break;
@@ -101,13 +109,7 @@
         }
         break;
       case 'storage.open': {
-        const result: { error?: unknown } = {};
-        if (!dispatch('gw:storage-open', result)) {
-          throw new Error(
-            'Xunlai storage is not available in this launch.',
-          );
-        }
-        if (result.error !== undefined) throw result.error;
+        dispatch('gw:storage-open');
         break;
       }
       case 'travel.toggle': {

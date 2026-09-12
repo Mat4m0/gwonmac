@@ -130,10 +130,9 @@ the three-dot shortcut menu for **Clear** and **Restore default**.
 Skill labels only change the displayed labels, not Guild Wars key bindings.
 Character Switch has its own switch, shortcut, and display settings here.
 It is a Core feature and does not require **Enable Tools**.
-The in-game Character Switch settings also select a horizontal or vertical
-layout. Horizontal is the default and follows the character-selection order.
-The search bar is shown by default and can be hidden there. The layout and search
-choices last for the current app session.
+Inside Hub, Character Switch uses compact horizontal cards in character-selection
+order. Its settings control search, profession, level and known-location display.
+The search bar is shown by default and can be hidden for the current app session.
 
 Build Library defaults to **Command-B**. **Control-Shift-Space** remains a
 Guild Wars control for calling the selected target without attacking.
@@ -197,9 +196,64 @@ always visible. **Advanced grid lines** contains the individual line settings.
 **Use Cartographer defaults** selects that built-in without deleting custom
 styles. Deleting a custom style requires confirmation.
 
+## Hub command palette
+
+Press **Command-R** to search people, outposts, tools, and commands. Type a name, use Up and Down,
+and press Enter for the action shown in the footer. The **Actions** button opens secondary actions. **Command-K** opens Trade. Escape goes back or
+closes the palette. The game keeps running while Hub is open.
+
+With Travel enabled, search an outpost or your custom Travel phrase. Travel,
+favourites, recent places, and Guild Hall stay in the same window. Command-T
+and `/tp` also open Travel inside Hub.
+
+Search a friend's alias or character name and press Enter to choose an action.
+**Travel to outpost** uses Any district; it does not join the friend's exact
+instance. Offline or stale locations cannot start a trip. **Whisper** opens a
+compact conversation. You can also type `whisper Character Name` to start one.
+Press Enter or Send to submit a message; merely opening a result sends nothing.
+
+Whispers uses one conversation interface for person search, the Whispers shortcut,
+and the unread launcher. Messages, drafts, history, mute and unread state stay in
+that view. Escape or Left at the start of a draft returns to people; closing Hub
+keeps drafts for the game session. Character changes, leaving the game, or turning
+off Whispers clear the session. Invite remains absent without a certified action.
+
+Build Library, Trade Chat, Characters, and Whispers open inside Hub. Detach a tool
+when you want to keep it beside the game. Disabled tools are absent from search.
+Storage opens quietly and does not show a failure popup.
+
+Use `team gom afk` to review and apply that saved team, or `build smiter` to load
+an exact saved build on your character. Prefixes open a review first; duplicate
+names require selection. Builds can also target an existing hero without replacing
+your team. `10 ecto in p` shows labelled NPC trader buy and sell estimates with
+observation times. Fixed gold/platinum conversions work offline. Amounts accept attached or spaced
+units: `1p`, `1 p`, `100k`, `.5e`, `2a`, and `10zkeys`. Use `in` or `to`.
+Stacks, mixed sums and multiplication work too: `1 stack ecto in p`,
+`100k + 10e in a`, `250 * 1.5e in p`, or `14a/stk in e each`.
+
+Armbrace and Zaishen key conversions automatically use recent Kamadan advertisements
+when enough consistent evidence exists. Results start with `~` and explain that
+they are inferred from median advertised prices. Choose seller asking prices or
+buyer offers; sample counts and observation dates remain visible. Missing evidence
+shows **Not enough recent prices** quietly inside Hub.
+
+For an optional override, search `rates`, choose **Your rates**, and enter your
+values. These rates stay in this game window and are explicitly labelled.
+NPC results offer a Buy/Sell
+selector. Material names and common aliases such as iron, feathers, dust and
+obby shards use Trade's catalogue and its quoted batch quantities. Fractional
+item results are labelled Equivalent value.
+
+Use Actions to pin a result or give it an exact search phrase. Search **Hub
+preferences** to reorder pins, remove saved actions, or reset aliases. Search `resign` for its existing
+confirmation, or `reload` for the account's Quit or Reload dialog.
+
+A custom shortcut already using Command-R takes priority. Use **View → Hub**
+in that case. Existing custom shortcuts and cleared bindings are preserved.
+
 ## Switch Character
 
-Press **Command-R** to open **Switch Character** from a playable outpost.
+Press **Command-E** to open **Switch Character** from a playable outpost.
 The search bar is shown for every account size. Initial focus remains on the
 current character. Press Left or Up for the previous character. Press Right or
 Down for the next character. Start typing a character name or primary profession
@@ -208,7 +262,7 @@ to move focus to search. Secondary professions are not searched. The number keys
 to reload.
 
 Enable **Resign** in **Settings → Tools**. It is off by default and requires
-Tools. Its shortcut defaults to **Command-Shift-R** and can be changed or cleared
+Tools. Its shortcut is unassigned by default and can be assigned or cleared
 in the same row. Turning off Resign or Tools disables it immediately.
 
 Press the shortcut for **Resign** in PvE. Press Enter to confirm sending
@@ -310,3 +364,29 @@ Settings, launcher presentation preferences, profile metadata, builds,
 templates, diagnostics, and downloaded client data remain local unless you
 explicitly share a report. The launcher renderer cannot read credentials,
 sockets, snapshots, templates, or profile browser storage.
+
+### Title calculations in Hub
+
+Search `titles` for editable examples. Try `sweet tooth from 7350`, then press
+Enter to compare the items needed. `250 cupcakes in sweet points` converts items
+to base points; `250 sweet points for 3e` compares an offer by price per point.
+`zaishen rank 3 from 500` calculates the keys still needed. These are offline
+calculations from your entered numbers, not observed character progress.
+See [title calculators](hub-title-calculators.md) for supported items and syntax.
+
+
+Inside Hub, recent Travel destinations form a horizontal carousel and Favorites
+stay in a compact grid. With an empty query, arrows choose and Enter travels.
+Escape returns to Hub. While editing a query, Left/Right preserve caret movement;
+Right at the end can activate a search result. Tab reaches Travel settings.
+Hub keeps the same size and position across results and tools; content scrolls inside.
+
+Type `char Toefte` in Hub and press Enter on **Switch to Toefte**. Switching from
+an explorable area retains the existing leave-area confirmation. The current
+character is labelled and cannot be switched to again.
+
+Type `acc second` to choose **Close Main and open Second** or **Open Second**.
+The first opens the target successfully before saving and closing the current
+game; the second keeps both accounts open. Already-open accounts are shown instead
+of launched twice. Search **Switch Account** to browse all saved accounts. Sign-in
+stays in the normal Guild Wars window.

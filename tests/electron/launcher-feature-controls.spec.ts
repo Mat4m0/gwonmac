@@ -62,7 +62,7 @@ test("the game menu follows saved Character Switch enablement and bindings", asy
       const item = Menu.getApplicationMenu()?.getMenuItemById("switch-character");
       return item ? { enabled: item.enabled, accelerator: item.accelerator ?? null } : null;
     });
-    await expect.poll(menu).toEqual({ enabled: true, accelerator: "Command+R" });
+    await expect.poll(menu).toEqual({ enabled: true, accelerator: "Command+Shift+R" });
     await launcher.evaluate(async () => {
       await window.launcherNative.tools.setFeature({ tool: "character-switch", enabled: false });
       await window.launcherNative.tools.replaceShortcut({ action: "character.switch", binding: { key: "j", shift: false, option: false } });

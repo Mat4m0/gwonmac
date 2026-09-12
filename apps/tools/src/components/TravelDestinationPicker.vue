@@ -49,6 +49,7 @@ async function onToggle(): Promise<void> {
 function close(): void {
   if (details.value !== null) details.value.open = false;
   open.value = false;
+  details.value?.querySelector<HTMLElement>("summary")?.focus();
 }
 
 function choose(destination: TravelDestination): void {
@@ -67,6 +68,7 @@ function move(direction: 1 | -1): void {
 }
 
 function onKeydown(event: KeyboardEvent): void {
+  if (event.isComposing) return;
   if (event.key === "Escape") {
     event.preventDefault();
     event.stopPropagation();
@@ -76,11 +78,13 @@ function onKeydown(event: KeyboardEvent): void {
   }
   if (event.key === "ArrowDown" || event.key === "ArrowUp") {
     event.preventDefault();
+    event.stopPropagation();
     move(event.key === "ArrowDown" ? 1 : -1);
     return;
   }
   if (event.key === "Enter" && activeDestination.value !== null) {
     event.preventDefault();
+    event.stopPropagation();
     choose(activeDestination.value);
   }
 }

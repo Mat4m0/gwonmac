@@ -15,10 +15,10 @@ Three sources have different jobs:
 | Source | What it owns for this work | What must not be copied wholesale |
 | --- | --- | --- |
 | [Current gwonmac](../) | Current native behavior, settings, feature availability, persistence, shared controls and release workflow | No replacement with an older checkout |
-| [Hub worktree](../../gwonmac-command-palette/) and [Hub specification](../../gwonmac-command-palette/spec.md) | Accepted search, task flows, navigation, shortcuts and preserved state | Unrelated changes, older versions of current native owners, historical bugs |
-| [UI study](/Users/matthias/Downloads/gw-ui-study/DESIGN.md) | Classic artwork, frame reconstruction, visual references and theme exploration | Sample records, demo search, browser-only geometry/preferences, extra theme systems |
+| [Integrated Hub specification](../spec.md) (source: `gwonmac-command-palette`) | Accepted search, task flows, navigation, shortcuts and preserved state | Unrelated changes, older versions of current native owners, historical bugs |
+| UI study (`/Users/matthias/Downloads/gw-ui-study/DESIGN.md`) | Classic artwork, frame reconstruction, visual references and theme exploration | Sample records, demo search, browser-only geometry/preferences, extra theme systems |
 
-Task references: [Build Guild Wars UI study](codex://threads/01a081f9-6873-7413-af41-b49dd320b759) and [TOCHECK: RAYCAST COMMAND BAR](codex://threads/01a07a52-9ffc-7ce0-bb64-ebedc53cda37).
+Research sources: the “Build Guild Wars UI study” and “TOCHECK: RAYCAST COMMAND BAR” design discussions. The local source checkouts above contain the implementation evidence.
 
 ## What the research established
 
@@ -27,7 +27,7 @@ Task references: [Build Guild Wars UI study](codex://threads/01a081f9-6873-7413-
 - Their common ancestor is `c1d530f9`. The inspected committed tips have 21 main-only and six Hub-only commits, before counting working changes. This is an integration task as well as a visual task.
 - The study was clean at `0e01edd`. Its `GwHub.vue` uses fictional records and simplified substring search. It cannot replace the production Hub controller.
 - I opened both local previews and inspected Classic Home, working Hub Home, `build monk`, and `char Toefte`. The working Hub has real presentation for ordered skill bars and explicit action labels. The study has the original silver frame and stronger blue selection treatment.
-- The [old audit](../../gwonmac-command-palette/docs/hub-audit.md) contains a later closure table for all H01–H14. Its original verdict is historical. The [verification record](../../gwonmac-command-palette/docs/hub-verification.md) reports 40 passing browser journeys in the final historical batch. These are useful regression specifications, not fresh qualification of current main.
+- The [old audit](hub-audit.md) contains a later closure table for all H01–H14. Its original verdict is historical. The [verification record](hub-verification.md) reports 40 passing browser journeys in the final historical batch. These are useful regression specifications, not fresh qualification of current main.
 - Main already defines one shared UI system in [Tools design](../apps/tools/DESIGN.md), including font roles, controls, Classic/Modern/Custom, contrast handling, and independent opacity. The overhaul should extend this system.
 
 I did not run the full suites, open a live game, exercise real account changes, or modify application code during this research.
@@ -71,13 +71,13 @@ Preserve the accepted defaults and custom overrides: ⌘R Hub, ⌘E Characters, 
 
 ### Frame and assets
 
-Reuse the study's frame source regions and measurements from [frame.json](/Users/matthias/Downloads/gw-ui-study/visual/frame.json) and its [provenance](/Users/matthias/Downloads/gw-ui-study/visual/provenance.json). The successful reconstruction uses a single decorative Canvas 2D image. Shared integer physical-pixel boundaries avoid seams from separately composited translucent tiles.
+Reuse the study's frame source regions and measurements from `visual/frame.json` and `visual/provenance.json` in the study checkout. The successful reconstruction uses a single decorative Canvas 2D image. Shared integer physical-pixel boundaries avoid seams from separately composited translucent tiles.
 
 Port that drawing logic as a small shared frame renderer usable by the existing DOM Hub and Vue windows. A Vue wrapper may own attachment and disposal, but must not become another geometry or feature-state owner. Keep HTML controls above the decoration, with `aria-hidden` and no pointer handling on the frame artwork. Redraw on size or pixel-ratio changes; dragging alone does not require continuous painting.
 
 Resolve assets through gwonmac's existing build, protocol and font owners. Runtime must not depend on a Downloads path, the study's dev server, or a second font loader. Confirm the redistribution basis and preserve notices before packaging the source artwork. A local provenance hash establishes origin, not permission by itself.
 
-The study is a strong accepted reference, but its [comparison report](/Users/matthias/Downloads/gw-ui-study/visual/results/report.json) explicitly does not establish pixel-perfect equality to the game. Rail landmarks differ by one reference pixel, corner differences remain, and some diagnostic masks contain no comparable pixels. Preserve that distinction.
+The study is a strong accepted reference, but its comparison report (`visual/results/report.json` in the study checkout) explicitly does not establish pixel-perfect equality to the game. Rail landmarks differ by one reference pixel, corner differences remain, and some diagnostic masks contain no comparable pixels. Preserve that distinction.
 
 ### Tokens, controls and typography
 

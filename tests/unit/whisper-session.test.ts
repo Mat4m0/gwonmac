@@ -95,3 +95,21 @@ test("chat participants become bounded session-only suggestions without conversa
   assert.equal(session.state.participants.length, 0);
   assert.equal(session.state.backgroundOpacity, 100);
 });
+
+test('compact and full composers share one draft without opening two surfaces', async () => {
+  const session = createWhisperSession(async () => { throw new Error('Offline'); });
+  session.setAvailable(true);
+  session.open('Romi Ranger', { visible: false });
+  assert.equal(session.state.visible, false);
+  const key = 'romi ranger';
+  session.setDraft(key, 'Meet in Kamadan?');
+  await session.send(key);
+  assert.equal(session.state.conversations[0]?.draft, 'Meet in Kamadan?');
+  session.open('Romi Ranger');
+  assert.equal(session.state.visible, true);
+  assert.equal(session.state.conversations.length, 1);
+  assert.equal(session.state.conversations[0]?.draft, 'Meet in Kamadan?');
+  assert.equal(session.state.conversations[0]?.error, 'Offline');
+  session.reset();
+  assert.equal(session.state.conversations.length, 0);
+});

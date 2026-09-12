@@ -407,8 +407,11 @@ export function installApplicationMenu(actions: ApplicationMenuActions, settings
               {
                 id: "show-settings",
                 label: "Settings…",
-                accelerator: "CmdOrCtrl+,",
-                click: () => revealLauncher("settings"),
+                click: () => {
+                  const win = windowRegistry.focusedGameWindow();
+                  if (win) void sendRendererCommand(win, { type: "hub.settings" });
+                  else revealLauncher("settings");
+                },
               },
               { type: "separator" as const },
               { role: "hide" as const },
@@ -490,6 +493,11 @@ export function installApplicationMenu(actions: ApplicationMenuActions, settings
             await host.updateSettings({ showDiagnostics: !cur.showDiagnostics });
             await sendRendererCommand(win, { type: "diagnostics.toggle" });
           }),
+        },
+        {
+          id: "open-hub",
+          label: "Hub — Command Palette",
+          click: withGameOwner(win => sendRendererCommand(win, { type: "hub.toggle" }).then(() => {})),
         },
         {
           id: "switch-character",

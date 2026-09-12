@@ -54,7 +54,7 @@ function installLauncherMenu(revealLauncher: LauncherReveal, accounts: AccountMe
             {
               id: "show-settings",
               label: "Settings…",
-              accelerator: "CmdOrCtrl+,",
+
               click: () => revealLauncher("settings"),
             },
             { type: "separator" as const },

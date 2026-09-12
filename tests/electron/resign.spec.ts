@@ -7,7 +7,7 @@ import { startGameInput } from "./input-helpers.js";
 
 test("Resign uses the shared modal and submits only on Enter or its button", async () => {
   const fixture = await launchPlayableClient("gw-resign-", { GW_BACKGROUND_LAUNCH: "0" }, async userData => {
-    await writeFile(path.join(userData, "settings.json"), JSON.stringify({ gwonmacTools: true, resignEnabled: true }));
+    await writeFile(path.join(userData, "settings.json"), JSON.stringify({ gwonmacTools: true, resignEnabled: true, shortcutOverrides: { "game.resign": { key: "r", shift: true, option: false } } }));
   });
   try {
     const { app, page } = fixture;

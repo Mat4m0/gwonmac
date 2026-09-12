@@ -16,14 +16,14 @@ export type WhisperSessionState = Readonly<{
   conversations: readonly WhisperConversation[]; recent: readonly RecentPerson[];
   participants: readonly RecentPerson[];
   friends: TravelFriends; selected: string | null; visible: boolean;
-  available: boolean; sound: WhisperSound; backgroundOpacity: number; missed: number;
+  available: boolean; poppedOut: boolean; sound: WhisperSound; backgroundOpacity: number; missed: number;
 }>;
 export const whisperPersonKey = (name: string) => name.trim().toLocaleLowerCase("en-US");
 export const whisperUnread = (conversation: WhisperConversation) => conversation.messages
   .filter(message => message.direction === "incoming" && message.id > conversation.readThrough).length;
 const initial = (): WhisperSessionState => ({ conversations: [], recent: [], participants: [],
   friends: { status: "waiting", reason: "unavailable" }, selected: null,
-  visible: false, available: false, sound: "background", backgroundOpacity: 100, missed: 0 });
+  visible: false, available: false, poppedOut: false, sound: "background", backgroundOpacity: 100, missed: 0 });
 const MAX_CONVERSATIONS = 32;
 const MAX_MESSAGES = 200;
 const MAX_PARTICIPANTS = 50;
@@ -67,6 +67,7 @@ export function createWhisperSession(send: (recipient: string, message: string) 
     },
     setAvailable(available: boolean) { if (available !== state.available) publish({ available }); },
     setVisible(visible: boolean) { publish({ visible }); },
+    setPoppedOut(poppedOut: boolean) { publish({ poppedOut }); },
     setSound(sound: WhisperSound) { publish({ sound }); },
     setBackgroundOpacity(backgroundOpacity: number) {
       if (Number.isInteger(backgroundOpacity) && backgroundOpacity >= 15 && backgroundOpacity <= 100) {
@@ -81,11 +82,11 @@ export function createWhisperSession(send: (recipient: string, message: string) 
       const keys = friendKeys();
       if (state.recent.some(p => keys.has(p.key))) publish({ recent: state.recent.filter(p => !keys.has(p.key)) });
     },
-    open(name: string) {
+    open(name: string, options: { visible?: boolean } = {}) {
       whisperLine(name.trim(), "x");
       const conversation = ensure(name);
       if (!conversation) throw new Error("Close a conversation before starting another (32 open).");
-      publish({ selected: conversation.key, visible: true });
+      publish({ selected: conversation.key, visible: options.visible ?? true });
     },
     showPicker() { publish({ selected: null, visible: true }); },
     observe(messages: readonly ObservedChatEvent[], missed = 0) {

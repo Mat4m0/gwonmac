@@ -658,7 +658,8 @@ export function createMainWindow(
   };
   installWindowShortcuts(win, {
     run(action) {
-      if (action === "character.switch") void toggleCharacterSwitch(win);
+      if (action === "hub.toggle") void sendRendererCommand(win, { type: "hub.toggle" });
+      else if (action === "character.switch") void toggleCharacterSwitch(win);
       else if (action === "game.call-target") void sendRendererCommand(win, { type: "game.call-target" });
       else if (action === "game.resign") return showResignGame(host, win);
       else if (action === "tools.toggle") void toggleTools(win);

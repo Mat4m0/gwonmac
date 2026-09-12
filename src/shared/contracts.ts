@@ -18,6 +18,9 @@
 import { DEFAULT_ALCOHOL_TIMER_POSITION, type AlcoholTimerPosition } from "./alcohol-timer.js";
 import type { EliteWikiRequest } from "./elite-wiki.js";
 import type { EliteTracking, EliteUpdate } from "./elite-skills.js";
+import type { HubSettingsApi } from "./hub-settings.js";
+import type { MarketSnapshot } from "./market-rates.js";
+import type { HubShortcut } from './hub-preferences.js';
 import type {
   DiagnosticSummary,
   RendererFrameBatch,
@@ -43,6 +46,8 @@ import type {
 } from "./visual-capture.js";
 import type {
   AccountTemplateLibrary,
+  HubAccountRequest,
+  HubAccountsSnapshot,
 } from "./accounts-contracts.js";
 import type { ShortcutOverrides } from "./keyboard-shortcuts.js";
 import {
@@ -450,6 +455,7 @@ export interface AppSettings {
   targetReadout: boolean;
   /** Player changes to the app-owned shortcuts; missing entries use defaults. */
   shortcutOverrides: ShortcutOverrides;
+  hubShortcuts: readonly HubShortcut[];
   /** Display-only labels that mirror the player's eight Guild Wars bindings. */
   skillKeyBindings: SkillKeyBindings;
   /** Show the configured skill-key labels over the eight player skill slots. */
@@ -542,6 +548,7 @@ export const RENDERER_WRITABLE_SETTINGS = [
   "characterSwitchProfession",
   "characterSwitchLevel",
   "characterSwitchLocation",
+  "hubShortcuts",
 ] as const satisfies readonly (keyof AppSettings)[];
 type RendererWritableSetting = (typeof RENDERER_WRITABLE_SETTINGS)[number];
 
@@ -622,6 +629,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   travelShortcuts: DEFAULT_STORED_TRAVEL_SHORTCUTS,
   targetReadout: false,
   shortcutOverrides: {},
+  hubShortcuts: [],
   skillKeyBindings: EMPTY_SKILL_KEY_BINDINGS,
   skillKeyLabelsEnabled: false,
   chatFiltersEnabled: false,
@@ -1018,6 +1026,8 @@ export type WasmBridgeMarkers = typeof WASM_BRIDGE_MARKERS;
  * They are events, so they travel as events and `level` travels as a number.
  */
 export type RendererCommand =
+  | { type: "hub.toggle" }
+  | { type: "hub.settings" }
   | { type: "input.reset" }
   | { type: "input.release"; code: string }
   | { type: "text.edit"; command: GameTextEditCommand }
@@ -1117,6 +1127,13 @@ export const CORE_IPC = {
   cartographyMapKnowledgeRecord: "gw:cartography:mapKnowledgeRecord",
   appOpenExternal: "gw:app:openExternal",
   appRevealPath: "gw:app:revealPath",
+  hubAccountsGet: "gw:hub:accounts:get",
+  hubAccountOpen: "gw:hub:account:open",
+  appOpenSettings: "gw:app:openSettings",
+  appShowLauncher: "gw:app:showLauncher",
+  hubSettingsGet: "gw:hub:settings:get",
+  hubSettingsUpdate: "gw:hub:settings:update",
+  hubShortcutCapture: "gw:hub:shortcut:capture",
   appRequestQuit: "gw:app:requestQuit",
   appReloadGame: "gw:app:reloadGame",
   appClaimRelogIntent: "gw:app:claimRelogIntent",
@@ -1147,6 +1164,7 @@ export const TOOLS_IPC = {
   tradeEvent: "gw:trade:event",
   tradeSavedGet: "gw:trade:saved:get",
   tradeSavedSet: "gw:trade:saved:set",
+  marketRatesGet: "gw:trade:market-rates:get",
   traderQuotesGet: "gw:trader:quotes:get",
   traderPriceHistoryGet: "gw:trader:priceHistory:get",
   travelPreferencesGet: "gw:travelPreferences:get",
@@ -1317,10 +1335,17 @@ export interface CoreGwNativeApiBase {
       value: CartographyEvidenceCapture,
     ): Promise<CartographyEvidenceExportResult>;
   };
+  accounts: {
+    get(): Promise<HubAccountsSnapshot>;
+    open(request: HubAccountRequest): Promise<void>;
+  };
+  hubSettings: HubSettingsApi;
   app: {
+    showLauncher(): Promise<void>;
     openExternal(kind: ExternalLinkKind): Promise<void>;
     /** Reveal a named app directory in Finder. */
     reveal(kind: RevealKind): Promise<void>;
+    openSettings(): Promise<void>;
     requestQuit(): Promise<void>;
     reloadGame(cause: GameReloadCause): Promise<void>;
     claimRelogIntent(): Promise<boolean>;
@@ -1380,6 +1405,7 @@ export interface ToolsNativeApiExtension {
     retry(source: TradeSource): Promise<void>;
     getSaved(): Promise<TradeSavedState>;
     setSaved(value: TradeSavedState): Promise<TradeSavedState>;
+    getMarketRates(): Promise<MarketSnapshot>;
     getTraderQuotes(): Promise<TraderQuoteSnapshot>;
     getTraderPriceHistory(
       request: TraderPriceHistoryRequest,

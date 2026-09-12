@@ -2,6 +2,7 @@
  * Owns input isolation and Vue lifetime for the optional whisper surface.
  * Temporary region withdrawal hides the view without losing its placement.
  */
+import { toggleHubWhispers } from './hub-whisper.js';
 import type { WhisperSession } from "../shared/whisper-session.js";
 import type { EmbeddedToolsBundle } from "../shared/tools-bundle-contracts.js";
 import { createNonActivatingSurface } from "./non-activating-surface.js";
@@ -21,7 +22,11 @@ export function createWhisperSurface(parent: HTMLElement, session: WhisperSessio
   const toggle = (event: Event) => {
     if (!enabled || !session.state.available) return;
     event.preventDefault();
-    session.setVisible(!session.state.visible);
+    if (window.gwHub && (!(event instanceof CustomEvent) || event.detail !== 'detach')) {
+      toggleHubWhispers(event, window.gwHub, root, parent, session);
+      return;
+    }
+    session.setVisible(event instanceof CustomEvent && event.detail === "show" ? true : !session.state.visible);
     if (session.state.visible) requestAnimationFrame(() => {
       if (disposed || !enabled || !session.state.visible) return;
       const id = session.state.selected ? `draft-${session.state.selected}` : "whisper-person";

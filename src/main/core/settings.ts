@@ -33,6 +33,7 @@ import {
 } from "../../shared/contracts.js";
 import { isDigest } from "../../shared/digest.js";
 import { AppError } from "../../shared/errors.js";
+import { isHubShortcuts } from '../../shared/hub-preferences.js';
 import { isShortcutOverrides } from "../../shared/keyboard-shortcuts.js";
 import {
   cloneSkillKeyBindings,
@@ -231,6 +232,10 @@ export function parseSettings(raw: unknown): AppSettings {
       throw new AppError("bad_settings", "settings.cartographyRevealMode is invalid");
     }
     out.cartographyRevealMode = mode;
+  }
+  if ("hubShortcuts" in src) {
+    if (!isHubShortcuts(src.hubShortcuts) || src.hubShortcuts.some(entry => /^(build|team):/u.test(entry.id))) throw new AppError("bad_settings", "Invalid Hub shortcuts");
+    out.hubShortcuts = src.hubShortcuts.map(entry => ({ ...entry }));
   }
   if ("shortcutOverrides" in src) {
     if (!isShortcutOverrides(src.shortcutOverrides)) {

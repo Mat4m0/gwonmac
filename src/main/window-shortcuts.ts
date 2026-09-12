@@ -2,11 +2,14 @@
  * Window-scoped shortcut interception and recording before Guild Wars sees a key.
  * Settings stay durable elsewhere; this controller owns only the live input state.
  */
+import { isAppShortcutCaptureActive } from "./launcher-shortcut-capture.js";
 import type { BrowserWindow } from "electron";
 import type { AppSettings, GameTextEditCommand } from "../shared/contracts.js";
 import { featureActivationRequested } from "../shared/feature-contracts.js";
 import {
   resolveShortcuts,
+  HUB_SHORTCUT,
+  hubShortcutAvailable,
   shortcutFromInput,
   shortcutMatches,
   type ShortcutAction,
@@ -29,7 +32,7 @@ const tracedKey = (key: string) => {
 };
 
 interface ShortcutActions {
-  run(action: ShortcutAction): void | Promise<void>;
+  run(action: ShortcutAction | "hub.toggle"): void | Promise<void>;
   edit(command: GameTextEditCommand): void;
   quitOrReload(): void | Promise<void>;
   recordCommandQ?(
@@ -59,6 +62,7 @@ const textEditCommand = (input: Electron.Input): GameTextEditCommand | null => {
 };
 
 class WindowShortcuts {
+  #hubAvailable = true;
   readonly #actions: ShortcutActions;
   #shortcuts = resolveShortcuts({
     "game.call-target": null,
@@ -82,6 +86,7 @@ class WindowShortcuts {
   ) {
     this.#actions = actions;
     win.webContents.on("before-input-event", (event, input) => {
+      if (isAppShortcutCaptureActive(win)) return;
       if (input.type === "keyUp") {
         const decision = this.#claimedCodes.get(input.code);
         if (decision && isTextEditClaim(decision) && input.control && !input.meta) {
@@ -131,18 +136,18 @@ class WindowShortcuts {
       }
       if (this.#capture) {
         if (["Meta", "Control", "Shift", "Alt"].includes(input.key)) return;
-        if (input.key === "Tab") return;
+        if (input.key === "Tab" && !input.meta && !input.control && !input.alt) return;
         event.preventDefault();
         recordMainInput(win, {
           source: 'main', kind: 'native-key', phase: 'down',
           key: tracedKey(input.key), repeat: input.isAutoRepeat, decision: 'capture',
         });
         this.#claimedCodes.set(input.code, 'capture');
-        if (input.key === "Escape") {
+        if (input.key === "Escape" && !input.meta && !input.control && !input.shift && !input.alt) {
           this.#finish({ status: "cancelled" });
           return;
         }
-        if (input.key === "Backspace" || input.key === "Delete") {
+        if ((input.key === "Backspace" || input.key === "Delete") && !input.meta && !input.control && !input.shift && !input.alt) {
           this.#finish({ status: "cleared" });
           return;
         }
@@ -228,6 +233,12 @@ class WindowShortcuts {
         }
         return;
       }
+      if (this.#hubAvailable && shortcutMatches(HUB_SHORTCUT, input)) {
+        event.preventDefault();
+        this.#claimedCodes.set(input.code, 'shortcut');
+        if (!input.isAutoRepeat) void this.#actions.run("hub.toggle");
+        return;
+      }
       for (const [action, binding] of Object.entries(this.#shortcuts)) {
         if (binding && shortcutMatches(binding, input)) {
           recordMainInput(win, {
@@ -270,6 +281,7 @@ class WindowShortcuts {
     | "callTargetEnabled"
     | "cartographyEnabled"
   >): void {
+    this.#hubAvailable = hubShortcutAvailable(settings.shortcutOverrides);
     const resolved = resolveShortcuts(settings.shortcutOverrides);
     this.#shortcuts = {
       "game.call-target": featureActivationRequested("callTarget", settings) ? resolved["game.call-target"] : null,

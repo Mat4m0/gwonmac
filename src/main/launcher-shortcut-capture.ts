@@ -1,5 +1,5 @@
 /**
- * Captures one macOS application shortcut at the launcher boundary. Main owns
+ * Captures one macOS application shortcut for launcher and in-game settings. Main owns
  * reserved keys and Tool conflicts, so renderer code cannot bypass the policy.
  */
 import type { BrowserWindow, Event, Input } from "electron";
@@ -9,6 +9,8 @@ import { resolveShortcuts, shortcutConflict, shortcutFromInput, shortcutReserved
 
 const CAPTURE_TIMEOUT_MS = 30_000;
 const activeCaptures = new WeakMap<BrowserWindow, () => void>();
+
+export const isAppShortcutCaptureActive = (win: BrowserWindow) => activeCaptures.has(win);
 
 export function captureLauncherShortcut(
   win: BrowserWindow,
@@ -33,11 +35,11 @@ export function captureLauncherShortcut(
       if (input.type !== "keyDown" || input.isAutoRepeat) return;
       if (["Meta", "Control", "Shift", "Alt"].includes(input.key)) return;
       event.preventDefault();
-      if (input.key === "Escape") {
+      if (input.key === "Escape" && !input.meta && !input.control && !input.shift && !input.alt) {
         finish({ status: "cancelled" });
         return;
       }
-      if (input.key === "Backspace" || input.key === "Delete") {
+      if ((input.key === "Backspace" || input.key === "Delete") && !input.meta && !input.control && !input.shift && !input.alt) {
         finish({ status: "cleared" });
         return;
       }

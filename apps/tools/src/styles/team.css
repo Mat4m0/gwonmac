@@ -448,7 +448,7 @@
   }
 }
 
-@container detail-pane (max-width: 479px) {
+@container detail-pane (max-width: 560px) {
   .team-scroll { padding: var(--ui-space-3); }
   .detail-title-line { flex-wrap: wrap; }
   .detail-header-actions {
@@ -489,7 +489,7 @@
 
 /* Below this, list and detail become separate views rather than two columns
    too narrow to read. */
-@container (max-width: 640px) {
+@container (max-width: 800px) {
   .workspace {
     display: block;
     position: relative;
@@ -591,4 +591,16 @@
     animation-iteration-count: 1 !important;
     transition-duration: 1ms !important;
   }
+}
+
+.team-mode .ui-segment { flex-wrap:wrap; min-width:0; }
+@container detail-pane (min-width:561px) and (max-width:860px) {
+  .team-slots > li { grid-template-columns:18px minmax(130px,.8fr) minmax(150px,1fr) 96px auto; }
+  .team-slots .skill-bar { display:flex; grid-column:2 / 4; grid-row:2; }
+  .team-slots .behavior-picker { grid-column:4; grid-row:1; }
+  .team-slots .team-member-actions { grid-column:5; grid-row:1; }
+}
+@container detail-pane (max-width:560px) {
+  .team-title-line { grid-template-columns:36px minmax(0,1fr); }
+  .team-title-line .detail-header-actions { grid-column:1 / -1; padding-left:0; }
 }

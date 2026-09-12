@@ -26,6 +26,7 @@ its rules.
 | How do elite capture markers and character plans work? | [Elite skills](elite-skills.md) |
 | How do I certify every cartography layer in a live game? | [Live cartography certification](live-cartography-certification.md) |
 | What remains to research for party and hostile effects? | [Future effect and debuff research](future-effect-durations.md) |
+| How should Hub search and operate tools, teams, builds, and conversions? | [Hub specification](../spec.md) and [verification evidence](hub-verification.md) |
 | How do application releases, Stable, and Beta work? | [Release verification](release-verification.md) |
 | Which UI tokens and components must Tools use? | [Tools design](../apps/tools/DESIGN.md) |
 

@@ -1,7 +1,8 @@
 /**
- * Owns the Core Command-R character palette, including focus and keyboard use.
+ * Owns the Core Command-E character palette, including focus and keyboard use.
  * It renders one bounded source and never reads game memory or native exports.
  */
+import { hubMatch, normaliseHubQuery } from "../shared/hub.js";
 import type {
   CharacterSummary,
 } from "./companion-character-list-snapshot.js";
@@ -61,13 +62,7 @@ export function orderCharacters(
 
 export const CHARACTER_SEARCH_LIMIT = 40;
 
-function normaliseCharacterQuery(value: string): string {
-  return value
-    .normalize("NFKD")
-    .replace(/\p{M}+/gu, "")
-    .trim()
-    .toLocaleLowerCase();
-}
+const normaliseCharacterQuery = normaliseHubQuery;
 
 export function searchCharacters(
   rows: ReturnType<typeof orderCharacters>,
@@ -76,13 +71,9 @@ export function searchCharacters(
   if (query.length > CHARACTER_SEARCH_LIMIT) return Object.freeze([]);
   const term = normaliseCharacterQuery(query);
   if (term === "") return rows;
-  const terms = term.split(/\s+/u);
   return Object.freeze(rows.filter(({ character }) => {
-    const name = normaliseCharacterQuery(character.name);
     const profession = professionPresentation(character.primaryProfession);
-    return terms.every((candidate) => name.includes(candidate))
-      || (profession !== null
-        && normaliseCharacterQuery(profession.name).includes(term));
+    return hubMatch(character.name, term, profession ? [profession.name] : []) !== null;
   }));
 }
 
@@ -113,23 +104,11 @@ export function characterCarouselRows(
   radius = 3,
 ): readonly (number | null)[] {
   const capacity = radius * 2 + 1;
-  if (count <= capacity) {
-    const leadingSlots = Math.floor((capacity - count) / 2);
-    return Object.freeze(Array.from(
-      { length: capacity },
-      (_, offset) => {
-        const row = offset - leadingSlots;
-        return row >= 0 && row < count ? row : null;
-      },
-    ));
-  }
-  return Object.freeze(Array.from(
-    { length: capacity },
-    (_, offset) => {
-      const row = selected + offset - radius;
-      return row >= 0 && row < count ? row : null;
-    },
-  ));
+  const start = Math.max(0, Math.min(selected - radius, count - capacity));
+  return Object.freeze(Array.from({ length: capacity }, (_, offset) => {
+    const row = start + offset;
+    return row < count ? row : null;
+  }));
 }
 
 export function createCharacterSwitchPalette(
@@ -206,14 +185,19 @@ export function createCharacterSwitchPalette(
   let enabled = false;
   let rows: ReturnType<typeof orderCharacters> = [];
   const busy = () => source.action.status === "switching";
-  const carouselRadius = () => window.innerWidth <= 680 ? 1 : window.innerWidth <= 1050 ? 2 : 3;
-  const modal = window.gwSurfaces.registerDialog({
-    root,
-    priority: 7,
-    transient: true,
-    dismiss: () => closePalette(true),
-    restoreFocus: () => canvas,
-  });
+  const carouselRadius = () => window.gwHub ? (window.innerWidth <= 640 ? 1 : 2) : window.innerWidth <= 680 ? 1 : window.innerWidth <= 1050 ? 2 : 3;
+  const hub = window.gwHub;
+  let hubBack: (() => void) | undefined;
+  const modal = hub ? {
+    show() { hub.showView('Characters', (target, back) => {
+      hubBack = back;
+      target.append(root); root.open = true;
+      return () => { hubBack = undefined; root.open = false; parent.append(root); if (view.kind === 'confirming') source.cancelConfirmation(); view = { kind: 'closed' }; };
+    }, () => !!window.gwToolsSettings?.().characterSwitchEnabled); },
+    close() { hub.close(); },
+    dispose() { if (root.open) hub.close(); },
+  } : window.gwSurfaces.registerDialog({ root, priority: 7, transient: true,
+    dismiss: () => closePalette(true), restoreFocus: () => canvas });
   const updateRowSelection = () => {
     for (const button of list.querySelectorAll<HTMLButtonElement>("button[data-row]")) {
       button.dataset.selected = String(Number(button.dataset.row) === selected);
@@ -245,9 +229,9 @@ export function createCharacterSwitchPalette(
     }
     const state = source.characters;
     const searching = state.status === "ready" && normaliseCharacterQuery(query) !== "";
-    const horizontal = layout === "horizontal";
-    root.dataset.layout = layout;
-    panel.dataset.layout = layout;
+    const horizontal = !!hub || layout === "horizontal";
+    root.dataset.layout = horizontal ? "horizontal" : "vertical";
+    panel.dataset.layout = root.dataset.layout;
     const focusedCharacterKey = preserveCharacterFocus
       && document.activeElement instanceof HTMLButtonElement
       && list.contains(document.activeElement)
@@ -363,7 +347,9 @@ export function createCharacterSwitchPalette(
         if (metaParts.length > 0) {
           const meta = document.createElement("span");
           meta.className = "character-switch-meta";
-          meta.textContent = metaParts.join(" · ");
+          meta.textContent = hub
+            ? [displayPreferences.characterSwitchLevel ? `Lv ${character.level}` : '', destination?.name.split(',')[0]].filter(Boolean).join(' · ')
+            : metaParts.join(" · ");
           meta.title = meta.textContent;
           copy.append(meta);
         }
@@ -413,7 +399,7 @@ export function createCharacterSwitchPalette(
     }
     for (const input of layoutInputs) input.checked = input.value === layout;
     const searchHint = searchEnabled ? ' <kbd class="ui-kbd">type</kbd> search' : "";
-    listHints.innerHTML = `<kbd class="ui-kbd">←↑</kbd> <kbd class="ui-kbd">→↓</kbd> choose${searchHint} <kbd class="ui-kbd">return</kbd> switch <kbd class="ui-kbd">esc</kbd> close`;
+    listHints.innerHTML = `<kbd class="ui-kbd">←↑</kbd> <kbd class="ui-kbd">→↓</kbd> choose${searchHint} <kbd class="ui-kbd">return</kbd> switch <kbd class="ui-kbd">esc</kbd> ${hub ? "back" : "close"}`;
     queryInput.setAttribute("aria-expanded", String(searching && rows.length > 0));
     if (searching) queryInput.setAttribute("aria-controls", "character-switch-list");
     else queryInput.removeAttribute("aria-controls");
@@ -455,7 +441,7 @@ export function createCharacterSwitchPalette(
     view = Object.freeze({ kind: "characters" });
     const state = source.characters;
     if (state.status === "ready") {
-      const openingRows = layout === "horizontal"
+      const openingRows = hub || layout === "horizontal"
         ? state.characters.map((character, index) => Object.freeze({ character, index }))
         : orderCharacters(state.characters);
       const current = openingRows.findIndex(({ index }) => index === state.selectedIndex);
@@ -484,6 +470,7 @@ export function createCharacterSwitchPalette(
     beginRequest(row.character.characterKey);
   };
   root.addEventListener("keydown", (event) => {
+    if (event.isComposing || event.defaultPrevented) return;
     if (event.key === "Escape") {
       event.preventDefault();
       if (view.kind === "confirming" || view.kind === "settings") {
@@ -498,7 +485,7 @@ export function createCharacterSwitchPalette(
         render();
         queryInput.focus({ preventScroll: true });
         revealSelected();
-      } else closePalette(true);
+      } else if (hubBack) hubBack(); else closePalette(true);
     }
     else if (view.kind !== "characters") return;
     else if (event.key === "ArrowDown" && event.target === queryInput) {
@@ -533,7 +520,7 @@ export function createCharacterSwitchPalette(
       revealSelected();
       return;
     }
-    if (event.key !== "Enter" || busy()) return;
+    if (event.key !== "Enter" || busy() || event.isComposing || event.repeat || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
     event.preventDefault();
     requestSelected();
   });
@@ -598,7 +585,7 @@ export function createCharacterSwitchPalette(
     preferenceFailure = false;
     render();
     if (view.kind === "settings") {
-      layoutInputs.find((input) => input.checked)?.focus({ preventScroll: true });
+      (hub ? searchCheckbox : layoutInputs.find((input) => input.checked))?.focus({ preventScroll: true });
     }
     else focusSelected();
   });
@@ -678,7 +665,15 @@ export function createCharacterSwitchPalette(
     event.preventDefault();
     if (source.action.status === "switching") return;
     if (root.open) closePalette(true);
-    else openPalette();
+    else {
+      openPalette();
+      if (event instanceof CustomEvent && typeof event.detail?.characterKey === 'string') {
+        selected = rows.findIndex(row => row.character.characterKey === event.detail.characterKey);
+        if (event.detail.activate === true && selected >= 0) { requestSelected(); return; }
+        if (selected < 0) selected = 0;
+        render(false); focusSelected(); revealSelected();
+      }
+    }
   };
   window.addEventListener("gw:character-toggle", onToggle);
   const unsubscribeSettings = window.gwNative.settings.onChange((settings) => {

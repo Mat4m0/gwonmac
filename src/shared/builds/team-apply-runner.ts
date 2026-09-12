@@ -380,10 +380,11 @@ function sameAttributes(
  * id until it is in the party, and everything except adding and removing is
  * keyed by agent id.
  */
-export async function runTeamApply(
+async function runConfiguration(
   plan: TeamApplyPlan,
   environment: TeamApplyEnvironment,
   commandId: number,
+  reconcileRoster: boolean,
 ): Promise<TeamApplyResult> {
   const opening = environment.party();
   const preflight = preflightTeamApply(plan, opening);
@@ -493,9 +494,10 @@ export async function runTeamApply(
       }
     }
 
+    const wantedOrder = wanted.map(({ hero }) => hero);
+    if (reconcileRoster) {
     let rosterActions = 0;
     const beforeRoster = writableParty(environment).heroes.map(({ hero }) => hero);
-    const wantedOrder = wanted.map(({ hero }) => hero);
     if (!canReconcileTeamRoster(beforeRoster, wantedOrder)) {
       while (writableParty(environment).heroes.length > 0) {
         const next = writableParty(environment).heroes[0]!;
@@ -551,6 +553,8 @@ export async function runTeamApply(
           : { state: "waiting" },
       );
       completedChanges += 1;
+    }
+
     }
 
     for (const member of wanted) {
@@ -677,7 +681,7 @@ export async function runTeamApply(
       }
     }
     const finalHeroes = writableParty(environment).heroes.map(({ hero }) => hero);
-    if (!teamRosterOrderMatches(finalHeroes, wantedOrder)) {
+    if (reconcileRoster && !teamRosterOrderMatches(finalHeroes, wantedOrder)) {
       throw new ApplyRefused("the final party order did not match the team");
     }
   } catch (cause) {
@@ -715,4 +719,32 @@ export async function runTeamApply(
     // skill it skipped tells the player it is one they have not unlocked.
     skippedSkills: Object.freeze([...skipped]),
   });
+}
+
+/** Applies a complete team, including its explicit roster and difficulty. */
+export function runTeamApply(plan: TeamApplyPlan, environment: TeamApplyEnvironment, commandId: number): Promise<TeamApplyResult> {
+  return runConfiguration(plan, environment, commandId, true);
+}
+
+/** Loads only one existing member's build. This path cannot add or remove heroes. */
+export function runBuildApply(
+  build: NonNullable<TeamApplyMember['build']>, hero: HeroId | null,
+  environment: TeamApplyEnvironment, commandId: number,
+): Promise<TeamApplyResult> {
+  const opening = environment.party();
+  const target = hero === null ? opening.player : opening.heroes.find(member => member.hero === hero);
+  if (!target || !target.agentId) return Promise.reject(new Error('Select an observed party member.'));
+  const agentId = target.agentId;
+  const guarded: TeamApplyEnvironment = {
+    ...environment,
+    party: () => {
+      const current = environment.party();
+      const member = hero === null ? current.player : current.heroes.find(member => member.hero === hero);
+      if (member?.agentId !== agentId) throw new Error('The build target changed. Select them again.');
+      return current;
+    },
+  };
+  const member: TeamApplyMember = { hero, build, behaviour: null };
+  return runConfiguration({ mode: 'none', members: hero === null ? [member]
+    : [{ hero: null, build: null, behaviour: null }, member] }, guarded, commandId, false);
 }

@@ -1,3 +1,7 @@
+/**
+ * Canonical trader item names, identifiers and quoted quantities.
+ * Shared by Trade browsing and Hub conversion without a second price catalogue.
+ */
 export const TRADER_PRICE_CATEGORIES = [
   "common-materials",
   "rare-materials",

@@ -28,6 +28,7 @@ import type * as TeamCommandsModule from "./enhancement-team-commands.js";
 import type { ProfessionCommandTraceReader } from "./profession-command-trace.js";
 import { createWhisperInstallation, type WhisperInstallation } from "./whisper-installation.js";
 import { createWhisperSession } from "../shared/whisper-session.js";
+import { createHubPeople } from "./hub-people.js";
 import { createWhisperSurface } from "./whisper-surface.js";
 import { installResignCommand } from "./resign.js";
 import type { StorageInstallation } from "./enhancement-storage-installation.js";
@@ -333,6 +334,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
   const whispers = input.whispers;
   const whisperSession = createWhisperSession(whispers.send);
   const unsubscribeWhispers = whispers.subscribe((messages, missed) => whisperSession.observe(messages, missed));
+  let hubPeople: ReturnType<typeof createHubPeople> | null = null;
   let whisperSurface: ReturnType<typeof createWhisperSurface> | null = null;
   let whisperCharacter: string | null = null;
   const resign = input.resignExports ? installResignCommand(input.resignExports) : null;
@@ -392,12 +394,12 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
         companionFriendsSignature(previous) === companionFriendsSignature(next),
     });
   const unsubscribeFriends = friendFeed?.subscribe((friends) => {
-    travel?.updateFriends(friends); whisperSession.updateFriends(friends);
+    travel?.updateFriends(friends); whisperSession.updateFriends(friends); hubPeople?.updateFriends(friends);
   });
   const pollFriends = () => {
     if (activeFriendPointer === 0 || friendFeed === null) return;
     const nextObservation = (policy().travel && travel?.observingFriends() === true)
-      || (policy().whispers && whisperSession.state.visible && whisperSession.state.selected === null);
+      || (policy().whispers && (window.gwHub?.visible || (whisperSession.state.visible && whisperSession.state.selected === null)));
     if (nextObservation !== observingFriends) {
       observingFriends = nextObservation;
       if (!observingFriends) friendFeed.withdraw();
@@ -422,6 +424,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
       () => { unsubscribeAlcohol?.(); unsubscribeAlcoholGeometry?.(); alcoholOverlay?.dispose(); alcoholOverlay = null; },
       () => hud?.dispose(),
       () => { resign?.dispose(); },
+      () => { hubPeople?.dispose(); hubPeople = null; },
       () => { whispers.setEnabled(false); unsubscribeWhispers(); whisperSurface?.dispose(); whisperSurface = null; whisperSession.dispose(); },
       () => { configureTrade?.(0); },
       () => { configureChatFilters?.(0); },
@@ -587,11 +590,11 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
     const region = snapshot().playRegionState;
     if (region.status === "ready" && region.characterKey !== null) {
       if (whisperCharacter !== null && whisperCharacter !== region.characterKey) {
-        whispers.setEnabled(false); whispers.poll(); whisperSession.reset();
+        whispers.setEnabled(false); whispers.poll(); whisperSession.reset(); friendFeed?.withdraw();
       }
       whisperCharacter = region.characterKey;
     } else if (region.status === "waiting" && region.reason === "game") {
-      whispers.setEnabled(false); whispers.poll(); whisperSession.reset(); whisperCharacter = null;
+      whispers.setEnabled(false); whispers.poll(); whisperSession.reset(); friendFeed?.withdraw(); whisperCharacter = null;
     }
     whispers.setEnabled(policy().whispers);
     whisperSession.setAvailable(whispers.enabled);
@@ -611,6 +614,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
     const nextEliteIdentity = eliteRegion.status === "ready" ? `${eliteRegion.characterKey}:${eliteRegion.mapId}` : "";
     if (nextEliteIdentity !== eliteIdentity) { party = null; eliteIdentity = nextEliteIdentity; }
     eliteMaps.update(policy().cartography);
+    hubPeople?.setEnabled(policy().travel || policy().whispers);
     quickItemMoveInstallation?.update(policy().quickItemMove);
   };
   const syncPolicy = (reason: "region" | "settings") => {
@@ -619,6 +623,11 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
 
   prepare(() => storage?.mount());
   prepare(() => travel?.mount(document.body));
+  const hub = window.gwHub;
+  if (hub) hubPeople = prepare(() => createHubPeople(hub, whisperSession, travel ? {
+    unavailable: () => { const command = travel.command(); return command ? command.unavailable() : "Travel is unavailable"; },
+    run: (friend, generation) => travel.travelToFriend(friend, generation),
+  } : null));
   const storageCommand = storage?.command() ?? null;
   toolbox = foundation ? prepare(() => tools.createToolboxLifecycle(document.body, {
     mountTool: (host, visible) => import("./tools-host.js").then(({ mountToolsInto }) =>

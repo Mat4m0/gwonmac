@@ -49,6 +49,7 @@ function rendererCheckout(): string {
   write("src/renderer/harness.css", "css");
   write("src/renderer/cartography-overlay-controls.css", "controls-css");
   write("src/renderer/character-switch.css", "character-css");
+  write("src/renderer/hub.css", "hub-css");
   write("src/renderer/loading.css", "css");
   write("src/renderer/fonts/COPYING-QUALITYPE", "licence");
   write("src/renderer/fonts/QTFrizQuad.otf", "font");
@@ -157,6 +158,7 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
       "fonts/files/inter-vietnamese-wght-normal.woff2",
       "fonts/inter.css",
       "harness.css",
+      "hub.css",
       "images/bg-reforged.jpg",
       "images/logo.webp",
       "images/playstation-controller-prompts.png",

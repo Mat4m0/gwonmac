@@ -1,5 +1,5 @@
 /**
- * The shared in-game boundary for the two independent Tools windows.
+ * Shared lifetime for embedded Hub tools and their detachable windows.
  *
  * Builds & Teams and Trade Chat mount lazily into explicit hosts. They may be
  * open together; the last interacted host owns visual stacking, Escape and
@@ -31,6 +31,7 @@ export interface MountedTool {
   setVisible(visible: boolean): void;
   setActive?(active: boolean): void;
   requestClose(): void;
+  search?(query: string): void;
   update(state: ToolboxState): void;
   dispose(): void;
 }
@@ -55,6 +56,7 @@ type Slot = {
   tool: MountedTool | null;
   requested: boolean;
   visible: boolean;
+  query?: string;
 };
 
 export type ToolboxAvailability = Readonly<{
@@ -140,6 +142,7 @@ export function createToolboxFoundation(
           return;
         }
         slot.tool = mounted;
+        if (slot.query !== undefined) { mounted?.search?.(slot.query); delete slot.query; }
         mounted?.setVisible(slot.visible);
         mounted?.setActive?.(active === slot);
         if (slot.name === "builds") mounted?.update(state);
@@ -149,6 +152,7 @@ export function createToolboxFoundation(
   const setOpen = (slot: Slot, next: boolean) => {
     if (slot.visible === next) return;
     slot.visible = next;
+    if (!next && slot.host.closest('#hub')) window.gwHub?.close();
     if (next) {
       ensure(slot);
       activate(slot);
@@ -174,15 +178,36 @@ export function createToolboxFoundation(
     }, true);
   }
 
+  const openInHub = (slot: Slot, title: string) => {
+    const hub = window.gwHub;
+    if (!hub) { setOpen(slot, true); activate(slot); return; }
+    hub.showView(title, target => {
+      setOpen(slot, true); activate(slot);
+      const detach = document.createElement('button'); detach.className = 'hub-detach ui-button'; detach.textContent = 'Detach';
+      detach.onclick = () => { hub.close(); setOpen(slot, true); activate(slot); }; target.append(detach);
+      slot.host.classList.add('hub-embedded-host'); target.append(slot.host);
+      const focus = () => slot.host.querySelector<HTMLInputElement>('input[type="search"], input')?.focus();
+      requestAnimationFrame(focus);
+      return () => { slot.host.classList.remove('hub-embedded-host'); root.append(slot.host); setOpen(slot, false); };
+    }, () => slot === builds ? availability.builds : availability.trade);
+  };
   const onBuildsCommand = (event: Event) => {
     if (!availability.builds) return;
     event.preventDefault();
-    toggle(builds);
+    if (window.gwHub) openInHub(builds, "Builds and Teams");
+    else if (event instanceof CustomEvent && event.detail === "show") { setOpen(builds, true); activate(builds); }
+    else toggle(builds);
   };
   const onTradeCommand = (event: Event) => {
     if (!trade || !availability.trade) return;
     event.preventDefault();
-    toggle(trade);
+    if (event instanceof CustomEvent && typeof event.detail?.query === "string") {
+      if (trade.tool) trade.tool.search?.(event.detail.query);
+      else trade.query = event.detail.query;
+    }
+    if (window.gwHub) openInHub(trade, "Trade");
+    else if (event instanceof CustomEvent && event.detail === "show") { setOpen(trade, true); activate(trade); }
+    else toggle(trade);
   };
 
   const stopAtOverlay = (event: Event) => event.stopPropagation();
@@ -198,6 +223,8 @@ export function createToolboxFoundation(
   const cursorMirror = new MutationObserver(mirrorCursor);
   cursorMirror.observe(canvas, { attributes: true, attributeFilter: ["style"] });
   mirrorCursor();
+  const onHub = () => { if (availability.builds) ensure(builds); };
+  window.addEventListener("gw:hub-visible", onHub);
   window.addEventListener("gw:tools-toggle", onBuildsCommand);
   window.addEventListener("gw:trade-toggle", onTradeCommand);
 
@@ -220,6 +247,7 @@ export function createToolboxFoundation(
       }
       nonActivating.dispose();
       cursorMirror.disconnect();
+      window.removeEventListener("gw:hub-visible", onHub);
       window.removeEventListener("gw:tools-toggle", onBuildsCommand);
       window.removeEventListener("gw:trade-toggle", onTradeCommand);
       window.dispatchEvent(new CustomEvent("gw:input-reset"));

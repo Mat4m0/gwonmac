@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { traderItemIcon, traderProfessionIcon } from "./trader-assets";
-import { TRADER_ITEMS, TRADER_PROFESSIONS } from "./trader-catalog";
+import { TRADER_ITEMS, TRADER_PROFESSIONS } from "../../../src/shared/trader-catalog";
 
 describe("trader artwork", () => {
   it("bundles an item icon for the complete trader catalogue", () => {

@@ -14,6 +14,7 @@ import path from "node:path";
 const ASSETS = [
   "cartography-overlay-controls.css",
   "character-switch.css",
+  "hub.css",
   "favicon.ico",
   "favicon.png",
   "fonts/COPYING-QUALITYPE",

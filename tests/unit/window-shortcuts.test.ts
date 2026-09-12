@@ -86,7 +86,7 @@ describe("window shortcut input", () => {
     const win = { webContents: { on: (_name: string, listener: typeof dispatch) => { dispatch = listener; } }, on() { return win; } } as unknown as BrowserWindow;
     const actions: string[] = [];
     installWindowShortcuts(win, { run: async action => { actions.push(action); }, edit() {}, quitOrReload() {} });
-    const press = (code = "KeyR") => {
+    const press = (code = "KeyJ") => {
       let claimed = false;
       dispatch({ preventDefault() { claimed = true; } }, { type: "keyDown", code, key: code.slice(3), meta: true, control: false, shift: true, alt: false, isAutoRepeat: false });
       return claimed;
@@ -95,19 +95,19 @@ describe("window shortcut input", () => {
     assert.equal(press(), false);
     updateWindowShortcuts(win, { ...DEFAULT_SETTINGS, gwonmacTools: true });
     assert.equal(press(), false);
-    const enabled = { ...DEFAULT_SETTINGS, gwonmacTools: true, resignEnabled: true };
+    const enabled = { ...DEFAULT_SETTINGS, gwonmacTools: true, resignEnabled: true, shortcutOverrides: { "game.resign": { key: "j", shift: true, option: false } } };
     updateWindowShortcuts(win, enabled);
     assert.equal(press(), true);
     await new Promise(resolve => setImmediate(resolve));
     assert.equal(press(), true);
     await new Promise(resolve => setImmediate(resolve));
-    updateWindowShortcuts(win, { ...enabled, shortcutOverrides: { "game.resign": { key: "j", shift: true, option: false } } });
+    updateWindowShortcuts(win, { ...enabled, shortcutOverrides: { "game.resign": { key: "u", shift: true, option: false } } });
     assert.equal(press(), false);
-    assert.equal(press("KeyJ"), true);
+    assert.equal(press("KeyU"), true);
     await new Promise(resolve => setImmediate(resolve));
     updateWindowShortcuts(win, { ...enabled, shortcutOverrides: { "game.resign": null } });
     assert.equal(press(), false);
-    assert.equal(press("KeyJ"), false);
+    assert.equal(press("KeyU"), false);
     assert.deepEqual(actions, ["game.resign", "game.resign", "game.resign"]);
   });
 
@@ -128,13 +128,13 @@ describe("window shortcut input", () => {
     assert.equal(press("KeyG"), false);
     assert.equal(press("KeyR"), true);
     updateWindowShortcuts(win, { ...settings, gwonmacTools: true, characterSwitchEnabled: false });
-    assert.equal(press("KeyR"), false);
+    assert.equal(press("KeyR"), true);
     assert.equal(press("KeyG"), true);
     assert.equal(press("KeyL"), true);
     updateWindowShortcuts(win, { ...settings, gwonmacTools: true, cartographyEnabled: false });
     assert.equal(press("KeyG"), false);
     assert.equal(press("KeyL"), false);
-    assert.deepEqual(actions, ["character.switch", "cartography.grid.toggle", "cartography.walkability.toggle"]);
+    assert.deepEqual(actions, ["hub.toggle", "hub.toggle", "cartography.grid.toggle", "cartography.walkability.toggle"]);
   });
   it("runs one Command action, preserves Control, and contains capture repeats", async () => {
     let beforeInput: (
@@ -189,10 +189,13 @@ describe("window shortcut input", () => {
     });
 
     assert.equal(dispatch(keyDown("KeyR", "r")), true);
-    assert.deepEqual(actions, ["character.switch"]);
+    assert.deepEqual(actions, ["hub.toggle"]);
     assert.equal(dispatch({ ...keyDown("KeyR", "r"), type: "keyUp" }), true);
     actions.length = 0;
-    assert.equal(dispatch(keyDown("KeyR", "r", { shift: true })), false);
+    assert.equal(dispatch(keyDown("KeyE", "e")), true);
+    assert.deepEqual(actions, ["character.switch"]);
+    dispatch({ ...keyDown("KeyE", "e"), type: "keyUp" });
+    actions.length = 0;
 
     assert.equal(dispatch(keyDown("KeyB", "b")), true);
     for (let repeat = 0; repeat < 3; repeat += 1) {
@@ -360,4 +363,21 @@ describe("window shortcut input", () => {
     assert.equal(dispatch(keyDown("KeyB", "b")), false);
     assert.deepEqual(actions, ["tools.toggle"]);
   });
+});
+
+it("routes Command-K directly to Trade and contains repeats", async () => {
+  let dispatch!: (event: { preventDefault(): void }, input: ShortcutInput) => void;
+  const win = { webContents: { on: (_name: string, listener: typeof dispatch) => { dispatch = listener; } }, on() { return win; } } as unknown as BrowserWindow;
+  const actions: string[] = [];
+  installWindowShortcuts(win, { run: action => { actions.push(action); }, edit() {}, quitOrReload() {} });
+  updateWindowShortcuts(win, { ...DEFAULT_SETTINGS, gwonmacTools: true });
+  const input: ShortcutInput = { type: "keyDown", code: "KeyK", key: "k", meta: true, shift: false, alt: false, control: false, isAutoRepeat: false };
+  dispatch({ preventDefault() {} }, input);
+  dispatch({ preventDefault() {} }, { ...input, isAutoRepeat: true });
+  dispatch({ preventDefault() {} }, { ...input, type: "keyUp" });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(actions, ["trade.toggle"]);
+  dispatch({ preventDefault() {} }, input);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(actions, ["trade.toggle", "trade.toggle"]);
 });

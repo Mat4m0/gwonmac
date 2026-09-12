@@ -20,6 +20,7 @@ api.trade = {
   retry: (source) => ipcRenderer.invoke(IPC.tradeRetry, source),
   getSaved: () => ipcRenderer.invoke(IPC.tradeSavedGet),
   setSaved: (value) => ipcRenderer.invoke(IPC.tradeSavedSet, value),
+  getMarketRates: () => ipcRenderer.invoke(IPC.marketRatesGet),
   getTraderQuotes: () => ipcRenderer.invoke(IPC.traderQuotesGet),
   getTraderPriceHistory: (request) => ipcRenderer.invoke(IPC.traderPriceHistoryGet, request),
   onEvent: (callback) => listen(IPC.tradeEvent, callback),
