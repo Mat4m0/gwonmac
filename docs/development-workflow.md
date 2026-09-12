@@ -89,6 +89,8 @@ Cache provisioning does not require copying account settings or credentials.
 Keep logs, screenshots, and the profile path in ignored `test-results/`, outside
 `build/`: the build command deletes that directory. Do not redirect into the
 same file that a command is reading to recover its profile path.
+Playwright suites own only `test-results/electron/` and `test-results/tools-e2e/`.
+Keep development evidence and profiles outside those disposable suite directories.
 
 Use `cua.getState()` for discovery. Confirm the process working directory and
 profile, then attach through its debugger or exact running app path. App lookup

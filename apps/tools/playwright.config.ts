@@ -1,6 +1,8 @@
 import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
+  // A suite may clear only its own output, never other local evidence or profiles.
+  outputDir: "../../test-results/tools-e2e",
   testDir: "./tests",
   timeout: 20_000,
   fullyParallel: true,
