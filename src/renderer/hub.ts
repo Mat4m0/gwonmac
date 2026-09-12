@@ -3,7 +3,7 @@
  * Optional Tools contributes local results and views without entering Core's imports.
  */
 import { attachClassicFrame } from '../shared/ui/frame.js';
-import { resolveShortcuts, shortcutDisplay } from '../shared/keyboard-shortcuts.js';
+import { resolveShortcuts, shortcutKeycaps, type ShortcutAction } from '../shared/keyboard-shortcuts.js';
 import { openHubSettings } from "./hub-settings.js";
 import { createHubAccounts } from './hub-accounts.js';
 import { hubIcon } from "./hub-icons.js";
@@ -20,9 +20,9 @@ export function createHub(parent: HTMLElement) {
   root.dataset.page = "home";
   root.setAttribute('aria-label', 'Hub');
   root.innerHTML = `<section class="hub-panel ui-frame">
-    <header class="hub-heading ui-window-head"><button class="ui-button" data-variant="quiet" aria-label="Back" hidden>←</button><span class="hub-name">Hub</span><span class="hub-caption">Command palette</span><button class="ui-button hub-close" data-icon aria-label="Close Hub" title="Close Hub (Escape)">×</button></header>
-    <div class="hub-search"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 8 10-8 10L4 12 12 2Zm0 5v10M8 12h8"/></svg><input type="text" role="combobox" aria-label="Search people, places, builds" aria-autocomplete="list" aria-controls="hub-results" aria-expanded="true" placeholder="Search people, places, builds…" autocomplete="off" spellcheck="false" maxlength="120"></div>
-    <div class="hub-rate-controls" hidden></div><div class="hub-results ui-scroll" id="hub-results" role="listbox" aria-label="Results"></div>
+    <header class="hub-heading ui-window-head"><button class="ui-button hub-back" data-variant="quiet" aria-label="Back" hidden>← Back</button><span class="hub-name">Hub</span><span class="hub-caption">Home</span><button class="ui-button hub-close" data-icon aria-label="Close Hub" title="Close Hub">×</button></header>
+    <div class="hub-search"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 8 10-8 10L4 12 12 2Zm0 5v10M8 12h8"/></svg><span class="hub-scope" hidden></span><input type="text" role="combobox" aria-label="Search people, places, builds" aria-autocomplete="list" aria-controls="hub-results" aria-expanded="true" placeholder="Search people, places, builds…" autocomplete="off" spellcheck="false" maxlength="120"></div>
+    <p class="hub-hint" id="hub-hint" hidden></p><div class="hub-rate-controls" hidden></div><div class="hub-results ui-scroll" id="hub-results" role="listbox" aria-label="Results"></div>
     <pre class="hub-preview ui-scroll" hidden></pre><div class="hub-view" hidden></div><p class="hub-status" role="status" hidden></p>
     <footer class="hub-footer"><button class="hub-primary ui-button" data-variant="primary"></button><span class="hub-count"></span><button class="hub-actions ui-button" data-variant="quiet">Actions</button></footer>
   </section>`;
@@ -44,6 +44,7 @@ export function createHub(parent: HTMLElement) {
   const primary = required<HTMLButtonElement>('.hub-primary');
   const count = required<HTMLElement>('.hub-count');
   let rows: readonly HubRow[] = [];
+  let shortcutRevision = '';
   let selected: string | null = null;
   const sources = new Map<HubSource, () => void>();
   const sourceEnabled = (source: HubSource) => !source.feature || ((source.feature === 'characterSwitchEnabled' || !!window.gwToolsSettings?.().gwonmacTools) && !!window.gwToolsSettings?.()[source.feature]);
@@ -61,7 +62,7 @@ export function createHub(parent: HTMLElement) {
     const parent = history.pop();
     if (!parent) { close(); return; }
     resetView(); scope = parent.scope;
-    if (parent.view && (!parent.view.available || parent.view.available())) { const view = parent.view; presenter.showView(view.title, view.mount, view.available); history.pop(); return; } input.value = parent.query; caption.textContent = scope?.title ?? 'Command palette'; backButton.hidden = !scope; root.dataset.page = scope ? 'section' : 'home';
+    if (parent.view && (!parent.view.available || parent.view.available())) { const view = parent.view; presenter.showView(view.title, view.mount, view.available); history.pop(); return; } input.value = parent.query; caption.textContent = scope?.title ?? 'Home'; backButton.hidden = !scope; root.dataset.page = scope ? 'section' : 'home';
     input.placeholder = scope ? 'Search actions…' : 'Search people, places, builds…'; report(''); refresh(true); select(parent.selected); list.scrollTop = parent.scroll; input.focus();
   }
   let previousFocus: HTMLElement | null = null;
@@ -76,17 +77,17 @@ export function createHub(parent: HTMLElement) {
   const handoff = (name: string, detail?: unknown) => { dispatch(name, detail); close(); };
   const commands = (): HubRow[] => {
     const settings = window.gwToolsSettings?.();
-    const tool = (id: string, title: string, keywords: string, enabled: boolean | undefined, event: string): HubRow[] => enabled ? [{
-      id, title, keywords, detail: 'Open tool', group: 'Tools', action: 'Open tool',
+    const tool = (id: string, title: string, detail: string, keywords: string, enabled: boolean | undefined, event: string): HubRow[] => enabled ? [{
+      id, title, keywords, detail, group: 'Tools', action: id === 'storage' ? 'Open Xunlai Storage' : `Open ${title}`,
       run: () => { if (id === 'storage') { close(); window.dispatchEvent(new CustomEvent(event, { cancelable: true })); } else dispatch(event, 'show'); },
     }] : [];
     return [
-      ...tool('travel', 'Travel', 'outpost destination teleport tp', settings?.gwonmacTools && settings.travelPalette, 'gw:travel-toggle'),
-      ...tool('builds', 'Build Library', 'teams templates skills', settings?.gwonmacTools && settings.buildLibrary, 'gw:tools-toggle'),
-      ...tool('trade', 'Trade Chat', 'kamadan prices trading market', settings?.gwonmacTools && settings.tradeChat, 'gw:trade-toggle'),
-      ...tool('whispers', 'Whispers', 'friends people message chat', settings?.gwonmacTools && settings.whispersEnabled, 'gw:whispers-toggle'),
-      ...(settings?.characterSwitchEnabled ? [{ id: 'character', title: 'Switch Character', detail: `Choose another character${resolveShortcuts(settings.shortcutOverrides ?? {})['character.switch'] ? ' · ' + shortcutDisplay(resolveShortcuts(settings.shortcutOverrides ?? {})['character.switch']) : ''}`, keywords: 'relog profession', group: 'Tools', action: 'Choose character', run: () => dispatch('gw:character-toggle') }] : []),
-      ...tool('storage', 'Open Xunlai Storage', 'chest bank', settings?.gwonmacTools && settings.xunlaiStorage, 'gw:storage-open'),
+      ...tool('travel', 'Travel', 'Outposts, favourites and recent places', 'outpost destination teleport tp', settings?.gwonmacTools && settings.travelPalette, 'gw:travel-toggle'),
+      ...tool('builds', 'Build Library', 'Saved builds and teams', 'teams templates skills', settings?.gwonmacTools && settings.buildLibrary, 'gw:tools-toggle'),
+      ...tool('trade', 'Trade Chat', 'Find offers and contact sellers', 'kamadan prices trading market', settings?.gwonmacTools && settings.tradeChat, 'gw:trade-toggle'),
+      ...tool('whispers', 'Whispers', 'Conversations, friends and drafts', 'friends people message chat', settings?.gwonmacTools && settings.whispersEnabled, 'gw:whispers-toggle'),
+      ...(settings?.characterSwitchEnabled ? [{ id: 'character', title: 'Switch Character', detail: 'Choose another character', keywords: 'relog profession', group: 'Tools', action: 'Choose character', run: () => dispatch('gw:character-toggle') }] : []),
+      ...tool('storage', 'Open Xunlai Storage', 'Open your storage chest', 'chest bank', settings?.gwonmacTools && settings.xunlaiStorage, 'gw:storage-open'),
       ...(settings?.gwonmacTools && settings.cartographyEnabled ? [{ id: 'maps', title: 'Maps', detail: 'Exploration grid, walkable terrain and compass ranges', keywords: 'grid terrain compass opacity', group: 'Tools', action: 'Adjust maps', run: () => openHubMaps(presenter) }] : []),
       { id: 'hub-preferences', title: 'Hub preferences', detail: 'Pins and exact search phrases', keywords: 'aliases vocabulary', group: 'Commands', action: 'Adjust Hub', run: () => manageHubShortcuts(presenter, shortcuts, lookup, saveShortcuts) },
       { id: 'settings', title: 'Settings', detail: 'In-game appearance, tools and shortcuts', keywords: 'preferences graphics appearance accounts hotkeys', group: 'Commands', action: 'Open Settings', run: openSettings },
@@ -149,9 +150,33 @@ export function createHub(parent: HTMLElement) {
     primary.replaceChildren(document.createTextNode(row ? row.action : 'Select a result'));
     if (row) { const key = document.createElement('kbd'); key.textContent = '↵'; primary.append(key); }
     primary.disabled = !row || !!row.unavailable || pending;
+    required<HTMLButtonElement>('.hub-actions').disabled = !row;
+  }
+  function paintNavigation() {
+    if (!scope && !disposeView) {
+      const context = [...sources.keys()].filter(sourceEnabled).flatMap(source => source.context?.() ?? []);
+      caption.textContent = ['Home', ...(!input.value.trim() ? context : [])].join(' · ');
+    }
+    const parent = history.at(-1);
+    const destination = parent?.view?.title ?? parent?.scope?.title ?? 'Home';
+    backButton.textContent = parent ? `← Back to ${destination}` : '← Close';
+    backButton.setAttribute('aria-description', parent ? `Return to ${destination}` : 'Close Hub');
+    const actionsButton = required<HTMLButtonElement>('.hub-actions');
+    actionsButton.hidden = !!scope;
+    actionsButton.disabled = !selected;
+    const query = parseHubQuery(input.value);
+    const scopeLabel = required<HTMLElement>('.hub-scope');
+    scopeLabel.textContent = query.scope ?? '';
+    scopeLabel.hidden = !!scope || !query.scope || !!disposeView;
+    input.setAttribute('aria-description', scope ? `Search actions for ${scope.title}` : query.scope ? `Search ${query.scope}` : 'Search tools or use a command example');
+    const hint = required<HTMLElement>('.hub-hint');
+    const example = commandExamples().find(row => normaliseHubQuery(row.title).startsWith(`${normaliseHubQuery(input.value)} `));
+    hint.textContent = !scope && !query.scope && input.value.trim() && example ? `Try “${example.title}” · ${example.detail}` : '';
+    hint.hidden = !hint.textContent || !!disposeView;
   }
   function refresh(reset = false) {
     if (!root.open || disposeView) return;
+    paintNavigation();
     const previousRows = rows;
     const tradeQuery = parseHubQuery(input.value);
     const tradeRows: HubRow[] = tradeQuery.scope === "trade" && window.gwToolsSettings?.().gwonmacTools && window.gwToolsSettings?.().tradeChat
@@ -172,9 +197,13 @@ export function createHub(parent: HTMLElement) {
       const priority = (id: string) => { const index = tools.indexOf(id); return index < 0 ? tools.length : index; };
       return priority(a.id) - priority(b.id);
     });
+    const bindings = resolveShortcuts(window.gwToolsSettings?.().shortcutOverrides ?? {});
+    const nextShortcutRevision = JSON.stringify(bindings);
+    const shortcutsChanged = shortcutRevision !== nextShortcutRevision;
+    shortcutRevision = nextShortcutRevision;
     // Keep mounted options steady when an observer only advances its sequence.
     // Actions still read the newly derived rows, so no stale closure can execute.
-    if (!reset && rows.length === previousRows.length && rows.every((row, index) => {
+    if (!reset && !shortcutsChanged && rows.length === previousRows.length && rows.every((row, index) => {
       const previous = previousRows[index];
       return previous && row.id === previous.id && row.title === previous.title
         && row.detail === previous.detail && row.group === previous.group
@@ -203,7 +232,12 @@ export function createHub(parent: HTMLElement) {
         arrow.textContent = '→'; option.append(title, detail, source, from, to, arrow);
         for (const [url,side] of [[row.conversion.iconFrom,'from'],[row.conversion.iconTo,'to']] as const) { if (!url) continue; const art=document.createElement('img'); art.onerror=() => art.remove(); art.src=url; art.alt=''; art.className=`hub-conversion-art hub-conversion-art-${side}`; option.append(art); }
       } else {
-        const type = document.createElement('span'); type.className = 'hub-row-type'; type.textContent = row.group === 'Tools' ? 'Tool' : row.group === 'Commands' ? 'Command' : row.group === 'Places' ? 'Outpost' : row.group === 'Characters' ? 'Character' : '';
+        const type = document.createElement('span'); type.className = 'hub-row-type';
+        const shortcutActions: Record<string, ShortcutAction> = { travel: 'travel.open', character: 'character.switch', builds: 'tools.toggle', trade: 'trade.toggle', whispers: 'whispers.toggle', storage: 'storage.open' };
+        const shortcut = shortcutActions[row.id];
+        if (shortcut) for (const key of shortcutKeycaps(bindings[shortcut])) {
+          const cap = document.createElement('kbd'); cap.className = 'ui-kbd'; cap.textContent = key.label; cap.setAttribute('aria-label', key.name); type.append(cap);
+        }
         option.append(hubIcon(document, row), title, detail, type);
         if (row.skills) {
           option.classList.add('hub-build-row');
@@ -230,7 +264,8 @@ export function createHub(parent: HTMLElement) {
     const exactCount = rows.filter(row => normaliseHubQuery(row.title) === parsed.term || savedRows.some(saved => saved.id === row.id)).length;
     const prior = previousRows.find(row => row.id === selected);
     const revised = prior && rows.find(row => row.id === selected)?.preview !== prior.preview;
-    select((prior?.id === 'quote-state' || prior?.id === 'market-state') && !!rows[0]?.conversion ? rows[0].id : reset ? exactCount > 1 ? null : rows[0]?.id ?? null : !revised && rows.some(row => row.id === selected) ? selected : null);
+    const initial = !scope && !input.value.trim() ? rows.find(row => !row.unavailable) : rows[0];
+    select((prior?.id === 'quote-state' || prior?.id === 'market-state') && !!rows[0]?.conversion ? rows[0].id : reset ? exactCount > 1 ? null : initial?.id ?? null : !revised && rows.some(row => row.id === selected) ? selected : null);
     if (!rows.length) {
       const empty = document.createElement('p'); empty.className = 'hub-empty'; empty.textContent = 'No matches'; list.append(empty);
     }
@@ -242,7 +277,7 @@ export function createHub(parent: HTMLElement) {
     const generation = epoch;
     pending = true; select(selected); report('');
     try {
-      if(row.searchQuery!==undefined){history.length=0;resetView();scope=null;backButton.hidden=true;caption.textContent='Command palette';input.value=row.searchQuery;refresh(true);input.focus();input.select();}
+      if(row.searchQuery!==undefined){history.length=0;resetView();scope=null;backButton.hidden=true;caption.textContent='Home';input.value=row.searchQuery;refresh(true);input.focus();input.select();}
       else await row.run();
     }
     catch (error) { if (generation === epoch) report(error instanceof Error ? error.message : 'The action could not complete. Try again.'); }
@@ -254,7 +289,7 @@ export function createHub(parent: HTMLElement) {
   }
   function home() {
     history.length = 0; resetView(); scope = null; input.value = restoreQuery; backButton.hidden = true;
-    root.dataset.page = 'home'; caption.textContent = 'Command palette'; input.placeholder = 'Search people, places, builds…'; report(''); refresh(true); input.focus();
+    root.dataset.page = 'home'; caption.textContent = 'Home'; input.placeholder = 'Search people, places, builds…'; report(''); refresh(true); input.focus();
   }
   function back() {
     if (returnFromView) returnFromView();
@@ -285,7 +320,7 @@ export function createHub(parent: HTMLElement) {
   const actions = () => {
     if (!root.open || document.querySelector('dialog:modal') !== root) return false;
     if (disposeView) return true;
-    if (scope) { back(); return true; }
+    if (scope) return true;
     const row = rows.find(row => row.id === selected);
     if (!row) return true;
     if (isHubShortcuts([{ id: row.id, phrase: '', pinned: false }])) {
@@ -348,6 +383,7 @@ export function createHub(parent: HTMLElement) {
       activeView = { title, mount, ...(available ? { available } : {}) };
       viewAvailable = available ?? null;
       disposeView = mount(content, back);
+      paintNavigation();
       if (!content.contains(document.activeElement)) content.querySelector<HTMLElement>('input,select,button,[tabindex="0"]')?.focus();
     },
     dispose() { close(); disposeFrame(); for (const unsubscribe of sources.values()) unsubscribe(); sources.clear(); modal.dispose(); root.remove(); window.removeEventListener('blur', onBlur); window.removeEventListener('gw:tools-settings', onSettings); },

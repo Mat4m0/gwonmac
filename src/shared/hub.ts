@@ -24,6 +24,8 @@ export type HubRow = Readonly<{
 export type HubSource = Readonly<{
   feature?: 'characterSwitchEnabled' | 'buildLibrary' | 'travelPalette' | 'tradeChat' | 'whispersEnabled';
   search(query: string): readonly HubRow[];
+  /** Read-only current context for Home; never an executable result. */
+  context?(): string | null;
   shortcuts?: Readonly<{ get(): readonly HubShortcut[]; save(value: readonly HubShortcut[]): Promise<void> }>;
   lookup?(id: string): HubRow | undefined;
   setVisible(visible: boolean): void;

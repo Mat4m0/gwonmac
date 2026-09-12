@@ -29,16 +29,15 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
     const skill = id === null ? null : host.skills.get(id);
     return { name: skill?.name ?? 'Empty slot', iconUrl: skill?.iconUrl ?? null, elite: skill?.elite ?? false };
   });
-  const buildPreview = (build: Build, compact = false) => [
-    `${build.professions.filter(Boolean).join('/')} · ${build.origin ?? 'Build Library'}`,
-    ...(compact ? [] : [build.skills.map(id => id === null ? 'Empty slot' : host.skills.get(id).name).join(' · ')]),
+  const buildPreview = (build: Build) => [
+    build.professions.filter(Boolean).join('/'),
     Object.entries(build.attributes).map(([name, rank]) => `${name.replace(/([a-z])([A-Z])/gu, '$1 $2')} ${rank}`).join(' · '),
   ].join('\n');
-  const preview = (item: Item, compact = false) => item.kind === 'build' ? buildPreview(item.value, compact)
+  const preview = (item: Item) => item.kind === 'build' ? buildPreview(item.value)
     : `${item.value.mode === 'none' ? 'Keep difficulty' : `${item.value.mode === 'hard' ? 'Hard' : 'Normal'} Mode`}\n` + item.value.slots.flatMap((slot, index) => {
       if (index > 0 && slot.hero === null && slot.build === null) return [];
       const build = controller.library.value?.builds.find(build => build.id === slot.build);
-      return [`${index + 1}. ${index === 0 ? 'Your character' : slot.hero === null ? 'Unassigned hero' : heroLabel(slot.hero)} · ${build?.name ?? 'Keep build'}${slot.behaviour ? ` · ${slot.behaviour}` : ''}${build ? `\n${buildPreview(build)}` : ''}`];
+      return [`${index + 1}. ${index === 0 ? playerName() : slot.hero === null ? 'Unassigned hero' : heroLabel(slot.hero)} · ${build?.name ?? 'Keep build'}${slot.behaviour ? ` · ${slot.behaviour}` : ''}`];
     }).join('\n');
   function assess(item: Item, hero: HeroId | null): string | null {
     if (host.applyUnavailable) return host.applyUnavailable;
@@ -100,7 +99,7 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
         const slot = doc.createElement('section'); const heading = doc.createElement('h3'); heading.textContent = label;
         const bar = doc.createElement('div'); bar.className = 'hub-skill-bar';
         skillPreview(build).forEach((skill, index) => { const cell = doc.createElement('span'); cell.className = 'hub-skill'; cell.dataset.elite = String(skill.elite); cell.title = `${index + 1}. ${skill.name}`; cell.setAttribute('role', 'img'); cell.setAttribute('aria-label', cell.title); cell.textContent = String(index + 1); if (skill.iconUrl) { const image = doc.createElement('img'); image.src = skill.iconUrl; image.alt = ''; image.onerror = () => image.remove(); cell.append(image); } bar.append(cell); });
-        const details = doc.createElement('details'); const summary = doc.createElement('summary'); summary.textContent = 'Attributes'; const text = doc.createElement('p'); text.textContent = buildPreview(build, true); details.append(summary, text); slot.append(heading, bar, details); description.append(slot);
+        const details = doc.createElement('details'); const summary = doc.createElement('summary'); summary.textContent = 'Attributes'; const text = doc.createElement('p'); text.textContent = buildPreview(build); details.append(summary, text); slot.append(heading, bar, details); description.append(slot);
       };
       if (item.kind === 'build') showBuild(item.value, 'Skills');
       else {
@@ -144,7 +143,7 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
       const item = all().find(item => `${item.kind}:${item.value.id}` === id);
       if (!item) return undefined;
       return { id, title: item.value.name, detail: item.kind === 'team' ? 'Saved team' : 'Saved build', group: 'Pinned',
-        preview: preview(item, true), ...(item.kind === 'build' ? { skills: skillPreview(item.value) } : {}), action: 'Review', run: () => review(item), actions: () => review(item) };
+        preview: preview(item), ...(item.kind === 'build' ? { skills: skillPreview(item.value) } : {}), action: 'Review', run: () => review(item), actions: () => review(item) };
     },
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
     setVisible(next) {
@@ -165,7 +164,7 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
         const refusal = direct ? assess(item, null) : null;
         return { id: `${item.kind}:${item.value.id}`, title: item.value.name,
           detail: item.kind === 'team' ? 'Saved team' : `${item.value.professions.filter(Boolean).join('/')} · ${item.value.origin ?? 'Build Library'}`,
-          group: item.kind === 'team' ? 'Teams' : 'Builds', preview: preview(item, true), ...(item.kind === 'build' ? { skills: skillPreview(item.value) } : {}),
+          group: item.kind === 'team' ? 'Teams' : 'Builds', preview: preview(item), ...(item.kind === 'build' ? { skills: skillPreview(item.value) } : {}),
           action: direct ? item.kind === 'team' ? `Apply team ${item.value.name}` : `Load ${item.value.name} on ${playerName()}` : 'Review',
           ...(refusal ? { unavailable: refusal } : {}), actions: () => review(item),
           run: () => direct ? apply(item, expected, null) : review(item) } satisfies HubRow;

@@ -145,7 +145,8 @@ test('exact build has a visible target and does not apply while typing', async (
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
   await search.fill('build smiter');
   await expect(page.getByRole('button', { name: 'Load Smiter on Your character ↵' })).toBeEnabled();
-  await expect(page.locator('.hub-preview')).toContainText('Templates/Skills/Smiter.txt');
+  await expect(page.locator('.hub-preview')).toContainText('Mo/Me');
+  await expect(page.locator('.hub-preview')).not.toContainText('Templates/Skills');
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', /command|apply/);
   await search.press('Enter');
   await expect(page.getByRole('dialog', { name: 'Hub', exact: true })).not.toBeVisible();
@@ -261,7 +262,7 @@ test('trade query opens the same searchable tool and can detach', async ({ page 
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
   await search.fill('trade ecto'); await search.press('Enter');
   await expect(page.locator('#hub .trade-search input')).toHaveValue('ecto');
-  await page.getByRole('button', { name: 'Detach', exact: true }).click();
+  await page.getByRole('button', { name: 'Pop out', exact: true }).click();
   await expect(page.locator('#toolbox-foundation .trade-search input')).toHaveValue('ecto');
   await expect(page.getByRole('dialog', { name: 'Hub', exact: true })).not.toBeVisible();
 });
@@ -271,7 +272,7 @@ test('Maps controls save inline without navigating away', async ({ page }) => {
   await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: { cartographyEnabled: true } })));
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
   await search.fill('maps'); await search.press('Enter');
-  await page.getByRole('button', { name: /Exploration grid/ }).click();
+  await page.getByRole('switch', { name: 'Exploration grid' }).check();
   await expect(page.getByRole('slider', { name: 'Grid opacity' })).toBeVisible();
   await page.getByRole('slider', { name: 'Grid opacity' }).fill('45');
   await expect(page.locator('.hub-view')).toContainText('45%');

@@ -183,7 +183,7 @@ export function createToolboxFoundation(
     if (!hub) { setOpen(slot, true); activate(slot); return; }
     hub.showView(title, target => {
       setOpen(slot, true); activate(slot);
-      const detach = document.createElement('button'); detach.className = 'hub-detach ui-button'; detach.textContent = 'Detach';
+      const detach = document.createElement('button'); detach.className = 'hub-detach ui-button'; detach.textContent = 'Pop out';
       detach.onclick = () => { hub.close(); setOpen(slot, true); activate(slot); }; target.append(detach);
       slot.host.classList.add('hub-embedded-host'); target.append(slot.host);
       const focus = () => slot.host.querySelector<HTMLInputElement>('input[type="search"], input')?.focus();
