@@ -225,3 +225,124 @@ lint and links passed. The full unit pass found stale copy-fixture inputs and
 an unanchored CSS selector assertion; both were corrected, and all 24 affected
 checks passed. The 182 policy, 200 Tools and 81 Launcher tests passed, as did
 the production build. Later layers must rerun the complete final gate.
+
+## Unified Hub candidate — 12 September 2026
+
+The final flow layer extends the shared frame to Whispers and the component
+gallery. Settings use shared controls. The browser fixture and production
+renderer share the packaged fallback font declaration; the original game-font
+loader remains unchanged. Classic custom title colours use the existing
+appearance projector. Modern keeps its saved `obsidian` identity.
+
+Text fields retain Left/Right caret editing. Enter remains the named action.
+Direct tool entry returns to the game without inserting Home into its history.
+Actions, nested views and normal Hub entry restore their actual parent.
+The Whisper shortcut toggles the active presentation. Its existing scroll owner
+captures before docking or detachment changes DOM geometry; drafts remain in
+the same session and composer.
+
+Currency and material artwork now appears in the explicit renderer package
+inputs. The Electron check requires both conversion images to decode through
+the production protocol. A browser failure check keeps labelled values and
+Copy result available when optional artwork cannot load.
+
+The compact Library fixes preserve usable catalogue results at 320 × 800 and
+team composition at 1024 × 420. The pointer reorder test scrolls its source
+into view before dropping; it still verifies reorder, removal and undo.
+Character tests now assert the accepted left-aligned Hub carousel, metadata,
+identity-preserving updates, confirmation, failure and focus restoration.
+The frozen preload inventory explicitly includes the reviewed `accounts` and
+`hubSettings` capabilities. Existing validation and refusal checks remain.
+
+### Acceptance evidence by delivery step
+
+| Plan step | Implementation and evidence |
+| --- | --- |
+| 1. Integrate current main | Baseline and conflict record above; newer elite/map, alcohol, font and client owners retained. |
+| 2. Establish baselines | Integrated Home/Travel and accepted study inspected; fixed 780 × 590 shell retained where the viewport permits. |
+| 3. Shared frame | [Frame owner](../src/shared/ui/frame.ts), [asset provenance](../src/shared/ui/frame/README.md), shared tokens and [gallery](ui-gallery.html); 1×/2× canvas and production-protocol checks. |
+| 4. Home and Travel | [Hub browser journeys](../apps/tools/tests/hub.spec.ts) cover explicit travel, selection, Back, keyboard carousels and stable outer bounds. |
+| 5. Characters, People, Accounts | Browser search/availability checks; [Character Electron tests](../tests/electron/input-character-switch.spec.ts); [account replacement refusal tests](../tests/unit/hub-account-actions.test.ts). |
+| 6. Builds and Teams | Search, eight skill slots, duplicate names, target review, interrupted Apply and authoring covered by Hub/Workbench browser suites; detached persistence covered in Electron. |
+| 7. Whispers and Trade | Browser offer-to-composer and Back; [Electron chat checks](../tests/electron/input-whispers.spec.ts) cover native focus, draft and transcript preservation, toggle and background strength. |
+| 8. Settings and other surfaces | Settings/Maps/calculator journeys, resolved keycaps, recording and disabled-feature checks; launcher controls and map editing tested at 200% zoom. |
+| 9. Final verification and cleanup | Final gate receipt below; replaced Hub paint and duplicate inset chrome removed. No temporary migration or compatibility owner was introduced by the visual cutover. |
+
+Direct visual inspection covered Home, Travel, character cards, account choices,
+build search/review, team editing, Trade review/detachment, Whispers docking,
+Settings, Maps, and the shared component specimen. The palette's title and
+controls remain above decorative artwork. Narrow Travel keeps Back, search,
+favourites and its action hints reachable.
+
+[Appearance checks](../apps/tools/tests/hub-appearance.spec.ts) include minimum
+opacity, a bright checkerboard backdrop, reduced motion, font changes, Custom
+Classic, Modern round trips and device-pixel density. Composed screenshot pixels
+under Hub result labels meet 4.5:1. The Workbench suite separately checks critical
+team and skill feedback contrast. These are bounded contrast checks, not an
+exhaustive accessibility certification. [Hub Electron checks](../tests/electron/input-hub.spec.ts)
+exercise actual 200% window zoom and the `gw://app` artwork route. Native
+`webContents.capturePage()` verifies the full zoomed window; the Playwright page
+capture cropped this Electron configuration and was replaced.
+
+### Native review and rollback
+
+The offline tests do not establish live gameplay or VoiceOver quality. Before
+release, Matthias must check the exact developer candidate in a real game:
+Hub input isolation and focus return; Travel and character confirmation; real
+account replacement failure; build/team target and result; Trade-to-Whisper and
+chat docking; original game-font loading; and VoiceOver announcements. Use a
+separate authorized test profile. No real message, trade, account switch or game
+action was performed for this overhaul.
+
+The original main, Hub reference and study checkouts remain clean. The isolated
+local branch stack separates integration, shared styling and final flows.
+Returning to the original checkout restores the baseline; the visual changes
+introduce no data migration. Do not remove or rewrite the user's saved appearance,
+shortcut or account data when reverting. Publication and merging remain separate.
+Recommend one Beta train for this combined multi-feature and input change after
+owned live QA and the existing release approval process.
+
+### Local delivery layers
+
+| Branch | Commit | Review boundary |
+| --- | --- | --- |
+| `feat/hub-overhaul-foundation` | `bdc7ba8b` | Accepted Hub integrated with current main `13c82c09`. |
+| `feat/hub-overhaul-style` | `0c7e37e7` | Shared Classic frame, controls, assets and inset chrome. |
+| `feat/hub-overhaul-flows` | `d1e97333` | Final flow continuity, fonts, compact layout, packaged artwork and regression checks. |
+
+The source baseline was committed before the implementation goal started.
+These branches are local. None was pushed, merged into main, or released.
+
+### Final gate receipt
+
+`corepack pnpm verify` completed successfully against source candidate
+`d1e97333`. The final run passed:
+
+- TypeScript, Vue type checks, lint and Markdown links.
+- 1,756 unit, 182 policy, 200 Tools and 81 Launcher checks.
+- Production builds and both compiled-kernel verification commands.
+- 111 integration and 30 release/preload checks.
+- 88 browser journeys and appearance/layout checks.
+- 158 offline Electron checks; one explicitly live-client test skipped.
+- macOS arm64 packaging, packaged launcher smoke and packaged Enhancement
+  isolation, host-only continuity, lifecycle and rollback checks.
+
+The final full log is retained locally at
+`/tmp/gwonmac-overhaul-final-gate.log`. The visual sweep reported no layout
+faults across its theme, opacity and font matrix. Native zoom captures and
+additional development evidence remain in ignored `test-results/`; generated
+packages, synthetic profiles and logs are not committed.
+
+### Developer handoff
+
+The documented `corepack pnpm dev --isolated --cached-only` startup completed
+its build and printed a verified `launcher-open` receipt. The process command,
+working directory and isolated profile were checked before attaching UI tools.
+Launcher Home was then visually inspected at `gw://app/launcher/index.html`.
+
+The fresh setup was completed with Tools left off. No player data or credentials
+were copied. This disposable profile has no game cache and displays **Game files
+need repair**. This verifies the launcher handoff, not game readiness. The Hub
+browser preview remains available with synthetic state for immediate UI review.
+Exact local coordinates and restart instructions are retained in
+`test-results/hub-developer/handoff.md`; the command and preview are left running.

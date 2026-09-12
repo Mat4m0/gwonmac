@@ -1,6 +1,10 @@
 # gwonmac: unify the Guild Wars visual study and Hub experience
 
-Research and proposed delivery plan — 12 September 2026.
+Research and delivery plan — 12 September 2026.
+
+Implementation completed locally across the three review layers. See the
+[verification record](hub-verification.md#unified-hub-candidate--12-september-2026)
+for acceptance evidence, exact checks and the remaining native review.
 
 Target: the existing **gwonmac** application, as confirmed by Matthias. Implementation authorized on 12 September 2026. This plan does not claim release readiness. Guild Wars v2 is outside this plan.
 
