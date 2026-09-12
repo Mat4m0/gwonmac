@@ -194,7 +194,8 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     quickItemMove: true,
     playerEffectObservation: true,
     effectIconGeometry: true,
-    alcoholObservation: false,
+    alcoholObservation: true,
+    nativeHudRendering: true,
     resignAction: true,
     whisperChat: true,
   } satisfies EnhancementCapabilities);
@@ -336,6 +337,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     playerEffectObservation: false,
     effectIconGeometry: false,
     alcoholObservation: false,
+    nativeHudRendering: true,
     resignAction: false,
     whisperChat: false,
   } satisfies EnhancementCapabilities);
@@ -364,6 +366,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     playerEffectObservation: false,
     effectIconGeometry: false,
     alcoholObservation: false,
+    nativeHudRendering: true,
     resignAction: false,
     whisperChat: false,
   } satisfies EnhancementCapabilities);

@@ -10,6 +10,7 @@ import { prepareClientModule, type PreparedClientModule } from
 import {
   enhancementOutputSha256,
 } from "../../src/main/certification/enhancement-builds.js";
+import { wasmEvidence, functionBodySha256 } from "../../src/main/certification/wasm-evidence.js";
 import { transformEnhancementWasm } from
   "../../src/main/certification/enhancement-transform.js";
 import { deriveFriendObserverCertificate } from
@@ -75,6 +76,17 @@ test("every shipped runtime profile reproduces the real client chain", async () 
     const profileBuild = profileVerification.enhancementBuild;
     assert.ok(profileBuild, `profile ${profile} must prove independently`);
     const enhanced = transformEnhancementWasm(template, profileBuild, capabilities);
+    const nativeInput = wasmEvidence(template)!.moduleView();
+    const nativeOutput = wasmEvidence(enhanced)!.moduleView();
+    const hasHud = nativeOutput.exports.some((entry) => entry.name === "gwonmac_hud_label");
+    assert.equal(hasHud, capabilities.nativeHudRendering,
+      `${launch} must install native HUD only for a selected display owner`);
+    if (!hasHud) {
+      for (const index of [6490, 6492, 6585]) {
+        assert.equal(functionBodySha256(nativeOutput, index), functionBodySha256(nativeInput, index),
+          `${launch} must preserve original UI collection and destruction`);
+      }
+    }
     assert.ok(
       deriveFriendObserverCertificate(enhanced),
       `friend observation must prove against the ${profile} predecessor`,

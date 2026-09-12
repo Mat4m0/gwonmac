@@ -819,6 +819,7 @@ export interface ClientCompatibility {
     playerEffectObservation: OptionalFeatureStatus;
     effectIconGeometry: OptionalFeatureStatus;
     alcoholObservation: OptionalFeatureStatus;
+    nativeHudRendering: OptionalFeatureStatus;
     resignAction: OptionalFeatureStatus;
     whisperChat: OptionalFeatureStatus;
     playRegionObservation: OptionalFeatureStatus;

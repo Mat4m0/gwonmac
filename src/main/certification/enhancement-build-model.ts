@@ -12,6 +12,7 @@
  * what the kernel reads and invalidates every `outputSha256` in the table, so
  * the two must be edited together or not at all.
  */
+import type { NATIVE_HUD_RENDERING_PROOF } from "./native-hud-transform.js";
 import {
   enhancementCapabilitiesForProfile,
   enhancementCapabilitiesCover,
@@ -201,6 +202,8 @@ export function enhancementConfigWords(
 }
 
 export interface KnownEnhancementBuild {
+  /** Exact native icon draw ownership; independent of observation facts. */
+  nativeHudRendering?: typeof NATIVE_HUD_RENDERING_PROOF;
   sha256: string;
   outputSha256: EnhancementOutputHashes;
   programId: number;
@@ -656,6 +659,7 @@ export function supportedEnhancementCapabilities(
       && build.playerEffectObservation !== undefined,
     effectIconGeometry: build.effectIconGeometry !== undefined,
     alcoholObservation: build.alcoholObservation !== undefined && build.effectIconGeometry !== undefined,
+    nativeHudRendering: build.nativeHudRendering !== undefined,
     whisperChat: playRegionObservation && gameThread && build.uiDispatcher !== undefined
       && build.chatFiltering !== undefined && build.whisperChat !== undefined,
     resignAction: playRegionObservation && gameThread && build.resignAction !== undefined,
@@ -760,6 +764,8 @@ export function hasValidEnhancementProfileHashes(
   if (build.skillSlotGeometry !== undefined && build.skillSlotGeometry.labelAddress === 0) {
     return false;
   }
+  if (build.nativeHudRendering !== undefined
+    && build.skillSlotGeometry === undefined && build.effectIconGeometry === undefined) return false;
   const actual = Object.entries(build.outputSha256);
   if (actual.length === 0) return false;
   const supported = supportedEnhancementCapabilities(build);

@@ -123,6 +123,7 @@ export const LOCAL_FEATURE_INVARIANTS = Object.freeze({
     "player-effects.collection-layout",
     "player-effects.precise-timer",
   ] as const),
+  nativeHudRendering: Object.freeze([...SHARED_FEATURE_INVARIANTS, "native-hud.draw-ownership"] as const),
   effectIconGeometry: Object.freeze([
     ...SHARED_FEATURE_INVARIANTS,
     "effect-icons.frame-constructor",
@@ -244,6 +245,8 @@ export interface LocalFeatureCertificateMap {
       | "playRegionObservation" | "observationBase"
       | "uiDispatcher" | "playerEffectObservation"
     >;
+  readonly nativeHudRendering: Readonly<{ core: EnhancementProofCore }>
+    & RequiredBuildFact<"nativeHudRendering">;
   readonly effectIconGeometry: Readonly<{ core: EnhancementProofCore }>
     & RequiredBuildFact<
       "playRegionObservation" | "playerEffectObservation" | "effectIconGeometry"
@@ -518,6 +521,8 @@ export function localFeatureVerdictsForBuild(
         playerEffectObservation: build.playerEffectObservation,
       })
     : null;
+  const nativeHudRendering = effective?.nativeHudRendering && core !== null && build?.nativeHudRendering !== undefined
+    ? Object.freeze({ core, nativeHudRendering: build.nativeHudRendering }) : null;
   const effectIconGeometry = effective?.effectIconGeometry && core !== null
       && build?.playRegionObservation !== undefined
       && build.playerEffectObservation !== undefined
@@ -646,6 +651,10 @@ export function localFeatureVerdictsForBuild(
       playerEffectObservation,
       failures.playerEffectObservation,
       "player-effects.collection-layout",
+    ),
+    nativeHudRendering: featureVerdict<"nativeHudRendering">(
+      inputSha256, requested.nativeHudRendering, nativeHudRendering, failures.nativeHudRendering,
+      "native-hud.draw-ownership",
     ),
     effectIconGeometry: featureVerdict<"effectIconGeometry">(
       inputSha256,

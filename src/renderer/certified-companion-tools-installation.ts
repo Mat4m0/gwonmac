@@ -4,6 +4,7 @@
  */
 import { createAlcoholObservationInstallation, readCompanionAlcohol } from "./companion-alcohol-snapshot.js";
 import { createAlcoholTimerOverlay } from "./alcohol-timer-overlay.js";
+import { createNativeHudLayer } from "./native-hud-layer.js";
 import { createEliteMapInstallation } from "./elite-map-installation.js";
 import { COMPANION_ABI, COMPANION_DISPATCH_KINDS, COMPANION_FEATURE_BITS } from "../shared/companion-abi.js";
 import {
@@ -350,9 +351,11 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
   const alcoholRequested = () => capabilities.alcoholObservation && snapshot().settings.gwonmacTools && snapshot().settings.alcoholTimerEnabled;
   const playerEffectsActive = () => capabilities.playerEffectObservation
     && (program === "effect-observer"
-      || ((policy().effectTimers || (alcoholRequested() && policy().alcoholTimer)) && capabilities.effectIconGeometry));
+      || (((capabilities.nativeHudRendering && policy().effectTimers)
+        || (alcoholRequested() && policy().alcoholTimer)) && capabilities.effectIconGeometry));
   const effectIconsActive = () => capabilities.effectIconGeometry
-    && (program === "effect-observer" || policy().effectTimers || (alcoholRequested() && policy().alcoholTimer));
+    && (program === "effect-observer" || (capabilities.nativeHudRendering && policy().effectTimers)
+      || (alcoholRequested() && policy().alcoholTimer));
   const playRegion = () => snapshot().playRegion;
   let companionState: CompanionSnapshot | null = null;
   let party: ToolboxObservation | null = null;
@@ -403,6 +406,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
     if (!observingFriends) return;
     friendFeed.update(readCompanionFriends(memory.buffer, activeFriendPointer));
   };
+  const hud = capabilities.nativeHudRendering ? createNativeHudLayer(input.mapExports, document) : null;
   const disposePresentation = () => runCleanupSteps(
     "Companion Tools presentation cleanup failed",
     [
@@ -416,6 +420,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
       () => { unsubscribeEffectIcons?.(); unsubscribeEffectIcons = null; },
       () => { effectOverlay?.dispose(); effectOverlay = null; },
       () => { unsubscribeAlcohol?.(); unsubscribeAlcoholGeometry?.(); alcoholOverlay?.dispose(); alcoholOverlay = null; },
+      () => hud?.dispose(),
       () => { resign?.dispose(); },
       () => { whispers.setEnabled(false); unsubscribeWhispers(); whisperSurface?.dispose(); whisperSurface = null; whisperSession.dispose(); },
       () => { configureTrade?.(0); },
@@ -448,7 +453,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
     }
   };
 
-  prepare(() => skills.mount(document.body, snapshot().settings));
+  prepare(() => { if (hud) skills.mount(document.body, snapshot().settings, hud); });
   const quickItemMoveControls = input.quickItemMove;
   if (quickItemMoveControls !== null && activeQuickItemMovePointer !== 0) {
     quickItemMoveInstallation = prepare(() => installQuickItemMove({
@@ -468,7 +473,8 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
       unsubscribeAlcohol = alcohol.subscribe(alcoholOverlay.setAlcohol);
       unsubscribeAlcoholGeometry = effectIcons.subscribe(alcoholOverlay.setGeometry);
     }
-    effectOverlay = createEffectTimerOverlayConsumer(document.body, canvas);
+    if (!hud) return;
+    effectOverlay = createEffectTimerOverlayConsumer(document.body, canvas, hud);
     unsubscribeEffects = playerEffects.subscribe(effectOverlay.setEffects);
     unsubscribeEffectIcons = effectIcons.subscribe(effectOverlay.setGeometry);
   });

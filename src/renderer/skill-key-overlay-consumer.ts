@@ -4,9 +4,10 @@
  * the only join between those two sources and it owns no discovery or input.
  */
 import type { CompanionSkillSlotState } from "./companion-skill-snapshot.js";
-import { createSkillKeyOverlay } from "./skill-key-overlay.js";
+import type { NativeHudLayer } from "./native-hud-layer.js";
 import {
   EMPTY_SKILL_KEY_BINDINGS,
+  EMPTY_SKILL_KEY_MODIFIERS,
   cloneSkillKeyBindings,
   type SkillKeyBindings,
 } from "../shared/skill-key-bindings.js";
@@ -15,8 +16,8 @@ import { projectSkillSlots } from "./skill-slot-projection.js";
 export function createSkillKeyOverlayConsumer(
   parent: HTMLElement,
   canvas: HTMLCanvasElement,
+  overlay: NativeHudLayer,
 ) {
-  const overlay = createSkillKeyOverlay(parent);
   let state: CompanionSkillSlotState = Object.freeze({
     status: "waiting",
     reason: "memory",
@@ -25,25 +26,21 @@ export function createSkillKeyOverlayConsumer(
   let enabled = false;
   function render() {
     if (!enabled || state.status !== "ready") {
-      overlay.update({ status: "waiting" });
+      overlay.update("keys", []);
       return;
     }
     const projected = projectSkillSlots(state, canvas);
     if (projected === null) {
-      overlay.update({ status: "waiting" });
+      overlay.update("keys", []);
       return;
     }
-    overlay.update({
-      status: "ready",
-      slots: bindings.flatMap((binding, index) => {
-        if (binding === null) return [];
-        const slot = projected[index]!;
-        return [{
-          ...slot,
-          binding,
-        }];
-      }),
-    });
+    overlay.update("keys", bindings.map((binding, index) => {
+      const slot = projected[index]!;
+      return {parent: state.status === "ready" ? state.frameId : 0, child: index,
+        width: slot.width, height: slot.height, binding: binding ?? {
+          input: {kind: "keyboard" as const, code: `Digit${index + 1}`}, modifiers: EMPTY_SKILL_KEY_MODIFIERS,
+        }};
+    }));
   }
   const view = parent.ownerDocument.defaultView;
   view?.addEventListener("resize", render);
@@ -62,7 +59,7 @@ export function createSkillKeyOverlayConsumer(
     },
     dispose() {
       view?.removeEventListener("resize", render);
-      overlay.dispose();
+      overlay.update("keys", []);
     },
   });
 }
