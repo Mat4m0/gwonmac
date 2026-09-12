@@ -1,4 +1,5 @@
 /** Normalized persistence for an embedded Tools window across viewport sizes. */
+import { captureCornerPosition, restoreCornerPosition, isCornerPosition } from "../../../src/shared/corner-position";
 
 export type FloatingWindowViewport = Readonly<{
   width: number;
@@ -19,13 +20,6 @@ type StoredFloatingWindowPlacement = Readonly<{
   top: number;
   width: number;
   height: number;
-}>;
-
-type StoredFloatingPosition = Readonly<{
-  formatVersion: 1;
-  corner: "top-left" | "top-right" | "bottom-left" | "bottom-right";
-  x: number;
-  y: number;
 }>;
 
 const ratio = (value: unknown): value is number =>
@@ -101,36 +95,8 @@ export function restoreFloatingPosition(
   size: Readonly<{ width: number; height: number }>,
 ): Readonly<{ left: number; top: number }> | null {
   const stored = storedRecord(serialized);
-  if (
-    !stored
-    || stored.formatVersion !== 1
-    || !["top-left", "top-right", "bottom-left", "bottom-right"].includes(String(stored.corner))
-    || typeof stored.x !== "number"
-    || !Number.isFinite(stored.x)
-    || stored.x < 0
-    || typeof stored.y !== "number"
-    || !Number.isFinite(stored.y)
-    || stored.y < 0
-  ) {
-    return null;
-  }
-  const available = usable(viewport);
-  if (available.width === 0 || available.height === 0 || size.width <= 0 || size.height <= 0) {
-    return null;
-  }
-  const corner = stored.corner as StoredFloatingPosition["corner"];
-  const horizontalRange = Math.max(0, available.width - size.width);
-  const verticalRange = Math.max(0, available.height - size.height);
-  const x = clamp(stored.x, 0, horizontalRange);
-  const y = clamp(stored.y, 0, verticalRange);
-  return {
-    left: corner.endsWith("left")
-      ? viewport.margin + x
-      : viewport.width - viewport.margin - size.width - x,
-    top: corner.startsWith("top")
-      ? viewport.margin + y
-      : viewport.height - viewport.margin - size.height - y,
-  };
+  if (!stored || stored.formatVersion !== 1 || !isCornerPosition(stored)) return null;
+  return restoreCornerPosition(stored, viewport, size);
 }
 
 export function serializeFloatingPosition(
@@ -138,24 +104,8 @@ export function serializeFloatingPosition(
   viewport: FloatingWindowViewport,
   size: Readonly<{ width: number; height: number }>,
 ): string | null {
-  const available = usable(viewport);
-  if (available.width === 0 || available.height === 0 || size.width <= 0 || size.height <= 0) {
-    return null;
-  }
-  const horizontalRange = Math.max(0, available.width - size.width);
-  const verticalRange = Math.max(0, available.height - size.height);
-  const left = clamp(position.left - viewport.margin, 0, horizontalRange);
-  const right = horizontalRange - left;
-  const top = clamp(position.top - viewport.margin, 0, verticalRange);
-  const bottom = verticalRange - top;
-  const horizontal = left <= right ? "left" : "right";
-  const vertical = top <= bottom ? "top" : "bottom";
-  return JSON.stringify({
-    formatVersion: 1,
-    corner: `${vertical}-${horizontal}`,
-    x: horizontal === "left" ? left : right,
-    y: vertical === "top" ? top : bottom,
-  } satisfies StoredFloatingPosition);
+  const stored = captureCornerPosition(position, viewport, size);
+  return stored === null ? null : JSON.stringify({ formatVersion: 1, ...stored });
 }
 
 export function serializeFloatingWindowPlacement(

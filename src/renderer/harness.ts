@@ -574,6 +574,8 @@ window.gwToolsSettings = () => Object.freeze({
   chatFilterTitleAchievements: appSettings?.chatFilterTitleAchievements ?? false,
   quickItemMove: appSettings?.quickItemMove ?? false,
   effectTimersEnabled: appSettings?.effectTimersEnabled ?? false,
+  alcoholTimerEnabled: appSettings?.alcoholTimerEnabled ?? false,
+  alcoholTimerPosition: appSettings?.alcoholTimerPosition ?? Object.freeze({ corner: "top-left", x: 4, y: 58, locked: true }),
   skillCooldownColor: appSettings?.skillCooldownColor
     ?? Object.freeze({ kind: 'preset', preset: 'red' }),
 });

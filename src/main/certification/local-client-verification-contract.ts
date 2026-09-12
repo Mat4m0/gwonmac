@@ -97,6 +97,7 @@ export const LOCAL_FEATURE_INVARIANTS = Object.freeze({
     "xunlai.data-window-anchors",
   ] as const),
   whisperChat: Object.freeze([...SHARED_FEATURE_INVARIANTS, "whisper.native-chat-path"] as const),
+  alcoholObservation: Object.freeze([...SHARED_FEATURE_INVARIANTS, "alcohol.post-process-producer"] as const),
   resignAction: Object.freeze([...SHARED_FEATURE_INVARIANTS, "resign.native-chat-path"] as const),
   chatAliases: Object.freeze([
     ...SHARED_FEATURE_INVARIANTS,
@@ -226,6 +227,7 @@ export interface LocalFeatureCertificateMap {
   }> & RequiredBuildFact<"observationBase" | "uiDispatcher" | "gameThread">;
   readonly whisperChat: Readonly<{ core: EnhancementProofCore }>
     & RequiredBuildFact<"playRegionObservation" | "gameThread" | "uiDispatcher" | "chatFiltering" | "whisperChat">;
+  readonly alcoholObservation: Readonly<{ core: EnhancementProofCore }> & RequiredBuildFact<"alcoholObservation">;
   readonly resignAction: Readonly<{ core: EnhancementProofCore }>
     & RequiredBuildFact<"playRegionObservation" | "gameThread" | "resignAction">;
   readonly chatAliases: Readonly<{ core: EnhancementProofCore }>
@@ -464,6 +466,8 @@ export function localFeatureVerdictsForBuild(
       && build.uiDispatcher !== undefined && build.chatFiltering !== undefined && build.whisperChat !== undefined
     ? Object.freeze({ core, playRegionObservation: build.playRegionObservation, gameThread: build.gameThread,
         uiDispatcher: build.uiDispatcher, chatFiltering: build.chatFiltering, whisperChat: build.whisperChat }) : null;
+  const alcoholObservation = effective?.alcoholObservation && core !== null && build?.alcoholObservation
+    ? Object.freeze({ core, alcoholObservation: build.alcoholObservation, playerEffectObservation: build.playerEffectObservation, effectIconGeometry: build.effectIconGeometry, uiDispatcher: build.uiDispatcher }) : null;
   const resignAction = effective?.resignAction && core !== null
       && build?.playRegionObservation !== undefined
       && build.gameThread !== undefined && build.resignAction !== undefined
@@ -610,6 +614,7 @@ export function localFeatureVerdictsForBuild(
     ),
     whisperChat: featureVerdict<"whisperChat">(inputSha256, requested.whisperChat, whisperChat,
       failures.whisperChat, "whisper.native-chat-path"),
+    alcoholObservation: featureVerdict<"alcoholObservation">(inputSha256, requested.alcoholObservation, alcoholObservation, failures.alcoholObservation, "alcohol.post-process-producer"),
     resignAction: featureVerdict<"resignAction">(
       inputSha256, requested.resignAction, resignAction,
       failures.resignAction, "resign.native-chat-path",

@@ -225,6 +225,7 @@ function enhancementCache(
     chatAliases: capabilities.chatAliases,
     resignAction: capabilities.resignAction,
     whisperChat: capabilities.whisperChat,
+    alcoholObservation: capabilities.alcoholObservation,
     skillSlotGeometry: capabilities.skillSlotGeometry,
     skillCooldownObservation: capabilities.skillCooldownObservation,
     playerEffectObservation: capabilities.playerEffectObservation,

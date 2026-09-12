@@ -92,6 +92,7 @@ export type PreparedCompanionExtension = Readonly<{
     effectIcons: KernelRegion;
     friends: KernelRegion;
     whispers?: KernelRegion;
+    alcohol?: KernelRegion;
     friendRoot: number;
   }>;
   activate(context: CompanionExtensionActivation): CompanionExtensionSession;

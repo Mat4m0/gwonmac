@@ -15,6 +15,7 @@
  * these boundaries; the sentence a player reads is written in the renderer,
  * where it can be tested against what is actually shown.
  */
+import { DEFAULT_ALCOHOL_TIMER_POSITION, type AlcoholTimerPosition } from "./alcohol-timer.js";
 import type { EliteWikiRequest } from "./elite-wiki.js";
 import type { EliteTracking, EliteUpdate } from "./elite-skills.js";
 import type {
@@ -465,6 +466,8 @@ export interface AppSettings {
   skillCooldownOverlayEnabled: boolean;
   /** Show exact remaining durations over the controlled player's native Effects icons. */
   effectTimersEnabled: boolean;
+  alcoholTimerEnabled: boolean;
+  alcoholTimerPosition: AlcoholTimerPosition;
   /** One curated or exact RGB color shared by all eight cooldown labels. */
   skillCooldownColor: SkillCooldownColor;
   /** Request the certified 4 GB client module on the next Guild Wars launch. */
@@ -521,6 +524,7 @@ export type AppSettingsPatch = Partial<AppSettings>;
 export const RENDERER_WRITABLE_SETTINGS = [
   "autoRelogAfterReload",
   "memoryWarningPosition",
+  "alcoholTimerPosition",
   "cartographyOverlayEnabled",
   "cartographyGridEnabled",
   "compassRangeIndicatorsEnabled",
@@ -626,6 +630,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   chatFilterTitleAchievements: true,
   skillCooldownOverlayEnabled: true,
   effectTimersEnabled: false,
+  alcoholTimerEnabled: false,
+  alcoholTimerPosition: DEFAULT_ALCOHOL_TIMER_POSITION,
   skillCooldownColor: DEFAULT_SKILL_COOLDOWN_COLOR,
   extendedMemoryEnabled: false,
   autoRelogAfterReload: false,
@@ -812,6 +818,7 @@ export interface ClientCompatibility {
     skillCooldownObservation: OptionalFeatureStatus;
     playerEffectObservation: OptionalFeatureStatus;
     effectIconGeometry: OptionalFeatureStatus;
+    alcoholObservation: OptionalFeatureStatus;
     resignAction: OptionalFeatureStatus;
     whisperChat: OptionalFeatureStatus;
     playRegionObservation: OptionalFeatureStatus;

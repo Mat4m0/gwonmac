@@ -69,6 +69,7 @@ test("Resign uses the shared modal and submits only on Enter or its button", asy
     await page.keyboard.press("Escape");
     await cancelled();
     await press();
+    await expect(modal).toBeVisible();
     await page.mouse.click(5, 5);
     await cancelled();
     await press();
@@ -78,6 +79,7 @@ test("Resign uses the shared modal and submits only on Enter or its button", asy
     await modal.getByRole("button", { name: "Cancel", exact: true }).click();
     await cancelled();
     await press();
+    await expect(modal).toBeVisible();
     await page.screenshot({ path: test.info().outputPath("resign-dialog.png") });
     await page.keyboard.press("Enter");
     await expect(modal).not.toBeVisible();

@@ -22,6 +22,7 @@ type FeatureBooleanSetting = BooleanSetting & (
   | "skillCooldownOverlayEnabled"
   | "chatFiltersEnabled"
   | "effectTimersEnabled"
+  | "alcoholTimerEnabled"
   | "cartographyEnabled"
   | "characterSwitchEnabled"
   | "resignEnabled"
@@ -161,6 +162,7 @@ export const FEATURE_SELECTION_POLICIES = defineFeatureSelectionPolicies({
     },
     region: "non-pvp",
   },
+  alcoholTimer: { activation: { kind: "setting", setting: "alcoholTimerEnabled", master: "gwonmacTools" }, region: "pve" },
   effectTimers: {
     activation: {
       kind: "setting",

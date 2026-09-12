@@ -381,6 +381,11 @@ function resolveEnhancementTransform(
     resolveHook("Whisper native sender", whisperChat.functionIndex, whisperChat.params, whisperChat.results);
     if (bodyHash(whisperChat.functionIndex) !== whisperChat.bodySha256) fail("Whisper native sender changed");
   }
+  if (capabilities.alcoholObservation) {
+    const proof = build.alcoholObservation!;
+    resolveHook("Alcohol producer", proof.functionIndex, proof.params, proof.results);
+    if (bodyHash(proof.functionIndex) !== proof.bodySha256) fail("Alcohol producer changed");
+  }
   if (capabilities.resignAction) {
     resolveHook("Resign native sender", resignAction.functionIndex, resignAction.params, resignAction.results);
     if (bodyHash(resignAction.functionIndex) !== resignAction.bodySha256) fail("Resign native sender changed");

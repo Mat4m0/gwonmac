@@ -45,10 +45,12 @@ export const fixtureSnapshot: LauncherSnapshot = {
       "skill-cooldowns": { enabled: true },
       "chat-filters": { enabled: false },
       "effect-timers": { enabled: false },
+      "alcohol-timer": { enabled: false },
     },
   },
   shortcuts: resolveShortcuts({}),
   settings: {
+    alcoholTimerPosition: { corner: "top-left", x: 4, y: 58, locked: true },
     uiStyle: DEFAULT_SETTINGS.uiStyle,
     uiFont: DEFAULT_SETTINGS.uiFont,
     uiCustomTheme: DEFAULT_SETTINGS.uiCustomTheme,

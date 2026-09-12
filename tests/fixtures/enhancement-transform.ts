@@ -29,6 +29,7 @@ export const UNSUPPORTED_ALL_CAPABILITIES: EnhancementCapabilities = Object.free
   skillCooldownObservation: false,
   playerEffectObservation: false,
     effectIconGeometry: false,
+    alcoholObservation: false,
     resignAction: false,
     whisperChat: false,
 });
@@ -49,6 +50,7 @@ export const CURSOR_ONLY: EnhancementCapabilities = Object.freeze({
   skillCooldownObservation: false,
   playerEffectObservation: false,
     effectIconGeometry: false,
+    alcoholObservation: false,
     resignAction: false,
     whisperChat: false,
 });
@@ -69,6 +71,7 @@ export const CURSOR_TARGET: EnhancementCapabilities = Object.freeze({
   skillCooldownObservation: false,
   playerEffectObservation: false,
     effectIconGeometry: false,
+    alcoholObservation: false,
     resignAction: false,
     whisperChat: false,
 });
@@ -89,6 +92,7 @@ export const TARGET_ONLY: EnhancementCapabilities = Object.freeze({
   skillCooldownObservation: false,
   playerEffectObservation: false,
     effectIconGeometry: false,
+    alcoholObservation: false,
     resignAction: false,
     whisperChat: false,
 });
@@ -109,6 +113,7 @@ export const STORAGE_ONLY: EnhancementCapabilities = Object.freeze({
   skillCooldownObservation: false,
   playerEffectObservation: false,
     effectIconGeometry: false,
+    alcoholObservation: false,
     resignAction: false,
     whisperChat: false,
 });
@@ -129,6 +134,7 @@ export const CURSOR_TOOLBOX: EnhancementCapabilities = Object.freeze({
   skillCooldownObservation: false,
   playerEffectObservation: false,
     effectIconGeometry: false,
+    alcoholObservation: false,
     resignAction: false,
     whisperChat: false,
 });
@@ -149,6 +155,7 @@ export const NO_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   skillCooldownObservation: false,
   playerEffectObservation: false,
     effectIconGeometry: false,
+    alcoholObservation: false,
     resignAction: false,
     whisperChat: false,
 });
@@ -169,6 +176,7 @@ export const CURSOR_TOOLBOX_COMMANDS: EnhancementCapabilities = Object.freeze({
   skillCooldownObservation: false,
   playerEffectObservation: false,
     effectIconGeometry: false,
+    alcoholObservation: false,
     resignAction: false,
     whisperChat: false,
 });
@@ -189,6 +197,7 @@ export const CURSOR_TARGET_TOOLBOX_COMMANDS: EnhancementCapabilities = Object.fr
   skillCooldownObservation: false,
   playerEffectObservation: false,
     effectIconGeometry: false,
+    alcoholObservation: false,
     resignAction: false,
     whisperChat: false,
 });
@@ -209,6 +218,7 @@ export const CURSOR_TOOLBOX_STORAGE: EnhancementCapabilities = Object.freeze({
   skillCooldownObservation: false,
   playerEffectObservation: false,
     effectIconGeometry: false,
+    alcoholObservation: false,
     resignAction: false,
     whisperChat: false,
 });

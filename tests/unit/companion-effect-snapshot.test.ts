@@ -120,11 +120,15 @@ function iconSnapshot() {
   view.setUint32(24, 1, true);
   view.setFloat32(36, 800, true);
   view.setFloat32(40, 600, true);
-  view.setUint32(44, 123, true);
-  view.setFloat32(48, 100, true);
-  view.setFloat32(52, -12, true);
-  view.setFloat32(56, 148, true);
-  view.setFloat32(60, 36, true);
+  view.setUint32(60, 123, true);
+  view.setFloat32(64, 100, true);
+  view.setFloat32(68, -12, true);
+  view.setFloat32(72, 148, true);
+  view.setFloat32(76, 36, true);
+  view.setFloat32(44, 100, true);
+  view.setFloat32(48, 0, true);
+  view.setFloat32(52, 800, true);
+  view.setFloat32(56, 100, true);
   return buffer;
 }
 

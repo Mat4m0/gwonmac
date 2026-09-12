@@ -585,6 +585,12 @@ export interface KnownEnhancementBuild {
     dirtyMessages: EnhancementEffectDirtyMessages;
     layout: EnhancementPlayerEffectLayout;
   }>;
+  alcoholObservation?: Readonly<{
+    functionIndex: number;
+    params: readonly ["i32", "i32"];
+    results: readonly [];
+    bodySha256: string;
+  }>;
   /** Exact native Effects parent and child mapping authority. */
   effectIconGeometry?: Readonly<{
     frameHash: number;
@@ -649,6 +655,7 @@ export function supportedEnhancementCapabilities(
       && build.uiDispatcher !== undefined
       && build.playerEffectObservation !== undefined,
     effectIconGeometry: build.effectIconGeometry !== undefined,
+    alcoholObservation: build.alcoholObservation !== undefined && build.effectIconGeometry !== undefined,
     whisperChat: playRegionObservation && gameThread && build.uiDispatcher !== undefined
       && build.chatFiltering !== undefined && build.whisperChat !== undefined,
     resignAction: playRegionObservation && gameThread && build.resignAction !== undefined,

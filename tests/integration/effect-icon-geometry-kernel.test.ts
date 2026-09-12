@@ -90,3 +90,20 @@ describe("native effect icon geometry kernel", () => {
     });
   });
 });
+
+  it("keeps the Effects anchor without icons and follows native frame movement", async () => {
+    const kernel = await createKernel({ partyDetail: true });
+    installGameGraph(kernel.view); installPlayerEffects(kernel.view, []);
+    installEffectIconGraph(kernel.view, 123);
+    assert.equal(kernel.init({ features: FEATURES }), 1);
+    kernel.tick(0, 12000, EFFECTS_HASH);
+    const first = kernel.effectIcons(); assert.equal(first.status, "ready");
+    if (first.status !== "ready") return;
+    assert.deepEqual(first.icons, []);
+    assert.deepEqual(first.anchor, { left: 100, bottom: 20, right: 800, top: 68 });
+    const parent = ADDRESSES.frameBuffer + 0x1c8;
+    kernel.view.setFloat32(parent + 0x10c, 150, true);
+    for (let tick = 0; tick < 31; tick++) kernel.tick(0, 12001 + tick, EFFECTS_HASH);
+    const moved = kernel.effectIcons(); assert.equal(moved.status, "ready");
+    if (moved.status === "ready") assert.equal(moved.anchor.left, 150);
+  });

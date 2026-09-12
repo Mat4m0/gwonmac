@@ -70,6 +70,7 @@ describe("companion policy source", () => {
           chatFilters: false,
           quickItemMove: false,
           effectTimers: false,
+    alcoholTimer: false,
         },
       },
     });

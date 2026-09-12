@@ -113,11 +113,12 @@ export function readCompanionEffectIcons(buffer: ArrayBuffer, pointer: number) {
   const candidateCount = view.getUint32(32, true);
   const viewportWidth = view.getFloat32(36, true);
   const viewportHeight = view.getFloat32(40, true);
+  const anchor = Object.freeze({ left: view.getFloat32(44, true), bottom: view.getFloat32(48, true), right: view.getFloat32(52, true), top: view.getFloat32(56, true) });
   if (count > MAX_EFFECTS) {
     return Object.freeze({ status: "waiting", reason: "corrupt" } as const);
   }
   const icons = Object.freeze(Array.from({ length: count }, (_, index) => {
-    const at = 44 + index * 20;
+    const at = 60 + index * 20;
     return Object.freeze({
       skillId: view.getUint32(at, true),
       left: view.getFloat32(at + 4, true),
@@ -158,6 +159,7 @@ export function readCompanionEffectIcons(buffer: ArrayBuffer, pointer: number) {
   if (frameId === 0 || outcome !== 0 || candidateCount !== 0
     || !finite(viewportWidth) || !finite(viewportHeight)
     || viewportWidth <= 0 || viewportHeight <= 0
+    || !Object.values(anchor).every(finite) || anchor.right <= anchor.left || anchor.top <= anchor.bottom
     || icons.some((icon) => icon.skillId === 0
       || ![icon.left, icon.bottom, icon.right, icon.top].every(finite)
       || icon.right <= icon.left || icon.top <= icon.bottom
@@ -167,7 +169,7 @@ export function readCompanionEffectIcons(buffer: ArrayBuffer, pointer: number) {
   }
   return Object.freeze({
     status: "ready" as const, sequence: second, generation, frameId,
-    viewportWidth, viewportHeight, icons,
+    viewportWidth, viewportHeight, anchor, icons,
   });
 }
 

@@ -50,6 +50,7 @@ struct Observation {
     frame_id: u32,
     viewport_width: f32,
     viewport_height: f32,
+    anchor: SkillSlotRect,
     count: u32,
     icons: [EffectIconRecord; EFFECT_RECORDS],
     outcome: u32,
@@ -63,6 +64,7 @@ impl Observation {
             frame_id: 0,
             viewport_width: 0.0,
             viewport_height: 0.0,
+            anchor: EMPTY_RECT,
             count: 0,
             icons: [EMPTY_ICON; EFFECT_RECORDS],
             outcome: Outcome::Inactive as u32,
@@ -85,6 +87,9 @@ unsafe fn same_current(right: Observation) -> bool {
     {
         return false;
     }
+    let anchor = unsafe { read_volatile(&(*snapshot).anchor) };
+    if anchor.left != right.anchor.left || anchor.bottom != right.anchor.bottom
+        || anchor.right != right.anchor.right || anchor.top != right.anchor.top { return false; }
     for index in 0..right.count as usize {
         let left = unsafe {
             read_volatile(core::ptr::addr_of!((*snapshot).icons)
@@ -105,16 +110,17 @@ unsafe fn same_current(right: Observation) -> bool {
 
 fn normalize(
     observed: Result<
-        (u32, f32, f32, u32, [EffectIconRecord; EFFECT_RECORDS]),
+        (u32, f32, f32, SkillSlotRect, u32, [EffectIconRecord; EFFECT_RECORDS]),
         (Outcome, u32),
     >,
 ) -> Observation {
     match observed {
-        Ok((frame_id, viewport_width, viewport_height, count, icons)) => Observation {
+        Ok((frame_id, viewport_width, viewport_height, anchor, count, icons)) => Observation {
             flags: FLAG_EFFECT_ICONS_READY,
             frame_id,
             viewport_width,
             viewport_height,
+            anchor,
             count,
             icons,
             outcome: 0,
@@ -125,6 +131,7 @@ fn normalize(
             frame_id: 0,
             viewport_width: 0.0,
             viewport_height: 0.0,
+            anchor: EMPTY_RECT,
             count: 0,
             icons: [EMPTY_ICON; EFFECT_RECORDS],
             outcome: outcome as u32,
@@ -197,7 +204,7 @@ unsafe fn rectangle(
 unsafe fn collect(
     layout: Layout,
     parent_hash: u32,
-) -> Result<(u32, f32, f32, u32, [EffectIconRecord; EFFECT_RECORDS]), (Outcome, u32)> {
+) -> Result<(u32, f32, f32, SkillSlotRect, u32, [EffectIconRecord; EFFECT_RECORDS]), (Outcome, u32)> {
     if parent_hash == 0
         || layout.frame_bytes == 0
         || layout.frame_child_offset_id.saturating_add(4) > layout.frame_bytes
@@ -309,7 +316,9 @@ unsafe fn collect(
         }
         output_count += 1;
     }
-    Ok((parent_id, viewport_width, viewport_height, output_count, records))
+    let anchor = unsafe { rectangle(layout, parent, viewport_width, viewport_height) }
+        .ok_or((Outcome::ChildInvalid, 0))?;
+    Ok((parent_id, viewport_width, viewport_height, anchor, output_count, records))
 }
 
 unsafe fn publish(observed: Option<Observation>) {
@@ -328,6 +337,7 @@ unsafe fn publish(observed: Option<Observation>) {
             write_volatile(&mut (*snapshot).candidate_count, value.candidates);
             write_volatile(&mut (*snapshot).viewport_width, value.viewport_width);
             write_volatile(&mut (*snapshot).viewport_height, value.viewport_height);
+            write_volatile(&mut (*snapshot).anchor, value.anchor);
             write_volatile(&mut (*snapshot).icons, value.icons);
         }
         write_volatile(&mut (*snapshot).sequence, next);

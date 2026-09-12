@@ -16,6 +16,7 @@
  * `isLocalClientVerification` re-validates every field of a result that crossed
  * the process boundary. Profile state is never consulted.
  */
+import { deriveAlcoholObservation } from "./enhancement-alcohol-proof.js";
 import { deriveWhisperChat } from "./enhancement-whisper-proof.js";
 import { deriveResignAction } from "./enhancement-resign-proof.js";
 import { createHash } from "node:crypto";
@@ -716,6 +717,9 @@ function deriveEnhancementBuild(
     && includePlayRegion
     && includePlayerEffects
     && effectIcons !== null;
+  const alcoholObservation = requestedCapabilities.alcoholObservation && includeEffectIcons
+    ? deriveAlcoholObservation(context.moduleView(), locatedLocal!.uiDispatcher!.functionIndex) : null;
+  const includeAlcohol = alcoholObservation !== null;
   const playerEffectCounts = includePlayerEffects || playerEffects !== null
     ? []
     : playerEffectCandidateCounts(context.moduleView());
@@ -734,6 +738,8 @@ function deriveEnhancementBuild(
   );
   const completeFailures: LocalFeatureFailures = Object.freeze({
     ...failures,
+    ...(requestedCapabilities.alcoholObservation && !includeAlcohol
+      ? { alcoholObservation: changedFeature("alcoholObservation", "alcohol.post-process-producer") } : {}),
     ...(requestedCapabilities.whisperChat && !includeWhispers
       ? { whisperChat: changedFeature("whisperChat", "whisper.native-chat-path") } : {}),
     ...(requestedCapabilities.resignAction && !includeResign
@@ -929,6 +935,7 @@ function deriveEnhancementBuild(
     ...(includeQuickItemMove ? { quickItemMove: locatedLocal!.quickItemMove! } : {}),
     ...(includePlayerEffects ? { playerEffectObservation: playerEffects! } : {}),
     ...(includeEffectIcons ? { effectIconGeometry: effectIcons! } : {}),
+    ...(includeAlcohol ? { alcoholObservation } : {}),
     ...skillbarBuild.beforeTeam,
     ...(includeTeam ? { teamApply: locatedLocal!.teamApply! } : {}),
     ...skillbarBuild.afterTeam,
@@ -950,6 +957,7 @@ function deriveEnhancementBuild(
     quickItemMove: includeQuickItemMove,
     playerEffectObservation: includePlayerEffects,
     effectIconGeometry: includeEffectIcons,
+    alcoholObservation: includeAlcohol,
     resignAction: includeResign,
     whisperChat: includeWhispers,
   });

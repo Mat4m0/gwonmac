@@ -55,6 +55,7 @@ const PARTY_ONLY: EnhancementCapabilities = Object.freeze({
   skillCooldownObservation: false,
   playerEffectObservation: false,
     effectIconGeometry: false,
+    alcoholObservation: false,
     resignAction: false,
     whisperChat: false,
 });
@@ -76,6 +77,7 @@ const EFFECT_ONLY: EnhancementCapabilities = Object.freeze({
   quickItemMove: false,
   playerEffectObservation: true,
     effectIconGeometry: false,
+    alcoholObservation: false,
     resignAction: false,
     whisperChat: false,
 });
@@ -338,6 +340,7 @@ describe("targeted Enhancement WebAssembly transform", () => {
           skillCooldownObservation: false,
           playerEffectObservation: false,
     effectIconGeometry: false,
+    alcoholObservation: false,
     resignAction: false,
     whisperChat: false,
         },

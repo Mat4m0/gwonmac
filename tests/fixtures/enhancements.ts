@@ -307,6 +307,7 @@ export const ADDRESSES = Object.freeze({
   effectIcons: 0xcc40,
   agentEffectRows: 0xe000,
   effectRecords: 0xe800,
+  alcohol: 0x6_3000,
   whispers: 0x6_0000,
   friends: 0x5_0000,
   friendRoot: 0x5_4000,
@@ -558,6 +559,8 @@ export type KernelInit = (
   features: number,
   whisperPointer: number,
   whisperSize: number,
+  alcoholPointer: number,
+  alcoholSize: number,
 ) => number;
 export type KernelDispatch = (
   kind: number,
@@ -786,6 +789,8 @@ export async function createKernel(
         features,
         overrides.whisperPointer ?? ((features & COMPANION_FEATURE_BITS.whisperObservation) !== 0 ? ADDRESSES.whispers : 0),
         overrides.whisperSize ?? ((features & COMPANION_FEATURE_BITS.whisperObservation) !== 0 ? COMPANION_ABI.whispers.bytes : 0),
+        (features & COMPANION_FEATURE_BITS.alcoholObservation) !== 0 ? ADDRESSES.alcohol : 0,
+        (features & COMPANION_FEATURE_BITS.alcoholObservation) !== 0 ? COMPANION_ABI.alcohol.bytes : 0,
       );
     },
     tick: (skillBarFrameId = 0, skillTimer = 0, effectsFrameHash = 0) => exports.dispatch(
@@ -979,6 +984,10 @@ export function installEffectIconGraph(
   view.setUint32(parent + 0x134, parentHash, true);
   view.setFloat32(parent + 0x104, 800, true);
   view.setFloat32(parent + 0x108, 600, true);
+  view.setFloat32(parent + 0x10c, 100, true);
+  view.setFloat32(parent + 0x110, 20, true);
+  view.setFloat32(parent + 0x114, 800, true);
+  view.setFloat32(parent + 0x118, 68, true);
   view.setUint32(child + 0xbc, 2, true);
   view.setUint32(child + 0x18c, 0x4, true);
   view.setUint32(child + 0xb8, skillId + 4, true);

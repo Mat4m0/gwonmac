@@ -461,6 +461,8 @@ export async function assertCleanupSafetyGates() {
             skillCooldownOverlayEnabled: true,
             quickItemMove: false,
             effectTimersEnabled: false,
+            alcoholTimerEnabled: false,
+            alcoholTimerPosition: Object.freeze({ corner: "top-left", x: 4, y: 58, locked: true }),
             skillCooldownColor: { kind: "preset", preset: "red" } as const,
             chatFiltersEnabled: false,
             chatFilterAllyDrops: false,
@@ -865,6 +867,8 @@ export async function assertToolboxFoundationLifecycle() {
         chatFilterTitleAchievements: false,
         quickItemMove: false,
         effectTimersEnabled: false,
+        alcoholTimerEnabled: false,
+        alcoholTimerPosition: Object.freeze({ corner: "top-left", x: 4, y: 58, locked: true }),
         skillCooldownColor: { kind: "preset", preset: "red" } as const,
       });
       const runtime = await installCertifiedCompanion(
@@ -1440,6 +1444,8 @@ export async function assertRollbackAfterTablePublication() {
           skillCooldownOverlayEnabled: true,
           quickItemMove: false,
           effectTimersEnabled: false,
+          alcoholTimerEnabled: false,
+          alcoholTimerPosition: Object.freeze({ corner: "top-left", x: 4, y: 58, locked: true }),
           skillCooldownColor: { kind: "preset", preset: "red" } as const,
           chatFiltersEnabled: false,
           chatFilterAllyDrops: false,

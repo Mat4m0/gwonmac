@@ -22,6 +22,7 @@ const capabilities: EnhancementCapabilities = Object.freeze({
   skillCooldownObservation: true,
   playerEffectObservation: false,
     effectIconGeometry: false,
+    alcoholObservation: false,
     resignAction: false,
     whisperChat: false,
   playRegionObservation: true,
@@ -144,6 +145,7 @@ test("unselected skill facts stay absent and selected missing facts fail clearly
     skillCooldownObservation: false,
     playerEffectObservation: false,
     effectIconGeometry: false,
+    alcoholObservation: false,
     resignAction: false,
     whisperChat: false,
   });

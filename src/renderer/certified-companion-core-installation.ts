@@ -315,6 +315,7 @@ export async function installCoreCertifiedCompanion(
         skillCooldowns: extension?.kernelRegions.skillCooldowns ?? { pointer: 0, bytes: 0 },
         playerEffects: extension?.kernelRegions.playerEffects ?? { pointer: 0, bytes: 0 },
         effectIcons: extension?.kernelRegions.effectIcons ?? { pointer: 0, bytes: 0 },
+        alcohol: extension?.kernelRegions.alcohol ?? { pointer: 0, bytes: 0 },
         whispers: extension?.kernelRegions.whispers ?? { pointer: 0, bytes: 0 },
         friends: extension?.kernelRegions.friends ?? { pointer: 0, bytes: 0 },
         playRegion: { pointer: playRegions.pointer, bytes: playRegions.bytes },

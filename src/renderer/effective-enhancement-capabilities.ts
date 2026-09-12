@@ -25,6 +25,7 @@ export function effectiveCapabilities(
       features.playerEffectObservation.status === "available",
     effectIconGeometry:
       features.effectIconGeometry.status === "available",
+    alcoholObservation: features.alcoholObservation.status === "available",
     playRegionObservation:
       features.playRegionObservation.status === "available",
     preGameControls: features.preGameControls.status === "available",
