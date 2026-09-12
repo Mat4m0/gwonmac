@@ -65,3 +65,41 @@ and travel/loading withdrawal.
 Party awareness and hostile-agent effects remain separate authority decisions.
 They must not reuse this player's capability or infer exact durations from broad
 condition/hex state flags. See [Future effect and debuff research](future-effect-durations.md).
+
+## Alcohol Timer
+
+Alcohol Timer is a separate, optional PvE Tool. It observes the certified native
+post-processing notification without changing the message or the game's visual
+effects. The proof fixes the tint/intensity payload and its level conversion.
+A changed producer or dispatch destination withdraws this capability.
+
+The kernel estimates one minute per alcohol level. Native updates correct the
+countdown; increases preserve the remainder of the current minute. The timer
+starts unknown until a notification arrives. Enabling it while already drunk
+can therefore leave it hidden until the next update. Salad notifications are
+ignored. The shared lunar/Brandy notification is ambiguous: level five is
+accepted only after a Brandy level-four notification. This conservative filter
+can omit an ambiguous drink. It never triggers automatic consumption.
+
+Same-character loading hides the readout while its deadline continues. Logout,
+character changes, unsupported regions, or disabling the Tool clear the estimate.
+No alcohol state is saved to disk.
+
+The renderer places a small beer icon and `m:ss` directly below the last visible
+row of Effects icons. Empty reserved rows in the Effects panel add no gap.
+With no icons, the timer uses the top-left corner of the Effects panel.
+The readout turns amber in the last 15 seconds and disappears at zero. There
+are no sounds or animations. Locked mode passes all pointer input to the game.
+
+Enable **Settings → Tools → Alcohol Timer**, then select **Adjust position**.
+An unlocked placeholder permits adjustment while sober. Drag the readout and
+select its lock, or focus it and use arrows, Shift+arrows, and Enter. Escape,
+lost pointer capture, or window blur cancels a drag. **Reset position** restores
+the initial placement and lock. Saved offsets use game UI coordinates relative
+to the visible icon group. They follow its movement and scale, and stay inside the
+game viewport. The preference is shared by the launcher's game windows.
+
+Automated evidence covers native countdown corrections, clock wrap, identity
+changes, notification rejection, snapshot validation, dragging, cancellation,
+locking, saved offsets, and launcher controls. A Developer Build still needs
+live QA for real drink types, map travel, visual alignment, and input feel.

@@ -90,7 +90,7 @@ export function companionKernelFixture(
   );
   const startFunction = signatures.length;
   const types = [
-    functionType(28, true),
+    functionType(30, true),
     functionType(6, false),
     functionType(0, true),
     functionType(0, false),

@@ -2,6 +2,7 @@
  * Strict process-boundary validation for ABI- and input-bound feature verdicts.
  * It rejects stale, malformed, and cross-input proof messages.
  */
+import { isAlcoholObservationProof } from "./enhancement-alcohol-proof.js";
 import { RESIGN_NATIVE_SENDER } from "./enhancement-resign-proof.js";
 import { isDeepStrictEqual } from "node:util";
 import { isDigest } from "../../shared/digest.js";
@@ -149,6 +150,7 @@ function featureFailuresFromVerdicts(
   const teamApply = refusalForFeature("teamApply", verdicts.teamApply);
   const travelAction = refusalForFeature("travelAction", verdicts.travelAction);
   const xunlaiAction = refusalForFeature("xunlaiAction", verdicts.xunlaiAction);
+  const alcoholObservation = refusalForFeature("alcoholObservation", verdicts.alcoholObservation);
   const whisperChat = refusalForFeature("whisperChat", verdicts.whisperChat);
   const resignAction = refusalForFeature("resignAction", verdicts.resignAction);
   const chatAliases = refusalForFeature("chatAliases", verdicts.chatAliases);
@@ -201,6 +203,7 @@ function featureFailuresFromVerdicts(
     || quickItemMove === null
     || playerEffectObservation === null
     || effectIconGeometry === null
+    || alcoholObservation === null
     || whisperChat === null
     || resignAction === null
   ) return null;
@@ -222,6 +225,7 @@ function featureFailuresFromVerdicts(
     ...(playerEffectObservation ? { playerEffectObservation } : {}),
     ...(effectIconGeometry ? { effectIconGeometry } : {}),
     ...(whisperChat ? { whisperChat } : {}),
+    ...(alcoholObservation ? { alcoholObservation } : {}),
     ...(resignAction ? { resignAction } : {}),
   });
 }
@@ -788,6 +792,7 @@ function isAutomaticSemanticBuild(
     && matchesTeamApply(build, baseline)
     && matchesSkillSlotGeometry(build)
     && matchesSkillCooldownObservation(build, baseline)
+    && (build.alcoholObservation === undefined || isAlcoholObservationProof(build.alcoholObservation))
     && matchesPlayerEffectObservation(build)
     && matchesEffectIconGeometry(build)
     && matchesPreGameControls(build, baseline)

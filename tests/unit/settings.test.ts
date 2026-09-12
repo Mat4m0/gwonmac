@@ -88,6 +88,8 @@ describe("settings", () => {
       skillCooldownOverlayEnabled: true,
       quickItemMove: false,
       effectTimersEnabled: false,
+      alcoholTimerEnabled: false,
+      alcoholTimerPosition: { x: 0, y: 10, locked: true },
       skillCooldownColor: { kind: "preset", preset: "red" },
       extendedMemoryEnabled: false,
       autoRelogAfterReload: false,
@@ -202,6 +204,8 @@ describe("settings", () => {
       skillCooldownOverlayEnabled: true,
       quickItemMove: false,
       effectTimersEnabled: false,
+      alcoholTimerEnabled: false,
+      alcoholTimerPosition: { x: 0, y: 10, locked: true },
       skillCooldownColor: { kind: "preset", preset: "red" },
       extendedMemoryEnabled: false,
       autoRelogAfterReload: false,
@@ -592,6 +596,8 @@ describe("settings", () => {
     assert.equal((await loadSettings(path)).autoRelogAfterReload, true);
     const disk = JSON.parse(await readFile(path, "utf8"));
     assert.deepEqual(Object.keys(disk).sort(), [
+      "alcoholTimerEnabled",
+      "alcoholTimerPosition",
       "autoCheckUpdates",
       "autoRelogAfterReload",
       "buildLibrary",
@@ -768,6 +774,8 @@ describe("settings", () => {
       skillCooldownOverlayEnabled: true,
       quickItemMove: false,
       effectTimersEnabled: false,
+      alcoholTimerEnabled: false,
+      alcoholTimerPosition: { x: 0, y: 10, locked: true },
       skillCooldownColor: { kind: "preset", preset: "red" },
       extendedMemoryEnabled: false,
       autoRelogAfterReload: false,

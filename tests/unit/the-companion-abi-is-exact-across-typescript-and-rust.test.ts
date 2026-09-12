@@ -32,6 +32,7 @@ const FEATURE_NAMES = Object.freeze({
   friendObservation: "FEATURE_FRIEND_OBSERVATION",
   playerEffectObservation: "FEATURE_PLAYER_EFFECT_OBSERVATION",
   effectIconGeometry: "FEATURE_EFFECT_ICON_GEOMETRY",
+  alcoholObservation: "FEATURE_ALCOHOL_OBSERVATION",
 } as const);
 
 const DISPATCH_NAMES = Object.freeze({

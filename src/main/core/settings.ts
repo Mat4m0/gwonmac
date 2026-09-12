@@ -14,6 +14,7 @@
  * because a silently ignored key is indistinguishable to the renderer from a
  * setting that did not stick.
  */
+import { isAlcoholTimerPosition } from "../../shared/alcohol-timer.js";
 import { readFile } from "node:fs/promises";
 import {
   DEFAULT_SETTINGS,
@@ -300,10 +301,15 @@ export function parseSettings(raw: unknown): AppSettings {
     "skillKeyLabelsEnabled",
     "skillCooldownOverlayEnabled",
     "effectTimersEnabled",
+    "alcoholTimerEnabled",
     "extendedMemoryEnabled",
     "autoRelogAfterReload",
   ] as const) {
     if (setting in src) out[setting] = asBool(src[setting], setting);
+  }
+  if ("alcoholTimerPosition" in src) {
+    if (!isAlcoholTimerPosition(src.alcoholTimerPosition)) throw new AppError("bad_settings", "Alcohol timer position is invalid");
+    out.alcoholTimerPosition = { ...src.alcoholTimerPosition };
   }
   if ("memoryWarningPosition" in src) {
     const position = src.memoryWarningPosition;

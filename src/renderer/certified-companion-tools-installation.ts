@@ -2,6 +2,8 @@
  * Prepares the optional half of a certified companion installation. Core owns
  * the shared kernel transaction and calls this extension only in Tools mode.
  */
+import { createAlcoholObservationInstallation, readCompanionAlcohol } from "./companion-alcohol-snapshot.js";
+import { createAlcoholTimerOverlay } from "./alcohol-timer-overlay.js";
 import { createEliteMapInstallation } from "./elite-map-installation.js";
 import { COMPANION_ABI, COMPANION_DISPATCH_KINDS, COMPANION_FEATURE_BITS } from "../shared/companion-abi.js";
 import {
@@ -119,6 +121,7 @@ export async function prepareToolsCompanionExtension(
   const skills = tools.createSkillOverlaysInstallation(capabilities);
   const slots = skills.geometry;
   const cooldowns = skills.cooldowns;
+  const alcohol = createAlcoholObservationInstallation(capabilities.alcoholObservation);
   const playerEffects = createPlayerEffectObservationInstallation(
     capabilities.playerEffectObservation,
   );
@@ -173,6 +176,7 @@ export async function prepareToolsCompanionExtension(
       | (foundation ? COMPANION_FEATURE_BITS.toolboxFoundation : 0)
       | (capabilities.targetObservation ? COMPANION_FEATURE_BITS.targetObservation : 0)
       | (capabilities.whisperChat ? COMPANION_FEATURE_BITS.whisperObservation : 0)
+      | (capabilities.alcoholObservation ? COMPANION_FEATURE_BITS.alcoholObservation : 0)
       | skills.certifiedFeatureFlags
       | (capabilities.playerEffectObservation
         ? COMPANION_FEATURE_BITS.playerEffectObservation : 0)
@@ -194,6 +198,7 @@ export async function prepareToolsCompanionExtension(
       whispers.allocate(malloc);
       slots?.allocate(malloc);
       cooldowns?.allocate(malloc);
+      alcohol.allocate(malloc);
       playerEffects.allocate(malloc);
       effectIcons.allocate(malloc);
       storage?.allocate(malloc);
@@ -202,6 +207,7 @@ export async function prepareToolsCompanionExtension(
         || (quickItemMove !== null && (!Number.isInteger(quickItemMovePointer) || quickItemMovePointer <= 0))
         || (slots !== null && !slots.allocated)
         || (cooldowns !== null && !cooldowns.allocated)
+        || !alcohol.allocated
         || !playerEffects.allocated
         || !effectIcons.allocated
         || (storage !== null && !storage.region().pointer)
@@ -235,12 +241,14 @@ export async function prepareToolsCompanionExtension(
         size: QUICK_ITEM_MOVE_SCRATCH_BYTES, align: 4 as const }]),
       ...(slots?.region == null ? [] : [slots.region]),
       ...(cooldowns?.region == null ? [] : [cooldowns.region]),
+      ...(alcohol.region == null ? [] : [alcohol.region]),
       ...(playerEffects.region == null ? [] : [playerEffects.region]),
       ...(effectIcons.region == null ? [] : [effectIcons.region]),
       ...(storage === null ? [] : [storage.region()]),
       ...(travel === null ? [] : [travel.region()]),
     ],
     kernelRegions: {
+      get alcohol() { return alcohol.region === null ? EMPTY_REGION : { pointer: alcohol.pointer, bytes: alcohol.bytes }; },
       get whispers() { return { pointer: whispers.pointer, bytes: whispers.bytes }; },
       get friends() { return friendPointer === 0 ? EMPTY_REGION : { pointer: friendPointer, bytes: COMPANION_ABI.friends.bytes }; },
       friendRoot: friendManifest?.root ?? 0,
@@ -264,7 +272,7 @@ export async function prepareToolsCompanionExtension(
     },
     activate(context) {
       const session = activateTools({ mapExports: exports, context, capabilities, program, foundation, observeState,
-        skills, slots, cooldowns, playerEffects, effectIcons, enqueue, traceReader, teamCommands, storage,
+        skills, slots, cooldowns, playerEffects, effectIcons, alcohol, enqueue, traceReader, teamCommands, storage,
         travel, configureTrade, takeTrade, configureChatFilters, friendPointer,
         resignExports: capabilities.resignAction ? exports : null, whispers,
         quickItemMove, quickItemMovePointer });
@@ -278,6 +286,7 @@ export async function prepareToolsCompanionExtension(
         () => { if (quickItemMovePointer !== 0) free(quickItemMovePointer); quickItemMovePointer = 0; },
         () => slots?.release(free),
         () => cooldowns?.release(free),
+        () => alcohol.release(free),
         () => playerEffects.release(free),
         () => effectIcons.release(free),
         () => whispers.dispose(free),
@@ -298,6 +307,7 @@ type ToolsInput = Readonly<{
   skills: ReturnType<typeof tools.createSkillOverlaysInstallation>;
   slots: ReturnType<typeof tools.createSkillOverlaysInstallation>["geometry"];
   cooldowns: ReturnType<typeof tools.createSkillOverlaysInstallation>["cooldowns"];
+  alcohol: ReturnType<typeof createAlcoholObservationInstallation>;
   playerEffects: ReturnType<typeof createPlayerEffectObservationInstallation>;
   effectIcons: ReturnType<typeof createEffectIconGeometryInstallation>;
   enqueue: EnhancementCommandEnqueue | null;
@@ -317,7 +327,7 @@ type ToolsInput = Readonly<{
 
 function activateTools(input: ToolsInput): CompanionExtensionSession {
   const { context, capabilities, program, foundation, observeState, skills,
-    slots, cooldowns, playerEffects, effectIcons, enqueue, traceReader, teamCommands, storage, travel,
+    slots, cooldowns, playerEffects, effectIcons, alcohol, enqueue, traceReader, teamCommands, storage, travel,
     configureTrade, takeTrade, configureChatFilters } = input;
   const whispers = input.whispers;
   const whisperSession = createWhisperSession(whispers.send);
@@ -337,11 +347,12 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
   });
   const snapshot = () => source.snapshot;
   const policy = () => snapshot().policy;
+  const alcoholRequested = () => capabilities.alcoholObservation && snapshot().settings.gwonmacTools && snapshot().settings.alcoholTimerEnabled;
   const playerEffectsActive = () => capabilities.playerEffectObservation
     && (program === "effect-observer"
-      || (policy().effectTimers && capabilities.effectIconGeometry));
+      || ((policy().effectTimers || (alcoholRequested() && policy().alcoholTimer)) && capabilities.effectIconGeometry));
   const effectIconsActive = () => capabilities.effectIconGeometry
-    && (program === "effect-observer" || policy().effectTimers);
+    && (program === "effect-observer" || policy().effectTimers || (alcoholRequested() && policy().alcoholTimer));
   const playRegion = () => snapshot().playRegion;
   let companionState: CompanionSnapshot | null = null;
   let party: ToolboxObservation | null = null;
@@ -361,6 +372,9 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
   let aliasEnabled: boolean | null = null;
   let lastTrace = "";
   let observingFriends = false;
+  let alcoholOverlay: ReturnType<typeof createAlcoholTimerOverlay> | null = null;
+  let unsubscribeAlcohol: (() => void) | null = null;
+  let unsubscribeAlcoholGeometry: (() => void) | null = null;
   let effectOverlay: ReturnType<typeof createEffectTimerOverlayConsumer> | null = null;
   let unsubscribeEffects: (() => void) | null = null;
   let unsubscribeEffectIcons: (() => void) | null = null;
@@ -401,6 +415,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
       () => { unsubscribeEffects?.(); unsubscribeEffects = null; },
       () => { unsubscribeEffectIcons?.(); unsubscribeEffectIcons = null; },
       () => { effectOverlay?.dispose(); effectOverlay = null; },
+      () => { unsubscribeAlcohol?.(); unsubscribeAlcoholGeometry?.(); alcoholOverlay?.dispose(); alcoholOverlay = null; },
       () => { resign?.dispose(); },
       () => { whispers.setEnabled(false); unsubscribeWhispers(); whisperSurface?.dispose(); whisperSurface = null; whisperSession.dispose(); },
       () => { configureTrade?.(0); },
@@ -447,6 +462,11 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
     const canvas = document.getElementById("canvas");
     if (!(canvas instanceof HTMLCanvasElement)) {
       throw new Error("Enhancement effect overlay target is missing");
+    }
+    if (capabilities.alcoholObservation) {
+      alcoholOverlay = createAlcoholTimerOverlay(document.body, canvas, alcoholTimerPosition => window.gwNative.settings.set({ alcoholTimerPosition }));
+      unsubscribeAlcohol = alcohol.subscribe(alcoholOverlay.setAlcohol);
+      unsubscribeAlcoholGeometry = effectIcons.subscribe(alcoholOverlay.setGeometry);
     }
     effectOverlay = createEffectTimerOverlayConsumer(document.body, canvas);
     unsubscribeEffects = playerEffects.subscribe(effectOverlay.setEffects);
@@ -519,6 +539,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
         ? COMPANION_FEATURE_BITS.targetObservation : 0)
       | (policy().whispers && capabilities.whisperChat ? COMPANION_FEATURE_BITS.whisperObservation : 0)
       | skills.activeFeatureFlags
+      | (alcoholRequested() ? COMPANION_FEATURE_BITS.alcoholObservation : 0)
       | (playerEffectsActive() ? COMPANION_FEATURE_BITS.playerEffectObservation : 0)
       | (effectIconsActive() ? COMPANION_FEATURE_BITS.effectIconGeometry : 0)
       | (activeFriendPointer !== 0 && observingFriends
@@ -550,6 +571,8 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
   const syncConsumers = () => {
     syncTarget();
     skills.sync(snapshot().settings, policy());
+    alcohol.setActive(alcoholRequested());
+    alcoholOverlay?.setSettings(snapshot().settings.alcoholTimerPosition, policy().alcoholTimer && alcoholRequested());
     playerEffects.setActive(playerEffectsActive());
     effectIcons.setActive(effectIconsActive());
     effectOverlay?.setEnabled(policy().effectTimers && effectIconsActive());
@@ -608,6 +631,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
   return Object.freeze({
     observer: {
       pollers: [
+        { poll: () => { if (alcohol.active) alcohol.sink?.update(readCompanionAlcohol(memory.buffer, alcohol.pointer)); }, enabled: () => alcohol.active },
         { poll: () => whispers.poll(), enabled: () => true },
         ...(activeFriendPointer === 0 ? [] : [{ poll: pollFriends, enabled: () => true }]),
         ...(travel === null ? [] : [{
@@ -721,6 +745,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
         () => { if (activeFriendPointer !== 0) free(activeFriendPointer); activeFriendPointer = 0; },
         () => slots?.release(free),
         () => cooldowns?.release(free),
+        () => { alcohol.release(free); alcohol.dispose(); },
         () => { playerEffects.release(free); playerEffects.dispose(); },
         () => { effectIcons.release(free); effectIcons.dispose(); },
       ]);

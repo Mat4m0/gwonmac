@@ -49,6 +49,7 @@ function projectCompatibility(
       skillCooldownObservation: status("skillCooldownObservation"),
       playerEffectObservation: status("playerEffectObservation"),
       effectIconGeometry: status("effectIconGeometry"),
+      alcoholObservation: status("alcoholObservation"),
       resignAction: status("resignAction"),
       whisperChat: status("whisperChat"),
       playRegionObservation: status("playRegionObservation"),

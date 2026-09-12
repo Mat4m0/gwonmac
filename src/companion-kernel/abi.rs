@@ -40,6 +40,8 @@ pub(crate) const FEATURE_FRIEND_OBSERVATION: u32 = 1 << 8;
 pub(crate) const FEATURE_PLAYER_EFFECT_OBSERVATION: u32 = 1 << 9;
 pub(crate) const FEATURE_EFFECT_ICON_GEOMETRY: u32 = 1 << 10;
 pub(crate) const FEATURE_WHISPER_OBSERVATION: u32 = 1 << 11;
+pub(crate) const FEATURE_ALCOHOL_OBSERVATION: u32 = 1 << 12;
+pub(crate) const ALCOHOL_BYTES: u32 = 32;
 pub(crate) const KNOWN_FEATURES: u32 = FEATURE_NATIVE_CURSOR
     | FEATURE_GAME_SNAPSHOT
     | FEATURE_TOOLBOX_FOUNDATION
@@ -51,7 +53,8 @@ pub(crate) const KNOWN_FEATURES: u32 = FEATURE_NATIVE_CURSOR
     | FEATURE_FRIEND_OBSERVATION
     | FEATURE_PLAYER_EFFECT_OBSERVATION
     | FEATURE_EFFECT_ICON_GEOMETRY
-    | FEATURE_WHISPER_OBSERVATION;
+    | FEATURE_WHISPER_OBSERVATION
+    | FEATURE_ALCOHOL_OBSERVATION;
 
 pub(crate) const CHARACTER_LIST_BYTES: u32 = size_of::<CharacterListSnapshot>() as u32;
 pub(crate) const CHARACTER_LIST_MAGIC: u32 = 0x4843_5747;
@@ -92,7 +95,7 @@ pub(crate) const FLAG_PLAYER_EFFECTS_LOADING: u32 = 1 << 1;
 pub(crate) const EFFECT_RECORDS: usize = 64;
 pub(crate) const EFFECT_ICON_BYTES: u32 = size_of::<EffectIconSnapshot>() as u32;
 pub(crate) const EFFECT_ICON_MAGIC: u32 = 0x4945_5747;
-pub(crate) const EFFECT_ICON_ABI_AND_SIZE: u32 = (EFFECT_ICON_BYTES << 16) | 1;
+pub(crate) const EFFECT_ICON_ABI_AND_SIZE: u32 = (EFFECT_ICON_BYTES << 16) | 2;
 pub(crate) const FLAG_EFFECT_ICONS_READY: u32 = 1 << 0;
 
 pub(crate) const TOOLBOX_BYTES: u32 = size_of::<ToolboxSnapshot>() as u32;
@@ -638,6 +641,7 @@ pub(crate) struct EffectIconSnapshot {
     pub(crate) candidate_count: u32,
     pub(crate) viewport_width: f32,
     pub(crate) viewport_height: f32,
+    pub(crate) anchor: SkillSlotRect,
     pub(crate) icons: [EffectIconRecord; EFFECT_RECORDS],
 }
 
@@ -720,7 +724,7 @@ const _: [(); 60] = [(); size_of::<SkillCooldownSnapshot>()];
 const _: [(); 24] = [(); size_of::<PlayerEffectRecord>()];
 const _: [(); 1572] = [(); size_of::<PlayerEffectSnapshot>()];
 const _: [(); 20] = [(); size_of::<EffectIconRecord>()];
-const _: [(); 1324] = [(); size_of::<EffectIconSnapshot>()];
+const _: [(); 1340] = [(); size_of::<EffectIconSnapshot>()];
 
 pub(crate) const WHISPER_SLOT_COUNT: usize = 32;
 pub(crate) const WHISPER_SENDER_UNITS: usize = 20;

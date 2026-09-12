@@ -156,12 +156,13 @@ test("the capability registry is the ordered wire vocabulary", () => {
       configOwners: ["observation", "storage"],
       hooks: ["ui"],
     },
+    { id: "alcoholObservation", requiresAll: ["effectIconGeometry"], requiresAny: [], configOwners: [], hooks: ["ui"] },
   ]);
   assert.deepEqual(
     ENHANCEMENT_CAPABILITY_CONTRACTS.map(({ id }) => id),
     ENHANCEMENT_CAPABILITY_FIELDS,
   );
-  assert.equal(new Set(ENHANCEMENT_CAPABILITY_FIELDS).size, 18);
+  assert.equal(new Set(ENHANCEMENT_CAPABILITY_FIELDS).size, 19);
   for (const contract of ENHANCEMENT_CAPABILITY_CONTRACTS) {
     assert.equal(Object.isFrozen(contract), true, contract.id);
     assert.equal(Object.isFrozen(contract.requiresAll), true, contract.id);
@@ -210,7 +211,8 @@ test("dependency pruning is derived from capability contracts", () => {
       cursor: contract.id === "nativeCursor",
       ui: contract.id === "partyObservation"
         || contract.id === "playerEffectObservation"
-        || contract.id === "whisperChat",
+        || contract.id === "whisperChat"
+        || contract.id === "alcoholObservation",
     }, contract.id);
   }
 });

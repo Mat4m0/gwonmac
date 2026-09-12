@@ -34,6 +34,7 @@ function generation(wasmPath: string, size: number): ClientGeneration {
         skillCooldownObservation: { status: "off" },
         playerEffectObservation: { status: "off" },
         effectIconGeometry: { status: "off" },
+        alcoholObservation: { status: "off" },
         resignAction: { status: "off" },
         whisperChat: { status: "off" },
       },

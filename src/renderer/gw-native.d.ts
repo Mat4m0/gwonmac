@@ -8,6 +8,7 @@
  * checked against one description of that surface rather than against each
  * other's assumptions.
  */
+import type { AlcoholTimerPosition } from "../shared/alcohol-timer.js";
 import type {
   AppSettings,
   RendererGwNativeApi,
@@ -315,6 +316,8 @@ declare global {
       chatFilterTitleAchievements: boolean;
       quickItemMove: boolean;
       effectTimersEnabled: boolean;
+      alcoholTimerEnabled: boolean;
+      alcoholTimerPosition: AlcoholTimerPosition;
       skillCooldownColor: AppSettings['skillCooldownColor'];
     }>;
     gwLoading: LoadingController;

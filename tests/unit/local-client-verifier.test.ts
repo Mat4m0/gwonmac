@@ -31,6 +31,7 @@ const NONE: EnhancementCapabilities = Object.freeze({
   skillCooldownObservation: false,
   playerEffectObservation: false,
     effectIconGeometry: false,
+    alcoholObservation: false,
     resignAction: false,
     whisperChat: false,
   playRegionObservation: false,
@@ -52,6 +53,7 @@ const ALL: EnhancementCapabilities = Object.freeze({
   skillCooldownObservation: true,
   playerEffectObservation: false,
     effectIconGeometry: false,
+    alcoholObservation: false,
     resignAction: false,
     whisperChat: false,
   playRegionObservation: true,
@@ -96,6 +98,7 @@ const STORAGE: EnhancementCapabilities = Object.freeze({
   skillCooldownObservation: false,
   playerEffectObservation: false,
     effectIconGeometry: false,
+    alcoholObservation: false,
     resignAction: false,
     whisperChat: false,
 });
@@ -125,6 +128,7 @@ const COOLDOWN: EnhancementCapabilities = Object.freeze({
   skillCooldownObservation: true,
   playerEffectObservation: false,
     effectIconGeometry: false,
+    alcoholObservation: false,
     resignAction: false,
     whisperChat: false,
 });

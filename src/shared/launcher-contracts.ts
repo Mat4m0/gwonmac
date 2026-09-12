@@ -3,6 +3,7 @@
  * Electron main. Domain owners remain in main; this file only names validated
  * commands and the rebuildable projection the Vue application renders.
  */
+import { isAlcoholTimerPosition } from "./alcohol-timer.js";
 import type {
   AppSettings,
   AppUpdateState,
@@ -161,6 +162,7 @@ export const GLOBAL_TOOLS = [
   "trade-chat", "maps", "target-readout", "skill-key-labels", "skill-cooldowns",
   "chat-filters",
   "effect-timers",
+  "alcohol-timer",
 ] as const;
 export type GlobalTool = (typeof GLOBAL_TOOLS)[number];
 export const GLOBAL_TOOL_FEATURES = Object.freeze({
@@ -179,6 +181,7 @@ export const GLOBAL_TOOL_FEATURES = Object.freeze({
   "skill-cooldowns": "skillCooldowns",
   "chat-filters": "chatFilters",
   "effect-timers": "effectTimers",
+  "alcohol-timer": "alcoholTimer",
 } satisfies Record<GlobalTool, FeatureId>);
 export const LAUNCHER_EXTERNAL_LINKS = ["github", "bugReport", "featureRequest", "discord", "arenaNetSupport", "donate", "releases"] as const;
 export type LauncherExternalLink = (typeof LAUNCHER_EXTERNAL_LINKS)[number];
@@ -205,6 +208,7 @@ export interface LauncherSettings {
   readonly characterSwitchLevel: boolean;
   readonly characterSwitchLocation: boolean;
   readonly skillKeyBindings: AppSettings["skillKeyBindings"];
+  readonly alcoholTimerPosition: AppSettings["alcoholTimerPosition"];
   readonly skillCooldownColor: AppSettings["skillCooldownColor"];
   readonly chatFilterAllyDrops: boolean;
   readonly chatFilterHallOfHeroes: boolean;
@@ -395,7 +399,7 @@ export function parseLauncherSettingsPatch(value: unknown): LauncherSettingsPatc
     "uiStyle", "uiFont", "uiCustomTheme", "uiPanelOpacity", "controllerPromptStyle",
     "autoCheckUpdates", "updateTrack", "renderScale", "extendedMemoryEnabled", "showDiagnostics",
     "autoRelogAfterReload", "characterSwitchProfession", "characterSwitchLevel",
-    "characterSwitchLocation", "skillKeyBindings", "skillCooldownColor",
+    "characterSwitchLocation", "skillKeyBindings", "skillCooldownColor", "alcoholTimerPosition",
     "chatFilterAllyDrops", "chatFilterHallOfHeroes", "chatFilterTitleAchievements",
     "cartographyOverlayEnabled", "cartographyGridEnabled", "cartographyCompassGridEnabled", "compassRangeIndicatorsEnabled",
     "compassRangeEarshotEnabled", "compassRangeCastEnabled", "compassRangeSpiritEnabled", "compassRangeSpiritExtendedEnabled",
@@ -442,6 +446,10 @@ export function parseLauncherSettingsPatch(value: unknown): LauncherSettingsPatc
   if (source.skillKeyBindings !== undefined) {
     if (!isSkillKeyBindings(source.skillKeyBindings)) throw new Error("Skill key labels are invalid");
     result.skillKeyBindings = cloneSkillKeyBindings(source.skillKeyBindings);
+  }
+  if (source.alcoholTimerPosition !== undefined) {
+    if (!isAlcoholTimerPosition(source.alcoholTimerPosition)) throw new Error("Alcohol timer position is invalid");
+    result.alcoholTimerPosition = { ...source.alcoholTimerPosition };
   }
   if (source.skillCooldownColor !== undefined) {
     if (!isSkillCooldownColor(source.skillCooldownColor)) throw new Error("Cooldown color is invalid");

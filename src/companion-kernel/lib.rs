@@ -47,6 +47,7 @@ mod friend_session;
 mod friends;
 mod memory;
 mod party;
+mod alcohol;
 mod player_effects;
 mod effect_icons;
 mod play_region;
@@ -735,6 +736,8 @@ pub unsafe extern "C" fn companion_init(
     features: u32,
     whisper_ptr: u32,
     whisper_size: u32,
+    alcohol_ptr: u32,
+    alcohol_size: u32,
 ) -> u32 {
     if features == 0
         || features & !KNOWN_FEATURES != 0
@@ -771,6 +774,8 @@ pub unsafe extern "C" fn companion_init(
             effect_icon_size,
             EFFECT_ICON_BYTES,
         )
+        || features & FEATURE_ALCOHOL_OBSERVATION != 0 && features & FEATURE_PLAYER_EFFECT_OBSERVATION == 0
+        || !valid_region(features & FEATURE_ALCOHOL_OBSERVATION != 0, alcohol_ptr, alcohol_size, ALCOHOL_BYTES)
         || !valid_region(features & FEATURE_WHISPER_OBSERVATION != 0, whisper_ptr, whisper_size, WHISPER_BYTES)
         || config_size != CONFIG_BYTES
         || config_ptr & 3 != 0
@@ -845,6 +850,7 @@ pub unsafe extern "C" fn companion_init(
     // `valid_region` demand, so the pointer it stores is non-null, aligned, and
     // large enough for the snapshot it will publish.
     unsafe {
+        if features & FEATURE_ALCOHOL_OBSERVATION != 0 { alcohol::initialize(alcohol_ptr); }
         if features & FEATURE_WHISPER_OBSERVATION != 0 { whispers::initialize(whisper_ptr); }
         SNAPSHOT_PTR = snapshot_ptr;
         LAYOUT = layout;
@@ -923,6 +929,9 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, c: u32, d
             if active & FEATURE_SKILL_COOLDOWN_OBSERVATION != 0 {
                 unsafe { skill_cooldowns::tick(layout, c) };
             }
+            if features & FEATURE_ALCOHOL_OBSERVATION != 0 {
+                unsafe { alcohol::tick(layout, c, active & FEATURE_ALCOHOL_OBSERVATION != 0) };
+            }
             if features & FEATURE_PLAYER_EFFECT_OBSERVATION != 0 {
                 if active & FEATURE_PLAYER_EFFECT_OBSERVATION != 0 {
                     unsafe { player_effects::tick(layout, c, TICK_COUNT) };
@@ -970,6 +979,9 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, c: u32, d
                 }
                 if ACTIVE_FEATURES & FEATURE_TOOLBOX_FOUNDATION != 0 {
                     toolbox::observe_ui(layout, a, b);
+                }
+                if ACTIVE_FEATURES & FEATURE_ALCOHOL_OBSERVATION != 0 {
+                    alcohol::observe(layout, a, b);
                 }
                 if ACTIVE_FEATURES & FEATURE_PLAYER_EFFECT_OBSERVATION != 0 {
                     player_effects::observe_ui(layout, a);
@@ -1038,7 +1050,7 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, c: u32, d
 
 #[no_mangle]
 pub extern "C" fn companion_abi() -> u32 {
-    25
+    26
 }
 
 #[no_mangle]
@@ -1112,3 +1124,6 @@ pub unsafe extern "C" fn companion_cursor_event_count() -> u32 {
 
 #[no_mangle]
 pub extern "C" fn companion_whisper_bytes() -> u32 { WHISPER_BYTES }
+
+#[no_mangle]
+pub extern "C" fn companion_alcohol_bytes() -> u32 { ALCOHOL_BYTES }
