@@ -93,9 +93,12 @@ coverage, and guidance. The compact control remains visible and explains this
 limited mode when opened. Settings remain intact and apply again automatically
 after travel to a fully supported area.
 
-The World Map projection and visibility come from one complete native event
-context. Unrelated or incomplete events leave the last complete reading intact,
-while a validated close event hides the overlay.
+The World Map projection comes from a complete native event context.
+Unrelated or incomplete events leave the last complete projection intact.
+Each presentation read also checks the certified native display flag, which
+clears before the close fade starts. Closing withdraws all World Map overlays;
+reopening requires another complete projection. Mission Map and Compass
+readings reject hidden frames and frames that are being destroyed.
 
 At 18 pixels or more per cell, the map draws individual amber diamonds and
 orange actionable markers. At 8–18 pixels it groups the global grid into 4×4

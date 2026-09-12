@@ -222,6 +222,7 @@ test("refuses incomplete, stale, and invalid Mission Map projection state", () =
 function worldMapExports(): WebAssembly.Exports {
   const values = [1, 12, 5, 200, 1, 1_920, 1_080, 0, 0, 1_920, 1_080, 0, 0, 0, 0, 8_192, 16_384];
   return {
+    [WORLD_MAP_FRAME_SPIKE_GLOBALS.observe]: () => undefined,
     ...Object.fromEntries(WORLD_MAP_FRAME_SPIKE_SCALARS.map((name, index) => [
       name,
       scalar(values[index]!, index < 5 || index === 11 ? "i32" : "f32"),
@@ -252,4 +253,26 @@ test("reads the dedicated World Map context atomically", () => {
   const invalid = worldMapExports();
   invalid[WORLD_MAP_FRAME_SPIKE_GLOBALS.bottomRightX] = scalar(0, "f32");
   assert.equal(createWorldMapFrameSpikeReader(invalid)?.snapshot(), null);
+});
+
+test("refreshes World Map visibility even when no new projection event arrives", () => {
+  const exports = worldMapExports();
+  const visible = exports[WORLD_MAP_FRAME_SPIKE_GLOBALS.visible];
+  assert.ok(visible instanceof WebAssembly.Global);
+  let showing = true;
+  exports[WORLD_MAP_FRAME_SPIKE_GLOBALS.observe] = () => { if (!showing) visible.value = 0; };
+  const reader = createWorldMapFrameSpikeReader(exports);
+  assert.ok(reader);
+  assert.ok(reader.snapshot());
+  showing = false;
+  assert.equal(reader.snapshot(), null);
+  assert.equal(reader.diagnostics().visible, 0);
+  showing = true;
+  assert.equal(reader.snapshot(), null, "reopening must wait for a complete new projection");
+  visible.value = 1;
+  assert.ok(reader.snapshot());
+  exports[WORLD_MAP_FRAME_SPIKE_GLOBALS.observe] = () => { throw new Error("unavailable"); };
+  assert.equal(createWorldMapFrameSpikeReader(exports)?.snapshot(), null);
+  delete exports[WORLD_MAP_FRAME_SPIKE_GLOBALS.observe];
+  assert.equal(createWorldMapFrameSpikeReader(exports), null);
 });

@@ -157,6 +157,7 @@ function cannotCapture(location: EliteLocation) { return /impossible to capture/
 function toggleTrack(id: number) { void plan.change({ kind: tracked(id) ? "remove" : "track", skillId: id }); }
 watch(character, () => { selectedId.value = null; preview.value = null; });
 watch(() => props.view.world, (value, previous) => { if (!value && previous) setOpen(false); });
+watch(() => props.view.mission, (value, previous) => { if (!value && previous) preview.value = null; });
 let choseDefaultProfession = false;
 watch(() => party.value.player?.professions, (pair) => {
   if (!choseDefaultProfession && pair) { profession.value = pair[0]; choseDefaultProfession = true; }
