@@ -37,6 +37,7 @@ function hideBrokenIcon(event: Event): void {
         <small v-if="skill.elite" class="skill-elite-label">Elite · One per bar</small>
       </span>
     </div>
+    <slot name="context" />
     <dl v-if="stats.length || skill.aftercastSeconds" class="skill-stats" aria-label="Skill costs and timings">
       <div v-for="stat in stats" :key="stat.label" :title="`${stat.label}: ${stat.value}${stat.suffix}`">
         <dt><img :src="stat.icon" :alt="stat.label" width="20" height="20" draggable="false"></dt>

@@ -1,6 +1,7 @@
-/** Owns asynchronous character-plan loading and saving, including stale responses. */
+/** Owns character-plan loading and ordered saves without dropping rapid edits. */
 import { ref, shallowRef, watch, type Ref } from "vue";
-import { EMPTY_ELITE_TRACKING, type EliteChange, type EliteTracking, type EliteUpdate } from "../../../src/shared/elite-skills";
+import { ELITE_LOCATIONS } from "../../../src/shared/elite-locations";
+import { EMPTY_ELITE_TRACKING, changeEliteTracking, type EliteChange, type EliteTracking, type EliteUpdate } from "../../../src/shared/elite-skills";
 import type { TravelCharacterKey } from "../../../src/shared/travel-history";
 export interface EliteTrackingHost {
   get(value: { characterKey: string }): Promise<EliteTracking>;
@@ -11,49 +12,82 @@ export function useEliteTracking(character: Ref<TravelCharacterKey | null>, host
   const busy = ref(false);
   const problem = ref("");
   const loaded = ref(false);
-  let epoch = 0;
-  let retryAction: (() => Promise<void>) | null = null;
+  function session() {
+    return { key: character.value, confirmed: EMPTY_ELITE_TRACKING,
+      pending: [] as EliteChange[], saving: false };
+  }
+  let current = session();
+  const pendingSaves = new Map<TravelCharacterKey, Promise<void>>();
+  let disposed = false;
+  const owns = (owner: ReturnType<typeof session>) => !disposed && owner === current;
   async function load() {
-    const key = character.value;
-    const ownEpoch = ++epoch;
+    const owner = current = session();
     tracking.value = EMPTY_ELITE_TRACKING;
     loaded.value = false;
     problem.value = "";
-    retryAction = null;
-    busy.value = key !== null;
-    if (key === null) return;
+    busy.value = owner.key !== null;
+    if (owner.key === null) return;
     try {
-      const next = await host.get({ characterKey: key });
-      if (ownEpoch !== epoch) return;
-      tracking.value = next;
+      // Returning to a character must load the final queued edit, not an intermediate save.
+      const pending = pendingSaves.get(owner.key);
+      if (pending) await pending;
+      if (!owns(owner)) return;
+      const next = await host.get({ characterKey: owner.key });
+      if (!owns(owner)) return;
+      owner.confirmed = tracking.value = next;
       loaded.value = true;
     } catch {
-      if (ownEpoch !== epoch) return;
-      problem.value = "Your tracked skills could not be loaded.";
-      retryAction = load;
-    } finally { if (ownEpoch === epoch) busy.value = false; }
+      if (owns(owner)) problem.value = "Your elite skills setup could not be loaded.";
+    } finally { if (owns(owner)) busy.value = false; }
   }
-  async function change(value: EliteChange) {
-    const key = character.value;
-    if (key === null || busy.value || !loaded.value) return;
-    const ownEpoch = epoch;
-    busy.value = true;
-    problem.value = "";
+  async function drain(owner: ReturnType<typeof session>) {
+    if (owner.saving || owner.key === null) return;
+    owner.saving = true;
+    if (owns(owner)) { busy.value = true; problem.value = ""; }
     try {
-      const next = await host.update({ characterKey: key, change: value });
-      if (ownEpoch !== epoch) return;
-      tracking.value = next;
-      retryAction = null;
+      // Finish already-requested saves for the old character after a switch.
+      while (owner.pending.length) {
+        const change = owner.pending[0]!;
+        owner.confirmed = await host.update({ characterKey: owner.key, change });
+        owner.pending.shift();
+        if (owns(owner)) tracking.value = owner.pending.reduce(
+          (state, next) => changeEliteTracking(state, next, ELITE_LOCATIONS), owner.confirmed);
+      }
     } catch {
-      if (ownEpoch !== epoch) return;
-      problem.value = "Could not save this change. Your saved plan is unchanged.";
-      retryAction = () => change(value);
-    } finally { if (ownEpoch === epoch) busy.value = false; }
+      if (owns(owner)) problem.value = "Changes are not saved. Retry, or restore your saved setup.";
+    } finally {
+      owner.saving = false;
+      if (owns(owner)) busy.value = false;
+    }
   }
-  const stop = watch(character, () => { void load(); }, { immediate: true });
+  function save(owner = current) {
+    if (owner.saving || owner.key === null) return;
+    const key = owner.key;
+    const completion = drain(owner);
+    pendingSaves.set(key, completion);
+    void completion.finally(() => {
+      if (pendingSaves.get(key) === completion) pendingSaves.delete(key);
+    });
+    return completion;
+  }
+  function change(value: EliteChange) {
+    if (disposed || (current.key !== null && !loaded.value)) return;
+    tracking.value = changeEliteTracking(tracking.value, value, ELITE_LOCATIONS);
+    if (current.key === null) return;
+    // Only the latest consecutive view edit matters; tracking actions retain their order.
+    const last = current.pending.length - 1;
+    if (value.kind === "view" && last > 0 && current.pending[last]?.kind === "view") current.pending[last] = value;
+    else current.pending.push(value);
+    if (!problem.value) void save();
+  }
+  const stop = watch(character, () => { void load(); }, { immediate: true, flush: "sync" });
   return { tracking, busy, loaded, problem, change, reload: load,
-    retry: () => retryAction?.(),
-    dismissError: () => { problem.value = ""; retryAction = null; },
-    dispose: () => { epoch++; stop(); },
+    retry: () => loaded.value ? save() : load(),
+    dismissError: () => {
+      current.pending.length = 0;
+      tracking.value = current.confirmed;
+      problem.value = "";
+    },
+    dispose: () => { disposed = true; stop(); },
   };
 }
