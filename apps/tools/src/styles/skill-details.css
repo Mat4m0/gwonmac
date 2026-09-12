@@ -1,0 +1,14 @@
+/* Shared, compact mechanics use the same locally bundled icons in both skill inspectors. */
+.skill-details { display: grid; gap: var(--ui-space-3); }
+.skill-details .inspector-identity { grid-template-columns: 48px minmax(0, 1fr); }
+.skill-details .inspector-identity .skill { width: 48px; height: 48px; }
+.skill-details .inspector-identity strong { font-size: var(--ui-font-size-lg); line-height: 1.2; overflow-wrap: anywhere; }
+.skill-details .inspector-identity small { font-size: var(--ui-font-size-sm); line-height: 1.4; }
+.skill-details .inspector-identity .skill-elite-label { color: var(--ui-accent); }
+.skill-stats { display: flex; flex-wrap: wrap; align-items: center; gap: var(--ui-space-2) var(--ui-space-4); margin: 0; }
+.skill-stats > div { display: inline-flex; align-items: center; gap: var(--ui-space-1); }
+.skill-stats dt, .skill-stats dd { margin: 0; }
+.skill-stats img { display: block; width: 20px; height: 20px; object-fit: contain; }
+.skill-stats dd { color: var(--ui-text-bright); font-variant-numeric: tabular-nums; }
+.skill-aftercast { font-size: var(--ui-font-size-sm); color: var(--ui-text-muted); }
+.skill-restriction { margin: 0; font-size: var(--ui-font-size-sm); color: var(--ui-text-muted); }

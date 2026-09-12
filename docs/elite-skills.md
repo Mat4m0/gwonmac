@@ -33,7 +33,9 @@ Hover or focus a skill for a preview. Open it for full details and capture notes
 The sticky detail header keeps **Back to skills** and **Close** visible. Back retains
 the current search and filters.
 The Builds skill inspector opens the same details through **Find capture locations**.
-Both interfaces read descriptions, mechanics, and icons from the installed client.
+Both interfaces read descriptions, mechanics, and skill artwork from the installed client.
+The shared detail component shows locally bundled Tango-style cost and timing icons
+with accessible labels. See [icon attribution](../THIRD-PARTY-NOTICES.md#guild-wars-wiki-stat-icons).
 
 Track a skill to save it for this character. **Track this boss** also selects
 one active capture location. Closing the planner leaves only tracked markers.

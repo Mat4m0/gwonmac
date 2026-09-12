@@ -338,22 +338,6 @@
 .inspector-identity strong { color: var(--ui-text-bright); }
 .inspector-identity small { color: var(--ui-text-muted); }
 
-.mechanic-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--ui-space-2);
-}
-
-.mechanic-list > span {
-  display: grid;
-  min-width: 70px;
-  padding: var(--ui-space-2);
-  background: var(--ui-well-fill);
-}
-
-.mechanic-list strong { color: var(--ui-text-bright); }
-.mechanic-list small { color: var(--ui-text-faint); }
-
 .skill-description {
   display: grid;
   gap: var(--ui-space-1);
@@ -426,7 +410,7 @@
   .catalogue-tools { grid-template-columns: 1fr; }
   .catalogue-count { display: none; }
   .catalogue-workspace > .workspace-heading p,
-  .skill-inspector .mechanic-list,
+  .skill-inspector .skill-stats,
   .skill-inspector .skill-description,
   .skill-inspector .description-unavailable { display: none; }
   .skill-inspector {
