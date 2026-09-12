@@ -58,24 +58,27 @@ changes can wait for one planned release.
 
 Run from the intended worktree:
 
-- `pnpm dev`: real app; uses the existing `Guild Wars` profile by default.
+- `pnpm dev`: builds and verifies the real launcher; uses the existing `Guild Wars` profile by default.
 - `pnpm dev:signed`: signed Dev package with persistent login; requires Apple signing configuration.
 - `pnpm launcher:fixture fresh`: disposable offline launcher, not a playable client.
 - `pnpm tools:dev`: standalone browser UI, not the application.
 
-For isolated real-app checks, build successfully, then launch with an explicit
-application path and disposable profile:
+For isolated real-app checks:
 
 ```bash
-pnpm build &&
-  dev_profile=$(mktemp -d "${TMPDIR:-/tmp}/gwonmac-dev.XXXXXX") &&
-  test -n "$dev_profile" &&
-  GW_BACKGROUND_LAUNCH=0 GW_EXPECT_USER_DATA="$dev_profile" \
-    pnpm exec electron "$PWD" --user-data-dir="$dev_profile"
+pnpm dev --isolated
 ```
 
-Reuse that profile during the task. It may download game data; saved login is
-memory-only. Do not copy player data without authorization.
+The command owns the app path and profile assertion. It prints `launcher-open`
+only after verifying the actual process, checkout, profile and visible
+`gw://app/launcher/index.html`. A welcome page, identity mismatch or startup
+failure cannot produce that receipt. Launcher verification does not mean that
+the game cache is ready or gameplay passed.
+
+Keep the command running. After closing the app, reuse its printed profile with
+`pnpm dev --profile /absolute/profile/path`. An already-running profile refuses
+before building; preserve that session. The profile may download game data;
+saved login is memory-only. Do not copy player data without authorization.
 
 `GW_EXPECT_USER_DATA` checks the actual profile before client preparation.
 Aliases such as `/var` and `/private/var` resolve to the same existing directory;
@@ -83,8 +86,9 @@ an empty, missing, dangling, or different expected path refuses preparation.
 Do not remove this assertion to work around a profile mismatch.
 
 For a cached-only check, first provision the authorized game artifacts and
-chunks in that profile, then add `GW_REQUIRE_CACHED_CLIENT=1` to the launch.
-Use `pnpm certification doctor --profile "$dev_profile"` to inspect readiness.
+chunks in that profile, then use `pnpm dev --profile /absolute/profile/path --cached-only`.
+Use `pnpm certification doctor --profile /absolute/profile/path` with that same
+printed profile to inspect readiness.
 Cache provisioning does not require copying account settings or credentials.
 Keep logs, screenshots, and the profile path in ignored `test-results/`, outside
 `build/`: the build command deletes that directory. Do not redirect into the
@@ -92,9 +96,11 @@ same file that a command is reading to recover its profile path.
 Playwright suites own only `test-results/electron/` and `test-results/tools-e2e/`.
 Keep development evidence and profiles outside those disposable suite directories.
 
-Use `cua.getState()` for discovery. Confirm the process working directory and
-profile, then attach through its debugger or exact running app path. App lookup
-can launch bare Electron if the process is absent; its welcome page is not gwonmac.
+For UI attachment, first confirm that the receipt's PID is still running with
+the printed checkout and profile. Then use `cua.getState()` for discovery and
+select the exact running app path. `cua.getApp()` starts an absent app: never
+use it to launch or check whether Electron is running. If the process exited,
+repeat the development command and wait for a new receipt before attaching.
 
 Verify `gw://app/launcher/index.html` before handoff. Starting the game hides the
 launcher; restore it with **Window → Show Launcher**. Do not click Play merely

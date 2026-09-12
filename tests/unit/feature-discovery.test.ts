@@ -141,3 +141,22 @@ test("live execution retains opt-in and cannot launch after a failed build", () 
   assert.equal(failed.status, 9, failed.stderr);
   assert.match(failed.stderr, /build failed/);
 });
+
+test("development launch rejects ambiguous profiles before build or Electron import", () => {
+  assert.equal(run("scripts/run-dev.ts", ["--help"]).status, 0);
+  for (const args of [["--profile"], ["--profile", ""], ["--isolated", "--profile", "/tmp"], ["--unknown"]]) {
+    const result = run("scripts/run-dev.ts", args);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /usage:/);
+  }
+  const missing = run("scripts/run-dev.ts", ["--profile", path.join(temporary, "absent")]);
+  assert.equal(missing.status, 1);
+  assert.match(missing.stderr, /ENOENT/);
+});
+
+test("development launch cannot import Electron or report success after a failed build", () => {
+  const result = run("scripts/run-dev.ts", ["--isolated"], { DISCOVERY_TEST_BUILD_FAILURE: "1" });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /build failed/);
+  assert.doesNotMatch(result.stdout, /launcher-open/);
+});
