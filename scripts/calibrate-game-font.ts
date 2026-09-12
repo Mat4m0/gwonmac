@@ -4,8 +4,10 @@
  * The player's own archive is the reference. Nothing from it is committed:
  * this command writes a disposable report under `/tmp` unless `--out` says
  * otherwise. Each candidate outline is rasterised by Chromium at the strike's
- * native physical size, aligned against the original grayscale
- * strike, scored by alpha error, and shown beside a heat-map difference.
+ * native physical size, compared against the decoded grayscale strike, scored by alpha error, and
+ * shown beside a heat-map difference. The default atlas checks every supported
+ * glyph; --text checks spacing in a specific string. Decoder regression tests
+ * are independent of this comparison, which cannot detect a shared decode bug.
  *
  *   pnpm font:calibrate
  *   pnpm font:calibrate -- --role display --text "Primary Quests"
@@ -46,10 +48,16 @@ const outDir = path.resolve(flag(
     ? "/tmp/gwonmac-font-calibration"
     : "/tmp/gwonmac-font-calibration-display",
 ));
-const sample = flag("text", role === "display" ? "Primary Quests" : "Seek Party");
+const atlas = !args.includes("--text");
+const sample = flag("text", Array.from({ length: 94 }, (_, index) =>
+  String.fromCharCode(0x21 + index)).join(""));
+if (!sample || [...sample].some((character) => {
+  const code = character.codePointAt(0)!;
+  return code < 0x20 || code > 0x7e;
+})) throw new Error("--text must contain only printable ASCII characters");
 const manifestPath = path.join(gameDir, "artifacts", "manifest.json");
 const decoderPath = path.resolve("build/native/gw-dat-decode");
-const thresholds = [0x60, 0x70, 0x80, 0x90, 0xa0, 0xb0, 0xc0, 0xd0, 0xe0];
+const thresholds = Array.from({ length: 33 }, (_, index) => 0x60 + index * 4);
 
 const manifest = parsePublishedClientManifest(
   JSON.parse(await readFile(manifestPath, "utf8")),
@@ -84,12 +92,13 @@ interface CandidateResult {
   referencePng: string;
   renderedPng: string;
   differencePng: string;
+  glyphs: { character: string; error: number; coverageDelta: number; missing: boolean }[];
 }
 
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 1180, height: 900 } });
 const results = await page.evaluate(
-  async ({ candidates, glyphs, metrics, sample }) => {
+  async ({ candidates, glyphs, metrics, sample, atlas }) => {
     const margin = 3;
     const glyphFor = (character: string) => {
       const code = character.charCodeAt(0);
@@ -101,8 +110,18 @@ const results = await page.evaluate(
       (total, character) => total + advance(character),
       0,
     );
-    const width = contentWidth + margin * 2;
-    const height = metrics.lineHeight + margin * 2;
+    const columns = 16;
+    const cellWidth = metrics.em + margin * 2;
+    const cellHeight = metrics.lineHeight + margin * 2;
+    const width = atlas ? columns * cellWidth : contentWidth + margin * 2;
+    const height = atlas ? Math.ceil(sample.length / columns) * cellHeight : cellHeight;
+    let textPen = margin;
+    const placements = [...sample].map((character, index) => {
+      const x = atlas ? (index % columns) * cellWidth + margin : textPen;
+      const y = atlas ? Math.floor(index / columns) * cellHeight + margin : margin;
+      textPen += advance(character);
+      return { character, x, y };
+    });
 
     const makeCanvas = () => {
       const canvas = document.createElement("canvas");
@@ -114,14 +133,13 @@ const results = await page.evaluate(
     const referenceContext = reference.getContext("2d", { willReadFrequently: true });
     if (!referenceContext) throw new Error("Chromium did not provide a 2D canvas");
     const referenceImage = referenceContext.createImageData(width, height);
-    let pen = margin;
-    for (const character of sample) {
+    for (const { character, x: pen, y: row } of placements) {
       const glyph = glyphFor(character);
       if (glyph) {
         for (let y = 0; y < glyph.height; y += 1) {
           for (let x = 0; x < glyph.width; x += 1) {
             const alpha = glyph.pixels[y * glyph.width + x] ?? 0;
-            const at = ((margin + glyph.top + y) * width + pen + x) * 4;
+            const at = ((row + glyph.top + y) * width + pen + x) * 4;
             referenceImage.data[at] = 255;
             referenceImage.data[at + 1] = 255;
             referenceImage.data[at + 2] = 255;
@@ -129,7 +147,6 @@ const results = await page.evaluate(
           }
         }
       }
-      pen += advance(character);
     }
     referenceContext.putImageData(referenceImage, 0, 0);
     const referenceAlpha = referenceContext.getImageData(0, 0, width, height).data;
@@ -179,7 +196,13 @@ const results = await page.evaluate(
       context.fillStyle = "white";
       context.font = `400 ${metrics.em}px ${family}`;
       context.textBaseline = "alphabetic";
-      context.fillText(sample, margin, margin + metrics.baseline);
+      if (atlas) {
+        for (const { character, x, y } of placements) {
+          context.fillText(character, x, y + metrics.baseline);
+        }
+      } else {
+        context.fillText(sample, margin, margin + metrics.baseline);
+      }
       const renderedImage = context.getImageData(0, 0, width, height);
 
       let best = { x: 0, y: 0, ...score(renderedImage.data, 0, 0) };
@@ -190,6 +213,28 @@ const results = await page.evaluate(
         }
       }
 
+      // A whole-atlas average can conceal one missing symbol. Report every
+      // cell separately as well; keep the unaligned render visible in the PNG.
+      const glyphResults = atlas ? placements.map(({ character, x, y }) => {
+        let error = 0;
+        let referenceCoverage = 0;
+        let renderedCoverage = 0;
+        for (let cy = y - margin; cy < y - margin + cellHeight; cy++) {
+          for (let cx = x - margin; cx < x - margin + cellWidth; cx++) {
+            const referenceValue = referenceAlpha[(cy * width + cx) * 4 + 3] ?? 0;
+            const renderedValue = renderedImage.data[(cy * width + cx) * 4 + 3] ?? 0;
+            error += Math.abs(referenceValue - renderedValue);
+            referenceCoverage += referenceValue;
+            renderedCoverage += renderedValue;
+          }
+        }
+        return {
+          character,
+          error: error / (cellWidth * cellHeight * 255),
+          coverageDelta: (renderedCoverage - referenceCoverage) / Math.max(referenceCoverage, 1),
+          missing: referenceCoverage > 0 && renderedCoverage === 0,
+        };
+      }) : [];
       const difference = makeCanvas();
       const differenceContext = difference.getContext("2d");
       if (!differenceContext) throw new Error("Chromium did not provide a 2D canvas");
@@ -213,6 +258,7 @@ const results = await page.evaluate(
       differenceContext.putImageData(differenceImage, 0, 0);
       output.push({
         threshold: candidate.threshold,
+        glyphs: glyphResults,
         error: best.error,
         coverageDelta: best.coverageDelta,
         referencePng: reference.toDataURL("image/png"),
@@ -222,7 +268,7 @@ const results = await page.evaluate(
     }
     return output;
   },
-  { candidates, glyphs, metrics, sample },
+  { candidates, glyphs, metrics, sample, atlas },
 ) as CandidateResult[];
 
 results.sort((left, right) => left.error - right.error);
@@ -240,33 +286,35 @@ await Promise.all([
   writeFile(path.join(outDir, "report.json"), JSON.stringify({
     sample,
     role,
+    atlas,
     physicalPixelSize: metrics.em,
     bestThreshold: best.threshold,
-    candidates: results.map(({ threshold, error, coverageDelta }) => ({
+    candidates: results.map(({ threshold, error, coverageDelta, glyphs }) => ({
       threshold,
       error,
       coverageDelta,
+      glyphs,
     })),
   }, null, 2)),
 ]);
 
 await page.setContent(`<!doctype html><meta charset="utf-8"><style>
   :root { color-scheme: dark; font-family: ui-sans-serif, system-ui, sans-serif; }
-  body { width: 1080px; margin: 0; padding: 40px; background: #0c0b0a; color: #eee9df; }
+  body { width: ${atlas ? Math.max(1080, (metrics.em + 6) * 16 * 3 + 150) : 1080}px; margin: 0; padding: 40px; background: #0c0b0a; color: #eee9df; }
   h1 { margin: 0 0 8px; font-size: 28px; }
   p { color: #aaa397; }
   .summary { margin-bottom: 28px; }
   .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
   article { padding: 18px; border: 1px solid #454038; border-radius: 10px; background: #171410; }
   h2 { margin: 0 0 14px; color: #e7c982; font-size: 16px; }
-  img { width: auto; height: auto; min-width: 100%; image-rendering: pixelated; background: #241b14; }
+  img { width: 100%; height: auto; image-rendering: pixelated; background: #241b14; }
   table { width: 100%; margin-top: 28px; border-collapse: collapse; font-variant-numeric: tabular-nums; }
   th, td { padding: 8px 10px; border-bottom: 1px solid #39352f; text-align: right; }
   th:first-child, td:first-child { text-align: left; }
   tr.best { color: #f2d58e; font-weight: 700; }
 </style>
 <h1>Guild Wars ${role} font calibration</h1>
-<p class="summary">“${sample.replaceAll("&", "&amp;").replaceAll("<", "&lt;")}” at ${metrics.em} physical pixels · best alpha threshold: 0x${best.threshold.toString(16)} · mean error ${(best.error * 100).toFixed(2)}%</p>
+<p class="summary">${atlas ? "All 94 printable non-space ASCII glyphs" : `“${sample.replaceAll("&", "&amp;").replaceAll("<", "&lt;")}”`} at ${metrics.em} physical pixels · best alpha threshold: 0x${best.threshold.toString(16)} · mean error ${(best.error * 100).toFixed(2)}%</p>
 <div class="grid">
   <article><h2>Original archive strike</h2><img src="${best.referencePng}"></article>
   <article><h2>Chromium render</h2><img src="${best.renderedPng}"></article>
@@ -286,4 +334,5 @@ console.log(JSON.stringify({
   bestThreshold: `0x${best.threshold.toString(16)}`,
   meanAlphaError: best.error,
   coverageDelta: best.coverageDelta,
+  missingGlyphs: best.glyphs.filter(({ missing }) => missing).map(({ character }) => character),
 }, null, 2));
