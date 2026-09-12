@@ -30,12 +30,20 @@ import { useFloatingWindow } from "./use-floating-window";
 import TradeIcon from "./TradeIcon.vue";
 import TraderPrices from "./components/TraderPrices.vue";
 
+const openInHub = () => window.dispatchEvent(new CustomEvent("gw:trade-toggle", { cancelable: true, detail: "show" }));
+
 const props = defineProps<{
   host: TradeHost;
   mode: "standalone" | "embedded";
   visible: boolean;
   active: boolean;
 }>();
+const offerActions = ref<HTMLDetailsElement | null>(null);
+function closeOfferActions() {
+  if (!offerActions.value?.open) return;
+  offerActions.value.open = false;
+  offerActions.value.querySelector('summary')?.focus();
+}
 const whispersEnabled = ref(false);
 const updateWhispersEnabled = () => { whispersEnabled.value = !!window.gwToolsSettings?.().gwonmacTools && !!window.gwToolsSettings?.().whispersEnabled; };
 onMounted(() => { updateWhispersEnabled(); window.addEventListener('gw:tools-settings', updateWhispersEnabled); });
@@ -613,6 +621,7 @@ useClassicFrame(panel);
       role="dialog"
       aria-label="Trade Chat"
       data-design-contract="trade-ledger-v1"
+      :data-view="view"
     >
       <header class="ui-panel-head ui-window-head window-bar" @pointerdown="startDrag">
         <div class="window-brand trade-brand" aria-hidden="true">
@@ -623,9 +632,7 @@ useClassicFrame(panel);
           <h1 class="ui-panel-title">{{ view === "prices" ? "Trader Prices" : `${sourceLabel} Trade` }}</h1>
           <p class="ui-field-hint">{{ view === "prices" ? "Current Guild Wars trader quotes · history from Kamadan" : "Public trade feed · listings are posted in Guild Wars" }}</p>
         </div>
-        <span v-if="view === 'listings'" class="trade-status" :data-state="current.status" role="status">
-          <i aria-hidden="true" />{{ statusLabel }}
-        </span>
+        <button v-if="mode === 'embedded'" class="ui-button tool-return-action" data-variant="quiet" @click="openInHub">Open in Hub</button>
         <button
           v-if="mode === 'embedded'"
           class="ui-button window-close"
@@ -697,7 +704,10 @@ useClassicFrame(panel);
           </button>
           <strong><TradeIcon name="player" /><bdi>{{ playerName }}</bdi></strong>
         </span>
-        <span>
+        <span class="trade-result-status">
+          <span class="trade-status" :data-state="current.status" role="status">
+            <i aria-hidden="true" />{{ statusLabel }}
+          </span>
           {{ filtered.length }}
           {{ filtered.length === 1 ? "offer" : "offers" }}
         </span>
@@ -827,28 +837,21 @@ useClassicFrame(panel);
             <p><bdi>{{ selected.message }}</bdi></p>
           </div>
           <footer class="inspector-actions">
-            <div class="inspector-action-group" role="group" aria-label="Offer actions">
-              <button v-if="whispersEnabled" class="ui-button" @click="whisperSeller(selected.sender)">Whisper {{ selected.sender }}</button>
-              <button
-                class="ui-button"
-                :aria-pressed="offerSaved(selected)"
-                :disabled="!savedReady"
-                @click="toggleOffer(selected)"
-              ><TradeIcon name="star" :filled="offerSaved(selected)" />{{ offerSaved(selected) ? "Saved" : "Save offer" }}</button>
-              <button
-                class="ui-button"
-                :aria-pressed="playerSaved(selected.sender)"
-                :disabled="!savedReady"
-                @click="togglePlayer(selected.sender)"
-              ><TradeIcon name="player" :filled="playerSaved(selected.sender)" />{{ playerSaved(selected.sender) ? "Following" : "Follow player" }}</button>
-            </div>
-            <div class="inspector-action-group" data-utility role="group" aria-label="Copy and source actions">
-              <button class="ui-button" data-variant="quiet" @click="copy(selected.sender, 'Character name')">
-                Copy name
-              </button>
-              <button class="ui-button" data-variant="quiet" @click="copy(selected.message, 'Message')">Copy offer</button>
-              <button class="ui-link" @click="props.host.openSource(source)">Open {{ sourceLabel }} feed ↗</button>
-            </div>
+            <button v-if="whispersEnabled" class="ui-button" data-variant="primary" :aria-label="`Whisper ${selected.sender}`" @click="whisperSeller(selected.sender)">Whisper seller</button>
+            <details ref="offerActions" class="offer-actions" @keydown.esc.stop.prevent="closeOfferActions">
+              <summary class="ui-button">Actions</summary>
+              <div class="inspector-action-group" role="group" aria-label="Offer actions">
+                <button class="ui-button" :aria-pressed="offerSaved(selected)" :disabled="!savedReady" @click="toggleOffer(selected)">
+                  <TradeIcon name="star" :filled="offerSaved(selected)" />{{ offerSaved(selected) ? "Saved" : "Save offer" }}
+                </button>
+                <button class="ui-button" :aria-pressed="playerSaved(selected.sender)" :disabled="!savedReady" @click="togglePlayer(selected.sender)">
+                  <TradeIcon name="player" :filled="playerSaved(selected.sender)" />{{ playerSaved(selected.sender) ? "Following" : "Follow player" }}
+                </button>
+                <button class="ui-button" @click="copy(selected.sender, 'Character name')">Copy name</button>
+                <button class="ui-button" @click="copy(selected.message, 'Message')">Copy offer</button>
+                <button class="ui-link" @click="props.host.openSource(source)">Open {{ sourceLabel }} feed ↗</button>
+              </div>
+            </details>
           </footer>
         </template>
         <div v-else class="ui-empty">

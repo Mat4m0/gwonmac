@@ -193,8 +193,9 @@ shared tokens; local palette literals are not allowed.
   and exit share the right edge, focus returns to its trigger, and reduced
   motion replaces translation with a brief cross-fade.
 - Reveal compact save and follow actions on ledger-row hover or keyboard focus;
-  keep them visible for touch input. Keep the bottom inspector actions on one
-  compact, wrapping row so the message remains the visual focus.
+  keep them visible for touch input. Keep Whisper seller visible in the bottom inspector. Put save, follow, copy,
+  and source commands under Actions. Escape closes Actions before leaving the
+  current view. The message remains the visual focus.
 - Scroll to revealed Trade Chat messages smoothly by default and instantly
   when reduced motion is active.
 - Keep scrolling flex and grid children shrinkable.
@@ -238,3 +239,29 @@ sound, mute and cleanup live in the options menu. The author appears once in
 the header and remains available to assistive technology on each message.
 Incoming messages align left, replies right, and consecutive bubbles group
 with tighter spacing. Keep settings and explanatory copy out of the transcript.
+
+## Hub task presentation
+
+Home shows current character and outpost context in its caption. Continue shows
+up to three actionable recent destinations. Explicit searches retain unavailable
+places with their reason. User pins keep their existing order and availability.
+Tool rows show meaningful descriptions and resolved shortcut keycaps.
+
+Back names its parent. Actions only opens contextual actions; it never means
+Back. Known query scopes stay visible, and typing a command name offers one
+relevant example. Neither examples nor typing execute an action.
+
+Full team search previews show the difficulty and one line per assigned member.
+Skill and attribute details remain available in Review. Template paths stay out
+of these primary summaries. Preview content scrolls inside the fixed frame.
+Team authoring keeps the roster first; Team options expands difficulty and tags,
+with the current difficulty visible in its summary.
+
+Embedded Trade uses the Hub heading and keeps connection state beside result
+counts. Common filters share a row when width permits. Secondary actions expand
+inside the inspector without replacing the ledger. Pop out and Open in Hub move
+the existing Trade or Library surface and preserve its selected item and edits.
+
+Maps pairs each native switch with its opacity control. Disabled layers retain
+but disable opacity controls. External settings updates repaint the same view;
+failed writes restore saved state and show a recoverable inline error.

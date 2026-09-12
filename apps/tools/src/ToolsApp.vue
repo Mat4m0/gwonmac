@@ -34,6 +34,8 @@ import { navigateRows, navigateTabs } from "./tab-keyboard";
 import { useClassicFrame } from "./ui/use-classic-frame";
 import { useFloatingWindow } from "./use-floating-window";
 
+const openInHub = () => window.dispatchEvent(new CustomEvent("gw:tools-toggle", { cancelable: true, detail: "show" }));
+
 const props = defineProps<{
   host: ToolsHost;
   hub?: HubPresenter<HTMLElement>;
@@ -279,6 +281,7 @@ useClassicFrame(panel);
           :aria-label="host.storageUnavailable ?? 'Open Xunlai Storage'"
           @click="openStorage"
         >{{ openingStorage ? "Opening…" : "Storage" }}</button>
+        <button v-if="mode === 'embedded'" class="ui-button tool-return-action" data-variant="quiet" @click="openInHub">Open in Hub</button>
         <button
           v-if="mode === 'embedded'"
           class="ui-button window-close"
