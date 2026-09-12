@@ -24,6 +24,114 @@ async function ledger(host: TradeHost = createDemoTradeHost()) {
 }
 
 describe("TradeChatApp", () => {
+  it("restores completed results and the selected offer without searching on show", async () => {
+    const demo = createDemoTradeHost();
+    const search = vi.fn(demo.search);
+    const host: TradeHost = { ...demo, search };
+    const wrapper = await ledger(host);
+    await wrapper.get("input[type=search]").setValue("Tyria Cartographer");
+    await wrapper.get(".trade-search").trigger("submit");
+    await flushPromises();
+    const rows = wrapper.findAll(".trade-row");
+    await rows[1]!.get(".offer-cell").trigger("click");
+    const selection = wrapper.get('.trade-row[data-selected]').text();
+    const offers = rows.map(row => row.text());
+    await wrapper.setProps({ visible: false });
+    await flushPromises();
+    await wrapper.setProps({ visible: true });
+    await flushPromises();
+    expect(search).toHaveBeenCalledTimes(1);
+    expect(wrapper.findAll(".trade-row").map(row => row.text())).toEqual(offers);
+    expect(wrapper.get('.trade-row[data-selected]').text()).toBe(selection);
+    wrapper.unmount();
+  });
+
+  it("waits for a live subscription before searching and retries without reconnecting", async () => {
+    const demo = createDemoTradeHost();
+    const events: { publish?: (event: TradeEvent) => void } = {};
+    const search = vi.fn(demo.search).mockRejectedValueOnce(new Error("temporary failure"));
+    const retry = vi.fn(demo.retry);
+    const subscribe = vi.fn(async (source: "kamadan" | "pre-searing") => ({
+      source, status: "connecting" as const, messages: [],
+    }));
+    const wrapper = await ledger({
+      ...demo, search, retry, subscribe,
+      onEvent(callback) { events.publish = callback; return () => { delete events.publish; }; },
+    });
+    await wrapper.get("input[type=search]").setValue("Polar Bear");
+    await wrapper.get(".trade-search").trigger("submit");
+    await flushPromises();
+    expect(search).not.toHaveBeenCalled();
+    events.publish?.({ type: "status", source: "kamadan", status: "live" });
+    await flushPromises();
+    expect(wrapper.text()).toContain("Search could not finish");
+    await wrapper.get(".trade-state button").trigger("click");
+    await flushPromises();
+    expect(search).toHaveBeenCalledTimes(2);
+    expect(retry).not.toHaveBeenCalled();
+    expect(subscribe).toHaveBeenCalledTimes(1);
+    expect(wrapper.text()).toContain("Quiet Ember");
+    wrapper.unmount();
+  });
+
+  it("resumes an interrupted search only after the returning feed is live", async () => {
+    const demo = createDemoTradeHost();
+    const events: { publish?: (event: TradeEvent) => void } = {};
+    let rejectSearch: ((reason: Error) => void) | undefined;
+    const search = vi.fn(demo.search).mockImplementationOnce(() => new Promise((_, reject) => { rejectSearch = reject; }));
+    const subscribe = vi.fn(demo.subscribe).mockImplementationOnce(demo.subscribe)
+      .mockImplementation(async source => ({ source, status: "connecting", messages: [] }));
+    const wrapper = await ledger({
+      ...demo, search, subscribe,
+      onEvent(callback) { events.publish = callback; return () => { delete events.publish; }; },
+    });
+    await wrapper.get("input[type=search]").setValue("Polar Bear");
+    await wrapper.get(".trade-search").trigger("submit");
+    await wrapper.setProps({ visible: false });
+    rejectSearch?.(new Error("feed closed"));
+    await flushPromises();
+    await wrapper.setProps({ visible: true });
+    await flushPromises();
+    expect(search).toHaveBeenCalledTimes(1);
+    events.publish?.({ type: "status", source: "kamadan", status: "live" });
+    await flushPromises();
+    expect(search).toHaveBeenCalledTimes(2);
+    expect(wrapper.text()).toContain("Quiet Ember");
+    expect(wrapper.text()).not.toContain("Search could not finish");
+    wrapper.unmount();
+  });
+
+  it("queues a Hub query before showing and searches the submitted query in a new market", async () => {
+    const demo = createDemoTradeHost();
+    const events: { publish?: (event: TradeEvent) => void } = {};
+    const search = vi.fn(demo.search);
+    const wrapper = mount(TradeChatApp, {
+      props: {
+        host: {
+          ...demo, search,
+          async subscribe(source) { return { source, status: "connecting", messages: [] }; },
+          onEvent(callback) { events.publish = callback; return () => { delete events.publish; }; },
+        } satisfies TradeHost,
+        mode: "embedded", visible: false, active: false,
+      },
+    });
+    wrapper.vm.search("Polar Bear");
+    await flushPromises();
+    expect(search).not.toHaveBeenCalled();
+    await wrapper.setProps({ visible: true });
+    events.publish?.({ type: "status", source: "kamadan", status: "live" });
+    await flushPromises();
+    expect(search).toHaveBeenCalledTimes(1);
+    await wrapper.get("input[type=search]").setValue("unsubmitted edit");
+    await wrapper.get(".source-segment button:last-child").trigger("click");
+    await flushPromises();
+    expect(search).toHaveBeenCalledTimes(1);
+    events.publish?.({ type: "status", source: "pre-searing", status: "live" });
+    await flushPromises();
+    expect(search).toHaveBeenLastCalledWith({ source: "pre-searing", query: "Polar Bear", scope: "all" });
+    wrapper.unmount();
+  });
+
   it("opens trader prices and returns without losing the listing state", async () => {
     const wrapper = await ledger();
     await wrapper.get("input[type=search]").setValue("arms");

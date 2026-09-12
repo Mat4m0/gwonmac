@@ -292,7 +292,8 @@ Hub input isolation and focus return; Travel and character confirmation; real
 account replacement failure; build/team target and result; Trade-to-Whisper and
 chat docking; original game-font loading; and VoiceOver announcements. Use a
 separate authorized test profile. No real message, trade, account switch or game
-action was performed for this overhaul.
+action was performed for the initial overhaul gate. The subsequent authorized
+computer-use session is recorded below.
 
 The original main, Hub reference and study checkouts remain clean. The isolated
 local branch stack separates integration, shared styling and final flows.
@@ -346,3 +347,57 @@ need repair**. This verifies the launcher handoff, not game readiness. The Hub
 browser preview remains available with synthetic state for immediate UI review.
 Exact local coordinates and restart instructions are retained in
 `test-results/hub-developer/handoff.md`; the command and preview are left running.
+
+## Authorized live UI verification — 12–13 September 2026
+
+At Matthias's explicit request, computer use exercised the real game in the
+isolated development profile. This supersedes the earlier cache-empty launcher
+handoff: the official game files were prepared normally and login succeeded.
+Credentials were entered only in the native sign-in form, with account/password
+remembering disabled. No credentials or account identifiers belong in this record.
+
+Observed UI boundaries:
+
+- Hub search, fixed currency conversion, caret editing, Settings navigation,
+  Classic/Modern switching and return to the game worked in an actual outpost.
+  Typing into Hub did not open the game's inventory.
+- Explicit Travel reached Chahbek Village and returned to Kamadan. Character
+  search switched to the other existing character in Fort Ranik and back to the
+  original character in Kamadan. Search typing alone did not execute either action.
+- An unsent Whisper draft survived pop-out, shortcut hide/show and docking back
+  into Hub. The test draft was cleared; no message was sent.
+- Party capture created one local team and its two observed builds. Skill bars,
+  professions and build details were visible; the team correctly reported that
+  it already matched the live party. Undo removed the complete test capture.
+- The Storage action opened the native Vault Box. No items or funds were moved.
+- Compass ranges visibly appeared when enabled through Hub, and the control
+  beside the compass restored the original off state.
+
+The Trade-to-Whisper return exposed a real defect: returning automatically
+searched before the replacement feed connection was ready, and Retry restarted
+the connection and repeated the failure. The existing Trade view now retains
+completed results on show, waits for a live feed before sending a new or
+interrupted search, and retries a search without replacing a live connection.
+Subscription and search completion use separate revision guards. Incoming live
+messages retain selection in the displayed result set.
+
+The rebuilt game passed the same live return path: a cold `trade ecto` Hub query
+loaded 28 public offers, opening the second offer's empty Whisper composer and
+pressing Back retained the query, all 28 results and that exact offer. An explicit
+search after returning also succeeded. No Whisper was sent. The original
+character remains in Kamadan; the real launcher is left visibly open.
+
+Four focused regression tests cover result/selection restoration, connection
+readiness and retry, interrupted search recovery, and Hub query transfer plus
+market changes. These supplement the real UI observations; they do not certify
+combat, mission completion, graphics performance, VoiceOver, multi-account
+replacement, or live changes to player/hero builds. No message, trade, purchase,
+mission entry or build application was performed. Release QA remains with Matthias.
+
+The follow-up `corepack pnpm verify` gate passed type checks, lint, links,
+1,756 unit, 182 policy, 204 Tools, 81 Launcher, 111 integration, 30 release/preload,
+88 browser and 158 offline Electron checks (one live-only test skipped), both
+kernel verifiers, arm64 packaging and both packaged smoke checks. Its local log
+is `/tmp/gwonmac-live-trade-fix-gate.log`. The final guard cancelling a queued
+item search when opening player listings was then checked with the 19-test Trade
+suite, targeted lint, a fresh development build and the live retest above.

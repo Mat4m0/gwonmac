@@ -142,6 +142,9 @@ const emptyHeading = computed(() => {
 });
 
 let requestRevision = 0;
+let subscriptionRevision = 0;
+// A submitted search waits for the socket; merely showing the ledger is not a search.
+let searchQueued = false;
 let stopEvents: (() => void) | null = null;
 let clock: ReturnType<typeof setInterval> | null = null;
 let noticeTimer: number | null = null;
@@ -151,24 +154,25 @@ let savedWrites = Promise.resolve();
 const now = ref(Date.now());
 
 async function subscribe(next: TradeSource): Promise<void> {
-  const revision = ++requestRevision;
-  searchProblem.value = "";
+  const revision = ++subscriptionRevision;
   const target = states[next];
   target.status = target.live.length ? "reconnecting" : "connecting";
   try {
     const snapshot = await props.host.subscribe(next);
-    if (revision !== requestRevision || source.value !== next || !props.visible) return;
+    if (revision !== subscriptionRevision || source.value !== next || !props.visible) return;
     target.status = snapshot.status;
     target.live = [...snapshot.messages];
     ensureSelection(target, filtered.value, next);
     emit("ready");
-    if (submittedQuery.value) await runSearch(revision);
+    void sendQueuedSearch();
   } catch {
-    if (revision === requestRevision) target.status = "unavailable";
+    if (revision === subscriptionRevision) target.status = "unavailable";
   }
 }
 
-async function runSearch(existingRevision?: number): Promise<void> {
+async function runSearch(): Promise<void> {
+  requestRevision += 1;
+  searchQueued = false;
   resetPlayerView();
   detailOpen.value = false;
   const trimmed = query.value.trim();
@@ -180,13 +184,20 @@ async function runSearch(existingRevision?: number): Promise<void> {
     ensureSelection(current.value, current.value.live, source.value);
     return;
   }
-  const revision = existingRevision ?? ++requestRevision;
-  const requestedSource = source.value;
   searching.value = true;
+  searchQueued = true;
+  await sendQueuedSearch();
+}
+
+async function sendQueuedSearch(): Promise<void> {
+  if (!searchQueued || !props.visible || current.value.status !== "live") return;
+  searchQueued = false;
+  const revision = requestRevision;
+  const requestedSource = source.value;
   try {
     const result = await props.host.search({
       source: requestedSource,
-      query: trimmed,
+      query: submittedQuery.value,
       scope: "all",
     });
     if (revision !== requestRevision || source.value !== requestedSource) return;
@@ -202,6 +213,11 @@ async function runSearch(existingRevision?: number): Promise<void> {
   }
 }
 
+function retrySearch(): void {
+  if (submittedQuery.value) void runSearch();
+  if (current.value.status !== "live") void props.host.retry(source.value);
+}
+
 function onQueryInput(event: Event): void {
   const value = (event.target as HTMLInputElement).value;
   if (!value.trim() && submittedQuery.value) clearSearch();
@@ -214,6 +230,7 @@ function clearSearch(): void {
   submittedQuery.value = "";
   searchProblem.value = "";
   searching.value = false;
+  searchQueued = false;
   visibleLimit.value = 25;
   requestRevision += 1;
   ensureSelection(current.value, current.value.live, source.value);
@@ -223,6 +240,7 @@ function onTradeEvent(event: TradeEvent): void {
   const target = states[event.source];
   if (event.type === "status") {
     target.status = event.status;
+    if (event.source === source.value) void sendQueuedSearch();
     return;
   }
   removeReplacement(target, event.message.replacementTimestamp);
@@ -235,7 +253,7 @@ function onTradeEvent(event: TradeEvent): void {
   } else {
     target.pending = insertTradeMessage(target.pending, event.message);
   }
-  ensureSelection(target, target.live, event.source);
+  if (event.source === source.value) ensureSelection(target, filtered.value, event.source);
 }
 
 function commitPending(): void {
@@ -264,6 +282,8 @@ function selectMessage(message: TradeMessage): void {
 }
 
 async function openPlayer(sender: string, focusTimestamp: number | null = null): Promise<void> {
+  searchQueued = false;
+  searching.value = false;
   if (!playerName.value) {
     playerReturn.value = {
       scrollTop: list.value?.scrollTop ?? 0,
@@ -476,6 +496,12 @@ watch(source, (next) => {
   resetPlayerView();
   detailOpen.value = false;
   visibleLimit.value = 25;
+  // Each market has different results. Keep the submitted query, not unsubmitted edits.
+  requestRevision += 1;
+  searchQueued = !!submittedQuery.value;
+  searching.value = searchQueued;
+  searchProblem.value = "";
+  current.value.search = [];
   if (props.visible) void subscribe(next);
 });
 watch(filtered, (messages) => {
@@ -484,7 +510,13 @@ watch(filtered, (messages) => {
 watch(() => props.visible, (visible) => {
   if (visible) void subscribe(source.value);
   else {
+    subscriptionRevision += 1;
     requestRevision += 1;
+    searchQueued = searching.value;
+    if (playerSearching.value) {
+      playerSearching.value = false;
+      playerProblem.value = "The search was interrupted. Go back or try again.";
+    }
     void props.host.unsubscribe();
   }
 });
@@ -503,6 +535,7 @@ onMounted(() => {
   });
 });
 onBeforeUnmount(() => {
+  subscriptionRevision += 1;
   requestRevision += 1;
   stopEvents?.();
   window.removeEventListener("keydown", onWindowKeydown);
@@ -697,7 +730,7 @@ useClassicFrame(panel);
           <button
             v-else-if="current.status === 'unavailable' || searchProblem"
             class="ui-button"
-            @click="props.host.retry(source); subscribe(source)"
+            @click="retrySearch"
           >Try again</button>
         </div>
         <div

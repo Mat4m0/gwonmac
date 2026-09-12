@@ -10,6 +10,12 @@ preserves its query and state. Hub currency conversions reuse its NPC quote sour
 observations older than five minutes are labelled Last observed.
 Hub also infers currency estimates from recent player advertisements as described below.
 
+Returning from a Whisper or reopening Trade preserves completed search results,
+the selected offer and the submitted query. It reconnects the live feed without
+repeating that search. A newly submitted or interrupted search waits until the
+selected feed is live; switching markets searches the submitted query in the
+new market. Retrying a failed search keeps an already live connection open.
+
 ## Product decision
 
 Trade helps a player find a recent, relevant Kamadan or Pre-Searing Ascalon
@@ -112,14 +118,14 @@ Do not copy these Toolbox++ implementation choices:
 | P0 | use the complete flow with a keyboard | avoid switching repeatedly between input methods |
 | P0 | save an offer or follow a player | keep useful leads and recognize their new listings |
 | P0 | inspect current NPC trader quotes and history | compare buy and sell movement without leaving the game |
-| Later | prepare an empty whisper to the selected character | shorten contact after the client action is certified |
+| P0 | prepare an empty whisper to the selected character | contact the author through the existing enabled Whispers tool, with Send remaining explicit |
 | Later | save a useful search | repeat a proven search when actual use justifies persistence |
 
 ## Window and entry point
 
-Trade Chat is a separate non-modal window. It does not share a window,
-workspace switch, navigation, or content area with Builds and teams. The player
-opens it directly from the GWonMac tool entry point.
+Trade has its own mounted view, opened in Hub or detached into a non-modal
+window. It keeps its state independently of Builds and Teams. The player opens
+it from Hub search or its direct shortcut.
 
 The window title is **Kamadan Trade** or **Pre-Searing Trade**, matching the
 selected source. Closing it does not close Builds and teams or Guild Wars.
