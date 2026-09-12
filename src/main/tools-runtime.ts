@@ -2,6 +2,8 @@
  * Owns every optional main-process Tools implementation for one Tools-capable
  * launch. Core never imports this module, its stores, or its network client.
  */
+import { dirname, join } from "node:path";
+import { EliteTrackingStore } from "./core/elite-tracking.js";
 import type { BrowserWindow } from "electron";
 import type { AppSettings, SettingsResetOutcome } from "../shared/contracts.js";
 import { featureActivationRequested } from "../shared/feature-contracts.js";
@@ -30,6 +32,8 @@ export function createToolsRuntime(input: Readonly<{
   preferences: PreferencesCoordinator;
   initialSettings: AppSettings;
 }>): ToolsRuntime {
+  const eliteTracking = new EliteTrackingStore();
+  const elitePath = (win: BrowserWindow) => join(dirname(input.accounts.buildLibraryPathFor(win)), "elite-tracking.json");
   const buildLibraries = new BuildLibraryCoordinator();
   const tradeChat = new TradeChatService();
   const tradeSaved = new TradeSavedStore(input.paths.tradeSaved);
@@ -37,11 +41,12 @@ export function createToolsRuntime(input: Readonly<{
   let settings = input.initialSettings;
   const fileGates = {
     buildLibrary: new Mutex(),
+    cartography: new Mutex(),
     travelPalette: new Mutex(),
   } as const;
   let tradeEnabled = featureActivationRequested("tradeChat", settings);
   const isFeatureEnabled = (
-    feature: "buildLibrary" | "travelPalette" | "tradeChat",
+    feature: "buildLibrary" | "travelPalette" | "tradeChat" | "cartography",
   ): boolean => featureActivationRequested(
     feature === "travelPalette" ? "travel" : feature,
     settings,
@@ -60,6 +65,8 @@ export function createToolsRuntime(input: Readonly<{
       buildLibraries.get(win, input.accounts.buildLibraryPathFor(win)),
     setBuildLibrary: (win: BrowserWindow, library) =>
       buildLibraries.set(win, input.accounts.buildLibraryPathFor(win), library),
+    getEliteTracking: (win, characterKey) => eliteTracking.get(elitePath(win), characterKey),
+    updateEliteTracking: (win, value) => eliteTracking.update(elitePath(win), value),
     getTravelPreferences: () => input.preferences.getTravelPreferences(),
     setTravelPreferences: (update) => input.preferences.updateTravelPreferences(update),
     getTravelHistory: (characterKey) => travelHistory.get(characterKey),
@@ -78,6 +85,7 @@ export function createToolsRuntime(input: Readonly<{
       tradeEnabled = nextTradeEnabled;
       await Promise.all([
         fileGates.buildLibrary.settled,
+        fileGates.cartography.settled,
         fileGates.travelPalette.settled,
       ]);
     },
@@ -88,6 +96,7 @@ export function createToolsRuntime(input: Readonly<{
       tradeChat.dispose();
       await Promise.all([
         fileGates.buildLibrary.settled,
+        fileGates.cartography.settled,
         fileGates.travelPalette.settled,
       ]);
     },

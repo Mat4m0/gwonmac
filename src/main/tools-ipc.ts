@@ -2,6 +2,7 @@
  * Owns the optional Tools renderer-to-main channels. Main imports this module
  * only for a Tools-capable launch, so Core registers no tool implementation.
  */
+import { parseEliteCharacter, parseEliteUpdate, type EliteTracking, type EliteUpdate } from "../shared/elite-skills.js";
 import type { BrowserWindow } from "electron";
 import type { ToolsInvokeChannel } from "../shared/contracts.js";
 import type { BuildLibrary } from "../shared/builds/library.js";
@@ -39,13 +40,15 @@ export interface ToolsIpcContext extends TradeIpcContext {
     readonly recovered: boolean;
   }>;
   setBuildLibrary(win: BrowserWindow, library: BuildLibrary): Promise<BuildLibrary>;
+  getEliteTracking(win: BrowserWindow, characterKey: TravelCharacterKey): Promise<EliteTracking>;
+  updateEliteTracking(win: BrowserWindow, value: EliteUpdate): Promise<EliteTracking>;
   getTravelPreferences(): Promise<TravelUserPreferences>;
   setTravelPreferences(update: TravelUserPreferencesUpdate): Promise<TravelUserPreferences>;
   getTravelHistory(characterKey: TravelCharacterKey): Promise<TravelHistory>;
   recordTravelHistory(characterKey: TravelCharacterKey, mapId: number): Promise<TravelHistory>;
-  isFeatureEnabled(feature: "buildLibrary" | "travelPalette" | "tradeChat"): boolean;
+  isFeatureEnabled(feature: "buildLibrary" | "travelPalette" | "cartography" | "tradeChat"): boolean;
   runFeature<Value>(
-    feature: "buildLibrary" | "travelPalette",
+    feature: "buildLibrary" | "travelPalette" | "cartography",
     label: string,
     operation: () => Promise<Value>,
   ): Promise<Value>;
@@ -63,6 +66,10 @@ const one = <Input>(parse: (value: unknown) => Input): Parser<Input> => (args) =
 export function registerToolsIpcHandlers(ctx: ToolsIpcContext): void {
   const handlers = {
     ...tradeChannelDefinitions(ctx),
+    eliteTrackingGet: channel(one(parseEliteCharacter), (win, value) =>
+      ctx.runFeature("cartography", "Maps", () => ctx.getEliteTracking(win, value.characterKey))),
+    eliteTrackingUpdate: channel(one(parseEliteUpdate), (win, value) =>
+      ctx.runFeature("cartography", "Maps", () => ctx.updateEliteTracking(win, value))),
     buildLibraryGet: channel(nothing, (win) => ctx.runFeature(
       "buildLibrary", "build library", () => ctx.getBuildLibrary(win),
     )),

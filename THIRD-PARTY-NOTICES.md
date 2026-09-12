@@ -152,3 +152,14 @@ GWonMac adds the dark face-button plates and the L4, L5, R4, R5, L, and R label
 plates needed by Guild Wars' fixed controller atlas. PlayStation is a trademark
 of Sony Interactive Entertainment Inc.; GWonMac is not affiliated with or
 endorsed by Sony.
+
+### Elite capture locations
+
+The elite capture catalogue is derived from GWToolbox++
+`GWToolboxdll/Widgets/WorldMapWidget_Constants.h` at commit
+`baaaf0de574b02008baa57a574625a99009cd5ac`, distributed under the MIT License
+reproduced above. Toolbox credits the original locations to **MappingOut
+v4.0.0 by Aylee Sedai**. Encounter notes and alternate coordinates are retained.
+The import is reproducible with `scripts/import-elite-locations.py` and a
+checkout of that exact revision. The importer checks the source hash before
+using its reviewed geographic sections. Game names remain ArenaNet material.

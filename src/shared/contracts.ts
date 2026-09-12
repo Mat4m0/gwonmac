@@ -15,6 +15,7 @@
  * these boundaries; the sentence a player reads is written in the renderer,
  * where it can be tested against what is actually shown.
  */
+import type { EliteTracking, EliteUpdate } from "./elite-skills.js";
 import type {
   DiagnosticSummary,
   RendererFrameBatch,
@@ -1141,6 +1142,8 @@ export const TOOLS_IPC = {
   traderPriceHistoryGet: "gw:trader:priceHistory:get",
   travelPreferencesGet: "gw:travelPreferences:get",
   travelPreferencesSet: "gw:travelPreferences:set",
+  eliteTrackingGet: "gw:eliteTracking:get",
+  eliteTrackingUpdate: "gw:eliteTracking:update",
   travelHistoryGet: "gw:travelHistory:get",
   travelHistoryRecord: "gw:travelHistory:record",
   buildLibraryGet: "gw:buildLibrary:get",
@@ -1377,6 +1380,10 @@ export interface ToolsNativeApiExtension {
     get(): Promise<TravelUserPreferences>;
     set(value: TravelUserPreferencesUpdate): Promise<TravelUserPreferences>;
   };
+  eliteTracking: {
+    get(value: { characterKey: string }): Promise<EliteTracking>;
+    update(value: EliteUpdate): Promise<EliteTracking>;
+  };
   travelHistory: {
     get(value: { characterKey: string }): Promise<readonly number[]>;
     record(value: { characterKey: string; mapId: number }): Promise<readonly number[]>;
@@ -1393,6 +1400,7 @@ const TOOL_NATIVE_NAMESPACE_MAP = {
   trade: true,
   travelPreferences: true,
   travelHistory: true,
+  eliteTracking: true,
   buildLibrary: true,
 } as const satisfies Record<ToolNativeNamespace, true>;
 
