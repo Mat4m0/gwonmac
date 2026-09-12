@@ -116,7 +116,7 @@ export function createHub(parent: HTMLElement) {
   }
   function commandExamples(): HubRow[] {
     const enabled = new Set(commands().map(row => row.id));
-    const examples = [ ['travel', 'travel kamadan', 'Find an outpost'], ['character', 'char Toefte', 'Find a character by name'], ['builds', 'build monk', 'Browse saved Monk builds'], ['builds', 'team gom afk', 'Find your saved team'], ['whispers', 'whisper Romi', 'Choose a person; write before sending'], ['', '1p in g', 'Convert platinum to gold'], ['trade', '10e in p', 'Estimate ecto value'], ['', 'titles', 'Plan title points'], ['', 'acc second', 'Choose how to open a saved account'] ];
+    const examples = [ ['trade', 'trade arms', 'Find offers or a seller'], ['travel', 'travel kamadan', 'Find an outpost'], ['character', 'char Toefte', 'Find a character by name'], ['builds', 'build monk', 'Browse saved Monk builds'], ['builds', 'team gom afk', 'Find your saved team'], ['whispers', 'whisper Romi', 'Choose a person; write before sending'], ['', '1p in g', 'Convert platinum to gold'], ['trade', '10e in p', 'Estimate ecto value'], ['', 'titles', 'Plan title points'], ['', 'acc second', 'Choose how to open a saved account'] ];
     return examples.filter(([tool]) => !tool || enabled.has(tool)).map(([, query, detail], index) => ({ id: `example:${index}`, title: query!, detail: detail!, group: 'Commands', action: 'Edit example', searchQuery: query!, run() {} }));
   }
   function openSettings() { openHubSettings(presenter); }
@@ -159,8 +159,10 @@ export function createHub(parent: HTMLElement) {
     }
     const parent = history.at(-1);
     const destination = parent?.view?.title ?? parent?.scope?.title ?? 'Home';
-    backButton.textContent = parent ? `← Back to ${destination}` : '← Close';
-    backButton.setAttribute('aria-description', parent ? `Return to ${destination}` : 'Close Hub');
+    backButton.hidden = !parent;
+    backButton.textContent = `← Back to ${destination}`;
+    backButton.title = `Back to ${destination}`;
+    backButton.setAttribute('aria-description', `Return to ${destination}`);
     const actionsButton = required<HTMLButtonElement>('.hub-actions');
     actionsButton.hidden = !!scope;
     actionsButton.disabled = !selected;

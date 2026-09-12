@@ -370,3 +370,8 @@
 .hub-panel:has(.hub-preview:not([hidden])) .hub-preview { flex:1; max-height:none; }
 
 .hub-view .tool-return-action { display:none; }
+
+@media(max-width:600px) {
+  .hub-back { flex:none; width:30px; max-width:30px; min-height:30px; padding:0; font-size:0; }
+  .hub-back::before { content:'←'; font-size:var(--ui-type-body-size); }
+}

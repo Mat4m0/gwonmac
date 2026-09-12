@@ -27,7 +27,7 @@ test('Home separates current context, teaches commands, and shows resolved short
   await expect(page.locator('.hub-caption')).toContainText("Lion's Arch");
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
   await search.fill('trade');
-  await expect(page.locator('.hub-hint')).toBeHidden();
+  await expect(page.locator('.hub-hint')).toContainText('trade arms');
   await expect(page.locator('.hub-row-type kbd')).toHaveText(['⌘', 'K']);
   await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: { shortcutOverrides: { 'trade.toggle': null } } })));
   await expect(page.locator('.hub-row-type kbd')).toHaveCount(0);

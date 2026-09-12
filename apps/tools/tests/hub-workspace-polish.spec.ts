@@ -28,6 +28,7 @@ test('Trade gives the ledger space and retains its offer through actions and doc
   await page.getByRole('button', { name: 'Open in Hub', exact: true }).click();
   await expect(page.locator('#hub')).toBeVisible();
   await expect(inspector).toContainText('105 consets');
+  await expect(page.locator('.hub-back')).toBeHidden();
   await expect(page.getByRole('button', { name: 'Whisper Silver Wayfarer', exact: true })).toBeInViewport();
   await page.screenshot({ path: info.outputPath('trade.png') });
 });
