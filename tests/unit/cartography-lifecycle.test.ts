@@ -51,3 +51,57 @@ test("a failed optional installation reports failure without retrying forever", 
   assert.equal(failures.length, 1);
   host.dispose();
 });
+
+
+test("failed Maps constructors release earlier native surfaces and detached painters", async (t) => {
+  const {installCartographySpike} = await import("../../src/renderer/cartography-spike/index.js");
+  const {CARTOGRAPHY_CONTEXT_GLOBALS, CARTOGRAPHY_CONTEXT_SCALARS,
+    EXPLORATION_SPIKE_GLOBALS, EXPLORATION_SPIKE_SCALARS,
+    WORLD_MAP_ANCHOR_SPIKE_GLOBALS, WORLD_MAP_ANCHOR_SPIKE_SCALARS} = await import("../../src/shared/cartography-spike.js");
+  t.mock.method(console, "error", () => {});
+  for (const failAt of ["native", "overlay"]) {
+    const view = new EventTarget();
+    const add = t.mock.method(view, "addEventListener");
+    const remove = t.mock.method(view, "removeEventListener");
+    const oldWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+    Object.defineProperty(globalThis, "window", {configurable: true, value: view});
+    try {
+      const canvases: {width: number; height: number}[] = [];
+      let hides = 0;
+      const exports = Object.fromEntries([
+        ...CARTOGRAPHY_CONTEXT_SCALARS, ...EXPLORATION_SPIKE_SCALARS, ...WORLD_MAP_ANCHOR_SPIKE_SCALARS,
+      ].map(name => [name, new WebAssembly.Global({value: "i32"})]));
+      Object.assign(exports, {
+        [CARTOGRAPHY_CONTEXT_GLOBALS.observe]: () => {},
+        [EXPLORATION_SPIKE_GLOBALS.observe]: () => {},
+        [EXPLORATION_SPIKE_GLOBALS.readWord]: () => 0,
+        [WORLD_MAP_ANCHOR_SPIKE_GLOBALS.observe]: () => {},
+        gwonmac_compass_ranges_hide: () => { hides++; },
+        gwonmac_mission_graphics_publish: () => 0,
+        gwonmac_mission_graphics_hide: () => {},
+        gwonmac_mission_graphics_serial: new WebAssembly.Global({value: "i32"}),
+      });
+      const document = {defaultView: view, createElement(tag: string) {
+        if (tag !== "canvas" || failAt === "native" && canvases.length === 1) throw new Error("canvas allocation failed");
+        const canvas = {width: 128, height: 128, getContext: () => ({})};
+        canvases.push(canvas); return canvas;
+      }};
+      // Deliberately incomplete DOM peer: construction fails before any game observation.
+      await assert.rejects(installCartographySpike({exports,
+        parent: {ownerDocument: document} as unknown as HTMLElement, canvas: {} as HTMLCanvasElement,
+        settings: () => { throw new Error("must not read settings"); },
+        persist: async () => { throw new Error("must not save"); },
+        exportEvidence: async () => { throw new Error("must not export"); },
+        getMapKnowledge: async () => [], recordMapKnowledge: async () => [],
+      }), /canvas allocation failed/);
+      assert.equal(hides, 1, "an earlier native range owner is released on either failure");
+      assert.ok(canvases.every(canvas => canvas.width === 0 && canvas.height === 0));
+      assert.equal(add.mock.callCount(), remove.mock.callCount(), "no graphics-reset listener survives refusal");
+      assert.equal(window.gwExplorationSpike, undefined);
+      assert.equal(window.gwWorldMapAnchorSpike, undefined);
+    } finally {
+      if (oldWindow) Object.defineProperty(globalThis, "window", oldWindow);
+      else Reflect.deleteProperty(globalThis, "window");
+    }
+  }
+});

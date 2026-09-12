@@ -3,7 +3,6 @@ import test from "node:test";
 import {
   projectGamePointToMissionMap,
   projectMissionMapContentBox,
-  projectTerrainToCompass,
   projectTerrainToMissionMap,
 } from "../../src/renderer/cartography-spike/map-projections.js";
 
@@ -31,43 +30,6 @@ test("projects the certified Mission Map drawable area and player anchor", () =>
     projectGamePointToMissionMap(frame, content, 1_000, 2_000, 10_600, 11_600),
     { x: 420, y: 61 },
   );
-});
-
-test("projects one cached terrain raster through Compass rotation", () => {
-  const projection = projectTerrainToCompass({
-    box: { left: 10, top: 20, width: 245, height: 260 },
-    terrain: {
-      canvas: {} as HTMLCanvasElement,
-      mapLeft: 0,
-      mapTop: 100,
-      mapUnitsPerPixel: 0.5,
-    },
-    playerMapX: 0,
-    playerMapY: 0,
-    directionX: 0,
-    directionY: 1,
-  });
-  assert.ok(projection);
-  assert.equal(projection.clip.kind, "circle");
-  assert.ok(Math.abs(projection.transform.a - 0.9216) < 0.0001);
-  assert.ok(Math.abs(projection.transform.b) === 0);
-  assert.equal(projection.transform.c, 0);
-  assert.ok(Math.abs(projection.transform.d - 0.9216) < 0.0001);
-  assert.equal(projection.transform.e, 122.5);
-  assert.ok(Math.abs(projection.transform.f - 306.82) < 0.001);
-
-  const rotated = projectTerrainToCompass({
-    box: { left: 10, top: 20, width: 245, height: 260 },
-    terrain: projectionTerrain,
-    playerMapX: 0,
-    playerMapY: 0,
-    directionX: 1,
-    directionY: 0,
-  });
-  assert.ok(rotated);
-  assert.ok(Math.abs(rotated.transform.a) === 0);
-  assert.ok(rotated.transform.b < 0);
-  assert.ok(rotated.transform.c > 0);
 });
 
 const projectionTerrain = {

@@ -139,7 +139,6 @@ const continentCache = new WeakMap<
   Readonly<{
     continent: number;
     generation: number;
-    explorationSequence: number;
     width: number;
     height: number;
     value: Extract<CartographyContinentState, { status: "ready" }>;
@@ -249,9 +248,10 @@ function deriveContinentCached(
   if (
     cached?.continent === continent
     && cached.generation === generation
-    && cached.explorationSequence === explorationSequence
     && cached.width === width
     && cached.height === height
+    && cached.value.explored.words.length === explorationWords.length
+    && cached.value.explored.words.every((word, index) => word === explorationWords[index])
   ) return cached.value;
   const value = deriveContinent(
     continent,
@@ -265,7 +265,6 @@ function deriveContinentCached(
     continentCache.set(source, Object.freeze({
       continent,
       generation,
-      explorationSequence,
       width,
       height,
       value,

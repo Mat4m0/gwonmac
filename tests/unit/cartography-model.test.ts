@@ -360,3 +360,22 @@ test("refreshes frame-sensitive presentation without rerunning classification", 
   const presentation = readCartographyPresentation(state, current);
   assert.deepEqual(presentation.player, { x: 99, y: 20 });
 });
+
+test("unchanged exploration reads reuse continent masks; a changed bit invalidates them", () => {
+  const original = sources();
+  let sequence = 1;
+  let words = new Uint32Array(Math.ceil(WIDTH * HEIGHT / 32));
+  const exploration: ExplorationSpikeController = {
+    ...original.exploration,
+    readBitmap: () => ({ snapshot: {status: 1, sequence: sequence++, generation: AREA_EPOCH, width: WIDTH, height: HEIGHT, dwordCount: words.length}, words: words.slice() }),
+  };
+  const input = {...original, exploration};
+  const first = readCartographyState(input); const unchanged = readCartographyState(input);
+  assert.equal(first.continent.status, "ready");
+  assert.equal(unchanged.continent, first.continent, "a polling counter does not invalidate map artwork");
+  words = Uint32Array.from(wordsWith(CREDITABLE_CELL));
+  const changed = readCartographyState(input);
+  assert.notEqual(changed.continent, first.continent);
+  assert.equal(changed.continent.status, "ready");
+  if (changed.continent.status === "ready") assert.equal(bitsetHasCell(changed.continent.remaining, CREDITABLE_CELL), false);
+});

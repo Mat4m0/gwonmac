@@ -46,6 +46,7 @@ export type CompassRangeLayer = Readonly<{
     ranges: readonly CompassRangeSelection[],
     theme: CompassRangeTheme,
   ): void;
+  image(): Readonly<{ canvas: HTMLCanvasElement; version: string }> | null;
   snapshot(): CompassRangeLayerSnapshot;
   dispose(): void;
 }>;
@@ -123,7 +124,7 @@ export function createCompassRangeLayer(parent: HTMLElement): CompassRangeLayer 
   const tooltip = document.createElement("div");
   tooltip.className = "compass-range-tooltip";
   tooltip.hidden = true;
-  root.append(canvas, tooltip);
+  root.append(tooltip);
   parent.append(root);
   const context = canvas.getContext("2d");
   let drawingVersion = "";
@@ -143,7 +144,7 @@ export function createCompassRangeLayer(parent: HTMLElement): CompassRangeLayer 
     if (context === null) return false;
     const dpr = document.defaultView?.devicePixelRatio ?? 1;
     const cssWidth = Number.parseFloat(root.style.width);
-    const cssHeight = Number.parseFloat(root.style.height);
+    const cssHeight = cssWidth;
     const width = Math.max(1, Math.round(cssWidth * dpr));
     const height = Math.max(1, Math.round(cssHeight * dpr));
     sizeCanvas(canvas, width, height);
@@ -217,10 +218,12 @@ export function createCompassRangeLayer(parent: HTMLElement): CompassRangeLayer 
       root.style.display = "block";
       latest = Object.freeze({ status: "visible", drawCount, projection });
     },
+    image: () => latest.status === "visible" ? { canvas, version: drawingVersion } : null,
     snapshot: () => latest,
     dispose() {
       document.removeEventListener("pointermove", onPointerMove);
       root.remove();
+      canvas.width = 0; canvas.height = 0;
       hide("disabled");
     },
   });
