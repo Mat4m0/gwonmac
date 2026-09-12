@@ -9,6 +9,7 @@
  */
 function installToolsApi(api, ipcRenderer, IPC, listen) {
 api.eliteTracking = {
+  openWiki: (value) => ipcRenderer.invoke(IPC.eliteWikiOpen, value),
   get: (value) => ipcRenderer.invoke(IPC.eliteTrackingGet, value),
   update: (value) => ipcRenderer.invoke(IPC.eliteTrackingUpdate, value),
 };

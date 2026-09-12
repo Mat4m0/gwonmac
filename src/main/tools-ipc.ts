@@ -2,6 +2,7 @@
  * Owns the optional Tools renderer-to-main channels. Main imports this module
  * only for a Tools-capable launch, so Core registers no tool implementation.
  */
+import { eliteWikiUrl } from "../shared/elite-wiki.js";
 import { parseEliteCharacter, parseEliteUpdate, type EliteTracking, type EliteUpdate } from "../shared/elite-skills.js";
 import type { BrowserWindow } from "electron";
 import type { ToolsInvokeChannel } from "../shared/contracts.js";
@@ -40,6 +41,7 @@ export interface ToolsIpcContext extends TradeIpcContext {
     readonly recovered: boolean;
   }>;
   setBuildLibrary(win: BrowserWindow, library: BuildLibrary): Promise<BuildLibrary>;
+  openEliteWiki(url: string): Promise<void>;
   getEliteTracking(win: BrowserWindow, characterKey: TravelCharacterKey): Promise<EliteTracking>;
   updateEliteTracking(win: BrowserWindow, value: EliteUpdate): Promise<EliteTracking>;
   getTravelPreferences(): Promise<TravelUserPreferences>;
@@ -66,6 +68,8 @@ const one = <Input>(parse: (value: unknown) => Input): Parser<Input> => (args) =
 export function registerToolsIpcHandlers(ctx: ToolsIpcContext): void {
   const handlers = {
     ...tradeChannelDefinitions(ctx),
+    eliteWikiOpen: channel(one(eliteWikiUrl), (_win, url) =>
+      ctx.runFeature("cartography", "Maps", () => ctx.openEliteWiki(url))),
     eliteTrackingGet: channel(one(parseEliteCharacter), (win, value) =>
       ctx.runFeature("cartography", "Maps", () => ctx.getEliteTracking(win, value.characterKey))),
     eliteTrackingUpdate: channel(one(parseEliteUpdate), (win, value) =>

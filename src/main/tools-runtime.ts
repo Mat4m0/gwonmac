@@ -4,7 +4,7 @@
  */
 import { dirname, join } from "node:path";
 import { EliteTrackingStore } from "./core/elite-tracking.js";
-import type { BrowserWindow } from "electron";
+import { shell, type BrowserWindow } from "electron";
 import type { AppSettings, SettingsResetOutcome } from "../shared/contracts.js";
 import { featureActivationRequested } from "../shared/feature-contracts.js";
 import { AllowlistError } from "../shared/errors.js";
@@ -65,6 +65,7 @@ export function createToolsRuntime(input: Readonly<{
       buildLibraries.get(win, input.accounts.buildLibraryPathFor(win)),
     setBuildLibrary: (win: BrowserWindow, library) =>
       buildLibraries.set(win, input.accounts.buildLibraryPathFor(win), library),
+    openEliteWiki: (url) => shell.openExternal(url),
     getEliteTracking: (win, characterKey) => eliteTracking.get(elitePath(win), characterKey),
     updateEliteTracking: (win, value) => eliteTracking.update(elitePath(win), value),
     getTravelPreferences: () => input.preferences.getTravelPreferences(),

@@ -15,6 +15,7 @@
  * these boundaries; the sentence a player reads is written in the renderer,
  * where it can be tested against what is actually shown.
  */
+import type { EliteWikiRequest } from "./elite-wiki.js";
 import type { EliteTracking, EliteUpdate } from "./elite-skills.js";
 import type {
   DiagnosticSummary,
@@ -1142,6 +1143,7 @@ export const TOOLS_IPC = {
   traderPriceHistoryGet: "gw:trader:priceHistory:get",
   travelPreferencesGet: "gw:travelPreferences:get",
   travelPreferencesSet: "gw:travelPreferences:set",
+  eliteWikiOpen: "gw:eliteWiki:open",
   eliteTrackingGet: "gw:eliteTracking:get",
   eliteTrackingUpdate: "gw:eliteTracking:update",
   travelHistoryGet: "gw:travelHistory:get",
@@ -1381,6 +1383,7 @@ export interface ToolsNativeApiExtension {
     set(value: TravelUserPreferencesUpdate): Promise<TravelUserPreferences>;
   };
   eliteTracking: {
+    openWiki(value: EliteWikiRequest): Promise<void>;
     get(value: { characterKey: string }): Promise<EliteTracking>;
     update(value: EliteUpdate): Promise<EliteTracking>;
   };

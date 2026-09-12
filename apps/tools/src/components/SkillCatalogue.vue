@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SkillDetails from "./SkillDetails.vue";
 import {
   computed,
   nextTick,
@@ -16,6 +17,12 @@ import {
   loadCataloguePreferences,
   saveCataloguePreferences,
 } from "../catalogue-preferences";
+
+const captureProblem = ref("");
+function findCapture(skill: SkillPresentation): void {
+  const unhandled = window.dispatchEvent(new CustomEvent("gw:elite-find", { cancelable: true, detail: { skillId: skill.id } }));
+  captureProblem.value = unhandled ? "Capture maps need Maps enabled and a supported PvE session." : "";
+}
 
 const props = defineProps<{
   editor: BuildDraftController;
@@ -468,52 +475,9 @@ function hideBrokenIcon(event: Event): void {
 
       <aside class="skill-inspector" aria-live="polite">
         <template v-if="inspected">
-          <div class="inspector-identity">
-            <span
-              class="ui-slot skill"
-              :data-elite="inspected.elite ? '' : undefined"
-              :data-profession="inspected.profession"
-              :data-icon-missing="inspected.iconUrl ? undefined : ''"
-            >
-              <img
-                v-if="inspected.iconUrl"
-                :src="inspected.iconUrl"
-                alt=""
-                draggable="false"
-                @error="hideBrokenIcon"
-              >
-              <span class="skill-fallback" aria-hidden="true">
-                {{ inspected.name.split(" ").map((part) => part[0]).join("").slice(0, 3) }}
-              </span>
-            </span>
-            <span>
-              <strong>{{ inspected.name }}</strong>
-              <small>
-                {{ inspected.profession ?? "PvE" }}
-                <template v-if="inspected.attribute"> · {{ label(inspected.attribute) }}</template>
-              </small>
-            </span>
-          </div>
-          <div class="mechanic-list">
-            <span v-if="inspected.elite"><strong>Elite</strong><small>One per bar</small></span>
-            <span v-if="inspected.availability === 'player-only-pve'">
-              <strong>Player only</strong><small>Heroes cannot equip this skill</small>
-            </span>
-            <span v-if="inspected.energyCost"><strong>{{ inspected.energyCost }}</strong><small>Energy</small></span>
-            <span v-if="inspected.adrenalineCost"><strong>{{ inspected.adrenalineCost }}</strong><small>Adrenaline</small></span>
-            <span v-if="inspected.healthCost"><strong>{{ inspected.healthCost }}%</strong><small>Health</small></span>
-            <span v-if="inspected.overcast"><strong>{{ inspected.overcast }}</strong><small>Overcast</small></span>
-            <span v-if="inspected.activationSeconds"><strong>{{ inspected.activationSeconds }}s</strong><small>Activation</small></span>
-            <span v-if="inspected.aftercastSeconds"><strong>{{ inspected.aftercastSeconds }}s</strong><small>Aftercast</small></span>
-            <span v-if="inspected.rechargeSeconds"><strong>{{ inspected.rechargeSeconds }}s</strong><small>Recharge</small></span>
-          </div>
-          <div v-if="inspected.description" class="skill-description">
-            <strong>Description</strong>
-            <p>{{ inspected.description }}</p>
-          </div>
-          <p v-else class="description-unavailable">
-            Description is unavailable from this installed client.
-          </p>
+          <SkillDetails :skill="inspected" />
+          <button v-if="inspected.elite" class="ui-link" @click="findCapture(inspected)">Find capture locations</button>
+          <p v-if="captureProblem" class="description-unavailable" role="status">{{ captureProblem }}</p>
           <p v-if="placement(inspected)?.explanation" class="inspector-warning">
             {{ placement(inspected)?.explanation }}
           </p>

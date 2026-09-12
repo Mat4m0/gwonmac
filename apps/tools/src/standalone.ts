@@ -38,7 +38,10 @@ window.gwApplyFixtureAppearance = (fixture: StandaloneAppearanceFixture) => {
 };
 
 const params = new URLSearchParams(window.location.search);
-if (params.has("whispers")) {
+if (params.has("elites")) {
+  const { mountEliteFixture } = await import("./elite-fixture");
+  mountEliteFixture(target);
+} else if (params.has("whispers")) {
   let id = 0;
   const session = createWhisperSession(async (recipient, message) => {
     session.observe([{ id: ++id, sender: recipient, message, direction: "outgoing" }]);

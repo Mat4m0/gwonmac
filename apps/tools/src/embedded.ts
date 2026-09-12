@@ -1,3 +1,6 @@
+/** Mounts the explicit Tools surfaces inside the certified renderer. */
+import { mountEliteSkills as mountElites } from "./elite-mount";
+import { loadInstalledSkills } from "./skill-catalog";
 import { mountWhispers } from "./whispers-mount";
 import { createNativeHost } from "./host";
 import { mountToolsApp as mount } from "./mount";
@@ -10,6 +13,11 @@ import type {
 } from "../../../src/shared/tools-bundle-contracts";
 
 const embedded: EmbeddedToolsBundle<HTMLElement> = Object.freeze({
+  mountEliteSkills: (target, options) => mountElites(target, {
+    tracking: options.nativeApi.eliteTracking, loadSkills: loadInstalledSkills,
+    onOpenChange: options.onOpenChange,
+    openWiki: (location, page) => options.nativeApi.eliteTracking.openWiki({ locationId: location.id, page }),
+  }),
   mountWhispers,
   mountToolsApp: (target, { nativeApi, ...options }) => mount(target, {
     host: createNativeHost(
@@ -39,5 +47,5 @@ const embedded: EmbeddedToolsBundle<HTMLElement> = Object.freeze({
   }),
 });
 
-export const { mountToolsApp, mountTravelPalette, mountTradeChat } = embedded;
+export const { mountEliteSkills, mountToolsApp, mountTravelPalette, mountTradeChat } = embedded;
 export { mountWhispers };

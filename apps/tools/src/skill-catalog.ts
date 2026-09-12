@@ -1,7 +1,7 @@
-import type {
-  SkillId,
-} from "../../../src/shared/builds/library";
-import type { SkillCatalogueRecord } from "../../../src/shared/skill-catalogue";
+/** Owns the shared skill presentation and installed-client catalogue loader. */
+import { skillId, type SkillId } from "../../../src/shared/builds/library";
+import { SKILL_CATALOGUE_ROUTE, SKILL_ICON_ROUTE } from "../../../src/shared/contracts";
+import { parseSkillCatalogue, type SkillCatalogueRecord } from "../../../src/shared/skill-catalogue";
 
 export interface SkillPresentation
   extends Omit<SkillCatalogueRecord, "id" | "hasIcon"> {
@@ -50,4 +50,13 @@ export function createSkillCatalogue(
       for (const skill of next) byId.set(skill.id, skill);
     },
   };
+}
+
+/** Both map planning and Builds read the same installed-client catalogue route. */
+export async function loadInstalledSkills(): Promise<readonly SkillPresentation[]> {
+  const response = await fetch(`gw://app/${SKILL_CATALOGUE_ROUTE}`);
+  if (!response.ok) throw new Error("The installed skill catalogue is unavailable. Try again after Guild Wars finishes loading.");
+  return parseSkillCatalogue(await response.json()).map(({ hasIcon, ...record }) => ({
+    ...record, id: skillId(record.id), iconUrl: hasIcon ? `gw://app/${SKILL_ICON_ROUTE(record.id)}` : null,
+  }));
 }
