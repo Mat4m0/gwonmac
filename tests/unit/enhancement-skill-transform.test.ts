@@ -23,6 +23,7 @@ const capabilities: EnhancementCapabilities = Object.freeze({
   playerEffectObservation: false,
     effectIconGeometry: false,
     alcoholObservation: false,
+    nativeHudRendering: false,
     resignAction: false,
     whisperChat: false,
   playRegionObservation: true,

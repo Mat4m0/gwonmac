@@ -276,6 +276,7 @@ declare global {
   }
 
   interface Window {
+    gwNativeHudStats?: () => Readonly<{available: boolean; [key: string]: boolean | number | null}>;
     gwNativeMapGraphicsStats?: () => Readonly<Record<"mission" | "world" | "mission_hover" | "world_hover" | "ranges",
       Readonly<{area: number; uploads: number; draws: number; created: number; destroyed: number}> | null>>;
     readonly gwNative: RendererGwNativeApi;

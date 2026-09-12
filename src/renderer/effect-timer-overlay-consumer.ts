@@ -7,7 +7,8 @@ import type {
   CompanionPlayerEffectState,
 } from "./companion-effect-snapshot.js";
 import { formatEffectTimer, remainingEffectMs } from "./companion-effect-snapshot.js";
-import { createEffectTimerOverlay, type EffectTimerLabel } from "./effect-timer-overlay.js";
+import type { NativeHudLayer } from "./native-hud-layer.js";
+export type EffectTimerLabel = Readonly<{skillId: number; x: number; y: number; width: number; height: number; text: string; urgency: "normal" | "soon" | "urgent"}>;
 
 export function projectEffectTimerLabels(
   effects: CompanionPlayerEffectState,
@@ -56,20 +57,23 @@ export function projectEffectTimerLabels(
 export function createEffectTimerOverlayConsumer(
   parent: HTMLElement,
   canvas: HTMLCanvasElement,
+  overlay: NativeHudLayer,
 ) {
-  const overlay = createEffectTimerOverlay(parent);
   let effects: CompanionPlayerEffectState = Object.freeze({ status: "waiting", reason: "memory" });
   let geometry: CompanionEffectIconState = Object.freeze({ status: "waiting", reason: "memory" });
   let enabled = false;
-  const render = () => overlay.update(enabled
-    ? projectEffectTimerLabels(effects, geometry, canvas)
-    : null);
+  const render = () => {
+    const labels = enabled ? projectEffectTimerLabels(effects, geometry, canvas) : null;
+    overlay.update("effects", labels?.map((label) => ({parent: geometry.status === "ready" ? geometry.frameId : 0,
+      child: label.skillId + 4, width: label.width, height: label.height, text: label.text,
+      color: {normal: "#eadcc2", soon: "#e5ad52", urgent: "#c86c65"}[label.urgency]})) ?? []);
+  };
   const view = parent.ownerDocument.defaultView;
   view?.addEventListener("resize", render);
   return Object.freeze({
     setEffects(next: CompanionPlayerEffectState) { effects = next; render(); },
     setGeometry(next: CompanionEffectIconState) { geometry = next; render(); },
     setEnabled(next: boolean) { if (enabled !== next) { enabled = next; render(); } },
-    dispose() { view?.removeEventListener("resize", render); overlay.dispose(); },
+    dispose() { view?.removeEventListener("resize", render); overlay.update("effects", []); },
   });
 }

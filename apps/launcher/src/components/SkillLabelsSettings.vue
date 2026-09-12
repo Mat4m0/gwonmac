@@ -40,11 +40,11 @@ async function capture(input: SkillKeyInput, event: KeyboardEvent | MouseEvent |
 
 <template>
   <div class="skill-label-settings">
-    <p>These labels do not change Guild Wars key bindings. Match the controls you use in the game.</p>
+    <p>These labels do not change Guild Wars key bindings. Unset slots use 1–8. Set custom labels to match your game controls.</p>
     <div v-for="(binding, index) in bindings" :key="index" class="skill-label-row">
-      <span>Skill {{ index + 1 }} · {{ binding ? skillKeyPresentation(binding).accessibleLabel : 'No label' }}</span>
+      <span>Skill {{ index + 1 }} · {{ binding ? skillKeyPresentation(binding).accessibleLabel : `${index + 1} (default)` }}</span>
       <button class="secondary" :aria-label="`Set skill ${index + 1} label`" @click="start(index)">Set label</button>
-      <button class="text-link" :disabled="!binding" :aria-label="`Clear skill ${index + 1} label`" @click="clear(index)">Clear</button>
+      <button class="text-link" :disabled="!binding" :aria-label="`Reset skill ${index + 1} label`" @click="clear(index)">Use default</button>
     </div>
     <template v-if="slot !== null">
       <div ref="target" tabindex="0" class="capture-target" aria-label="Skill label capture"

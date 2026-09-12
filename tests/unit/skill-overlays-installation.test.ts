@@ -29,6 +29,7 @@ const withBinding = Object.freeze({
 
 test("skill policy activates and withdraws only the observation regions it needs", () => {
   const skills = createSkillOverlaysInstallation({
+    nativeHudRendering: true,
     skillSlotGeometry: true,
     skillCooldownObservation: true,
   });
@@ -106,4 +107,15 @@ test("skill policy activates and withdraws only the observation regions it needs
   skills.disposePresentation();
   skills.geometry.dispose();
   skills.cooldowns.dispose();
+});
+
+
+test("a refused native renderer leaves skill display observers inactive", () => {
+  const skills = createSkillOverlaysInstallation({
+    nativeHudRendering: false, skillSlotGeometry: true, skillCooldownObservation: true,
+  });
+  skills.sync(withBinding, {skillKeyLabels: true, skillCooldowns: true});
+  assert.equal(skills.activeFeatureFlags, 0);
+  assert.equal(skills.geometry.active, false);
+  assert.equal(skills.cooldowns.active, false);
 });

@@ -481,6 +481,10 @@ export class ClientRuntime {
           requested.resignAction, effective.resignAction, supported.resignAction, preparationFailed,
         ),
         alcoholObservation: optionalFeatureStatus(requested.alcoholObservation, effective.alcoholObservation, supported.alcoholObservation, preparationFailed),
+        nativeHudRendering: optionalFeatureStatus(
+          requested.nativeHudRendering, effective.nativeHudRendering,
+          supported.nativeHudRendering, preparationFailed,
+        ),
         effectIconGeometry: optionalFeatureStatus(
           requested.effectIconGeometry,
           effective.effectIconGeometry,

@@ -12,6 +12,7 @@ export function effectiveCapabilities(
   if (!features) return null;
   return Object.freeze({
     nativeCursor: features.nativeCursor.status === "available",
+    nativeHudRendering: features.nativeHudRendering.status === "available",
     targetObservation: features.targetObservation.status === "available",
     partyObservation: features.partyObservation.status === "available",
     teamApply: features.teamApply.status === "available",

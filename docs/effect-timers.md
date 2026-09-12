@@ -107,3 +107,41 @@ Automated evidence covers native countdown corrections, clock wrap, identity
 changes, notification rejection, snapshot validation, dragging, cancellation,
 locking, saved offsets, and launcher controls. A Developer Build still needs
 live QA for real drink types, map travel, visual alignment, and input feel.
+
+## Native drawing
+
+Skill shortcuts, skill cooldowns, and effect timers share the detached atlas in
+[`native-hud-layer.ts`](../src/renderer/native-hud-layer.ts). Timer changes update
+small glyph meshes. Cached digits and all three urgency colors avoid repeated
+pixel uploads. Digits share fixed-width cells with centered glyphs so changing
+numbers does not shift their alignment. Effect labels retain their resource slots when another effect
+expires. Effect numbers sit inside the lower-right artwork with a proportional
+inset. The bottom duration bar and icon border remain clear.
+
+[`native-hud-transform.ts`](../src/main/certification/native-hud-transform.ts)
+attaches those meshes after each native icon's last visible descendant, in the
+final clipped draw category. Each skill icon has one draw and one mesh containing
+its keycap triangles followed by its cooldown triangles. Separate native draw
+objects must not represent these overlapping parts: collection order alone
+does not guarantee their downstream order. The stock icon and veil draw before
+the composition. Later native panels and tooltips cover it. The transform
+checks exact native functions, the Effects parent hash, and the child identity.
+Skill labels attach to the visible bitmap child of each logical skill slot.
+The draw captures the native UI projection and ancestor opacity directly; it
+does not require the logical container to own a reusable bitmap. Geometry and
+timer changes reuse the retained draw. New and recreated meshes receive their
+geometry on the first draw, even when the icon bounds have not changed. A timer
+does not wait for its next digit change to appear. For a matched icon, the
+collector reports
+empty intermediate slots on the final descendant so the native cache reaches
+the label category.
+Other frames keep their original stopping point. Skill Key Labels replaces all
+eight keycaps: custom bindings where configured, otherwise 1–8. The exact native
+hotkey child is omitted while its replacement is active and restored when the
+feature withdraws. Keycaps match the original 17-unit visible artwork within
+each 56-unit skill icon. The stock 24-unit tile has seven transparent units above
+and left. Their size and corner inset follow the interface scale without
+fixed pixel limits. Long chords shrink only when needed to fit the icon.
+The game's key bindings and icon artwork stay unchanged.
+Native icon destruction, disabling the feature, and graphics reset release the
+owned resources. Missing native drawing support produces no browser fallback.

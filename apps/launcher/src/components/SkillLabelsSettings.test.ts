@@ -8,6 +8,8 @@ describe("skill label customization", () => {
   it("captures physical keyboard labels without changing other slots", async () => {
     const save = vi.fn<(patch: LauncherSettingsPatch) => Promise<void>>(async () => undefined);
     const wrapper = mount(SkillLabelsSettings, { props: { bindings: EMPTY_SKILL_KEY_BINDINGS, save } });
+    expect(wrapper.text()).toContain("Skill 1 · 1 (default)");
+    expect(wrapper.text()).toContain("Skill 8 · 8 (default)");
     await wrapper.get('[aria-label="Set skill 3 label"]').trigger("click");
     await wrapper.get('[aria-label="Skill label capture"]').trigger("keydown", { code: "KeyG", key: "g", ctrlKey: true });
     await flushPromises();
