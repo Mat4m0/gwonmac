@@ -23,6 +23,7 @@ const base: ClientSession = {
       playerEffectObservation: { status: "off" },
       effectIconGeometry: { status: "off" },
         alcoholObservation: { status: "off" },
+      nativeHudRendering: { status: "off" },
       resignAction: { status: "off" },
         whisperChat: { status: "off" },
       playRegionObservation: { status: "off" },

@@ -17,6 +17,7 @@
  * the process boundary. Profile state is never consulted.
  */
 import { deriveAlcoholObservation } from "./enhancement-alcohol-proof.js";
+import { NATIVE_HUD_RENDERING_PROOF, provesNativeHudRendering } from "./native-hud-transform.js";
 import { deriveWhisperChat } from "./enhancement-whisper-proof.js";
 import { deriveResignAction } from "./enhancement-resign-proof.js";
 import { createHash } from "node:crypto";
@@ -199,6 +200,8 @@ function failuresForRequested(
     ...(requested.playerEffectObservation
       ? { playerEffectObservation: changedFeature("playerEffectObservation", invariant) }
       : {}),
+    ...(requested.nativeHudRendering
+      ? { nativeHudRendering: changedFeature("nativeHudRendering", invariant) } : {}),
     ...(requested.effectIconGeometry
       ? { effectIconGeometry: changedFeature("effectIconGeometry", invariant) }
       : {}),
@@ -720,6 +723,9 @@ function deriveEnhancementBuild(
   const alcoholObservation = requestedCapabilities.alcoholObservation && includeEffectIcons
     ? deriveAlcoholObservation(context.moduleView(), locatedLocal!.uiDispatcher!.functionIndex) : null;
   const includeAlcohol = alcoholObservation !== null;
+  const includeNativeHud = requestedCapabilities.nativeHudRendering
+    && (skillbar.includeGeometry || includeEffectIcons)
+    && provesNativeHudRendering(context);
   const playerEffectCounts = includePlayerEffects || playerEffects !== null
     ? []
     : playerEffectCandidateCounts(context.moduleView());
@@ -740,6 +746,8 @@ function deriveEnhancementBuild(
     ...failures,
     ...(requestedCapabilities.alcoholObservation && !includeAlcohol
       ? { alcoholObservation: changedFeature("alcoholObservation", "alcohol.post-process-producer") } : {}),
+    ...(requestedCapabilities.nativeHudRendering && !includeNativeHud
+      ? { nativeHudRendering: changedFeature("nativeHudRendering", "native-hud.draw-ownership") } : {}),
     ...(requestedCapabilities.whisperChat && !includeWhispers
       ? { whisperChat: changedFeature("whisperChat", "whisper.native-chat-path") } : {}),
     ...(requestedCapabilities.resignAction && !includeResign
@@ -936,6 +944,7 @@ function deriveEnhancementBuild(
     ...(includePlayerEffects ? { playerEffectObservation: playerEffects! } : {}),
     ...(includeEffectIcons ? { effectIconGeometry: effectIcons! } : {}),
     ...(includeAlcohol ? { alcoholObservation } : {}),
+    ...(includeNativeHud ? { nativeHudRendering: NATIVE_HUD_RENDERING_PROOF } : {}),
     ...skillbarBuild.beforeTeam,
     ...(includeTeam ? { teamApply: locatedLocal!.teamApply! } : {}),
     ...skillbarBuild.afterTeam,
@@ -958,6 +967,7 @@ function deriveEnhancementBuild(
     playerEffectObservation: includePlayerEffects,
     effectIconGeometry: includeEffectIcons,
     alcoholObservation: includeAlcohol,
+    nativeHudRendering: includeNativeHud,
     resignAction: includeResign,
     whisperChat: includeWhispers,
   });

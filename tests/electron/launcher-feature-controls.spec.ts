@@ -86,7 +86,7 @@ test("existing custom map styles can be selected, edited and extended", async ()
     });
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     await page.getByRole("button", { name: "Maps", exact: true }).click();
-    const compass = page.getByRole("checkbox", { name: /Grid on Compass/ });
+    const compass = page.getByRole("checkbox", { name: /Markers on Compass/ });
     await expect(compass).not.toBeChecked();
     await expect(compass).toBeDisabled();
     await page.getByRole("checkbox", { name: /Exploration grid/ }).check();
@@ -144,7 +144,7 @@ test("map styles offer usable color and numeric controls at normal size and 200%
       (await window.launcherNative.state.get()).settings.cartographyPresetLibrary.customPresets[0]?.style.walkability.boundaryWidth,
     )).toBe(0);
 
-    await page.getByText("Advanced grid lines", { exact: true }).click();
+    await page.getByText("Inspection outlines", { exact: true }).click();
     for (const size of [
       { width: 1180, height: 900, zoom: 1 },
       { width: 900, height: 700, zoom: 1 },

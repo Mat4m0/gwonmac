@@ -3,7 +3,8 @@
 GWonMac has three independent native-map layers:
 
 - **Cartography grid** draws Guild Wars' fixed 32×32 map-unit exploration cells
-  over the Mission Map and World Map. **Grid on Compass** includes the Compass
+  only where exploration remains on the Mission Map and World Map. **Markers on
+  Compass** includes the Compass
   only when explicitly enabled. It defaults to off, including existing profiles
   that do not yet have this preference.
 - **Walkable terrain** shades the current instance's certified pathing geometry
@@ -26,8 +27,8 @@ without a reload when Tools and Maps are active.
 
 Maps settings remain available when Tools are off. The page explains how to
 enable Maps and whether an application restart is needed. An illustrative
-preview shows the selected colors, border, grid, and markers without a game
-session. Advanced grid lines and Compass inspection options are disclosed
+preview shows the selected colors, border, and remaining markers without a game
+session. Inspection outlines and Compass inspection options are disclosed
 separately. **Use Cartographer defaults** selects the built-in style without
 deleting custom styles. Deletion requires confirmation with the style name.
 
@@ -69,15 +70,16 @@ the remembered `2` remains the basis for the lighter non-current number.
 
 The default visual language is:
 
-- soft green coverage: creditable progress already explored;
+- explored cells: no exploration artwork;
 - hollow amber: an unexplored continent candidate;
 - solid orange: confirmed actionable in the loaded instance; and
 - no grey marker.
 
 Continent progress remains visible if current pathing is unavailable. Missing
 Compass or map-window projection hides only that surface. Amber is an estimate,
-not proof that the current instance can reach a cell. A thin neutral boundary
-shows where live current-instance evidence applies.
+not proof that the current instance can reach a cell. Existing marker shapes and
+colors distinguish live evidence from estimates; no permanent lattice or
+explored-area tint covers the map.
 
 ## Map presentation
 
@@ -88,8 +90,8 @@ on either map hides only that surface.
 
 Continent progress and guidance cover Tyria, Pre-Searing, Cantha, and Elona.
 The Battle Isles, Realm of Torment, dungeons, and other maps outside a campaign
-world map keep the local walkable-terrain layer but hide the global grid,
-coverage, and guidance. The compact control remains visible and explains this
+world map keep the local walkable-terrain layer but hide global exploration
+guidance. The compact control remains visible and explains this
 limited mode when opened. Settings remain intact and apply again automatically
 after travel to a fully supported area.
 
@@ -104,13 +106,14 @@ At 18 pixels or more per cell, the map draws individual amber diamonds and
 orange actionable markers. At 8–18 pixels it groups the global grid into 4×4
 clusters. Below 8 pixels it uses 16×16 clusters. Cluster origins are fixed to
 the global grid, so they do not jump during pan, resize, or travel. Unreadable
-progress hides below the minimum safe scale.
+progress hides below the minimum safe scale. Large cached tiles use clusters
+when individual markers exceed the drawing budget, so resizing does not erase
+remaining guidance.
 
-The detailed walkability veil is shown only in close-up presentation. The
-continent-scale view keeps green coverage, remaining clusters, solid-orange
-current guidance, and the live-evidence boundary without the noisy terrain
-veil. Off-screen cells are culled; green coverage is cached by exploration
-generation.
+The detailed walkability veil is shown on the Compass and Mission Map. It
+darkens the area outside walkable terrain while leaving the interior clear,
+with the chosen boundary color. The continent-scale view keeps remaining
+markers and clusters. Explored cells are clear on every map.
 
 Hold Shift while hovering the map window to inspect the normal 3×3 reveal
 range. Hold Option+Shift for Bird's Eye 7×7 inspection. The diamond is the
@@ -119,7 +122,44 @@ hatching.
 
 The Compass stays local and precise. It uses the same fixed grid, live terrain,
 exploration, and actionable state, but does not draw continent clusters or the
-green continent tint. It works before the map window is opened.
+continent tint. It works before the map window is opened.
+
+Terrain, remaining markers, and ranges are composed inside their owning native
+maps. Compass terrain and markers share a native Canvas texture; ranges have a
+separate retained mesh. Mission and World Map bitmap quads draw after their
+native background and before foreground icons. Native matrices and clipping
+control continuous motion and coverage by later panels and tooltips. The old
+positioned browser drawing surfaces are removed. Menus and tooltips remain
+application UI. Compass and Mission Map share the inverse-veil painter.
+
+The Compass caches one nearby terrain texture. It repaints when the map, terrain
+tile, style, opacity, or interface scale changes. Movement within a tile and
+camera rotation update only native mesh coordinates. Optional Compass inspection
+repaints when its selected player cell changes; it does not follow every subcell
+movement in the CPU painter. The texture has a fixed
+size limit, and its input buffer is released after the native copy. The Canvas
+owns the retained mesh and material until its destructor runs. Missing native
+support or stale map identity hides Compass terrain without changing settings.
+Stationary Compass geometry is reused; range geometry changes only with its
+Canvas rectangle or artwork, not camera motion.
+
+Mission and World Map cache artwork in world coordinates, with a margin around
+the visible rectangle. Small pans reuse it. Zoom moves it continuously through
+the native camera; raster detail changes in eighth-octave steps. Textures are
+bounded to 2048 pixels per edge. Hover and Shift inspection use independent
+small textures, so moving the pointer does not rebuild terrain or remaining
+markers. Closing a map withdraws its drawing; native destruction releases its
+retained handles. Graphics resets invalidate uploads, and loader disposal frees
+its detached canvases and listeners. Failed installation releases each resource
+already acquired; one failed native withdrawal does not stop other cleanup.
+Missing native support hides that surface and skips its CPU painter. Compass
+geometry remains available for a healthy Mission Map projection.
+
+Exploration invalidation compares bitmap contents rather than the observation
+sequence. Identical polls reuse the masks and artwork; real progress updates
+at the existing model polling interval. Native presentation remains at the
+game's frame rate. Cached textures trade bounded memory and slight raster
+resampling during zoom for fewer CPU paints and GPU uploads.
 
 Compass ranges also work without opening the Mission Map. Their radii are
 1012, 1248, 2512, and 3500 Guild Wars units, projected from the certified

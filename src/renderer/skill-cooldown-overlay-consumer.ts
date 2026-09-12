@@ -12,14 +12,14 @@ import type {
   CompanionSkillCooldownState,
   CompanionSkillSlotState,
 } from "./companion-skill-snapshot.js";
-import { createSkillCooldownOverlay, type SkillCooldownSlot } from "./skill-cooldown-overlay.js";
+import type { NativeHudLayer, NativeHudItem } from "./native-hud-layer.js";
 import { projectSkillSlots } from "./skill-slot-projection.js";
 
 export function createSkillCooldownOverlayConsumer(
   parent: HTMLElement,
   canvas: HTMLCanvasElement,
+  overlay: NativeHudLayer,
 ) {
-  const overlay = createSkillCooldownOverlay(parent);
   let geometry: CompanionSkillSlotState = Object.freeze({ status: "waiting", reason: "memory" });
   let cooldowns: CompanionSkillCooldownState = Object.freeze({ status: "waiting", reason: "memory" });
   let color: SkillCooldownColor = DEFAULT_SKILL_COOLDOWN_COLOR;
@@ -33,7 +33,7 @@ export function createSkillCooldownOverlayConsumer(
   }
   let visibleCooldowns = cooldownSignature(cooldowns);
 
-  function projection(): readonly SkillCooldownSlot[] | null {
+  function projection(): readonly (NativeHudItem | null)[] | null {
     if (
       !enabled
       || geometry.status !== "ready"
@@ -43,19 +43,18 @@ export function createSkillCooldownOverlayConsumer(
     ) return null;
     const projected = projectSkillSlots(geometry, canvas);
     if (projected === null) return null;
-    const slots: SkillCooldownSlot[] = [];
+    const slots: (NativeHudItem | null)[] = [];
     for (let index = 0; index < 8; index += 1) {
       const rect = projected[index]!;
       const timestamp = cooldowns.rechargeTimestamps[index]!;
       const remainingMs = timestamp === 0 ? 0 : (timestamp - cooldowns.gameTimer) >>> 0;
-      slots.push(Object.freeze({
-        ...rect,
-        remainingMs,
-      }));
+      const text = formatSkillCooldown(remainingMs);
+      slots.push(text === null ? null : {parent: geometry.frameId, child: index,
+        width: rect.width, height: rect.height, text, color: skillCooldownCssColor(color)});
     }
     return Object.freeze(slots);
   }
-  function render() { overlay.update(projection(), color); }
+  function render() { overlay.update("cooldowns", projection() ?? []); }
   const view = parent.ownerDocument.defaultView;
   view?.addEventListener("resize", render);
 
@@ -80,7 +79,7 @@ export function createSkillCooldownOverlayConsumer(
     },
     dispose() {
       view?.removeEventListener("resize", render);
-      overlay.dispose();
+      overlay.update("cooldowns", []);
     },
   });
 }

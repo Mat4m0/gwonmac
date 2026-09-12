@@ -3,6 +3,7 @@
  * It rejects stale, malformed, and cross-input proof messages.
  */
 import { isAlcoholObservationProof } from "./enhancement-alcohol-proof.js";
+import { NATIVE_HUD_RENDERING_PROOF } from "./native-hud-transform.js";
 import { RESIGN_NATIVE_SENDER } from "./enhancement-resign-proof.js";
 import { isDeepStrictEqual } from "node:util";
 import { isDigest } from "../../shared/digest.js";
@@ -182,6 +183,7 @@ function featureFailuresFromVerdicts(
     "playerEffectObservation",
     verdicts.playerEffectObservation,
   );
+  const nativeHudRendering = refusalForFeature("nativeHudRendering", verdicts.nativeHudRendering);
   const effectIconGeometry = refusalForFeature(
     "effectIconGeometry",
     verdicts.effectIconGeometry,
@@ -204,6 +206,7 @@ function featureFailuresFromVerdicts(
     || playerEffectObservation === null
     || effectIconGeometry === null
     || alcoholObservation === null
+    || nativeHudRendering === null
     || whisperChat === null
     || resignAction === null
   ) return null;
@@ -224,6 +227,7 @@ function featureFailuresFromVerdicts(
     ...(quickItemMove ? { quickItemMove } : {}),
     ...(playerEffectObservation ? { playerEffectObservation } : {}),
     ...(effectIconGeometry ? { effectIconGeometry } : {}),
+    ...(nativeHudRendering ? { nativeHudRendering } : {}),
     ...(whisperChat ? { whisperChat } : {}),
     ...(alcoholObservation ? { alcoholObservation } : {}),
     ...(resignAction ? { resignAction } : {}),
@@ -733,6 +737,10 @@ function isAutomaticSemanticBuild(
   const hasPreGameControls = build.preGameControls !== undefined;
   const hasPlayerEffects = build.playerEffectObservation !== undefined;
   const hasEffectIcons = build.effectIconGeometry !== undefined;
+  if (build.nativeHudRendering !== undefined && (
+    (!hasSkillSlotGeometry && !hasEffectIcons)
+    || !isDeepStrictEqual(build.nativeHudRendering, NATIVE_HUD_RENDERING_PROOF)
+  )) return false;
   if (!hasCursor && !hasPlayRegion && !hasObservation && !hasTarget
     && !hasTravel && !hasXunlai && !hasAliases && !hasChatFiltering
     && !hasParty && !hasTeam && !hasSkillSlotGeometry

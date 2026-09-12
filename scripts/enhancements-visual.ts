@@ -78,13 +78,31 @@ try {
     const moduleUrl = (source: string) =>
       `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
     const bindingsUrl = moduleUrl(await compile("shared/skill-key-bindings.ts"));
-    const appearanceUrl = moduleUrl(await compile("renderer/appearance.ts"));
-    const bindingViewUrl = moduleUrl((await compile("renderer/skill-key-binding-view.ts"))
-      .replace("../shared/skill-key-bindings.js", bindingsUrl)
-      .replace("./appearance.js", appearanceUrl));
-    const compiled = (await compile("renderer/skill-key-overlay.ts"))
-      .replace("../shared/skill-key-bindings.js", bindingsUrl)
-      .replace("./skill-key-binding-view.js", bindingViewUrl);
+    const artworkUrl = moduleUrl((await compile("renderer/skill-key-artwork.ts"))
+      .replace("../shared/skill-key-bindings.js", bindingsUrl));
+    const compiled = `import { paintSkillKeyPlate, skillKeyPlateLayout } from "${artworkUrl}";
+      function createSkillKeyOverlay(parent) {
+        return { update(state) {
+          for (const slot of state.slots) {
+            if (!slot.binding) continue;
+            const host = document.createElement("span");
+            host.style.cssText = "position:absolute;left:" + slot.x + "px;top:" + slot.y + "px;width:" + slot.width + "px;height:" + slot.height + "px";
+            parent.append(host);
+            const canvas = document.createElement("canvas");
+            canvas.width = 300; canvas.height = 64;
+            const ctx = canvas.getContext("2d");
+            const width = paintSkillKeyPlate(ctx, slot.binding);
+            const art = ctx.getImageData(0, 0, width, 64);
+            canvas.width = width; ctx.putImageData(art, 0, 0);
+            const layout = skillKeyPlateLayout(slot.width, slot.height, width);
+            canvas.className = "skill-key-plate";
+            canvas.dataset.referenceDigit = String(slot.binding.input.kind === "keyboard" && slot.binding.input.code === "Digit7");
+            canvas.style.cssText = "width:" + layout.width + "px;height:" + layout.height + "px;position:absolute;right:" + layout.inset + "px;bottom:" + layout.inset + "px";
+            host.append(canvas);
+          }
+        }};
+      }`;
+    await page.evaluate((family) => document.fonts.load(`48px "${family}"`), fontFamily);
     await page.addScriptTag({
       type: "module",
       content: `${compiled}\nglobalThis.__createSkillKeyOverlay = createSkillKeyOverlay;`,
@@ -136,6 +154,12 @@ try {
           { x: 274, y: 340, width: 140, height: 140, binding: bindings[9] },
         ],
       });
+      const smallSlot = document.createElement("div");
+      smallSlot.className = "skill";
+      smallSlot.style.cssText = "position:absolute;left:470px;top:400px;width:51px;height:51px";
+      document.body.append(smallSlot);
+      create(document.body).update({status: "ready", slots: [{x:470, y:400, width:51, height:51,
+        binding:{input:{kind:"keyboard",code:"KeyX"},modifiers:modifiers(false,false,true,true)}}]});
       document.body.dataset.ready = "true";
     });
     } else {
@@ -166,10 +190,7 @@ try {
       differingPixelRatio: number;
     }> | null = null;
     if (fixture === "skill-keys" && reference !== null) {
-      const plates = page.locator(".skill-key-plate");
-      const visible = await plates.evaluateAll((nodes) => nodes.flatMap((node, index) =>
-        node.getClientRects().length === 0 ? [] : [index]));
-      const digit = plates.nth(visible.at(-1) ?? -1);
+      const digit = page.locator('.skill-key-plate[data-reference-digit="true"]');
       const custom = path.join(outputDir, `skill-keys-${scale}x-custom-7.png`);
       const customPng = await digit.screenshot({ path: custom });
       const measured = await page.evaluate(async ({ native, rendered, renderScale }) => {

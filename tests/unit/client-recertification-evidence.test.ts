@@ -9,6 +9,7 @@ import { createClientRecertificationEvidence } from
   "../../scripts/client-recertification-evidence.js";
 import { ENHANCEMENT_CAPABILITY_FIELDS } from
   "../../src/shared/enhancement-contracts.js";
+import { SEMANTIC_VERIFIER_ABI } from "../../src/main/certification/semantic-proof.js";
 import { LOCAL_FEATURE_INVARIANTS } from
   "../../src/main/certification/local-client-verification-contract.js";
 
@@ -25,8 +26,8 @@ test("retains bounded generation evidence without paths or raw addresses", async
   const fileOutputDigest = sha256("file-output");
   const feature601Input = sha256("features-e01-input");
   const feature601DoubleClick = sha256("features-e01-double-click");
-  const featureAllInput = sha256("features-7ffff-input");
-  const featureAllDoubleClick = sha256("features-7ffff-double-click");
+  const featureAllInput = sha256("features-fffff-input");
+  const featureAllDoubleClick = sha256("features-fffff-double-click");
   const generation = sha256("generation");
   const commit = "a".repeat(40);
   const files = {
@@ -52,7 +53,7 @@ test("retains bounded generation evidence without paths or raw addresses", async
       outputSha256: feature601DoubleClick,
       enhancementInputSha256: fileOutputDigest,
     }, {
-      profile: "features-7ffff",
+      profile: "features-fffff",
       inputSha256: featureAllInput,
       outputSha256: featureAllDoubleClick,
       enhancementInputSha256: fileOutputDigest,
@@ -76,7 +77,7 @@ test("retains bounded generation evidence without paths or raw addresses", async
       inputSha256: feature601DoubleClick,
       outputSha256: outputDigest,
     }, {
-      profile: "features-7ffff",
+      profile: "features-fffff",
       inputSha256: featureAllDoubleClick,
       outputSha256: outputDigest,
     }],
@@ -100,7 +101,7 @@ test("retains bounded generation evidence without paths or raw addresses", async
       outputSha256: sha256("cartography-e01"),
       memoryLayout: "relocated",
     }, {
-      profile: "features-7ffff",
+      profile: "features-fffff",
       inputSha256: featureAllInput,
       outputSha256: sha256("cartography-fff"),
       memoryLayout: "relocated",
@@ -129,11 +130,11 @@ test("retains bounded generation evidence without paths or raw addresses", async
       writeFile(files.js, js),
       writeFile(files.runtime, JSON.stringify({
         officialSha256: wasmDigest,
-        verifierAbi: 7,
+        verifierAbi: SEMANTIC_VERIFIER_ABI,
         fileVerdict: {
           status: "proved",
           inputSha256: wasmDigest,
-          verifierAbi: 7,
+          verifierAbi: SEMANTIC_VERIFIER_ABI,
           outputSha256: fileOutputDigest,
           rawAddress: 0x5a0ee0,
         },
@@ -305,18 +306,18 @@ test("retains bounded generation evidence without paths or raw addresses", async
     for (const fileVerdict of [{
       status: "refused",
       inputSha256: wasmDigest,
-      verifierAbi: 7,
+      verifierAbi: SEMANTIC_VERIFIER_ABI,
       reason: "template-shape-changed",
     }, {
       status: "proved",
       inputSha256: sha256("wrong-input"),
       outputSha256: outputDigest,
-      verifierAbi: 7,
+      verifierAbi: SEMANTIC_VERIFIER_ABI,
     }, {
       status: "proved",
       inputSha256: wasmDigest,
       outputSha256: outputDigest,
-      verifierAbi: 8,
+      verifierAbi: SEMANTIC_VERIFIER_ABI + 1,
     }]) {
       await Promise.all([
         writeFile(files.runtime, JSON.stringify({
@@ -336,10 +337,10 @@ test("retains bounded generation evidence without paths or raw addresses", async
     }
     await writeFile(files.runtime, JSON.stringify({
       ...record(evidence.runtime),
-      verifierAbi: 8,
+      verifierAbi: SEMANTIC_VERIFIER_ABI + 1,
       fileVerdict: {
         ...record(record(evidence.runtime).fileVerdict),
-        verifierAbi: 8,
+        verifierAbi: SEMANTIC_VERIFIER_ABI + 1,
       },
     }));
     const wrongSourceAbi = await createClientRecertificationEvidence(args, environment);
@@ -375,7 +376,7 @@ test("rejects poison strings and contradictory proved states", async () => {
       writeFile(files.js, js),
       writeFile(files.runtime, JSON.stringify({
         officialSha256: wasmDigest,
-        verifierAbi: 7,
+        verifierAbi: SEMANTIC_VERIFIER_ABI,
         fileVerdict: null,
         templateSaving: false,
         features: {

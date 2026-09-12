@@ -222,11 +222,20 @@ After that restart, these choices update during the session:
 - **Target distance and range** controls the shipped Test readout and its target
   observation.
 - **Skill Key Labels** controls renderer-owned labels over the certified
-  skill-slot rectangles. Saved bindings remain when the tool is off. The
+  skill-slot rectangles. All eight use the same keycap style: custom labels where
+  set, otherwise 1–8. Original keycaps return when the tool is off. Saved
+  bindings remain. The
   companion publishes geometry, not bindings, and the renderer never turns a
   label into game input.
 - **Skill Cooldowns** controls the display of observed recharge numbers. Its
   saved colour remains when the tool is off.
+
+Native skill and effect drawing has a separate `nativeHudRendering` capability.
+The local verifier checks its exact draw owners, traversal, and resource functions.
+The transform rechecks those owners before it installs native HUD hooks. Core
+and observation-only profiles preserve the original UI collection and destruction.
+A changed drawing owner disables HUD presentation while leaving separately proved
+skill, effect, and icon observations available to other consumers.
 
 Disabled optional observers stop their domain reads. Core cursor observation
 stays active. A small map-policy projection reads GWToolbox++'s PvP map flag

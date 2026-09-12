@@ -182,6 +182,13 @@ const CAPABILITY_DEFINITIONS = Object.freeze([
     configOwners: [],
     hooks: ["ui"],
   },
+  {
+    id: "nativeHudRendering",
+    requiresAll: [],
+    requiresAny: ["skillSlotGeometry", "effectIconGeometry"],
+    configOwners: [],
+    hooks: [],
+  },
 ] as const);
 for (const contract of CAPABILITY_DEFINITIONS) {
   Object.freeze(contract.requiresAll);
@@ -278,6 +285,7 @@ export const NO_ENHANCEMENT_CAPABILITIES: EnhancementCapabilities = Object.freez
   resignAction: false,
   whisperChat: false,
   alcoholObservation: false,
+  nativeHudRendering: false,
 });
 
 function isExactBooleanRecord<Key extends string>(
@@ -321,6 +329,7 @@ export function parseEnhancementCapabilities(
     resignAction: value.resignAction,
     whisperChat: value.whisperChat,
     alcoholObservation: value.alcoholObservation,
+    nativeHudRendering: value.nativeHudRendering,
   });
 }
 
@@ -357,7 +366,7 @@ export const ENHANCEMENT_CAPABILITY_PRESETS = Object.freeze({
   // Developer-only session: exact player effects plus the already-certified
   // roster projection needed to correlate later party-effect evidence.
   effectObserver: capabilitiesFromMask(0xc204),
-  all: capabilitiesFromMask(0x7ffff),
+  all: capabilitiesFromMask(0xfffff),
 });
 
 /** The two capability sets shipped by Core and Tools release launches. */
@@ -372,7 +381,7 @@ export {
   ENHANCEMENT_LAYOUT_WORD_COUNT,
   ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT,
 } from "./enhancement-config.js";
-export const ENHANCEMENT_TRANSFORM_ABI = 58;
+export const ENHANCEMENT_TRANSFORM_ABI = 67;
 
 export const ENHANCEMENT_CHAT_FILTER_MASKS = Object.freeze({
   allyDrops: 1,

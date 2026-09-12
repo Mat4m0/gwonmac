@@ -35,3 +35,14 @@ export function createCartographyLifecycle(
     },
   };
 }
+
+
+/** Drain acquired Maps resources even when one native release fails. */
+export function disposeCartographyResources(steps: (() => void)[]): void {
+  const failures: unknown[] = [];
+  while (steps.length > 0) {
+    const step = steps.pop()!;
+    try { step(); } catch (cause) { failures.push(cause); }
+  }
+  if (failures.length > 0) throw new AggregateError(failures, "Maps cleanup failed");
+}

@@ -276,6 +276,9 @@ declare global {
   }
 
   interface Window {
+    gwNativeHudStats?: () => Readonly<{available: boolean; [key: string]: boolean | number | null}>;
+    gwNativeMapGraphicsStats?: () => Readonly<Record<"mission" | "world" | "mission_hover" | "world_hover" | "ranges",
+      Readonly<{area: number; uploads: number; draws: number; created: number; destroyed: number}> | null>>;
     readonly gwNative: RendererGwNativeApi;
     FS?: {
       syncfs(
@@ -289,6 +292,7 @@ declare global {
     gwApplySettings?(settings: AppSettings): void;
     gwCartographyGridStats?(): CartographyGridStats;
     gwCompassRangeStats?(): CompassRangeStats;
+    gwNativeCompassTerrainStats?(): Readonly<{ status: "hidden" | "ready" | "unavailable"; area: number; updates: number; uploads: number; created: number; destroyed: number; textureSize: number }>;
     /** Pointer-free atomic epoch and classification diagnostics; development only. */
     gwCartographyModelStats?(): CartographyModelStats;
     gwSurfaces: GwonmacSurfaceController;

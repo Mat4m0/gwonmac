@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const rendererSources = [
-  "src/renderer/effect-timer-overlay.ts",
+  "src/renderer/native-hud-layer.ts",
   "src/renderer/effect-timer-overlay-consumer.ts",
   "src/renderer/player-effect-state-installation.ts",
 ] as const;

@@ -35,6 +35,7 @@ const NO_CAPABILITIES = Object.freeze({
   playerEffectObservation: false,
     effectIconGeometry: false,
     alcoholObservation: false,
+    nativeHudRendering: false,
     resignAction: false,
     whisperChat: false,
 });
@@ -95,6 +96,7 @@ describe("Enhancement client chain", () => {
         playerEffectObservation: false,
     effectIconGeometry: false,
     alcoholObservation: false,
+    nativeHudRendering: false,
     resignAction: false,
     whisperChat: false,
       },

@@ -2,6 +2,9 @@
  * Owns Cartography installation behind one observer, model, kernel, and UI lifecycle.
  * Partial installation is rolled back before control returns to the harness.
  */
+import { createNativeCompassRangesLayer } from "./native-compass-ranges-layer.js";
+import { createNativeMapGraphicsLayer } from "./native-map-graphics-layer.js";
+import { createNativeCompassTerrainLayer } from "./native-compass-terrain-layer.js";
 import type {
   CartographyEvidenceCapture,
   CartographyEvidenceExportResult,
@@ -15,6 +18,7 @@ import type {
   WorldMapFrameSpikeController,
   WorldMapFrameSpikeDiagnostic,
 } from "../../shared/cartography-spike.js";
+import { disposeCartographyResources } from "../cartography-lifecycle.js";
 import { readCartographyPlayerState } from "../cartography-player-state.js";
 import { createCartographyContextReader } from "./context-observer.js";
 import { createExplorationSpikeReader } from "./exploration-observer.js";
@@ -109,39 +113,57 @@ export async function installCartographySpike(options: Readonly<{
       console.error("[cartography] remembered map knowledge unavailable", cause);
     }
   }
-  if (compassReader !== null) window.gwCompassFrameSpike = compassReader;
-  if (missionMapReader !== null) window.gwMissionMapFrameSpike = missionMapReader;
-  if (worldMapReader !== null) window.gwWorldMapFrameSpike = worldMapReader;
-  window.gwWorldMapAnchorSpike = anchor;
-  window.gwExplorationSpike = exploration;
-  const disposeOverlay = mountCartographyOverlay({
-    parent: options.parent,
-    canvas: options.canvas,
-    modelSources: {
-      context,
-      compass,
-      missionMap,
-      worldMap,
-      exploration,
-      anchor,
-      kernel,
-      companion: readCartographyPlayerState,
-      revealRadius: () => options.settings().cartographyRevealMode === "birds-eye" ? 3 : 1,
-    },
-    settings: options.settings,
-    persist: options.persist,
-    exportEvidence: options.exportEvidence,
-    initialMapKnowledge,
-    recordMapKnowledge: options.recordMapKnowledge,
-  });
+  const cleanup = [() => kernel.dispose()];
+  const dispose = () => disposeCartographyResources(cleanup);
+  try {
+    const nativeCompassRanges = createNativeCompassRangesLayer(options.exports, options.parent.ownerDocument);
+    cleanup.push(() => nativeCompassRanges.dispose());
+    const nativeMapGraphics = createNativeMapGraphicsLayer(options.exports, options.parent.ownerDocument);
+    cleanup.push(() => nativeMapGraphics.dispose());
+    const compassTerrainLayer = createNativeCompassTerrainLayer(options.exports, options.parent.ownerDocument);
+    cleanup.push(() => compassTerrainLayer.dispose());
+    if (compassReader !== null) window.gwCompassFrameSpike = compassReader;
+    if (missionMapReader !== null) window.gwMissionMapFrameSpike = missionMapReader;
+    if (worldMapReader !== null) window.gwWorldMapFrameSpike = worldMapReader;
+    window.gwWorldMapAnchorSpike = anchor;
+    window.gwExplorationSpike = exploration;
+    cleanup.push(() => {
+      if (window.gwCompassFrameSpike === compassReader) delete window.gwCompassFrameSpike;
+      if (window.gwMissionMapFrameSpike === missionMapReader) delete window.gwMissionMapFrameSpike;
+      if (window.gwWorldMapFrameSpike === worldMapReader) delete window.gwWorldMapFrameSpike;
+      if (window.gwWorldMapAnchorSpike === anchor) delete window.gwWorldMapAnchorSpike;
+      if (window.gwExplorationSpike === exploration) delete window.gwExplorationSpike;
+    });
+    const disposeOverlay = mountCartographyOverlay({
+      compassTerrainLayer,
+      nativeMapGraphics,
+      nativeCompassRanges,
+      parent: options.parent,
+      canvas: options.canvas,
+      modelSources: {
+        context,
+        compass,
+        missionMap,
+        worldMap,
+        exploration,
+        anchor,
+        kernel,
+        companion: readCartographyPlayerState,
+        revealRadius: () => options.settings().cartographyRevealMode === "birds-eye" ? 3 : 1,
+      },
+      settings: options.settings,
+      persist: options.persist,
+      exportEvidence: options.exportEvidence,
+      initialMapKnowledge,
+      recordMapKnowledge: options.recordMapKnowledge,
+    });
 
-  return () => {
-    disposeOverlay();
-    kernel.dispose();
-    if (window.gwCompassFrameSpike === compassReader) delete window.gwCompassFrameSpike;
-    if (window.gwMissionMapFrameSpike === missionMapReader) delete window.gwMissionMapFrameSpike;
-    if (window.gwWorldMapFrameSpike === worldMapReader) delete window.gwWorldMapFrameSpike;
-    if (window.gwWorldMapAnchorSpike === anchor) delete window.gwWorldMapAnchorSpike;
-    if (window.gwExplorationSpike === exploration) delete window.gwExplorationSpike;
-  };
+    cleanup.push(disposeOverlay);
+    return dispose;
+  } catch (cause) {
+    try { dispose(); } catch (cleanupError) {
+      throw new AggregateError([cause, cleanupError], "Maps installation and cleanup failed", {cause: cleanupError});
+    }
+    throw cause;
+  }
 }

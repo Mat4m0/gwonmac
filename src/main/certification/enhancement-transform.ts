@@ -15,6 +15,7 @@
  * so no capability selection may inherit another's ordering.
  *
  */
+import { appendNativeHud } from "./native-hud-transform.js";
 import { createHash } from "node:crypto";
 import {
   enhancementCapabilityProfile,
@@ -948,11 +949,15 @@ function assembleEnhancementTransform(
     if (section.id === 10) return { id: section.id, body: encodeCode(nextBodies) };
     return section;
   });
-  const output = concat(
+  const enhanced = concat(
     WASM_HEADER,
     ...rewritten.map(encodeSection),
     encodeSection(buildEnhancementManifestSection(build, capabilities)),
   );
+  // Core and observation-only profiles must not install optional HUD hooks.
+  const output = capabilities.nativeHudRendering
+    ? appendNativeHud(enhanced, skillBarFrameGlobalIndex)
+    : enhanced;
   if (!WebAssembly.validate(output)) {
     try {
       new WebAssembly.Module(output);

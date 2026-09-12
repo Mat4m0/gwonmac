@@ -1,5 +1,5 @@
 /**
- * Deterministic, headless visual matrix for the shared cooldown view.
+ * Replays the production native HUD atlas and ordered quads into an offline matrix.
  * This is not a live-game acceptance test; pass a native crop as --reference
  * to compare the real background at 1x, 1.5x, and 2x.
  */
@@ -26,15 +26,20 @@ const compile = async (relative: string) => ts.transpileModule(
 ).outputText;
 const moduleUrl = (source: string) =>
   `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
-const appearanceUrl = moduleUrl(await compile("renderer/appearance.ts"));
+// The fixture supplies the extracted font locally; it has no gw:// app host.
+const appearanceUrl = moduleUrl(`export async function ensureGuildWarsFont() {
+  await document.fonts.load('48px "Guild Wars Original Display"');
+}`);
 const cooldownModelUrl = moduleUrl(await compile("shared/skill-cooldowns.ts"));
 const bindingModelUrl = moduleUrl(await compile("shared/skill-key-bindings.ts"));
-const cooldownView = (await compile("renderer/skill-cooldown-view.ts"))
-  .replace("../shared/skill-cooldowns.js", cooldownModelUrl)
-  .replace("./appearance.js", appearanceUrl);
-const bindingView = (await compile("renderer/skill-key-binding-view.ts"))
+const artworkUrl = moduleUrl((await compile("renderer/skill-key-artwork.ts"))
+  .replace("../shared/skill-key-bindings.js", bindingModelUrl));
+const hudContractUrl = moduleUrl(await compile("shared/native-hud.ts"));
+const hudUrl = moduleUrl((await compile("renderer/native-hud-layer.ts"))
+  .replace("../shared/native-hud.js", hudContractUrl)
   .replace("../shared/skill-key-bindings.js", bindingModelUrl)
-  .replace("./appearance.js", appearanceUrl);
+  .replace("./skill-key-artwork.js", artworkUrl)
+  .replace("./appearance.js", appearanceUrl));
 
 const browser = await chromium.launch();
 try {
@@ -60,26 +65,71 @@ try {
       .fixture small { color: #b8b3a5; font-variant-numeric: tabular-nums; }
       .slot.small { width: 40px; height: 40px; }
       .slot.large { width: 140px; height: 140px; }
-      .settings-skill-cooldown-preview-key { --skill-key-edge: 23px; position: absolute; right: 2px; bottom: 2px; max-width: calc(100% - 4px); }
+      .native-hud-preview { position: absolute; inset: 0; width: 100%; height: 100%; }
+      body[data-reference] .native-hud-preview { visibility: hidden; }
       #sizes { display: flex; align-items: end; gap: 18px; margin-top: 26px; }
     </style></head><body><h1>Skill cooldown visual matrix · ${scale}×</h1><div id="matrix" class="matrix"></div><div id="sizes"></div></body></html>`);
-    const referenceOutput = path.join(outputDir, `skill-cooldowns-${scale}x-reference.png`);
-    await page.screenshot({ path: referenceOutput });
-    await page.addScriptTag({
-      type: "module",
-      content: `${cooldownView}\nglobalThis.__cooldownView = createSkillCooldownView;`,
-    });
-    await page.addScriptTag({
-      type: "module",
-      content: `${bindingView}\nglobalThis.__bindingView = createSkillKeyBindingView;`,
-    });
-    const measurements = await page.evaluate(() => {
-      const createCooldown = (globalThis as unknown as {
-        __cooldownView(parent: HTMLElement): { element: HTMLElement; update(ms: number, color: unknown): void };
-      }).__cooldownView;
-      const createBinding = (globalThis as unknown as {
-        __bindingView(parent: HTMLElement): { element: HTMLElement; update(binding: unknown): void };
-      }).__bindingView;
+    await page.addScriptTag({type: "module", content: `
+      import {createNativeHudLayer} from "${hudUrl}";
+      import {formatSkillCooldown, skillCooldownCssColor} from "${cooldownModelUrl}";
+      import {NATIVE_HUD_HEADER, NATIVE_HUD_ATLAS_SIZE} from "${hudContractUrl}";
+      globalThis.__nativeHudFixture = {createNativeHudLayer, formatSkillCooldown, skillCooldownCssColor,
+        header: NATIVE_HUD_HEADER, size: NATIVE_HUD_ATLAS_SIZE};
+    `});
+    const measurements = await page.evaluate(async (scale) => {
+      const {createNativeHudLayer, formatSkillCooldown, skillCooldownCssColor, header, size} =
+        (globalThis as unknown as {__nativeHudFixture: {
+          createNativeHudLayer: typeof import("../src/renderer/native-hud-layer.js").createNativeHudLayer;
+          formatSkillCooldown: typeof import("../src/shared/skill-cooldowns.js").formatSkillCooldown;
+          skillCooldownCssColor: typeof import("../src/shared/skill-cooldowns.js").skillCooldownCssColor;
+          header: number; size: number;
+        }}).__nativeHudFixture;
+      await document.fonts.load('48px "Guild Wars Original Display"');
+      const memory = new WebAssembly.Memory({initial: 80});
+      const atlas = document.createElement("canvas"); atlas.width = size; atlas.height = size;
+      const atlasContext = atlas.getContext("2d")!;
+      let quads: number[][] = [];
+      const layer = createNativeHudLayer({memory, malloc: () => 1024, free() {},
+        gwonmac_hud_reset() { quads = []; },
+        gwonmac_hud_atlas(region: number) {
+          const bytes = new Uint8Array(memory.buffer, region + 8, size * size * 4);
+          const rgba = new Uint8ClampedArray(bytes.length);
+          for (let n = 0; n < bytes.length; n += 4) {
+            rgba[n] = bytes[n + 2]!; rgba[n + 1] = bytes[n + 1]!;
+            rgba[n + 2] = bytes[n]!; rgba[n + 3] = bytes[n + 3]!;
+          }
+          atlasContext.putImageData(new ImageData(rgba, size, size), 0, 0); return 1;
+        },
+        gwonmac_hud_label(region: number) {
+          const view = new DataView(memory.buffer, region);
+          if (view.getUint32(8, true) !== 0) throw new Error("Unexpected native fixture slot");
+          quads = Array.from({length: view.getUint32(20, true)}, (_, n) =>
+            Array.from({length: 8}, (_, field) => view.getFloat32(header + n * 32 + field * 4, true)));
+          return 1;
+        },
+      }, document);
+      await Promise.resolve(); await Promise.resolve();
+      const paint = (slot: HTMLElement, remainingMs: number,
+        color: Parameters<typeof skillCooldownCssColor>[0], chord = false) => {
+        const width = slot.clientWidth, height = slot.clientHeight;
+        const item = {parent: 1, child: 0, width, height};
+        layer.update("keys", [{...item, binding: {input: {kind: "keyboard", code: chord ? "F12" : "Digit7"},
+          modifiers: {control: chord, option: chord, shift: chord, command: chord}}}]);
+        const text = formatSkillCooldown(remainingMs);
+        layer.update("cooldowns", [text === null ? null : {...item, text, color: skillCooldownCssColor(color)}]);
+        const canvas = document.createElement("canvas"); canvas.className = "native-hud-preview";
+        canvas.width = Math.round(width * scale); canvas.height = Math.round(height * scale);
+        const context = canvas.getContext("2d")!;
+        // Replay the production mesh order: the keycap is first, then glyphs.
+        // This verifies atlas pixels and geometry, not the game's GPU ordering.
+        for (const q of quads) {
+          const [x, y, w, h, u, v, right, bottom] = q as [number, number, number, number, number, number, number, number];
+          if (w > 0 && h > 0) context.drawImage(atlas, u * size, v * size, (right - u) * size, (bottom - v) * size,
+            x * canvas.width, y * canvas.height, w * canvas.width, h * canvas.height);
+        }
+        slot.append(canvas);
+        return {slot: height, quadCount: quads.length, label: text, keycap: chord ? "⌃⌥⇧⌘F12" : "7"};
+      };
       const matrix = document.getElementById("matrix")!;
       const values = [32_000, 14_000, 9_000, 3_000, 2_900, 400, 0];
       const colors = [
@@ -104,26 +154,7 @@ try {
           caption.textContent = remainingMs === 0 ? "ready" : `${remainingMs} ms`;
           fixture.append(slot, caption);
           matrix.append(fixture);
-          const view = createCooldown(slot);
-          view.element.style.setProperty("--skill-cooldown-slot-height", "82px");
-          view.update(remainingMs, color);
-          if (name === "Red" && index === 4) {
-            const key = createBinding(slot);
-            key.element.classList.add("settings-skill-cooldown-preview-key");
-            key.update({
-              input: { kind: "keyboard", code: "F12" },
-              modifiers: { control: true, option: true, shift: true, command: true },
-            });
-          }
-          const rect = view.element.getBoundingClientRect();
-          const glyph = view.element.firstElementChild?.getBoundingClientRect();
-          measured.push({
-            name,
-            remainingMs,
-            slot: rect.height,
-            glyphWidth: glyph?.width ?? null,
-            glyphHeight: glyph?.height ?? null,
-          });
+          measured.push({name, remainingMs, ...paint(slot, remainingMs, color, name === "Red" && index === 4)});
         });
       }
       const sizes = document.getElementById("sizes")!;
@@ -131,13 +162,16 @@ try {
         const slot = document.createElement("span");
         slot.className = `slot ${className}`;
         sizes.append(slot);
-        const view = createCooldown(slot);
-        view.element.style.setProperty("--skill-cooldown-slot-height", `${edge}px`);
-        view.update(2_900, { kind: "preset", preset: "red" });
+        measured.push({name: className, remainingMs: 2900, edge, ...paint(slot, 2900, {kind: "preset", preset: "red"})});
       }
+      layer.dispose();
       return measured;
-    });
+    }, scale);
     await page.evaluate(() => document.fonts.ready);
+    const referenceOutput = path.join(outputDir, `skill-cooldowns-${scale}x-reference.png`);
+    await page.evaluate(() => { document.body.dataset.reference = "true"; });
+    await page.screenshot({path: referenceOutput});
+    await page.evaluate(() => { delete document.body.dataset.reference; });
     const renderedOutput = path.join(outputDir, `skill-cooldowns-${scale}x-rendered.png`);
     const rendered = await page.screenshot({ path: renderedOutput });
     const referencePng = await readFile(referenceOutput);

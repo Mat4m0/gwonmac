@@ -64,8 +64,6 @@ const confirmDelete = ref(false);
 const active = computed(() => resolveCartographyPresetEntry(props.settings.cartographyPresetLibrary));
 const exportValue = computed(() => active.value ? encodeCartographyPreset({ name: active.value.name, style: active.value.style }) : "");
 const lineLabels = {
-  lattice: "Grid lines",
-  current: "Current cell",
   hover: "Hovered cell",
   normalRange: "3×3 range",
   birdsEyeRange: "7×7 range",
@@ -198,11 +196,11 @@ async function updateUnseen(patch: Partial<CartographyPresetStyle["grid"]["unsee
   </div>
   <div class="setting-group map-layers">
     <div class="feature-heading">
-      <label for="map-grid"><strong>Exploration grid</strong><small id="map-grid-help">Mission Map and World Map; marks unexplored cells reachable in this instance.</small></label>
+      <label for="map-grid"><strong>Exploration grid</strong><small id="map-grid-help">Shows remaining exploration on the Mission Map and World Map. Hollow amber markers are estimates.</small></label>
       <ShortcutSetting v-if="shortcuts" action="cartography.grid.toggle" :shortcuts="shortcuts" :api="api" :perform-save="performSave" />
       <input id="map-grid" type="checkbox" aria-label="Exploration grid" aria-describedby="map-grid-help" :checked="settings.cartographyGridEnabled" @change="persist({ cartographyGridEnabled: ($event.currentTarget as HTMLInputElement).checked })" />
     </div>
-    <label><span><strong>Grid on Compass</strong><small>Also show exploration cells on the Compass. Off by default.</small></span><input type="checkbox" :checked="settings.cartographyCompassGridEnabled" :disabled="!settings.cartographyGridEnabled" @change="persist({ cartographyCompassGridEnabled: ($event.currentTarget as HTMLInputElement).checked })" /></label>
+    <label><span><strong>Markers on Compass</strong><small>Show nearby unexplored cells that this map can reveal. Off by default.</small></span><input type="checkbox" :checked="settings.cartographyCompassGridEnabled" :disabled="!settings.cartographyGridEnabled" @change="persist({ cartographyCompassGridEnabled: ($event.currentTarget as HTMLInputElement).checked })" /></label>
     <label><span><strong>Compass ranges</strong><small>Show Shout, Cast, Spirit, and Ext. Spirit range rings.</small></span><input type="checkbox" aria-label="Compass ranges" :checked="settings.compassRangeIndicatorsEnabled" @change="persist({ compassRangeIndicatorsEnabled: ($event.currentTarget as HTMLInputElement).checked })" /></label>
     <details class="compass-range-settings">
       <summary>Configure Compass ranges</summary>
@@ -239,7 +237,7 @@ async function updateUnseen(patch: Partial<CartographyPresetStyle["grid"]["unsee
     <div class="setting-row"><span>Grid outline color</span><ColorControl label="Grid outline color" :value="active.style.grid.casingColor" @change="updateGrid" /></div>
     <div class="setting-row"><span>Unseen cell color</span><ColorControl label="Unseen cell color" :value="active.style.grid.unseen.color" @change="updateUnseen({ color: $event })" /></div>
     <label><span>Unseen cell marker</span><select :value="active.style.grid.unseen.marker" @change="updateUnseen({ marker: ($event.currentTarget as HTMLSelectElement).value as CartographyUnseenMarker })"><option v-for="marker in CARTOGRAPHY_UNSEEN_MARKERS" :key="marker" :value="marker">{{ marker }}</option></select></label>
-    <details class="advanced-map-lines"><summary>Advanced grid lines</summary>
+    <details class="advanced-map-lines"><summary>Inspection outlines</summary>
     <fieldset v-for="(label, key) in lineLabels" :key="key" class="map-line-editor">
       <legend>{{ label }}</legend>
       <div class="setting-row"><span>Color</span><ColorControl :label="`${label} color`" :value="active.style.grid[key].color" @change="updateLine(key, { color: $event })" /></div>

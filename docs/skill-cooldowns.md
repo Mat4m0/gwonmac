@@ -84,21 +84,28 @@ joins the two complete eight-slot records.
 Text updates are bounded by the formatter's visible output. Above three seconds
 the view changes only when the upward-rounded whole second changes. Below three
 seconds it changes only when the upward-rounded tenth changes. Ready skills
-have no label. The complete overlay hides when either source is unavailable,
+have no label. The native labels hide when either source is unavailable,
 stale, malformed, loading, or denied by the existing Tools/PvE policy.
 
 ## Presentation and remaining acceptance
 
-The HUD and Settings preview share
-[`skill-cooldown-view.ts`](../src/renderer/skill-cooldown-view.ts), including
-the extracted `Guild Wars Original Display` font, outline, shadow, optical
-offset, scale, formatter, and color tokens. The one canonical setting accepts
-red, cream, gold, blue, or an exact six-digit custom RGB value.
+The native HUD uses a cached glyph atlas in
+[`native-hud-layer.ts`](../src/renderer/native-hud-layer.ts), the extracted
+`Guild Wars Original Display` font, and the existing formatter and color setting.
+Digits use equal-width cells and centered visible glyph bounds. Changing a digit
+preserves its cell position even when the original font has different widths or
+bearings. Decimal and long labels use smaller scales. The canonical color
+setting accepts red, cream, gold, blue, or an exact six-digit custom RGB value.
 
-[`skill-cooldown-visual.ts`](../scripts/skill-cooldown-visual.ts) creates the
-required duration/color/size/key-coexistence matrix at 1x, 1.5x, and 2x. It can
-place the view over a real native skill crop and writes reference, rendered,
-and difference images. This remains a calibration aid, not live acceptance.
+The atlas allocates on first use. It stays cached across brief idle periods so a
+new cooldown does not need another pixel upload. Repacking for changed artwork
+republishes current geometry and withdraws removed labels.
+
+[`skill-cooldown-visual.ts`](../scripts/skill-cooldown-visual.ts) replays the actual
+native atlas and ordered quads for its duration/color/size/key-coexistence matrix
+at 1x, 1.5x, and 2x. It can place the drawing over a real native skill crop and
+writes reference, rendered, and difference images. It verifies artwork and
+geometry; native GPU ordering and live acceptance remain separate checks.
 
 Live acceptance requires both closed diagnostics and visual confirmation. The
 session must record first observations for skill geometry and cooldowns;
@@ -106,3 +113,8 @@ Settings must show both live states as working; and a recharging skill must show
 the expected number over the correct native slot. Signed bottom-left frame
 coordinates are valid when a slot intersects the viewport, even when one edge
 is negative. Synthetic output alone cannot close this item.
+
+The skill labels and shortcut badges attach to the certified SkillBar's native
+child icons. Their shared drawing lifetime and resource rules are documented
+under [Native drawing](effect-timers.md#native-drawing). There is no positioned
+browser HUD drawing path.

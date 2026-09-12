@@ -85,7 +85,7 @@ describe("Maps settings", () => {
     expect(wrapper.text()).toContain("Layers and styles for every account");
     expect(wrapper.text()).toContain("World Map");
     expect(wrapper.text()).toContain("Exploration grid");
-    expect(wrapper.text()).toContain("unexplored cells reachable in this instance");
+    expect(wrapper.text()).toContain("nearby unexplored cells that this map can reveal");
     expect(wrapper.text()).toContain("Walkable terrain");
     expect(wrapper.text()).not.toContain("Other-map route");
 

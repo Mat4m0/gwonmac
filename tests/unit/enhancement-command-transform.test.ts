@@ -257,6 +257,7 @@ describe("Enhancement command transform", () => {
       playerEffectObservation: false,
     effectIconGeometry: false,
     alcoholObservation: false,
+    nativeHudRendering: false,
     resignAction: false,
     whisperChat: false,
     } as const;

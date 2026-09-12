@@ -3,8 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const rendererSources = [
-  "src/renderer/skill-cooldown-view.ts",
-  "src/renderer/skill-cooldown-overlay.ts",
+  "src/renderer/native-hud-layer.ts",
   "src/renderer/skill-cooldown-overlay-consumer.ts",
   "src/renderer/skill-cooldown-state-installation.ts",
   "src/renderer/skill-overlays-installation.ts",

@@ -143,6 +143,7 @@ export const TARGET_ONLY: EnhancementCapabilities = Object.freeze({
   playerEffectObservation: false,
     effectIconGeometry: false,
     alcoholObservation: false,
+    nativeHudRendering: false,
     resignAction: false,
     whisperChat: false,
 });
@@ -164,6 +165,7 @@ export const TOOLBOX_PROGRAM_CAPABILITIES: EnhancementCapabilities = Object.free
   playerEffectObservation: false,
     effectIconGeometry: false,
     alcoholObservation: false,
+    nativeHudRendering: false,
     resignAction: false,
     whisperChat: false,
 });
@@ -185,6 +187,7 @@ export const PRODUCT_TOOLS_CAPABILITIES: EnhancementCapabilities = Object.freeze
   playerEffectObservation: false,
     effectIconGeometry: false,
     alcoholObservation: false,
+    nativeHudRendering: false,
     resignAction: false,
     whisperChat: false,
 });
@@ -206,6 +209,7 @@ export const TARGET_OFF_PRODUCT_CAPABILITIES: EnhancementCapabilities = Object.f
   playerEffectObservation: false,
     effectIconGeometry: false,
     alcoholObservation: false,
+    nativeHudRendering: false,
     resignAction: false,
     whisperChat: false,
 });

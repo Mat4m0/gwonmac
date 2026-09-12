@@ -3,6 +3,7 @@
  * certified geometry and recharge feeds. Native ownership stays in the feed
  * installations; this module owns only their shared settings/policy lifecycle.
  */
+import type { NativeHudLayer } from "./native-hud-layer.js";
 import { COMPANION_FEATURE_BITS } from "../shared/companion-abi.js";
 import type { AppSettings } from "../shared/contracts.js";
 import type { EnhancementCapabilities } from "../shared/enhancement-contracts.js";
@@ -18,7 +19,7 @@ type SkillFeaturePolicy = Readonly<{
 }>;
 
 export function createSkillOverlaysInstallation(
-  capabilities: Pick<EnhancementCapabilities, "skillSlotGeometry" | "skillCooldownObservation">,
+  capabilities: Pick<EnhancementCapabilities, "skillSlotGeometry" | "skillCooldownObservation" | "nativeHudRendering">,
 ) {
   const geometry = createSkillSlotGeometryInstallation(capabilities.skillSlotGeometry);
   const cooldowns = createSkillCooldownObservationInstallation(
@@ -40,24 +41,25 @@ export function createSkillOverlaysInstallation(
         ? COMPANION_FEATURE_BITS.skillCooldownObservation
         : 0),
     get activeFeatureFlags() { return activeFeatureFlags; },
-    mount(parent: HTMLElement, settings: SkillSettings) {
-      if (!capabilities.skillSlotGeometry || keyConsumer !== null) return;
+    mount(parent: HTMLElement, settings: SkillSettings, hud: NativeHudLayer) {
+      if (!capabilities.nativeHudRendering || !capabilities.skillSlotGeometry || keyConsumer !== null) return;
       const canvas = parent.ownerDocument.getElementById("canvas");
       if (!(canvas instanceof HTMLCanvasElement)) {
         throw new Error("Enhancement skill overlay target is missing");
       }
-      keyConsumer = createSkillKeyOverlayConsumer(parent, canvas);
+      keyConsumer = createSkillKeyOverlayConsumer(parent, canvas, hud);
       unsubscribeKeyGeometry = geometry.subscribe(keyConsumer.update);
       if (!capabilities.skillCooldownObservation) return;
-      cooldownConsumer = createSkillCooldownOverlayConsumer(parent, canvas);
+      cooldownConsumer = createSkillCooldownOverlayConsumer(parent, canvas, hud);
       cooldownConsumer.sync(settings.skillCooldownColor, false);
       unsubscribeCooldownGeometry = geometry.subscribe(cooldownConsumer.update);
       unsubscribeCooldownState = cooldowns.subscribe(cooldownConsumer.setCooldownState);
     },
     sync(settings: SkillSettings, policy: SkillFeaturePolicy) {
-      const geometryActive = policy.skillKeyLabels || policy.skillCooldowns;
+      const geometryActive = capabilities.nativeHudRendering && (policy.skillKeyLabels || policy.skillCooldowns);
+      const cooldownActive = capabilities.nativeHudRendering && policy.skillCooldowns;
       geometry.setActive(geometryActive);
-      cooldowns.setActive(policy.skillCooldowns);
+      cooldowns.setActive(cooldownActive);
       keyConsumer?.setBindings(settings.skillKeyBindings);
       keyConsumer?.setEnabled(policy.skillKeyLabels);
       cooldownConsumer?.sync(settings.skillCooldownColor, policy.skillCooldowns);
@@ -67,7 +69,7 @@ export function createSkillOverlaysInstallation(
           ? COMPANION_FEATURE_BITS.skillSlotGeometry
           : 0
       ) | (
-        capabilities.skillCooldownObservation && policy.skillCooldowns
+        capabilities.skillCooldownObservation && cooldownActive
           ? COMPANION_FEATURE_BITS.skillCooldownObservation
           : 0
       );

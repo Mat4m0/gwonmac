@@ -50,6 +50,7 @@ function projectCompatibility(
       playerEffectObservation: status("playerEffectObservation"),
       effectIconGeometry: status("effectIconGeometry"),
       alcoholObservation: status("alcoholObservation"),
+      nativeHudRendering: status("nativeHudRendering"),
       resignAction: status("resignAction"),
       whisperChat: status("whisperChat"),
       playRegionObservation: status("playRegionObservation"),
