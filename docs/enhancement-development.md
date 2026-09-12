@@ -164,7 +164,8 @@ layout facts remain restricted to the exact reviewed client.
 
 ## Use the cheapest proof
 
-Use this order:
+Choose the boundary needed to verify the change; this is not a sequence every
+task must complete:
 
 ```text
 pure unit or transform test
@@ -174,17 +175,26 @@ pure unit or transform test
   -> one bounded live scenario
 ```
 
-Most work must finish the first four levels without an ArenaNet request. A live
-run confirms semantics. It is not the first debugger.
+Presentation using supplied observations can be checked without a playable
+client. The [offline Electron fixture](../tests/electron/fixtures.mts) and
+[alcohol positioning tests](../tests/electron/alcohol-timer.spec.ts) show that
+boundary. Use the playable fixture when client readiness itself matters, and a
+live scenario when actual native behavior cannot be established offline.
 
-Start with:
+For changing overlay layout, preview populated and empty states, the longest
+valid label, and relevant small geometry. Passing text assertions does not prove
+that labels fit or that appearing icons leave a saved position stable.
+
+Start with the owning tests and build-free discovery as needed:
 
 ```bash
 pnpm certification doctor
-pnpm run check
-pnpm build
-pnpm test:integration
+pnpm enhancements:live --list
 ```
+
+Run `pnpm run check` for the final change. Build before verifying changed
+compiled behavior; run integration or live checks for the affected boundary.
+See [client research](client-research.md) for inspection and source lookup.
 
 `certification doctor` reads the local profile and published client. It does not
 start Electron. It does not contact ArenaNet. It cannot inspect provisioned
@@ -304,19 +314,22 @@ because macOS can consume a physical modifier release while Command is held.
 
 ## Add or change a feature
 
-For each field, observer, widget, or command:
+Establish the requested behavior and its failure behavior, then extend the
+existing domain owner. Reusing accepted observations or changing host-only UI
+does not require new native facts, a snapshot region, or a live scenario.
 
-1. Write the user-visible behavior.
-2. Write the failure behavior.
-3. Name the invariant that proves the behavior.
-4. Find candidate facts with static analysis or bounded typed observation.
-5. Add a build-local fact only after evidence supports it.
-6. Test valid, loading, absent, corrupt, torn, and non-finite inputs as
-   applicable.
-7. Extend or version one bounded snapshot region.
-8. Add the presentation through its domain owner.
-9. Run one live scenario that changes the real value.
-10. Record any remaining semantic gap in the relevant internal evidence file.
+For new native behavior, find candidate facts through static analysis or bounded
+typed observation. Use the extension contract below for production integration.
+Exercise valid and relevant loading, absent, corrupt, torn, and non-finite input
+cases. Verify real value changes in a bounded live scenario where fixtures cannot
+establish semantics; retain any remaining gap in the domain's evidence file.
+
+An investigation can first run a small, reversible control that resolves the
+deciding uncertainty. Keep memory bounds, artifact identity and session ownership
+intact, but do not require complete production integration before testing
+feasibility. Distinguish what the experiment demonstrated from the remaining
+shipping requirements. Record a useful rejected hypothesis or next unresolved
+question when it will prevent repeated work; no fixed report template is needed.
 
 Do not add a renderer pointer chain, parallel JavaScript probe, general memory
 write, arbitrary game call, raw packet export, or renderer-side copy of the
@@ -335,7 +348,7 @@ Use only the layers the feature needs:
 | --- | --- | --- |
 | Saved player choice | [`AppSettings` and `DEFAULT_SETTINGS`](../src/shared/contracts.ts), plus [`parseSettings` and `parseSettingsPatch`](../src/main/core/settings.ts) | Add one shape, durable default, and strict full/patch parser only when the feature needs player configuration. |
 | Product activation and coarse region rule | [`FEATURE_SELECTION_POLICIES`](../src/shared/feature-contracts.ts) | Add one stable `FeatureId`. The runtime policy must project that exact ID. |
-| Certified client support | [`enhancement-contracts.ts`](../src/shared/enhancement-contracts.ts) and `src/main/certification/` | Add an independently provable capability. A product setting cannot grant native authority. |
+| Certified client support | [`enhancement-contracts.ts`](../src/shared/enhancement-contracts.ts) and `src/main/certification/` | Add an independently provable capability. Keep defaults, validators and verifier consumers aligned; the [typed verifier fixture](../tests/electron/fixtures/local-verifier-app/main.mjs) uses canonical defaults instead of a second complete capability list. A product setting cannot grant native authority. |
 | Fixed native publication | [`createCompanionRegionInstallation`](../src/renderer/companion-region-installation.ts) | Own allocation, activation withdrawal, freshness, and disposal for one bounded region. |
 | Live settings and map policy | [`createCompanionPolicySource`](../src/renderer/companion-policy-source.ts) | Consume one immutable snapshot. Do not subscribe to Settings or classify play regions again. |
 | Domain behavior | A named renderer or command module | Own decoding, formatting, state transitions, and user-facing refusal in the feature domain. |

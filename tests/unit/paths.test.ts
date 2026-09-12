@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { describe, it } from "node:test";
 import {
   clientArtifactPath,
@@ -6,10 +9,37 @@ import {
   diagnosticFramesPath,
   documentDirectories,
   gamePaths,
+  matchesExpectedProfile,
   multiProfilePaths,
   unpackedPath,
 } from "../../src/main/core/paths.ts";
 import { parseProfileId } from "../../src/shared/multiple-accounts.ts";
+
+describe("development profile identity", () => {
+  it("accepts an alias of the same profile and refuses other or unresolved profiles", async () => {
+    const temporary = await mkdtemp(path.join(os.tmpdir(), "gw-profile-identity-"));
+    try {
+      const actual = path.join(temporary, "profile");
+      const alias = path.join(temporary, "alias");
+      const other = path.join(temporary, "other");
+      await mkdir(actual);
+      await mkdir(other);
+      await symlink(actual, alias, "dir");
+      assert.equal(await matchesExpectedProfile(actual, undefined), true);
+      assert.equal(await matchesExpectedProfile(actual, `${actual}//`), true);
+      assert.equal(await matchesExpectedProfile(actual, other), false);
+      assert.equal(await matchesExpectedProfile(actual, path.join(temporary, "missing")), false);
+      assert.equal(await matchesExpectedProfile(actual, alias), true);
+      assert.equal(await matchesExpectedProfile(alias, actual), true);
+      await rm(actual, { recursive: true });
+      assert.equal(await matchesExpectedProfile(alias, alias), false, "dangling aliases cannot establish identity");
+    } finally { await rm(temporary, { recursive: true, force: true }); }
+  });
+
+  it("refuses an explicitly empty expected profile instead of disabling the check", async () => {
+    assert.equal(await matchesExpectedProfile(process.cwd(), ""), false);
+  });
+});
 
 // Every value below is a literal on purpose. A refactor may move where a path
 // is *constructed*; it may not change what the path *is*. `game/chunks` holds

@@ -17,6 +17,7 @@ its rules.
 | How does Trade Chat discovery work? | [Trade Chat discovery](trade-discovery.md) |
 | What can diagnostics record and export? | [Diagnostics](diagnostics.md) |
 | How do agents develop, branch, stabilize, and roll out changes? | [Development and rollout](development-workflow.md) |
+| Where are feature examples, reference sources, and cheap inspection commands? | [Client research](client-research.md) |
 | How do I change or recertify an Enhancement? | [Enhancement development](enhancement-development.md) |
 | How does the whisper companion stay in sync with original chat? | [Whispers](whispers.md) |
 | How are player skill cooldowns certified and displayed? | [Skill cooldowns](skill-cooldowns.md) |
