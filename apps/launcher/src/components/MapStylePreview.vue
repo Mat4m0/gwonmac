@@ -8,7 +8,7 @@ const boundary = "M0 120 L50 90 L92 104 L138 54 L190 70 L230 28 L320 40";
 
 <template>
   <figure class="map-preview">
-    <svg viewBox="0 0 320 160" role="img" aria-label="Illustrative map style: shaded terrain, border, grid lines, current cell, and unexplored marker">
+    <svg viewBox="0 0 320 160" role="img" aria-label="Illustrative map style: shaded terrain, border, hovered cell, and remaining exploration marker">
       <rect width="320" height="160" fill="#343d33" />
       <g :opacity="terrainOpacity / 100">
         <path :d="`${boundary} L320 0 L0 0 Z`" :fill="style.walkability.veilColor" />
@@ -19,8 +19,7 @@ const boundary = "M0 120 L50 90 L92 104 L138 54 L190 70 L230 28 L320 40";
       </g>
       <g :opacity="gridOpacity / 100" fill="none">
         <template v-for="casing in [true, false]" :key="String(casing)">
-          <path v-if="style.grid.lattice.width > 0" d="M40 0V160 M80 0V160 M120 0V160 M160 0V160 M200 0V160 M240 0V160 M280 0V160 M0 40H320 M0 80H320 M0 120H320" :stroke="casing ? style.grid.casingColor : style.grid.lattice.color" :stroke-width="style.grid.lattice.width + (casing ? 2 : 0)" :stroke-dasharray="dashes[style.grid.lattice.pattern]" />
-          <rect x="160" y="80" width="40" height="40" :stroke="casing ? style.grid.casingColor : style.grid.current.color" :stroke-width="style.grid.current.width + (casing && style.grid.current.width > 0 ? 2 : 0)" :stroke-dasharray="dashes[style.grid.current.pattern]" />
+          <rect x="160" y="80" width="40" height="40" :stroke="casing ? style.grid.casingColor : style.grid.hover.color" :stroke-width="style.grid.hover.width + (casing && style.grid.hover.width > 0 ? 2 : 0)" :stroke-dasharray="dashes[style.grid.hover.pattern]" />
         </template>
         <g :stroke="style.grid.unseen.color" :fill="style.grid.unseen.color">
           <path v-if="style.grid.unseen.marker === 'diamond'" d="M260 90L270 100L260 110L250 100Z" />
@@ -31,7 +30,7 @@ const boundary = "M0 120 L50 90 L92 104 L138 54 L190 70 L230 28 L320 40";
         </g>
       </g>
     </svg>
-    <figcaption>Style preview · illustrative terrain. Layer visibility is controlled above.</figcaption>
+    <figcaption>Style preview · markers show what remains. Cell outlines appear on hover.</figcaption>
   </figure>
 </template>
 

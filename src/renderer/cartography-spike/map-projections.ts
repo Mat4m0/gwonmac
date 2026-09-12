@@ -217,18 +217,6 @@ function projectTerrain(
   });
 }
 
-export function projectTerrainToCompass(input: Readonly<{
-  box: ScreenBox;
-  terrain: WalkableTerrainSurface;
-  playerMapX: number;
-  playerMapY: number;
-  directionX: number;
-  directionY: number;
-}>): InverseMaskProjection | null {
-  const projection = projectMapUnitsToCompass(input);
-  return projection === null ? null : projectTerrain(projection, input.terrain);
-}
-
 export function projectTerrainToMissionMap(input: Readonly<{
   frame: MissionMapFrameSpikeSnapshot;
   box: ScreenBox;
