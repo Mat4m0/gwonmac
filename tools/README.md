@@ -50,10 +50,11 @@ builder also gives the arity and payload size that the analysis must verify.
 
 ## Certification command
 
-`pnpm certification` is the maintainer interface to the production
-certification code:
+`pnpm certification` runs the current source without building the app. It is
+the maintainer interface to the production certification code:
 
 ```text
+inspect        inventory local WASM bytes without granting runtime authority
 doctor         inspect the local cached workspace
 template       derive or check the template-save record
 recertify      report Enhancement candidates and evidence
@@ -70,3 +71,6 @@ The application owns the complete transform chain in
 `src/main/certification/client-module.ts`. Analysis output and
 `certificates/certified-client.json` do not grant runtime authority. See the
 [Enhancement runbook](../docs/enhancement-development.md) before a live run.
+
+Use [client research](../docs/client-research.md) to locate reference clones and
+discover live scenarios without building or launching the app.

@@ -301,7 +301,7 @@ test("a new client build can be re-certified without hand-derivation", async () 
   assert.doesNotMatch(locator, /formatBuildEntry|compareToCertified/);
   assert.equal(
     manifest.scripts?.["certification"],
-    "pnpm build && node build/tools/certification.js",
+    "node --import ./scripts/ts-hook.mjs src/tools/certification.ts",
   );
 
   // Derivation must stay shape-based. A remembered index would defeat the point.

@@ -69,11 +69,26 @@ application path and disposable profile:
 ```bash
 pnpm build &&
   dev_profile=$(mktemp -d "${TMPDIR:-/tmp}/gwonmac-dev.XXXXXX") &&
-  GW_BACKGROUND_LAUNCH=0 pnpm exec electron "$PWD" --user-data-dir="$dev_profile"
+  test -n "$dev_profile" &&
+  GW_BACKGROUND_LAUNCH=0 GW_EXPECT_USER_DATA="$dev_profile" \
+    pnpm exec electron "$PWD" --user-data-dir="$dev_profile"
 ```
 
 Reuse that profile during the task. It may download game data; saved login is
 memory-only. Do not copy player data without authorization.
+
+`GW_EXPECT_USER_DATA` checks the actual profile before client preparation.
+Aliases such as `/var` and `/private/var` resolve to the same existing directory;
+an empty, missing, dangling, or different expected path refuses preparation.
+Do not remove this assertion to work around a profile mismatch.
+
+For a cached-only check, first provision the authorized game artifacts and
+chunks in that profile, then add `GW_REQUIRE_CACHED_CLIENT=1` to the launch.
+Use `pnpm certification doctor --profile "$dev_profile"` to inspect readiness.
+Cache provisioning does not require copying account settings or credentials.
+Keep logs, screenshots, and the profile path in ignored `test-results/`, outside
+`build/`: the build command deletes that directory. Do not redirect into the
+same file that a command is reading to recover its profile path.
 
 Use `cua.getState()` for discovery. Confirm the process working directory and
 profile, then attach through its debugger or exact running app path. App lookup

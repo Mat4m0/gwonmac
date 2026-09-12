@@ -2,11 +2,10 @@
 // its code artifacts on disk. This is what the recertification workflow asks
 // before it decides whether anything needs deriving.
 //
-// It is not part of the certification chain and deliberately not a
-// `certification` subcommand: `pnpm certification` builds the companion kernel
-// first, because the Enhancement transform embeds it. Detection must cost a
-// manifest fetch and nothing else, so this runs straight off the TypeScript
-// loader with no build, no installed packages, and no client bytes.
+// Acquisition is separate from certification: detection needs only a manifest
+// fetch, not the installed client or a transform. Like the certification CLI,
+// this uses the TypeScript loader without building the app. Detection also
+// needs no installed packages or client bytes.
 //
 // The identity it compares is the JSPI code generation — `Gw.jspi.js` and
 // `Gw.jspi.wasm` — and not `clientFingerprint`, which additionally covers

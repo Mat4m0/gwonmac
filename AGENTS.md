@@ -4,7 +4,10 @@ Read this file before you change the repository. It defines how coding agents
 must work in gwonmac.
 
 Use [docs/README.md](docs/README.md) to find the document that owns a subsystem.
-Read the owning document and the executable tests before you edit code.
+Read the sections and executable examples relevant to the changed behavior.
+
+For client feature work, the repository [gwonmac-feature skill](.agents/skills/gwonmac-feature/SKILL.md)
+routes to existing owners, research evidence, and build-free inspection.
 
 ## Goal
 
@@ -33,17 +36,12 @@ registry, or compatibility path, answer these questions:
 Matthias coordinates the project. Agents execute repository work. Do not make
 him reconstruct repository state or guess the next command.
 
-For every task, an agent must:
-
-1. Inspect the current branch, worktree, recent commits, and applicable CI.
-2. Classify the task as normal development, release stabilization, or an
-   emergency Stable patch.
-3. Read the owning document and existing tests.
-4. State any assumption that changes scope or release risk.
-5. Implement the smallest complete outcome.
-6. Run focused checks, then the applicable local repository gate.
-7. Review the complete diff for unrelated changes and missing cleanup.
-8. Report the outcome, evidence, remaining risk, and one clear next action.
+Before changing code, inspect the branch and worktree so unrelated work stays
+intact. Use the normal development path unless the task concerns a release or
+emergency Stable patch; inspect the corresponding history and CI when relevant.
+Carry authorized work through implementation, relevant verification, diff review,
+and cleanup. Report the outcome, evidence, remaining risk, and next action.
+State assumptions that change scope or release risk.
 
 Agents own investigation, implementation, automated verification, diff review,
 pull-request preparation, and CI diagnosis. Matthias owns product priority,
@@ -302,14 +300,8 @@ Use signed, packaged, live-client, or release-only tests only for invariants
 that the cheaper layer cannot prove. Do not turn a one-time migration story
 into a permanent default test.
 
-Before you finish, check:
-
-- Did you create a second source of truth?
-- Did you leave the old path behind?
-- Did you add structure without a second consumer?
-- Did you make failure or debugging harder?
-- Did you change a trust boundary without an executable refusal test?
-- Did you update the one document that owns the behavior?
+Changed trust boundaries need executable refusal tests. Keep the owning document
+consistent with behavior and remove obsolete paths introduced by the change.
 
 ## Documentation style
 

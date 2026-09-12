@@ -12,9 +12,24 @@
  * `src/main/paths.ts`.
  */
 import path from "node:path";
+import { realpath } from "node:fs/promises";
 import type { CLIENT_ARTIFACTS } from "./access-key.js";
 import type { ProfileId } from "../../shared/multiple-accounts.js";
 import { clientGenerationPaths } from "./client-compatibility.js";
+
+/** Verify the developer's requested profile before starting client preparation. */
+export async function matchesExpectedProfile(actual: string, expected: string | undefined): Promise<boolean> {
+  if (expected === undefined) return true;
+  if (expected === "") return false;
+  try {
+    // Electron can canonicalize /var to /private/var on macOS. Compare the
+    // existing directories, while refusing missing or dangling profile paths.
+    const [actualPath, expectedPath] = await Promise.all([realpath(actual), realpath(expected)]);
+    return actualPath === expectedPath;
+  } catch {
+    return false;
+  }
+}
 
 export interface GamePaths {
   userData: string;

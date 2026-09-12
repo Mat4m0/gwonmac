@@ -81,7 +81,7 @@ import {
   wireLifecycle,
 } from "./lifecycle.js";
 import { sweepOrphanDirectories } from "./core/atomic-file.js";
-import { documentDirectories } from "./core/paths.js";
+import { documentDirectories, matchesExpectedProfile } from "./core/paths.js";
 import { gamePaths } from "./paths.js";
 import {
   DEVELOPER_ENHANCEMENT_PROGRAM,
@@ -679,9 +679,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     ? nativeHost
     : new VolatileNativeKeychain();
   const expectedUserData = process.env.GW_EXPECT_USER_DATA;
-  const profileMatches =
-    !expectedUserData ||
-    path.resolve(expectedUserData) === path.resolve(app.getPath("userData"));
+  const profileMatches = await matchesExpectedProfile(app.getPath("userData"), expectedUserData);
   const clientRuntime = new ClientRuntime({
     paths,
     hostVersion: HOST_VERSION,

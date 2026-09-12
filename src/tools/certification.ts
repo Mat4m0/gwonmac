@@ -23,7 +23,7 @@
  * finding.
  */
 import { createHash } from "node:crypto";
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile, open } from "node:fs/promises";
 import path from "node:path";
 import { writeAtomic } from "../main/core/atomic-file.js";
 import {
@@ -70,8 +70,11 @@ import {
   formatCarryForwardMarkdown,
 } from "./carry-forward.js";
 
+import { inspectWasmBytes } from "./wasm-inspection.js";
+
 const USAGE =
   "usage: certification <command>\n"
+  + "  inspect [PATH/Gw.jspi.wasm]          inventory local bytes; no runtime authority\n"
   + "  doctor [--profile PATH]              why Enhancement is or is not running here\n"
   + "  recertify [PATH/Gw.jspi.wasm]        draft an Enhancement build entry, with evidence\n"
   + "  verify [PATH/Gw.jspi.wasm]           run the exact runtime feature verifier\n"
@@ -106,6 +109,52 @@ function argumentValue(argv: readonly string[], name: string): string | null {
 
 function positionalArguments(argv: readonly string[]): string[] {
   return argv.filter((argument) => !argument.startsWith("--"));
+}
+
+/** Inventory bytes without executing client code or guessing their origin. */
+async function inspect(argv: readonly string[]): Promise<void> {
+  const refuse = (reason: string, exitCode = 1) => {
+    process.stdout.write(`${JSON.stringify({ formatVersion: 1, status: "refused", runtimeAuthority: false, reason })}\n`);
+    process.exitCode = exitCode;
+  };
+  if (argv.length > 1 || argv.some((arg) => arg.startsWith("--"))) {
+    refuse("usage: inspect [PATH/Gw.jspi.wasm]", 2);
+    return;
+  }
+  // Bound file allocation even if a supplied file grows after stat. The input
+  // is only evidence; no path or hash implies official or synthetic provenance.
+  const maximumBytes = 64 * 1024 * 1024;
+  let bytes: Uint8Array;
+  try {
+    const file = await open(argv[0] ?? installedClientArtifact(), "r");
+    try {
+      const stat = await file.stat();
+      if (!stat.isFile()) { refuse("cannot-read"); return; }
+      if (stat.size > maximumBytes) { refuse("input-too-large"); return; }
+      const buffer = Buffer.alloc(stat.size + 1);
+      let length = 0;
+      while (length < buffer.length) {
+        const read = await file.read(buffer, length, buffer.length - length, length);
+        if (read.bytesRead === 0) break;
+        length += read.bytesRead;
+      }
+      if (length !== stat.size) { refuse("input-changed"); return; }
+      bytes = new Uint8Array(buffer.subarray(0, length));
+    } finally { await file.close(); }
+  } catch { refuse("cannot-read"); return; }
+  try {
+    const module = inspectWasmBytes(bytes);
+    if (module === null) { refuse("invalid-wasm"); return; }
+    process.stdout.write(`${JSON.stringify({
+      formatVersion: 1, status: "ok", runtimeAuthority: false,
+      artifact: {
+        selection: argv[0] === undefined ? "cached-client-path" : "supplied-path",
+        provenance: "unverified",
+        sha256: createHash("sha256").update(bytes).digest("hex"), bytes: bytes.byteLength,
+      },
+      module,
+    })}\n`);
+  } catch { refuse("unsupported-module-shape"); }
 }
 
 async function doctor(argv: readonly string[]): Promise<void> {
@@ -444,6 +493,7 @@ async function cartography(argv: readonly string[]): Promise<void> {
 }
 
 const COMMANDS = Object.freeze({
+  inspect,
   doctor,
   recertify,
   verify,

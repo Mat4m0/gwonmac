@@ -1,9 +1,8 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Readable } from "node:stream";
 import { fileURLToPath } from "node:url";
-import { chromium } from "playwright";
 import type { Browser, BrowserContext, Page } from "playwright";
 // The sources, not `build/`. Importing the compiled copy made the contract a
 // second source of truth: a stale `build/` typechecked against a
@@ -16,6 +15,7 @@ import {
 } from "../src/tools/enhancement-workspace.js";
 import type { AutomationCommand } from "../src/shared/automation.js";
 import {
+  SCENARIOS,
   liveRunPlan,
   liveRunRefusal,
   scenarioContext,
@@ -33,6 +33,25 @@ import {
 } from "./enhancements-live/result.js";
 
 type Shutdown = { code: number | null; signal: NodeJS.Signals | null };
+
+// Discovery reads the same scenario definitions as execution, before importing
+// Playwright, inspecting a profile, building, or acquiring any live capability.
+const discoveryArgs = process.argv.slice(2).filter((value) => value !== "--");
+if (discoveryArgs.includes("--list") || discoveryArgs.includes("--describe")) {
+  const [operation, name] = discoveryArgs;
+  const list = operation === "--list" && discoveryArgs.length === 1;
+  const describe = operation === "--describe" && discoveryArgs.length === 2
+    && name !== undefined && Object.hasOwn(SCENARIOS, name);
+  if (!list && !describe) {
+    console.error("usage: enhancements:live --list | --describe SCENARIO");
+    process.exit(2);
+  }
+  const scenarios = Object.entries(SCENARIOS)
+    .filter(([key]) => list || key === name)
+    .map(([key, { tier, program, readiness }]) => ({ name: key, tier, program, readiness }));
+  console.log(JSON.stringify({ formatVersion: 1, scenarios }));
+  process.exit(0);
+}
 
 if (process.env.GW_LIVE_SMOKE !== "1") {
   console.error("enhancements:live requires GW_LIVE_SMOKE=1");
@@ -64,6 +83,17 @@ if (!plan) {
 }
 const selectedScenario = plan.scenario;
 const privacySensitive = plan.name === "character-switch";
+// Discovery exits above. Live execution keeps the existing build-before-
+// preflight order so profile ownership is checked after the potentially long build.
+const build = spawnSync(process.execPath, ["scripts/build.mjs"], {
+  cwd: root, stdio: "inherit",
+});
+if (build.error || build.status !== 0) {
+  console.error("enhancements:live build failed");
+  process.exit(build.status ?? 1);
+}
+const { chromium } = await import("playwright");
+
 const profileOwner = await activeProfileOwner(userData);
 if (profileOwner !== null) {
   console.error(JSON.stringify({
