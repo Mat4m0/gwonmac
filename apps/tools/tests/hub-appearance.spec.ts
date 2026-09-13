@@ -4,6 +4,10 @@ for (const ratio of [1, 2]) {
   test.describe(`Classic frame at ${ratio}×`, () => {
     test.use({ deviceScaleFactor: ratio, viewport: { width: 1280, height: 720 } });
     test('artwork remains decorative and leaves saved opacity in control', async ({ page }, info) => {
+      // Hosted Macs can prefer reduced transparency. Exercise both material
+      // modes explicitly instead of inheriting the machine's accessibility setting.
+      const media = await page.context().newCDPSession(page);
+      await media.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-transparency', value: 'no-preference' }] });
       await page.goto('/?hub');
       const frame = page.locator('#hub .ui-frame-artwork');
       await expect(page.locator('.hub-panel')).toHaveClass(/ui-art-frame/);
@@ -25,6 +29,11 @@ for (const ratio of [1, 2]) {
       await page.evaluate(() => window.gwApplyFixtureAppearance?.({ uiStyle: 'guild-wars', uiPanelOpacity: 65 }));
       await expect.poll(() => page.locator('.hub-panel').evaluate(element => getComputedStyle(element, '::before').backgroundColor)).toMatch(/0\.65\)/);
       await page.screenshot({ path: info.outputPath('classic-home-65.png') });
+      await media.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-transparency', value: 'reduce' }] });
+      await expect.poll(() => page.locator('.hub-panel').evaluate(element => getComputedStyle(element, '::before').backgroundColor)).toBe('rgb(8, 8, 7)');
+      expect(await page.evaluate(() => document.documentElement.style.getPropertyValue('--ui-panel-opacity'))).toBe('0.65');
+      await media.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-transparency', value: 'no-preference' }] });
+      await expect.poll(() => page.locator('.hub-panel').evaluate(element => getComputedStyle(element, '::before').backgroundColor)).toMatch(/0\.65\)/);
       await page.evaluate(() => window.gwApplyFixtureAppearance?.({ uiStyle: 'obsidian', uiPanelOpacity: 100 }));
       await expect(frame).toBeHidden();
       expect(await page.locator('.hub-panel').boundingBox()).toEqual(box);
