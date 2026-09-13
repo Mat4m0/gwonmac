@@ -561,3 +561,35 @@ The browser preview remains at `http://127.0.0.1:4194/?hub`. Verification did no
 rebuild the primary checkout or restart its game. The earlier playtest process
 was no longer running at the final check. These checks do not establish live
 gameplay acceptance. No push, merge or release was performed.
+
+## Incoming and equipped build comparison — 13 September 2026
+
+`4a132bbb` keeps the incoming build above the target search. It shows the name,
+eight skills, professions and invested attributes. Target rows show the current
+player or hero observations in the same format. Missing observations do not use
+saved builds or the incoming bar as a substitute.
+
+Right Arrow opens build, folder and target details without applying. Selecting a
+hero opens its comparison; Apply remains explicit. History restores the incoming
+build, query and target selection. Observation changes preserve result focus and
+remove unavailable current bars.
+
+The repository gate passed types, lint, links, 1,756 unit, 182 policy, 208 Tools
+and 81 Launcher checks. The complete browser suite passed 106 checks. Six focused
+comparison checks then passed, including two added viewport cases at 320×800 and
+640×500. Final test-source type checks and lint also passed. Logs are
+`/tmp/gwonmac-hub-comparison-check.log`,
+`/tmp/gwonmac-hub-comparison-browser-all.log` and
+`/tmp/gwonmac-hub-comparison-responsive.log`.
+
+Computer-use inspection confirmed the player comparison, hero list and individual
+hero comparison. Desktop and compact screenshots are retained in ignored
+`test-results/hub-build-comparison/`. The preview remains at
+`http://127.0.0.1:4194/?hub`. These screenshots and apply checks use synthetic
+observations; no live gameplay acceptance is claimed.
+
+A fresh production build passed the compiled Electron Hub check, including
+Right Arrow into native template browsing, Back and zoomed frame geometry.
+Logs are `/tmp/gwonmac-hub-comparison-build.log` and
+`/tmp/gwonmac-hub-comparison-electron.log`. The disposable verification checkout
+was removed after the test completed. No push, merge or release occurred.
