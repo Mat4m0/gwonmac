@@ -593,3 +593,28 @@ Right Arrow into native template browsing, Back and zoomed frame geometry.
 Logs are `/tmp/gwonmac-hub-comparison-build.log` and
 `/tmp/gwonmac-hub-comparison-electron.log`. The disposable verification checkout
 was removed after the test completed. No push, merge or release occurred.
+
+## Compact attributes and Tango professions — 13 September 2026
+
+Individual build results no longer reserve a lower preview or display template
+file paths. The incoming summary, equipped comparisons and saved library rows
+show abbreviated attribute ranks grouped under one Tango icon per profession.
+Thin dividers separate ranks. Full names remain in tooltips and accessible labels.
+One shared asset set also supplies Character Switch, profession filters and
+Trader views; original sources and GFDL notices are in the third-party notice.
+
+`pnpm check` passed types, lint, links, 1,757 unit, 182 policy, 208 Tools and
+81 Launcher checks. The full browser run passed 109 of 110 checks; the remaining
+new image-load assertion ran before the asset finished loading. It now waits
+for decoded artwork. All eight focused Hub build checks passed after the final
+grouping change, covering that assertion, 320px/1280px results, 320×800/640×500
+comparisons, keyboard navigation and explicit application. Logs are
+`/tmp/hub-polish-check.log`, `/tmp/hub-polish-browser.log` and
+`/tmp/hub-polish-grouped.log`.
+
+Computer-use inspection covered grouped Hub results, the incoming/current
+comparison, Build Library and Character Switch. Compact browser screenshots
+were also inspected. Evidence is in ignored `test-results/hub-compact-builds/`.
+The fixture preview remains at `http://127.0.0.1:4194/?hub`.
+These checks use synthetic observations. No new native or live-game check,
+production rebuild, push or release was performed for this presentation change.

@@ -1,5 +1,6 @@
 /** Hub presentation over the existing library controller and bounded apply owners. */
 import { watch } from 'vue';
+import { buildAttributes, buildProfessions } from '../../../src/shared/builds/presentation';
 import { hubMatch, parseHubQuery, type HubPresenter, type HubRow, type HubSource } from '../../../src/shared/hub';
 import { buildId, type Build, type Team, type HeroId } from '../../../src/shared/builds/library';
 import { heroLabel, PROFESSIONS } from '../../../src/shared/builds/heroes';
@@ -38,8 +39,9 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
     const party = host.party.value;
     const member = party.status === 'ready' ? hero === null ? party.player : party.heroes.find(member => member.hero === hero) : null;
     return {
-      detail: member ? `${member.skills ? 'Current build' : 'Current build not available'} · ${member.professions?.filter(Boolean).join('/') ?? 'Professions not available'}` : 'Current build not available',
-      ...(member?.skills ? { skills: skillPreview({ skills: member.skills }), skillDetails: attributesPreview(member.attributes) } : {}),
+      detail: member?.skills ? 'Current build' : 'Current build not available',
+      professions: buildProfessions(member?.professions ?? []),
+      ...(member?.skills ? { skills: skillPreview({ skills: member.skills }), attributes: buildAttributes(member.attributes ?? {}), ...(member.attributes === null ? { attributeStatus: 'Attributes not available' } : {}) } : {}),
     };
   };
   const preview = (item: Item) => item.kind === 'build' ? buildPreview(item.value)
@@ -100,7 +102,7 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
   }
   function chooseBuild(item: Item & { kind: 'build' }) {
     const expected = revision(item);
-    const summary = { label: 'Build to apply', title: item.value.name, detail: buildPreview(item.value), skills: skillPreview(item.value) };
+    const summary = { label: 'Build to apply', title: item.value.name, detail: '', skills: skillPreview(item.value), attributes: buildAttributes(item.value.attributes), professions: buildProfessions(item.value.professions) };
     const unavailable = (hero: HeroId | null) => {
       const latest = current(item);
       return !latest || revision(latest) !== expected ? 'This saved build changed. Go back and select it again.' : assess(item, hero);
@@ -142,9 +144,9 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
     return (skills < 0 ? parts : parts.slice(skills + 1)).join('/');
   };
   const buildRow = (item: Item & { kind: 'build' }): HubRow => ({
-    id: `build:${item.value.id}`, title: item.value.name, detail: `${item.value.professions.filter(Boolean).join('/')} · ${item.value.origin ?? 'Saved builds'}`,
+    id: `build:${item.value.id}`, title: item.value.name, detail: '', professions: buildProfessions(item.value.professions),
     keywords: [item.value.professions[0], PROFESSIONS[item.value.professions[0]].name, ...item.value.tags].join(' '),
-    group: 'Builds', preview: buildPreview(item.value), skills: skillPreview(item.value), action: 'Choose target', navigate: () => chooseBuild(item), run: () => chooseBuild(item), actions: () => chooseBuild(item),
+    group: 'Builds', attributes: buildAttributes(item.value.attributes), skills: skillPreview(item.value), action: 'Choose target', navigate: () => chooseBuild(item), run: () => chooseBuild(item), actions: () => chooseBuild(item),
   });
   function browseTemplates(folder: string | null = null) {
     hub.showRows(folder === null ? 'Guild Wars templates' : folder || 'Skills', () => {

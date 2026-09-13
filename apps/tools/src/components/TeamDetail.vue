@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ProfessionIcon from "./ProfessionIcon.vue";
 import { computed, nextTick, ref, watch } from "vue";
 import { HEROES_IN_PANEL_ORDER } from "../../../../src/shared/builds/heroes";
 import {
@@ -386,7 +387,7 @@ defineExpose({
                 ? buildById(controller.library.value, slot.build)?.professions[0]
                 : undefined"
             >
-              {{ teamMemberLabel(slot.hero, index)[0] }}
+              <ProfessionIcon v-if="slot.build && controller.library.value" :profession="buildById(controller.library.value, slot.build)?.professions[0]" /><template v-else>{{ teamMemberLabel(slot.hero, index)[0] }}</template>
             </span>
             <span v-if="index === 0" class="player-identity">
               <strong>You</strong>

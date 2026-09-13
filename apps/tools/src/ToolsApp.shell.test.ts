@@ -35,7 +35,8 @@ describe("ToolsApp shell and library", () => {
   it("makes build lineage, usage, favourites, and catalogue labels explicit", async () => {
     const wrapper = await workbench();
     await wrapper.get("#builds-library-tab").trigger("click");
-    expect(wrapper.findAll(".library-row")[0]!.text()).toContain("Mo/Me");
+    expect(wrapper.findAll(".library-row")[0]!.findAll(".profession-icon").map(icon => icon.attributes("alt"))).toEqual(["Monk", "Mesmer"]);
+    expect(wrapper.findAll(".library-row")[0]!.findAll(".build-attribute-group > img")).toHaveLength(1);
     expect(wrapper.findAll(".library-row")[0]!.text()).toContain("Used by 2 teams");
     expect(wrapper.findAll(".library-row")[1]!.text()).toContain(
       "Based on Word of Healing · 8 changes",

@@ -141,7 +141,9 @@ test('exact build has a visible target and does not apply while typing', async (
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
   await search.fill('build smiter');
   await expect(page.getByRole('button', { name: 'Choose target ↵' })).toBeEnabled();
-  await expect(page.locator('.hub-preview')).toContainText('Mo/Me');
+  await expect(page.locator('.hub-preview')).toBeHidden();
+  await expect(page.locator('.hub-build-row')).not.toContainText('Templates/Skills');
+  await expect(page.locator('.hub-build-row').getByRole('img', { name: 'Healing Prayers 12', exact: true })).toBeVisible();
   await expect(page.locator('.hub-preview')).not.toContainText('Templates/Skills');
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', /command|apply/);
   await search.press('Enter');

@@ -174,6 +174,34 @@ export function createHub(parent: HTMLElement) {
     });
     return bar;
   }
+  function renderBuildInfo(row: Pick<HubRow, 'skills' | 'attributes' | 'attributeStatus'>) {
+    const info = document.createElement('span'); info.className = 'hub-build-info';
+    if (row.skills) info.append(renderSkillBar(row.skills));
+    const attributes = document.createElement('span'); attributes.className = 'hub-attributes';
+    for (const group of row.attributes ?? []) {
+      const cluster = document.createElement('span'); cluster.className = 'hub-attribute-group';
+      const icon = document.createElement('img'); icon.src = group.icon; icon.alt = group.name; icon.title = group.name;
+      cluster.append(icon);
+      for (const attribute of group.attributes) {
+        const chip = document.createElement('span'); chip.className = 'hub-attribute';
+        chip.title = `${attribute.name} ${attribute.rank}`;
+        chip.setAttribute('role', 'img'); chip.setAttribute('aria-label', chip.title);
+        const rank = document.createElement('b'); rank.textContent = String(attribute.rank);
+        chip.append(attribute.label, rank); cluster.append(chip);
+      }
+      attributes.append(cluster);
+    }
+    if (row.attributeStatus) attributes.textContent = row.attributeStatus;
+    info.append(attributes); return info;
+  }
+  function renderProfessions(professions: NonNullable<HubRow['professions']>) {
+    const pair = document.createElement('span'); pair.className = 'hub-professions';
+    for (const profession of professions) {
+      const icon = document.createElement('img'); icon.src = profession.icon;
+      icon.alt = profession.name; icon.title = profession.name; pair.append(icon);
+    }
+    return pair;
+  }
   let renderedSummary: HubSummary | undefined;
   function paintNavigation() {
     const summary = disposeView ? undefined : scope?.summary;
@@ -185,9 +213,11 @@ export function createHub(parent: HTMLElement) {
         const label = document.createElement('span'); label.className = 'hub-summary-label'; label.textContent = summary.label;
         const name = document.createElement('strong'); name.textContent = summary.title;
         const detail = document.createElement('p'); detail.textContent = summary.detail;
-        summaryPanel.append(label, name);
-        if (summary.skills) summaryPanel.append(renderSkillBar(summary.skills));
-        summaryPanel.append(detail);
+        summaryPanel.append(label);
+        if (summary.professions) name.prepend(renderProfessions(summary.professions));
+        summaryPanel.append(name);
+        if (summary.skills) summaryPanel.append(renderBuildInfo(summary));
+        if (summary.detail) summaryPanel.append(detail);
       }
     }
     const currentTitle = activeView?.title ?? scope?.title ?? 'Home';
@@ -260,7 +290,7 @@ export function createHub(parent: HTMLElement) {
       const previous = previousRows[index];
       return previous && row.id === previous.id && row.title === previous.title
         && row.detail === previous.detail && row.group === previous.group
-        && row.action === previous.action && row.unavailable === previous.unavailable && row.preview === previous.preview && row.skillDetails === previous.skillDetails && JSON.stringify(row.skills) === JSON.stringify(previous.skills);
+        && row.action === previous.action && row.unavailable === previous.unavailable && row.preview === previous.preview && row.attributeStatus === previous.attributeStatus && JSON.stringify([row.skills, row.attributes, row.professions]) === JSON.stringify([previous.skills, previous.attributes, previous.professions]);
     })) { select(selected); return; }
     const hadRowFocus = list.contains(document.activeElement);
     list.replaceChildren();
@@ -292,11 +322,11 @@ export function createHub(parent: HTMLElement) {
         if (shortcut) for (const key of shortcutKeycaps(bindings[shortcut])) {
           const cap = document.createElement('kbd'); cap.className = 'ui-kbd'; cap.textContent = key.label; cap.setAttribute('aria-label', key.name); type.append(cap);
         }
-        option.append(hubIcon(document, row), title, detail, type);
+        option.append(row.professions?.length ? renderProfessions(row.professions) : hubIcon(document, row), title, detail, type);
+        detail.hidden = !detail.textContent;
         if (row.skills) {
           option.classList.add('hub-build-row');
-          option.append(renderSkillBar(row.skills));
-          if (row.skillDetails) { const details = document.createElement('span'); details.className = 'hub-skill-details'; details.textContent = row.skillDetails; option.append(details); }
+          option.append(renderBuildInfo(row));
         }
       }
       option.addEventListener('pointermove', () => select(row.id));

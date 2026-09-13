@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import BuildAttributes from "./components/BuildAttributes.vue";
+import ProfessionIcon from "./components/ProfessionIcon.vue";
 import {
   computed,
   nextTick,
@@ -446,11 +448,12 @@ useClassicFrame(panel);
                   {{ value.name }}
                 </span>
                 <em v-if="'mode' in value">{{ value.mode === "hard" ? "Hard" : value.mode === "normal" ? "Normal" : "Unspecified" }}</em>
-                <em v-else>{{ value.professions.join("/") }}</em>
+                <span v-else><ProfessionIcon v-for="profession in value.professions.filter(Boolean)" :key="profession!" :profession="profession" /></span>
               </span>
 
               <template v-if="'skills' in value">
                 <SkillBar :skills="value.skills" :catalogue="controller.skills" compact />
+                <BuildAttributes :attributes="value.attributes" />
                 <span v-if="value.parent" class="row-meta">
                   {{
                     buildById(controller.library.value, value.parent)
@@ -473,7 +476,7 @@ useClassicFrame(panel);
                     :data-empty="slot.build ? undefined : ''"
                     :title="teamMemberLabel(slot.hero, index)"
                   >
-                    {{ slot.build ? buildById(controller.library.value, slot.build)?.professions[0] : "–" }}
+                    <ProfessionIcon v-if="slot.build" :profession="buildById(controller.library.value, slot.build)?.professions[0]" /><template v-else>–</template>
                   </i>
                 </span>
                 <span class="row-meta">

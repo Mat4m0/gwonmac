@@ -316,7 +316,21 @@
 .hub-summary-label { display:block; color:var(--ui-accent); font-size:11px; margin-bottom:4px; }
 .hub-summary strong { color:var(--ui-text-bright); font-weight:600; }
 .hub-summary p { margin:8px 0 0; color:var(--ui-text-muted); font-size:12px; white-space:pre-line; }
-.hub-skill-details { grid-column:2; color:var(--ui-text-muted); font-size:11px; line-height:1.5; padding-top:6px; }
+.hub-build-info { grid-column:2; display:flex; align-items:center; flex-wrap:wrap; gap:10px 16px; min-width:0; margin-top:8px; }
+.hub-build-info .hub-skill-bar { margin-top:0; flex-shrink:0; }
+.hub-attributes { display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; color:var(--ui-text-muted); font-size:12px; }
+.hub-attribute { display:inline-flex; align-items:center; gap:4px; white-space:nowrap; }
+.hub-attribute-group > img { width:18px; height:18px; object-fit:contain; }
+.hub-attribute b { color:var(--ui-text); font-variant-numeric:tabular-nums; font-weight:600; }
+.hub-professions { display:inline-flex; align-items:center; gap:1px; }
+.hub-professions img { width:22px; height:22px; object-fit:contain; }
+.hub-row > .hub-professions { grid-column:1; grid-row:1 / span 2; position:relative; width:34px; height:34px; }
+.hub-row > .hub-professions img:first-child { width:30px; height:30px; align-self:flex-start; }
+.hub-row > .hub-professions img + img { position:absolute; right:-3px; bottom:-2px; width:20px; height:20px; }
+.hub-summary strong { display:flex; align-items:center; gap:8px; }
 @media(max-height:600px) { .hub-summary { padding-block:5px; } .hub-summary p { margin-top:4px; } .hub-summary .hub-skill-bar { margin-top:4px; } }
 .hub-summary .hub-skill-bar, .hub-row .hub-skill-bar { display:grid; grid-template-columns:repeat(8,minmax(0,1fr)); width:min(100%,284px); }
 .hub-summary .hub-skill, .hub-row .hub-skill { width:100%; height:auto; aspect-ratio:1; }
+
+.hub-attribute-group { display:inline-flex; align-items:center; flex-wrap:wrap; gap:5px; max-width:100%; }
+.hub-attribute + .hub-attribute::before { content:""; height:10px; border-left:1px solid var(--ui-edge); margin-inline:2px 3px; }

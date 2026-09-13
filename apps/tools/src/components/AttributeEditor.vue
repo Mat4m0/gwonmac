@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ProfessionIcon from "./ProfessionIcon.vue";
 import { computed } from "vue";
 import {
   attributePointsRemaining,
@@ -150,7 +151,7 @@ function onRankKeydown(attribute: Attribute, event: KeyboardEvent): void {
 
     <div class="attribute-groups">
       <section>
-        <h3>{{ PROFESSIONS[editor.draft.value.professions[0]].name }}</h3>
+        <h3><ProfessionIcon :profession="editor.draft.value.professions[0]" /> {{ PROFESSIONS[editor.draft.value.professions[0]].name }}</h3>
         <div class="attribute-lines">
           <div
             v-for="attribute in primaryAttributes"
@@ -198,7 +199,7 @@ function onRankKeydown(attribute: Attribute, event: KeyboardEvent): void {
       </section>
 
       <section v-if="editor.draft.value.professions[1]">
-        <h3>{{ PROFESSIONS[editor.draft.value.professions[1]].name }}</h3>
+        <h3><ProfessionIcon :profession="editor.draft.value.professions[1]" /> {{ PROFESSIONS[editor.draft.value.professions[1]].name }}</h3>
         <div class="attribute-lines">
           <div
             v-for="attribute in secondaryAttributes"

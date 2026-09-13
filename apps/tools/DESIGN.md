@@ -300,3 +300,15 @@ or transcript. There is no docking control or embedded Hub chat layout.
 Maps pairs each native switch with its opacity control. Disabled layers retain
 but disable opacity controls. External settings updates repaint the same view;
 failed writes restore saved state and show a recoverable inline error.
+
+### Compact build metadata
+
+Hub build results keep the skill bar and invested attribute ranks in each row.
+There is no separate lower preview for individual builds and no visible template
+file path. Incoming and equipped comparisons use the same compact presentation.
+Attributes are grouped under one Tango icon per profession, with abbreviated
+labels and ranks separated by fine dividers; tooltips and
+accessible names retain the full attribute name. Labels distinguish Illusion
+Magic (IM) from Inspiration Magic (InM). Narrow windows wrap attributes below
+the eight skills. Profession artwork has one shared Tango asset set for Hub,
+Character Switch, Builds, Elite Skills and Trader views.

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ProfessionIcon from "./ProfessionIcon.vue";
 import { computed } from "vue";
 import type { LiveParty } from "../../../../src/shared/builds/live-party";
 import { heroLabel } from "../../../../src/shared/builds/heroes";
@@ -65,7 +66,7 @@ const canCapture = computed(() =>
             to Guard, which is a real setting somebody might act on.
           -->
             <span v-if="hero.professions" class="live-party-meta">
-              {{ hero.professions[1] ? `${hero.professions[0]}/${hero.professions[1]}` : hero.professions[0] }}
+              <ProfessionIcon :profession="hero.professions[0]" /><ProfessionIcon :profession="hero.professions[1]" />
             </span>
             <span v-if="hero.behaviour" class="ui-chip live-party-behaviour">
               {{ BEHAVIOUR_LABELS[hero.behaviour] }}
