@@ -2,6 +2,13 @@
 
 Research and delivery plan — 12 September 2026.
 
+**Amended after Matthias's in-game review on 13 September:** Trade, Builds
+(including reviews) and Whispers always use floating windows. Hub now has
+ancestor breadcrumbs, Backspace history navigation, directional focus, and a
+locked-by-default movable/resizable frame. These decisions supersede the
+original docking and fixed-size proposals below. The current interaction owner
+is [Tools design](../apps/tools/DESIGN.md#hub-task-presentation).
+
 Implementation completed locally across the three review layers. See the
 [verification record](hub-verification.md#unified-hub-candidate--12-september-2026)
 for acceptance evidence, exact checks and the remaining native review.
@@ -47,8 +54,8 @@ Use the same visual language in three presentation forms:
 | Form | Suitable work | Behavior |
 | --- | --- | --- |
 | Search result or compact review | Destination, character, saved build/team, conversion, person | Search, inspect, choose a named action |
-| View inside Hub | Travel, Characters, Whispers, settings, build/team authoring, Trade | Fixed outer frame; content scrolls or changes pane inside it |
-| Floating tool | Ongoing chat, longer Trade or Library work | Reuse feature state; return to Hub without losing the task |
+| View inside Hub | Travel, Characters, settings and utilities | User-sized frame; content scrolls or changes pane inside it |
+| Floating tool | All Whispers, Trade, Library editing and build/team review | Reuse feature state across hide/show; no docking control |
 
 One visual system does not require every tool to use the same content layout. Travel needs destinations; Characters needs a carousel; chat needs a transcript; Trade needs a ledger; builds need skill slots. Reuse their frames, type roles, controls, focus states and navigation conventions.
 

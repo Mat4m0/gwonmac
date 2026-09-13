@@ -70,8 +70,9 @@ weight families use the same semantic weight tokens at 500, 600, and 700.
   centre preserves one application of the saved panel material and opacity.
   Source regions and asset notices are in the
   [frame provenance](../../src/shared/ui/frame/README.md).
-- Embed tools without another outer frame, close control or resize grip.
-  Reparent the existing tool and preserve its state when docking or detaching.
+- Keep Travel, Characters and settings inside Hub. Trade, Build Library and
+  Whispers always open as independent floating windows, including Hub searches
+  and direct shortcuts. Their existing owners preserve state across hide/show.
 - Use `.ui-well` for a recessed content surface.
 - Use `.ui-raised` for a pressable raised surface.
 - Do not add a generic Card. Panes, sidebars, toolbars, and sections are
@@ -242,25 +243,42 @@ with tighter spacing. Keep settings and explanatory copy out of the transcript.
 
 ## Hub task presentation
 
-Home shows current character and outpost context in its caption. Continue shows
+Home shows current character and outpost context beside its breadcrumbs. Continue shows
 up to three actionable recent destinations. Explicit searches retain unavailable
 places with their reason. User pins keep their existing order and availability.
 Tool rows show meaningful descriptions and resolved shortcut keycaps.
 
-Back names its parent. Actions only opens contextual actions; it never means
-Back. Known query scopes stay visible, and typing a command name offers one
+The top bar shows clickable ancestor breadcrumbs and an understated Back arrow.
+Backspace returns to the previous page when no text is being edited; an empty
+search can also go Back. History restores the query, selection and scroll.
+Arrow keys connect results, search, navigation and actions. Character cards use
+Left/Right; Up returns to search, then to Back. Native text editing, range and
+select controls retain their own keys. Actions only opens contextual actions. Known query scopes stay visible, and typing a command name offers one
 relevant example. Neither examples nor typing execute an action.
 
 Full team search previews show the difficulty and one line per assigned member.
 Skill and attribute details remain available in Review. Template paths stay out
-of these primary summaries. Preview content scrolls inside the fixed frame.
+of these primary summaries. Preview content scrolls inside the current frame.
+Review opens in the floating Library and retains explicit target/apply guards.
 Team authoring keeps the roster first; Team options expands difficulty and tags,
 with the current difficulty visible in its summary.
 
-Embedded Trade uses the Hub heading and keeps connection state beside result
-counts. Common filters share a row when width permits. Secondary actions expand
-inside the inspector without replacing the ledger. Pop out and Open in Hub move
-the existing Trade or Library surface and preserve its selected item and edits.
+Floating Trade keeps connection state beside result counts. Common filters share
+a row when width permits. Secondary actions expand inside the inspector without
+replacing the ledger. Opening a seller's Whisper leaves the Trade query and
+selected offer intact. Floating windows share visual and keyboard stacking.
+Escape closes an expanded Actions menu before its window.
+
+Hub and floating tools start locked. A subtle top-bar lock enables dragging by
+the header and resizing through a 36px corner hit area. Classic uses its corner
+artwork without painting a second resize button. Close is a plain X with a usable
+hit target and visible keyboard focus. Hub retains its adjusted geometry across
+pages; windows remain bounded by the viewport. Alt+arrows on Hub's unlocked lock
+control move it; arrows on its resize handle resize it.
+
+Whispers paints its background once across the complete frame interior. Its
+title is vertically centered, and conversation controls sit above the picker
+or transcript. There is no docking control or embedded Hub chat layout.
 
 Maps pairs each native switch with its opacity control. Disabled layers retain
 but disable opacity controls. External settings updates repaint the same view;

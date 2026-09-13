@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import UiWindowLock from "./ui/UiWindowLock.vue";
 import {
   computed,
   nextTick,
@@ -34,7 +35,6 @@ import { navigateRows, navigateTabs } from "./tab-keyboard";
 import { useClassicFrame } from "./ui/use-classic-frame";
 import { useFloatingWindow } from "./use-floating-window";
 
-const openInHub = () => window.dispatchEvent(new CustomEvent("gw:tools-toggle", { cancelable: true, detail: "show" }));
 
 const props = defineProps<{
   host: ToolsHost;
@@ -49,11 +49,25 @@ const emit = defineEmits<{
 }>();
 
 const controller = useLibrary(props.host);
-const hubLibrary = props.hub ? createHubLibrary(controller, props.host, props.hub) : null;
+const review = shallowRef<{ title: string; mount: Parameters<HubPresenter<HTMLElement>['showView']>[1] } | null>(null);
+const reviewHost = ref<HTMLElement | null>(null);
+let disposeReview: (() => void) | undefined;
+watch([review, reviewHost], () => {
+  disposeReview?.(); disposeReview = undefined;
+  if (review.value && reviewHost.value) disposeReview = review.value.mount(reviewHost.value, () => { review.value = null; });
+}, { flush: 'post' });
+onBeforeUnmount(() => disposeReview?.());
+const hubLibrary = props.hub ? createHubLibrary(controller, props.host, {
+  ...props.hub,
+  showView(title, mount) {
+    window.dispatchEvent(new CustomEvent('gw:tools-toggle', { cancelable: true, detail: 'show' }));
+    navigate(() => { review.value = { title, mount }; });
+  },
+}) : null;
 onBeforeUnmount(() => hubLibrary?.dispose());
 const search = ref<HTMLInputElement | null>(null);
 const mobileView = ref<"list" | "detail">("list");
-const { panel, resizeGrip, panelStyle, startDrag } = useFloatingWindow({
+const { panel, resizeGrip, panelStyle, startDrag, locked } = useFloatingWindow({
   mode: props.mode,
   visible: toRef(props, "visible"),
   initialPosition: { left: 28, top: 42 },
@@ -263,7 +277,7 @@ useClassicFrame(panel);
     <section
       ref="panel"
       class="ui-frame ui-panel tools-window"
-      :style="panelStyle"
+      :style="panelStyle" :data-locked="locked"
       aria-label="Build Library"
       role="dialog"
     >
@@ -281,10 +295,10 @@ useClassicFrame(panel);
           :aria-label="host.storageUnavailable ?? 'Open Xunlai Storage'"
           @click="openStorage"
         >{{ openingStorage ? "Opening…" : "Storage" }}</button>
-        <button v-if="mode === 'embedded'" class="ui-button tool-return-action" data-variant="quiet" @click="openInHub">Open in Hub</button>
+        <UiWindowLock v-if="mode === 'embedded'" v-model="locked" />
         <button
           v-if="mode === 'embedded'"
-          class="ui-button window-close"
+          class="ui-window-close window-close"
           data-icon
           aria-label="Close Build Library"
           @click="requestClose"
@@ -293,6 +307,11 @@ useClassicFrame(panel);
         </button>
       </header>
 
+      <section v-if="review" class="library-review ui-scroll" aria-label="Build review">
+        <button class="ui-button" data-variant="quiet" @click="review = null">← Library</button>
+        <div ref="reviewHost" />
+      </section>
+      <template v-else>
       <div v-if="storageProblem" class="ui-banner" data-tone="warning" role="alert">
         {{ storageProblem }}
       </div>
@@ -581,6 +600,7 @@ useClassicFrame(panel);
         </div>
       </Transition>
 
+      </template>
       <UiDialog
         :open="pendingNavigation !== null"
         class="leave-dialog"
@@ -691,7 +711,7 @@ useClassicFrame(panel);
       <button
         v-if="mode === 'embedded'"
         type="button"
-        class="ui-resize-grip"
+        v-show="!locked" class="ui-resize-grip"
         aria-label="Resize Build Library"
         ref="resizeGrip"
       />

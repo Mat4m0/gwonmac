@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import UiWindowLock from "./ui/UiWindowLock.vue";
 import {
   computed,
   nextTick,
@@ -30,7 +31,6 @@ import { useFloatingWindow } from "./use-floating-window";
 import TradeIcon from "./TradeIcon.vue";
 import TraderPrices from "./components/TraderPrices.vue";
 
-const openInHub = () => window.dispatchEvent(new CustomEvent("gw:trade-toggle", { cancelable: true, detail: "show" }));
 
 const props = defineProps<{
   host: TradeHost;
@@ -102,7 +102,7 @@ const states = reactive<Record<TradeSource, SourceState>>({
   kamadan: state(),
   "pre-searing": state(),
 });
-const { panel, resizeGrip, panelStyle, startDrag } = useFloatingWindow({
+const { panel, resizeGrip, panelStyle, startDrag, locked } = useFloatingWindow({
   mode: props.mode,
   visible: toRef(props, "visible"),
   initialPosition: { left: 64, top: 54 },
@@ -617,7 +617,7 @@ useClassicFrame(panel);
     <section
       ref="panel"
       class="ui-frame ui-panel tools-window trade-window"
-      :style="panelStyle"
+      :style="panelStyle" :data-locked="locked"
       role="dialog"
       aria-label="Trade Chat"
       data-design-contract="trade-ledger-v1"
@@ -632,10 +632,10 @@ useClassicFrame(panel);
           <h1 class="ui-panel-title">{{ view === "prices" ? "Trader Prices" : `${sourceLabel} Trade` }}</h1>
           <p class="ui-field-hint">{{ view === "prices" ? "Current Guild Wars trader quotes · history from Kamadan" : "Public trade feed · listings are posted in Guild Wars" }}</p>
         </div>
-        <button v-if="mode === 'embedded'" class="ui-button tool-return-action" data-variant="quiet" @click="openInHub">Open in Hub</button>
+        <UiWindowLock v-if="mode === 'embedded'" v-model="locked" />
         <button
           v-if="mode === 'embedded'"
-          class="ui-button window-close"
+          class="ui-window-close window-close"
           data-icon
           aria-label="Close Trade Chat"
           @click="emit('close')"
@@ -917,7 +917,7 @@ useClassicFrame(panel);
         v-if="mode === 'embedded'"
         ref="resizeGrip"
         type="button"
-        class="ui-resize-grip"
+        v-show="!locked" class="ui-resize-grip"
         aria-label="Resize Trade Chat"
       />
     </section>

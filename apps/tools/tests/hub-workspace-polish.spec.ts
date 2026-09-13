@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('Trade gives the ledger space and retains its offer through actions and docking', async ({ page }, info) => {
+test('Trade gives the ledger space and retains its offer through actions and reopening', async ({ page }, info) => {
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
@@ -22,13 +22,10 @@ test('Trade gives the ledger space and retains its offer through actions and doc
   await page.locator('.offer-actions > summary').press('Escape');
   await expect(page.locator('.offer-actions')).not.toHaveAttribute('open');
   await expect(inspector).toBeVisible();
-  await page.getByRole('button', { name: 'Pop out', exact: true }).click();
   await expect(page.locator('#hub')).not.toBeVisible();
-  await expect(inspector).toBeVisible();
-  await page.getByRole('button', { name: 'Open in Hub', exact: true }).click();
-  await expect(page.locator('#hub')).toBeVisible();
+  await page.getByRole('button', { name: 'Close Trade Chat', exact: true }).click();
+  await page.keyboard.press('Meta+k');
   await expect(inspector).toContainText('105 consets');
-  await expect(page.locator('.hub-back')).toBeHidden();
   await expect(page.getByRole('button', { name: 'Whisper Silver Wayfarer', exact: true })).toBeInViewport();
   await page.screenshot({ path: info.outputPath('trade.png') });
 });
@@ -53,8 +50,8 @@ test('team authoring prioritizes the roster while options and persisted edits st
   await expect(page.locator('.team-options > summary')).toContainText('Normal Mode');
   await page.locator('.team-options > summary').click();
   await expect(page.locator('.team-actions')).toContainText('update 8 builds');
-  await page.getByRole('button', { name: 'Pop out', exact: true }).click();
-  await page.getByRole('button', { name: 'Open in Hub', exact: true }).click();
+  await page.getByRole('button', { name: 'Close Build Library', exact: true }).click();
+  await page.keyboard.press('Meta+b');
   await expect(page.getByRole('textbox', { name: 'Team name', exact: true })).toHaveValue('GOM AFK');
   await expect(page.locator('.team-options > summary')).toContainText('Normal Mode');
   await page.screenshot({ path: info.outputPath('team-editor.png') });

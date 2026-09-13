@@ -24,7 +24,7 @@ for (const viewport of [{ width: 1280, height: 720 }, { width: 390, height: 650 
 
 test('Home separates current context, teaches commands, and shows resolved shortcuts', async ({ page }) => {
   await page.goto('/?hub');
-  await expect(page.locator('.hub-caption')).toContainText("Lion's Arch");
+  await expect(page.locator('.hub-context')).toContainText("Lion's Arch");
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
   await search.fill('trade');
   await expect(page.locator('.hub-hint')).toContainText('trade arms');
@@ -37,7 +37,7 @@ test('Home separates current context, teaches commands, and shows resolved short
   await expect(page.locator('.hub-scope')).toHaveText('team');
   await page.getByRole('button', { name: 'Actions', exact: true }).click();
   await expect(page.locator('.hub-actions')).toBeHidden();
-  await expect(page.getByRole('button', { name: 'Back', exact: true })).toContainText('Back to Home');
+  await expect(page.getByRole('button', { name: 'Back', exact: true })).toHaveAttribute('title', 'Back to Home');
   await page.getByRole('button', { name: 'Back', exact: true }).click();
   await expect(search).toHaveValue('team gom afk');
 });

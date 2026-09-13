@@ -1432,3 +1432,26 @@ button.ui-chip[aria-disabled="true"] {
   color: var(--ui-chat-outgoing-ink);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-chat-outgoing-accent) 24%, transparent);
 }
+
+/* Window chrome keeps large interaction targets without a second painted button. */
+.ui-window-close, .ui-window-lock, .hub-crumb {
+  appearance:none; border:0; background:transparent; box-shadow:none; color:var(--ui-text-muted);
+  display:inline-flex; align-items:center; justify-content:center; padding:0; flex:none;
+  cursor:pointer; font:inherit; min-width:28px; min-height:28px;
+}
+.ui-window-close { font-size:22px; line-height:1; }
+.ui-window-close:hover, .ui-window-lock:hover, .hub-crumb:hover { color:var(--ui-text-bright); }
+.ui-window-close:focus-visible, .ui-window-lock:focus-visible, .hub-crumb:focus-visible { outline:1px solid var(--ui-focus); outline-offset:-2px; }
+.ui-window-lock svg { width:15px; height:15px; fill:none; stroke:currentColor; stroke-width:1.6; }
+[data-locked=false] .lock-shackle { transform:translateY(-2px); }
+.ui-window-resize { position:absolute; bottom:0; right:0; width:36px; height:36px; border:0; padding:0; background:transparent; box-shadow:none; cursor:nwse-resize; z-index:var(--ui-z-title); }
+.ui-window-resize:focus-visible { outline:1px solid var(--ui-focus); outline-offset:-5px; }
+[data-locked=true] > .ui-window-head { cursor:default; }
+[data-locked=false] > .ui-window-head { cursor:grab; touch-action:none; }
+/* The Classic frame already supplies the corner artwork. */
+.ui-art-frame > .ui-resize-grip { width:36px; height:36px; border:0; background:transparent; box-shadow:none; }
+.ui-art-frame > .ui-resize-grip:focus-visible { background:transparent; }
+.ui-window-resize::after, .ui-art-frame > .ui-resize-grip::after {
+  content:''; display:var(--ui-art-corners); position:absolute; right:6px; bottom:6px;
+  width:12px; height:12px; background:repeating-linear-gradient(135deg, transparent 0 3px, var(--ui-text-muted) 3px 4px); clip-path:polygon(100% 0,100% 100%,0 100%);
+}

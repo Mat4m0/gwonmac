@@ -6,7 +6,7 @@ import { useFloatingWindow } from "./use-floating-window";
 
 const storageKey = "test.floating-window-placement";
 
-function mountWindow() {
+function mountWindow(unlocked = false) {
   return mount(defineComponent({
     setup() {
       const floating = useFloatingWindow({
@@ -18,6 +18,7 @@ function mountWindow() {
         viewportMargin: 32,
         placementStorageKey: storageKey,
       });
+      floating.locked.value = !unlocked;
       return () => h("section", {
         ref: floating.panel,
         style: floating.panelStyle.value,
@@ -58,9 +59,18 @@ afterEach(() => {
 });
 
 describe("useFloatingWindow", () => {
-  it("restores resized and moved geometry after the document unloads", async () => {
+  it("starts locked and refuses resizing until unlocked", async () => {
     vi.spyOn(window, "requestAnimationFrame").mockReturnValue(1);
     const wrapper = mountWindow();
+    const panel = wrapper.get("section").element as HTMLElement;
+    giveWindowGeometry(panel);
+    await wrapper.get("button").trigger("keydown", { key: "ArrowLeft" });
+    expect(panel.style.width).toBe("");
+    wrapper.unmount();
+  });
+  it("restores resized and moved geometry after the document unloads", async () => {
+    vi.spyOn(window, "requestAnimationFrame").mockReturnValue(1);
+    const wrapper = mountWindow(true);
     const panel = wrapper.get("section").element as HTMLElement;
     giveWindowGeometry(panel);
 

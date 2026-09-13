@@ -2,6 +2,7 @@
  * Owns the Core command palette, its search focus and transient modal lifetime.
  * Optional Tools contributes local results and views without entering Core's imports.
  */
+import { installHubWindow } from './hub-window.js';
 import { attachClassicFrame } from '../shared/ui/frame.js';
 import { resolveShortcuts, shortcutKeycaps, type ShortcutAction } from '../shared/keyboard-shortcuts.js';
 import { openHubSettings } from "./hub-settings.js";
@@ -20,11 +21,12 @@ export function createHub(parent: HTMLElement) {
   root.dataset.page = "home";
   root.setAttribute('aria-label', 'Hub');
   root.innerHTML = `<section class="hub-panel ui-frame">
-    <header class="hub-heading ui-window-head"><button class="ui-button hub-back" data-variant="quiet" aria-label="Back" hidden>← Back</button><span class="hub-name">Hub</span><span class="hub-caption">Home</span><button class="ui-button hub-close" data-icon aria-label="Close Hub" title="Close Hub">×</button></header>
+    <header class="hub-heading ui-window-head"><button class="ui-button hub-back" data-variant="quiet" aria-label="Back" hidden>← Back</button><span class="hub-name">Hub</span><nav class="hub-breadcrumbs" aria-label="Hub breadcrumb"><span class="hub-caption">Home</span></nav><span class="hub-context"></span><button class="ui-window-lock hub-lock" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="lock-shackle" d="M7 11V7a5 5 0 0 1 10 0v4"/><rect x="5" y="11" width="14" height="10" rx="2"/></svg></button><button class="ui-window-close hub-close" aria-label="Close Hub" title="Close Hub">×</button></header>
     <div class="hub-search"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 8 10-8 10L4 12 12 2Zm0 5v10M8 12h8"/></svg><span class="hub-scope" hidden></span><input type="text" role="combobox" aria-label="Search people, places, builds" aria-autocomplete="list" aria-controls="hub-results" aria-expanded="true" placeholder="Search people, places, builds…" autocomplete="off" spellcheck="false" maxlength="120"></div>
     <p class="hub-hint" id="hub-hint" hidden></p><div class="hub-rate-controls" hidden></div><div class="hub-results ui-scroll" id="hub-results" role="listbox" aria-label="Results"></div>
     <pre class="hub-preview ui-scroll" hidden></pre><div class="hub-view" hidden></div><p class="hub-status" role="status" hidden></p>
     <footer class="hub-footer"><button class="hub-primary ui-button" data-variant="primary"></button><span class="hub-count"></span><button class="hub-actions ui-button" data-variant="quiet">Actions</button></footer>
+    <button class="ui-window-resize hub-resize" aria-label="Resize Hub" title="Drag to resize, or use arrow keys" hidden></button>
   </section>`;
   parent.append(root);
   const required = <T extends Element>(selector: string) => {
@@ -33,18 +35,21 @@ export function createHub(parent: HTMLElement) {
     return element;
   };
   const disposeFrame = attachClassicFrame(required<HTMLElement>('.hub-panel'));
+  const disposeWindow = installHubWindow(required<HTMLElement>('.hub-panel'), required<HTMLElement>('.hub-heading'), required<HTMLButtonElement>('.hub-lock'), required<HTMLElement>('.hub-resize'));
   const input = required<HTMLInputElement>('input');
   const search = required<HTMLElement>('.hub-search');
   const list = required<HTMLElement>('.hub-results');
   const content = required<HTMLElement>('.hub-view');
   const backButton = required<HTMLButtonElement>('[aria-label="Back"]');
   const caption = required<HTMLElement>('.hub-caption');
+  const breadcrumbs = required<HTMLElement>('.hub-breadcrumbs');
   const status = required<HTMLElement>('.hub-status');
   const footer = required<HTMLElement>('footer');
   const primary = required<HTMLButtonElement>('.hub-primary');
   const count = required<HTMLElement>('.hub-count');
   let rows: readonly HubRow[] = [];
   let shortcutRevision = '';
+  let navigationRevision = '';
   let selected: string | null = null;
   const sources = new Map<HubSource, () => void>();
   const sourceEnabled = (source: HubSource) => !source.feature || ((source.feature === 'characterSwitchEnabled' || !!window.gwToolsSettings?.().gwonmacTools) && !!window.gwToolsSettings?.()[source.feature]);
@@ -62,9 +67,10 @@ export function createHub(parent: HTMLElement) {
     const parent = history.pop();
     if (!parent) { close(); return; }
     resetView(); scope = parent.scope;
-    if (parent.view && (!parent.view.available || parent.view.available())) { const view = parent.view; presenter.showView(view.title, view.mount, view.available); history.pop(); return; } input.value = parent.query; caption.textContent = scope?.title ?? 'Home'; backButton.hidden = !scope; root.dataset.page = scope ? 'section' : 'home';
+    if (parent.view && (!parent.view.available || parent.view.available())) { const view = parent.view; restoring = true; presenter.showView(view.title, view.mount, view.available); restoring = false; return; } input.value = parent.query; caption.textContent = scope?.title ?? 'Home'; backButton.hidden = !scope; root.dataset.page = scope ? 'section' : 'home';
     input.placeholder = scope ? 'Search actions…' : 'Search people, places, builds…'; report(''); refresh(true); select(parent.selected); list.scrollTop = parent.scroll; input.focus();
   }
+  let restoring = false;
   let previousFocus: HTMLElement | null = null;
   let pending = false;
   let epoch = 0;
@@ -153,14 +159,28 @@ export function createHub(parent: HTMLElement) {
     required<HTMLButtonElement>('.hub-actions').disabled = !row;
   }
   function paintNavigation() {
-    if (!scope && !disposeView) {
-      const context = [...sources.keys()].filter(sourceEnabled).flatMap(source => source.context?.() ?? []);
-      caption.textContent = ['Home', ...(!input.value.trim() ? context : [])].join(' · ');
+    const currentTitle = activeView?.title ?? scope?.title ?? 'Home';
+    caption.textContent = currentTitle;
+    const context = !scope && !disposeView && !input.value.trim()
+      ? [...sources.keys()].filter(sourceEnabled).flatMap(source => source.context?.() ?? []) : [];
+    required<HTMLElement>('.hub-context').textContent = context.join(' · ');
+    const trail = history.map((page, index) => ({ title: page.view?.title ?? page.scope?.title ?? 'Home', index }));
+    const nextNavigation = JSON.stringify([trail, currentTitle]);
+    if (navigationRevision !== nextNavigation) {
+      navigationRevision = nextNavigation;
+      breadcrumbs.replaceChildren();
+      for (const page of trail) {
+        const button = document.createElement('button'); button.type = 'button'; button.className = 'hub-crumb'; button.textContent = page.title;
+        button.onclick = () => { history.splice(page.index + 1); restoreParent(); };
+        const separator = document.createElement('span'); separator.textContent = '›'; separator.setAttribute('aria-hidden', 'true');
+        breadcrumbs.append(button, separator);
+      }
+      caption.setAttribute('aria-current', 'page'); breadcrumbs.append(caption);
     }
     const parent = history.at(-1);
     const destination = parent?.view?.title ?? parent?.scope?.title ?? 'Home';
     backButton.hidden = !parent;
-    backButton.textContent = `← Back to ${destination}`;
+    backButton.textContent = '←';
     backButton.title = `Back to ${destination}`;
     backButton.setAttribute('aria-description', `Return to ${destination}`);
     const actionsButton = required<HTMLButtonElement>('.hub-actions');
@@ -220,7 +240,7 @@ export function createHub(parent: HTMLElement) {
         heading.className = 'hub-group'; heading.setAttribute('role', 'presentation'); heading.textContent = group;
         list.append(heading);
       }
-      const option = document.createElement('div');
+      const option = document.createElement('div'); option.tabIndex = -1;
       option.id = `hub-result-${index}`; option.dataset.id = row.id; option.className = 'hub-row';
       option.setAttribute('role', 'option'); option.setAttribute('aria-disabled', String(!!row.unavailable));
       const title = document.createElement('span'); title.className = 'hub-title'; title.textContent = row.title;
@@ -279,7 +299,7 @@ export function createHub(parent: HTMLElement) {
     const generation = epoch;
     pending = true; select(selected); report('');
     try {
-      if(row.searchQuery!==undefined){history.length=0;resetView();scope=null;backButton.hidden=true;caption.textContent='Home';input.value=row.searchQuery;refresh(true);input.focus();input.select();}
+      if(row.searchQuery!==undefined){remember();resetView();scope=null;backButton.hidden=true;caption.textContent='Home';input.value=row.searchQuery;refresh(true);input.focus();input.select();}
       else await row.run();
     }
     catch (error) { if (generation === epoch) report(error instanceof Error ? error.message : 'The action could not complete. Try again.'); }
@@ -302,7 +322,7 @@ export function createHub(parent: HTMLElement) {
     input.value = ''; restoreQuery = ''; report(''); selected = null;
   }
   const modal = window.gwSurfaces.registerDialog({ root, priority: 6, transient: true,
-    dismiss: () => scope || disposeView ? back() : close(),
+    dismiss: () => history.length ? back() : close(),
     restoreFocus: () => previousFocus?.isConnected && previousFocus.getClientRects().length > 0 ? previousFocus : document.getElementById('canvas'),
   });
   function show() {
@@ -314,10 +334,58 @@ export function createHub(parent: HTMLElement) {
   input.addEventListener('input', () => { report(''); refresh(true); });
   input.addEventListener('keydown', event => {
     if (event.isComposing) return;
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-      event.preventDefault(); const index = rows.findIndex(row => row.id === selected);
-      select(rows[(index + (event.key === 'ArrowDown' ? 1 : -1) + rows.length) % rows.length]?.id ?? null, true);
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      const id = selected ?? rows[0]?.id ?? null; select(id, true);
+      list.querySelector<HTMLElement>('[aria-selected="true"]')?.focus();
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault(); (backButton.hidden ? required<HTMLButtonElement>('.hub-lock') : backButton).focus();
     } else if (event.key === 'Enter') { event.preventDefault(); if (!event.repeat) void run(); }
+  });
+  root.addEventListener('keydown', event => {
+    if (event.defaultPrevented || event.isComposing || event.metaKey || event.ctrlKey || event.altKey) return;
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    if (!target || target === required<HTMLElement>('.hub-resize')) return;
+    const editing = target.matches('input,textarea,select,[contenteditable="true"]');
+    if (event.key === 'Backspace' && (!editing || target instanceof HTMLInputElement && target.type !== 'range' && !target.value)) {
+      if (history.length) { event.preventDefault(); event.stopPropagation(); back(); }
+      return;
+    }
+    const row = target.closest<HTMLElement>('.hub-row');
+    if (row && ['ArrowUp', 'ArrowDown', 'Enter'].includes(event.key)) {
+      event.preventDefault();
+      const index = rows.findIndex(item => item.id === row.dataset.id);
+      if (event.key === 'Enter') { if (!event.repeat) void run(); }
+      else if (event.key === 'ArrowUp' && index <= 0) input.focus();
+      else if (event.key === 'ArrowDown' && index === rows.length - 1) primary.focus();
+      else {
+        const next = Math.max(0, Math.min(rows.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)));
+        select(rows[next]?.id ?? null, true); list.querySelector<HTMLElement>('[aria-selected="true"]')?.focus();
+      }
+      return;
+    }
+    if (target.closest('.hub-footer')) {
+      const controls = [primary, required<HTMLButtonElement>('.hub-actions')].filter(button => !button.hidden && !button.disabled);
+      if (event.key === 'ArrowUp') { event.preventDefault(); list.querySelector<HTMLElement>('[aria-selected="true"]')?.focus(); }
+      else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); controls[Math.max(0, Math.min(controls.length - 1, controls.indexOf(target as HTMLButtonElement) + (event.key === 'ArrowRight' ? 1 : -1)))]?.focus(); }
+      return;
+    }
+    if (target.closest('.hub-heading')) {
+      const controls = [...required<HTMLElement>('.hub-heading').querySelectorAll<HTMLButtonElement>('button')].filter(button => !button.hidden && button.getClientRects().length);
+      const index = controls.indexOf(target as HTMLButtonElement);
+      if (event.key === 'ArrowDown') { event.preventDefault(); (search.hidden ? content.querySelector<HTMLElement>('input[type=search],input[type=text]') ?? content.querySelector<HTMLElement>('input,select,button,[tabindex="0"]') : input)?.focus(); }
+      else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); controls[Math.max(0, Math.min(controls.length - 1, index + (event.key === 'ArrowRight' ? 1 : -1)))]?.focus(); }
+      return;
+    }
+    if (content.contains(target) && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+      if (target.matches('select,input[type="range"],textarea') || target.isContentEditable) return;
+      const controls = [...content.querySelectorAll<HTMLElement>('input,select,button,a[href],summary,[tabindex="0"]')].filter(control => control.getClientRects().length && !control.matches(':disabled')).sort((a, b) => { const left = a.getBoundingClientRect(), right = b.getBoundingClientRect(); return left.top - right.top || left.left - right.left; });
+      const index = controls.indexOf(target);
+      if (index < 0) return;
+      event.preventDefault();
+      if (event.key === 'ArrowUp' && index === 0) (backButton.hidden ? required<HTMLButtonElement>('.hub-lock') : backButton).focus();
+      else controls[Math.max(0, Math.min(controls.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)))]?.focus();
+    }
   });
   const actions = () => {
     if (!root.open || document.querySelector('dialog:modal') !== root) return false;
@@ -369,14 +437,14 @@ export function createHub(parent: HTMLElement) {
       const fromOpenHub = root.open;
       if (!fromOpenHub) show();
       if (!scope) restoreQuery = input.value;
-      if (fromOpenHub) remember(); resetView(); scope = { title, rows: getRows }; root.dataset.page = 'section'; caption.textContent = title;
+      if (fromOpenHub && !restoring) remember(); resetView(); scope = { title, rows: getRows }; root.dataset.page = 'section'; caption.textContent = title;
       backButton.hidden = false; input.placeholder = 'Search actions…'; input.value = ''; report(''); refresh(true); input.focus();
     },
     showView(title: string, mount: (target: HTMLElement, back: () => void) => () => void, available?: () => boolean) {
       const fromOpenHub = root.open;
       if (!fromOpenHub) show();
       if (!scope) restoreQuery = input.value;
-      if (fromOpenHub) remember();
+      if (fromOpenHub && !restoring) remember();
       resetView();
       returnFromView = restoreParent;
       root.dataset.page = 'section'; caption.textContent = title; backButton.hidden = false;
@@ -388,7 +456,7 @@ export function createHub(parent: HTMLElement) {
       paintNavigation();
       if (!content.contains(document.activeElement)) content.querySelector<HTMLElement>('input,select,button,[tabindex="0"]')?.focus();
     },
-    dispose() { close(); disposeFrame(); for (const unsubscribe of sources.values()) unsubscribe(); sources.clear(); modal.dispose(); root.remove(); window.removeEventListener('blur', onBlur); window.removeEventListener('gw:tools-settings', onSettings); },
+    dispose() { close(); disposeWindow(); disposeFrame(); for (const unsubscribe of sources.values()) unsubscribe(); sources.clear(); modal.dispose(); root.remove(); window.removeEventListener('blur', onBlur); window.removeEventListener('gw:tools-settings', onSettings); },
   };
   presenter.attach(createHubAccounts(presenter, { get: () => window.gwNative.accounts.get(), open: request => window.gwNative.accounts.open(request) }));
   presenter.attach(createHubCalculator({

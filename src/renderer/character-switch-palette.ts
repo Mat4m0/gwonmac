@@ -192,6 +192,7 @@ export function createCharacterSwitchPalette(
     show() { hub.showView('Characters', (target, back) => {
       hubBack = back;
       target.append(root); root.open = true;
+      if (view.kind === "closed") { view = Object.freeze({ kind: "characters" }); render(); }
       return () => { hubBack = undefined; root.open = false; parent.append(root); if (view.kind === 'confirming') source.cancelConfirmation(); view = { kind: 'closed' }; };
     }, () => !!window.gwToolsSettings?.().characterSwitchEnabled); },
     close() { hub.close(); },
@@ -399,7 +400,7 @@ export function createCharacterSwitchPalette(
     }
     for (const input of layoutInputs) input.checked = input.value === layout;
     const searchHint = searchEnabled ? ' <kbd class="ui-kbd">type</kbd> search' : "";
-    listHints.innerHTML = `<kbd class="ui-kbd">←↑</kbd> <kbd class="ui-kbd">→↓</kbd> choose${searchHint} <kbd class="ui-kbd">return</kbd> switch <kbd class="ui-kbd">esc</kbd> ${hub ? "back" : "close"}`;
+    listHints.innerHTML = `<kbd class="ui-kbd">${hub ? "← →" : "←↑ →↓"}</kbd> choose${hub && searchEnabled ? ' <kbd class="ui-kbd">↑</kbd> search / Back' : searchHint} <kbd class="ui-kbd">return</kbd> switch <kbd class="ui-kbd">esc</kbd> ${hub ? "back" : "close"}`;
     queryInput.setAttribute("aria-expanded", String(searching && rows.length > 0));
     if (searching) queryInput.setAttribute("aria-controls", "character-switch-list");
     else queryInput.removeAttribute("aria-controls");
@@ -528,6 +529,9 @@ export function createCharacterSwitchPalette(
     const button = (event.target as Element).closest<HTMLButtonElement>("button[data-row]");
     if (!button || view.kind !== "characters") return;
     selected = Number(button.dataset.row);
+    if (hub && event.key === 'ArrowUp' && searchEnabled) {
+      event.preventDefault(); event.stopPropagation(); queryInput.focus({ preventScroll: true }); return;
+    }
     const arrowMove = event.key === "ArrowLeft" || event.key === "ArrowRight"
       || event.key === "ArrowUp" || event.key === "ArrowDown";
     if (arrowMove) {

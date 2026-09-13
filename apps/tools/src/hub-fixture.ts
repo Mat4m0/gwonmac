@@ -109,7 +109,13 @@ export function mountHubFixture(target: HTMLElement) {
     session.observe([{ id: ++id, sender: recipient, message, direction: 'outgoing' }]);
     record('Whisper');
   });
-  const messenger = document.createElement('div'); document.body.append(messenger);
+  const messenger = document.createElement('div');
+  messenger.className = 'whisper-popout-host';
+  messenger.style.cssText = 'position:fixed;inset:0;pointer-events:none';
+  document.body.append(messenger);
+  const whisperSurface = window.gwSurfaces.register({ root: messenger, priority: 4, dismiss: () => session.setVisible(false) });
+  session.subscribe(state => whisperSurface.setOpen(state.visible));
+  messenger.addEventListener('pointerdown', () => whisperSurface.raise(), true);
   mountWhispers(messenger, { session });
   window.addEventListener('hub-fixture-failure', () => { failSend = true; });
   window.addEventListener('hub-fixture-reset', () => session.reset());
@@ -127,7 +133,8 @@ export function mountHubFixture(target: HTMLElement) {
   window.addEventListener('gw:travel-toggle', event => { event.preventDefault(); travel.open(); });
   window.addEventListener('gw:whispers-toggle', event => {
     event.preventDefault();
-    toggleHubWhispers(event, hub, messenger, document.body, session);
+    toggleHubWhispers(event, hub, messenger, session);
+    if (session.state.visible) whisperSurface.raise();
   });
   window.addEventListener('hub-fixture-settings', event => { if (event instanceof CustomEvent) {
     settings = { ...settings, ...event.detail }; for (const listener of settingsListeners) listener(settings);
