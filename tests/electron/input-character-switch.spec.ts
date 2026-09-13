@@ -116,7 +116,8 @@ test("a 27-character account uses the Hub carousel and preserves search, identit
     await page.keyboard.press("ArrowLeft");
     await expect(selected).toContainText("Character 01");
     await page.keyboard.press("ArrowUp");
-    await expect(selected).toContainText("Rudolph Prime");
+    await expect.poll(() => isDomActiveElement(search)).toBe(true);
+    await expect(selected).toContainText("Character 01");
     await page.keyboard.press("ArrowDown");
     await expect(selected).toContainText("Character 01");
     await expect.poll(() => isDomActiveElement(selected)).toBe(true);
