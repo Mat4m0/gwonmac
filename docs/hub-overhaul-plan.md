@@ -1,6 +1,448 @@
-# gwonmac: unify the Guild Wars visual study and Hub experience
+# Hub refinement: intent, focus, continuity, and native workflows
 
-Research and proposed delivery plan — 12 September 2026.
+Implementation and acceptance plan — 13 September 2026.
+
+**Status:** implemented locally on `feat/hub-overhaul-flows`; live acceptance
+remains with Matthias. The reviewed starting baseline was `c99d5c33`.
+`adc3fd67` delivered focus and handoff continuity; the remaining refinement is
+recorded in [Hub verification](hub-verification.md#intent-and-continuity-refinement--13-september-2026).
+The requirements below describe the implemented contract. The historical delivery
+record remains separate. No publication or release acceptance is claimed.
+
+## 1. Product outcome
+
+Support the player's likely intent in the fewest meaningful steps. First entry
+should focus the control that advances that task. Returning should restore the
+place the player left. Search is immediately available, but it must not become an
+extra compulsory stop in a character carousel, account picker, or target chooser.
+
+Consistency means predictable intent, actions, and return behavior. It does not
+mean forcing every tool into the same keyboard layout or focusing search on every
+page. This supersedes the previous review's suggestion of a uniform search-first
+loop and its recommendation to always add team review.
+
+Preserve the accepted Guild Wars appearance, existing game/feature owners,
+custom shortcuts, optional Tools boundary, and user data. Keep ordinary actions
+fast. Add a decision step only when the player still needs to choose a target,
+resolve ambiguity, or understand a materially different operation.
+
+## 2. The anchor journeys
+
+### Switch character
+
+1. Press the resolved Hub shortcut (default `⌘R`). A fresh Hub opens with search focused.
+2. Type `sw`. Switch Character appears before Switch Account in ordinary tool ordering.
+3. Press Down to focus the selected Switch Character result; Enter opens it.
+4. The current character card owns focus immediately. Left/Right moves through
+   this account's characters. There is no extra Down or Tab just to start browsing.
+5. Enter on another available character performs the visibly named switch action.
+   Selecting the current character does not trigger a redundant relog.
+6. Up from the cards focuses optional character search. Up from that search
+   reaches Back. Down returns to the remembered card. Normal typing from a card
+   starts/refines character search without losing the first character.
+7. Back restores the parent query `sw`, the Switch Character row, its keyboard
+   focus, and the previous scroll position. It does not put focus in search.
+
+The direct Characters shortcut (default `⌘E`) opens the same card-first view,
+without a fabricated Home history entry. Explicit `char <name>` searches may
+retain their existing direct, named activation when the character is unambiguous;
+do not force them through a redundant carousel.
+
+### Switch account
+
+Switch Account already exists in `src/renderer/hub-accounts.ts`; extend that owner.
+
+1. Select Switch Account from Hub results and press Enter.
+2. Focus an eligible account row immediately. Show the current account clearly;
+   it must not be the default executable choice for switching to itself.
+3. Enter on an account opens its actions, with the default Switch Account action
+   focused. Label both the target account and the current account affected.
+4. Keep Show/Open separately available for keeping the current game running.
+   Do not introduce another confirmation over the existing explicit action choice.
+5. Back from actions returns to the same account row in the account picker.
+6. Back again returns to the Switch Account command in the original Hub results,
+   preserving query, scroll, and row focus. Up moves through those results to
+   search; when the command is the first/only result, one Up reaches search.
+
+An exact `acc <name>` can continue exposing that account's named actions directly.
+Do not manufacture intermediate pages when the player already supplied the target.
+Return only through stages actually visited. A failed replacement preserves the
+current account through the existing native account owner. Revalidate changes to
+account identity/state immediately before execution.
+
+With no alternative saved account, provide a clear empty state and a route to
+existing account management in the launcher. Avoid a dead or unexplained command.
+
+### Find and apply a build
+
+1. Search `build monk` or a folder-qualified query. Down browses results.
+2. Enter or Right on a build opens the compact target page with the incoming
+   build pinned above it. Focus Apply to me, not the optional target search.
+3. That row already displays the player's current build. Enter applies to the
+   named player if allowed; no second mandatory comparison page is needed.
+4. Down selects Apply to hero; Enter or Right opens the hero picker, initially
+   focused on the first eligible current-party hero. Search remains optional.
+5. Hero rows show their current bars. Enter on an eligible hero performs the
+   explicitly labeled apply action because build and target are now both visible.
+   Right opens deeper read-only comparison/details when wanted. This deliberately
+   removes the current compulsory hero review step while retaining optional inspection.
+6. Blocked targets remain inspectable. For these rows, Enter/Right opens the
+   explanation/details; they never execute an apply. Make the different action
+   explicit in the row/footer. Separate navigation availability from apply permission.
+7. Back restores the exact originating target or build row, query, focus, and scroll.
+
+Typing, hovering, and arrow selection never apply a build. A selected row must
+always expose the consequence of Enter before it can change the game.
+
+## 3. Entry focus and navigation contract
+
+| Surface | Default focus on first entry | Optional search | Primary activation |
+| --- | --- | --- | --- |
+| Fresh Hub | Global search | Already focused | Visible selected result action |
+| Character carousel | Current/explicitly selected character | Up or type from card | Switch to named character |
+| Account picker | First eligible alternative account | Up/type from rows | Open named account actions |
+| Account actions | Switch action for the chosen account | Available but not required | Named switch/show/open operation |
+| Travel | Existing destination search with a useful selected destination | Already focused | Travel to named destination |
+| Build Library/folder | First available folder/build row | Up/type from rows | Open folder or choose build target |
+| Build target page | Apply to me | Up/type from rows | Apply to named player, or open hero picker |
+| Hero picker | First eligible current-party hero | Up/type from rows | Apply to named hero; inspect blocked target |
+| Settings | Relevant section/control | Only where useful | Existing native control behavior |
+| Whisper conversation | Composer for the selected conversation | Person picker separately | Send only on explicit composer action |
+
+Returning to an existing stage overrides these defaults with its saved focus.
+For empty/loading pages, focus the useful search, retry, or empty-state action;
+do not focus a decorative heading or disabled primary action.
+
+### Keys and mouse behavior
+
+- Up/Down follows each view's meaningful vertical order; Left/Right remains
+  spatial for characters and native for text, sliders, and selects.
+- For list/carousel browsing, Up at the top reaches search; Up from search reaches
+  Back. Travel may retain search focus while moving active destinations, but must
+  provide that upward escape at the first destination instead of wrapping forever.
+- Right on a navigational result opens its child. Use a quiet child cue where
+  needed. Right must never execute a world-changing command.
+- Enter executes the displayed primary action. A click does the same for the
+  clicked row. A separate details affordance may inspect without executing.
+- Backspace deletes while editing nonempty text. Outside editing, or in empty
+  search, it returns one stage. No navigation during composition. Empty textareas
+  and ordinary form fields retain native editing rather than becoming Back controls.
+- Escape closes the top submenu/details first, then goes back a stage, then
+  dismisses Hub. X dismisses Hub directly. Direct entry has no fake parent.
+- Tab/Shift+Tab continues reaching controls. Arrow behavior must not trap focus.
+- Typing from browse controls returns to search, preserving query, selection range,
+  and caret. An empty optional search starts with the typed character. Do not replace
+  a prior query merely because a character card was focused.
+- Paste, Option characters, dead keys, IME, selection, undo, and delete must use
+  native text editing. Verify the full input path in Electron. Choose the smallest
+  input-owner change that supports these cases; do not force a combobox focus model
+  onto every carousel or form.
+- Mouse hover may preview a row but must not steal keyboard focus. After Back,
+  a stationary pointer must not immediately overwrite the restored selection.
+- Background updates preserve stable identities. Held keys cannot chain an Enter
+  into a newly opened destructive/action stage or leak movement into the game.
+
+## 4. History stores the player's place
+
+Current history retains parent query, row, and list scroll but restores search
+focus unconditionally. Mounted views are recreated without a complete focus/state
+snapshot. Refine the existing history owner in `src/renderer/hub.ts`.
+
+Each visited stage must retain enough information to restore:
+
+- Stage identity, actual parent, and source account context.
+- Search query plus caret/selection range when the input owned focus.
+- Selected result/card/account/hero identity, never just its numerical index.
+- Focus region: search, selected item, header, footer, or a named form control.
+- Relevant scroll position and existing tool-owned view state.
+
+Capture the launching row/control before opening a child. On Back, reconstruct
+the stage, refresh current facts, restore selection and scroll, then focus the
+recorded control. Breadcrumb jumps restore the saved destination stage and discard
+its descendants. Keep focus restoration separate from first-entry defaults.
+
+If the selected item disappears, retain the query and choose a predictable nearby
+browse position without executing anything. Explain material removal/availability
+changes. If a whole feature disappears, return to its nearest valid parent.
+Never enable an action using stale stored game facts.
+
+Use one history stack with small typed restoration data. Existing tools continue
+owning drafts, filters, and feature state; do not duplicate their state in a second
+global store. Do not retain detached DOM nodes as durable navigation identity.
+
+### Dismissal and lifetime
+
+- Back restores the exact prior stage, including row focus.
+- Temporary app blur hides Hub and releases game input, but retains session context.
+  Reopening after that temporary hide resumes the stage and revalidates live facts.
+- Explicit X, closing from Home, or toggling Hub closed ends that Hub navigation
+  task. The next fresh `⌘R` starts in global search. Successful terminal actions
+  also end the task. Persistent tool drafts/filters survive independently.
+- Popout handoffs retain a return location during the session; reopening Hub may
+  resume that location. Repeated shortcuts focus the existing destination as defined
+  by that feature rather than creating duplicate windows or history entries.
+- Account replacement/restart clears account-specific Hub navigation. Another
+  account window must never inherit executable targets from this one.
+- No durable navigation-history database or browser-history framework is required.
+
+## 5. Build search, comparison, and completion
+
+### One native library model
+
+Retain native template files/folders as their source; retain saved library records
+in their existing owner. Do not copy native templates into another permanent library.
+Use the same build matcher inside Build Library, folder views, and global search.
+
+| Query | Intended interpretation |
+| --- | --- |
+| `build monk` | Primary Monk builds |
+| `build folder monk` | Forgiving folder/name/tag words plus primary profession |
+| `build parent/child monk` | Ordered contiguous folder path plus profession |
+| `build parent child monk` | Forgiving terms across path/name/tags, without promising order |
+| `build folder:"Team Builds/Farming" monk` | Explicit folder with spaces plus profession |
+| `build folder:Monk mesmer` | Mesmer builds stored under a folder named Monk |
+| `build Mo/Me` | Exact profession pair, not a folder path |
+| `build folder:Mo/Me` | Explicit folder path even if it resembles a profession pair |
+| `build folder:/` | Native skill templates saved at the root |
+
+Preserve case-insensitivity, backslash normalization, unfinished quotes while
+typing, and existing supported matching behavior. Exact profession words filter
+primary profession; explicit `folder:` disambiguates profession-named folders.
+Document leading/trailing slash semantics in Commands examples. Do not silently
+reinterpret a malformed precise query as an unrelated executable action.
+
+Browse immediate child folders and files. Parent folders with no direct files
+still exist in navigation. Breadcrumbs show actual hierarchy. Keep the current
+compact title: **Protection** followed by smaller muted **Mo/Me**, then folder icon
+and muted relative folder path. Distinguish duplicate source identities only as
+much as needed; root templates and saved-library builds need a source label when
+their names otherwise collide. No absolute system paths in result rows.
+
+Show reading, empty, and failed source states distinctly. Preserve valid results
+when a source fails. Offer Retry and a concise unreadable-file count/details.
+Refresh on relevant entry/resume and explicit retry using existing readers;
+do not add a background filesystem watcher without evidence it is necessary.
+
+### Compact, informative comparison
+
+Keep one pinned incoming build, current target bars, grouped Tango attribute icons,
+and abbreviated ranks. Keep the removed empty metadata panel removed.
+
+- Align slots, mark changed skills subtly, and show meaningful rank deltas.
+- Show Already equipped only when the relevant observations are complete and equal.
+- Label invested attribute ranks accurately; do not imply equipment/rune bonuses.
+- Preserve unknown values explicitly. A missing bar is not eight empty skills.
+- Offer keyboard-accessible Details with skill names/descriptions and full attribute
+  names. Do not insert eight mandatory tab stops into every build result.
+- Group current-party heroes separately from unlocked heroes outside the party.
+  Use current primary/secondary observations, including variable-profession heroes;
+  do not infer a chosen secondary from a static hero table.
+- Eligibility affects final execution, not access to an explanation or comparison.
+  No automatic hero addition as a side effect of inspecting/applying one build.
+
+Reuse `src/shared/builds/presentation.ts`, the existing skill facts, and appropriate
+comparison logic in `src/shared/builds/diff.ts`. Adapt unknown live values explicitly
+instead of inventing a complete Build merely to call a comparison helper.
+
+### Action feedback and recent use
+
+Expose existing apply progress, bind it to the reviewed build/target, prevent
+duplicate execution, and report observed completion. Partial results identify
+the skipped skills and remaining problem. Preserve context on failure and revalidate
+before retry. Do not imply an atomic rollback or offer Undo without a proven restore.
+
+After confirmed application, record a bounded recent build/target reference through
+the existing library/preferences owner. Allow it in Continue or Pins without changing
+ordinary results through learned ranking. Revalidate native files and account context
+when reusing a recent action. Never persist an old live agent ID as a reusable target.
+
+### Fast team intent
+
+Keep the existing exact, unique `team <name>` path eligible for direct activation
+when the named team and consequential changes are visible before Enter. Show a compact
+roster/difficulty summary and explicit Apply team label; Right/Details offers review.
+Partial or ambiguous matches review/resolve first. If the default view cannot explain
+the material changes clearly, fix that presentation before keeping direct activation.
+Do not insert mandatory review solely to make teams resemble the single-build flow.
+
+## 6. Coherent surfaces and visual refinement
+
+| Surface | Ownership |
+| --- | --- |
+| Hub | Discovery, travel, characters, accounts, settings, build browsing and bounded application |
+| Build workspace | Authoring, organization, variants, team assembly |
+| Trade popout | Offers, filters, comparison, browsing position |
+| Whisper popout | Conversations, drafts, delivery and retry |
+| Native game | Gameplay and the existing mechanics these tools assist |
+
+With Hub open, the Build shortcut browses in Hub; outside it, the existing authoring
+workspace remains available. Trade and Whispers always use their popouts. No docking
+controls or duplicate mounted owners are reintroduced.
+
+Polish shared chrome: vertically centered titles, seamless Classic frame/content
+edges, plain visible X controls (including command tray and Build Library), restrained
+breadcrumbs, useful drag regions, and generous invisible resize hit areas. Classic
+uses its corner artwork without painting a second resize-grip button. Keep decoration
+out of the accessibility tree and pointer handling.
+
+Only Hub has a subtle lock, initially locked. Other popouts move/resize directly.
+Recommend remembering Hub geometry per existing account profile across restart,
+while starting each renderer session locked; reset restores default geometry and lock.
+Use the existing settings/placement owner and viewport recovery rules. Preserve
+current popout placement persistence and clamp windows after display/zoom changes.
+Explain existing keyboard movement/resizing in accessible help.
+
+Retain theme IDs, saved palette/opacity ranges, and Classic/Modern/Custom behavior.
+Test readable muted metadata, distinct focus/selection/hover, and wrapping over
+bright as well as dark game scenes. Keep geometry stable during page transitions.
+Reuse shared typography and Tango assets wherever profession identity is shown.
+
+Trade-to-Whisper preserves query, scroll, selected offer, recipient, and drafts.
+Selecting a person prepares the conversation; it does not send. Build browsing-to-
+authoring preserves source/selection without creating a second editable copy.
+Travel preserves filters/district selection and returns focus to its originating
+destination after inspection; direct unambiguous travel remains a named activation.
+
+## 7. Implementation order and acceptance
+
+Deliver bounded Conventional Commits on the current topic branch. Do not split
+into permanent old/new paths or introduce a new UI/navigation framework.
+
+| Step | Work | Observable exit criterion |
+| --- | --- | --- |
+| 1 | Reconcile current intent in `spec.md` and `apps/tools/DESIGN.md`; document purposeful per-view differences | One current contract; obsolete embedded Trade/Whisper and shared-lock rules removed |
+| 2 | Extend existing history with focus restoration and tool restoration hooks | Character and account anchor journeys return to the exact launching control |
+| 3 | Implement task-specific first focus, optional search, native typing, and meaningful arrows | Character entry immediately accepts Left/Right; Back does not require refocusing results |
+| 4 | Separate temporary hide from task end; preserve handoff context and revalidate on resume | Wiki/app switch and popout return preserve place without stale executable targets |
+| 5 | Unify build matching and folder hierarchy; explain source failures | Same queries work in all build contexts; nested browsing and Retry are understandable |
+| 6 | Refine minimal-step build/hero/team actions, comparison, feedback, and recent use | Player can identify the build, target, change, and outcome without redundant stages |
+| 7 | Apply chrome, geometry, disclosure, and cross-tool handoff refinements | Existing tools look related and preserve their useful native/task-specific layouts |
+| 8 | Complete cross-tool and compiled-app verification, then prepare one candidate for review | Evidence names exact build and remaining human acceptance; no release claim from fixture checks |
+
+Start with steps 2–3 as the first working vertical slice after the contract update.
+Prove the concrete character/account journeys before extending restoration to every
+view. Shared code should emerge only for shared responsibilities, not visual similarity.
+
+## 8. Verification matrix
+
+| Scenario | Required evidence |
+| --- | --- |
+| `⌘R`, `sw`, Down, Enter, Left/Right | Character card focus immediately; no input leakage |
+| Character search → card → Back | Query/caret/selection and parent row focus restored appropriately |
+| Switch Account → account → actions → Back twice | Same account row, then same command row; no extra search focus or account operation |
+| Direct `char`/`acc`/team intent | No fake parent or redundant picker; explicit visible action |
+| Native text after browsing | First character, paste, Option/dead keys, IME, selection, undo/delete work in Electron |
+| Mouse + keyboard + held keys | Hover cannot undo restored focus; key repeat cannot execute the next page |
+| Async removal/reordering | Selected identity remains stable; vanished target cannot become another executable choice |
+| Blur/resume and account change | Read-only place resumes; live targets refresh; another account never inherits them |
+| Nested/duplicate/invalid templates | Hierarchical browsing, consistent syntax, source distinction, and recoverable failure |
+| Mixed-profession heroes | Eligible apply, blocked inspection, unknown current bar, and no silent roster changes |
+| Apply interrupted or template edited | Named partial result or stale-file refusal, context retained, safe retry |
+| Trade → Whisper → return | Offer/search/scroll and draft survive; no automatic send |
+| Geometry and appearance | Lock scope, reset, restart persistence, viewport recovery, Classic/Modern/Custom readability |
+| Optional Tools unavailable | Core game stays usable; host authoring remains available under existing rules |
+
+Extend existing fixtures with realistic mixed professions, missing observations,
+long names, empty/large folders, and account state changes. Measure large-list typing
+and observation refresh locally if profiling identifies a delay; do not preemptively
+add caching, virtualization, telemetry, or learned ranking.
+
+Use the repository's existing checks:
+
+```bash
+pnpm check
+pnpm tools:test:e2e
+pnpm test:electron
+```
+
+During each step run the affected unit/browser tests first; run the relevant final
+gate against the final source. Compiled Electron tests require the corresponding
+fresh build through the documented workflow. Preserve any existing live session;
+never rebuild/restart it silently to obtain a screenshot. PR Application verification
+and release-specific checks follow [Development and rollout](development-workflow.md).
+
+Browser fixtures prove presentation and controlled state changes. Electron proves
+the exercised native host/input boundary. Neither proves live input feel or gameplay
+acceptance. Record checks and limitations in [Hub verification](hub-verification.md).
+The verification record distinguishes the exercised fixture/native boundaries
+from the remaining live input and gameplay acceptance.
+
+## 9. Rollout, persistence, and completion
+
+Use Developer Builds for the individual stages. Once the coherent candidate passes
+review, recommend one Beta train because input, accounts, and placement persistence
+are affected. Matthias accepts the exact candidate and authorizes publication under
+the existing release process. No per-feature Beta, forced mid-session restart, new
+permanent branch, or hidden flag for unfinished work.
+
+Most changes are in-memory presentation behavior. If Hub placement or recent-use
+storage needs schema changes, inspect existing readers and downgrade behavior first;
+use the existing validated settings owner, optional/defaulted data, and a focused
+compatibility test. Preserve saved bindings, account profiles, templates, and drafts.
+Rollback must ignore/reset only newly introduced optional state, not wipe user data.
+The implementation uses only optional validated profile browser geometry under
+`gwonmac.hub-window-placement`; Reset removes that key and older builds ignore it.
+Recent target references are bounded to three per renderer session. Saved-build
+recency uses the existing `lastUsed` field without adding an Undo transaction.
+There is no native settings or saved-library schema migration.
+Revert bounded commits or use the documented release repair flow as appropriate;
+do not add permanent dual implementations to support rollback.
+
+Completion means all anchor journeys and relevant failure cases pass, obsolete
+behavior/tests/docs are reconciled, source ownership remains singular, and the actual
+app candidate is available for the requested in-game acceptance with its identity
+recorded. The executor owns implementation and technical checks. Matthias owns live
+acceptance and release decisions; routine focus/layout choices need no new approval.
+
+Deferred: autonomous multi-action workflows, automatic hero addition, generic AI
+search, equipment/bonus simulation, durable navigation across restarts, global undo,
+new themes, and a framework rewrite. Native templates and official game mechanics
+remain the foundation.
+
+## 10. Evidence and implementation owners
+
+- [Hub renderer](../src/renderer/hub.ts): history, row actions, input, breadcrumbs,
+  temporary lifetime, with per-view focus and selection restored on Back.
+- [Character carousel](../src/renderer/character-switch-palette.ts): spatial controls
+  and optional search, preserving native query editing when typing from a card.
+- [Account presentation](../src/renderer/hub-accounts.ts): existing Switch Account,
+  explicit replace/open actions, native revalidation.
+- [Travel](../apps/tools/src/components/TravelPalette.vue): destination input and
+  selection; preserve its useful search-first interaction.
+- [Hub build library](../apps/tools/src/hub-library.ts): matching, native folder
+  browsing, incoming/current target presentation, application feedback.
+- [Shared Hub contract](../src/shared/hub.ts), [build presentation](../src/shared/builds/presentation.ts),
+  [build differences](../src/shared/builds/diff.ts), and [bounded apply runner](../src/shared/builds/team-apply-runner.ts).
+- [Hub geometry](../src/renderer/hub-window.ts), [Tools design](../apps/tools/DESIGN.md),
+  [product boundaries](../PRODUCT.md), and [account profiles](multiple-accounts.md).
+- [W3C combobox pattern](https://www.w3.org/WAI/ARIA/apg/patterns/combobox/): native
+  editing/focus guidance for searchable lists; not a requirement to make every task a combobox.
+- [Apple search guidance](https://developer.apple.com/videos/play/wwdc2026/292/):
+  recognizable search behavior within a custom visual identity.
+
+---
+
+## Historical overhaul record — superseded proposal and completed delivery
+
+The following text preserves the original research and delivery history. Its
+earlier focus, presentation, and implementation proposals are superseded by the
+current refinement plan above. Historical completion statements refer to that
+earlier delivery only.
+
+### gwonmac: unify the Guild Wars visual study and Hub experience
+
+Research and delivery plan — 12 September 2026.
+
+**Amended after Matthias's follow-up on 13 September:** Build search, template
+folder browsing, target selection and application stay inside Hub. Trade and
+Whispers remain floating. Only Hub has a lock; other floating tools move and
+resize directly. Hub settings can restore its default geometry. These decisions
+supersede the earlier floating-build-review and shared-lock proposals below.
+The current interaction owner is [Tools design](../apps/tools/DESIGN.md#hub-task-presentation).
+
+Implementation completed locally across the three review layers. See the
+[verification record](hub-verification.md#unified-hub-candidate--12-september-2026)
+for acceptance evidence, exact checks and the remaining native review.
 
 Target: the existing **gwonmac** application, as confirmed by Matthias. Implementation authorized on 12 September 2026. This plan does not claim release readiness. Guild Wars v2 is outside this plan.
 
@@ -43,8 +485,8 @@ Use the same visual language in three presentation forms:
 | Form | Suitable work | Behavior |
 | --- | --- | --- |
 | Search result or compact review | Destination, character, saved build/team, conversion, person | Search, inspect, choose a named action |
-| View inside Hub | Travel, Characters, Whispers, settings, build/team authoring, Trade | Fixed outer frame; content scrolls or changes pane inside it |
-| Floating tool | Ongoing chat, longer Trade or Library work | Reuse feature state; return to Hub without losing the task |
+| View inside Hub | Travel, Characters, settings and utilities | User-sized frame; content scrolls or changes pane inside it |
+| Floating tool | All Whispers, Trade, Library editing and build/team review | Reuse feature state across hide/show; no docking control |
 
 One visual system does not require every tool to use the same content layout. Travel needs destinations; Characters needs a carousel; chat needs a transcript; Trade needs a ledger; builds need skill slots. Reuse their frames, type roles, controls, focus states and navigation conventions.
 
@@ -202,8 +644,19 @@ Use existing `pnpm run check`, the Tools Hub browser journeys after integration,
 - [WAI-ARIA combobox guidance](https://www.w3.org/WAI/ARIA/apg/patterns/combobox/) supports keeping text editing and result navigation distinct, with the active result exposed to assistive technology.
 - [WCAG contrast guidance](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html) supplies the text contrast thresholds. The local study demonstrates why game backdrops must be part of the comparison.
 
-## Scope and next action
+## Scope and delivery status
 
 Keep native DDS skin replacement, extra themes, new daily/planning features, framework migration and v2 out of this delivery. The HTML companion can match Guild Wars visually without changing ArenaNet's native interface textures.
 
-Start implementation with steps 1–4 as a bounded first milestone: preserve and integrate the Hub, establish baselines, then deliver Home and Travel in the original frame. Review that actual working result before extending the same system to the remaining flows. This establishes both visual fidelity and usable interaction early, while the current owners and player data remain intact.
+The integrated overhaul and the follow-up polish are implemented in the existing
+gwonmac app as of 13 September 2026. The original frame, shared controls and
+existing feature owners now cover the journeys above. The post-playtest polish
+adds compact team previews, more visible Trade offers and team members, clear
+Back/Actions/Pop out behavior, Home context and command examples, and paired Maps
+layer/opacity controls. Task state remains with the existing tools when they move
+between Hub and floating presentation.
+
+The [verification record](hub-verification.md) distinguishes the earlier live
+outpost checks from the final polish's browser, offline Electron and packaging
+evidence. These local commits are ready for review; release publication and human
+gameplay/accessibility acceptance remain separate from implementation completion.

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ProfessionIcon from "./ProfessionIcon.vue";
 import { computed, nextTick, ref, watch } from "vue";
 import { HEROES_IN_PANEL_ORDER } from "../../../../src/shared/builds/heroes";
 import {
@@ -316,7 +317,9 @@ defineExpose({
           </button>
         </div>
       </div>
-      <div class="team-controls">
+      <details class="team-options">
+        <summary>Team options · {{ team.mode === "none" ? "Keep difficulty" : team.mode === "hard" ? "Hard Mode" : "Normal Mode" }}</summary>
+        <div class="team-controls">
         <fieldset class="team-mode">
           <legend>When applying</legend>
           <div class="ui-segment" role="group" aria-label="Difficulty when applying">
@@ -337,7 +340,8 @@ defineExpose({
           label="Team tags"
           @update="controller.setTags({ kind: 'team', id: team.id }, $event)"
         />
-      </div>
+        </div>
+      </details>
     </header>
 
     <div v-if="sharedBuildCount > 0" class="ui-banner">
@@ -350,10 +354,9 @@ defineExpose({
     </div>
 
     <div class="detail-scroll team-scroll">
-      <div class="section-heading">
+      <div class="section-heading team-roster-heading">
         <div>
           <h2 id="team-title">Team composition</h2>
-          <p>Hero, build, and behavior remain visible in one scan.</p>
         </div>
         <label v-if="lockedHeroes.length" class="show-locked-heroes ui-check">
           <input v-model="showLockedHeroes" type="checkbox">
@@ -384,7 +387,7 @@ defineExpose({
                 ? buildById(controller.library.value, slot.build)?.professions[0]
                 : undefined"
             >
-              {{ teamMemberLabel(slot.hero, index)[0] }}
+              <ProfessionIcon v-if="slot.build && controller.library.value" :profession="buildById(controller.library.value, slot.build)?.professions[0]" /><template v-else>{{ teamMemberLabel(slot.hero, index)[0] }}</template>
             </span>
             <span v-if="index === 0" class="player-identity">
               <strong>You</strong>

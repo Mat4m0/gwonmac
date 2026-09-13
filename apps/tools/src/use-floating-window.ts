@@ -11,7 +11,7 @@ import { installResizeGrip } from "../../../src/shared/ui/resize";
 import {
   restoreFloatingWindowPlacement,
   serializeFloatingWindowPlacement,
-} from "./floating-window-placement";
+} from "../../../src/shared/ui/window-placement";
 
 export function useFloatingWindow(options: {
   mode: "standalone" | "embedded";
@@ -74,7 +74,7 @@ export function useFloatingWindow(options: {
   };
 
   const startDrag = (event: PointerEvent) => {
-    if (options.mode !== "embedded" || !panel.value) return;
+    if (event.button !== 0 || options.mode !== "embedded" || !panel.value) return;
     if ((event.target as Element).closest("button, input, select, textarea, a, summary, label")) return;
     const element = panel.value;
     const handle = event.currentTarget as HTMLElement;

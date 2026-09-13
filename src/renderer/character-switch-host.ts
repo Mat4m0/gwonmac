@@ -45,6 +45,11 @@ export function installCharacterSwitchHost(parent: HTMLElement): CharacterSwitch
   const palette = createCharacterSwitchPalette(parent, proxy);
   const hubSource: HubSource = {
     feature: 'characterSwitchEnabled',
+    context() {
+      const state = source.characters;
+      return ['outpost', 'pve-explorable', 'pvp-explorable'].includes(source.context) && state.status === 'ready' && state.selectedIndex !== null
+        ? state.characters[state.selectedIndex]?.name ?? null : null;
+    },
     setVisible() {}, subscribe: proxy.subscribe,
     search(query) {
       const parsed = parseHubQuery(query);

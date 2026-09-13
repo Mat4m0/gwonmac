@@ -30,12 +30,19 @@ import { useFloatingWindow } from "./use-floating-window";
 import TradeIcon from "./TradeIcon.vue";
 import TraderPrices from "./components/TraderPrices.vue";
 
+
 const props = defineProps<{
   host: TradeHost;
   mode: "standalone" | "embedded";
   visible: boolean;
   active: boolean;
 }>();
+const offerActions = ref<HTMLDetailsElement | null>(null);
+function closeOfferActions() {
+  if (!offerActions.value?.open) return;
+  offerActions.value.open = false;
+  offerActions.value.querySelector('summary')?.focus();
+}
 const whispersEnabled = ref(false);
 const updateWhispersEnabled = () => { whispersEnabled.value = !!window.gwToolsSettings?.().gwonmacTools && !!window.gwToolsSettings?.().whispersEnabled; };
 onMounted(() => { updateWhispersEnabled(); window.addEventListener('gw:tools-settings', updateWhispersEnabled); });
@@ -142,6 +149,9 @@ const emptyHeading = computed(() => {
 });
 
 let requestRevision = 0;
+let subscriptionRevision = 0;
+// A submitted search waits for the socket; merely showing the ledger is not a search.
+let searchQueued = false;
 let stopEvents: (() => void) | null = null;
 let clock: ReturnType<typeof setInterval> | null = null;
 let noticeTimer: number | null = null;
@@ -151,24 +161,25 @@ let savedWrites = Promise.resolve();
 const now = ref(Date.now());
 
 async function subscribe(next: TradeSource): Promise<void> {
-  const revision = ++requestRevision;
-  searchProblem.value = "";
+  const revision = ++subscriptionRevision;
   const target = states[next];
   target.status = target.live.length ? "reconnecting" : "connecting";
   try {
     const snapshot = await props.host.subscribe(next);
-    if (revision !== requestRevision || source.value !== next || !props.visible) return;
+    if (revision !== subscriptionRevision || source.value !== next || !props.visible) return;
     target.status = snapshot.status;
     target.live = [...snapshot.messages];
     ensureSelection(target, filtered.value, next);
     emit("ready");
-    if (submittedQuery.value) await runSearch(revision);
+    void sendQueuedSearch();
   } catch {
-    if (revision === requestRevision) target.status = "unavailable";
+    if (revision === subscriptionRevision) target.status = "unavailable";
   }
 }
 
-async function runSearch(existingRevision?: number): Promise<void> {
+async function runSearch(): Promise<void> {
+  requestRevision += 1;
+  searchQueued = false;
   resetPlayerView();
   detailOpen.value = false;
   const trimmed = query.value.trim();
@@ -180,13 +191,20 @@ async function runSearch(existingRevision?: number): Promise<void> {
     ensureSelection(current.value, current.value.live, source.value);
     return;
   }
-  const revision = existingRevision ?? ++requestRevision;
-  const requestedSource = source.value;
   searching.value = true;
+  searchQueued = true;
+  await sendQueuedSearch();
+}
+
+async function sendQueuedSearch(): Promise<void> {
+  if (!searchQueued || !props.visible || current.value.status !== "live") return;
+  searchQueued = false;
+  const revision = requestRevision;
+  const requestedSource = source.value;
   try {
     const result = await props.host.search({
       source: requestedSource,
-      query: trimmed,
+      query: submittedQuery.value,
       scope: "all",
     });
     if (revision !== requestRevision || source.value !== requestedSource) return;
@@ -202,6 +220,11 @@ async function runSearch(existingRevision?: number): Promise<void> {
   }
 }
 
+function retrySearch(): void {
+  if (submittedQuery.value) void runSearch();
+  if (current.value.status !== "live") void props.host.retry(source.value);
+}
+
 function onQueryInput(event: Event): void {
   const value = (event.target as HTMLInputElement).value;
   if (!value.trim() && submittedQuery.value) clearSearch();
@@ -214,6 +237,7 @@ function clearSearch(): void {
   submittedQuery.value = "";
   searchProblem.value = "";
   searching.value = false;
+  searchQueued = false;
   visibleLimit.value = 25;
   requestRevision += 1;
   ensureSelection(current.value, current.value.live, source.value);
@@ -223,6 +247,7 @@ function onTradeEvent(event: TradeEvent): void {
   const target = states[event.source];
   if (event.type === "status") {
     target.status = event.status;
+    if (event.source === source.value) void sendQueuedSearch();
     return;
   }
   removeReplacement(target, event.message.replacementTimestamp);
@@ -235,7 +260,7 @@ function onTradeEvent(event: TradeEvent): void {
   } else {
     target.pending = insertTradeMessage(target.pending, event.message);
   }
-  ensureSelection(target, target.live, event.source);
+  if (event.source === source.value) ensureSelection(target, filtered.value, event.source);
 }
 
 function commitPending(): void {
@@ -264,6 +289,8 @@ function selectMessage(message: TradeMessage): void {
 }
 
 async function openPlayer(sender: string, focusTimestamp: number | null = null): Promise<void> {
+  searchQueued = false;
+  searching.value = false;
   if (!playerName.value) {
     playerReturn.value = {
       scrollTop: list.value?.scrollTop ?? 0,
@@ -476,6 +503,12 @@ watch(source, (next) => {
   resetPlayerView();
   detailOpen.value = false;
   visibleLimit.value = 25;
+  // Each market has different results. Keep the submitted query, not unsubmitted edits.
+  requestRevision += 1;
+  searchQueued = !!submittedQuery.value;
+  searching.value = searchQueued;
+  searchProblem.value = "";
+  current.value.search = [];
   if (props.visible) void subscribe(next);
 });
 watch(filtered, (messages) => {
@@ -484,7 +517,13 @@ watch(filtered, (messages) => {
 watch(() => props.visible, (visible) => {
   if (visible) void subscribe(source.value);
   else {
+    subscriptionRevision += 1;
     requestRevision += 1;
+    searchQueued = searching.value;
+    if (playerSearching.value) {
+      playerSearching.value = false;
+      playerProblem.value = "The search was interrupted. Go back or try again.";
+    }
     void props.host.unsubscribe();
   }
 });
@@ -503,6 +542,7 @@ onMounted(() => {
   });
 });
 onBeforeUnmount(() => {
+  subscriptionRevision += 1;
   requestRevision += 1;
   stopEvents?.();
   window.removeEventListener("keydown", onWindowKeydown);
@@ -580,6 +620,7 @@ useClassicFrame(panel);
       role="dialog"
       aria-label="Trade Chat"
       data-design-contract="trade-ledger-v1"
+      :data-view="view"
     >
       <header class="ui-panel-head ui-window-head window-bar" @pointerdown="startDrag">
         <div class="window-brand trade-brand" aria-hidden="true">
@@ -590,16 +631,13 @@ useClassicFrame(panel);
           <h1 class="ui-panel-title">{{ view === "prices" ? "Trader Prices" : `${sourceLabel} Trade` }}</h1>
           <p class="ui-field-hint">{{ view === "prices" ? "Current Guild Wars trader quotes · history from Kamadan" : "Public trade feed · listings are posted in Guild Wars" }}</p>
         </div>
-        <span v-if="view === 'listings'" class="trade-status" :data-state="current.status" role="status">
-          <i aria-hidden="true" />{{ statusLabel }}
-        </span>
         <button
           v-if="mode === 'embedded'"
-          class="ui-button window-close"
+          class="ui-window-close window-close"
           data-icon
           aria-label="Close Trade Chat"
           @click="emit('close')"
-        ><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 3 10 10M13 3 3 13"/></svg></button>
+        >×</button>
       </header>
 
       <TraderPrices
@@ -664,7 +702,10 @@ useClassicFrame(panel);
           </button>
           <strong><TradeIcon name="player" /><bdi>{{ playerName }}</bdi></strong>
         </span>
-        <span>
+        <span class="trade-result-status">
+          <span class="trade-status" :data-state="current.status" role="status">
+            <i aria-hidden="true" />{{ statusLabel }}
+          </span>
           {{ filtered.length }}
           {{ filtered.length === 1 ? "offer" : "offers" }}
         </span>
@@ -697,7 +738,7 @@ useClassicFrame(panel);
           <button
             v-else-if="current.status === 'unavailable' || searchProblem"
             class="ui-button"
-            @click="props.host.retry(source); subscribe(source)"
+            @click="retrySearch"
           >Try again</button>
         </div>
         <div
@@ -794,28 +835,21 @@ useClassicFrame(panel);
             <p><bdi>{{ selected.message }}</bdi></p>
           </div>
           <footer class="inspector-actions">
-            <div class="inspector-action-group" role="group" aria-label="Offer actions">
-              <button v-if="whispersEnabled" class="ui-button" @click="whisperSeller(selected.sender)">Whisper {{ selected.sender }}</button>
-              <button
-                class="ui-button"
-                :aria-pressed="offerSaved(selected)"
-                :disabled="!savedReady"
-                @click="toggleOffer(selected)"
-              ><TradeIcon name="star" :filled="offerSaved(selected)" />{{ offerSaved(selected) ? "Saved" : "Save offer" }}</button>
-              <button
-                class="ui-button"
-                :aria-pressed="playerSaved(selected.sender)"
-                :disabled="!savedReady"
-                @click="togglePlayer(selected.sender)"
-              ><TradeIcon name="player" :filled="playerSaved(selected.sender)" />{{ playerSaved(selected.sender) ? "Following" : "Follow player" }}</button>
-            </div>
-            <div class="inspector-action-group" data-utility role="group" aria-label="Copy and source actions">
-              <button class="ui-button" data-variant="quiet" @click="copy(selected.sender, 'Character name')">
-                Copy name
-              </button>
-              <button class="ui-button" data-variant="quiet" @click="copy(selected.message, 'Message')">Copy offer</button>
-              <button class="ui-link" @click="props.host.openSource(source)">Open {{ sourceLabel }} feed ↗</button>
-            </div>
+            <button v-if="whispersEnabled" class="ui-button" data-variant="primary" :aria-label="`Whisper ${selected.sender}`" @click="whisperSeller(selected.sender)">Whisper seller</button>
+            <details ref="offerActions" class="offer-actions" @keydown.esc.stop.prevent="closeOfferActions">
+              <summary class="ui-button">Actions</summary>
+              <div class="inspector-action-group" role="group" aria-label="Offer actions">
+                <button class="ui-button" :aria-pressed="offerSaved(selected)" :disabled="!savedReady" @click="toggleOffer(selected)">
+                  <TradeIcon name="star" :filled="offerSaved(selected)" />{{ offerSaved(selected) ? "Saved" : "Save offer" }}
+                </button>
+                <button class="ui-button" :aria-pressed="playerSaved(selected.sender)" :disabled="!savedReady" @click="togglePlayer(selected.sender)">
+                  <TradeIcon name="player" :filled="playerSaved(selected.sender)" />{{ playerSaved(selected.sender) ? "Following" : "Follow player" }}
+                </button>
+                <button class="ui-button" @click="copy(selected.sender, 'Character name')">Copy name</button>
+                <button class="ui-button" @click="copy(selected.message, 'Message')">Copy offer</button>
+                <button class="ui-link" @click="props.host.openSource(source)">Open {{ sourceLabel }} feed ↗</button>
+              </div>
+            </details>
           </footer>
         </template>
         <div v-else class="ui-empty">
@@ -838,7 +872,7 @@ useClassicFrame(panel);
               <strong>Saved</strong>
               <span>{{ savedCount }} {{ savedCount === 1 ? "item" : "items" }}</span>
             </div>
-            <button ref="savedClose" class="ui-button" data-icon aria-label="Close Saved" @click="closeSaved"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 3 10 10M13 3 3 13" /></svg></button>
+            <button ref="savedClose" class="ui-button" data-icon aria-label="Close Saved" @click="closeSaved">×</button>
           </header>
           <div class="ui-segment saved-tabs" data-fill role="group" aria-label="Saved item type">
             <button :aria-pressed="savedTab === 'offers'" @click="savedTab = 'offers'">Offers {{ saved.offers.length }}</button>

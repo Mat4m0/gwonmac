@@ -29,8 +29,6 @@ test("embedded whispers open on the first click and retain draft input when rais
     await launcher.click();
     const panel = page.locator("#whisper-window");
     await expect(panel).toBeVisible();
-    await panel.getByRole("button", { name: "Pop out chat", exact: true }).click();
-    await expect(page.locator("#hub")).toBeHidden();
     await panel.getByRole("button", { name: /Test Friend Message 30/ }).click();
     const transcript = panel.locator("[data-transcript]");
     await panel.getByRole("button", { name: "30 new · Show latest" }).click();
@@ -43,14 +41,13 @@ test("embedded whispers open on the first click and retain draft input when rais
     await field.press("End");
     await field.pressSequentially(" here");
     await expect(field).toHaveValue("Keep my draft here");
+    await expect(page.locator("#hub")).toBeHidden();
     await panel.locator('[aria-label="Chat options"]').click();
     const opacity = panel.getByRole("slider", { name: "Background" });
     const head = panel.locator(".whisper-head");
     const bubble = panel.locator(".whisper-bubble").first();
     const composer = panel.locator(".whisper-input-row");
-    const fullTranscriptBackground = await transcript.evaluate(element => getComputedStyle(element).backgroundColor);
-    const fullHeadBackground = await head.evaluate(element => getComputedStyle(element).backgroundColor);
-    const fullFrameEdge = await panel.evaluate(element => getComputedStyle(element, "::before").backgroundColor);
+    const fullBackground = await panel.evaluate(element => getComputedStyle(element, "::before").backgroundColor);
     const fullHeadEdge = await head.evaluate(element => getComputedStyle(element).borderBottomColor);
     const fullBubbleBackground = await bubble.evaluate(element => getComputedStyle(element).backgroundColor);
     const fullBubbleEdge = await bubble.evaluate(element => getComputedStyle(element).boxShadow);
@@ -60,12 +57,8 @@ test("embedded whispers open on the first click and retain draft input when rais
     if (!bounds) throw new Error("Background slider is not visible");
     await opacity.click({ position: { x: bounds.width * 0.2, y: bounds.height / 2 } });
     await expect(opacity).toHaveValue("30");
-    await expect.poll(() => transcript.evaluate(element => getComputedStyle(element).backgroundColor))
-      .not.toBe(fullTranscriptBackground);
-    await expect.poll(() => head.evaluate(element => getComputedStyle(element).backgroundColor))
-      .not.toBe(fullHeadBackground);
     await expect.poll(() => panel.evaluate(element => getComputedStyle(element, "::before").backgroundColor))
-      .not.toBe(fullFrameEdge);
+      .not.toBe(fullBackground);
     await expect.poll(() => head.evaluate(element => getComputedStyle(element).borderBottomColor))
       .not.toBe(fullHeadEdge);
     await expect.poll(() => bubble.evaluate(element => getComputedStyle(element).backgroundColor))
@@ -104,7 +97,6 @@ test("whisper toggle focuses the picker or draft and returns focus to the game",
     await expect(page.locator("#whisper-window")).toBeAttached();
     const toggle = () => page.evaluate(() => window.dispatchEvent(new CustomEvent("gw:whispers-toggle", { cancelable: true })));
     await toggle();
-    await page.getByRole("button", { name: "Pop out chat", exact: true }).click();
     await expect(page.locator("#whisper-person")).toBeFocused();
     await page.locator("#whisper-person").fill("Test Friend");
     await page.locator(".whisper-search").getByRole("button", { name: "Whisper", exact: true }).click();

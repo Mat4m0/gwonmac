@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ProfessionIcon from "./ProfessionIcon.vue";
 import SkillDetails from "./SkillDetails.vue";
 import {
   computed,
@@ -294,9 +295,9 @@ function hideBrokenIcon(event: Event): void {
           Choose skill {{ (editor.activeSlot.value ?? 0) + 1 }}
         </h2>
         <p>
-          {{ editor.draft.value.professions[0] }}
+          <ProfessionIcon :profession="editor.draft.value.professions[0]" /> {{ editor.draft.value.professions[0] }}
           <template v-if="editor.draft.value.professions[1]">
-            / {{ editor.draft.value.professions[1] }}
+            / <ProfessionIcon :profession="editor.draft.value.professions[1]" /> {{ editor.draft.value.professions[1] }}
           </template>
           · PvE skills for this {{ editor.context.value === "hero" ? "hero" : "build" }}
         </p>
@@ -340,14 +341,14 @@ function hideBrokenIcon(event: Event): void {
       <div class="ui-segment skill-filters" aria-label="Filter skills">
         <button :aria-pressed="filter === 'all'" @click="filter = 'all'">All</button>
         <button :aria-pressed="filter === 'primary'" @click="filter = 'primary'">
-          {{ editor.draft.value.professions[0] }}
+          <ProfessionIcon :profession="editor.draft.value.professions[0]" /> {{ editor.draft.value.professions[0] }}
         </button>
         <button
           v-if="editor.draft.value.professions[1]"
           :aria-pressed="filter === 'secondary'"
           @click="filter = 'secondary'"
         >
-          {{ editor.draft.value.professions[1] }}
+          <ProfessionIcon :profession="editor.draft.value.professions[1]" /> {{ editor.draft.value.professions[1] }}
         </button>
         <button :aria-pressed="filter === 'elite'" @click="filter = 'elite'">Elite</button>
         <button
@@ -435,7 +436,7 @@ function hideBrokenIcon(event: Event): void {
               <span class="result-copy">
                 <strong>{{ skill.name }}</strong>
                 <small>
-                  {{ skill.profession ?? "PvE" }}
+                  <ProfessionIcon :profession="skill.profession" /> {{ skill.profession ?? "PvE" }}
                   <template v-if="skill.attribute"> · {{ label(skill.attribute) }}</template>
                 </small>
               </span>

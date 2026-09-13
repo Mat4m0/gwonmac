@@ -82,6 +82,10 @@ export function installSurfaceController(
     if (event.key === "Escape") {
       if (nativeModal !== null) return; // The native cancel event owns dismissal.
       claim(event);
+      const expanded = (event.target instanceof Element ? event.target.closest<HTMLDetailsElement>('details[open]') : null);
+      if (expanded && surface.root.contains(expanded)) {
+        expanded.open = false; expanded.querySelector('summary')?.focus(); return;
+      }
       surface.dismiss();
       return;
     }
@@ -147,6 +151,7 @@ export function installSurfaceController(
         if (next) {
           if (surface.transient) dismissTransient(id);
           surfaces.set(id, { ...surface, order: order++ });
+          if (!(surface.root instanceof HTMLDialogElement)) surface.root.style.zIndex = String(100 + order);
         }
         else surfaces.delete(id);
       },
@@ -154,6 +159,7 @@ export function installSurfaceController(
         const current = surfaces.get(id);
         if (!current) return;
         surfaces.set(id, { ...current, order: order++ });
+        if (!(surface.root instanceof HTMLDialogElement)) surface.root.style.zIndex = String(100 + order);
       },
       dispose() {
         open = false;

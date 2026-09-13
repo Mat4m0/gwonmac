@@ -1,5 +1,5 @@
 /**
- * Shared lifetime for embedded Hub tools and their detachable windows.
+ * Shared lifetime for independent Build Library and Trade windows.
  *
  * Builds & Teams and Trade Chat mount lazily into explicit hosts. They may be
  * open together; the last interacted host owns visual stacking, Escape and
@@ -14,7 +14,7 @@ const OVERLAY_CSS = `
 #toolbox-foundation {
   position: fixed;
   inset: 0;
-  z-index: 4;
+  z-index: auto;
   box-sizing: border-box;
   pointer-events: none;
   color: #e8e4d8;
@@ -88,8 +88,14 @@ export function createToolboxFoundation(
   const nonActivating = createNonActivatingSurface(root, () => canvas);
   let state: ToolboxState = Object.freeze({ status: "waiting" });
   let disposed = false;
-  let stackOrder = 0;
   let active: Slot | null = null;
+  let focusFrame: number | undefined;
+  const cancelPendingFocus = () => {
+    if (focusFrame !== undefined) cancelAnimationFrame(focusFrame);
+    focusFrame = undefined;
+  };
+  window.addEventListener("keydown", cancelPendingFocus, true);
+  window.addEventListener("pointerdown", cancelPendingFocus, true);
   let availability: ToolboxAvailability = { builds: true, trade: true };
 
   const requestClose = (slot: Slot): void => {
@@ -124,8 +130,8 @@ export function createToolboxFoundation(
   const slots = (): Slot[] => trade ? [builds, trade] : [builds];
 
   const activate = (slot: Slot) => {
+    cancelPendingFocus();
     active = slot;
-    slot.host.style.zIndex = String(++stackOrder);
     slot.surface.raise();
     for (const candidate of slots()) {
       candidate.tool?.setActive?.(candidate === slot);
@@ -151,6 +157,7 @@ export function createToolboxFoundation(
 
   const setOpen = (slot: Slot, next: boolean) => {
     if (slot.visible === next) return;
+    cancelPendingFocus();
     slot.visible = next;
     if (!next && slot.host.closest('#hub')) window.gwHub?.close();
     if (next) {
@@ -178,24 +185,21 @@ export function createToolboxFoundation(
     }, true);
   }
 
-  const openInHub = (slot: Slot, title: string) => {
-    const hub = window.gwHub;
-    if (!hub) { setOpen(slot, true); activate(slot); return; }
-    hub.showView(title, target => {
-      setOpen(slot, true); activate(slot);
-      const detach = document.createElement('button'); detach.className = 'hub-detach ui-button'; detach.textContent = 'Detach';
-      detach.onclick = () => { hub.close(); setOpen(slot, true); activate(slot); }; target.append(detach);
-      slot.host.classList.add('hub-embedded-host'); target.append(slot.host);
-      const focus = () => slot.host.querySelector<HTMLInputElement>('input[type="search"], input')?.focus();
-      requestAnimationFrame(focus);
-      return () => { slot.host.classList.remove('hub-embedded-host'); root.append(slot.host); setOpen(slot, false); };
-    }, () => slot === builds ? availability.builds : availability.trade);
+  const openFloating = (slot: Slot) => {
+    window.gwHub?.suspend();
+    setOpen(slot, true); activate(slot);
+    // A later surface change or user input owns focus over this deferred handoff.
+    focusFrame = requestAnimationFrame(() => {
+      focusFrame = undefined;
+      if (!disposed && slot.visible && active === slot) [...slot.host.querySelectorAll<HTMLInputElement>('input')].find(input => !input.disabled && input.getClientRects().length)?.focus();
+    });
   };
   const onBuildsCommand = (event: Event) => {
     if (!availability.builds) return;
     event.preventDefault();
-    if (window.gwHub) openInHub(builds, "Builds and Teams");
-    else if (event instanceof CustomEvent && event.detail === "show") { setOpen(builds, true); activate(builds); }
+    if (event instanceof CustomEvent && event.detail === 'workspace') openFloating(builds);
+    else if (window.gwHub?.visible) window.gwHub.browseBuilds();
+    else if (event instanceof CustomEvent && event.detail === "show") openFloating(builds);
     else toggle(builds);
   };
   const onTradeCommand = (event: Event) => {
@@ -205,8 +209,7 @@ export function createToolboxFoundation(
       if (trade.tool) trade.tool.search?.(event.detail.query);
       else trade.query = event.detail.query;
     }
-    if (window.gwHub) openInHub(trade, "Trade");
-    else if (event instanceof CustomEvent && event.detail === "show") { setOpen(trade, true); activate(trade); }
+    if (window.gwHub?.visible || event instanceof CustomEvent && (event.detail === "show" || typeof event.detail?.query === "string")) openFloating(trade);
     else toggle(trade);
   };
 
@@ -227,6 +230,8 @@ export function createToolboxFoundation(
   window.addEventListener("gw:hub-visible", onHub);
   window.addEventListener("gw:tools-toggle", onBuildsCommand);
   window.addEventListener("gw:trade-toggle", onTradeCommand);
+  // The client may finish mounting Tools after Hub has already opened.
+  if (window.gwHub?.visible) onHub();
 
   return {
     update(next: ToolboxState) {
@@ -236,11 +241,15 @@ export function createToolboxFoundation(
     setAvailable(next: ToolboxAvailability) {
       availability = next;
       if (!next.builds) setOpen(builds, false);
+      else if (window.gwHub?.visible) ensure(builds);
       if (trade && !next.trade) setOpen(trade, false);
     },
     get state() { return state; },
     dispose() {
       disposed = true;
+      cancelPendingFocus();
+      window.removeEventListener("keydown", cancelPendingFocus, true);
+      window.removeEventListener("pointerdown", cancelPendingFocus, true);
       for (const slot of slots()) {
         slot.tool?.dispose();
         slot.surface.dispose();

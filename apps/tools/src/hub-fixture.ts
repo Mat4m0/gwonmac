@@ -38,6 +38,7 @@ export function mountHubFixture(target: HTMLElement) {
   const record = (message: string) => { target.dataset.action = message; };
   let settings: AppSettings = { ...DEFAULT_SETTINGS, gwonmacTools: true, travelPalette: true, whispersEnabled: true, buildLibrary: true, tradeChat: true, xunlaiStorage: true };
   try { settings.hubShortcuts = JSON.parse(localStorage.getItem('hub-fixture-shortcuts') ?? '[]'); } catch { /* Disposable fixture data. */ }
+  const settingsListeners = new Set<(value: AppSettings) => void>();
   let capturingShortcut = false;
   const hubSettings: HubSettingsApi = {
     get: async () => ({ settings, tools: { configured: settings.gwonmacTools, loaded: true, restartRequired: !settings.gwonmacTools, features: Object.fromEntries(GLOBAL_TOOLS.map(tool => [tool, { enabled: settings[FEATURE_SELECTION_POLICIES[GLOBAL_TOOL_FEATURES[tool]].activation.setting] }])) as GlobalToolSettings }, shortcuts: resolveShortcuts(settings.shortcutOverrides) }),
@@ -52,7 +53,7 @@ export function mountHubFixture(target: HTMLElement) {
         if (conflict) settings = { ...settings, shortcutOverrides: withShortcutOverride(settings.shortcutOverrides, conflict, null) };
         settings = { ...settings, shortcutOverrides: withShortcutOverride(settings.shortcutOverrides, change.action, change.binding) };
       }
-      window.gwApplyFixtureAppearance?.({ uiStyle: settings.uiStyle, uiPanelOpacity: settings.uiPanelOpacity });
+      window.gwApplyFixtureAppearance?.({ uiStyle: settings.uiStyle, uiPanelOpacity: settings.uiPanelOpacity, uiFont: settings.uiFont, uiCustomTheme: settings.uiCustomTheme });
       window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: settings }));
     },
     capture: () => new Promise(resolve => {
@@ -72,7 +73,7 @@ export function mountHubFixture(target: HTMLElement) {
   Object.assign(window, {
     gwSurfaces: installSurfaceController(document),
     gwToolsSettings: () => settings,
-    gwNative: { hubSettings, accounts: { get: async () => ({ current: '9e1bd41c-cfc0-4ca8-a57f-2f0ca159c72d', profiles: [{ id: '9e1bd41c-cfc0-4ca8-a57f-2f0ca159c72d', name: 'Main', state: 'running' }, { id: 'e98a37bc-5211-4bc5-8094-0b1286b3c42d', name: 'Second', state: 'ready' }] }), open: async (request: { mode: string }) => { record(`Account Second ${request.mode}`); } }, settings: { get: async () => settings, onChange: () => () => {}, set: async (patch: RendererSettingsPatch) => { settings = { ...settings, ...patch }; localStorage.setItem('hub-fixture-shortcuts', JSON.stringify(settings.hubShortcuts)); window.dispatchEvent(new Event('gw:tools-settings')); return settings; } }, clipboard: { writeText: async (value: string) => record(`Copied ${value}`) }, trade: { getMarketRates: async () => ({ ...estimateMarketRates(new URLSearchParams(location.search).has('market-empty') ? [] : ['WTS armbraces 30e/ea','WTB armbraces 28e/ea','WTS zkeys 1.5e/ea','WTB zkeys 1.4e/ea','WTS 20 ectos for 100k','WTB 25 ectos for 100k'].flatMap((message,group)=>Array.from({length:6},(_,index)=>({source:'kamadan' as const,message,sender:`Sample ${group} ${index}`,timestamp:Date.now()-index*60_000})))), sample: true }), getTraderQuotes: async () => ({ updatedAt: Date.now(), quotes: [{ modelId: '0b03a2', side: 'buy', price: 6000, timestamp: Date.now() }, { modelId: '0b03a2', side: 'sell', price: 5000, timestamp: Date.now() }] }) }, app: { showLauncher: async () => record('Launcher'), openSettings: async () => record('Settings'), requestQuit: async () => record('Quit or Reload'), openExternal: async () => record('Website') } },
+    gwNative: { hubSettings, accounts: { get: async () => ({ current: '9e1bd41c-cfc0-4ca8-a57f-2f0ca159c72d', profiles: [{ id: '9e1bd41c-cfc0-4ca8-a57f-2f0ca159c72d', name: 'Main', state: 'running' }, { id: 'e98a37bc-5211-4bc5-8094-0b1286b3c42d', name: 'Second', state: 'ready' }] }), open: async (request: { mode: string }) => { record(`Account Second ${request.mode}`); } }, settings: { get: async () => settings, onChange: (listener: (value: AppSettings) => void) => { settingsListeners.add(listener); return () => settingsListeners.delete(listener); }, set: async (patch: RendererSettingsPatch) => { settings = { ...settings, ...patch }; localStorage.setItem('hub-fixture-shortcuts', JSON.stringify(settings.hubShortcuts)); for (const listener of settingsListeners) listener(settings); window.dispatchEvent(new Event('gw:tools-settings')); return settings; } }, clipboard: { writeText: async (value: string) => record(`Copied ${value}`) }, trade: { getMarketRates: async () => ({ ...estimateMarketRates(new URLSearchParams(location.search).has('market-empty') ? [] : ['WTS armbraces 30e/ea','WTB armbraces 28e/ea','WTS zkeys 1.5e/ea','WTB zkeys 1.4e/ea','WTS 20 ectos for 100k','WTB 25 ectos for 100k'].flatMap((message,group)=>Array.from({length:6},(_,index)=>({source:'kamadan' as const,message,sender:`Sample ${group} ${index}`,timestamp:Date.now()-index*60_000})))), sample: true }), getTraderQuotes: async () => ({ updatedAt: Date.now(), quotes: [{ modelId: '0b03a2', side: 'buy', price: 6000, timestamp: Date.now() }, { modelId: '0b03a2', side: 'sell', price: 5000, timestamp: Date.now() }] }) }, app: { showLauncher: async () => record('Launcher'), openSettings: async () => record('Settings'), requestQuit: async () => record('Quit or Reload'), openExternal: async () => record('Website') } },
   });
   const hub = createHub(document.body);
   const game = createHubGameFixture(record);
@@ -108,7 +109,13 @@ export function mountHubFixture(target: HTMLElement) {
     session.observe([{ id: ++id, sender: recipient, message, direction: 'outgoing' }]);
     record('Whisper');
   });
-  const messenger = document.createElement('div'); document.body.append(messenger);
+  const messenger = document.createElement('div');
+  messenger.className = 'whisper-popout-host';
+  messenger.style.cssText = 'position:fixed;inset:0;pointer-events:none';
+  document.body.append(messenger);
+  const whisperSurface = window.gwSurfaces.register({ root: messenger, priority: 4, dismiss: () => session.setVisible(false) });
+  session.subscribe(state => whisperSurface.setOpen(state.visible));
+  messenger.addEventListener('pointerdown', () => whisperSurface.raise(), true);
   mountWhispers(messenger, { session });
   window.addEventListener('hub-fixture-failure', () => { failSend = true; });
   window.addEventListener('hub-fixture-reset', () => session.reset());
@@ -126,10 +133,11 @@ export function mountHubFixture(target: HTMLElement) {
   window.addEventListener('gw:travel-toggle', event => { event.preventDefault(); travel.open(); });
   window.addEventListener('gw:whispers-toggle', event => {
     event.preventDefault();
-    toggleHubWhispers(event, hub, messenger, document.body, session);
+    toggleHubWhispers(event, hub, messenger, session);
+    if (session.state.visible) whisperSurface.raise();
   });
   window.addEventListener('hub-fixture-settings', event => { if (event instanceof CustomEvent) {
-    settings = { ...settings, ...event.detail };
+    settings = { ...settings, ...event.detail }; for (const listener of settingsListeners) listener(settings);
     foundation.setAvailable({ builds: settings.gwonmacTools && settings.buildLibrary, trade: settings.gwonmacTools && settings.tradeChat });
     people.setEnabled(settings.gwonmacTools && (settings.travelPalette || settings.whispersEnabled));
     window.dispatchEvent(new Event('gw:tools-settings'));
@@ -140,7 +148,7 @@ export function mountHubFixture(target: HTMLElement) {
   let modern = false;
   theme.onclick = () => { modern = !modern; window.gwApplyFixtureAppearance?.({ uiStyle: modern ? 'obsidian' : 'guild-wars', uiPanelOpacity: 100 }); };
   const scenario = document.createElement('select'); scenario.className = 'ui-select'; scenario.setAttribute('aria-label', 'Fixture scenario');
-  for (const [value, label] of [['ready', 'Ready in outpost'], ['explorable', 'Explorable area'], ['partial', 'Interrupted apply'], ['duplicate', 'Duplicate build names']] as const) {
+  for (const [value, label] of [['ready', 'Ready in outpost'], ['explorable', 'Explorable area'], ['partial', 'Interrupted apply'], ['duplicate', 'Duplicate build names'], ['folders', 'Nested build folders'], ['mixed-professions', 'Mixed hero professions']] as const) {
     const option = document.createElement('option'); option.value = value; option.textContent = label; scenario.append(option);
   }
   scenario.onchange = () => { game.setScenario(scenario.value); hub.show(); };

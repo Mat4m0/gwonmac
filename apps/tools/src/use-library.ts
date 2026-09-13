@@ -10,6 +10,8 @@ import {
   removeTeam,
   skillBarOf,
   skillId,
+  type HeroId,
+  type BuildId,
   teamById,
   teamId,
   teamSlotsOf,
@@ -99,6 +101,8 @@ function sameTemplate(left: Build, right: SkillTemplate): boolean {
 
 export function useLibrary(host: ToolsHost) {
   const library = shallowRef<BuildLibrary | null>(null);
+  // Session recents reference source IDs; native template contents stay in Guild Wars.
+  const recentBuilds = shallowRef<readonly { id: BuildId; hero: HeroId | null }[]>([]);
   const loading = ref(true);
   const saving = ref(false);
   const error = ref<string | null>(null);
@@ -757,6 +761,12 @@ export function useLibrary(host: ToolsHost) {
   });
 
   return {
+    recentBuilds,
+    async recordBuildUse(id: BuildId, hero: HeroId | null) {
+      recentBuilds.value = [{ id, hero }, ...recentBuilds.value.filter(entry => entry.id !== id || entry.hero !== hero)].slice(0, 3);
+      if (!library.value?.builds.some(build => build.id === id)) return true;
+      return !!await commit('Recent build updated', current => ({ ...current, builds: current.builds.map(build => build.id === id ? { ...build, lastUsed: Date.now() } : build) }), true);
+    },
     skills: host.skills,
     party: host.party,
     // Narrower than handing components the host: they need the reason Apply is

@@ -64,7 +64,7 @@ export function createTravelPalette(parent: HTMLElement, command: TravelCommand)
       if (visible) void load().catch(() => { /* The explicit Travel action offers a retry. */ });
     },
     search(query) {
-      return app?.source.search(query) ?? matchHubRows([{ id: 'travel', title: 'Travel', detail: 'Outposts, favourites and recent places', group: 'Tools', keywords: 'tp teleport destination', action: 'Browse travel', run: open }], query);
+      return app?.source.search(query) ?? matchHubRows([{ id: 'travel', title: 'Travel', detail: 'Outposts, favourites and recent places', group: 'Tools', keywords: 'tp teleport destination', action: 'Browse travel', navigate: open, run: open }], query);
     },
   };
   const onCommand = (event: Event) => {

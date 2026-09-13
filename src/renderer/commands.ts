@@ -59,7 +59,7 @@
   window.gwNative.commands.handle(async (command) => {
     if (
       command.type === 'accounts.settings.open'
-      || command.type === 'tools.toggle'
+      || (command.type === 'tools.toggle' && !window.gwHub?.visible)
       || command.type === 'trade.toggle'
       || command.type === 'storage.open'
       || command.type === 'diagnostics.toggle'

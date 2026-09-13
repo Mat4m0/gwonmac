@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ProfessionIcon from "./ProfessionIcon.vue";
 import {
   computed,
   nextTick,
@@ -268,7 +269,7 @@ defineExpose({
           class="ui-mark profession-mark"
           :data-profession="editor.draft.value.professions[0]"
         >
-          {{ editor.draft.value.professions[0] }}
+          <ProfessionIcon :profession="editor.draft.value.professions[0]" />
         </div>
         <div class="title-editor">
           <label class="ui-sr-only" for="build-name">Build name</label>
@@ -281,7 +282,7 @@ defineExpose({
           <p>
             {{ PROFESSIONS[editor.draft.value.professions[0]].name }}
             <template v-if="editor.draft.value.professions[1]">
-              / {{ PROFESSIONS[editor.draft.value.professions[1] as Profession].name }}
+              / <ProfessionIcon :profession="editor.draft.value.professions[1]" /> {{ PROFESSIONS[editor.draft.value.professions[1] as Profession].name }}
             </template>
             · {{ context === "hero" ? "Hero build" : context === "player" ? "Player build" : "Library build" }}
           </p>

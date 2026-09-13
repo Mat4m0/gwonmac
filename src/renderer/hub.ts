@@ -2,8 +2,10 @@
  * Owns the Core command palette, its search focus and transient modal lifetime.
  * Optional Tools contributes local results and views without entering Core's imports.
  */
+import { installSearchEditing, resumeSearchInput } from './search-input.js';
+import { installHubWindow } from './hub-window.js';
 import { attachClassicFrame } from '../shared/ui/frame.js';
-import { resolveShortcuts, shortcutDisplay } from '../shared/keyboard-shortcuts.js';
+import { resolveShortcuts, shortcutKeycaps, type ShortcutAction } from '../shared/keyboard-shortcuts.js';
 import { openHubSettings } from "./hub-settings.js";
 import { createHubAccounts } from './hub-accounts.js';
 import { hubIcon } from "./hub-icons.js";
@@ -11,7 +13,7 @@ import { openHubMaps } from './hub-maps.js';
 import { editHubShortcut, manageHubShortcuts } from './hub-preferences.js';
 import { isHubShortcuts, type HubShortcut } from '../shared/hub-preferences.js';
 import { createHubCalculator } from './hub-calculator.js';
-import { matchHubRows, parseHubQuery, normaliseHubQuery, type HubRow, type HubSource } from '../shared/hub.js';
+import { matchHubRows, parseHubQuery, normaliseHubQuery, type HubRow, type HubSource, type HubSummary } from '../shared/hub.js';
 export function createHub(parent: HTMLElement) {
   const document = parent.ownerDocument;
   const root = document.createElement('dialog');
@@ -20,34 +22,43 @@ export function createHub(parent: HTMLElement) {
   root.dataset.page = "home";
   root.setAttribute('aria-label', 'Hub');
   root.innerHTML = `<section class="hub-panel ui-frame">
-    <header class="hub-heading ui-window-head"><button class="ui-button" data-variant="quiet" aria-label="Back" hidden>←</button><span class="hub-name">Hub</span><span class="hub-caption">Command palette</span><button class="ui-button hub-close" data-icon aria-label="Close Hub" title="Close Hub (Escape)">×</button></header>
-    <div class="hub-search"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 8 10-8 10L4 12 12 2Zm0 5v10M8 12h8"/></svg><input type="text" role="combobox" aria-label="Search people, places, builds" aria-autocomplete="list" aria-controls="hub-results" aria-expanded="true" placeholder="Search people, places, builds…" autocomplete="off" spellcheck="false" maxlength="120"></div>
-    <div class="hub-rate-controls" hidden></div><div class="hub-results ui-scroll" id="hub-results" role="listbox" aria-label="Results"></div>
+    <header class="hub-heading ui-window-head"><button class="ui-button hub-back" data-variant="quiet" aria-label="Back" hidden>← Back</button><span class="hub-name">Hub</span><nav class="hub-breadcrumbs" aria-label="Hub breadcrumb"><span class="hub-caption">Home</span></nav><span class="hub-context"></span><button class="ui-window-lock hub-lock" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="lock-shackle" d="M7 11V7a5 5 0 0 1 10 0v4"/><rect x="5" y="11" width="14" height="10" rx="2"/></svg></button><button class="ui-window-close hub-close" aria-label="Close Hub" title="Close Hub">×</button></header>
+    <section class="hub-summary" aria-label="Build to apply" hidden></section>
+    <div class="hub-search"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 8 10-8 10L4 12 12 2Zm0 5v10M8 12h8"/></svg><span class="hub-scope" hidden></span><input type="text" role="combobox" aria-label="Search people, places, builds" aria-autocomplete="list" aria-controls="hub-results" aria-expanded="true" placeholder="Search people, places, builds…" autocomplete="off" spellcheck="false" maxlength="120"></div>
+    <p class="hub-hint" id="hub-hint" hidden></p><div class="hub-rate-controls" hidden></div><div class="hub-results ui-scroll" id="hub-results" role="listbox" aria-label="Results"></div>
     <pre class="hub-preview ui-scroll" hidden></pre><div class="hub-view" hidden></div><p class="hub-status" role="status" hidden></p>
     <footer class="hub-footer"><button class="hub-primary ui-button" data-variant="primary"></button><span class="hub-count"></span><button class="hub-actions ui-button" data-variant="quiet">Actions</button></footer>
+    <button class="ui-window-resize hub-resize" aria-label="Resize Hub" title="Drag to resize, or use arrow keys" hidden></button>
   </section>`;
   parent.append(root);
+  const receipt = document.createElement('output'); receipt.className = 'hub-receipt ui-well'; receipt.setAttribute('role', 'status'); receipt.hidden = true; parent.append(receipt);
+  let receiptTimer: ReturnType<typeof setTimeout> | undefined;
   const required = <T extends Element>(selector: string) => {
     const element = root.querySelector<T>(selector);
     if (!element) throw new Error(`Hub control missing: ${selector}`);
     return element;
   };
   const disposeFrame = attachClassicFrame(required<HTMLElement>('.hub-panel'));
+  const hubWindow = installHubWindow(required<HTMLElement>('.hub-panel'), required<HTMLElement>('.hub-heading'), required<HTMLButtonElement>('.hub-lock'), required<HTMLElement>('.hub-resize'));
   const input = required<HTMLInputElement>('input');
   const search = required<HTMLElement>('.hub-search');
   const list = required<HTMLElement>('.hub-results');
+  const disposeSearchEditing = installSearchEditing(list, input);
   const content = required<HTMLElement>('.hub-view');
   const backButton = required<HTMLButtonElement>('[aria-label="Back"]');
   const caption = required<HTMLElement>('.hub-caption');
+  const breadcrumbs = required<HTMLElement>('.hub-breadcrumbs');
   const status = required<HTMLElement>('.hub-status');
   const footer = required<HTMLElement>('footer');
   const primary = required<HTMLButtonElement>('.hub-primary');
   const count = required<HTMLElement>('.hub-count');
   let rows: readonly HubRow[] = [];
+  let shortcutRevision = '';
+  let navigationRevision = '';
   let selected: string | null = null;
   const sources = new Map<HubSource, () => void>();
   const sourceEnabled = (source: HubSource) => !source.feature || ((source.feature === 'characterSwitchEnabled' || !!window.gwToolsSettings?.().gwonmacTools) && !!window.gwToolsSettings?.()[source.feature]);
-  type RowScope = Readonly<{ title: string; rows: () => readonly HubRow[] }>;
+  type RowScope = Readonly<{ title: string; rows: () => readonly HubRow[]; summary?: HubSummary }>;
   let scope: RowScope | null = null;
   type MountedView = { title: string; mount: (target: HTMLElement, back: () => void) => () => void; available?: () => boolean };
   let activeView: MountedView | null = null;
@@ -55,15 +66,67 @@ export function createHub(parent: HTMLElement) {
   let viewAvailable: (() => boolean) | null = null;
   let returnFromView: (() => void) | null = null;
   let restoreQuery = '';
-  const history: { scope: RowScope | null; query: string; selected: string | null; scroll: number; view: MountedView | null }[] = [];
-  function remember() { history.push({ scope, query: input.value, selected, scroll: list.scrollTop, view: activeView }); }
+  type FocusPlace = { selector: string; range?: readonly [number, number] };
+  type Page = { scope: RowScope | null; query: string; selected: string | null; scroll: number; view: MountedView | null; focus: FocusPlace };
+  const history: Page[] = [];
+  let suspended: Page | null = null;
+  let restoringFocus: MutationObserver | null = null;
+  const focusPlace = (): FocusPlace => {
+    const active = document.activeElement;
+    const row = active instanceof Element ? active.closest<HTMLElement>('.hub-row') : null;
+    let selector = '.hub-search input';
+    if (row?.dataset.id) selector = `.hub-row[data-id="${CSS.escape(row.dataset.id)}"]`;
+    else if (active instanceof HTMLElement && root.contains(active)) {
+      for (const attribute of ['id', 'data-character-key', 'data-section', 'aria-label']) {
+        const value = active.getAttribute(attribute);
+        if (value) { selector = `[${attribute}="${CSS.escape(value)}"]`; break; }
+      }
+      if (active === primary) selector = '.hub-primary';
+      if (active === required('.hub-actions')) selector = '.hub-actions';
+    }
+    return { selector, ...(active instanceof HTMLInputElement && active.selectionStart !== null
+      ? { range: [active.selectionStart, active.selectionEnd ?? active.selectionStart] as const } : {}) };
+  };
+  const focusResult = () => (list.querySelector<HTMLElement>('[aria-selected="true"]') ?? input).focus({ preventScroll: true });
+  function restoreFocus(place: FocusPlace) {
+    restoringFocus?.disconnect();
+    const attempt = () => {
+      const control = root.querySelector<HTMLElement>(place.selector);
+      if (!control || !control.getClientRects().length || control.matches(':disabled')) return false;
+      control.focus({ preventScroll: true });
+      if (place.range && control instanceof HTMLInputElement && control.selectionStart !== null) control.setSelectionRange(...place.range);
+      restoringFocus?.disconnect(); restoringFocus = null;
+      return true;
+    };
+    if (!attempt()) {
+      if (!content.hidden) (content.querySelector<HTMLElement>('input,button,select,[tabindex="0"]') ?? backButton).focus();
+      else focusResult();
+      restoringFocus = new MutationObserver(attempt);
+      restoringFocus.observe(content, { childList: true, subtree: true });
+    }
+  }
+  const capture = (): Page => ({ scope, query: input.value, selected, scroll: list.scrollTop, view: activeView, focus: focusPlace() });
+  function remember() { history.push(capture()); }
+  function restorePage(page: Page) {
+    resetView(); scope = page.scope;
+    if (page.view) {
+      if (page.view.available && !page.view.available()) { restoreParent(); return; }
+      restoring = true; presenter.showView(page.view.title, page.view.mount, page.view.available); restoring = false;
+    } else {
+      input.value = page.query; caption.textContent = scope?.title ?? 'Home'; root.dataset.page = scope ? 'section' : 'home';
+      input.placeholder = scope ? 'Search actions…' : 'Search people, places, builds…'; report(''); refresh(true);
+      select(rows.some(row => row.id === page.selected) ? page.selected : null); list.scrollTop = page.scroll;
+      if (page.selected && selected === null) report('The previous selection is no longer available. Choose a result.');
+    }
+    backButton.hidden = history.length === 0;
+    restoreFocus(page.focus);
+  }
   function restoreParent() {
     const parent = history.pop();
-    if (!parent) { home(); return; }
-    resetView(); scope = parent.scope;
-    if (parent.view && (!parent.view.available || parent.view.available())) { const view = parent.view; presenter.showView(view.title, view.mount, view.available); history.pop(); return; } input.value = parent.query; caption.textContent = scope?.title ?? 'Command palette'; backButton.hidden = !scope; root.dataset.page = scope ? 'section' : 'home';
-    input.placeholder = scope ? 'Search actions…' : 'Search people, places, builds…'; report(''); refresh(true); select(parent.selected); list.scrollTop = parent.scroll; input.focus();
+    if (!parent) { close(); return; }
+    restorePage(parent);
   }
+  let restoring = false;
   let previousFocus: HTMLElement | null = null;
   let pending = false;
   let epoch = 0;
@@ -73,22 +136,22 @@ export function createHub(parent: HTMLElement) {
       throw new Error('Unavailable in the current game state.');
     }
   };
-  const handoff = (name: string, detail?: unknown) => { dispatch(name, detail); close(); };
+  const handoff = (name: string, detail?: unknown) => { dispatch(name, detail); suspend(); };
   const commands = (): HubRow[] => {
     const settings = window.gwToolsSettings?.();
-    const tool = (id: string, title: string, keywords: string, enabled: boolean | undefined, event: string): HubRow[] => enabled ? [{
-      id, title, keywords, detail: 'Open tool', group: 'Tools', action: 'Open tool',
+    const tool = (id: string, title: string, detail: string, keywords: string, enabled: boolean | undefined, event: string): HubRow[] => enabled ? [{
+      id, title, keywords, detail, group: 'Tools', action: id === 'storage' ? 'Open Xunlai Storage' : `Open ${title}`,
       run: () => { if (id === 'storage') { close(); window.dispatchEvent(new CustomEvent(event, { cancelable: true })); } else dispatch(event, 'show'); },
     }] : [];
     return [
-      ...tool('travel', 'Travel', 'outpost destination teleport tp', settings?.gwonmacTools && settings.travelPalette, 'gw:travel-toggle'),
-      ...tool('builds', 'Build Library', 'teams templates skills', settings?.gwonmacTools && settings.buildLibrary, 'gw:tools-toggle'),
-      ...tool('trade', 'Trade Chat', 'kamadan prices trading market', settings?.gwonmacTools && settings.tradeChat, 'gw:trade-toggle'),
-      ...tool('whispers', 'Whispers', 'friends people message chat', settings?.gwonmacTools && settings.whispersEnabled, 'gw:whispers-toggle'),
-      ...(settings?.characterSwitchEnabled ? [{ id: 'character', title: 'Switch Character', detail: `Choose another character${resolveShortcuts(settings.shortcutOverrides ?? {})['character.switch'] ? ' · ' + shortcutDisplay(resolveShortcuts(settings.shortcutOverrides ?? {})['character.switch']) : ''}`, keywords: 'relog profession', group: 'Tools', action: 'Choose character', run: () => dispatch('gw:character-toggle') }] : []),
-      ...tool('storage', 'Open Xunlai Storage', 'chest bank', settings?.gwonmacTools && settings.xunlaiStorage, 'gw:storage-open'),
+      ...tool('travel', 'Travel', 'Outposts, favourites and recent places', 'outpost destination teleport tp', settings?.gwonmacTools && settings.travelPalette, 'gw:travel-toggle'),
+      ...tool('builds', 'Build Library', 'Saved builds and teams', 'teams templates skills', settings?.gwonmacTools && settings.buildLibrary, 'gw:tools-toggle').map(row => ({ ...row, unavailable: 'Build Library is loading.' })),
+      ...tool('trade', 'Trade Chat', 'Find offers and contact sellers', 'kamadan prices trading market', settings?.gwonmacTools && settings.tradeChat, 'gw:trade-toggle'),
+      ...tool('whispers', 'Whispers', 'Conversations, friends and drafts', 'friends people message chat', settings?.gwonmacTools && settings.whispersEnabled, 'gw:whispers-toggle'),
+      ...(settings?.characterSwitchEnabled ? [{ id: 'character', title: 'Switch Character', detail: 'Choose another character', keywords: 'relog profession', group: 'Tools', action: 'Choose character', navigate: () => dispatch('gw:character-toggle'), run: () => dispatch('gw:character-toggle') }] : []),
+      ...tool('storage', 'Open Xunlai Storage', 'Open your storage chest', 'chest bank', settings?.gwonmacTools && settings.xunlaiStorage, 'gw:storage-open'),
       ...(settings?.gwonmacTools && settings.cartographyEnabled ? [{ id: 'maps', title: 'Maps', detail: 'Exploration grid, walkable terrain and compass ranges', keywords: 'grid terrain compass opacity', group: 'Tools', action: 'Adjust maps', run: () => openHubMaps(presenter) }] : []),
-      { id: 'hub-preferences', title: 'Hub preferences', detail: 'Pins and exact search phrases', keywords: 'aliases vocabulary', group: 'Commands', action: 'Adjust Hub', run: () => manageHubShortcuts(presenter, shortcuts, lookup, saveShortcuts) },
+      { id: 'hub-preferences', title: 'Hub preferences', detail: 'Pins and exact search phrases', keywords: 'aliases vocabulary', group: 'Commands', action: 'Adjust Hub', run: () => manageHubShortcuts(presenter, shortcuts, lookup, saveShortcuts, hubWindow.reset) },
       { id: 'settings', title: 'Settings', detail: 'In-game appearance, tools and shortcuts', keywords: 'preferences graphics appearance accounts hotkeys', group: 'Commands', action: 'Open Settings', run: openSettings },
       { id: 'launcher', title: 'Show Launcher', detail: 'Accounts, updates and game files', keywords: 'launcher administration', group: 'Commands', action: 'Show Launcher', run: async () => { await window.gwNative.app.showLauncher(); close(); } },
       { id: 'commands', title: 'Commands', detail: 'Examples you can edit and run', keywords: 'help guide examples', group: 'Commands', action: 'Browse examples', run: () => presenter.showRows('Commands', commandExamples) },
@@ -101,8 +164,8 @@ export function createHub(parent: HTMLElement) {
     ];
   };
   const shortcuts = () => [...(window.gwToolsSettings?.().hubShortcuts ?? []), ...[...sources.keys()].filter(sourceEnabled).flatMap(source => source.shortcuts?.get() ?? [])];
-  const lookup = (id: string): HubRow | undefined => commands().find(row => row.id === id)
-    ?? [...sources.keys()].filter(sourceEnabled).map(source => source.lookup?.(id)).find(Boolean);
+  const lookup = (id: string): HubRow | undefined => [...sources.keys()].filter(sourceEnabled).map(source => source.lookup?.(id)).find(Boolean)
+    ?? commands().find(row => row.id === id);
   async function saveShortcuts(value: readonly HubShortcut[]) {
     if (!isHubShortcuts(value)) throw new Error('Invalid Hub shortcuts');
     const privateEntries = value.filter(entry => /^(build|team):/u.test(entry.id));
@@ -115,7 +178,7 @@ export function createHub(parent: HTMLElement) {
   }
   function commandExamples(): HubRow[] {
     const enabled = new Set(commands().map(row => row.id));
-    const examples = [ ['travel', 'travel kamadan', 'Find an outpost'], ['character', 'char Toefte', 'Find a character by name'], ['builds', 'build monk', 'Browse saved Monk builds'], ['builds', 'team gom afk', 'Find your saved team'], ['whispers', 'whisper Romi', 'Choose a person; write before sending'], ['', '1p in g', 'Convert platinum to gold'], ['trade', '10e in p', 'Estimate ecto value'], ['', 'titles', 'Plan title points'], ['', 'acc second', 'Choose how to open a saved account'] ];
+    const examples = [ ['trade', 'trade arms', 'Find offers or a seller'], ['travel', 'travel kamadan', 'Find an outpost'], ['character', 'char Toefte', 'Find a character by name'], ['builds', 'build monk', 'Browse saved Monk builds'], ['builds', 'team gom afk', 'Find your saved team'], ['whispers', 'whisper Romi', 'Choose a person; write before sending'], ['', '1p in g', 'Convert platinum to gold'], ['trade', '10e in p', 'Estimate ecto value'], ['', 'titles', 'Plan title points'], ['', 'acc second', 'Choose how to open a saved account'], ['builds', 'build folder:Monk monk', 'Monk builds in a folder and its descendants'], ['builds', 'build folder:"Team Builds/Farming" monk', 'Quotes keep spaces; paths match consecutive folder names'], ['builds', 'build folder:/Monk/ mesmer', 'Leading slash starts at Skills; trailing slash matches the complete folder name'], ['builds', 'build Mo/Me', 'Exact profession pair; use folder:Mo/Me to search that folder instead'], ['builds', 'build folder:/', 'Templates saved directly in the Skills root'] ];
     return examples.filter(([tool]) => !tool || enabled.has(tool)).map(([, query, detail], index) => ({ id: `example:${index}`, title: query!, detail: detail!, group: 'Commands', action: 'Edit example', searchQuery: query!, run() {} }));
   }
   function openSettings() { openHubSettings(presenter); }
@@ -149,9 +212,129 @@ export function createHub(parent: HTMLElement) {
     primary.replaceChildren(document.createTextNode(row ? row.action : 'Select a result'));
     if (row) { const key = document.createElement('kbd'); key.textContent = '↵'; primary.append(key); }
     primary.disabled = !row || !!row.unavailable || pending;
+    const actionsButton = required<HTMLButtonElement>('.hub-actions');
+    actionsButton.disabled = !row;
+    actionsButton.hidden = !!scope && !row?.skills && !scope.summary?.skills;
+    actionsButton.textContent = scope ? 'Details' : 'Actions';
+  }
+  function renderSkillBar(skills: NonNullable<HubRow['skills']>) {
+    const bar = document.createElement('span'); bar.className = 'hub-skill-bar';
+    skills.forEach((skill, index) => {
+      const slot = document.createElement('span'); slot.className = 'hub-skill';
+      slot.dataset.elite = String(skill.elite); slot.dataset.changed = String(!!skill.changed); slot.title = `${index + 1}. ${skill.name}${skill.changed ? ' · will change' : ''}`;
+      slot.setAttribute('role', 'img'); slot.setAttribute('aria-label', `${index + 1}. ${skill.name}`);
+      if (skill.changed) slot.setAttribute('aria-description', 'This slot will change.');
+      slot.textContent = String(index + 1);
+      if (skill.iconUrl) {
+        const image = document.createElement('img'); image.src = skill.iconUrl; image.alt = '';
+        image.onerror = () => image.remove(); slot.append(image);
+      }
+      bar.append(slot);
+    });
+    return bar;
+  }
+  function renderBuildInfo(row: Pick<HubRow, 'skills' | 'attributes' | 'attributeStatus'>) {
+    const info = document.createElement('span'); info.className = 'hub-build-info';
+    if (row.skills) info.append(renderSkillBar(row.skills));
+    const attributes = document.createElement('span'); attributes.className = 'hub-attributes';
+    for (const group of row.attributes ?? []) {
+      const cluster = document.createElement('span'); cluster.className = 'hub-attribute-group';
+      const icon = document.createElement('img'); icon.src = group.icon; icon.alt = group.name; icon.title = group.name;
+      cluster.append(icon);
+      for (const attribute of group.attributes) {
+        const chip = document.createElement('span'); chip.className = 'hub-attribute';
+        chip.title = `${attribute.name}: ${attribute.rank}${attribute.nextRank !== undefined && attribute.nextRank !== attribute.rank ? ` → ${attribute.nextRank}` : ''} invested ranks`;
+        chip.setAttribute('role', 'img'); chip.setAttribute('aria-label', `${attribute.name} ${attribute.rank}${attribute.nextRank !== undefined && attribute.nextRank !== attribute.rank ? ` → ${attribute.nextRank}` : ''}`); chip.setAttribute('aria-description', 'Invested ranks');
+        const rank = document.createElement('b'); rank.textContent = `${attribute.rank}${attribute.nextRank !== undefined && attribute.nextRank !== attribute.rank ? ` → ${attribute.nextRank}` : ''}`;
+        chip.append(attribute.label, rank); cluster.append(chip);
+      }
+      attributes.append(cluster);
+    }
+    if (row.attributeStatus) attributes.textContent = row.attributeStatus;
+    info.append(attributes); return info;
+  }
+  function renderProfessions(professions: NonNullable<HubRow['professions']>) {
+    const pair = document.createElement('span'); pair.className = 'hub-professions';
+    for (const profession of professions) {
+      const icon = document.createElement('img'); icon.src = profession.icon;
+      icon.alt = profession.name; icon.title = profession.name; pair.append(icon);
+    }
+    return pair;
+  }
+  function appendProfessionLabel(title: HTMLElement, professions: HubRow['professions']) {
+    if (!professions?.length) return;
+    const label = document.createElement('span'); label.className = 'hub-profession-label';
+    label.textContent = professions.map(profession => profession.code).join('/');
+    title.append(' ', label);
+  }
+  function appendFolderLabel(title: HTMLElement, folder: HubRow['folder']) {
+    if (folder === null || folder === undefined) return;
+    const label = document.createElement('span'); label.className = 'hub-folder-label';
+    label.title = `Template folder: ${folder || 'Skills'}`;
+    label.setAttribute('aria-label', label.title);
+    label.append(hubIcon(document, { id: 'folder', group: 'Builds' }), folder || 'Skills');
+    title.append(' ', label);
+  }
+  let renderedSummary: HubSummary | undefined;
+  function paintNavigation() {
+    const summary = disposeView ? undefined : scope?.summary;
+    const summaryPanel = required<HTMLElement>('.hub-summary');
+    summaryPanel.hidden = !summary;
+    if (summary !== renderedSummary) {
+      renderedSummary = summary; summaryPanel.replaceChildren();
+      if (summary) {
+        const label = document.createElement('span'); label.className = 'hub-summary-label'; label.textContent = summary.label;
+        const name = document.createElement('strong'); name.textContent = summary.title;
+        appendProfessionLabel(name, summary.professions);
+        appendFolderLabel(name, summary.folder);
+        const detail = document.createElement('p'); detail.textContent = summary.detail;
+        summaryPanel.append(label);
+        if (summary.professions) name.prepend(renderProfessions(summary.professions));
+        summaryPanel.append(name);
+        if (summary.skills) summaryPanel.append(renderBuildInfo(summary));
+        if (summary.detail) summaryPanel.append(detail);
+      }
+    }
+    const currentTitle = activeView?.title ?? scope?.title ?? 'Home';
+    caption.textContent = currentTitle;
+    const context = !scope && !disposeView && !input.value.trim()
+      ? [...sources.keys()].filter(sourceEnabled).flatMap(source => source.context?.() ?? []) : [];
+    required<HTMLElement>('.hub-context').textContent = context.join(' · ');
+    const trail = history.map((page, index) => ({ title: page.view?.title ?? page.scope?.title ?? 'Home', index }));
+    const nextNavigation = JSON.stringify([trail, currentTitle]);
+    if (navigationRevision !== nextNavigation) {
+      navigationRevision = nextNavigation;
+      breadcrumbs.replaceChildren();
+      for (const page of trail) {
+        const button = document.createElement('button'); button.type = 'button'; button.className = 'hub-crumb'; button.textContent = page.title;
+        button.onclick = () => { history.splice(page.index + 1); restoreParent(); };
+        const separator = document.createElement('span'); separator.textContent = '›'; separator.setAttribute('aria-hidden', 'true');
+        breadcrumbs.append(button, separator);
+      }
+      caption.setAttribute('aria-current', 'page'); breadcrumbs.append(caption);
+    }
+    const parent = history.at(-1);
+    const destination = parent?.view?.title ?? parent?.scope?.title ?? 'Home';
+    backButton.hidden = !parent;
+    backButton.textContent = '←';
+    backButton.title = `Back to ${destination}`;
+    backButton.setAttribute('aria-description', `Return to ${destination}`);
+    const actionsButton = required<HTMLButtonElement>('.hub-actions');
+    actionsButton.hidden = !!scope && !scope.summary?.skills && !rows.find(row => row.id === selected)?.skills;
+    actionsButton.disabled = !selected;
+    const query = parseHubQuery(input.value);
+    const scopeLabel = required<HTMLElement>('.hub-scope');
+    scopeLabel.textContent = query.scope ?? '';
+    scopeLabel.hidden = !!scope || !query.scope || !!disposeView;
+    input.setAttribute('aria-description', scope ? `Search actions for ${scope.title}` : query.scope ? `Search ${query.scope}` : 'Search tools or use a command example');
+    const hint = required<HTMLElement>('.hub-hint');
+    const example = commandExamples().find(row => normaliseHubQuery(row.title).startsWith(`${normaliseHubQuery(input.value)} `));
+    hint.textContent = !scope && !query.scope && input.value.trim() && example ? `Try “${example.title}” · ${example.detail}` : '';
+    hint.hidden = !hint.textContent || !!disposeView;
   }
   function refresh(reset = false) {
     if (!root.open || disposeView) return;
+    paintNavigation();
     const previousRows = rows;
     const tradeQuery = parseHubQuery(input.value);
     const tradeRows: HubRow[] = tradeQuery.scope === "trade" && window.gwToolsSettings?.().gwonmacTools && window.gwToolsSettings?.().tradeChat
@@ -164,7 +347,7 @@ export function createHub(parent: HTMLElement) {
     const ids = new Set([...extra, ...savedRows].map(row => row.id));
     rows = scope ? matchHubRows(extra, input.value) : [...savedRows, ...extra.filter(row => !savedRows.some(saved => saved.id === row.id)), ...(parseHubQuery(input.value).scope ? [] : matchHubRows(commands().filter(row => !ids.has(row.id)), input.value))];
     rows = [...rows].sort((a, b) => {
-      const groups = ["Pinned", "Calculator", "Teams", "Builds", "Accounts", "Characters", "People", "Places", "Continue", "Tools", "Commands"];
+      const groups = ["Pinned", "Calculator", "Teams", "Folders", "Builds", "Targets", "Current build", "Accounts", "Characters", "In your party", "Unlocked heroes", "Heroes", "People", "Places", "Continue", "Tools", "Commands", "Sources"];
       const groupOrder = groups.indexOf(a.group) - groups.indexOf(b.group);
       if (groupOrder || scope || a.group !== 'Tools') return groupOrder;
       // Keep everyday game actions ahead of account management, independent of provider order.
@@ -172,14 +355,19 @@ export function createHub(parent: HTMLElement) {
       const priority = (id: string) => { const index = tools.indexOf(id); return index < 0 ? tools.length : index; };
       return priority(a.id) - priority(b.id);
     });
+    const bindings = resolveShortcuts(window.gwToolsSettings?.().shortcutOverrides ?? {});
+    const nextShortcutRevision = JSON.stringify(bindings);
+    const shortcutsChanged = shortcutRevision !== nextShortcutRevision;
+    shortcutRevision = nextShortcutRevision;
     // Keep mounted options steady when an observer only advances its sequence.
     // Actions still read the newly derived rows, so no stale closure can execute.
-    if (!reset && rows.length === previousRows.length && rows.every((row, index) => {
+    if (!reset && !shortcutsChanged && rows.length === previousRows.length && rows.every((row, index) => {
       const previous = previousRows[index];
       return previous && row.id === previous.id && row.title === previous.title
         && row.detail === previous.detail && row.group === previous.group
-        && row.action === previous.action && row.unavailable === previous.unavailable && row.preview === previous.preview && JSON.stringify(row.skills) === JSON.stringify(previous.skills);
+        && row.action === previous.action && row.unavailable === previous.unavailable && row.preview === previous.preview && row.folder === previous.folder && row.attributeStatus === previous.attributeStatus && JSON.stringify([row.skills, row.attributes, row.professions]) === JSON.stringify([previous.skills, previous.attributes, previous.professions]);
     })) { select(selected); return; }
+    const hadRowFocus = list.contains(document.activeElement);
     list.replaceChildren();
     let group = '';
     rows.forEach((row, index) => {
@@ -189,10 +377,12 @@ export function createHub(parent: HTMLElement) {
         heading.className = 'hub-group'; heading.setAttribute('role', 'presentation'); heading.textContent = group;
         list.append(heading);
       }
-      const option = document.createElement('div');
+      const option = document.createElement('div'); option.tabIndex = -1;
       option.id = `hub-result-${index}`; option.dataset.id = row.id; option.className = 'hub-row';
       option.setAttribute('role', 'option'); option.setAttribute('aria-disabled', String(!!row.unavailable));
       const title = document.createElement('span'); title.className = 'hub-title'; title.textContent = row.title;
+      appendProfessionLabel(title, row.professions);
+      appendFolderLabel(title, row.folder);
       const detail = document.createElement('span'); detail.className = 'hub-detail'; detail.textContent = row.unavailable ?? row.detail;
       const arrow = document.createElement('span'); arrow.className = 'hub-row-arrow'; arrow.textContent = '↵'; arrow.setAttribute('aria-hidden', 'true');
       if (row.conversion) {
@@ -201,36 +391,33 @@ export function createHub(parent: HTMLElement) {
         const from = document.createElement('span'); from.className = 'hub-currency hub-currency-from'; from.textContent = row.conversion.from;
         const to = document.createElement('span'); to.className = 'hub-currency hub-currency-to'; to.textContent = row.conversion.to;
         arrow.textContent = '→'; option.append(title, detail, source, from, to, arrow);
-        for (const [url,side] of [[row.conversion.iconFrom,'from'],[row.conversion.iconTo,'to']] as const) { if (!url) continue; const art=document.createElement('img'); art.src=url; art.alt=''; art.className=`hub-conversion-art hub-conversion-art-${side}`; option.append(art); }
+        for (const [url,side] of [[row.conversion.iconFrom,'from'],[row.conversion.iconTo,'to']] as const) { if (!url) continue; const art=document.createElement('img'); art.onerror=() => art.remove(); art.src=url; art.alt=''; art.className=`hub-conversion-art hub-conversion-art-${side}`; option.append(art); }
       } else {
-        const type = document.createElement('span'); type.className = 'hub-row-type'; type.textContent = row.group === 'Tools' ? 'Tool' : row.group === 'Commands' ? 'Command' : row.group === 'Places' ? 'Outpost' : row.group === 'Characters' ? 'Character' : '';
-        option.append(hubIcon(document, row), title, detail, type);
+        const type = document.createElement('span'); type.className = 'hub-row-type';
+        const shortcutActions: Record<string, ShortcutAction> = { travel: 'travel.open', character: 'character.switch', builds: 'tools.toggle', trade: 'trade.toggle', whispers: 'whispers.toggle', storage: 'storage.open' };
+        const shortcut = shortcutActions[row.id];
+        if (shortcut) for (const key of shortcutKeycaps(bindings[shortcut])) {
+          const cap = document.createElement('kbd'); cap.className = 'ui-kbd'; cap.textContent = key.label; cap.setAttribute('aria-label', key.name); type.append(cap);
+        }
+        option.append(row.professions?.length ? renderProfessions(row.professions) : hubIcon(document, row), title, detail, type);
+        if (row.navigate) { const child = document.createElement('span'); child.className = 'hub-child-cue'; child.textContent = '›'; child.setAttribute('aria-hidden', 'true'); type.append(child); }
+        detail.hidden = !detail.textContent;
         if (row.skills) {
           option.classList.add('hub-build-row');
-          const bar = document.createElement('span'); bar.className = 'hub-skill-bar';
-          row.skills.forEach((skill, index) => {
-            const slot = document.createElement('span'); slot.className = 'hub-skill';
-            slot.dataset.elite = String(skill.elite); slot.title = `${index + 1}. ${skill.name}`;
-            slot.setAttribute('role', 'img'); slot.setAttribute('aria-label', slot.title);
-            slot.textContent = String(index + 1);
-            if (skill.iconUrl) {
-              const image = document.createElement('img'); image.src = skill.iconUrl; image.alt = '';
-              image.onerror = () => image.remove(); slot.append(image);
-            }
-            bar.append(slot);
-          });
-          option.append(bar);
+          option.append(renderBuildInfo(row));
         }
       }
-      option.addEventListener('pointermove', () => select(row.id));
-      option.addEventListener('click', () => { select(row.id); void run(); });
+      option.addEventListener('pointermove', event => { if (event.movementX || event.movementY) select(row.id); });
+      option.addEventListener('click', () => { select(row.id); option.focus({ preventScroll: true }); void run(); });
       list.append(option);
     });
     count.textContent = `${rows.length} result${rows.length === 1 ? '' : 's'}`;
     const exactCount = rows.filter(row => normaliseHubQuery(row.title) === parsed.term || savedRows.some(saved => saved.id === row.id)).length;
     const prior = previousRows.find(row => row.id === selected);
     const revised = prior && rows.find(row => row.id === selected)?.preview !== prior.preview;
-    select((prior?.id === 'quote-state' || prior?.id === 'market-state') && !!rows[0]?.conversion ? rows[0].id : reset ? exactCount > 1 ? null : rows[0]?.id ?? null : !revised && rows.some(row => row.id === selected) ? selected : null);
+    const initial = !input.value.trim() ? rows.find(row => row.preferred && !row.unavailable) ?? rows.find(row => !row.unavailable) ?? rows[0] : rows[0];
+    select((prior?.id === 'quote-state' || prior?.id === 'market-state') && !!rows[0]?.conversion ? rows[0].id : reset ? exactCount > 1 ? null : initial?.id ?? null : !revised && rows.some(row => row.id === selected) ? selected : null);
+    if (hadRowFocus) (list.querySelector<HTMLElement>('[aria-selected="true"]') ?? input).focus();
     if (!rows.length) {
       const empty = document.createElement('p'); empty.className = 'hub-empty'; empty.textContent = 'No matches'; list.append(empty);
     }
@@ -242,60 +429,141 @@ export function createHub(parent: HTMLElement) {
     const generation = epoch;
     pending = true; select(selected); report('');
     try {
-      if(row.searchQuery!==undefined){history.length=0;resetView();scope=null;backButton.hidden=true;caption.textContent='Command palette';input.value=row.searchQuery;refresh(true);input.focus();input.select();}
+      if(row.searchQuery!==undefined){remember();resetView();scope=null;backButton.hidden=true;caption.textContent='Home';input.value=row.searchQuery;refresh(true);input.focus();input.select();}
       else await row.run();
     }
     catch (error) { if (generation === epoch) report(error instanceof Error ? error.message : 'The action could not complete. Try again.'); }
     finally { pending = false; select(selected); }
   }
   function resetView() {
+    restoringFocus?.disconnect(); restoringFocus = null;
     disposeView?.(); disposeView = null; activeView = null; viewAvailable = null; returnFromView = null; content.replaceChildren(); content.hidden = true;
     search.hidden = false; list.hidden = false; footer.hidden = false;
   }
   function home() {
     history.length = 0; resetView(); scope = null; input.value = restoreQuery; backButton.hidden = true;
-    root.dataset.page = 'home'; caption.textContent = 'Command palette'; input.placeholder = 'Search people, places, builds…'; report(''); refresh(true); input.focus();
+    root.dataset.page = 'home'; caption.textContent = 'Home'; input.placeholder = 'Search people, places, builds…'; report(''); refresh(true); input.focus();
   }
   function back() {
     if (returnFromView) returnFromView();
     else restoreParent();
   }
-  function close() {
-    epoch++; history.length = 0; resetView(); modal.close(); for (const source of sources.keys()) source.setVisible(false); scope = null;
+  function close(message?: string) {
+    suspended = null; epoch++; history.length = 0; resetView(); modal.close(); for (const source of sources.keys()) source.setVisible(false); scope = null;
     input.value = ''; restoreQuery = ''; report(''); selected = null;
+    if (typeof message === 'string' && message) { clearTimeout(receiptTimer); receipt.textContent = message; receipt.hidden = false; receiptTimer = setTimeout(() => { receipt.hidden = true; }, 8000); }
+  }
+  function suspend() {
+    if (!root.open) return;
+    suspended = capture(); epoch++; modal.close();
+    for (const source of sources.keys()) source.setVisible(false);
   }
   const modal = window.gwSurfaces.registerDialog({ root, priority: 6, transient: true,
-    dismiss: () => scope || disposeView ? back() : close(),
+    dismiss: () => history.length ? back() : close(),
     restoreFocus: () => previousFocus?.isConnected && previousFocus.getClientRects().length > 0 ? previousFocus : document.getElementById('canvas'),
   });
   function show() {
     if (root.open) { home(); return; }
     previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     window.dispatchEvent(new Event('gw:input-reset'));
-    modal.show(); window.dispatchEvent(new Event('gw:hub-visible')); for (const source of sources.keys()) source.setVisible(sourceEnabled(source)); home();
+    modal.show(); window.dispatchEvent(new Event('gw:hub-visible'));
+    const resume = suspended; suspended = null;
+    for (const source of sources.keys()) source.setVisible(sourceEnabled(source));
+    if (resume) restorePage(resume); else home();
   }
   input.addEventListener('input', () => { report(''); refresh(true); });
   input.addEventListener('keydown', event => {
     if (event.isComposing) return;
-    const plain = !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey;
-    const atEnd = input.selectionStart === input.value.length && input.selectionEnd === input.value.length;
-    const atStart = input.selectionStart === 0 && input.selectionEnd === 0;
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-      event.preventDefault(); const index = rows.findIndex(row => row.id === selected);
-      select(rows[(index + (event.key === 'ArrowDown' ? 1 : -1) + rows.length) % rows.length]?.id ?? null, true);
-    } else if (event.key === 'Enter' || (event.key === 'ArrowRight' && plain && atEnd)) { event.preventDefault(); if (!event.repeat) void run(); }
-    else if(event.key === 'ArrowLeft' && plain && atStart && !event.repeat){event.preventDefault();if(scope)back();else if(input.value){input.value='';refresh(true);}else close();}
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      const id = selected ?? rows[0]?.id ?? null; select(id, true);
+      list.querySelector<HTMLElement>('[aria-selected="true"]')?.focus();
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault(); (backButton.hidden ? required<HTMLButtonElement>('.hub-lock') : backButton).focus();
+    } else if (event.key === 'Enter') { event.preventDefault(); if (!event.repeat) void run(); }
   });
+  root.addEventListener('keydown', event => {
+    restoringFocus?.disconnect(); restoringFocus = null;
+    if (!event.defaultPrevented && event.target instanceof Element && event.target.closest('.hub-row') && resumeSearchInput(event, input)) return;
+    if (event.defaultPrevented || event.isComposing || event.metaKey || event.ctrlKey || event.altKey) return;
+    if (event.key === 'Enter' && event.repeat) { event.preventDefault(); return; }
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    if (!target || target === required<HTMLElement>('.hub-resize')) return;
+    const editing = target.matches('input,textarea,select,[contenteditable="true"]');
+    if (event.key === 'Backspace' && (!editing || target instanceof HTMLInputElement && (target === input || target.getAttribute('role') === 'combobox') && !target.value)) {
+      if (history.length) { event.preventDefault(); event.stopPropagation(); back(); }
+      return;
+    }
+    const row = target.closest<HTMLElement>('.hub-row');
+    if (row && ['ArrowUp', 'ArrowDown', 'ArrowRight', 'Enter'].includes(event.key)) {
+      event.preventDefault();
+      const index = rows.findIndex(item => item.id === row.dataset.id);
+      if (event.key === 'ArrowRight') { if (!event.repeat) rows[index]?.navigate?.(); }
+      else if (event.key === 'Enter') { if (!event.repeat) void run(); }
+      else if (event.key === 'ArrowUp' && index <= 0) input.focus();
+      else if (event.key === 'ArrowDown' && index === rows.length - 1) primary.focus();
+      else {
+        const next = Math.max(0, Math.min(rows.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)));
+        select(rows[next]?.id ?? null, true); list.querySelector<HTMLElement>('[aria-selected="true"]')?.focus();
+      }
+      return;
+    }
+    if (target.closest('.hub-footer')) {
+      const controls = [primary, required<HTMLButtonElement>('.hub-actions')].filter(button => !button.hidden && !button.disabled);
+      if (event.key === 'ArrowUp') { event.preventDefault(); list.querySelector<HTMLElement>('[aria-selected="true"]')?.focus(); }
+      else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); controls[Math.max(0, Math.min(controls.length - 1, controls.indexOf(target as HTMLButtonElement) + (event.key === 'ArrowRight' ? 1 : -1)))]?.focus(); }
+      return;
+    }
+    if (target.closest('.hub-heading')) {
+      const controls = [...required<HTMLElement>('.hub-heading').querySelectorAll<HTMLButtonElement>('button')].filter(button => !button.hidden && button.getClientRects().length);
+      const index = controls.indexOf(target as HTMLButtonElement);
+      if (event.key === 'ArrowDown') { event.preventDefault(); (search.hidden ? content.querySelector<HTMLElement>('input[type=search],input[type=text]') ?? content.querySelector<HTMLElement>('input,select,button,[tabindex="0"]') : input)?.focus(); }
+      else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); controls[Math.max(0, Math.min(controls.length - 1, index + (event.key === 'ArrowRight' ? 1 : -1)))]?.focus(); }
+      return;
+    }
+    if (content.contains(target) && event.key === 'ArrowUp' && target.matches('input[role=combobox]')) {
+      event.preventDefault(); (backButton.hidden ? required<HTMLButtonElement>('.hub-lock') : backButton).focus(); return;
+    }
+    if (content.contains(target) && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+      if (target.matches('select,input[type="range"],textarea') || target.isContentEditable) return;
+      const controls = [...content.querySelectorAll<HTMLElement>('input,select,button,a[href],summary,[tabindex="0"]')].filter(control => control.getClientRects().length && !control.matches(':disabled')).sort((a, b) => { const left = a.getBoundingClientRect(), right = b.getBoundingClientRect(); return left.top - right.top || left.left - right.left; });
+      const index = controls.indexOf(target);
+      if (index < 0) return;
+      event.preventDefault();
+      if (event.key === 'ArrowUp' && index === 0) (backButton.hidden ? required<HTMLButtonElement>('.hub-lock') : backButton).focus();
+      else controls[Math.max(0, Math.min(controls.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)))]?.focus();
+    }
+  });
+  function showBuildDetails(row: HubRow) {
+    const incoming = scope?.summary;
+    presenter.showView('Build details', target => {
+      const view = document.createElement('section'); view.className = 'hub-build-details ui-scroll';
+      for (const build of [...(incoming ? [incoming] : []), row]) {
+        const heading = document.createElement('h2'); heading.textContent = 'label' in build ? `${build.label}: ${build.title}` : `${build.title} · ${build.detail}`; view.append(heading);
+        if (build.workspace) { const open = document.createElement('button'); open.className = 'ui-button'; open.textContent = 'Open in Build Library'; open.onclick = build.workspace; view.append(open); }
+        if (build.skills) {
+          view.append(renderBuildInfo(build));
+          const skills = document.createElement('ol');
+          for (const skill of build.skills) { const item = document.createElement('li'); const name = document.createElement('strong'); name.textContent = skill.name; const description = document.createElement('p'); description.textContent = skill.description ?? 'Description not available.'; item.append(name, description); skills.append(item); }
+          view.append(skills);
+        }
+        const attributes = document.createElement('p'); attributes.textContent = build.attributeStatus ?? build.attributes?.flatMap(group => group.attributes.map(attribute => `${attribute.name} ${attribute.rank}${attribute.nextRank !== undefined && attribute.nextRank !== attribute.rank ? ` → ${attribute.nextRank}` : ''}`)).join(' · ') ?? '';
+        if (attributes.textContent) { attributes.prepend('Invested attributes: '); view.append(attributes); }
+      }
+      view.tabIndex = 0; target.append(view); view.focus();
+      return () => view.remove();
+    });
+  }
   const actions = () => {
     if (!root.open || document.querySelector('dialog:modal') !== root) return false;
     if (disposeView) return true;
-    if (scope) { home(); return true; }
     const row = rows.find(row => row.id === selected);
+    if (scope) { if (row && (row.skills || scope.summary?.skills)) showBuildDetails(row); return true; }
     if (!row) return true;
     if (isHubShortcuts([{ id: row.id, phrase: '', pinned: false }])) {
       presenter.showRows(row.title, () => [
         { ...row, id: 'selected-action', group: 'Actions' },
-        ...(row.actions ? [{ id: 'review-selected', title: 'Review', detail: row.title, group: 'Actions', action: 'Review', run: row.actions }] : []),
+        ...(row.skills || row.actions ? [{ id: 'review-selected', title: row.skills ? 'Details' : 'Review', detail: row.title, group: 'Actions', action: row.skills ? 'Details' : 'Review', run: () => row.skills ? showBuildDetails(row) : row.actions?.() }] : []),
         { id: 'pin-selected', title: shortcuts().some(entry => entry.id === row.id && entry.pinned) ? 'Unpin' : 'Pin to Hub', detail: row.title, group: 'Actions', action: 'Update pin', run: async () => {
           const entries = shortcuts(); const old = entries.find(entry => entry.id === row.id);
           await saveShortcuts([...entries.filter(entry => entry.id !== row.id), { id: row.id, phrase: old?.phrase ?? '', pinned: !old?.pinned }]);
@@ -304,27 +572,26 @@ export function createHub(parent: HTMLElement) {
       ]); return true;
     }
     if (row.actions) { row.actions(); return true; }
-    if (!scope) restoreQuery = input.value;
-    root.dataset.page = 'section'; scope = { title: row.title, rows: () => [row] }; caption.textContent = row.title;
-    backButton.hidden = false; input.placeholder = 'Search actions…'; input.value = ''; refresh(true); input.focus(); return true;
+    presenter.showRows(row.title, () => [row]); return true;
   };
   required<HTMLButtonElement>('.hub-actions').onclick = actions;
-  required<HTMLButtonElement>('.hub-close').onclick = close;
+  required<HTMLButtonElement>('.hub-close').onclick = () => close();
   backButton.onclick = back; primary.onclick = () => { void run(); };
+  root.addEventListener('pointerdown', () => { restoringFocus?.disconnect(); restoringFocus = null; });
   root.addEventListener('click', event => { if (event.target === root) { event.stopImmediatePropagation(); close(); } }, true);
-  root.addEventListener('close', () => { if (!root.open) close(); });
-  const onBlur = () => close();
+  root.addEventListener('close', () => { if (!root.open && !suspended) close(); });
+  const onBlur = () => suspend();
   let enabledSources = new Set<HubSource>();
   const onSettings = () => {
     const disabled = [...enabledSources].some(source => !sourceEnabled(source));
     enabledSources = new Set([...sources.keys()].filter(sourceEnabled));
     for (const source of sources.keys()) source.setVisible(root.open && sourceEnabled(source));
-    if (disposeView && (viewAvailable ? !viewAvailable() : disabled)) home();
+    if ((disposeView && (viewAvailable ? !viewAvailable() : disabled)) || (scope && disabled)) { suspended = null; home(); }
     else refresh();
   };
   window.addEventListener('blur', onBlur); window.addEventListener('gw:tools-settings', onSettings);
   const presenter = {
-    show, close, openSettings, toggle: () => root.open ? close() : show(), actions,
+    show, close, suspend, openSettings, toggle: () => root.open ? close() : show(), actions,
     get visible() { return root.open; },
     attach(next: HubSource) {
       if (sourceEnabled(next)) enabledSources.add(next);
@@ -334,29 +601,34 @@ export function createHub(parent: HTMLElement) {
         if (root.open && (!disposeView || !viewAvailable || !viewAvailable())) home();
       };
     },
-    showRows(title: string, getRows: () => readonly HubRow[]) {
-      if (!root.open) show();
+    showRows(title: string, getRows: () => readonly HubRow[], summary?: HubSummary) {
+      const fromOpenHub = root.open;
+      if (!fromOpenHub) { suspended = null; show(); }
       if (!scope) restoreQuery = input.value;
-      remember(); resetView(); scope = { title, rows: getRows }; root.dataset.page = 'section'; caption.textContent = title;
-      backButton.hidden = false; input.placeholder = 'Search actions…'; input.value = ''; report(''); refresh(true); input.focus();
+      if (fromOpenHub && !restoring) remember(); resetView(); scope = { title, rows: getRows, ...(summary ? { summary } : {}) }; root.dataset.page = 'section'; caption.textContent = title;
+      backButton.hidden = history.length === 0; input.placeholder = 'Search actions…'; input.value = ''; report(''); refresh(true); focusResult();
     },
     showView(title: string, mount: (target: HTMLElement, back: () => void) => () => void, available?: () => boolean) {
-      if (!root.open) show();
+      const fromOpenHub = root.open;
+      if (!fromOpenHub) { suspended = null; show(); }
       if (!scope) restoreQuery = input.value;
-      remember();
+      if (fromOpenHub && !restoring) remember();
       resetView();
       returnFromView = restoreParent;
-      root.dataset.page = 'section'; caption.textContent = title; backButton.hidden = false;
+      root.dataset.page = 'section'; caption.textContent = title; backButton.hidden = history.length === 0;
       required<HTMLElement>('.hub-preview').hidden = true; required<HTMLElement>('.hub-rate-controls').hidden = true;
       search.hidden = true; list.hidden = true; footer.hidden = true; content.hidden = false;
       activeView = { title, mount, ...(available ? { available } : {}) };
       viewAvailable = available ?? null;
       disposeView = mount(content, back);
+      paintNavigation();
       if (!content.contains(document.activeElement)) content.querySelector<HTMLElement>('input,select,button,[tabindex="0"]')?.focus();
     },
-    dispose() { close(); disposeFrame(); for (const unsubscribe of sources.values()) unsubscribe(); sources.clear(); modal.dispose(); root.remove(); window.removeEventListener('blur', onBlur); window.removeEventListener('gw:tools-settings', onSettings); },
+    browseBuilds() { const row = lookup('builds'); if (row && !row.unavailable) void row.run(); else report('Build Library is loading. Try again.'); },
+    resetPosition: hubWindow.reset,
+    dispose() { close(); disposeSearchEditing(); clearTimeout(receiptTimer); receipt.remove(); hubWindow.dispose(); disposeFrame(); for (const unsubscribe of sources.values()) unsubscribe(); sources.clear(); modal.dispose(); root.remove(); window.removeEventListener('blur', onBlur); window.removeEventListener('gw:tools-settings', onSettings); },
   };
-  presenter.attach(createHubAccounts(presenter, { get: () => window.gwNative.accounts.get(), open: request => window.gwNative.accounts.open(request) }));
+  presenter.attach(createHubAccounts(presenter, { get: () => window.gwNative.accounts.get(), open: request => window.gwNative.accounts.open(request), manage: () => window.gwNative.app.showLauncher() }));
   presenter.attach(createHubCalculator({
     hub: presenter,
     copy: value => window.gwNative.clipboard.writeText(value),

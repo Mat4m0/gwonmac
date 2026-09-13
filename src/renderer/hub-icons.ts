@@ -6,6 +6,7 @@ import type { HubRow } from '../shared/hub.js';
 const paths = {
   title: '<path d="M8 3h8v6a4 4 0 0 1-8 0V3ZM8 5H4v3a4 4 0 0 0 4 4M16 5h4v3a4 4 0 0 1-4 4M12 13v6M7 21h10"/>',
   travel: '<path d="m12 3 8 8-8 10-8-10 8-8Z"/><circle cx="12" cy="10" r="2.5"/>',
+  folder: '<path d="M3 6h7l2 3h9v11H3V6Z"/>',
   builds: '<path d="M5 4h11l3 3v13H5V4Z M8 8h6 M8 12h8 M8 16h5"/>',
   team: '<circle cx="12" cy="7" r="3"/><path d="M6 21v-3a6 6 0 0 1 12 0v3M4 8a3 3 0 0 0 0 6M20 8a3 3 0 0 1 0 6M2 21v-2a4 4 0 0 1 3-4M22 21v-2a4 4 0 0 0-3-4"/>',
   trade: '<path d="M12 3v17M7 6h10M5 8l-3 7h6L5 8Zm14 0-3 7h6l-3-7ZM7 21h10"/>',
@@ -24,10 +25,10 @@ export function hubIcon(document: Document, row: Pick<HubRow, 'id' | 'group' | '
   const icon = document.createElement('span'); icon.className = 'hub-icon'; icon.setAttribute('aria-hidden', 'true');
   if (row.icon) { const image = document.createElement('img'); image.src = row.icon; image.alt = ''; icon.append(image); return icon; }
   const id = row.id.split(':')[0];
-  const kind = row.group === 'Teams' || id === 'team' ? 'team'
+  const kind = id === 'folder' || id === 'game-templates' ? 'folder' : row.group === 'Teams' || id === 'team' ? 'team'
     : row.group === 'Builds' || id === 'build' || id === 'builds' ? 'builds'
     : row.group === 'Places' || id === 'place' || id === 'travel' ? 'travel'
-    : row.group === 'Accounts' || id === 'accounts' || row.group === 'People' || row.group === 'Characters' || id === 'character' ? 'person'
+    : row.group === 'Accounts' || id === 'accounts' || row.group === 'People' || row.group === 'Heroes' || row.group === 'Characters' || id === 'character' ? 'person'
     : id === 'hub-preferences' ? 'settings' : id === 'call-target' ? 'target'
     : id && id in paths ? id as keyof typeof paths : 'command';
   icon.dataset.kind = kind;

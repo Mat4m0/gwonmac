@@ -1,11 +1,11 @@
-import { parseBuildLibrary } from "../../../src/shared/builds/parse-library";
 /** Synthetic game command boundary for Hub. Runs the production apply runners offline. */
+import { parseBuildLibrary } from '../../../src/shared/builds/parse-library';
 import { ref } from 'vue';
 import { createDemoHost, type ToolsHost } from './host';
 import { demoLibrary } from './fixtures';
 import { liveParty, type LiveParty } from '../../../src/shared/builds/live-party';
 import { buildId, teamId, mapTeamSlots, type BuildLibrary, skillBarOf, skillId, type Build, type HeroId, type ProfessionPair } from '../../../src/shared/builds/library';
-import { ATTRIBUTES, PROFESSIONS } from '../../../src/shared/builds/heroes';
+import { ATTRIBUTES, PROFESSIONS, heroLabel } from '../../../src/shared/builds/heroes';
 import { runBuildApply, runTeamApply, type TeamApplyCommands, type TeamApplyEnvironment } from '../../../src/shared/builds/team-apply-runner';
 import { encodeSkillTemplate } from '../../../src/shared/builds/skill-template';
 
@@ -18,6 +18,7 @@ export function createHubGameFixture(record: (action: string) => void) {
     { ...original, id: teamId('hub-gom-afk'), name: 'GOM AFK', slots: mapTeamSlots(original.slots, slot => ({ ...slot, build: smiter.id })) }, ...demoLibrary.teams,
   ] };
   try { const saved = localStorage.getItem("hub-fixture-library"); if (saved) library = parseBuildLibrary(JSON.parse(saved)); } catch { /* Disposable fixture only. */ }
+  let folders = false;
   let partial = false;
   let duplicate = false;
   let sent = 0;
@@ -27,6 +28,11 @@ export function createHubGameFixture(record: (action: string) => void) {
     unlockObserved: true, unlocked: Array.from({ length: 39 }, (_, i) => i + 1),
     slots: [{ index: 0, occupied: true, hero: null, agentId: 1, level: 20, professions: [3, 0], behaviour: null, skills: Array(8).fill(0), attributes: [], disabled: 0 }, ...original.slots.flatMap((slot, index) => slot.hero === null ? [] : [{ index, occupied: true, hero: Number(slot.hero), agentId: Number(slot.hero) + 100, level: 20, professions: [3, 0], behaviour: 1, skills: Array(8).fill(0), attributes: [], disabled: 0 }])],
   } }));
+  // Distinct equipped bars make incoming/current comparisons visible in the workbench.
+  party.value = { ...party.value,
+    player: party.value.player ? { ...party.value.player, skills: skillBarOf(index => first.skills[(index + 1) % 8]!), attributes: first.attributes } : null,
+    heroes: party.value.heroes.map((member, offset) => ({ ...member, skills: skillBarOf(index => first.skills[(index + offset + 2) % 8]!), attributes: first.attributes })),
+  };
   const change = () => { sent++; record(`command:${sent}`); if (partial && sent > 1) throw new Error('Synthetic interruption. 1 change was confirmed before Apply stopped.'); };
   const professions = (previous: ProfessionPair | null, secondary: number): ProfessionPair => [previous?.[0] ?? 'Mo', Object.entries(PROFESSIONS).find(([, value]) => value.id === secondary)?.[0] as ProfessionPair[1] ?? null];
   const attributes = (ranks: readonly (readonly [number, number])[]) => Object.fromEntries(ranks.map(([id, rank]) => [Object.entries(ATTRIBUTES).find(([, value]) => value.id === id)?.[0] ?? '', rank]));
@@ -55,13 +61,22 @@ export function createHubGameFixture(record: (action: string) => void) {
   const host: ToolsHost = { ...base, party,
     async loadLibrary() { return { library, recovered: false }; },
     async saveLibrary(value) { library = value; localStorage.setItem("hub-fixture-library", JSON.stringify(value)); return value; },
-    async loadTemplates() { return duplicate ? [{ path: 'Other/Smiter.txt', contents: encodeSkillTemplate(smiter) ?? '' }] : []; },
+    async loadTemplates() { return [
+      { path: 'Skills/Monk/Protection.txt', contents: encodeSkillTemplate(first) ?? '' },
+      { path: 'Skills/Mesmer/Panic.txt', contents: encodeSkillTemplate(demoLibrary.builds.find(build => build.professions[0] === 'Me')!) ?? '' },
+      ...(folders ? [
+        { path: 'Skills/Team Builds/Farming/Protection.txt', contents: encodeSkillTemplate(first) ?? '' },
+        { path: 'Skills/Team Builds/Dungeons/Protection.txt', contents: encodeSkillTemplate(first) ?? '' },
+      ] : []),
+      ...(duplicate ? [{ path: 'Other/Smiter.txt', contents: encodeSkillTemplate(smiter) ?? '' }] : []),
+    ]; },
     async applyTeam(plan, onEvent) { record('apply-team'); return runTeamApply(plan, { ...environment(), ...(onEvent ? { onEvent } : {}) }, 1); },
     async applyBuild(build, id, onEvent) { record('apply-build'); return runBuildApply(build, id, { ...environment(), ...(onEvent ? { onEvent } : {}) }, 2); },
     async openStorage() { throw new Error('Synthetic storage refusal'); },
   };
   return { host, setScenario(value: string) {
-    partial = value === 'partial'; duplicate = value === 'duplicate'; sent = 0;
-    party.value = { ...party.value, inOutpost: value !== 'explorable' };
+    folders = value === 'folders'; partial = value === 'partial'; duplicate = value === 'duplicate'; sent = 0;
+    if (value === 'mixed-professions') party.value = { ...party.value, heroes: party.value.heroes.map(member => ({ ...member, professions: heroLabel(member.hero) === 'Tahlkora' ? ['Mo', null] : ['Me', 'Mo'] })) };
+    party.value = { ...party.value, status: value === 'unobserved-builds' ? 'unavailable' : 'ready', inOutpost: value !== 'explorable' };
   } };
 }

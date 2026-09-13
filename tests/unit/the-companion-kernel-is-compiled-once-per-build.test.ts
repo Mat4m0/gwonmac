@@ -28,6 +28,10 @@ import {
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
+// Every artwork URL used by the unbundled calculator must survive static copying.
+const currencyImages = [...readFileSync(path.join(repoRoot, "src/shared/currency-assets.ts"), "utf8")
+  .matchAll(/new URL\('\.\/(images\/[^']+)'/gu)].map(match => match[1]!);
+
 const roots: string[] = [];
 after(() => {
   for (const root of roots) rmSync(root, { recursive: true, force: true });
@@ -51,6 +55,7 @@ function rendererCheckout(): string {
   write("src/renderer/character-switch.css", "character-css");
   write("src/renderer/hub.css", "hub-css");
   write("src/renderer/loading.css", "css");
+  write("src/renderer/fonts.css", "font-css");
   write("src/renderer/fonts/COPYING-QUALITYPE", "licence");
   write("src/renderer/fonts/QTFrizQuad.otf", "font");
   write("src/renderer/images/logo.webp", "webp");
@@ -67,6 +72,7 @@ function rendererCheckout(): string {
   for (let profession = 1; profession <= 10; profession += 1) {
     write(`src/shared/images/professions/${profession}.png`, `profession-${profession}`);
   }
+  for (const image of currencyImages) write(`src/shared/${image}`, image);
   write("node_modules/@fontsource-variable/inter/wght.css", "inter-css");
   write("node_modules/@fontsource-variable/inter/LICENSE", "inter-licence");
   for (const subset of [
@@ -148,6 +154,7 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
       "character-switch.css",
       "favicon.ico",
       "favicon.png",
+      "fonts.css",
       "fonts/COPYING-INTER",
       "fonts/COPYING-QUALITYPE",
       "fonts/QTFrizQuad.otf",
@@ -166,6 +173,7 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
       "images/playstation-controller-prompts.png",
       "index.html",
       "loading.css",
+      ...currencyImages.map(image => `shared/${image}`).sort(),
       "shared/images/professions/1.png",
       "shared/images/professions/10.png",
       "shared/images/professions/2.png",

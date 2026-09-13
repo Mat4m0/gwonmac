@@ -5,11 +5,12 @@ import { TRAVEL_DESTINATIONS } from "../../../src/shared/travel-destinations";
 import { hubMatch } from "../../../src/shared/hub";
 import { WHISPER_LINE_UNITS, WHISPER_MESSAGE_UNITS } from "../../../src/shared/whispers";
 import type { FriendPresence, TravelFriend } from "../../../src/shared/friends";
+import { useClassicFrame } from "./ui/use-classic-frame";
 import { useFloatingWindow } from "./use-floating-window";
 import {
   restoreFloatingPosition,
   serializeFloatingPosition,
-} from "./floating-window-placement";
+} from "../../../src/shared/ui/window-placement";
 
 const initials = (name: string) => name.trim().split(/\s+/u).slice(0, 2).map(word => word[0]).join("").toLocaleUpperCase();
 
@@ -42,37 +43,16 @@ const optionsMenu = ref<HTMLDetailsElement | null>(null);
 function dismissOptions(event: Event) {
   if (optionsMenu.value?.open && !optionsMenu.value.contains(event.target as Node)) optionsMenu.value.open = false;
 }
-const inHub = () => !!panel.value?.closest('.hub-view');
-let homeSelection = -1;
-function homeButtons() { return [...(panel.value?.querySelectorAll<HTMLButtonElement>('.whisper-picker .whisper-person-open') ?? [])]; }
-function selectHome(delta: number) {
-  const buttons = homeButtons();
-  if (!buttons.length) return;
-  homeSelection = homeSelection < 0 ? delta > 0 ? 0 : buttons.length - 1 : (homeSelection + delta + buttons.length) % buttons.length;
-  buttons.forEach((button, index) => { button.dataset.hubSelected = String(index === homeSelection); });
-  buttons[homeSelection]?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-}
-function collapse() {
-  if (inHub()) panel.value?.dispatchEvent(new CustomEvent('gw:whispers-back', { bubbles: true }));
-  else props.session.setVisible(false);
-}
-function hubNavigation(event: KeyboardEvent) {
-  if (!inHub() || event.defaultPrevented || event.isComposing || event.altKey || event.metaKey || event.ctrlKey || event.shiftKey) return;
-  const input = event.target instanceof HTMLInputElement ? event.target : null;
-  const left = event.key === 'ArrowLeft' && (!input || input.selectionStart === 0 && input.selectionEnd === 0);
-  if (event.key !== 'Escape' && !left) return;
-  event.preventDefault(); event.stopPropagation();
-  if (selected.value) showPicker(); else collapse();
-}
+function collapse() { props.session.setVisible(false); }
 function escapeOptions(event: KeyboardEvent) {
   if (event.key === "Escape" && optionsMenu.value?.open) {
     event.preventDefault(); event.stopPropagation(); optionsMenu.value.open = false;
     optionsMenu.value.querySelector("summary")?.focus();
-  } else hubNavigation(event);
+  }
 }
 function showPicker() {
   if (optionsMenu.value) optionsMenu.value.open = false;
-  homeSelection = -1; search.value = "";
+  search.value = "";
   props.session.showPicker();
   void nextTick(() => document.getElementById("whisper-person")?.focus());
 }
@@ -168,27 +148,15 @@ function open(name: string) {
   catch (error) { pickerError.value = error instanceof Error ? error.message : "Enter a character name."; }
 }
 function searchInput() {
-  suggestionIndex.value = -1; homeSelection = -1;
+  suggestionIndex.value = -1;
   pickerError.value = "";
 }
 function searchKeydown(event: KeyboardEvent) {
   if (event.isComposing) return;
-  if (inHub() && !event.metaKey && !event.altKey && !event.ctrlKey && !event.shiftKey) {
-    const input = event.target as HTMLInputElement;
-    const right = event.key === 'ArrowRight' && input.selectionStart === input.value.length && input.selectionEnd === input.value.length;
-    if (right || event.key === 'Enter') {
-      event.preventDefault(); event.stopPropagation();
-      if (!event.repeat) submitSearch();
-      return;
-    }
-    if (!search.value && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
-      event.preventDefault(); selectHome(event.key === 'ArrowDown' ? 1 : -1); return;
-    }
-  }
   if (event.key === "Escape" && search.value) {
     event.preventDefault(); event.stopPropagation(); search.value = ""; suggestionIndex.value = -1; return;
   }
-  if (!inHub() && event.key === "Tab" && suggestions.value.length) {
+  if (event.key === "Tab" && suggestions.value.length) {
     event.preventDefault(); search.value = suggestions.value[0]!.name; suggestionIndex.value = 0; return;
   }
   if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
@@ -201,7 +169,6 @@ function searchKeydown(event: KeyboardEvent) {
     ?.scrollIntoView({ block: "nearest" }));
 }
 function submitSearch() {
-  if (inHub() && !search.value.trim()) { homeButtons()[Math.max(0, homeSelection)]?.click(); return; }
   open(suggestions.value[suggestionIndex.value]?.name ?? search.value);
 }
 function draftInput(key: string, event: Event) {
@@ -297,17 +264,18 @@ watch(() => [state.value.selected, selected.value?.messages.at(-1)?.id] as const
   if (follow) await latest();
   else markVisibleRead();
 });
-watch(visible, async value => {
-  if (!value) {
+// Preserve transcript position while the floating window is hidden.
+watch(visible, async (value, wasVisible) => {
+  if (wasVisible) {
     const log = activeLog();
     if (log && selected.value) scrollPositions.set(selected.value.key, log.scrollTop);
-    return;
   }
+  if (!value) return;
   await nextTick();
   const log = activeLog();
   if (log && selected.value) log.scrollTop = scrollPositions.get(selected.value.key) ?? log.scrollTop;
   markVisibleRead();
-});
+}, { flush: "sync" });
 
 let audio: AudioContext | null = null;
 let lastSoundId = Math.max(0, ...state.value.conversations.flatMap(c => c.messages.map(m => m.id)));
@@ -391,12 +359,6 @@ function dragIcon(event: PointerEvent) {
   button.addEventListener("pointercancel", cancel);
   button.addEventListener("lostpointercapture", finish);
 }
-function dock() {
-  window.dispatchEvent(new CustomEvent('gw:whispers-toggle', { cancelable: true, detail: 'dock' }));
-}
-function popOut() {
-  panel.value?.dispatchEvent(new CustomEvent('gw:whispers-popout', { bubbles: true }));
-}
 function toggle() {
   if (dragged) { dragged = false; return; }
   enableAudio();
@@ -427,6 +389,7 @@ onBeforeUnmount(() => {
   document.removeEventListener("pointerdown", enableAudio); document.removeEventListener("keydown", enableAudio);
   void audio?.close();
 });
+useClassicFrame(panel);
 </script>
 
 <template>
@@ -437,6 +400,10 @@ onBeforeUnmount(() => {
     <span v-if="unread" class="whisper-badge" aria-hidden="true">{{ unread > 99 ? '99+' : unread }}</span>
   </button>
   <section v-show="visible" id="whisper-window" ref="panel" class="ui-frame ui-reading-surface whisper-window" data-variant="quiet" :style="windowStyle" :data-chat-selected="Boolean(selected)" aria-label="Whispers" @keydown="escapeOptions">
+    <header class="ui-panel-head ui-window-head whisper-frame-head" @pointerdown="startDrag">
+      <h2 class="ui-panel-title">Whispers</h2>
+      <button class="ui-window-close" aria-label="Hide Whispers" @click="session.setVisible(false)">×</button>
+    </header>
     <div class="whisper-layout">
     <div v-show="!selected" class="ui-scroll whisper-picker" :data-searching="Boolean(search.trim())">
       <form class="ui-input-group whisper-search" @submit.prevent="submitSearch"><label class="whisper-sr-only" for="whisper-person">Character name</label><input id="whisper-person" v-model="search" maxlength="20" placeholder="Find a friend…" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="whisper-suggestions" :aria-expanded="Boolean(search.trim() && suggestions.length)" :aria-activedescendant="suggestionIndex >= 0 ? `whisper-suggestion-${suggestionIndex}` : undefined" @input="searchInput" @keydown="searchKeydown"/><button data-variant="primary" class="ui-button whisper-control" type="submit" :disabled="!search.trim()" aria-label="Whisper"><span class="whisper-compose-label">Whisper</span><svg class="whisper-compose-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5 4 4M4 20l4-1L21 6l-4-4L4 15v5Zm7-16H4v7"/></svg></button></form>
@@ -476,7 +443,7 @@ onBeforeUnmount(() => {
       </template>
     </div>
     <div class="whisper-chat-pane">
-    <header class="whisper-head" @pointerdown="!inHub() && startDrag($event)">
+    <header class="whisper-head" @pointerdown="startDrag">
       <button v-if="selected" data-variant="quiet" class="ui-button whisper-control whisper-icon" aria-label="Conversations" title="Conversations" @click="showPicker">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
         <span v-if="unread" class="whisper-back-count">{{ unread > 99 ? '99+' : unread }}</span>
@@ -486,8 +453,6 @@ onBeforeUnmount(() => {
         <h2>{{ selected?.name ?? 'Conversations' }}</h2>
         <small v-if="selectedFriend" class="whisper-presence-label"><span class="whisper-presence" :data-presence="selectedFriend.status" />{{ presenceLabel(selectedFriend.status) }}<span v-if="selectedLocation"> · {{ selectedLocation }}</span></small>
       </div>
-      <button class="ui-button whisper-control whisper-icon whisper-popout-action" data-variant="quiet" aria-label="Pop out chat" title="Pop out chat" @click="popOut"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3h7v7m0-7-10 10M10 5H4v15h15v-6"/></svg></button>
-      <button class="ui-button whisper-control whisper-icon whisper-return-action" data-variant="quiet" aria-label="Open in Hub" title="Open in Hub" @click="dock"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4zM9 4v16m9-12-4 4 4 4m-4-4h7"/></svg></button>
       <details ref="optionsMenu" class="whisper-options">
         <summary data-variant="quiet" class="ui-button whisper-control whisper-icon" aria-label="Chat options" title="Chat options"><svg viewBox="0 0 24 24" aria-hidden="true"><circle class="whisper-icon-dot" cx="5" cy="12" r="1.5"/><circle class="whisper-icon-dot" cx="12" cy="12" r="1.5"/><circle class="whisper-icon-dot" cx="19" cy="12" r="1.5"/></svg></summary>
         <div class="ui-raised ui-scroll whisper-menu">
@@ -526,17 +491,27 @@ onBeforeUnmount(() => {
         </form>
       </div>
     </template>
-    <div v-if="!selected" class="whisper-hub-empty"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-5 3v-3H3V6a2 2 0 0 1 2-2Z"/></svg><strong>Your whispers, together</strong><p>Choose a conversation or find a friend.</p></div>
     </div>
     </div>
-    <div class="whisper-hub-hints" aria-hidden="true"><span>{{ selected ? 'Enter send' : '↑ ↓ choose · Enter open' }}</span><span>Esc back</span></div>
-    <button ref="resizeGrip" class="whisper-resize" aria-label="Resize whispers"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 19 7-7m-1 7 1-1"/></svg></button>
+    <div class="whisper-hints" aria-hidden="true"><span>{{ selected ? 'Enter sends' : '↑ ↓ choose · Enter opens' }}</span><span>Esc hides</span></div>
+    <button ref="resizeGrip" class="ui-window-resize whisper-resize" aria-label="Resize whispers"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 19 7-7m-1 7 1-1"/></svg></button>
   </section>
 </template>
 
 <style scoped>
-.whisper-layout,.whisper-chat-pane { display:contents; }
-.whisper-avatar,.whisper-hub-empty,.whisper-compose-icon,.whisper-popout-action,.whisper-return-action { display:none; }
+/* Chat keeps its own saved background strength. Its sections paint once inside
+ * the decorative frame without leaving transparent gaps around its inset. */
+/* The whisper opacity paints one inset plane behind content in both materials.
+ * Modern's decorative border mask must not turn that plane into an overlay. */
+.whisper-window.ui-art-frame { --ui-art-fill:transparent; --ui-art-surface-fill:var(--whisper-panel-fill); --ui-art-surface-mask:none; --ui-art-surface-width:0; --ui-art-surface-z:-1; box-shadow:var(--ui-art-shadow); }
+.whisper-window.ui-art-frame::before { background:var(--ui-art-surface-fill); }
+.whisper-frame-head { display:flex; align-items:center; cursor:grab; }
+.whisper-frame-head .ui-panel-title { margin:0; flex:1; font-family:var(--ui-font-display); }
+
+.whisper-layout { display:flex; flex-direction:column; flex:1; min-height:0; background:transparent; }
+.whisper-chat-pane { display:contents; }
+.whisper-avatar,.whisper-compose-icon { display:none; }
+.whisper-hints { display:flex; justify-content:space-between; gap:12px; padding:0 10px 6px; color:var(--ui-text-faint); font-size:11px; line-height:1.4; }
 .ui-reading-surface { color: var(--ui-text); font: 14px/1.5 var(--ui-font-reading); font-synthesis: none; text-shadow: none; color-scheme: dark; }
 .ui-reading-surface *, .ui-reading-surface *::before, .ui-reading-surface *::after { box-sizing: border-box; text-shadow: none; }
 .ui-reading-surface svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
@@ -545,9 +520,9 @@ onBeforeUnmount(() => {
 .ui-reading-surface small { color: var(--ui-text-muted); font: 12px/1.5 var(--ui-font-reading); }
 .ui-reading-surface input, .ui-reading-surface select { min-width: 0; width: 100%; color: var(--ui-text); caret-color: var(--ui-focus); font: inherit; }
 .ui-reading-surface input::placeholder { color: var(--ui-text-muted); opacity: 1; }
-.whisper-window { --whisper-background-percent: 100%; --whisper-panel-fill: color-mix(in srgb, var(--ui-panel-fill) var(--whisper-background-percent), transparent); --whisper-well-fill: color-mix(in srgb, var(--ui-well) var(--whisper-background-percent), transparent); --whisper-incoming-fill: color-mix(in srgb, color-mix(in srgb, var(--ui-info) 12%, var(--ui-well)) var(--whisper-background-percent), transparent); --whisper-outgoing-fill: color-mix(in srgb, color-mix(in srgb, var(--ui-success) 16%, var(--ui-well)) var(--whisper-background-percent), transparent); --whisper-edge: color-mix(in srgb, var(--ui-outline) var(--whisper-background-percent), transparent); --whisper-line: color-mix(in srgb, var(--ui-line-soft) var(--whisper-background-percent), transparent); position: fixed; width: 340px; height: 360px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); display: flex; flex-direction: column; pointer-events: auto; isolation: isolate; background: transparent; box-shadow: 0 0 0 1px var(--whisper-edge); }
+.whisper-window { box-sizing:border-box; --whisper-background-percent: 100%; --whisper-panel-fill: color-mix(in srgb, var(--ui-panel-fill) var(--whisper-background-percent), transparent); --whisper-well-fill: color-mix(in srgb, var(--ui-well) var(--whisper-background-percent), transparent); --whisper-incoming-fill: color-mix(in srgb, color-mix(in srgb, var(--ui-info) 12%, var(--ui-well)) var(--whisper-background-percent), transparent); --whisper-outgoing-fill: color-mix(in srgb, color-mix(in srgb, var(--ui-success) 16%, var(--ui-well)) var(--whisper-background-percent), transparent); --whisper-edge: color-mix(in srgb, var(--ui-outline) var(--whisper-background-percent), transparent); --whisper-line: color-mix(in srgb, var(--ui-line-soft) var(--whisper-background-percent), transparent); position: fixed; width: 340px; height: 360px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); display: flex; flex-direction: column; pointer-events: auto; isolation: isolate; background: transparent; box-shadow: 0 0 0 1px var(--whisper-edge); }
 .whisper-window::before { background: color-mix(in srgb, var(--ui-text-muted) var(--whisper-background-percent), transparent); }
-.whisper-head { display: flex; align-items: center; gap: 2px; min-height: 42px; padding: 4px 8px; border-bottom: 1px solid var(--whisper-line); background: var(--whisper-panel-fill); border-radius: var(--ui-radius) var(--ui-radius) 0 0; cursor: grab; }
+.whisper-head { order:-1; display: flex; align-items: center; gap: 2px; min-height: 42px; padding: 4px 8px; border-bottom: 1px solid var(--whisper-line); background: transparent; border-radius: var(--ui-radius) var(--ui-radius) 0 0; cursor: grab; }
 .whisper-heading { flex: 1; min-width: 0; margin: 0 6px; display: flex; align-items: baseline; gap: 8px; }
 .whisper-head h2 { min-width: 0; font: var(--ui-font-weight-semibold) 15px/1.3 var(--ui-font-interface); color: var(--ui-text-bright); margin: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .whisper-heading[data-conversation] h2 { color: var(--ui-chat-incoming-accent); }
@@ -563,7 +538,7 @@ onBeforeUnmount(() => {
 .whisper-bubble { max-width: 80%; padding: 6px 10px; font-size: 13px; line-height: 1.4; background: var(--whisper-incoming-fill); box-shadow: inset 0 0 0 1px color-mix(in srgb, color-mix(in srgb, var(--ui-chat-incoming-accent) 18%, transparent) var(--whisper-background-percent), transparent); }
 .whisper-bubble[data-direction="outgoing"] { background: var(--whisper-outgoing-fill); box-shadow: inset 0 0 0 1px color-mix(in srgb, color-mix(in srgb, var(--ui-chat-outgoing-accent) 24%, transparent) var(--whisper-background-percent), transparent); }
 .whisper-picker, .whisper-transcript { overflow: auto; }
-.whisper-picker { padding: 10px 10px 12px; flex: 1; min-height: 0; background: var(--whisper-panel-fill); }
+.whisper-picker { padding: 10px 10px 12px; flex: 1; min-height: 0; background: transparent; }
 .whisper-search, .whisper-inline { display: flex; gap: 8px; }
 .whisper-search { padding: 4px; border-color: var(--whisper-edge); border-radius: var(--ui-radius); background: var(--whisper-well-fill); box-shadow: inset 0 0 0 1px var(--whisper-line); }
 .whisper-search input { flex: 1; padding: 4px 8px; }
@@ -585,14 +560,14 @@ onBeforeUnmount(() => {
 .whisper-presence[data-presence="offline"] { background: var(--ui-text-faint); }
 .whisper-status-copy { margin-left: 10px; color: var(--ui-text-muted) !important; }
 .whisper-conversation { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.whisper-transcript { flex: 1; min-height: 40px; padding: 12px 10px; overscroll-behavior: contain; scroll-padding-block: 12px; background: var(--whisper-panel-fill); box-shadow: inset 0 1px 0 var(--whisper-line), inset 0 -1px 0 var(--whisper-line); }
+.whisper-transcript { flex: 1; min-height: 40px; padding: 12px 10px; overscroll-behavior: contain; scroll-padding-block: 12px; background: transparent; box-shadow: inset 0 1px 0 var(--whisper-line), inset 0 -1px 0 var(--whisper-line); }
 .whisper-message { display: flex; flex-direction: column; align-items: flex-start; margin-top: 10px; }
 .whisper-message:first-of-type { margin-top: 0; }
 .whisper-message[data-grouped] { margin-top: 4px; }
 .whisper-message[data-direction="outgoing"] { align-items: flex-end; }
 .whisper-unread-marker { align-self: stretch; display: flex; align-items: center; gap: 12px; margin: 0 0 16px; color: var(--ui-chat-incoming-accent) !important; text-align: center; }
 .whisper-unread-marker::before, .whisper-unread-marker::after { content: ''; height: 1px; background: color-mix(in srgb, var(--ui-chat-incoming-accent) 42%, transparent); flex: 1; }
-.whisper-compose { padding: 8px 10px 10px; background: var(--whisper-panel-fill); }
+.whisper-compose { padding: 8px 10px 10px; background: transparent; }
 .whisper-input-row { display: flex; align-items: center; gap: 6px; padding: 4px; border-color: var(--whisper-edge); border-radius: var(--ui-radius-pill); background: var(--whisper-well-fill); box-shadow: inset 0 0 0 1px var(--whisper-line); }
 .whisper-input-row input { padding: 4px 8px; flex: 1; border-radius: var(--ui-radius-swell); }
 .whisper-input-row:has(input:focus-visible) { outline: 2px solid var(--ui-focus); outline-offset: 2px; }
@@ -623,7 +598,12 @@ onBeforeUnmount(() => {
 .whisper-window .whisper-control[data-variant="primary"] { border-color: var(--whisper-edge); background: var(--whisper-outgoing-fill); box-shadow: 0 0 0 1px var(--whisper-edge); }
 .whisper-window .whisper-control[data-variant="quiet"]:hover:not(:disabled) { background: color-mix(in srgb, var(--ui-hover) var(--whisper-background-percent), transparent); }
 .whisper-window .whisper-control[data-variant="quiet"]:active:not(:disabled) { background: color-mix(in srgb, var(--ui-pressed-layer) var(--whisper-background-percent), transparent); }
-.whisper-resize { position: absolute; bottom: 1px; right: 1px; width: 16px; height: 16px; padding: 0; border: 0; background: transparent; color: var(--ui-text-muted); cursor: nwse-resize; }
+.whisper-resize { position: absolute; bottom: 1px; right: 1px; width: 36px; height: 36px; padding: 0; border: 0; background: transparent; color: var(--ui-text-muted); cursor: nwse-resize; }
 .whisper-resize svg { width: 16px; height: 16px; }
 .whisper-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+</style>
+
+<style scoped>
+.whisper-window.ui-art-frame .whisper-resize svg { display:none; }
+.whisper-frame-head .ui-window-close { margin-left:0; }
 </style>

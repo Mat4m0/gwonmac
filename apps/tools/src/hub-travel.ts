@@ -23,10 +23,11 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
     if (!disposed) refresh();
   };
   function open() {
+    let resume: InstanceType<typeof TravelPalette>['$props']['resume'];
     hub.showView('Travel', (target, back) => {
       active = true;
       const app = createApp({ setup: () => () => h(TravelPalette, {
-        host, preferences, inset: true, visible: true, nativeDialog: true, onClose: back,
+        host, preferences, ...(resume ? { resume } : {}), onRemember: state => { resume = state; }, inset: true, visible: true, nativeDialog: true, onClose: back,
       }) });
       app.mount(target);
       return () => { active = false; app.unmount(); };
@@ -48,6 +49,7 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
   }
   const source: HubSource = {
     feature: 'travelPalette',
+    context: () => host.state.value.status === 'ready' ? travelDestination(host.state.value.mapId)?.name ?? null : null,
     lookup(id) { const place = travelDestination(Number(id.replace('place:', ''))); return place ? source.search(place.name).find(row => row.id === id) : undefined; },
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
     setVisible(next) { if (next && !visible) void load(); visible = next; },
@@ -55,14 +57,14 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
       const parsed = parseHubQuery(query);
       if (parsed.scope && parsed.scope !== 'travel') return [];
       query = parsed.term;
-      const tools: HubRow[] = [{ id: 'travel', title: 'Travel', detail: loadError || 'Outposts, favourites, recent places and Guild Hall', group: 'Tools', keywords: 'tp teleport destination', action: 'Browse travel', run: open }];
+      const tools: HubRow[] = [{ id: 'travel', title: 'Travel', detail: loadError || 'Outposts, favourites, recent places and Guild Hall', group: 'Tools', keywords: 'tp teleport destination', action: 'Browse travel', navigate: open, run: open }];
       const destinations = query.trim() ? TRAVEL_DESTINATIONS.filter(destination => hubMatch(destination.name, query, preferences.synonyms.value.filter(entry => entry.mapId === destination.mapId).map(entry => entry.term)) !== null).slice(0, 8)
-        : host.history.value.slice(0, 3).flatMap(id => { const destination = travelDestination(id); return destination ? [destination] : []; });
+        : host.history.value.filter(id => !refusal(id)).slice(0, 3).flatMap(id => { const destination = travelDestination(id); return destination ? [destination] : []; });
       return [...destinations.map(destination => {
         const reason = refusal(destination.mapId);
         return { id: `place:${destination.mapId}`, title: destination.name,
           detail: query.trim() ? 'Outpost · Any district' : 'Recently visited · Any district',
-          group: query.trim() ? 'Places' : 'Continue', action: 'Travel',
+          group: query.trim() ? 'Places' : 'Continue', action: `Travel to ${destination.name}`,
           ...(reason ? { unavailable: reason } : {}), run: () => travel(destination.mapId) };
       }), ...matchHubRows(tools, query)];
     },

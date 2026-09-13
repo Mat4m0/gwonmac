@@ -26,7 +26,8 @@ test("the bundled fonts are pinned and carry their OFL licenses", () => {
   );
   assert.match(license, /Copyright \(c\) 1992 QualiType/);
   assert.match(license, /SIL OPEN FONT LICENSE[\s\S]*Version 1\.1/);
-  const css = readFileSync(path.join(root, "src/renderer/loading.css"), "utf8");
+  const css = readFileSync(path.join(root, "src/renderer/fonts.css"), "utf8");
+  assert.match(readFileSync(path.join(root, "src/renderer/loading.css"), "utf8"), /@import "\.\/fonts\.css"/);
   assert.match(css, /font-family: "QTFrizQuad"/);
   assert.match(css, /url\("fonts\/QTFrizQuad\.otf"\)/);
 

@@ -14,6 +14,7 @@ export function createWhisperSurface(parent: HTMLElement, session: WhisperSessio
   if (!(canvas instanceof HTMLCanvasElement)) throw new Error("Whispers game canvas is missing");
   const root = document.createElement("div");
   root.id = "whispers-host";
+  root.className = "whisper-popout-host";
   root.style.cssText = "position:fixed;inset:0;pointer-events:none;z-index:4";
   parent.append(root);
   const nonActivating = createNonActivatingSurface(root, () => canvas);
@@ -22,8 +23,9 @@ export function createWhisperSurface(parent: HTMLElement, session: WhisperSessio
   const toggle = (event: Event) => {
     if (!enabled || !session.state.available) return;
     event.preventDefault();
-    if (window.gwHub && (!(event instanceof CustomEvent) || event.detail !== 'detach')) {
-      toggleHubWhispers(event, window.gwHub, root, parent, session);
+    if (window.gwHub) {
+      toggleHubWhispers(event, window.gwHub, root, session);
+      if (session.state.visible) surface.raise();
       return;
     }
     session.setVisible(event instanceof CustomEvent && event.detail === "show" ? true : !session.state.visible);

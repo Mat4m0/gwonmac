@@ -2,6 +2,7 @@
  * Owns the Core Command-E character palette, including focus and keyboard use.
  * It renders one bounded source and never reads game memory or native exports.
  */
+import { installSearchEditing, resumeSearchInput } from "./search-input.js";
 import { hubMatch, normaliseHubQuery } from "../shared/hub.js";
 import type {
   CharacterSummary,
@@ -151,6 +152,7 @@ export function createCharacterSwitchPalette(
   const previousButton = root.querySelector<HTMLButtonElement>(".character-switch-previous")!;
   const nextButton = root.querySelector<HTMLButtonElement>(".character-switch-next")!;
   const listHints = root.querySelector<HTMLElement>(".character-switch-list-hints")!;
+  const disposeSearchEditing = installSearchEditing(list, queryInput);
   const settingsHints = root.querySelector<HTMLElement>(".character-switch-settings-hints")!;
   const confirmHints = root.querySelector<HTMLElement>(".character-switch-confirm-hints")!;
   const details = root.querySelector<HTMLDetailsElement>(".character-switch-details")!;
@@ -192,6 +194,8 @@ export function createCharacterSwitchPalette(
     show() { hub.showView('Characters', (target, back) => {
       hubBack = back;
       target.append(root); root.open = true;
+      if (view.kind === "closed") { view = Object.freeze({ kind: "characters" }); render(); }
+      focusSelected();
       return () => { hubBack = undefined; root.open = false; parent.append(root); if (view.kind === 'confirming') source.cancelConfirmation(); view = { kind: 'closed' }; };
     }, () => !!window.gwToolsSettings?.().characterSwitchEnabled); },
     close() { hub.close(); },
@@ -399,7 +403,7 @@ export function createCharacterSwitchPalette(
     }
     for (const input of layoutInputs) input.checked = input.value === layout;
     const searchHint = searchEnabled ? ' <kbd class="ui-kbd">type</kbd> search' : "";
-    listHints.innerHTML = `<kbd class="ui-kbd">←↑</kbd> <kbd class="ui-kbd">→↓</kbd> choose${searchHint} <kbd class="ui-kbd">return</kbd> switch <kbd class="ui-kbd">esc</kbd> ${hub ? "back" : "close"}`;
+    listHints.innerHTML = `<kbd class="ui-kbd">${hub ? "← →" : "←↑ →↓"}</kbd> choose${hub && searchEnabled ? ' <kbd class="ui-kbd">↑</kbd> search / Back' : searchHint} <kbd class="ui-kbd">return</kbd> switch <kbd class="ui-kbd">esc</kbd> ${hub ? "back" : "close"}`;
     queryInput.setAttribute("aria-expanded", String(searching && rows.length > 0));
     if (searching) queryInput.setAttribute("aria-controls", "character-switch-list");
     else queryInput.removeAttribute("aria-controls");
@@ -494,7 +498,7 @@ export function createCharacterSwitchPalette(
       revealSelected();
     }
     else {
-      if (normaliseCharacterQuery(query) !== "") return;
+      if (normaliseCharacterQuery(query) !== "" || event.target instanceof HTMLInputElement || event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
       const position = numberedCharacterPosition(event.key, Math.min(rows.length, 10));
       if (position === null) return;
       event.preventDefault();
@@ -528,6 +532,9 @@ export function createCharacterSwitchPalette(
     const button = (event.target as Element).closest<HTMLButtonElement>("button[data-row]");
     if (!button || view.kind !== "characters") return;
     selected = Number(button.dataset.row);
+    if (hub && event.key === 'ArrowUp' && searchEnabled) {
+      event.preventDefault(); event.stopPropagation(); queryInput.focus({ preventScroll: true }); return;
+    }
     const arrowMove = event.key === "ArrowLeft" || event.key === "ArrowRight"
       || event.key === "ArrowUp" || event.key === "ArrowDown";
     if (arrowMove) {
@@ -542,17 +549,7 @@ export function createCharacterSwitchPalette(
     }
     if (normaliseCharacterQuery(query) === ""
       && numberedCharacterPosition(event.key, Math.min(rows.length, 10)) !== null) return;
-    if (searchEnabled && event.key.length === 1
-      && !event.metaKey && !event.ctrlKey && !event.altKey) {
-      event.preventDefault();
-      event.stopPropagation();
-      query = event.key.slice(0, CHARACTER_SEARCH_LIMIT);
-      queryInput.value = query;
-      selected = 0;
-      render(false);
-      queryInput.focus({ preventScroll: true });
-      revealSelected();
-    }
+    if (searchEnabled) resumeSearchInput(event, queryInput);
   });
   list.addEventListener("focusin", (event) => {
     const button = event.target instanceof Element
@@ -694,6 +691,7 @@ export function createCharacterSwitchPalette(
   };
   window.addEventListener("resize", resize);
   return Object.freeze({ dispose() {
+    disposeSearchEditing();
     unsubscribe();
     unsubscribeSettings();
     modal.dispose();

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import {
   TRAVEL_SEARCH_QUERY_LIMIT,
   TRAVEL_SHORTCUT_LIMIT,
@@ -29,8 +29,12 @@ const props = defineProps<{
   nativeDialog?: boolean;
   inset?: boolean;
   preferences?: ReturnType<typeof useTravelPreferences>;
+  resume?: {
+    query: string; selected: string | null; mode: "travel" | "customize";
+    editingSlot: number | null; addingPhrase: boolean; phrase: string; mapId: number | null; scroll: number;
+  };
 }>();
-const emit = defineEmits<{ close: [] }>();
+const emit = defineEmits<{ close: []; remember: [state: NonNullable<typeof props.resume>] }>();
 type PaletteMode = "travel" | "customize";
 const SMALL_TRAVEL_CATALOGUE_LIMIT = 10;
 const GUILD_HALL_SEARCH_TERMS = Object.freeze(["guild hall", "guild", "hall", "gh"]);
@@ -44,13 +48,13 @@ const COMPACT_FAVORITE_LABELS: Readonly<Record<string, string>> = Object.freeze(
 const palette = ref<HTMLElement | null>(null);
 const input = ref<HTMLInputElement | null>(null);
 const settingsButton = ref<HTMLButtonElement | null>(null);
-const query = ref("");
+const query = ref(props.resume?.query ?? "");
 const active = ref(0);
-const mode = ref<PaletteMode>("travel");
-const editingShortcutSlot = ref<number | null>(null);
-const addingPhrase = ref(false);
-const newPhraseTerm = ref("");
-const newPhraseMapId = ref<number | null>(null);
+const mode = ref<PaletteMode>(props.resume?.mode ?? "travel");
+const editingShortcutSlot = ref<number | null>(props.resume?.editingSlot ?? null);
+const addingPhrase = ref(props.resume?.addingPhrase ?? false);
+const newPhraseTerm = ref(props.resume?.phrase ?? "");
+const newPhraseMapId = ref<number | null>(props.resume?.mapId ?? null);
 const phraseError = ref("");
 const feedback = ref("");
 const feedbackLevel = ref<"info" | "success" | "warning" | "danger">("info");
@@ -220,11 +224,21 @@ const selectableDestinations = computed(() => showingSmallCatalogue.value
   : hasQuery.value ? results.value : [...recentDestinations.value, ...assignedShortcuts.value.flatMap(row => row.destination ? [row.destination] : [])]);
 const activeDestination = computed(() => selectableDestinations.value[active.value] ?? null);
 const hasSelectableDestination = computed(() => selectableDestinations.value.some(selectable));
-const activeResultId = computed(() => !hasQuery.value && !showingSmallCatalogue.value
-  ? active.value < recentDestinations.value.length ? `recent-${recentDestinations.value[active.value]?.mapId}` : `favorite-${assignedShortcuts.value[active.value-recentDestinations.value.length]?.index}`
-  : activeDestination.value === null ? null
-  : "resultKey" in activeDestination.value
-    ? activeDestination.value.resultKey : `map-${activeDestination.value.mapId}`);
+const resultId = (index: number): string | null => {
+  const destination = selectableDestinations.value[index];
+  if (!destination) return null;
+  if (!hasQuery.value && !showingSmallCatalogue.value) return index < recentDestinations.value.length
+    ? `recent-${recentDestinations.value[index]?.mapId}` : `favorite-${assignedShortcuts.value[index-recentDestinations.value.length]?.index}`;
+  return "resultKey" in destination ? destination.resultKey : `map-${destination.mapId}`;
+};
+const activeResultId = computed(() => resultId(active.value));
+onBeforeUnmount(() => {
+  visibilityLoad++;
+  emit("remember", { query: query.value, selected: activeResultId.value, mode: mode.value,
+    editingSlot: editingShortcutSlot.value, addingPhrase: addingPhrase.value,
+    phrase: newPhraseTerm.value, mapId: newPhraseMapId.value,
+    scroll: palette.value?.querySelector<HTMLElement>(".travel-body")?.scrollTop ?? 0 });
+});
 const statusText = computed(() =>
   feedback.value
   || props.host.notice.value?.message
@@ -390,13 +404,19 @@ watch(query, () => {
   active.value = 0;
   if (hasQuery.value) mode.value = "travel";
 });
+let resultsQuery = query.value;
 watch(results, (next, previous) => {
-  const selectedKey = previous[active.value]?.resultKey;
+  const queryChanged = resultsQuery !== query.value;
+  resultsQuery = query.value;
+  const selectedKey = queryChanged ? undefined : previous[active.value]?.resultKey;
   const retained = selectedKey === undefined ? -1 : next.findIndex(
     (result) => result.resultKey === selectedKey && result.disabledReason === null,
   );
   const firstAvailable = next.findIndex((result) => result.disabledReason === null);
-  active.value = retained >= 0 ? retained : firstAvailable;
+  active.value = queryChanged || !previous.length ? firstAvailable : retained;
+  if (selectedKey !== undefined && retained < 0 && !queryChanged) {
+    setFeedback("That destination is no longer available. Choose another destination.", "info");
+  }
   if (!hasQuery.value) active.value = 0;
   props.host.traceSearch(query.value, next.flatMap(
     (result) => result.kind === "guild-hall" ? [] : [result.mapId],
@@ -405,21 +425,28 @@ watch(results, (next, previous) => {
 watch(() => props.visible, async (visible) => {
   if (!visible) return;
   const load = ++visibilityLoad;
-  query.value = "";
-  active.value = 0;
-  mode.value = "travel";
-  editingShortcutSlot.value = null;
-  addingPhrase.value = false;
+  if (!props.resume) {
+    query.value = ""; active.value = 0; mode.value = "travel";
+    editingShortcutSlot.value = null; addingPhrase.value = false;
+  }
   feedback.value = "";
   phraseError.value = "";
   await nextTick();
-  input.value?.focus({ preventScroll: true });
+  if (!props.resume && load === visibilityLoad) input.value?.focus({ preventScroll: true });
   try {
     const [preferencesLoaded] = await Promise.all([
       travelPreferences.load(),
       props.host.loadHistory(),
     ]);
     if (!preferencesLoaded || load !== visibilityLoad) return;
+    if (props.resume) {
+      await nextTick();
+      const retained = selectableDestinations.value.findIndex((_, index) => resultId(index) === props.resume?.selected);
+      active.value = retained;
+      if (retained < 0 && props.resume.selected) setFeedback("That destination is no longer available. Choose another destination.", "info");
+      const scroller = palette.value?.querySelector<HTMLElement>(".travel-body");
+      if (scroller) scroller.scrollTop = props.resume.scroll;
+    }
   } catch {
     setFeedback("Travel preferences could not be loaded. Reopen Travel to try again.", "danger");
   }
@@ -633,11 +660,10 @@ function onKeydown(event: KeyboardEvent): void {
   if (!props.visible || event.isComposing) return;
   const plainArrow = !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey;
   const atStart = event.target === input.value && input.value?.selectionStart === 0 && input.value.selectionEnd === 0;
-  const atEnd = event.target === input.value && input.value?.selectionStart === query.value.length && input.value.selectionEnd === query.value.length;
   if (props.inset && mode.value === 'travel' && !hasQuery.value && event.target === input.value && plainArrow && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
     event.preventDefault(); void moveActive(event.key === 'ArrowRight' ? 1 : -1); return;
   }
-  if (event.key === "Escape" || (event.key === "ArrowLeft" && plainArrow && atStart)) {
+  if (event.key === "Escape" || (event.key === "ArrowLeft" && plainArrow && atStart && !hasQuery.value)) {
     event.preventDefault();
     if (mode.value === "customize") void selectMode("travel");
     else if (hasQuery.value) {
@@ -647,11 +673,12 @@ function onKeydown(event: KeyboardEvent): void {
     return;
   }
   if (mode.value === "travel" && event.target === input.value && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+    if (props.inset && event.key === "ArrowUp" && active.value === 0) return;
     event.preventDefault();
     void moveActive(event.key === "ArrowDown" ? 1 : -1);
     return;
   }
-  if (mode.value === "travel" && event.target === input.value && (event.key === "Enter" || (event.key === "ArrowRight" && plainArrow && atEnd))) {
+  if (mode.value === "travel" && event.target === input.value && event.key === "Enter") {
     if (event.repeat) { event.preventDefault(); return; }
     if (activeDestination.value !== null
       && selectable(activeDestination.value)

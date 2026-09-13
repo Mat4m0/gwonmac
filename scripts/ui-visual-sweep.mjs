@@ -15,7 +15,6 @@
 import { chromium } from "@playwright/test";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 
 /** @typedef {{where: string, kind: string, element: string, detail: string}} Finding */
 
@@ -28,7 +27,7 @@ const flag = (name, fallback) => {
 
 const outDir = path.resolve(flag("out", "/tmp/ui-sweep"));
 const toolsUrl = flag("url", "http://127.0.0.1:4179/");
-const galleryUrl = pathToFileURL(path.resolve("docs/ui-gallery.html")).href;
+const galleryUrl = new URL(`/@fs${path.resolve("docs/ui-gallery.html")}`, toolsUrl).href;
 
 const OPACITIES = [
   { name: "minimum", value: 0.65 },
@@ -161,7 +160,7 @@ async function audit(page, label) {
       // A themed surface must never fall back to the UA's transparent default
       // and show whatever is behind it raw.
       if (
-        el.classList.contains("ui-frame")
+        el.classList.contains("ui-frame") && !el.classList.contains("ui-art-frame")
         && style.backgroundColor === "rgba(0, 0, 0, 0)"
         && !style.backgroundImage.includes("gradient")
       ) {
@@ -182,7 +181,7 @@ async function audit(page, label) {
     // The frame ring has to exist wherever a panel claims one.
     for (const el of document.querySelectorAll(".ui-frame")) {
       const ring = getComputedStyle(el, "::after");
-      if (ring.content === "none") note("no-ring", el, "::after missing");
+      if (ring.content === "none" && !el.querySelector(".ui-frame-artwork")) note("no-ring", el, "::after missing");
     }
 
     if (document.scrollingElement) {

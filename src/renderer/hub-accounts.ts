@@ -4,10 +4,20 @@
  */
 import { hubMatch, normaliseHubQuery, parseHubQuery, type HubPresenter, type HubRow, type HubSource } from '../shared/hub.js';
 import type { HubAccountsSnapshot, HubAccountRequest } from '../shared/accounts-contracts.js';
-export function createHubAccounts(hub: HubPresenter<HTMLElement>, api: { get(): Promise<HubAccountsSnapshot>; open(request: HubAccountRequest): Promise<void> }): HubSource {
+export function createHubAccounts(hub: HubPresenter<HTMLElement>, api: { get(): Promise<HubAccountsSnapshot>; open(request: HubAccountRequest): Promise<void>; manage?(): Promise<void> }): HubSource {
   let snapshot: HubAccountsSnapshot | null = null;
   let visible = false;
   let generation = 0;
+  let problem = '';
+  async function load() {
+    const request = ++generation;
+    try {
+      const next = await api.get();
+      if (request !== generation) return;
+      if (snapshot && snapshot.current !== next.current) hub.close();
+      snapshot = next; problem = ''; refresh();
+    } catch { if (request === generation) { problem = 'Accounts could not load. Try again.'; refresh(); } }
+  }
   const listeners = new Set<() => void>();
   const refresh = () => { for (const listener of listeners) listener(); };
   type Profile = HubAccountsSnapshot['profiles'][number];
@@ -25,36 +35,33 @@ export function createHubAccounts(hub: HubPresenter<HTMLElement>, api: { get(): 
       },
     }));
   };
-  const rows = (): HubRow[] => (snapshot?.profiles ?? []).map(profile => ({
+  const rows = (): HubRow[] => problem ? [{ id: 'accounts-retry', title: 'Retry accounts', detail: problem, group: 'Accounts', action: 'Retry', run: load }] : !snapshot || snapshot.profiles.length < 2 ? [{ id: 'accounts-manage', title: 'Manage accounts', detail: snapshot ? 'Add another account in the launcher.' : 'Loading accounts…', group: 'Accounts', action: 'Show Launcher', ...(!api.manage ? { unavailable: 'Open the launcher to manage accounts.' } : {}), run: async () => { await api.manage?.(); hub.close(); } }] : snapshot.profiles.map(profile => ({
     id: `account:${profile.id}`, title: profile.name, detail: profile.id === snapshot?.current ? 'Current account' : profile.state === 'running' ? 'Open' : profile.state === 'ready' ? 'Saved account' : profile.state === 'failed' ? 'Retry opening' : 'Opening…',
     group: 'Accounts', action: 'Choose account action',
     ...(profile.id === snapshot?.current || !['ready', 'failed', 'running'].includes(profile.state) ? { unavailable: profile.id === snapshot?.current ? 'Current account' : 'This account is still opening.' } : {}),
-    run: () => hub.showRows(profile.name, () => actions(profile)),
+    navigate: () => hub.showRows(profile.name, () => actions(profile)), run: () => hub.showRows(profile.name, () => actions(profile)),
   }));
   return {
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
     setVisible(next) {
-      if (next && !visible) {
-        const request = ++generation;
-        void api.get().then(value => { if (generation === request) { snapshot = value; refresh(); } }).catch(() => { if (generation === request) { snapshot = null; refresh(); } });
-      }
+      if (next && !visible) void load();
       visible = next;
     },
     search(query) {
-      if (!snapshot || snapshot.profiles.length < 2) return [];
+
       const parsed = parseHubQuery(query);
       if (parsed.scope && parsed.scope !== 'acc') return [];
       if (parsed.scope === 'acc') {
         const matched = rows().filter(row => hubMatch(row.title, parsed.term) !== null);
         const exact = matched.filter(row => normaliseHubQuery(row.title) === parsed.term && !row.unavailable);
         if (exact.length === 1) {
-          const profile = snapshot.profiles.find(item => `account:${item.id}` === exact[0]?.id);
+          const profile = snapshot?.profiles.find(item => `account:${item.id}` === exact[0]?.id);
           if (profile) return actions(profile);
         }
         return matched;
       }
       if (query && hubMatch('Switch Account', query, ['acc', 'accounts']) === null) return [];
-      return [{ id: 'accounts', title: 'Switch Account', detail: 'Open another saved account or switch to it', group: 'Tools', action: 'Browse accounts', run: () => hub.showRows('Accounts', rows) }];
+      return [{ id: 'accounts', title: 'Switch Account', detail: 'Open another saved account or switch to it', group: 'Tools', action: 'Browse accounts', navigate: () => hub.showRows('Accounts', rows), run: () => hub.showRows('Accounts', rows) }];
     },
   };
 }

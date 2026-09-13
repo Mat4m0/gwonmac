@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import BuildAttributes from "./components/BuildAttributes.vue";
+import ProfessionIcon from "./components/ProfessionIcon.vue";
 import {
   computed,
   nextTick,
@@ -34,6 +36,7 @@ import { navigateRows, navigateTabs } from "./tab-keyboard";
 import { useClassicFrame } from "./ui/use-classic-frame";
 import { useFloatingWindow } from "./use-floating-window";
 
+
 const props = defineProps<{
   host: ToolsHost;
   hub?: HubPresenter<HTMLElement>;
@@ -47,7 +50,10 @@ const emit = defineEmits<{
 }>();
 
 const controller = useLibrary(props.host);
-const hubLibrary = props.hub ? createHubLibrary(controller, props.host, props.hub) : null;
+const hubLibrary = props.hub ? createHubLibrary(controller, props.host, props.hub, build => {
+  window.dispatchEvent(new CustomEvent('gw:tools-toggle', { detail: 'workspace', cancelable: true }));
+  select(build);
+}) : null;
 onBeforeUnmount(() => hubLibrary?.dispose());
 const search = ref<HTMLInputElement | null>(null);
 const mobileView = ref<"list" | "detail">("list");
@@ -281,12 +287,12 @@ useClassicFrame(panel);
         >{{ openingStorage ? "Opening…" : "Storage" }}</button>
         <button
           v-if="mode === 'embedded'"
-          class="ui-button window-close"
+          class="ui-window-close window-close"
           data-icon
           aria-label="Close Build Library"
           @click="requestClose"
         >
-          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 3 10 10M13 3 3 13" /></svg>
+          ×
         </button>
       </header>
 
@@ -445,11 +451,12 @@ useClassicFrame(panel);
                   {{ value.name }}
                 </span>
                 <em v-if="'mode' in value">{{ value.mode === "hard" ? "Hard" : value.mode === "normal" ? "Normal" : "Unspecified" }}</em>
-                <em v-else>{{ value.professions.join("/") }}</em>
+                <span v-else><ProfessionIcon v-for="profession in value.professions.filter(Boolean)" :key="profession!" :profession="profession" /></span>
               </span>
 
               <template v-if="'skills' in value">
                 <SkillBar :skills="value.skills" :catalogue="controller.skills" compact />
+                <BuildAttributes :attributes="value.attributes" />
                 <span v-if="value.parent" class="row-meta">
                   {{
                     buildById(controller.library.value, value.parent)
@@ -472,7 +479,7 @@ useClassicFrame(panel);
                     :data-empty="slot.build ? undefined : ''"
                     :title="teamMemberLabel(slot.hero, index)"
                   >
-                    {{ slot.build ? buildById(controller.library.value, slot.build)?.professions[0] : "–" }}
+                    <ProfessionIcon v-if="slot.build" :profession="buildById(controller.library.value, slot.build)?.professions[0]" /><template v-else>–</template>
                   </i>
                 </span>
                 <span class="row-meta">
@@ -574,7 +581,7 @@ useClassicFrame(panel);
             data-icon
             aria-label="Dismiss message"
             @click="controller.dismissNotice"
-          ><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 3 10 10M13 3 3 13"/></svg></button>
+          >×</button>
         </div>
       </Transition>
 
@@ -627,7 +634,7 @@ useClassicFrame(panel);
               <p v-else>Start empty, then assign library builds to its eight slots.</p>
             </div>
             <button type="button" class="ui-button" data-icon aria-label="Close" @click="composer = null">
-              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 3 10 10M13 3 3 13"/></svg>
+              ×
             </button>
           </header>
           <label v-if="composer !== 'import-team'">

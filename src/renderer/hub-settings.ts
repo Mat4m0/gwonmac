@@ -11,6 +11,8 @@ import { TOOL_PRESENTATION } from '../shared/tool-presentation.js';
 import { DEFAULT_SHORTCUTS, SHORTCUT_CAPTURE_HINT, shortcutKeycaps, SHORTCUT_ACTIONS, SHORTCUT_LABELS, shortcutConflict, type ShortcutAction, type ShortcutBinding } from '../shared/keyboard-shortcuts.js';
 
 export function openHubSettings(hub: Hub) {
+  let page = 'Tools';
+  let scroll = 0;
   hub.showView('Settings', target => {
     const doc = target.ownerDocument;
     const view = doc.createElement('section'); view.className = 'hub-settings';
@@ -18,7 +20,7 @@ export function openHubSettings(hub: Hub) {
     const body = doc.createElement('div'); body.className = 'hub-settings-body ui-scroll';
     const status = doc.createElement('p'); status.className = 'hub-settings-status'; status.setAttribute('role', 'status');
     view.append(nav, body, status); target.append(view);
-    let page = 'Tools'; let snapshot: HubSettingsSnapshot | null = null; let disposed = false; let pending = false;
+    let snapshot: HubSettingsSnapshot | null = null; let disposed = false; let pending = false;
     const api = window.gwNative.hubSettings;
     const sections = ['Tools', 'Appearance', 'Shortcuts', 'Maps', 'Chat & characters'];
     const buttons = sections.map(name => {
@@ -28,6 +30,7 @@ export function openHubSettings(hub: Hub) {
       button.onclick = () => { page = name; status.textContent = ''; render(); };
       button.onkeydown = event => {
         if (!['ArrowDown', 'ArrowUp', 'ArrowRight'].includes(event.key)) return;
+        if (event.key === 'ArrowUp' && name === sections[0]) return;
         event.preventDefault();
         if (event.key === 'ArrowRight') { body.querySelector<HTMLElement>('input,select,button')?.focus(); return; }
         const index = sections.indexOf(name); const next = buttons[(index + (event.key === 'ArrowDown' ? 1 : -1) + sections.length) % sections.length]; next?.click(); next?.focus();
@@ -35,7 +38,7 @@ export function openHubSettings(hub: Hub) {
       nav.append(button); return button;
     });
     function row(title: string, control: HTMLElement, detail = '') {
-      const label = doc.createElement('label'); label.className = 'hub-setting-row';
+      const label = doc.createElement('label'); label.className = control.matches('input[type=checkbox]') ? 'hub-setting-row ui-check' : 'hub-setting-row';
       const copy = doc.createElement('span'); const name = doc.createElement('strong'); name.textContent = title; copy.append(name);
       if (detail) { const hint = doc.createElement('small'); hint.textContent = detail; copy.append(hint); }
       if (control.matches('input,select,button')) control.setAttribute('aria-label', title); label.append(copy, control); body.append(label);
@@ -58,7 +61,7 @@ export function openHubSettings(hub: Hub) {
       input.value = String(snapshot?.settings[key]); input.onchange = () => { const chosen = options.find(choice => String(choice.value) === input.value); if (chosen) void save({ kind: 'settings', patch: { [key]: chosen.value } }, title); }; row(title, input, detail);
     }
     function range(title: string, key: keyof HubSettingsPatch, min = 0) {
-      const wrap = doc.createElement('span'); wrap.className = 'hub-setting-range'; const input = doc.createElement('input'); input.type = 'range'; input.min = String(min); input.max = '100'; input.value = String(snapshot?.settings[key] ?? 100); input.setAttribute('aria-label', title);
+      const wrap = doc.createElement('span'); wrap.className = 'hub-setting-range'; const input = doc.createElement('input'); input.type = 'range'; input.className = 'ui-range'; input.min = String(min); input.max = '100'; input.value = String(snapshot?.settings[key] ?? 100); input.setAttribute('aria-label', title);
       const output = doc.createElement('output'); output.textContent = `${input.value}%`; input.oninput = () => { output.textContent = `${input.value}%`; }; input.onchange = () => { void save({ kind: 'settings', patch: { [key]: Number(input.value) } }, title); }; wrap.append(input, output); row(title, wrap);
     }
     function chooseShortcut(action: ShortcutAction, binding: ShortcutBinding | null) {
@@ -78,12 +81,15 @@ export function openHubSettings(hub: Hub) {
         if (snapshot.tools.restartRequired) { const note = doc.createElement('p'); note.className = 'hub-settings-note'; note.textContent = 'Saved. Close your game windows and restart gwonmac to finish loading or unloading Tools.'; body.append(note); }
         for (const tool of GLOBAL_TOOLS) { const info = TOOL_PRESENTATION[tool]; toggle(info.label, snapshot.tools.features[tool].enabled, enabled => ({ kind: 'tool', tool, enabled }), info.description, tool !== 'character-switch' && !snapshot.tools.configured); }
       } else if (page === 'Appearance') {
-        select('Panel style', 'uiStyle', [{ label: 'Guild Wars', value: 'guild-wars' }, { label: 'Obsidian', value: 'obsidian' }, { label: 'Your custom theme', value: 'custom' }]);
+        const resetPosition = doc.createElement('button'); resetPosition.className = 'ui-button'; resetPosition.textContent = 'Reset';
+        resetPosition.onclick = () => { hub.resetPosition(); status.textContent = 'Hub position and size reset. Window locked.'; };
+        row('Reset Hub position', resetPosition, 'Restore the default position and size, and lock the Hub.');
+        select('Panel style', 'uiStyle', [{ label: 'Guild Wars', value: 'guild-wars' }, { label: 'Modern', value: 'obsidian' }, { label: 'Your custom theme', value: 'custom' }]);
         range('Panel opacity', 'uiPanelOpacity', UI_PANEL_OPACITY_MIN);
-        select('Panel font', 'uiFont', UI_FONTS.map(value => ({ label: value === 'guild-wars' ? 'Guild Wars' : value.charAt(0).toUpperCase() + value.slice(1), value })), 'Hub keeps its consistent system font. This changes other in-game panels.');
+        select('Panel font', 'uiFont', UI_FONTS.map(value => ({ label: value === 'guild-wars' ? 'Guild Wars' : value.charAt(0).toUpperCase() + value.slice(1), value })), 'Changes Hub and other in-game panels. Messages keep a readable text face.');
         settingToggle('Relog after reload', 'autoRelogAfterReload');
       } else if (page === 'Shortcuts') {
-        const hint = doc.createElement('p'); hint.textContent = 'Command R opens Hub. Changes apply to every account.'; body.append(hint);
+        const hint = doc.createElement('p'); hint.textContent = 'Changes apply to every account.'; body.append(hint);
         for (const action of SHORTCUT_ACTIONS) {
           const controls = doc.createElement('span'); controls.className = 'hub-setting-shortcut';
           const tool = action.startsWith('cartography.') ? 'maps' : GLOBAL_TOOLS.find(tool => TOOL_PRESENTATION[tool].action === action);
@@ -116,7 +122,7 @@ export function openHubSettings(hub: Hub) {
       }
     }
     status.textContent = 'Loading settings…'; buttons[0]?.focus();
-    void api.get().then(next => { if (!disposed) { snapshot = next; status.textContent = ''; render(); } }).catch(() => { if (!disposed) { status.textContent = 'Settings could not load. Go back and try again.'; } });
-    return () => { disposed = true; view.remove(); };
+    void api.get().then(next => { if (!disposed) { snapshot = next; status.textContent = ''; render(); body.scrollTop = scroll; } }).catch(() => { if (!disposed) { status.textContent = 'Settings could not load. Go back and try again.'; } });
+    return () => { scroll = body.scrollTop; disposed = true; view.remove(); };
   }, () => true);
 }

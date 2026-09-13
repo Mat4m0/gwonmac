@@ -604,3 +604,17 @@
   .team-title-line { grid-template-columns:36px minmax(0,1fr); }
   .team-title-line .detail-header-actions { grid-column:1 / -1; padding-left:0; }
 }
+
+/* The roster owns the working area; less frequent settings expand in place. */
+.team-detail-header { padding:var(--ui-space-2) var(--ui-space-3); flex:none; max-height:45%; overflow:auto; }
+.team-options { margin-top:var(--ui-space-2); }
+.team-options > summary { width:fit-content; min-height:30px; display:list-item; cursor:pointer; color:var(--ui-text-muted); }
+.team-options .team-controls { margin-top:0; padding-block:var(--ui-space-2); }
+.team-roster-heading { flex-direction:row; align-items:center; flex-wrap:wrap; gap:var(--ui-space-2); margin-bottom:var(--ui-space-2); }
+.team-scroll { padding:var(--ui-space-2) var(--ui-space-3); }
+
+@container detail-pane (min-width:561px) and (max-width:860px) {
+  .team-slots > li { padding-block:var(--ui-space-1); row-gap:var(--ui-space-1); }
+  .team-slots .hero-cell small { display:none; }
+  .team-slots .skill-bar { margin:0; }
+}

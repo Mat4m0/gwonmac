@@ -62,7 +62,7 @@ their bounded public WebSocket protocol and links back to the selected source.
 Release remains conditional on confirming the service owner's permission or
 published compatibility expectations.
 
-The Trader prices catalogue includes the small item and profession PNGs that
+The Trader prices catalogue includes the small item PNGs that
 the Kamadan price interface publishes inline or from its fixed image routes.
 Kamadan does not publish dye images, so the dye vial PNGs come from the
 [Guild Wars Wiki dye icon gallery](https://wiki.guildwars.com/wiki/Category:Dye_icons).
@@ -193,6 +193,24 @@ Original files and attribution histories:
 - [Overcast](https://wiki.guildwars.com/wiki/File:Tango-overcast.png)
 - [Recharge](https://wiki.guildwars.com/wiki/File:Tango-recharge.png)
 - [Sacrifice](https://wiki.guildwars.com/wiki/File:Tango-sacrifice.png)
+
+### Tango profession icons
+
+The unmodified 48×48 PNGs in `src/shared/images/professions/` are by
+[LordBiro](https://wiki.guildwars.com/wiki/User:LordBiro), distributed under the
+same GFDL terms above. They replace the earlier circular profession artwork.
+File numbers follow the game's profession IDs, from Warrior (1) to Dervish (10).
+
+- [Warrior](https://wiki.guildwars.com/wiki/File:Warrior-tango-icon-48.png)
+- [Ranger](https://wiki.guildwars.com/wiki/File:Ranger-tango-icon-48.png)
+- [Monk](https://wiki.guildwars.com/wiki/File:Monk-tango-icon-48.png)
+- [Necromancer](https://wiki.guildwars.com/wiki/File:Necromancer-tango-icon-48.png)
+- [Mesmer](https://wiki.guildwars.com/wiki/File:Mesmer-tango-icon-48.png)
+- [Elementalist](https://wiki.guildwars.com/wiki/File:Elementalist-tango-icon-48.png)
+- [Assassin](https://wiki.guildwars.com/wiki/File:Assassin-tango-icon-48.png)
+- [Ritualist](https://wiki.guildwars.com/wiki/File:Ritualist-tango-icon-48.png)
+- [Paragon](https://wiki.guildwars.com/wiki/File:Paragon-tango-icon-48.png)
+- [Dervish](https://wiki.guildwars.com/wiki/File:Dervish-tango-icon-48.png)
 
 The complete GNU Free Documentation License follows. This notice is included
 in the packaged application's Resources directory.

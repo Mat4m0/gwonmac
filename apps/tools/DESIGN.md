@@ -70,8 +70,11 @@ weight families use the same semantic weight tokens at 500, 600, and 700.
   centre preserves one application of the saved panel material and opacity.
   Source regions and asset notices are in the
   [frame provenance](../../src/shared/ui/frame/README.md).
-- Embed tools without another outer frame, close control or resize grip.
-  Reparent the existing tool and preserve its state when docking or detaching.
+- Keep Travel, Characters, settings and build search/application inside Hub.
+  Build Library in Home browses saved builds and the existing Guild Wars template
+  folders. With Hub open, the Build shortcut enters this browser. Outside Hub, it opens
+  the full authoring window.
+  Trade and Whispers use independent floating windows with state across hide/show.
 - Use `.ui-well` for a recessed content surface.
 - Use `.ui-raised` for a pressable raised surface.
 - Do not add a generic Card. Panes, sidebars, toolbars, and sections are
@@ -150,7 +153,8 @@ shared tokens; local palette literals are not allowed.
 
 ## Window and interaction rules
 
-- Settings, Builds and teams, and Trade Chat use the same visible resize grip.
+- Windows share the resize interaction. Classic uses its corner artwork and an
+  invisible hit area; Modern and Custom may show the shared grip.
 - Pointer resize uses capture and handles cancellation and lost capture.
 - Arrow keys resize the window. Shift increases the step.
 - Start a Tools drag only from title-bar furniture.
@@ -193,8 +197,9 @@ shared tokens; local palette literals are not allowed.
   and exit share the right edge, focus returns to its trigger, and reduced
   motion replaces translation with a brief cross-fade.
 - Reveal compact save and follow actions on ledger-row hover or keyboard focus;
-  keep them visible for touch input. Keep the bottom inspector actions on one
-  compact, wrapping row so the message remains the visual focus.
+  keep them visible for touch input. Keep Whisper seller visible in the bottom inspector. Put save, follow, copy,
+  and source commands under Actions. Escape closes Actions before leaving the
+  current view. The message remains the visual focus.
 - Scroll to revealed Trade Chat messages smoothly by default and instantly
   when reduced motion is active.
 - Keep scrolling flex and grid children shrinkable.
@@ -238,3 +243,135 @@ sound, mute and cleanup live in the options menu. The author appears once in
 the header and remains available to assistive technology on each message.
 Incoming messages align left, replies right, and consecutive bubbles group
 with tighter spacing. Keep settings and explanatory copy out of the transcript.
+
+## Hub task presentation
+
+Home shows current character and outpost context beside its breadcrumbs. Continue shows
+up to three actionable recent destinations. Explicit searches retain unavailable
+places with their reason. User pins keep their existing order and availability.
+Tool rows show meaningful descriptions and resolved shortcut keycaps.
+
+The top bar shows clickable ancestor breadcrumbs and an understated Back arrow.
+Backspace returns to the previous page when no text is being edited; an empty
+search can also go Back. History restores query, selection, scroll and the actual
+focused row/control. First entry and restoration are separate: character cards,
+account choices and action lists start on their useful item; search stays optional.
+Fresh Home starts in search. Temporary app blur and popout handoffs retain the
+session task; explicit closure starts a fresh task next time. Resume refreshes
+current facts before execution. Account replacement invalidates prior targets.
+Arrow keys connect results, search, navigation and actions. Character cards use
+Left/Right; Up returns to search, then to Back. Native text editing, range and
+select controls retain their own keys. Actions only opens contextual actions. Known query scopes stay visible, and typing a command name offers one
+relevant example. Neither examples nor typing execute an action.
+
+Full team search previews show the difficulty and one line per assigned member.
+Skill and attribute details remain available in Review. Template paths stay out
+of these primary summaries. Preview content scrolls inside the current frame.
+Review remains inside Hub and retains explicit target/apply guards. Every single
+build selection opens Apply to me / Apply to hero, including exact-name searches.
+The incoming build remains above the search field during target selection and
+comparison. Current player and hero rows show observed equipped skills,
+professions and invested attributes. Missing observations stay explicitly unknown;
+a current bar is never filled from the incoming or saved build. Observer updates
+preserve keyboard focus. Right Arrow opens supported child pages without applying.
+Enter on an eligible current-party hero applies the displayed build to that hero.
+Right opens optional comparison. Blocked heroes open their explanation instead
+of executing. First entry focuses the first eligible current-party hero.
+Back restores the search and incoming-build context.
+Hero search lists observed unlocked heroes and current party members. Heroes
+outside the party require adding first; single-build apply cannot change the roster.
+Template browsing is read-only and shows populated folders from the existing
+file reader. Apply rereads the selected template and refuses changed content.
+Team authoring keeps the roster first; Team options expands difficulty and tags,
+with the current difficulty visible in its summary.
+
+Floating Trade keeps connection state beside result counts. Common filters share
+a row when width permits. Secondary actions expand inside the inspector without
+replacing the ledger. Opening a seller's Whisper leaves the Trade query and
+selected offer intact. Floating windows share visual and keyboard stacking.
+Escape closes an expanded Actions menu before its window.
+
+Only Hub starts locked. Its subtle top-bar lock enables dragging by
+the header and resizing through a 36px corner hit area. Floating tools have no
+lock control and remain directly movable and resizable. Classic uses its corner
+artwork without painting a second resize button. Close is a plain X with a usable
+hit target and visible keyboard focus. Hub retains its adjusted geometry across
+pages; windows remain bounded by the viewport. Alt+arrows on Hub's unlocked lock
+control move it; arrows on its resize handle resize it. Reset Hub position is
+available in Hub preferences and Settings → Appearance. It restores default
+position and size, and locks the Hub. Placement uses the shared validated window
+placement format in account-profile browser storage; a new renderer always starts
+locked. Reset removes only the Hub placement key.
+
+Whispers paints its background once across the complete frame interior. Its
+title is vertically centered, and conversation controls sit above the picker
+or transcript. There is no docking control or embedded Hub chat layout.
+
+Maps pairs each native switch with its opacity control. Disabled layers retain
+but disable opacity controls. External settings updates repaint the same view;
+failed writes restore saved state and show a recoverable inline error.
+
+### Compact build metadata
+
+Hub build results keep the skill bar and invested attribute ranks in each row.
+There is no separate lower preview for individual builds and no visible template
+file path. Profession codes remain beside the title, such as Protection
+Mo/Me, in smaller muted text. Native templates also show a folder icon and
+muted relative folder path. Incoming and equipped comparisons use the same
+compact presentation.
+Attributes are grouped under one Tango icon per profession, with abbreviated
+labels and ranks separated by fine dividers; tooltips and
+accessible names retain the full attribute name. Labels distinguish Illusion
+Magic (IM) from Inspiration Magic (InM). Narrow windows wrap attributes below
+the eight skills. Profession artwork has one shared Tango asset set for Hub,
+Character Switch, Builds, Elite Skills and Trader views.
+
+### Build folder search
+
+The `build` command searches native template folders as well as saved builds.
+Plain words are combined with AND across build names, tags and folder names,
+regardless of word order. An unquoted full profession name or code filters the
+primary profession. An exact pair such as `Mo/Me` matches both professions.
+Quoted terms keep names with spaces together and allow literal profession words.
+
+- `build farming monk`: Monk builds with Farming in their folder, name or tags.
+- `build teams/farming monk`: Monk templates under consecutive Teams/Farming folders.
+- `build teams farming monk`: the same words, without requiring path order.
+- `build "Team Builds/Farming" monk`: a path containing a folder name with spaces.
+- `build folder:"Team Builds" monk`: explicitly require that folder, including descendants.
+- `build folder:Monk mesmer`: Mesmer templates stored in the Monk folder.
+- `build folder:/ monk`: Monk templates directly in the Skills root.
+
+Search is case-insensitive and supports word prefixes. Slash paths require exact
+parent segments and allow a prefix in the last segment. A trailing slash makes
+that last segment exact; a leading slash anchors the path at the Skills root.
+Backslashes are accepted as path separators. Quotes may remain unfinished while
+typing. Unknown folders return no results. Imported build provenance is not a
+current template folder. File identities and the reread-before-apply guard stay
+unchanged; folder searches never apply a build automatically.
+
+Typing a printable character while a Hub result has keyboard focus resumes the
+search at its saved caret or selection. This also applies on target-selection
+pages. Arrows still navigate results; Enter activates the selected result;
+Backspace from a result still goes back in Hub history.
+
+### Build continuity and completion
+
+Build browsing uses the same matcher in global search and nested folders. Browse
+immediate child folders, including parents whose templates are all in descendants.
+`Mo/Me` requires that exact profession pair; `folder:Mo/Me` searches that folder.
+Reading, empty, failed, and unreadable template states are distinct. Retry uses the
+existing reader and keeps previously valid builds visible.
+
+Incoming/current comparisons mark changed slots and invested-rank deltas. Details
+exposes skill descriptions and full attribute names without adding tab stops to
+every skill. Already equipped requires complete, equal observations. A saved
+build's Details can open its canonical record in the authoring workspace.
+
+Apply shows progress and explicit partial failures through the existing runner.
+Confirmed completion closes Hub with a brief receipt naming the build and target.
+The library controller retains up to three recent build/hero references for this
+renderer session; Continue reopens the named target for review. Native files and
+live targets are revalidated before applying again. Saved build usage updates the
+existing timestamp without adding an Undo entry; no new persistent library schema
+or durable hero-agent references are introduced.

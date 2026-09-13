@@ -10,20 +10,34 @@ export type HubRow = Readonly<{
   group: string;
   keywords?: string;
   aliases?: readonly string[];
+  /** A domain-specific matcher shared by global search and scoped browsing. */
+  matches?(query: string): boolean;
   action: string;
+  /** Preferred initial browse focus, without affecting explicit user selection. */
+  preferred?: boolean;
   preview?: string;
-  skills?: readonly Readonly<{ name: string; iconUrl: string | null; elite: boolean }>[];
+  skills?: readonly Readonly<{ name: string; iconUrl: string | null; elite: boolean; description?: string | null; changed?: boolean }>[];
+  attributes?: readonly Readonly<{ name: string; icon: string; attributes: readonly Readonly<{ name: string; label: string; rank: number; nextRank?: number }>[] }>[];
+  attributeStatus?: string;
+  folder?: string | null;
+  professions?: readonly Readonly<{ name: string; icon: string; code: string }>[];
+  /** Opens a read-only child page; Right Arrow must never apply a build. */
+  navigate?(): void;
   searchQuery?: string;
   icon?: string;
   quoteBasis?: Readonly<{ value:string; options:readonly {value:string;label:string}[]; choose(value:string):void }>;
   conversion?: Readonly<{ input: string; from: string; to: string; iconFrom?: string; iconTo?: string }>;
   unavailable?: string;
+  /** Opens the canonical saved record in its existing authoring workspace. */
+  workspace?(): void;
   actions?(): void;
   run(): void | Promise<void>;
 }>;
 export type HubSource = Readonly<{
   feature?: 'characterSwitchEnabled' | 'buildLibrary' | 'travelPalette' | 'tradeChat' | 'whispersEnabled';
   search(query: string): readonly HubRow[];
+  /** Read-only current context for Home; never an executable result. */
+  context?(): string | null;
   shortcuts?: Readonly<{ get(): readonly HubShortcut[]; save(value: readonly HubShortcut[]): Promise<void> }>;
   lookup?(id: string): HubRow | undefined;
   setVisible(visible: boolean): void;
@@ -51,13 +65,15 @@ export function hubMatch(name: string, query: string, aliases: readonly string[]
 export function matchHubRows(rows: readonly HubRow[], query: string): readonly HubRow[] {
   if (!normaliseHubQuery(query)) return rows;
   const rank = (row: HubRow) => hubMatch(row.title, query, row.aliases) === 'exact' ? 0 : 1;
-  return rows.filter(row => hubMatch(row.title, query, [...(row.aliases ?? []), row.keywords ?? '']) !== null)
+  return rows.filter(row => row.matches ? row.matches(query) : hubMatch(row.title, query, [...(row.aliases ?? []), row.keywords ?? '']) !== null)
     .sort((a, b) => rank(a) - rank(b) || a.title.localeCompare(b.title) || a.id.localeCompare(b.id));
 }
 
+export type HubSummary = Readonly<Pick<HubRow, 'title' | 'detail' | 'skills' | 'attributes' | 'professions' | 'attributeStatus' | 'folder' | 'workspace'> & { label: string }>;
+
 export interface HubPresenter<Target> {
-  close(): void;
+  close(message?: string): void;
   attach(source: HubSource): () => void;
-  showRows(title: string, rows: () => readonly HubRow[]): void;
+  showRows(title: string, rows: () => readonly HubRow[], summary?: HubSummary): void;
   showView(title: string, mount: (target: Target, back: () => void) => () => void, available?: () => boolean): void;
 }

@@ -58,6 +58,15 @@ afterEach(() => {
 });
 
 describe("useFloatingWindow", () => {
+  it("resizes without a lock control", async () => {
+    vi.spyOn(window, "requestAnimationFrame").mockReturnValue(1);
+    const wrapper = mountWindow();
+    const panel = wrapper.get("section").element as HTMLElement;
+    giveWindowGeometry(panel);
+    await wrapper.get("button").trigger("keydown", { key: "ArrowLeft" });
+    expect(Number.parseFloat(panel.style.width)).toBeLessThan(800);
+    wrapper.unmount();
+  });
   it("restores resized and moved geometry after the document unloads", async () => {
     vi.spyOn(window, "requestAnimationFrame").mockReturnValue(1);
     const wrapper = mountWindow();

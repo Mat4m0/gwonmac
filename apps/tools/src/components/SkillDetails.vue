@@ -1,5 +1,6 @@
 <!-- Shared skill information for Builds and Elite Skills; actions belong to each consumer. -->
 <script setup lang="ts">
+import ProfessionIcon from "./ProfessionIcon.vue";
 import { computed } from "vue";
 import type { SkillPresentation } from "../skill-catalog";
 import { PROFESSIONS } from "../../../../src/shared/builds/heroes";
@@ -33,7 +34,7 @@ function hideBrokenIcon(event: Event): void {
       </span>
       <span>
         <strong>{{ skill.name }}</strong>
-        <small>{{ skill.profession ? PROFESSIONS[skill.profession].name : "PvE" }}<template v-if="skill.attribute"> · {{ skill.attribute.replace(/([a-z])([A-Z])/gu, "$1 $2") }}</template></small>
+        <small><ProfessionIcon :profession="skill.profession" /> {{ skill.profession ? PROFESSIONS[skill.profession].name : "PvE" }}<template v-if="skill.attribute"> · {{ skill.attribute.replace(/([a-z])([A-Z])/gu, "$1 $2") }}</template></small>
         <small v-if="skill.elite" class="skill-elite-label">Elite · One per bar</small>
       </span>
     </div>

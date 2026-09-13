@@ -126,7 +126,7 @@
 .trade-columns,
 .trade-row {
   display: grid;
-  grid-template-columns: 104px minmax(150px, 0.8fr) minmax(280px, 2.3fr) 58px 68px;
+  grid-template-columns: 78px minmax(110px, 0.8fr) minmax(160px, 2.3fr) 48px 64px;
   align-items: center;
   gap: var(--ui-space-3);
 }
@@ -152,8 +152,8 @@
 
 .trade-row {
   width: 100%;
-  min-height: 52px;
-  padding: var(--ui-space-2) var(--ui-space-3);
+  min-height: 44px;
+  padding: var(--ui-space-1) var(--ui-space-3);
   border-bottom: 1px solid var(--ui-line-soft);
   background: transparent;
   color: var(--ui-text);
@@ -275,13 +275,13 @@
 
 .trade-inspector {
   display: flex;
-  min-height: 132px;
+  min-height: 0;
   max-height: 180px;
   flex: 0 0 auto;
   flex-direction: column;
-  gap: var(--ui-space-3);
-  margin-top: var(--ui-gap);
-  padding: var(--ui-space-3) var(--ui-space-4);
+  gap: var(--ui-space-2);
+  margin-top: var(--ui-space-2);
+  padding: var(--ui-space-2) var(--ui-space-3);
   overflow: auto;
 }
 
@@ -324,6 +324,7 @@
 
 .inspector-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--ui-space-4);
@@ -836,3 +837,22 @@
 @media (hover: none) {
   .row-quick-actions { opacity: 1; pointer-events: auto; }
 }
+
+/* Keep common filters on one row; secondary offer commands expand on demand. */
+.trade-toolbar-actions .intent-segment { width:auto; flex:none; }
+.trade-toolbar-actions .saved-trigger { margin-left:auto; }
+.offer-actions { min-width:0; }
+.offer-actions > summary { list-style:none; cursor:pointer; }
+.offer-actions > summary::-webkit-details-marker { display:none; }
+.offer-actions > summary::after { content:' ▾'; }
+.offer-actions[open] { flex-basis:100%; }
+.offer-actions[open] > summary::after { content:' ▴'; }
+.offer-actions .inspector-action-group { flex-wrap:wrap; margin-top:var(--ui-space-2); }
+.inspector-copy p { overflow-wrap:anywhere; }
+@container (max-width: 460px) {
+  .trade-toolbar-actions .intent-segment { width:100%; }
+  .trade-toolbar-actions .saved-trigger { margin-left:0; }
+}
+
+.hub-view .trade-window[data-view="listings"] > .window-bar { display:none; }
+.trade-result-status { display:flex; align-items:center; gap:var(--ui-space-3); white-space:nowrap; }
