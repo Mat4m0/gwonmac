@@ -637,7 +637,7 @@
   .authoring-tabs .ui-chip { display: none; }
   .authoring-bar {
     width: auto;
-    grid-template-columns: repeat(4, minmax(44px, 56px));
+    grid-template-columns: repeat(4, 44px);
     gap: var(--ui-space-1);
   }
   .attribute-line { grid-template-columns: minmax(0, 1fr) auto; }
