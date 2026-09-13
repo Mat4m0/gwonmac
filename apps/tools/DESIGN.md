@@ -274,7 +274,9 @@ comparison. Current player and hero rows show observed equipped skills,
 professions and invested attributes. Missing observations stay explicitly unknown;
 a current bar is never filled from the incoming or saved build. Observer updates
 preserve keyboard focus. Right Arrow opens supported child pages without applying.
-Hero selection opens a comparison; its explicit Apply action is the final step.
+Enter on an eligible current-party hero applies the displayed build to that hero.
+Right opens optional comparison. Blocked heroes open their explanation instead
+of executing. First entry focuses the first eligible current-party hero.
 Back restores the search and incoming-build context.
 Hero search lists observed unlocked heroes and current party members. Heroes
 outside the party require adding first; single-build apply cannot change the roster.
@@ -297,7 +299,9 @@ hit target and visible keyboard focus. Hub retains its adjusted geometry across
 pages; windows remain bounded by the viewport. Alt+arrows on Hub's unlocked lock
 control move it; arrows on its resize handle resize it. Reset Hub position is
 available in Hub preferences and Settings → Appearance. It restores default
-position and size, and locks the Hub.
+position and size, and locks the Hub. Placement uses the shared validated window
+placement format in account-profile browser storage; a new renderer always starts
+locked. Reset removes only the Hub placement key.
 
 Whispers paints its background once across the complete frame interior. Its
 title is vertically centered, and conversation controls sit above the picker
@@ -350,3 +354,24 @@ Typing a printable character while a Hub result has keyboard focus resumes the
 search at its saved caret or selection. This also applies on target-selection
 pages. Arrows still navigate results; Enter activates the selected result;
 Backspace from a result still goes back in Hub history.
+
+### Build continuity and completion
+
+Build browsing uses the same matcher in global search and nested folders. Browse
+immediate child folders, including parents whose templates are all in descendants.
+`Mo/Me` requires that exact profession pair; `folder:Mo/Me` searches that folder.
+Reading, empty, failed, and unreadable template states are distinct. Retry uses the
+existing reader and keeps previously valid builds visible.
+
+Incoming/current comparisons mark changed slots and invested-rank deltas. Details
+exposes skill descriptions and full attribute names without adding tab stops to
+every skill. Already equipped requires complete, equal observations. A saved
+build's Details can open its canonical record in the authoring workspace.
+
+Apply shows progress and explicit partial failures through the existing runner.
+Confirmed completion closes Hub with a brief receipt naming the build and target.
+The library controller retains up to three recent build/hero references for this
+renderer session; Continue reopens the named target for review. Native files and
+live targets are revalidated before applying again. Saved build usage updates the
+existing timestamp without adding an Undo entry; no new persistent library schema
+or durable hero-agent references are introduced.

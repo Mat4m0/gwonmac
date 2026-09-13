@@ -83,8 +83,8 @@ Travel. Do not introduce a generic slash-command executor as part of Hub.
 
 Use the existing Classic and Modern appearance systems. Start with a compact
 panel near the upper center of the active game window, approximately six to eight
-rows. Clamp its size to the viewport. Detailed views may expand without moving
-search or back controls unnecessarily. Respect reduced motion and text scaling.
+rows. Clamp its size to the viewport. Keep the outer frame fixed through queries and page changes; scroll detailed
+content inside it. Respect reduced motion and text scaling.
 
 Home contains a focused search field, a short Pinned section, existing relevant
 recents, and enabled sections. Do not show dangerous actions in empty-query recents.
@@ -100,8 +100,10 @@ The footer names what Enter will do. Do not rely on colour or icons alone.
 - A direct shortcut has no artificial Home step when Escape closes its section.
 - A visible Actions button exposes secondary actions. Tab reaches it; its menu
   supports normal arrow navigation. Do not consume text-editing arrow keys.
-- Back restores query, selection, and scroll position.
-- Root invocation begins a fresh search. Tool state and drafts survive dismissal.
+- Back restores query, caret, selection, scroll, and the launching control.
+- A fresh invocation focuses global search. Temporary app blur and popout handoffs
+  retain the current task; explicit closure ends it. Tool state and drafts have
+  their own existing lifetimes.
 - Clicking outside dismisses without sending or applying anything new.
 - While Hub owns focus, typing must not reach the game. Restore the previous
   game focus on dismissal and correctly release held modifiers and movement keys.
@@ -137,10 +139,10 @@ and diacritics in identities. Do not transliterate or infer abbreviations.
 An exact alias colliding with another exact name is ambiguous. No exact match
 may win merely because it came from a different source.
 
-A unique exact `team` or `build` result can expose Apply directly with its preview
-already visible. Enter is the explicit confirmation. Discovery matches initially
-expose **Review**, not Apply. Selecting Review opens the exact item, where the
-next Enter can apply. Multiple exact matches require explicit row selection first.
+A unique exact `team` result can expose Apply directly with its configuration
+preview visible. Enter is the explicit confirmation; Right opens optional review.
+Partial or ambiguous teams require review. Every single build opens a target page
+with the incoming build visible and Apply to me focused. Multiple exact matches require explicit row selection first.
 Bare person queries open actions; bare build/team queries open detail, not Apply.
 
 Examples:
@@ -167,7 +169,8 @@ No matches displays only **No matches** and retains the editable query.
 6. Display **Apply team GOM AFK ↵** only when the plan is ready.
 7. On Enter, revalidate identity, revision, active client, region, and party state.
 8. Execute once through the existing observation-driven runner.
-9. Close quietly after observed completion. If already configured, do not resend changes.
+9. Close after observed completion with a brief named build/team receipt.
+   If already configured, do not resend changes.
 
 “Full team” means every field supported by the canonical saved-team model and
 apply runner. It does not promise equipment, consumables, positioning, travel,
@@ -193,7 +196,7 @@ Use the runner's existing stop conditions on client or session changes.
 `build smiter` searches the existing saved library and account template owner.
 Profession names and acronyms filter by the saved primary profession: `build monk`,
 `build mo`, or `build monk smit`. Keep every matching build available in the list.
-Profession matches open Review; they never turn into an exact-name apply action.
+Profession matches open target selection; searching never applies a build.
 Each build result shows eight small skill icons beneath its name, preserving skill
 order, with an elite outline and skill names on hover. Missing icons retain a
 numbered slot. Production uses the existing skill catalogue and icon route.
@@ -205,8 +208,10 @@ Default target is explicitly **Your character: <name>**, never the selected game
 target. A target selector may choose an eligible hero. The choice stays visible
 and is revalidated at execution. A new root build command resets to Your character.
 
-A unique exact command exposes **Load Smiter on <name> ↵**. Other matches require
-Review first. Reuse the existing named build-load path where available. If inspection
+Every single build opens **Apply to me / Apply to hero**, including exact names.
+Enter on an eligible hero applies to that named hero; Right opens optional
+comparison. Blocked heroes remain inspectable without executing. Keep current-party
+heroes separate from unlocked heroes outside the party. Reuse the existing named build-load path where available. If inspection
 finds no suitable certified single-build command, that is capability work for this
 milestone; do not simulate a team replacement or broaden a raw bridge to achieve it.
 
@@ -253,13 +258,13 @@ the independent calculator and fixed conversions can remain enabled.
 
 ## 9. Other end-to-end sections
 
-| Section | In-Hub experience | Completion |
+| Section | Presentation | Completion |
 | --- | --- | --- |
 | Travel | Existing destinations, aliases, favourites, history, Guild Hall | Explicit destination action, then quiet close |
 | People | Identity, presence, available Whisper/Travel actions | No automatic social or travel action |
-| Whispers | List, unread state, history, composer, delivery/retry state | Send stays in conversation; Escape preserves draft |
-| Trade | Existing sources, search, intent filters, message detail, trader quotes | Contact opens addressed composer without sending |
-| Builds/Teams | Browse, inspect, apply, existing authoring controls | Expand editor inside Hub; preserve draft |
+| Whispers | Floating conversation with unread state, history, composer and delivery/retry | Send stays in conversation; Escape preserves draft |
+| Trade | Floating ledger with sources, search, filters, message detail and quotes | Contact opens addressed composer without sending |
+| Builds/Teams | Browse, inspect and apply in Hub; authoring in the Build workspace | Open the same saved record in its editor; preserve draft |
 | Characters | Compact left-aligned carousel; `char name` selects the explicit switch action | Existing switch workflow and explorable-area confirmation |
 | Accounts | Saved profile names and runtime state; `acc name` offers open or replace | Launch successfully before closing the source; normal sign-in |
 | Maps | Existing layer toggles, ranges, opacity, style controls | Update inline and remain open for comparison |
@@ -278,7 +283,7 @@ its direct game interaction; Hub does not add inventory automation. Call Target
 retains its direct shortcut because combat should not require opening Hub.
 
 Whispers uses one mounted conversation component for Hub person search, its direct
-shortcut and its unread launcher. Reparent the component; do not maintain a parallel
+shortcut and its unread launcher. Keep it in its floating window; do not maintain a parallel
 quick composer. Existing session-reset rules continue to govern draft lifetime.
 Travel recent destinations and characters use horizontal carousels; Travel favorites
 remain a compact grid. Arrows browse and Enter selects. Escape returns one level.
@@ -340,9 +345,9 @@ Reuse these owners:
 - [Process boundaries](docs/process-model.md) and
   [enhancement policy](docs/enhancement-development.md).
 
-This specification changes Trade's eventual presentation boundary from a separate
-primary window to a Hub section with optional detachment. It does not change its
-read-only market boundary. Update that owning document when the cutover lands.
+Trade and Whispers retain their existing floating presentation and state owners.
+Hub discovers and opens them, preserving its own return location. The read-only
+market boundary remains unchanged.
 
 Extract existing reusable tool content rather than mount duplicate applications.
 Delete replaced shells and old search rules as each section cuts over. Rename the
@@ -357,7 +362,7 @@ Implement as coherent reviewable layers, not one oversized change:
 1. Hub identity, shortcut cutover, deterministic search, quiet availability, focus.
 2. Saved build/template and full-team search, previews, existing apply integration.
 3. Calculator and validated observed-rate conversion.
-4. Shared embedded tool sections and deliberate detachment, one section at a time.
+4. Shared chrome, task-specific Hub sections, and existing floating tools.
 5. Vocabulary editor, pins, saved actions; guided flows only after concrete use.
 
 The three defining journeys are release acceptance criteria, not optional polish.
@@ -410,15 +415,11 @@ and game-file management. Hub uses a bounded native settings capability backed b
 the same preferences owner as the launcher, with canonical validation and shortcut
 conflict rules. The generic game settings transport retains its narrower authority.
 
-The Pop out chat button immediately left of Chat options moves the existing mounted chat panel onto the game
-surface. It keeps the selected conversation, unread state, transcripts, and drafts.
-The small panel supports dragging, resizing, minimizing, sound, and background
-opacity. The Open in Hub button in the same position returns it to Hub. This is an in-game overlay,
-not a second native window or a second chat session. Nothing is sent by moving it.
-
-
-Pop-out mode lasts for the chat session. The floating chat icon shows/hides that
-panel until the user explicitly docks it; moving the panel preserves all drafts.
+Whispers always opens its existing floating panel. Hub person selection, the chat
+shortcut, and the floating icon use the same conversation owner. The panel retains
+selected conversation, unread state, transcripts, and drafts across hide/show. It
+supports dragging and resizing directly; there is no lock or docking control.
+Opening a conversation does not send a message.
 
 Shortcut settings show separate keycaps in macOS order: Control, Option, Shift,
 Command, then the key. Both Hub and Launcher use the canonical model. Existing

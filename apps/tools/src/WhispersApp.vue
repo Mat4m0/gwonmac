@@ -10,7 +10,7 @@ import { useFloatingWindow } from "./use-floating-window";
 import {
   restoreFloatingPosition,
   serializeFloatingPosition,
-} from "./floating-window-placement";
+} from "../../../src/shared/ui/window-placement";
 
 const initials = (name: string) => name.trim().split(/\s+/u).slice(0, 2).map(word => word[0]).join("").toLocaleUpperCase();
 

@@ -28,18 +28,18 @@ test('hero search includes unlocked heroes and applies only to an existing party
   await search.fill('hero'); await search.press('Enter');
   await search.fill('Dunkoro');
   await expect(page.locator('#hub').getByRole('option')).toContainText('Add this hero to your party first.');
-  await expect(page.getByRole('button', { name: 'Review current build ↵', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Review availability ↵', exact: true })).toBeEnabled();
   await search.press('Enter');
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', /command|apply/);
+  await expect(page.getByRole('button', { name: 'Apply to Dunkoro ↵', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
   await search.fill('Tahlkora');
   await expect(page.locator('#hub').getByRole('option')).toHaveAttribute('aria-disabled', 'false');
   await page.screenshot({ path: info.outputPath('hub-hero-search.png') });
   await search.press('ArrowDown'); await page.keyboard.press('Enter');
-  await expect(page.locator('.hub-caption')).toHaveText('Tahlkora');
-  await expect(page.locator('#app')).not.toHaveAttribute('data-action', /command|apply/);
-  await search.press('Enter');
   await expect(page.locator('#hub')).toBeHidden();
   await expect(page.locator('#app')).toHaveAttribute('data-action', /command:/);
+  await expect(page.locator('.hub-receipt')).toContainText('applied to Tahlkora');
 });
 
 test('only Hub locks, reset restores its default frame, and popouts have visible plain X controls', async ({ page }) => {
@@ -173,4 +173,78 @@ test('folder-qualified builds show a subtle path and preserve it through review 
   expect(folder.x + folder.width).toBeLessThanOrEqual(row.x + row.width);
   expect(folder.y + folder.height).toBeLessThanOrEqual(row.y + row.height);
   await page.screenshot({ path: info.outputPath('hub-folder-search.png') });
+});
+
+
+test('nested folders browse one level at a time and use the same build filters', async ({ page }) => {
+  await page.goto('/?hub');
+  await page.getByRole('button', { name: 'Close Hub', exact: true }).click();
+  await page.getByLabel('Fixture scenario', { exact: true }).selectOption('folders');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  await search.fill('build'); await search.press('Enter');
+  await search.fill('Guild Wars templates'); await search.press('Enter');
+  await search.fill('Team Builds'); await search.press('Enter');
+  await expect(page.locator('.hub-row')).toContainText(['Dungeons', 'Farming']);
+  await search.fill('Farming'); await search.press('ArrowDown'); await page.keyboard.press('Enter');
+  await expect(page.locator('.hub-breadcrumbs')).toContainText('Team Builds›Farming');
+  await search.fill('folder:"Team Builds/Farming" monk');
+  await expect(page.locator('.hub-build-row')).toHaveCount(1);
+  await expect(page.locator('.hub-build-row')).toContainText('Protection');
+});
+
+test('comparison details are keyboard accessible without applying a build', async ({ page }) => {
+  await page.goto('/?hub');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  await search.fill('build monk'); await search.press('ArrowDown'); await page.keyboard.press('Enter');
+  await expect(page.locator('.hub-row [data-changed=true]').first()).toBeVisible();
+  await page.getByRole('button', { name: 'Details', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.hub-build-details')).toContainText('Protective Spirit');
+  await expect(page.locator('.hub-build-details')).toContainText('Healing Prayers');
+  await expect(page.locator('#app')).not.toHaveAttribute('data-action', /command|apply/);
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: 'Details', exact: true })).toBeFocused();
+});
+
+for (const width of [390, 1280]) {
+test(`recent build targets and editor handoff retain their place at ${width}px`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 720 });
+  await page.goto('/?hub');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  await search.fill('build monk'); await search.press('Enter');
+  await search.fill('hero'); await search.press('Enter');
+  await search.fill('Tahlkora'); await search.press('Enter');
+  await expect(page.locator('#hub')).toBeHidden();
+  await page.getByRole('button', { name: 'Open Hub', exact: true }).click();
+  await page.locator('.hub-row[data-id^="recent:"]').click();
+  await expect(page.locator('.hub-caption')).toHaveText('Tahlkora');
+  await expect(page.locator('.hub-row:focus')).toContainText('Already equipped');
+  await page.getByRole('button', { name: 'Home', exact: true }).click();
+  await search.fill('build Word of Healing'); await search.press('Enter');
+  await expect(page.getByRole('region', { name: 'Build to apply', exact: true })).toContainText('Word of Healing');
+  await page.getByRole('button', { name: 'Details', exact: true }).click();
+  await page.getByRole('button', { name: 'Open in Build Library', exact: true }).click();
+  await expect(page.locator('#hub')).toBeHidden();
+  await expect(page.locator('.tools-window')).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Build name', exact: true })).toHaveValue('Word of Healing');
+  await expect.poll(() => page.locator('.tools-window').evaluate(panel => panel.contains(document.activeElement))).toBe(true);
+  await page.getByRole('button', { name: 'Close Build Library', exact: true }).click();
+  await page.getByRole('button', { name: 'Open Hub', exact: true }).click();
+  await expect(page.locator('.hub-build-details')).toBeVisible();
+});
+}
+
+test('mixed hero professions default to the eligible hero and keep blocked heroes inspectable', async ({ page }) => {
+  await page.goto('/?hub');
+  await page.getByRole('button', { name: 'Close Hub', exact: true }).click();
+  await page.getByLabel('Fixture scenario', { exact: true }).selectOption('mixed-professions');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  await search.fill('build monk'); await search.press('Enter');
+  await search.fill('hero'); await search.press('Enter');
+  await expect(page.locator('.hub-row:focus')).toContainText('Tahlkora');
+  const blocked = page.locator('.hub-row').filter({ hasText: "Gwen's assigned build is for Mo, but the observed primary is Me." });
+  await blocked.click();
+  await expect(page.locator('.hub-primary')).toBeDisabled();
+  await expect(page.locator('.hub-summary')).toContainText('Protection');
+  await expect(page.locator('#app')).not.toHaveAttribute('data-action', /command|apply/);
 });

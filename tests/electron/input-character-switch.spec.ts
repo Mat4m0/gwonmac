@@ -15,7 +15,7 @@ import { startGameInput } from "./input-helpers.js";
 test("a 27-character account uses the Hub carousel and preserves search, identity and preferences", async () => {
   const fixture = await launchPlayableClient("gw-character-switch-e2e-");
   try {
-    const { page } = fixture;
+    const { app, page } = fixture;
     await startGameInput(page);
     await page.evaluate(() => {
       document.getElementById("loading")?.classList.add("gone");
@@ -126,6 +126,15 @@ test("a 27-character account uses the Hub carousel and preserves search, identit
     await expect(search).toHaveValue("rud");
     await expect(list.getByRole("option")).toHaveCount(1);
     await expect(selected).toContainText("Rudolph Prime");
+    await search.press("ArrowDown");
+    await app.evaluate(({ BrowserWindow }, url) => {
+      const contents = BrowserWindow.getAllWindows().find(win => win.webContents.getURL() === url)?.webContents;
+      contents?.sendInputEvent({ type: 'keyDown', keyCode: 'A', modifiers: ['meta'] });
+      contents?.sendInputEvent({ type: 'keyUp', keyCode: 'A', modifiers: ['meta'] });
+    }, page.url());
+    await expect(search).toBeFocused();
+    await expect.poll(() => search.evaluate(input => input instanceof HTMLInputElement
+      ? [input.selectionStart, input.selectionEnd] : null)).toEqual([0, 3]);
     await search.press("Escape");
     await search.press("ArrowDown");
     await expect.poll(() => isDomActiveElement(selected)).toBe(true);

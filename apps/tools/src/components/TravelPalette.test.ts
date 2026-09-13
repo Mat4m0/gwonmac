@@ -717,7 +717,7 @@ describe("TravelPalette", () => {
     await result.trigger("click");
 
     expect(travel).not.toHaveBeenCalled();
-    expect(wrapper.text()).toContain("This friend’s location changed. Select them again.");
+    expect(wrapper.text()).toContain("That destination is no longer available. Choose another destination.");
     wrapper.unmount();
   });
 
@@ -757,6 +757,30 @@ describe("TravelPalette", () => {
     await flushPromises();
 
     expect(wrapper.findAll(".travel-result")[1]!.attributes("aria-selected")).toBe("true");
+    wrapper.unmount();
+  });
+
+  it("does not silently select another friend when the selected identity disappears", async () => {
+    const first = { key: "0123456789abcdef", status: "online" as const, mapId: 449,
+      alias: "First Friend", character: "First Character" };
+    const second = { key: "fedcba9876543210", status: "away" as const, mapId: 194,
+      alias: "Second Friend", character: "Second Character" };
+    const { wrapper, host, travel } = fixture({ friends: {
+      status: "ready", sequence: 2, generation: 1, friends: [first, second],
+    } });
+    await flushPromises();
+    const search = wrapper.get('[role="combobox"]');
+    await search.setValue("friend");
+    await search.trigger("keydown", { key: "ArrowDown" });
+    host.updateFriends({ status: "ready", sequence: 4, generation: 1, friends: [first] });
+    await flushPromises();
+    await search.trigger("keydown", { key: "Enter" });
+    expect(travel).not.toHaveBeenCalled();
+    expect(wrapper.text()).toContain("Choose another destination");
+    host.updateFriends({ status: "ready", sequence: 6, generation: 1, friends: [first] });
+    await flushPromises();
+    await search.trigger("keydown", { key: "Enter" });
+    expect(travel).not.toHaveBeenCalled();
     wrapper.unmount();
   });
 

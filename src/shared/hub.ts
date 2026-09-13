@@ -13,9 +13,11 @@ export type HubRow = Readonly<{
   /** A domain-specific matcher shared by global search and scoped browsing. */
   matches?(query: string): boolean;
   action: string;
+  /** Preferred initial browse focus, without affecting explicit user selection. */
+  preferred?: boolean;
   preview?: string;
-  skills?: readonly Readonly<{ name: string; iconUrl: string | null; elite: boolean }>[];
-  attributes?: readonly Readonly<{ name: string; icon: string; attributes: readonly Readonly<{ name: string; label: string; rank: number }>[] }>[];
+  skills?: readonly Readonly<{ name: string; iconUrl: string | null; elite: boolean; description?: string | null; changed?: boolean }>[];
+  attributes?: readonly Readonly<{ name: string; icon: string; attributes: readonly Readonly<{ name: string; label: string; rank: number; nextRank?: number }>[] }>[];
   attributeStatus?: string;
   folder?: string | null;
   professions?: readonly Readonly<{ name: string; icon: string; code: string }>[];
@@ -26,6 +28,8 @@ export type HubRow = Readonly<{
   quoteBasis?: Readonly<{ value:string; options:readonly {value:string;label:string}[]; choose(value:string):void }>;
   conversion?: Readonly<{ input: string; from: string; to: string; iconFrom?: string; iconTo?: string }>;
   unavailable?: string;
+  /** Opens the canonical saved record in its existing authoring workspace. */
+  workspace?(): void;
   actions?(): void;
   run(): void | Promise<void>;
 }>;
@@ -65,10 +69,10 @@ export function matchHubRows(rows: readonly HubRow[], query: string): readonly H
     .sort((a, b) => rank(a) - rank(b) || a.title.localeCompare(b.title) || a.id.localeCompare(b.id));
 }
 
-export type HubSummary = Readonly<Pick<HubRow, 'title' | 'detail' | 'skills' | 'attributes' | 'professions' | 'attributeStatus' | 'folder'> & { label: string }>;
+export type HubSummary = Readonly<Pick<HubRow, 'title' | 'detail' | 'skills' | 'attributes' | 'professions' | 'attributeStatus' | 'folder' | 'workspace'> & { label: string }>;
 
 export interface HubPresenter<Target> {
-  close(): void;
+  close(message?: string): void;
   attach(source: HubSource): () => void;
   showRows(title: string, rows: () => readonly HubRow[], summary?: HubSummary): void;
   showView(title: string, mount: (target: Target, back: () => void) => () => void, available?: () => boolean): void;

@@ -23,10 +23,11 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
     if (!disposed) refresh();
   };
   function open() {
+    let resume: InstanceType<typeof TravelPalette>['$props']['resume'];
     hub.showView('Travel', (target, back) => {
       active = true;
       const app = createApp({ setup: () => () => h(TravelPalette, {
-        host, preferences, inset: true, visible: true, nativeDialog: true, onClose: back,
+        host, preferences, ...(resume ? { resume } : {}), onRemember: state => { resume = state; }, inset: true, visible: true, nativeDialog: true, onClose: back,
       }) });
       app.mount(target);
       return () => { active = false; app.unmount(); };

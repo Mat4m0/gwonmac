@@ -1,5 +1,8 @@
-/** Normalized persistence for an embedded Tools window across viewport sizes. */
-import { captureCornerPosition, restoreCornerPosition, isCornerPosition } from "../../../src/shared/corner-position";
+/**
+ * Validates normalized placement shared by Hub and floating Tools windows.
+ * One format retains geometry across viewport sizes without storing UI state.
+ */
+import { captureCornerPosition, restoreCornerPosition, isCornerPosition } from "../corner-position.js";
 
 export type FloatingWindowViewport = Readonly<{
   width: number;

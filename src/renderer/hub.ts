@@ -2,7 +2,7 @@
  * Owns the Core command palette, its search focus and transient modal lifetime.
  * Optional Tools contributes local results and views without entering Core's imports.
  */
-import { resumeSearchInput } from './search-input.js';
+import { installSearchEditing, resumeSearchInput } from './search-input.js';
 import { installHubWindow } from './hub-window.js';
 import { attachClassicFrame } from '../shared/ui/frame.js';
 import { resolveShortcuts, shortcutKeycaps, type ShortcutAction } from '../shared/keyboard-shortcuts.js';
@@ -31,6 +31,8 @@ export function createHub(parent: HTMLElement) {
     <button class="ui-window-resize hub-resize" aria-label="Resize Hub" title="Drag to resize, or use arrow keys" hidden></button>
   </section>`;
   parent.append(root);
+  const receipt = document.createElement('output'); receipt.className = 'hub-receipt ui-well'; receipt.setAttribute('role', 'status'); receipt.hidden = true; parent.append(receipt);
+  let receiptTimer: ReturnType<typeof setTimeout> | undefined;
   const required = <T extends Element>(selector: string) => {
     const element = root.querySelector<T>(selector);
     if (!element) throw new Error(`Hub control missing: ${selector}`);
@@ -41,6 +43,7 @@ export function createHub(parent: HTMLElement) {
   const input = required<HTMLInputElement>('input');
   const search = required<HTMLElement>('.hub-search');
   const list = required<HTMLElement>('.hub-results');
+  const disposeSearchEditing = installSearchEditing(list, input);
   const content = required<HTMLElement>('.hub-view');
   const backButton = required<HTMLButtonElement>('[aria-label="Back"]');
   const caption = required<HTMLElement>('.hub-caption');
@@ -175,7 +178,7 @@ export function createHub(parent: HTMLElement) {
   }
   function commandExamples(): HubRow[] {
     const enabled = new Set(commands().map(row => row.id));
-    const examples = [ ['trade', 'trade arms', 'Find offers or a seller'], ['travel', 'travel kamadan', 'Find an outpost'], ['character', 'char Toefte', 'Find a character by name'], ['builds', 'build monk', 'Browse saved Monk builds'], ['builds', 'team gom afk', 'Find your saved team'], ['whispers', 'whisper Romi', 'Choose a person; write before sending'], ['', '1p in g', 'Convert platinum to gold'], ['trade', '10e in p', 'Estimate ecto value'], ['', 'titles', 'Plan title points'], ['', 'acc second', 'Choose how to open a saved account'], ['builds', 'build folder:Monk monk', 'Find Monk builds in a template folder; use parent/child for subfolders'] ];
+    const examples = [ ['trade', 'trade arms', 'Find offers or a seller'], ['travel', 'travel kamadan', 'Find an outpost'], ['character', 'char Toefte', 'Find a character by name'], ['builds', 'build monk', 'Browse saved Monk builds'], ['builds', 'team gom afk', 'Find your saved team'], ['whispers', 'whisper Romi', 'Choose a person; write before sending'], ['', '1p in g', 'Convert platinum to gold'], ['trade', '10e in p', 'Estimate ecto value'], ['', 'titles', 'Plan title points'], ['', 'acc second', 'Choose how to open a saved account'], ['builds', 'build folder:Monk monk', 'Monk builds in a folder and its descendants'], ['builds', 'build folder:"Team Builds/Farming" monk', 'Quotes keep spaces; paths match consecutive folder names'], ['builds', 'build folder:/Monk/ mesmer', 'Leading slash starts at Skills; trailing slash matches the complete folder name'], ['builds', 'build Mo/Me', 'Exact profession pair; use folder:Mo/Me to search that folder instead'], ['builds', 'build folder:/', 'Templates saved directly in the Skills root'] ];
     return examples.filter(([tool]) => !tool || enabled.has(tool)).map(([, query, detail], index) => ({ id: `example:${index}`, title: query!, detail: detail!, group: 'Commands', action: 'Edit example', searchQuery: query!, run() {} }));
   }
   function openSettings() { openHubSettings(presenter); }
@@ -209,14 +212,18 @@ export function createHub(parent: HTMLElement) {
     primary.replaceChildren(document.createTextNode(row ? row.action : 'Select a result'));
     if (row) { const key = document.createElement('kbd'); key.textContent = '↵'; primary.append(key); }
     primary.disabled = !row || !!row.unavailable || pending;
-    required<HTMLButtonElement>('.hub-actions').disabled = !row;
+    const actionsButton = required<HTMLButtonElement>('.hub-actions');
+    actionsButton.disabled = !row;
+    actionsButton.hidden = !!scope && !row?.skills && !scope.summary?.skills;
+    actionsButton.textContent = scope ? 'Details' : 'Actions';
   }
   function renderSkillBar(skills: NonNullable<HubRow['skills']>) {
     const bar = document.createElement('span'); bar.className = 'hub-skill-bar';
     skills.forEach((skill, index) => {
       const slot = document.createElement('span'); slot.className = 'hub-skill';
-      slot.dataset.elite = String(skill.elite); slot.title = `${index + 1}. ${skill.name}`;
-      slot.setAttribute('role', 'img'); slot.setAttribute('aria-label', slot.title);
+      slot.dataset.elite = String(skill.elite); slot.dataset.changed = String(!!skill.changed); slot.title = `${index + 1}. ${skill.name}${skill.changed ? ' · will change' : ''}`;
+      slot.setAttribute('role', 'img'); slot.setAttribute('aria-label', `${index + 1}. ${skill.name}`);
+      if (skill.changed) slot.setAttribute('aria-description', 'This slot will change.');
       slot.textContent = String(index + 1);
       if (skill.iconUrl) {
         const image = document.createElement('img'); image.src = skill.iconUrl; image.alt = '';
@@ -236,9 +243,9 @@ export function createHub(parent: HTMLElement) {
       cluster.append(icon);
       for (const attribute of group.attributes) {
         const chip = document.createElement('span'); chip.className = 'hub-attribute';
-        chip.title = `${attribute.name} ${attribute.rank}`;
-        chip.setAttribute('role', 'img'); chip.setAttribute('aria-label', chip.title);
-        const rank = document.createElement('b'); rank.textContent = String(attribute.rank);
+        chip.title = `${attribute.name}: ${attribute.rank}${attribute.nextRank !== undefined && attribute.nextRank !== attribute.rank ? ` → ${attribute.nextRank}` : ''} invested ranks`;
+        chip.setAttribute('role', 'img'); chip.setAttribute('aria-label', `${attribute.name} ${attribute.rank}${attribute.nextRank !== undefined && attribute.nextRank !== attribute.rank ? ` → ${attribute.nextRank}` : ''}`); chip.setAttribute('aria-description', 'Invested ranks');
+        const rank = document.createElement('b'); rank.textContent = `${attribute.rank}${attribute.nextRank !== undefined && attribute.nextRank !== attribute.rank ? ` → ${attribute.nextRank}` : ''}`;
         chip.append(attribute.label, rank); cluster.append(chip);
       }
       attributes.append(cluster);
@@ -313,7 +320,7 @@ export function createHub(parent: HTMLElement) {
     backButton.title = `Back to ${destination}`;
     backButton.setAttribute('aria-description', `Return to ${destination}`);
     const actionsButton = required<HTMLButtonElement>('.hub-actions');
-    actionsButton.hidden = !!scope;
+    actionsButton.hidden = !!scope && !scope.summary?.skills && !rows.find(row => row.id === selected)?.skills;
     actionsButton.disabled = !selected;
     const query = parseHubQuery(input.value);
     const scopeLabel = required<HTMLElement>('.hub-scope');
@@ -340,7 +347,7 @@ export function createHub(parent: HTMLElement) {
     const ids = new Set([...extra, ...savedRows].map(row => row.id));
     rows = scope ? matchHubRows(extra, input.value) : [...savedRows, ...extra.filter(row => !savedRows.some(saved => saved.id === row.id)), ...(parseHubQuery(input.value).scope ? [] : matchHubRows(commands().filter(row => !ids.has(row.id)), input.value))];
     rows = [...rows].sort((a, b) => {
-      const groups = ["Pinned", "Calculator", "Teams", "Builds", "Targets", "Current build", "Accounts", "Characters", "Heroes", "People", "Places", "Continue", "Tools", "Commands"];
+      const groups = ["Pinned", "Calculator", "Teams", "Folders", "Builds", "Targets", "Current build", "Accounts", "Characters", "In your party", "Unlocked heroes", "Heroes", "People", "Places", "Continue", "Tools", "Commands", "Sources"];
       const groupOrder = groups.indexOf(a.group) - groups.indexOf(b.group);
       if (groupOrder || scope || a.group !== 'Tools') return groupOrder;
       // Keep everyday game actions ahead of account management, independent of provider order.
@@ -408,7 +415,7 @@ export function createHub(parent: HTMLElement) {
     const exactCount = rows.filter(row => normaliseHubQuery(row.title) === parsed.term || savedRows.some(saved => saved.id === row.id)).length;
     const prior = previousRows.find(row => row.id === selected);
     const revised = prior && rows.find(row => row.id === selected)?.preview !== prior.preview;
-    const initial = !input.value.trim() ? rows.find(row => !row.unavailable) : rows[0];
+    const initial = !input.value.trim() ? rows.find(row => row.preferred && !row.unavailable) ?? rows.find(row => !row.unavailable) ?? rows[0] : rows[0];
     select((prior?.id === 'quote-state' || prior?.id === 'market-state') && !!rows[0]?.conversion ? rows[0].id : reset ? exactCount > 1 ? null : initial?.id ?? null : !revised && rows.some(row => row.id === selected) ? selected : null);
     if (hadRowFocus) (list.querySelector<HTMLElement>('[aria-selected="true"]') ?? input).focus();
     if (!rows.length) {
@@ -441,9 +448,10 @@ export function createHub(parent: HTMLElement) {
     if (returnFromView) returnFromView();
     else restoreParent();
   }
-  function close() {
+  function close(message?: string) {
     suspended = null; epoch++; history.length = 0; resetView(); modal.close(); for (const source of sources.keys()) source.setVisible(false); scope = null;
     input.value = ''; restoreQuery = ''; report(''); selected = null;
+    if (typeof message === 'string' && message) { clearTimeout(receiptTimer); receipt.textContent = message; receipt.hidden = false; receiptTimer = setTimeout(() => { receipt.hidden = true; }, 8000); }
   }
   function suspend() {
     if (!root.open) return;
@@ -478,10 +486,11 @@ export function createHub(parent: HTMLElement) {
     restoringFocus?.disconnect(); restoringFocus = null;
     if (!event.defaultPrevented && event.target instanceof Element && event.target.closest('.hub-row') && resumeSearchInput(event, input)) return;
     if (event.defaultPrevented || event.isComposing || event.metaKey || event.ctrlKey || event.altKey) return;
+    if (event.key === 'Enter' && event.repeat) { event.preventDefault(); return; }
     const target = event.target instanceof HTMLElement ? event.target : null;
     if (!target || target === required<HTMLElement>('.hub-resize')) return;
     const editing = target.matches('input,textarea,select,[contenteditable="true"]');
-    if (event.key === 'Backspace' && (!editing || target instanceof HTMLInputElement && target.type !== 'range' && !target.value)) {
+    if (event.key === 'Backspace' && (!editing || target instanceof HTMLInputElement && (target === input || target.getAttribute('role') === 'combobox') && !target.value)) {
       if (history.length) { event.preventDefault(); event.stopPropagation(); back(); }
       return;
     }
@@ -525,16 +534,36 @@ export function createHub(parent: HTMLElement) {
       else controls[Math.max(0, Math.min(controls.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)))]?.focus();
     }
   });
+  function showBuildDetails(row: HubRow) {
+    const incoming = scope?.summary;
+    presenter.showView('Build details', target => {
+      const view = document.createElement('section'); view.className = 'hub-build-details ui-scroll';
+      for (const build of [...(incoming ? [incoming] : []), row]) {
+        const heading = document.createElement('h2'); heading.textContent = 'label' in build ? `${build.label}: ${build.title}` : `${build.title} · ${build.detail}`; view.append(heading);
+        if (build.workspace) { const open = document.createElement('button'); open.className = 'ui-button'; open.textContent = 'Open in Build Library'; open.onclick = build.workspace; view.append(open); }
+        if (build.skills) {
+          view.append(renderBuildInfo(build));
+          const skills = document.createElement('ol');
+          for (const skill of build.skills) { const item = document.createElement('li'); const name = document.createElement('strong'); name.textContent = skill.name; const description = document.createElement('p'); description.textContent = skill.description ?? 'Description not available.'; item.append(name, description); skills.append(item); }
+          view.append(skills);
+        }
+        const attributes = document.createElement('p'); attributes.textContent = build.attributeStatus ?? build.attributes?.flatMap(group => group.attributes.map(attribute => `${attribute.name} ${attribute.rank}${attribute.nextRank !== undefined && attribute.nextRank !== attribute.rank ? ` → ${attribute.nextRank}` : ''}`)).join(' · ') ?? '';
+        if (attributes.textContent) { attributes.prepend('Invested attributes: '); view.append(attributes); }
+      }
+      view.tabIndex = 0; target.append(view); view.focus();
+      return () => view.remove();
+    });
+  }
   const actions = () => {
     if (!root.open || document.querySelector('dialog:modal') !== root) return false;
     if (disposeView) return true;
-    if (scope) return true;
     const row = rows.find(row => row.id === selected);
+    if (scope) { if (row && (row.skills || scope.summary?.skills)) showBuildDetails(row); return true; }
     if (!row) return true;
     if (isHubShortcuts([{ id: row.id, phrase: '', pinned: false }])) {
       presenter.showRows(row.title, () => [
         { ...row, id: 'selected-action', group: 'Actions' },
-        ...(row.actions ? [{ id: 'review-selected', title: 'Review', detail: row.title, group: 'Actions', action: 'Review', run: row.actions }] : []),
+        ...(row.skills || row.actions ? [{ id: 'review-selected', title: row.skills ? 'Details' : 'Review', detail: row.title, group: 'Actions', action: row.skills ? 'Details' : 'Review', run: () => row.skills ? showBuildDetails(row) : row.actions?.() }] : []),
         { id: 'pin-selected', title: shortcuts().some(entry => entry.id === row.id && entry.pinned) ? 'Unpin' : 'Pin to Hub', detail: row.title, group: 'Actions', action: 'Update pin', run: async () => {
           const entries = shortcuts(); const old = entries.find(entry => entry.id === row.id);
           await saveShortcuts([...entries.filter(entry => entry.id !== row.id), { id: row.id, phrase: old?.phrase ?? '', pinned: !old?.pinned }]);
@@ -546,8 +575,9 @@ export function createHub(parent: HTMLElement) {
     presenter.showRows(row.title, () => [row]); return true;
   };
   required<HTMLButtonElement>('.hub-actions').onclick = actions;
-  required<HTMLButtonElement>('.hub-close').onclick = close;
+  required<HTMLButtonElement>('.hub-close').onclick = () => close();
   backButton.onclick = back; primary.onclick = () => { void run(); };
+  root.addEventListener('pointerdown', () => { restoringFocus?.disconnect(); restoringFocus = null; });
   root.addEventListener('click', event => { if (event.target === root) { event.stopImmediatePropagation(); close(); } }, true);
   root.addEventListener('close', () => { if (!root.open && !suspended) close(); });
   const onBlur = () => suspend();
@@ -556,7 +586,7 @@ export function createHub(parent: HTMLElement) {
     const disabled = [...enabledSources].some(source => !sourceEnabled(source));
     enabledSources = new Set([...sources.keys()].filter(sourceEnabled));
     for (const source of sources.keys()) source.setVisible(root.open && sourceEnabled(source));
-    if (disposeView && (viewAvailable ? !viewAvailable() : disabled)) home();
+    if ((disposeView && (viewAvailable ? !viewAvailable() : disabled)) || (scope && disabled)) { suspended = null; home(); }
     else refresh();
   };
   window.addEventListener('blur', onBlur); window.addEventListener('gw:tools-settings', onSettings);
@@ -596,7 +626,7 @@ export function createHub(parent: HTMLElement) {
     },
     browseBuilds() { const row = lookup('builds'); if (row && !row.unavailable) void row.run(); else report('Build Library is loading. Try again.'); },
     resetPosition: hubWindow.reset,
-    dispose() { close(); hubWindow.dispose(); disposeFrame(); for (const unsubscribe of sources.values()) unsubscribe(); sources.clear(); modal.dispose(); root.remove(); window.removeEventListener('blur', onBlur); window.removeEventListener('gw:tools-settings', onSettings); },
+    dispose() { close(); disposeSearchEditing(); clearTimeout(receiptTimer); receipt.remove(); hubWindow.dispose(); disposeFrame(); for (const unsubscribe of sources.values()) unsubscribe(); sources.clear(); modal.dispose(); root.remove(); window.removeEventListener('blur', onBlur); window.removeEventListener('gw:tools-settings', onSettings); },
   };
   presenter.attach(createHubAccounts(presenter, { get: () => window.gwNative.accounts.get(), open: request => window.gwNative.accounts.open(request), manage: () => window.gwNative.app.showLauncher() }));
   presenter.attach(createHubCalculator({

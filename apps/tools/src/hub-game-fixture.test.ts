@@ -139,6 +139,7 @@ test('build folder search handles paths, words, quotes, prefixes and ambiguous n
     ['Skills/Other/Farming/Protection.txt', monk],
     ['Skills/Monk/Panic.txt', mesmer],
     ['Skills/Root.txt', monk],
+    ['Skills/Mo/Me/Panic.txt', mesmer],
   ] as const;
   let source: import('../../../src/shared/hub').HubSource | undefined;
   let dispose: (() => void) | undefined;
@@ -160,8 +161,66 @@ test('build folder search handles paths, words, quotes, prefixes and ambiguous n
   expect(folders('build folder:monk')).toEqual(['Monk']);
   expect(folders('build folder:monk mesmer')).toEqual(['Monk']);
   expect(folders('build folder:monk monk')).toEqual([]);
+  expect(folders('build Mo/Me')).not.toContain('Mo/Me');
+  expect(folders('build folder:Mo/Me')).toEqual(['Mo/Me']);
+  expect(folders('build Mo/Me mesmer')).toEqual([]);
   expect(folders('build folder:/ monk')).toEqual(['']);
-  for (const query of ['build missing monk', 'build farming/team monk', 'build folder:protection', 'build folder:template-code', 'build folder:']) expect(folders(query), query).toEqual([]);
+  for (const query of ['build missing monk', 'build farming/team monk', 'build folder:protection', 'build folder:template-code', 'build folder:', 'build travel monk']) expect(folders(query), query).toEqual([]);
   expect(source!.search('build folder:"Team Builds/Farming" monk')[0]).toMatchObject({ title: 'Protection', folder: 'Team Builds/Farming', action: 'Choose target' });
   dispose?.(); app.unmount();
+});
+
+test('template source failures preserve valid results and retry distinguishes malformed files', async () => {
+  const { createApp, h, nextTick } = await import('vue');
+  const { useLibrary } = await import('./use-library');
+  const { createHubLibrary } = await import('./hub-library');
+  const { encodeSkillTemplate } = await import('../../../src/shared/builds/skill-template');
+  const { host } = createHubGameFixture(() => {});
+  const { library } = await host.loadLibrary();
+  const template = encodeSkillTemplate(library.builds[0]!)!;
+  let fail = false;
+  let source: import('../../../src/shared/hub').HubSource | undefined;
+  let dispose: (() => void) | undefined;
+  const app = createApp({ setup() {
+    const fixture = { ...host, async loadTemplates() {
+      if (fail) throw new Error('Unavailable');
+      return [{ path: 'Skills/Native.txt', contents: template }, { path: 'Skills/Broken.txt', contents: 'invalid' }];
+    } };
+    dispose = createHubLibrary(useLibrary(fixture), fixture, { attach(next) { source = next; return () => {}; }, close() {}, showRows() {}, showView() {} }).dispose;
+    return () => h('div');
+  } });
+  app.mount(document.createElement('div')); await nextTick(); await nextTick();
+  source!.setVisible(true); await nextTick(); await nextTick();
+  expect(source!.search('build native').some(row => row.title === 'Native')).toBe(true);
+  expect(source!.search('build native').some(row => row.title === '1 unreadable template')).toBe(true);
+  fail = true; source!.setVisible(false); source!.setVisible(true); await nextTick(); await nextTick();
+  const rows = source!.search('build native');
+  expect(rows.some(row => row.title === 'Native')).toBe(true);
+  expect(rows.some(row => row.id === 'templates-retry')).toBe(true);
+  fail = false; await rows.find(row => row.id === 'templates-retry')!.run();
+  expect(source!.search('build native').some(row => row.id === 'templates-retry')).toBe(false);
+  dispose?.(); app.unmount();
+});
+
+
+test('recent-use bookkeeping preserves the next meaningful Undo and bounds target references', async () => {
+  const { createApp, h, nextTick } = await import('vue');
+  const { useLibrary } = await import('./use-library');
+  const { host } = createHubGameFixture(() => {});
+  let controller: ReturnType<typeof useLibrary> | undefined;
+  const app = createApp({ setup() { controller = useLibrary(host); return () => h('div'); } });
+  app.mount(document.createElement('div')); await nextTick(); await nextTick();
+  const build = controller!.library.value!.builds[0]!;
+  expect(controller!.canUndo.value).toBe(false);
+  await controller!.recordBuildUse(build.id, null);
+  expect(controller!.canUndo.value).toBe(false);
+  const heroes = host.party.value.heroes.slice(0, 3).map(member => member.hero);
+  for (const hero of heroes) await controller!.recordBuildUse(build.id, hero);
+  expect(controller!.recentBuilds.value).toEqual([...heroes].reverse().map(hero => ({ id: build.id, hero })));
+  expect(controller!.recentBuilds.value).toHaveLength(3);
+  await controller!.renameBuild(build.id, 'Renamed for test');
+  await controller!.recordBuildUse(build.id, null);
+  await controller!.undo();
+  expect(controller!.library.value!.builds.find(item => item.id === build.id)?.name).toBe(build.name);
+  app.unmount();
 });

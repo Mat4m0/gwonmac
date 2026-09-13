@@ -11,6 +11,8 @@ import { TOOL_PRESENTATION } from '../shared/tool-presentation.js';
 import { DEFAULT_SHORTCUTS, SHORTCUT_CAPTURE_HINT, shortcutKeycaps, SHORTCUT_ACTIONS, SHORTCUT_LABELS, shortcutConflict, type ShortcutAction, type ShortcutBinding } from '../shared/keyboard-shortcuts.js';
 
 export function openHubSettings(hub: Hub) {
+  let page = 'Tools';
+  let scroll = 0;
   hub.showView('Settings', target => {
     const doc = target.ownerDocument;
     const view = doc.createElement('section'); view.className = 'hub-settings';
@@ -18,7 +20,7 @@ export function openHubSettings(hub: Hub) {
     const body = doc.createElement('div'); body.className = 'hub-settings-body ui-scroll';
     const status = doc.createElement('p'); status.className = 'hub-settings-status'; status.setAttribute('role', 'status');
     view.append(nav, body, status); target.append(view);
-    let page = 'Tools'; let snapshot: HubSettingsSnapshot | null = null; let disposed = false; let pending = false;
+    let snapshot: HubSettingsSnapshot | null = null; let disposed = false; let pending = false;
     const api = window.gwNative.hubSettings;
     const sections = ['Tools', 'Appearance', 'Shortcuts', 'Maps', 'Chat & characters'];
     const buttons = sections.map(name => {
@@ -28,6 +30,7 @@ export function openHubSettings(hub: Hub) {
       button.onclick = () => { page = name; status.textContent = ''; render(); };
       button.onkeydown = event => {
         if (!['ArrowDown', 'ArrowUp', 'ArrowRight'].includes(event.key)) return;
+        if (event.key === 'ArrowUp' && name === sections[0]) return;
         event.preventDefault();
         if (event.key === 'ArrowRight') { body.querySelector<HTMLElement>('input,select,button')?.focus(); return; }
         const index = sections.indexOf(name); const next = buttons[(index + (event.key === 'ArrowDown' ? 1 : -1) + sections.length) % sections.length]; next?.click(); next?.focus();
@@ -119,7 +122,7 @@ export function openHubSettings(hub: Hub) {
       }
     }
     status.textContent = 'Loading settings…'; buttons[0]?.focus();
-    void api.get().then(next => { if (!disposed) { snapshot = next; status.textContent = ''; render(); } }).catch(() => { if (!disposed) { status.textContent = 'Settings could not load. Go back and try again.'; } });
-    return () => { disposed = true; view.remove(); };
+    void api.get().then(next => { if (!disposed) { snapshot = next; status.textContent = ''; render(); body.scrollTop = scroll; } }).catch(() => { if (!disposed) { status.textContent = 'Settings could not load. Go back and try again.'; } });
+    return () => { scroll = body.scrollTop; disposed = true; view.remove(); };
   }, () => true);
 }

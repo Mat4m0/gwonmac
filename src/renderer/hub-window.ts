@@ -2,16 +2,19 @@
  * Owns the Hub's locked-by-default placement, bounded drag and resize gestures.
  * Placement stays local to the Hub; navigating never resets the player's geometry.
  */
+import { restoreFloatingWindowPlacement, serializeFloatingWindowPlacement } from '../shared/ui/window-placement.js';
 import { installResizeGrip } from '../shared/ui/resize.js';
 
 export function installHubWindow(panel: HTMLElement, heading: HTMLElement, lock: HTMLButtonElement, grip: HTMLElement) {
+  const storageKey = 'gwonmac.hub-window-placement';
+  const viewport = () => ({ width: window.innerWidth, height: window.innerHeight, margin: 8 });
   let locked = true;
   let placed = false;
   let finishDrag: (() => void) | null = null;
   const paint = () => {
     panel.dataset.locked = String(locked);
     lock.setAttribute('aria-label', locked ? 'Unlock Hub position' : 'Lock Hub position');
-    lock.title = locked ? 'Unlock to move and resize' : 'Lock position and size';
+    lock.title = locked ? 'Unlock to move and resize' : 'Lock position and size. Option + arrows here moves the Hub; arrows on the corner resize it.';
     lock.setAttribute('aria-pressed', String(locked));
     grip.hidden = locked;
   };
@@ -24,6 +27,15 @@ export function installHubWindow(panel: HTMLElement, heading: HTMLElement, lock:
       top: `${Math.max(8, Math.min(top, window.innerHeight - height - 8))}px`,
       width: `${width}px`, height: `${height}px` });
   };
+  const save = () => {
+    if (!placed) return;
+    const value = serializeFloatingWindowPlacement(panel.getBoundingClientRect(), viewport());
+    try { if (value) localStorage.setItem(storageKey, value); } catch { /* Placement remains usable when storage is unavailable. */ }
+  };
+  try {
+    const stored = restoreFloatingWindowPlacement(localStorage.getItem(storageKey), viewport(), { width: 340, height: 300 });
+    if (stored) place(stored.left, stored.top, stored.width, stored.height);
+  } catch { /* Use the default geometry when storage is unavailable. */ }
   const fit = () => {
     if (!placed) return;
     const box = panel.getBoundingClientRect();
@@ -41,7 +53,7 @@ export function installHubWindow(panel: HTMLElement, heading: HTMLElement, lock:
       heading.removeEventListener('pointerup', finish);
       heading.removeEventListener('pointercancel', finish);
       heading.removeEventListener('lostpointercapture', finish);
-      finishDrag = null;
+      finishDrag = null; save();
     };
     finishDrag = finish;
     heading.addEventListener('pointermove', move);
@@ -55,12 +67,16 @@ export function installHubWindow(panel: HTMLElement, heading: HTMLElement, lock:
     const box = panel.getBoundingClientRect();
     place(box.left + (event.key === 'ArrowRight' ? 16 : event.key === 'ArrowLeft' ? -16 : 0),
       box.top + (event.key === 'ArrowDown' ? 16 : event.key === 'ArrowUp' ? -16 : 0), box.width, box.height);
+    save();
   };
   const disposeResize = installResizeGrip(grip, {
+    setActive: active => { if (!active) save(); },
     size: () => panel.getBoundingClientRect(),
     limits: () => { const box = panel.getBoundingClientRect(); return { minWidth: 340, minHeight: 300, maxWidth: window.innerWidth - box.left - 8, maxHeight: window.innerHeight - box.top - 8 }; },
     resize: (width, height) => { if (!locked) { const box = panel.getBoundingClientRect(); place(box.left, box.top, width, height); } },
   });
+  const saveResize = () => save();
+  grip.addEventListener('keyup', saveResize);
   lock.addEventListener('click', toggle);
   lock.addEventListener('keydown', moveWithKeys);
   heading.addEventListener('pointerdown', drag);
@@ -70,8 +86,9 @@ export function installHubWindow(panel: HTMLElement, heading: HTMLElement, lock:
   paint();
   const reset = () => {
     finishDrag?.(); placed = false; locked = true;
+    try { localStorage.removeItem(storageKey); } catch { /* Reset still restores this session. */ }
     for (const property of ['left', 'top', 'width', 'height', 'transform']) panel.style.removeProperty(property);
     paint();
   };
-  return { reset, dispose() { panel.closest('dialog')?.removeEventListener('toggle', onShow); finishDrag?.(); disposeResize(); lock.removeEventListener('click', toggle); lock.removeEventListener('keydown', moveWithKeys); heading.removeEventListener('pointerdown', drag); window.removeEventListener('resize', fit); } };
+  return { reset, dispose() { panel.closest('dialog')?.removeEventListener('toggle', onShow); finishDrag?.(); disposeResize(); grip.removeEventListener('keyup', saveResize); lock.removeEventListener('click', toggle); lock.removeEventListener('keydown', moveWithKeys); heading.removeEventListener('pointerdown', drag); window.removeEventListener('resize', fit); } };
 }

@@ -11,7 +11,7 @@ import { installResizeGrip } from "../../../src/shared/ui/resize";
 import {
   restoreFloatingWindowPlacement,
   serializeFloatingWindowPlacement,
-} from "./floating-window-placement";
+} from "../../../src/shared/ui/window-placement";
 
 export function useFloatingWindow(options: {
   mode: "standalone" | "embedded";

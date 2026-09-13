@@ -67,3 +67,68 @@ test('Command-R opens Core Hub, keeps editing local and restores game focus', as
     await expect.poll(() => isDomActiveElement(page.locator('#canvas'))).toBe(true);
   } finally { await closeOffline(fixture); }
 });
+
+test('Hub browse focus preserves native editing shortcuts, Unicode and composition', async () => {
+  const fixture = await launchPlayableClient('gw-hub-editing-e2e-');
+  const { app, page } = fixture;
+  const clipboardBefore = await app.evaluate(({ clipboard }) => clipboard.availableFormats().map(format => ({
+    format, bytes: clipboard.readBuffer(format).toString('base64'),
+  })));
+  try {
+    await startGameInput(page);
+    await page.evaluate(() => { document.getElementById('loading')?.classList.add('gone'); window.gwHub?.show(); });
+    const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+    const row = page.locator('.hub-row[aria-selected=true]');
+    await search.fill('sw'); await search.press('ArrowDown');
+    await app.evaluate(({ BrowserWindow }, url) => {
+      const contents = BrowserWindow.getAllWindows().find(win => win.webContents.getURL() === url)?.webContents;
+      contents?.sendInputEvent({ type: 'keyDown', keyCode: 'A', modifiers: ['meta'] });
+      contents?.sendInputEvent({ type: 'keyUp', keyCode: 'A', modifiers: ['meta'] });
+    }, page.url());
+    await expect(search).toBeFocused();
+    await expect.poll(() => search.evaluate(input => input instanceof HTMLInputElement ? [input.selectionStart, input.selectionEnd] : null)).toEqual([0, 2]);
+    await search.press('ArrowDown');
+    await app.evaluate(({ BrowserWindow, clipboard }, url) => {
+      clipboard.writeText('travel');
+      const contents = BrowserWindow.getAllWindows().find(win => win.webContents.getURL() === url)?.webContents;
+      contents?.sendInputEvent({ type: 'keyDown', keyCode: 'V', modifiers: ['meta'] });
+      contents?.sendInputEvent({ type: 'keyUp', keyCode: 'V', modifiers: ['meta'] });
+    }, page.url());
+    await expect(search).toHaveValue('travel');
+    await search.press('ArrowDown'); await page.keyboard.press('Meta+z');
+    await expect(search).toHaveValue('sw');
+    await search.press('ArrowDown'); await page.keyboard.press('Meta+Shift+z');
+    await expect(search).toHaveValue('travel');
+    await search.evaluate(input => { if (input instanceof HTMLInputElement) input.setSelectionRange(0, 1); });
+    await search.press('ArrowDown'); await page.keyboard.press('Delete');
+    await expect(search).toHaveValue('ravel');
+    await search.fill('sw'); await search.press('ArrowDown');
+    await expect(row).toBeFocused();
+    // Chromium owns the composed edit; this checks the host path, not an OS input-source UI.
+    const cdp = await page.context().newCDPSession(page);
+    try {
+      await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Dead', code: 'KeyE', modifiers: 1 });
+      await expect(search).toBeFocused();
+      await cdp.send('Input.insertText', { text: 'é' });
+      await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Dead', code: 'KeyE', modifiers: 1 });
+      await expect(search).toHaveValue('swé');
+      await search.fill('sw'); await search.press('ArrowDown');
+      await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Process', windowsVirtualKeyCode: 229 });
+      await expect(search).toBeFocused();
+      await cdp.send('Input.imeSetComposition', { text: '日本', selectionStart: 2, selectionEnd: 2 });
+      await expect(search).toHaveValue('sw日本');
+      await cdp.send('Input.insertText', { text: '日本' });
+      await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Process', windowsVirtualKeyCode: 229 });
+      await expect(search).toHaveValue('sw日本');
+    } finally { await cdp.detach(); }
+    await expect(page.locator('.hub-caption')).toHaveText('Home');
+    await search.press('Escape');
+    await expect.poll(() => isDomActiveElement(page.locator('#canvas'))).toBe(true);
+  } finally {
+    await app.evaluate(({ clipboard }, saved) => {
+      clipboard.clear();
+      for (const item of saved) clipboard.writeBuffer(item.format, Buffer.from(item.bytes, 'base64'));
+    }, clipboardBefore);
+    await closeOffline(fixture);
+  }
+});

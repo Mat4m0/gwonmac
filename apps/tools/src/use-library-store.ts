@@ -25,6 +25,7 @@ export function createLibraryStore(context: StoreContext) {
   const commit = async (
     label: string,
     change: (current: BuildLibrary) => BuildLibrary,
+    bookkeeping = false,
   ): Promise<boolean> => {
     if (!context.library.value || context.saving.value) return false;
     const previous = cloneLibrary(context.library.value);
@@ -38,15 +39,15 @@ export function createLibraryStore(context: StoreContext) {
     try {
       const stored = await context.host.saveLibrary(candidate);
       context.library.value = stored;
-      undoStack.value = [
+      if (!bookkeeping) undoStack.value = [
         ...undoStack.value,
         { label, library: previous, selection: previousSelection },
       ].slice(-40);
-      context.notice(label);
+      if (!bookkeeping) context.notice(label);
       return true;
     } catch (cause) {
       console.error("[tools] the library transaction could not be saved", cause);
-      context.notice("Nothing changed—the save failed.", "error");
+      if (!bookkeeping) context.notice("Nothing changed—the save failed.", "error");
       return false;
     } finally {
       context.saving.value = false;

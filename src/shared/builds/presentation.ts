@@ -33,7 +33,7 @@ export function buildAttributes(attributes: Build['attributes']) {
       const attribute = key as Attribute;
       const rank = attributes[attribute];
       return rank && ATTRIBUTES[attribute].profession === profession
-        ? [{ label, rank, name: attribute.replace(/([a-z])([A-Z])/gu, '$1 $2') }] : [];
+        ? [{ label, rank: Number(rank), name: attribute.replace(/([a-z])([A-Z])/gu, '$1 $2') }] : [];
     });
     const presentation = professionPresentation(facts.id);
     return ranks.length && presentation ? [{ ...presentation, attributes: ranks }] : [];

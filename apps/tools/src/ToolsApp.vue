@@ -50,7 +50,10 @@ const emit = defineEmits<{
 }>();
 
 const controller = useLibrary(props.host);
-const hubLibrary = props.hub ? createHubLibrary(controller, props.host, props.hub) : null;
+const hubLibrary = props.hub ? createHubLibrary(controller, props.host, props.hub, build => {
+  window.dispatchEvent(new CustomEvent('gw:tools-toggle', { detail: 'workspace', cancelable: true }));
+  select(build);
+}) : null;
 onBeforeUnmount(() => hubLibrary?.dispose());
 const search = ref<HTMLInputElement | null>(null);
 const mobileView = ref<"list" | "detail">("list");

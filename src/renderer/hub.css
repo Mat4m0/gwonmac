@@ -343,3 +343,13 @@
 .hub-summary strong { flex-wrap:wrap; }
 .hub-build-row .hub-title { white-space:normal; overflow:visible; overflow-wrap:anywhere; text-overflow:clip; }
 @media(max-width:540px) { .hub-folder-label { display:flex; margin:3px 0 0; } }
+
+/* Comparison cues add information without changing slot geometry or elite outlines. */
+.hub-skill[data-changed=true]::after { content:'•'; position:absolute; right:1px; bottom:0; color:var(--ui-accent); background:var(--ui-panel-fill); border-radius:var(--ui-radius-pill); width:10px; height:10px; line-height:8px; text-align:center; }
+.hub-child-cue { font-size:18px; opacity:.7; padding-inline:4px; }
+.hub-build-details { height:100%; padding:12px; overflow:auto; }
+.hub-build-details h2 { font-family:var(--ui-font-display); font-size:18px; margin:8px 0; }
+.hub-build-details ol { padding-left:24px; }
+.hub-build-details li { margin:10px 0; }
+.hub-build-details p { color:var(--ui-text-muted); white-space:pre-wrap; }
+.hub-receipt { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); max-width:calc(100vw - 32px); z-index:var(--ui-z-toast); padding:10px 16px; color:var(--ui-text); pointer-events:none; }

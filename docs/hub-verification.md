@@ -658,3 +658,66 @@ after Down and restoring game focus on dismissal. Logs are
 Computer-use inspection confirmed that Down followed by typing resumes the
 preview search. The existing live game session was preserved; it needs a relaunch
 to load this change. No live gameplay acceptance, push or release is claimed.
+
+
+## Intent and continuity refinement — 13 September 2026
+
+This completes the remaining local work after `adc3fd67` on
+`feat/hub-overhaul-flows`, against the current
+[refinement plan](hub-overhaul-plan.md). Character/account entry and history retain
+their task focus. Travel and Settings resume their query, selection, controls and
+scroll. A removed Travel target clears the executable choice until the player
+selects another destination.
+
+Build search shares one matcher across global and folder contexts, distinguishes
+profession pairs from explicit folder paths, and reports recoverable template
+source failures. Eligible heroes apply directly with a named action; blocked
+heroes remain inspectable. Optional details show full skill descriptions and
+attribute changes. Saved builds open the existing authoring workspace, including
+at compact width, with focus on a visible field. Apply feedback stays with its
+actual target; confirmed use records bounded session recents without fake Undo.
+
+Hub geometry reuses the existing normalized floating-window serializer. Only the
+validated `gwonmac.hub-window-placement` key persists in profile browser storage;
+lock state resets each launch. Reset removes only that optional key. Older builds
+ignore it, and no native settings or library schema changes are needed. The Core
+storage policy permits only these three geometry calls and continues rejecting
+other browser-storage access. Native credential ownership is unchanged.
+
+Verification on the final runtime source:
+
+- `pnpm check`: types, lint and links passed; 1,757 unit, 183 policy, 212 Tools
+  and 81 Launcher tests passed (`/tmp/gwonmac-refinement-accepted-check.log`).
+- Full browser suite: 124 passed, covering cross-tool history, account actions,
+  appearance, target failures and geometry. The subsequent compact editor focus
+  correction passed both focused 390px/1280px handoff cases
+  (`/tmp/gwonmac-refinement-final-browser.log`,
+  `/tmp/gwonmac-refinement-handoff.log`).
+- Fresh `pnpm build` passed (`/tmp/gwonmac-refinement-candidate-build.log`).
+  The focused compiled Electron run passed 12 of 13 checks; the new character
+  select-all assertion was mistakenly placed before entering its query. After
+  correcting that test setup, both character checks passed. Hub, character,
+  clipboard, Tools and Whisper coverage is now green
+  (`/tmp/gwonmac-refinement-final-electron.log`,
+  `/tmp/gwonmac-refinement-character-final.log`).
+- Native editing exercises physical Meta+A/Meta+V through Electron's input owner,
+  clipboard isolation, query selection, undo/redo and Delete. Chromium composition
+  is exercised with dead-key/IME events; this does not test the macOS input-source
+  chooser or certify every physical keyboard layout.
+- Computer-use inspection covered Classic/Modern presentation, mixed-profession
+  target rows, interrupted apply feedback, optional details and desktop/compact
+  authoring handoff. The final compact editor visibly focuses Build name. Fixture
+  observations are synthetic; no real build apply or account switch was executed.
+
+The candidate was rebuilt and opened with `pnpm dev --cached-only`. The launcher
+receipt verified the `gwonmac-hub-overhaul` checkout, the default Guild Wars
+profile, PID 59713 and `gw://app/launcher/index.html` with `launcher-open` status.
+The launcher remains open for acceptance; its receipt is
+`/tmp/gwonmac-refinement-launcher.log`. The existing preview server was preserved.
+
+Remaining acceptance: Matthias checks the exact candidate in live gameplay,
+including input feel, real character/account switching and native build application.
+Packaging and release checks were not rerun for this renderer/Tools refinement.
+No push, merge or release was performed. Rollback reverts the bounded refinement
+commits; geometry may be reset independently without deleting profiles, templates,
+drafts or saved bindings.

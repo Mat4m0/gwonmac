@@ -179,12 +179,13 @@ export function createToolboxFoundation(
   const openFloating = (slot: Slot) => {
     window.gwHub?.suspend();
     setOpen(slot, true); activate(slot);
-    requestAnimationFrame(() => slot.host.querySelector<HTMLInputElement>('input[type="search"], input')?.focus());
+    requestAnimationFrame(() => [...slot.host.querySelectorAll<HTMLInputElement>('input')].find(input => !input.disabled && input.getClientRects().length)?.focus());
   };
   const onBuildsCommand = (event: Event) => {
     if (!availability.builds) return;
     event.preventDefault();
-    if (window.gwHub?.visible) window.gwHub.browseBuilds();
+    if (event instanceof CustomEvent && event.detail === 'workspace') openFloating(builds);
+    else if (window.gwHub?.visible) window.gwHub.browseBuilds();
     else if (event instanceof CustomEvent && event.detail === "show") openFloating(builds);
     else toggle(builds);
   };

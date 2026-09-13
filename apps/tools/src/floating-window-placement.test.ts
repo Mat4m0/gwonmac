@@ -5,7 +5,7 @@ import {
   restoreFloatingWindowPlacement,
   serializeFloatingPosition,
   serializeFloatingWindowPlacement,
-} from "./floating-window-placement";
+} from "../../../src/shared/ui/window-placement";
 
 const viewport = { width: 1_600, height: 1_000, margin: 32 };
 const minimum = { width: 520, height: 400 };

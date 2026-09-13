@@ -148,7 +148,7 @@ export function mountHubFixture(target: HTMLElement) {
   let modern = false;
   theme.onclick = () => { modern = !modern; window.gwApplyFixtureAppearance?.({ uiStyle: modern ? 'obsidian' : 'guild-wars', uiPanelOpacity: 100 }); };
   const scenario = document.createElement('select'); scenario.className = 'ui-select'; scenario.setAttribute('aria-label', 'Fixture scenario');
-  for (const [value, label] of [['ready', 'Ready in outpost'], ['explorable', 'Explorable area'], ['partial', 'Interrupted apply'], ['duplicate', 'Duplicate build names'], ['folders', 'Nested build folders']] as const) {
+  for (const [value, label] of [['ready', 'Ready in outpost'], ['explorable', 'Explorable area'], ['partial', 'Interrupted apply'], ['duplicate', 'Duplicate build names'], ['folders', 'Nested build folders'], ['mixed-professions', 'Mixed hero professions']] as const) {
     const option = document.createElement('option'); option.value = value; option.textContent = label; scenario.append(option);
   }
   scenario.onchange = () => { game.setScenario(scenario.value); hub.show(); };

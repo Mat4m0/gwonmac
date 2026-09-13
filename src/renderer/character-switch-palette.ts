@@ -2,7 +2,7 @@
  * Owns the Core Command-E character palette, including focus and keyboard use.
  * It renders one bounded source and never reads game memory or native exports.
  */
-import { resumeSearchInput } from "./search-input.js";
+import { installSearchEditing, resumeSearchInput } from "./search-input.js";
 import { hubMatch, normaliseHubQuery } from "../shared/hub.js";
 import type {
   CharacterSummary,
@@ -152,6 +152,7 @@ export function createCharacterSwitchPalette(
   const previousButton = root.querySelector<HTMLButtonElement>(".character-switch-previous")!;
   const nextButton = root.querySelector<HTMLButtonElement>(".character-switch-next")!;
   const listHints = root.querySelector<HTMLElement>(".character-switch-list-hints")!;
+  const disposeSearchEditing = installSearchEditing(list, queryInput);
   const settingsHints = root.querySelector<HTMLElement>(".character-switch-settings-hints")!;
   const confirmHints = root.querySelector<HTMLElement>(".character-switch-confirm-hints")!;
   const details = root.querySelector<HTMLDetailsElement>(".character-switch-details")!;
@@ -497,7 +498,7 @@ export function createCharacterSwitchPalette(
       revealSelected();
     }
     else {
-      if (normaliseCharacterQuery(query) !== "") return;
+      if (normaliseCharacterQuery(query) !== "" || event.target instanceof HTMLInputElement || event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
       const position = numberedCharacterPosition(event.key, Math.min(rows.length, 10));
       if (position === null) return;
       event.preventDefault();
@@ -690,6 +691,7 @@ export function createCharacterSwitchPalette(
   };
   window.addEventListener("resize", resize);
   return Object.freeze({ dispose() {
+    disposeSearchEditing();
     unsubscribe();
     unsubscribeSettings();
     modal.dispose();

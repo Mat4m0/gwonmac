@@ -1,13 +1,13 @@
 # Hub refinement: intent, focus, continuity, and native workflows
 
-Final proposed implementation plan — 13 September 2026.
+Implementation and acceptance plan — 13 September 2026.
 
-**Status:** planned, not implemented by this document. Target: the existing
-gwonmac app. Reviewed baseline: `c99d5c33` on `feat/hub-overhaul-flows`.
-The earlier overhaul is implemented locally; this plan defines its next refinement.
-The historical delivery record below is preserved for evidence and is not the
-current proposal. No release, account change, or game restart is part of preparing
-this document.
+**Status:** implemented locally on `feat/hub-overhaul-flows`; live acceptance
+remains with Matthias. The reviewed starting baseline was `c99d5c33`.
+`adc3fd67` delivered focus and handoff continuity; the remaining refinement is
+recorded in [Hub verification](hub-verification.md#intent-and-continuity-refinement--13-september-2026).
+The requirements below describe the implemented contract. The historical delivery
+record remains separate. No publication or release acceptance is claimed.
 
 ## 1. Product outcome
 
@@ -364,8 +364,8 @@ and release-specific checks follow [Development and rollout](development-workflo
 Browser fixtures prove presentation and controlled state changes. Electron proves
 the exercised native host/input boundary. Neither proves live input feel or gameplay
 acceptance. Record checks and limitations in [Hub verification](hub-verification.md).
-The plan/document change itself needs link/diff validation and the repository gate;
-it does not require running gameplay or UI action tests for unimplemented behavior.
+The verification record distinguishes the exercised fixture/native boundaries
+from the remaining live input and gameplay acceptance.
 
 ## 9. Rollout, persistence, and completion
 
@@ -380,6 +380,11 @@ storage needs schema changes, inspect existing readers and downgrade behavior fi
 use the existing validated settings owner, optional/defaulted data, and a focused
 compatibility test. Preserve saved bindings, account profiles, templates, and drafts.
 Rollback must ignore/reset only newly introduced optional state, not wipe user data.
+The implementation uses only optional validated profile browser geometry under
+`gwonmac.hub-window-placement`; Reset removes that key and older builds ignore it.
+Recent target references are bounded to three per renderer session. Saved-build
+recency uses the existing `lastUsed` field without adding an Undo transaction.
+There is no native settings or saved-library schema migration.
 Revert bounded commits or use the documented release repair flow as appropriate;
 do not add permanent dual implementations to support rollback.
 
@@ -397,9 +402,9 @@ remain the foundation.
 ## 10. Evidence and implementation owners
 
 - [Hub renderer](../src/renderer/hub.ts): history, row actions, input, breadcrumbs,
-  temporary lifetime; current Back restores input focus unconditionally.
+  temporary lifetime, with per-view focus and selection restored on Back.
 - [Character carousel](../src/renderer/character-switch-palette.ts): spatial controls
-  and optional search; current card typing replaces the query.
+  and optional search, preserving native query editing when typing from a card.
 - [Account presentation](../src/renderer/hub-accounts.ts): existing Switch Account,
   explicit replace/open actions, native revalidation.
 - [Travel](../apps/tools/src/components/TravelPalette.vue): destination input and

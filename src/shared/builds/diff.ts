@@ -94,8 +94,8 @@ export interface BuildDiff {
  * drops out below rather than becoming a change.
  */
 const mentionedAttributes = (
-  from: Build,
-  to: Build,
+  from: Pick<Build, "attributes">,
+  to: Pick<Build, "attributes">,
 ): ReadonlySet<Attribute> =>
   new Set([
     ...(Object.keys(from.attributes) as readonly Attribute[]),
@@ -107,7 +107,7 @@ const mentionedAttributes = (
  * "from the first build, to the second", so a caller rendering "variant vs
  * parent" passes the parent first.
  */
-export function diffBuilds(from: Build, to: Build): BuildDiff {
+export function diffBuilds(from: Pick<Build, "skills" | "attributes" | "professions">, to: Pick<Build, "skills" | "attributes" | "professions">): BuildDiff {
   const skills: SkillChange[] = [];
   for (const slot of SKILL_SLOTS) {
     // `?? null` rather than a bare read: a record parsed from a stored file can

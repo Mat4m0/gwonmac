@@ -1,11 +1,11 @@
-import { parseBuildLibrary } from "../../../src/shared/builds/parse-library";
 /** Synthetic game command boundary for Hub. Runs the production apply runners offline. */
+import { parseBuildLibrary } from '../../../src/shared/builds/parse-library';
 import { ref } from 'vue';
 import { createDemoHost, type ToolsHost } from './host';
 import { demoLibrary } from './fixtures';
 import { liveParty, type LiveParty } from '../../../src/shared/builds/live-party';
 import { buildId, teamId, mapTeamSlots, type BuildLibrary, skillBarOf, skillId, type Build, type HeroId, type ProfessionPair } from '../../../src/shared/builds/library';
-import { ATTRIBUTES, PROFESSIONS } from '../../../src/shared/builds/heroes';
+import { ATTRIBUTES, PROFESSIONS, heroLabel } from '../../../src/shared/builds/heroes';
 import { runBuildApply, runTeamApply, type TeamApplyCommands, type TeamApplyEnvironment } from '../../../src/shared/builds/team-apply-runner';
 import { encodeSkillTemplate } from '../../../src/shared/builds/skill-template';
 
@@ -76,6 +76,7 @@ export function createHubGameFixture(record: (action: string) => void) {
   };
   return { host, setScenario(value: string) {
     folders = value === 'folders'; partial = value === 'partial'; duplicate = value === 'duplicate'; sent = 0;
+    if (value === 'mixed-professions') party.value = { ...party.value, heroes: party.value.heroes.map(member => ({ ...member, professions: heroLabel(member.hero) === 'Tahlkora' ? ['Mo', null] : ['Me', 'Mo'] })) };
     party.value = { ...party.value, status: value === 'unobserved-builds' ? 'unavailable' : 'ready', inOutpost: value !== 'explorable' };
   } };
 }
