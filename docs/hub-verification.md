@@ -450,3 +450,63 @@ The existing live game process was preserved on its earlier build; this polish
 does not add evidence for live combat, graphics performance, VoiceOver or human
 usability acceptance. The temporary verification checkout is removed after its
 tests finish. All changes are local commits; no publication or merge is included.
+
+
+## Floating tools and Hub navigation — 13 September 2026
+
+The player feedback implemented in `36609fca` supersedes the earlier docking
+behavior. Trade, Builds and Whispers always use their existing floating windows.
+Hub launches and focuses them; build reviews stay in the floating Library. Drafts,
+unsaved-edit guards, native target validation and input isolation remain covered.
+
+Hub now restores its page history with Backspace outside text editing or from an
+empty input. Breadcrumb ancestors restore the matching query and selection. Arrow
+keys connect result rows, search, header controls and footer actions. Characters
+retain Left/Right selection; Up reaches search, then Back. Opening a standalone
+shortcut does not invent a previously visited page.
+
+Hub and the three floating tools start locked. Their subtle title-bar locks enable
+movement and resizing; the Classic corner artwork has an invisible 36px hit area.
+The X retains an accessible button target without a painted button frame. Hub
+geometry stays through page navigation and fits the current viewport.
+
+Whispers now paints one complete inset background, aligns the title vertically,
+and puts conversation controls above the picker. `51e3bc0e` also keeps the Modern
+background behind content and separates the keyboard hints. Both materials have
+focused checks for frame geometry, background masking, draft preservation and
+keyboard navigation. `2bf0a681` updates the compiled character test to assert the
+new Up-to-search behavior instead of the retired Up-to-previous-character rule.
+
+Local screenshots are retained in ignored `test-results/hub-feedback/`:
+`hub-characters.png`, `hub-maps-breadcrumb.png`, `whisper-classic.png` and
+`whisper-modern.png`. They use synthetic game state, not a live account.
+
+### Verification provenance
+
+The full gate at `36609fca` passed type checks, lint, links, 1,756 unit, 182 policy,
+206 Tools, 81 Launcher, 111 integration, 30 release/preload and 101 browser checks,
+plus both kernel verifiers. Its offline Electron pass had 154 successes, one
+live-only skip and four failures: one outdated character-arrow assertion, two
+focus-sensitive character-switch checks and a launcher restart timeout. The log
+is `/tmp/gwonmac-hub-feedback-verify.log`; this was not a single green full gate.
+
+The final implementation at `2bf0a681` passed fresh type checks, lint, all 102
+browser checks, a fresh production build and 15 compiled Electron checks. That
+last run includes every earlier native failure and all affected Hub, Character
+Switch, floating Toolbox and Whisper input tests. All passed without changing
+the focus-sensitive or launcher tests. Logs are
+`/tmp/gwonmac-hub-feedback-final-browser102.log`,
+`/tmp/gwonmac-hub-feedback-final-build.log` and
+`/tmp/gwonmac-hub-feedback-final-electron.log`.
+
+The final arm64 package passed both kernel verifiers again. Its log is
+`/tmp/gwonmac-hub-feedback-final-package.log`. The temporary verification checkout
+was removed after its tests completed. The browser preview remains available at
+`http://127.0.0.1:4194/?hub`. These checks do not certify live gameplay, VoiceOver,
+server prices or human usability acceptance. No release, push or merge occurred.
+
+Both packaged smoke checks passed: launcher state/profile startup, and isolated
+Enhancement runtime with Toolbox lifecycles and rollback. The log is
+`/tmp/gwonmac-hub-feedback-final-smoke.log`. The earlier playtest game process had
+closed before the final primary build; no running game was terminated for this
+update.
