@@ -1,10 +1,13 @@
 import { expect, test } from '@playwright/test';
 import { writeFile } from 'node:fs/promises';
+import path from 'node:path';
 import { launchPlayableClient, closeOffline, isDomActiveElement } from './fixtures.mjs';
 import { startGameInput } from './input-helpers.js';
 
 test('Command-R opens Core Hub, keeps editing local and restores game focus', async () => {
-  const fixture = await launchPlayableClient('gw-hub-keyboard-e2e-');
+  const fixture = await launchPlayableClient('gw-hub-keyboard-e2e-', {}, userData =>
+    writeFile(path.join(userData, 'settings.json'), JSON.stringify({ gwonmacTools: true, buildLibrary: true })),
+  );
   try {
     const { app, page } = fixture;
     await startGameInput(page);
