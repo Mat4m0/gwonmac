@@ -13,8 +13,9 @@
 // a real window in tests/electron/sandbox.spec.ts), and the three assertions
 // that still need the compiled build (tests/release/).
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { spawnSync, type SpawnSyncReturns } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -379,6 +380,38 @@ test("the Stable rollback proof preserves unified-launcher cutover documents", (
     roundTrip,
     /returned\.launcherState,[\s\S]*candidateDocuments\.launcherState/,
   );
+});
+
+test("application impact verifies new branches and rejects malformed commits", () => {
+  const block = read(".github/workflows/pr-package.yml")
+    .split("      - name: Classify application impact\n")[1]
+    ?.split("\n  fast:")[0]?.split("        run: |\n")[1];
+  assert.ok(block, "the test must execute the workflow's actual classification shell");
+  const directory = mkdtempSync(path.join(tmpdir(), "gw-ci-impact-"));
+  const output = path.join(directory, "output");
+  const head = "a".repeat(40);
+  const zero = "0".repeat(40);
+  try {
+    for (const [event, before, sha, status, expected] of [
+      ["push", zero, head, 0, "runtime=true\nwebsite=true\n"],
+      ["push", "invalid", head, 1, ""],
+      ["push", "", head, 1, ""],
+      ["push", zero, "invalid", 1, ""],
+      ["workflow_dispatch", "", head, 0, "runtime=true\nwebsite=false\n"],
+    ] as const) {
+      writeFileSync(output, "");
+      const result: SpawnSyncReturns<string> = spawnSync("bash", ["-euo", "pipefail", "-c", block.replace(/^ {10}/gmu, "")], {
+        cwd: root,
+        env: { ...process.env, EVENT_NAME: event, BEFORE_SHA: before, HEAD_SHA: sha, BASE_SHA: "", GITHUB_OUTPUT: output },
+        encoding: "utf8",
+        timeout: 5_000,
+      });
+      assert.equal(result.status, status, result.stderr);
+      assert.equal(readFileSync(output, "utf8"), expected);
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test("application verification routes conservatively through one required result", () => {
