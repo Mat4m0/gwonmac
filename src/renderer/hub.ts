@@ -422,6 +422,11 @@ export function createHub(parent: HTMLElement) {
       return;
     }
     const row = target.closest<HTMLElement>('.hub-row');
+    if (row && event.key.length === 1) {
+      // Let the browser insert into the newly focused input, preserving native editing.
+      event.stopPropagation(); input.focus();
+      return;
+    }
     if (row && ['ArrowUp', 'ArrowDown', 'ArrowRight', 'Enter'].includes(event.key)) {
       event.preventDefault();
       const index = rows.findIndex(item => item.id === row.dataset.id);

@@ -339,3 +339,8 @@ Backslashes are accepted as path separators. Quotes may remain unfinished while
 typing. Unknown folders return no results. Imported build provenance is not a
 current template folder. File identities and the reread-before-apply guard stay
 unchanged; folder searches never apply a build automatically.
+
+Typing a printable character while a Hub result has keyboard focus resumes the
+search at its saved caret or selection. This also applies on target-selection
+pages. Arrows still navigate results; Enter activates the selected result;
+Backspace from a result still goes back in Hub history.

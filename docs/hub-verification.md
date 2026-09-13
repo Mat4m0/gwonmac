@@ -637,3 +637,24 @@ Logs are `/tmp/hub-folder-check.log`, `/tmp/hub-folder-browser-final.log` and
 result; the final 320px screenshot is in ignored
 `test-results/hub-folder-search/compact.png`. The fixture preview remains open.
 No native build, live-game check, push or release was needed for this change.
+
+## Resume typing after result navigation — 13 September 2026
+
+A printable key from a focused Hub result now restores the search input before
+the browser inserts the character. The saved caret or selection is preserved.
+The normal input event refreshes results. Enter, directional navigation and
+Backspace history retain their existing behavior.
+
+The repository gate passed. All 43 Hub browser checks passed, including the new
+regression for typing from Home, appending after navigation, replacing selected
+query text and typing on target pages. The final native-editing refinement passed
+that focused browser check, renderer types and lint. A fresh production build in
+a disposable checkout passed the compiled Electron Hub test, including typing
+after Down and restoring game focus on dismissal. Logs are
+`/tmp/hub-resume-typing-check.log`, `/tmp/hub-resume-typing-browser.log`,
+`/tmp/hub-resume-native-editing.log` and
+`/tmp/hub-resume-typing-native-final.log`.
+
+Computer-use inspection confirmed that Down followed by typing resumes the
+preview search. The existing live game session was preserved; it needs a relaunch
+to load this change. No live gameplay acceptance, push or release is claimed.

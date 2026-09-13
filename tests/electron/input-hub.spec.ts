@@ -25,7 +25,9 @@ test('Command-R opens Core Hub, keeps editing local and restores game focus', as
       if (!(element instanceof HTMLCanvasElement) || !element.width) return 0;
       return element.getContext('2d')?.getImageData(element.width / 2, 20 * devicePixelRatio, 1, 1).data[3] ?? 0;
     })).toBeGreaterThan(0);
-    await search.fill('1250 gold in p');
+    await search.press('ArrowDown'); await page.keyboard.type('1250 gold in p');
+    await expect(search).toBeFocused();
+    await expect(search).toHaveValue('1250 gold in p');
     await expect(hub.getByRole('option')).toContainText('1.25 platinum');
     await expect.poll(() => hub.locator('.hub-conversion-art').evaluateAll(images =>
       images.length === 2 && images.every(image => image instanceof HTMLImageElement && image.naturalWidth > 0),

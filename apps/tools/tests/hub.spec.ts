@@ -661,3 +661,31 @@ test('Hub text arrows cannot execute an action or clear a query', async ({ page 
   await search.press('Home'); await search.press('ArrowLeft');
   await expect(search).toHaveValue('kamadan');
 });
+
+
+test('typing after result navigation resumes the search at its caret without running a command', async ({ page }) => {
+  await page.goto('/?hub');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  await search.press('ArrowDown');
+  await expect(page.locator('.hub-row[aria-selected="true"]')).toBeFocused();
+  await page.keyboard.type('build monk');
+  await expect(search).toBeFocused();
+  await expect(search).toHaveValue('build monk');
+  await expect(page.locator('.hub-build-row')).toHaveCount(4);
+  await search.press('ArrowDown'); await page.keyboard.press('ArrowDown');
+  await page.keyboard.type(' Protection');
+  await expect(search).toHaveValue('build monk Protection');
+  await expect(page.locator('.hub-build-row')).toHaveCount(1);
+  await expect(page.locator('#app')).not.toHaveAttribute('data-action', /command|apply/);
+  // A selection in the existing query is replaced, rather than appending twice.
+  await search.press('Home'); await search.press('Shift+End'); await search.press('ArrowDown');
+  await page.keyboard.type('build smiter');
+  await expect(search).toHaveValue('build smiter');
+  await search.press('ArrowDown'); await page.keyboard.press('Enter');
+  await expect(page.locator('.hub-summary')).toContainText('Smiter');
+  await search.press('ArrowDown'); await page.keyboard.type('hero');
+  await expect(search).toHaveValue('hero');
+  await expect(page.locator('.hub-row')).toContainText('Apply to hero');
+  await search.press('ArrowDown'); await page.keyboard.press('Backspace');
+  await expect(search).toHaveValue('build smiter');
+});
