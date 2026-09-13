@@ -135,7 +135,7 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 320, height: 800 
     const rows = page.locator('.hub-build-row');
     await expect(rows).toHaveCount(4);
     await expect(rows.first()).not.toContainText('.txt');
-    await expect(rows.first().locator('.hub-title')).toHaveText('Protection (Mo/Me)');
+    await expect(rows.first().locator('.hub-title')).toHaveText('Protection Mo/Me Monk');
     await expect(rows.first().locator('.hub-attribute').first()).toHaveText('HP12');
     await expect(rows.first().getByRole('img', { name: 'Healing Prayers 12', exact: true })).toBeVisible();
     await expect(rows.first().locator('.hub-professions img')).toHaveCount(2);
@@ -147,3 +147,30 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 320, height: 800 
     await page.screenshot({ path: info.outputPath('hub-compact-builds.png') });
   });
 }
+
+
+test('folder-qualified builds show a subtle path and preserve it through review and Back', async ({ page }, info) => {
+  await page.goto('/?hub');
+  await page.getByRole('button', { name: 'Close Hub', exact: true }).click();
+  await page.getByLabel('Fixture scenario', { exact: true }).selectOption('folders');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  for (const query of ['build team builds farming monk', 'build "Team Builds/Farming" monk', 'build folder:"Team Builds/Farming" mo']) {
+    await search.fill(query);
+    const row = page.locator('.hub-build-row');
+    await expect(row).toHaveCount(1);
+    await expect(row.locator('.hub-title')).toHaveText('Protection Mo/Me Team Builds/Farming');
+    await expect(row.locator('.hub-folder-label svg')).toBeVisible();
+  }
+  await search.press('ArrowDown'); await page.keyboard.press('ArrowRight');
+  await expect(page.locator('.hub-summary .hub-folder-label')).toHaveText('Team Builds/Farming');
+  await expect(page.locator('#app')).not.toHaveAttribute('data-action', /command|apply/);
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await expect(search).toHaveValue('build folder:"Team Builds/Farming" mo');
+  await page.setViewportSize({ width: 320, height: 800 });
+  expect(await page.locator('.hub-results').evaluate(el => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
+  const folder = (await page.locator('.hub-build-row .hub-folder-label').boundingBox())!;
+  const row = (await page.locator('.hub-build-row').boundingBox())!;
+  expect(folder.x + folder.width).toBeLessThanOrEqual(row.x + row.width);
+  expect(folder.y + folder.height).toBeLessThanOrEqual(row.y + row.height);
+  await page.screenshot({ path: info.outputPath('hub-folder-search.png') });
+});

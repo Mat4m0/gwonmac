@@ -123,3 +123,45 @@ test('Hub current-build comparison follows observations and never substitutes th
   expect(rows!()[0]!.skills).toBeUndefined();
   app.unmount();
 });
+
+test('build folder search handles paths, words, quotes, prefixes and ambiguous names without applying', async () => {
+  const { createApp, h, nextTick } = await import('vue');
+  const { useLibrary } = await import('./use-library');
+  const { createHubLibrary } = await import('./hub-library');
+  const { encodeSkillTemplate } = await import('../../../src/shared/builds/skill-template');
+  const { host } = createHubGameFixture(() => { throw new Error('Search must not apply'); });
+  const { library } = await host.loadLibrary();
+  const monk = library.builds.find(build => build.professions[0] === 'Mo')!;
+  const mesmer = library.builds.find(build => build.professions[0] === 'Me')!;
+  const entries = [
+    ['Skills/Team Builds/Farming/Protection.txt', monk],
+    ['Skills/Team Builds/Dungeons/Protection.txt', monk],
+    ['Skills/Other/Farming/Protection.txt', monk],
+    ['Skills/Monk/Panic.txt', mesmer],
+    ['Skills/Root.txt', monk],
+  ] as const;
+  let source: import('../../../src/shared/hub').HubSource | undefined;
+  let dispose: (() => void) | undefined;
+  const fixtureHost = { ...host, async loadTemplates() { return entries.map(([path, build]) => ({ path, contents: encodeSkillTemplate(build)! })); } };
+  const app = createApp({ setup() {
+    dispose = createHubLibrary(useLibrary(fixtureHost), fixtureHost, { attach(next) { source = next; return () => {}; }, close() {}, showRows() {}, showView() {} }).dispose;
+    return () => h('div');
+  } });
+  app.mount(document.createElement('div')); await nextTick(); await nextTick();
+  source!.setVisible(true); await nextTick(); await nextTick();
+  const folders = (query: string) => source!.search(query).map(row => row.folder);
+  for (const query of ['build team builds farming monk', 'build "Team Builds" farming mo', 'build "Team Builds/Farming" monk', 'build folder:"team builds/farm" protection', 'build "TEAM BUILDS/Farming/" Mo/Me', 'build "Team Builds\\Farming" monk', 'build folder:"team builds/farming']) {
+    expect(folders(query), query).toEqual(['Team Builds/Farming']);
+  }
+  expect(folders('build folder:"team builds" monk')).toEqual(['Team Builds/Dungeons', 'Team Builds/Farming']);
+  expect(folders('build farming monk')).toEqual(['Other/Farming', 'Team Builds/Farming']);
+  for (const query of ['build other/farming monk', 'build other farming monk', 'build monk farming other', 'build folder:/other/farm monk']) expect(folders(query), query).toEqual(['Other/Farming']);
+  expect(folders('build "Monk" panic')).toEqual(['Monk']);
+  expect(folders('build folder:monk')).toEqual(['Monk']);
+  expect(folders('build folder:monk mesmer')).toEqual(['Monk']);
+  expect(folders('build folder:monk monk')).toEqual([]);
+  expect(folders('build folder:/ monk')).toEqual(['']);
+  for (const query of ['build missing monk', 'build farming/team monk', 'build folder:protection', 'build folder:template-code', 'build folder:']) expect(folders(query), query).toEqual([]);
+  expect(source!.search('build folder:"Team Builds/Farming" monk')[0]).toMatchObject({ title: 'Protection', folder: 'Team Builds/Farming', action: 'Choose target' });
+  dispose?.(); app.unmount();
+});

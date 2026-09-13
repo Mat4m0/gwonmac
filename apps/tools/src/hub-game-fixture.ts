@@ -18,6 +18,7 @@ export function createHubGameFixture(record: (action: string) => void) {
     { ...original, id: teamId('hub-gom-afk'), name: 'GOM AFK', slots: mapTeamSlots(original.slots, slot => ({ ...slot, build: smiter.id })) }, ...demoLibrary.teams,
   ] };
   try { const saved = localStorage.getItem("hub-fixture-library"); if (saved) library = parseBuildLibrary(JSON.parse(saved)); } catch { /* Disposable fixture only. */ }
+  let folders = false;
   let partial = false;
   let duplicate = false;
   let sent = 0;
@@ -63,6 +64,10 @@ export function createHubGameFixture(record: (action: string) => void) {
     async loadTemplates() { return [
       { path: 'Skills/Monk/Protection.txt', contents: encodeSkillTemplate(first) ?? '' },
       { path: 'Skills/Mesmer/Panic.txt', contents: encodeSkillTemplate(demoLibrary.builds.find(build => build.professions[0] === 'Me')!) ?? '' },
+      ...(folders ? [
+        { path: 'Skills/Team Builds/Farming/Protection.txt', contents: encodeSkillTemplate(first) ?? '' },
+        { path: 'Skills/Team Builds/Dungeons/Protection.txt', contents: encodeSkillTemplate(first) ?? '' },
+      ] : []),
       ...(duplicate ? [{ path: 'Other/Smiter.txt', contents: encodeSkillTemplate(smiter) ?? '' }] : []),
     ]; },
     async applyTeam(plan, onEvent) { record('apply-team'); return runTeamApply(plan, { ...environment(), ...(onEvent ? { onEvent } : {}) }, 1); },
@@ -70,7 +75,7 @@ export function createHubGameFixture(record: (action: string) => void) {
     async openStorage() { throw new Error('Synthetic storage refusal'); },
   };
   return { host, setScenario(value: string) {
-    partial = value === 'partial'; duplicate = value === 'duplicate'; sent = 0;
+    folders = value === 'folders'; partial = value === 'partial'; duplicate = value === 'duplicate'; sent = 0;
     party.value = { ...party.value, status: value === 'unobserved-builds' ? 'unavailable' : 'ready', inOutpost: value !== 'explorable' };
   } };
 }

@@ -336,3 +336,10 @@
 .hub-attribute + .hub-attribute::before { content:""; height:10px; border-left:1px solid var(--ui-edge); margin-inline:2px 3px; }
 
 .hub-profession-label { color:var(--ui-text-muted); font-size:.8em; font-weight:400; white-space:nowrap; }
+
+.hub-folder-label { display:inline-flex; align-items:center; gap:4px; max-width:100%; margin-left:8px; vertical-align:middle; color:var(--ui-text-muted); font-size:.8em; font-weight:400; overflow-wrap:anywhere; }
+.hub-folder-label .hub-icon { display:inline-flex; flex-shrink:0; width:14px; height:14px; margin:0; padding:0; background:none; box-shadow:none; }
+.hub-folder-label .hub-icon svg { width:14px; height:14px; }
+.hub-summary strong { flex-wrap:wrap; }
+.hub-build-row .hub-title { white-space:normal; overflow:visible; overflow-wrap:anywhere; text-overflow:clip; }
+@media(max-width:540px) { .hub-folder-label { display:flex; margin:3px 0 0; } }

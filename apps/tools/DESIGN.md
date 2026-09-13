@@ -306,7 +306,8 @@ failed writes restore saved state and show a recoverable inline error.
 Hub build results keep the skill bar and invested attribute ranks in each row.
 There is no separate lower preview for individual builds and no visible template
 file path. Profession codes remain beside the title, such as Protection
-(Mo/Me), in smaller muted text. Incoming and equipped comparisons use the same
+Mo/Me, in smaller muted text. Native templates also show a folder icon and
+muted relative folder path. Incoming and equipped comparisons use the same
 compact presentation.
 Attributes are grouped under one Tango icon per profession, with abbreviated
 labels and ranks separated by fine dividers; tooltips and
@@ -314,3 +315,27 @@ accessible names retain the full attribute name. Labels distinguish Illusion
 Magic (IM) from Inspiration Magic (InM). Narrow windows wrap attributes below
 the eight skills. Profession artwork has one shared Tango asset set for Hub,
 Character Switch, Builds, Elite Skills and Trader views.
+
+### Build folder search
+
+The `build` command searches native template folders as well as saved builds.
+Plain words are combined with AND across build names, tags and folder names,
+regardless of word order. An unquoted full profession name or code filters the
+primary profession. An exact pair such as `Mo/Me` matches both professions.
+Quoted terms keep names with spaces together and allow literal profession words.
+
+- `build farming monk`: Monk builds with Farming in their folder, name or tags.
+- `build teams/farming monk`: Monk templates under consecutive Teams/Farming folders.
+- `build teams farming monk`: the same words, without requiring path order.
+- `build "Team Builds/Farming" monk`: a path containing a folder name with spaces.
+- `build folder:"Team Builds" monk`: explicitly require that folder, including descendants.
+- `build folder:Monk mesmer`: Mesmer templates stored in the Monk folder.
+- `build folder:/ monk`: Monk templates directly in the Skills root.
+
+Search is case-insensitive and supports word prefixes. Slash paths require exact
+parent segments and allow a prefix in the last segment. A trailing slash makes
+that last segment exact; a leading slash anchors the path at the Skills root.
+Backslashes are accepted as path separators. Quotes may remain unfinished while
+typing. Unknown folders return no results. Imported build provenance is not a
+current template folder. File identities and the reread-before-apply guard stay
+unchanged; folder searches never apply a build automatically.

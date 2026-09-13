@@ -11,6 +11,40 @@ import type { LibraryController } from './use-library';
 import type { ToolsHost } from './host';
 
 type Item = { kind: 'team'; value: Team } | { kind: 'build'; value: Build };
+// Only native template records have a current folder; import provenance is not a folder.
+function templateFolder(build: Build): string | null {
+  if (!String(build.id).startsWith('template:')) return null;
+  const parts = (build.origin ?? '').replaceAll('\\', '/').split('/'); parts.pop();
+  const skills = parts.findIndex(part => part.toLowerCase() === 'skills');
+  return (skills < 0 ? parts : parts.slice(skills + 1)).join('/');
+}
+function folderMatches(folder: string | null, query: string): boolean {
+  if (folder === null || !query) return false;
+  if (query === '/') return folder === '';
+  const parts = folder.toLowerCase().split('/');
+  const wanted = query.split('/').filter(Boolean);
+  if (!wanted.length) return false;
+  return parts.some((_, start) => (!query.startsWith('/') || start === 0)
+    && wanted.every((part, index) => {
+      const actual = parts[start + index];
+      return actual !== undefined && (index < wanted.length - 1 || query.endsWith('/') ? actual === part : actual.startsWith(part));
+    }));
+}
+function matchesBuild(build: Build, query: string): boolean {
+  const folder = templateFolder(build);
+  const aliases = [build.professions[0], PROFESSIONS[build.professions[0]].name, ...build.tags, ...(folder?.split('/') ?? [])];
+  // Quotes group names with spaces; an unfinished quote remains useful while typing.
+  const tokens = query.toLowerCase().replaceAll('\\', '/').match(/(?:[^\s"]+|"[^"]*"?)+/gu) ?? [];
+  return tokens.every(raw => {
+    const token = raw.replaceAll('"', '');
+    if (token.startsWith('folder:')) return folderMatches(folder, token.slice(7));
+    if (token.includes('/')) return token === build.professions.filter(Boolean).join('/').toLowerCase() || folderMatches(folder, token);
+    const profession = Object.entries(PROFESSIONS).find(([code, facts]) => code.toLowerCase() === token || facts.name.toLowerCase() === token);
+    if (profession && !raw.startsWith('"')) return build.professions[0] === profession[0];
+    return hubMatch(build.name, token, aliases) !== null;
+  });
+}
+
 export function createHubLibrary(controller: LibraryController, host: ToolsHost, hub: HubPresenter<HTMLElement>) {
   let templates: readonly Build[] = [];
   let templateProblem = '';
@@ -102,7 +136,7 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
   }
   function chooseBuild(item: Item & { kind: 'build' }) {
     const expected = revision(item);
-    const summary = { label: 'Build to apply', title: item.value.name, detail: '', skills: skillPreview(item.value), attributes: buildAttributes(item.value.attributes), professions: buildProfessions(item.value.professions) };
+    const summary = { label: 'Build to apply', title: item.value.name, detail: '', folder: templateFolder(item.value), skills: skillPreview(item.value), attributes: buildAttributes(item.value.attributes), professions: buildProfessions(item.value.professions) };
     const unavailable = (hero: HeroId | null) => {
       const latest = current(item);
       return !latest || revision(latest) !== expected ? 'This saved build changed. Go back and select it again.' : assess(item, hero);
@@ -138,20 +172,15 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
       { id: 'choose-hero', title: 'Apply to hero', detail: 'Compare your heroes’ current builds', group: 'Targets', action: 'Choose hero', navigate: chooseHero, run: chooseHero },
     ], summary);
   }
-  const templateFolder = (build: Build) => {
-    const parts = (build.origin ?? '').split('/'); parts.pop();
-    const skills = parts.indexOf('Skills');
-    return (skills < 0 ? parts : parts.slice(skills + 1)).join('/');
-  };
   const buildRow = (item: Item & { kind: 'build' }): HubRow => ({
-    id: `build:${item.value.id}`, title: item.value.name, detail: '', professions: buildProfessions(item.value.professions),
-    keywords: [item.value.professions[0], PROFESSIONS[item.value.professions[0]].name, ...item.value.tags].join(' '),
+    id: `build:${item.value.id}`, title: item.value.name, detail: '', folder: templateFolder(item.value), professions: buildProfessions(item.value.professions),
+    keywords: [item.value.professions[0], PROFESSIONS[item.value.professions[0]].name, ...item.value.tags, templateFolder(item.value)?.replaceAll('/', ' ') ?? '', templateFolder(item.value) ?? ''].join(' '),
     group: 'Builds', attributes: buildAttributes(item.value.attributes), skills: skillPreview(item.value), action: 'Choose target', navigate: () => chooseBuild(item), run: () => chooseBuild(item), actions: () => chooseBuild(item),
   });
   function browseTemplates(folder: string | null = null) {
     hub.showRows(folder === null ? 'Guild Wars templates' : folder || 'Skills', () => {
       if (templateProblem) return [{ id: 'templates-retry', title: 'Could not read templates', detail: 'Retry reading the saved game files.', group: 'Builds', action: 'Retry', run: async () => { await readTemplates(); refresh(); } }];
-      const folderRows: HubRow[] = folder === null ? [...new Set(templates.map(templateFolder).filter(Boolean))].sort().map(name => ({
+      const folderRows: HubRow[] = folder === null ? [...new Set(templates.map(build => templateFolder(build) ?? '').filter(Boolean))].sort().map(name => ({
         id: `folder:${name}`, title: name, detail: 'Template folder', group: 'Builds', action: 'Open folder', navigate: () => browseTemplates(name), run: () => browseTemplates(name),
       })) : [];
       const files = templates.filter(build => templateFolder(build) === (folder ?? '')).map(value => buildRow({ kind: 'build', value }));
@@ -226,7 +255,7 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
       if (parsed.scope && parsed.scope !== 'team' && parsed.scope !== 'build') return [];
       if (!parsed.term || ['build', 'builds', 'build library', 'templates'].includes(query.trim().toLowerCase())) return [libraryRow()];
       const matches = all().filter(item => (!parsed.scope || item.kind === parsed.scope)
-        && hubMatch(item.value.name, parsed.term, [...item.value.tags, ...(item.kind === 'build' ? [item.value.professions[0], PROFESSIONS[item.value.professions[0]].name, item.value.origin ?? ''] : [])]) !== null);
+        && (item.kind === 'build' ? matchesBuild(item.value, parsed.term) : hubMatch(item.value.name, parsed.term, item.value.tags) !== null));
       const exacts = matches.filter(item => hubMatch(item.value.name, parsed.term) === 'exact');
       return matches.sort((a, b) => Number(hubMatch(b.value.name, parsed.term) === 'exact') - Number(hubMatch(a.value.name, parsed.term) === 'exact')
         || a.value.name.localeCompare(b.value.name) || a.value.id.localeCompare(b.value.id)).map(item => {

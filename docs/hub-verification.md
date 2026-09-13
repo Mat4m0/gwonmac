@@ -618,3 +618,22 @@ were also inspected. Evidence is in ignored `test-results/hub-compact-builds/`.
 The fixture preview remains at `http://127.0.0.1:4194/?hub`.
 These checks use synthetic observations. No new native or live-game check,
 production rebuild, push or release was performed for this presentation change.
+
+## Folder-aware build search — 13 September 2026
+
+Build search combines folder words with names, tags and primary professions.
+Ordered slash paths, quoted names, explicit `folder:` filters, root selection,
+case-insensitive prefixes and backslash separators are covered by the mounted
+library test. Import provenance is not treated as a live template folder.
+Results and incoming comparisons show muted profession codes without parentheses,
+followed by a folder icon and relative path. Narrow results wrap the folder label.
+
+`pnpm check` passed types, lint, links, 1,757 unit, 182 policy, 209 Tools and
+81 Launcher tests. The Hub browser suites passed 51 checks. After correcting
+narrow folder-label clipping, all nine build browser checks passed again; the
+Tools type check, focused lint and 11 UI policy checks also passed.
+Logs are `/tmp/hub-folder-check.log`, `/tmp/hub-folder-browser-final.log` and
+`/tmp/hub-folder-wrap-browser.log`. Computer-use inspection confirmed the desktop
+result; the final 320px screenshot is in ignored
+`test-results/hub-folder-search/compact.png`. The fixture preview remains open.
+No native build, live-game check, push or release was needed for this change.

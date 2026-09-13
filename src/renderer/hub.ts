@@ -123,7 +123,7 @@ export function createHub(parent: HTMLElement) {
   }
   function commandExamples(): HubRow[] {
     const enabled = new Set(commands().map(row => row.id));
-    const examples = [ ['trade', 'trade arms', 'Find offers or a seller'], ['travel', 'travel kamadan', 'Find an outpost'], ['character', 'char Toefte', 'Find a character by name'], ['builds', 'build monk', 'Browse saved Monk builds'], ['builds', 'team gom afk', 'Find your saved team'], ['whispers', 'whisper Romi', 'Choose a person; write before sending'], ['', '1p in g', 'Convert platinum to gold'], ['trade', '10e in p', 'Estimate ecto value'], ['', 'titles', 'Plan title points'], ['', 'acc second', 'Choose how to open a saved account'] ];
+    const examples = [ ['trade', 'trade arms', 'Find offers or a seller'], ['travel', 'travel kamadan', 'Find an outpost'], ['character', 'char Toefte', 'Find a character by name'], ['builds', 'build monk', 'Browse saved Monk builds'], ['builds', 'team gom afk', 'Find your saved team'], ['whispers', 'whisper Romi', 'Choose a person; write before sending'], ['', '1p in g', 'Convert platinum to gold'], ['trade', '10e in p', 'Estimate ecto value'], ['', 'titles', 'Plan title points'], ['', 'acc second', 'Choose how to open a saved account'], ['builds', 'build folder:Monk monk', 'Find Monk builds in a template folder; use parent/child for subfolders'] ];
     return examples.filter(([tool]) => !tool || enabled.has(tool)).map(([, query, detail], index) => ({ id: `example:${index}`, title: query!, detail: detail!, group: 'Commands', action: 'Edit example', searchQuery: query!, run() {} }));
   }
   function openSettings() { openHubSettings(presenter); }
@@ -205,7 +205,15 @@ export function createHub(parent: HTMLElement) {
   function appendProfessionLabel(title: HTMLElement, professions: HubRow['professions']) {
     if (!professions?.length) return;
     const label = document.createElement('span'); label.className = 'hub-profession-label';
-    label.textContent = `(${professions.map(profession => profession.code).join('/')})`;
+    label.textContent = professions.map(profession => profession.code).join('/');
+    title.append(' ', label);
+  }
+  function appendFolderLabel(title: HTMLElement, folder: HubRow['folder']) {
+    if (folder === null || folder === undefined) return;
+    const label = document.createElement('span'); label.className = 'hub-folder-label';
+    label.title = `Template folder: ${folder || 'Skills'}`;
+    label.setAttribute('aria-label', label.title);
+    label.append(hubIcon(document, { id: 'folder', group: 'Builds' }), folder || 'Skills');
     title.append(' ', label);
   }
   let renderedSummary: HubSummary | undefined;
@@ -219,6 +227,7 @@ export function createHub(parent: HTMLElement) {
         const label = document.createElement('span'); label.className = 'hub-summary-label'; label.textContent = summary.label;
         const name = document.createElement('strong'); name.textContent = summary.title;
         appendProfessionLabel(name, summary.professions);
+        appendFolderLabel(name, summary.folder);
         const detail = document.createElement('p'); detail.textContent = summary.detail;
         summaryPanel.append(label);
         if (summary.professions) name.prepend(renderProfessions(summary.professions));
@@ -297,7 +306,7 @@ export function createHub(parent: HTMLElement) {
       const previous = previousRows[index];
       return previous && row.id === previous.id && row.title === previous.title
         && row.detail === previous.detail && row.group === previous.group
-        && row.action === previous.action && row.unavailable === previous.unavailable && row.preview === previous.preview && row.attributeStatus === previous.attributeStatus && JSON.stringify([row.skills, row.attributes, row.professions]) === JSON.stringify([previous.skills, previous.attributes, previous.professions]);
+        && row.action === previous.action && row.unavailable === previous.unavailable && row.preview === previous.preview && row.folder === previous.folder && row.attributeStatus === previous.attributeStatus && JSON.stringify([row.skills, row.attributes, row.professions]) === JSON.stringify([previous.skills, previous.attributes, previous.professions]);
     })) { select(selected); return; }
     const hadRowFocus = list.contains(document.activeElement);
     list.replaceChildren();
@@ -314,6 +323,7 @@ export function createHub(parent: HTMLElement) {
       option.setAttribute('role', 'option'); option.setAttribute('aria-disabled', String(!!row.unavailable));
       const title = document.createElement('span'); title.className = 'hub-title'; title.textContent = row.title;
       appendProfessionLabel(title, row.professions);
+      appendFolderLabel(title, row.folder);
       const detail = document.createElement('span'); detail.className = 'hub-detail'; detail.textContent = row.unavailable ?? row.detail;
       const arrow = document.createElement('span'); arrow.className = 'hub-row-arrow'; arrow.textContent = '↵'; arrow.setAttribute('aria-hidden', 'true');
       if (row.conversion) {
