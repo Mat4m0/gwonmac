@@ -493,10 +493,9 @@ useClassicFrame(panel);
         </form>
       </div>
     </template>
-    <div v-if="!selected" class="whisper-hub-empty"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-5 3v-3H3V6a2 2 0 0 1 2-2Z"/></svg><strong>Your whispers, together</strong><p>Choose a conversation or find a friend.</p></div>
     </div>
     </div>
-    <div class="whisper-hub-hints" aria-hidden="true"><span>{{ selected ? 'Enter send' : '↑ ↓ choose · Enter open' }}</span><span>Esc back</span></div>
+    <div class="whisper-hints" aria-hidden="true"><span>{{ selected ? 'Enter sends' : '↑ ↓ choose · Enter opens' }}</span><span>Esc hides</span></div>
     <button v-show="!locked" ref="resizeGrip" class="ui-window-resize whisper-resize" aria-label="Resize whispers"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 19 7-7m-1 7 1-1"/></svg></button>
   </section>
 </template>
@@ -504,14 +503,17 @@ useClassicFrame(panel);
 <style scoped>
 /* Chat keeps its own saved background strength. Its sections paint once inside
  * the decorative frame without leaving transparent gaps around its inset. */
-.whisper-window.ui-art-frame { --ui-art-fill:transparent; --ui-art-surface-fill:var(--whisper-panel-fill); box-shadow:var(--ui-art-shadow); }
+/* The whisper opacity paints one inset plane behind content in both materials.
+ * Modern's decorative border mask must not turn that plane into an overlay. */
+.whisper-window.ui-art-frame { --ui-art-fill:transparent; --ui-art-surface-fill:var(--whisper-panel-fill); --ui-art-surface-mask:none; --ui-art-surface-width:0; --ui-art-surface-z:-1; box-shadow:var(--ui-art-shadow); }
 .whisper-window.ui-art-frame::before { background:var(--ui-art-surface-fill); }
 .whisper-frame-head { display:flex; align-items:center; cursor:grab; }
 .whisper-frame-head .ui-panel-title { margin:0; flex:1; font-family:var(--ui-font-display); }
 
 .whisper-layout { display:flex; flex-direction:column; flex:1; min-height:0; background:transparent; }
 .whisper-chat-pane { display:contents; }
-.whisper-avatar,.whisper-hub-empty,.whisper-compose-icon,.whisper-popout-action,.whisper-return-action { display:none; }
+.whisper-avatar,.whisper-compose-icon { display:none; }
+.whisper-hints { display:flex; justify-content:space-between; gap:12px; padding:0 10px 6px; color:var(--ui-text-faint); font-size:11px; line-height:1.4; }
 .ui-reading-surface { color: var(--ui-text); font: 14px/1.5 var(--ui-font-reading); font-synthesis: none; text-shadow: none; color-scheme: dark; }
 .ui-reading-surface *, .ui-reading-surface *::before, .ui-reading-surface *::after { box-sizing: border-box; text-shadow: none; }
 .ui-reading-surface svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }

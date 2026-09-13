@@ -76,9 +76,13 @@ test('arrows connect Hub results, character carousel, search and Back', async ({
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', /Character/);
 });
 
-test('floating Whispers paints one complete frame and preserves a draft across hide/show', async ({ page }, info) => {
+for (const material of ['Guild Wars', 'Modern']) test(`floating Whispers paints one complete ${material} frame and preserves a draft across hide/show`, async ({ page }, info) => {
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  await search.fill('settings'); await search.press('Enter');
+  await page.getByRole('button', { name: 'Appearance', exact: true }).click();
+  await page.getByLabel('Panel style', { exact: true }).selectOption({ label: material });
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
   await search.fill('whisper Romi'); await search.press('Enter');
   const panel = page.locator('#whisper-window');
   await expect(page.locator('#hub')).toBeHidden();
@@ -92,8 +96,10 @@ test('floating Whispers paints one complete frame and preserves a draft across h
     const head = element.querySelector('.whisper-frame-head')!;
     const title = head.querySelector('h2')!;
     const header = head.getBoundingClientRect(), label = title.getBoundingClientRect();
-    return { boxSizing: getComputedStyle(element).boxSizing, fill: getComputedStyle(element, '::before').backgroundColor, delta: Math.abs((header.top + header.bottom - label.top - label.bottom) / 2) };
+    const paint = getComputedStyle(element, '::before');
+    return { boxSizing: getComputedStyle(element).boxSizing, fill: paint.backgroundColor, mask: paint.maskImage, z: paint.zIndex, delta: Math.abs((header.top + header.bottom - label.top - label.bottom) / 2) };
   });
   expect(geometry.boxSizing).toBe('border-box'); expect(geometry.fill).not.toBe('rgba(0, 0, 0, 0)'); expect(geometry.delta).toBeLessThan(2);
+  expect(geometry.mask).toBe('none'); expect(Number(geometry.z)).toBeLessThan(0);
   await page.screenshot({ path: info.outputPath('whisper-floating.png') });
 });
