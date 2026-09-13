@@ -529,6 +529,8 @@ test("aligns team header controls and configured row controls", async ({ page })
 });
 
 test("reorders team members with keyboard and pointer drag, then removes and undoes", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 960 });
+  await page.evaluate(() => document.fonts.ready);
   const selectedHeroes = () => page.locator(".hero-picker select").evaluateAll(
     (selects) => selects.map((select) => (select as HTMLSelectElement).value).filter(Boolean),
   );
@@ -541,6 +543,8 @@ test("reorders team members with keyboard and pointer drag, then removes and und
   await expect.poll(selectedHeroes).toEqual(reordered);
   await expect(page.locator("#team-move-1")).toBeFocused();
 
+  // Compact layout is covered separately; both drag endpoints must be visible.
+  await page.locator('[data-team-slot="1"]').evaluate((row) => row.scrollIntoView({ block: "start" }));
   const handle = await page.locator("#team-move-1").boundingBox();
   const destination = await page.locator('[data-team-slot="3"]').boundingBox();
   expect(handle).not.toBeNull();
