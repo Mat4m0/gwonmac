@@ -137,7 +137,7 @@ test.describe("renderer Travel input", () => {
         "0",
       );
       await expect(search).toHaveAccessibleName("Destination, phrase, or friend");
-      await expect(palette.getByRole("listbox")).toHaveCount(0);
+      await expect(palette.locator(".travel-results")).toBeHidden();
       await expect(palette.getByRole("heading", { name: "Favorites" })).toBeVisible();
       await expect(palette.locator(".travel-favorite-grid .travel-favorite")).toHaveCount(6);
 

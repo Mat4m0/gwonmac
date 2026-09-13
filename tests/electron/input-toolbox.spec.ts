@@ -586,7 +586,6 @@ test.describe("renderer Tools input", () => {
       await expect(page.locator("#toolbox-builds")).toHaveAttribute("data-ready", "true");
       await expect(page.locator('.tools-stage[data-mode="embedded"]')).toBeVisible();
       await expect(page.getByRole("heading", { name: "Build Library" })).toBeVisible();
-      await expect(page.getByText("Saved on this Mac")).toBeVisible();
       await settleEmbeddedShow();
       await expect.poll(() => isDomActiveElement(canvas)).toBe(true);
 

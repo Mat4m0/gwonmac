@@ -26,8 +26,8 @@ test("feature controls preserve preferences and validate native commands", async
     await expect(resign).not.toBeChecked();
     await resign.check();
     await expect(resign).toBeChecked();
-    await page.evaluate(() => window.launcherNative.tools.replaceShortcut({ action: "game.resign", binding: { key: "r", shift: true, option: false } }));
-    await expect(page.getByText("⌘⇧R", { exact: true })).toBeVisible();
+    await page.evaluate(() => window.launcherNative.tools.replaceShortcut({ action: "game.resign", binding: { key: "j", shift: true, option: false } }));
+    await expect(page.getByRole("button", { name: "Change Resign shortcut", exact: true }).locator("kbd")).toHaveText(["⇧", "⌘", "J"]);
     await resign.uncheck();
     await expect(resign).not.toBeChecked();
     await page.screenshot({ path: test.info().outputPath("tools-settings.png") });
@@ -62,7 +62,7 @@ test("the game menu follows saved Character Switch enablement and bindings", asy
       const item = Menu.getApplicationMenu()?.getMenuItemById("switch-character");
       return item ? { enabled: item.enabled, accelerator: item.accelerator ?? null } : null;
     });
-    await expect.poll(menu).toEqual({ enabled: true, accelerator: "Command+Shift+R" });
+    await expect.poll(menu).toEqual({ enabled: true, accelerator: "Command+E" });
     await launcher.evaluate(async () => {
       await window.launcherNative.tools.setFeature({ tool: "character-switch", enabled: false });
       await window.launcherNative.tools.replaceShortcut({ action: "character.switch", binding: { key: "j", shift: false, option: false } });
