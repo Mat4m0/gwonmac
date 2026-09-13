@@ -263,6 +263,13 @@ Skill and attribute details remain available in Review. Template paths stay out
 of these primary summaries. Preview content scrolls inside the current frame.
 Review remains inside Hub and retains explicit target/apply guards. Every single
 build selection opens Apply to me / Apply to hero, including exact-name searches.
+The incoming build remains above the search field during target selection and
+comparison. Current player and hero rows show observed equipped skills,
+professions and invested attributes. Missing observations stay explicitly unknown;
+a current bar is never filled from the incoming or saved build. Observer updates
+preserve keyboard focus. Right Arrow opens supported child pages without applying.
+Hero selection opens a comparison; its explicit Apply action is the final step.
+Back restores the search and incoming-build context.
 Hero search lists observed unlocked heroes and current party members. Heroes
 outside the party require adding first; single-build apply cannot change the roster.
 Template browsing is read-only and shows populated folders from the existing

@@ -97,3 +97,29 @@ test('profession search includes every saved primary-profession build without a 
   expect(source!.search('build monk')[0]).toMatchObject({ action: 'Choose target', skills: expect.arrayContaining([expect.objectContaining({ name: 'Word of Healing' })]) });
   dispose?.(); app.unmount();
 });
+
+test('Hub current-build comparison follows observations and never substitutes the incoming bar', async () => {
+  const { createApp, h, nextTick } = await import('vue');
+  const { useLibrary } = await import('./use-library');
+  const { createHubLibrary } = await import('./hub-library');
+  const { host } = createHubGameFixture(() => {});
+  let source: import('../../../src/shared/hub').HubSource | undefined;
+  let rows: (() => readonly import('../../../src/shared/hub').HubRow[]) | undefined;
+  let summary: import('../../../src/shared/hub').HubSummary | undefined;
+  const app = createApp({ setup() {
+    createHubLibrary(useLibrary(host), host, { attach(next) { source = next; return () => {}; }, close() {},
+      showRows(_title, next, context) { rows = next; summary = context; }, showView() {} });
+    return () => h('div');
+  } });
+  app.mount(document.createElement('div')); await nextTick(); await nextTick();
+  await source!.search('build smiter')[0]!.run();
+  const incoming = summary!.skills;
+  expect(rows!()[0]!.skills).not.toEqual(incoming);
+  host.party.value = { ...host.party.value, player: { ...host.party.value.player!, skills: null, attributes: null } };
+  expect(rows!()[0]!.skills).toBeUndefined();
+  expect(rows!()[0]!.detail).toContain('Current build not available');
+  expect(summary!.skills).toEqual(incoming);
+  host.party.value = { ...host.party.value, status: 'unavailable' };
+  expect(rows!()[0]!.skills).toBeUndefined();
+  app.unmount();
+});

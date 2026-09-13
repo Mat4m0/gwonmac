@@ -27,14 +27,21 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
   const revision = (item: Item) => JSON.stringify(item.kind === 'team' ? [item.value, controller.library.value?.builds] : item.value);
   const playerName = () => { const source = window.gwCharacterSwitch; const state = source?.characters; return source && ['outpost', 'pve-explorable', 'pvp-explorable'].includes(source.context) && state?.status === 'ready' && state.selectedIndex !== null ? state.characters[state.selectedIndex]?.name ?? 'Your character' : 'Your character'; };
   const targetName = (hero: HeroId | null) => hero === null ? playerName() : heroLabel(hero);
-  const skillPreview = (build: Build) => build.skills.map(id => {
+  const skillPreview = (build: Pick<Build, 'skills'>) => build.skills.map(id => {
     const skill = id === null ? null : host.skills.get(id);
-    return { name: skill?.name ?? 'Empty slot', iconUrl: skill?.iconUrl ?? null, elite: skill?.elite ?? false };
+    return { name: skill?.name ?? (id === null ? 'Empty slot' : `Unknown skill ${id}`), iconUrl: skill?.iconUrl ?? null, elite: skill?.elite ?? false };
   });
-  const buildPreview = (build: Build) => [
-    build.professions.filter(Boolean).join('/'),
-    Object.entries(build.attributes).map(([name, rank]) => `${name.replace(/([a-z])([A-Z])/gu, '$1 $2')} ${rank}`).join(' · '),
-  ].join('\n');
+  const attributesPreview = (attributes: Build['attributes'] | null) => attributes === null ? 'Attributes not available'
+    : Object.entries(attributes).map(([name, rank]) => `${name.replace(/([a-z])([A-Z])/gu, '$1 $2')} ${rank}`).join(' · ') || 'No attribute points assigned';
+  const buildPreview = (build: Pick<Build, 'professions' | 'attributes'>) => `${build.professions.filter(Boolean).join('/')}\n${attributesPreview(build.attributes)}`;
+  const equipped = (hero: HeroId | null) => {
+    const party = host.party.value;
+    const member = party.status === 'ready' ? hero === null ? party.player : party.heroes.find(member => member.hero === hero) : null;
+    return {
+      detail: member ? `${member.skills ? 'Current build' : 'Current build not available'} · ${member.professions?.filter(Boolean).join('/') ?? 'Professions not available'}` : 'Current build not available',
+      ...(member?.skills ? { skills: skillPreview({ skills: member.skills }), skillDetails: attributesPreview(member.attributes) } : {}),
+    };
+  };
   const preview = (item: Item) => item.kind === 'build' ? buildPreview(item.value)
     : `${item.value.mode === 'none' ? 'Keep difficulty' : `${item.value.mode === 'hard' ? 'Hard' : 'Normal'} Mode`}\n` + item.value.slots.flatMap((slot, index) => {
       if (index > 0 && slot.hero === null && slot.build === null) return [];
@@ -93,34 +100,41 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
   }
   function chooseBuild(item: Item & { kind: 'build' }) {
     const expected = revision(item);
+    const summary = { label: 'Build to apply', title: item.value.name, detail: buildPreview(item.value), skills: skillPreview(item.value) };
     const unavailable = (hero: HeroId | null) => {
       const latest = current(item);
       return !latest || revision(latest) !== expected ? 'This saved build changed. Go back and select it again.' : assess(item, hero);
     };
-    const applyRow = (hero: HeroId | null, title: string, detail: string): HubRow => {
+    const applyRow = (hero: HeroId | null, title: string): HubRow => {
       const refusal = unavailable(hero);
-      return { id: `apply:${hero ?? 'me'}`, title, detail, group: 'Builds',
-        preview: `${item.value.name}\n${buildPreview(item.value)}`, ...(hero === null ? { skills: skillPreview(item.value) } : {}), action: hero === null ? 'Apply to me' : `Apply to ${targetName(hero)}`,
+      return { id: `apply:${hero ?? 'me'}`, title, ...equipped(hero), group: 'Current build',
+        action: hero === null ? 'Apply to me' : `Apply to ${targetName(hero)}`,
         ...(refusal ? { unavailable: refusal } : {}), run: () => apply(item, expected, hero) };
     };
+    function compareTarget(hero: HeroId | null) {
+      hub.showRows(targetName(hero), () => [applyRow(hero, hero === null ? 'Apply to me' : `Apply to ${targetName(hero)}`)], summary);
+    }
+    function chooseHero() {
+      hub.showRows('Heroes', () => {
+        const party = host.party.value;
+        const heroes = new Set([...party.heroes.map(member => member.hero),
+          ...[...(party.accountHeroes ?? [])].filter(([, facts]) => facts.availability === 'unlocked').map(([id]) => id)]);
+        const rows = [...heroes].map(id => {
+          const member = party.heroes.find(member => member.hero === id);
+          const professions = member?.professions ?? party.accountHeroes?.get(id)?.professions;
+          const refusal = member ? unavailable(id) : 'Add this hero to your party first.';
+          return { id: `hero:${id}`, title: heroLabel(id), ...equipped(id), group: 'Heroes',
+            keywords: professions?.flatMap(value => value ? [PROFESSIONS[value].name] : []).join(' ') ?? '',
+            action: 'Review current build', ...(refusal ? { unavailable: refusal } : {}),
+            navigate: () => compareTarget(id), run: () => compareTarget(id) };
+        }).sort((a, b) => Number(!!a.unavailable) - Number(!!b.unavailable) || a.title.localeCompare(b.title));
+        return rows.length ? rows : [{ id: 'heroes-unavailable', title: 'No heroes observed', detail: 'Enter a PvE outpost to read your heroes.', group: 'Heroes', action: 'Choose hero', unavailable: 'Hero information is not available yet.', run() {} }];
+      }, summary);
+    }
     hub.showRows(item.value.name, () => [
-      applyRow(null, 'Apply to me', playerName()),
-      { id: 'choose-hero', title: 'Apply to hero', detail: 'Search your unlocked heroes', group: 'Builds', action: 'Choose hero', run() {
-        hub.showRows('Heroes', () => {
-          const party = host.party.value;
-          const heroes = new Set([...party.heroes.map(member => member.hero),
-            ...[...(party.accountHeroes ?? [])].filter(([, facts]) => facts.availability === 'unlocked').map(([id]) => id)]);
-          const rows = [...heroes].map(id => {
-            const member = party.heroes.find(member => member.hero === id);
-            const professions = member?.professions ?? party.accountHeroes?.get(id)?.professions;
-            const row = applyRow(id, heroLabel(id), member ? 'In your party' : 'Add to party first');
-            return { ...row, group: 'Heroes', keywords: professions?.flatMap(value => value ? [PROFESSIONS[value].name] : []).join(' ') ?? '',
-              ...(!member ? { unavailable: 'Add this hero to your party first.' } : {}) };
-          }).sort((a, b) => Number(!!a.unavailable) - Number(!!b.unavailable) || a.title.localeCompare(b.title));
-          return rows.length ? rows : [{ id: 'heroes-unavailable', title: 'No heroes observed', detail: 'Enter a PvE outpost to read your heroes.', group: 'Builds', action: 'Choose hero', unavailable: 'Hero information is not available yet.', run() {} }];
-        });
-      } },
-    ]);
+      { ...applyRow(null, 'Apply to me'), navigate: () => compareTarget(null), detail: `${playerName()} · ${equipped(null).detail}`, group: 'Targets' },
+      { id: 'choose-hero', title: 'Apply to hero', detail: 'Compare your heroes’ current builds', group: 'Targets', action: 'Choose hero', navigate: chooseHero, run: chooseHero },
+    ], summary);
   }
   const templateFolder = (build: Build) => {
     const parts = (build.origin ?? '').split('/'); parts.pop();
@@ -130,21 +144,22 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
   const buildRow = (item: Item & { kind: 'build' }): HubRow => ({
     id: `build:${item.value.id}`, title: item.value.name, detail: `${item.value.professions.filter(Boolean).join('/')} · ${item.value.origin ?? 'Saved builds'}`,
     keywords: [item.value.professions[0], PROFESSIONS[item.value.professions[0]].name, ...item.value.tags].join(' '),
-    group: 'Builds', preview: buildPreview(item.value), skills: skillPreview(item.value), action: 'Choose target', run: () => chooseBuild(item), actions: () => chooseBuild(item),
+    group: 'Builds', preview: buildPreview(item.value), skills: skillPreview(item.value), action: 'Choose target', navigate: () => chooseBuild(item), run: () => chooseBuild(item), actions: () => chooseBuild(item),
   });
   function browseTemplates(folder: string | null = null) {
     hub.showRows(folder === null ? 'Guild Wars templates' : folder || 'Skills', () => {
       if (templateProblem) return [{ id: 'templates-retry', title: 'Could not read templates', detail: 'Retry reading the saved game files.', group: 'Builds', action: 'Retry', run: async () => { await readTemplates(); refresh(); } }];
       const folderRows: HubRow[] = folder === null ? [...new Set(templates.map(templateFolder).filter(Boolean))].sort().map(name => ({
-        id: `folder:${name}`, title: name, detail: 'Template folder', group: 'Builds', action: 'Open folder', run: () => browseTemplates(name),
+        id: `folder:${name}`, title: name, detail: 'Template folder', group: 'Builds', action: 'Open folder', navigate: () => browseTemplates(name), run: () => browseTemplates(name),
       })) : [];
       const files = templates.filter(build => templateFolder(build) === (folder ?? '')).map(value => buildRow({ kind: 'build', value }));
       return [...folderRows, ...files, ...(!folderRows.length && !files.length ? [{ id: 'templates-empty', title: 'No skill templates here', detail: 'Save a skill template in Guild Wars, then reopen this page.', group: 'Builds', action: 'Open', unavailable: 'No saved skill templates found.', run() {} }] : [])];
     });
   }
-  const libraryRow = (): HubRow => ({ id: 'builds', title: 'Build Library', detail: 'Browse saved builds and Guild Wars template folders', keywords: 'templates skills folders builds', group: 'Tools', action: 'Browse builds', run() {
+  async function openTemplates() { try { await readTemplates(); } catch { templateProblem = 'Could not read templates.'; } browseTemplates(); }
+  const libraryRow = (): HubRow => ({ id: 'builds', title: 'Build Library', detail: 'Browse saved builds and Guild Wars template folders', keywords: 'templates skills folders builds', group: 'Tools', action: 'Browse builds', navigate() { void libraryRow().run(); }, run() {
     hub.showRows('Build Library', () => [
-      { id: 'game-templates', title: 'Guild Wars templates', detail: 'Your existing skill template files and folders', group: 'Builds', action: 'Browse templates', run: async () => { try { await readTemplates(); } catch { templateProblem = 'Could not read templates.'; } browseTemplates(); } },
+      { id: 'game-templates', title: 'Guild Wars templates', detail: 'Your existing skill template files and folders', group: 'Builds', action: 'Browse templates', navigate: openTemplates, run: openTemplates },
       ...all().filter((item): item is Item & { kind: 'build' } => item.kind === 'build' && !String(item.value.id).startsWith('template:')).map(buildRow),
     ]);
   } });

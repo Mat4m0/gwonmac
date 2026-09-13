@@ -28,13 +28,16 @@ test('hero search includes unlocked heroes and applies only to an existing party
   await search.fill('hero'); await search.press('Enter');
   await search.fill('Dunkoro');
   await expect(page.locator('#hub').getByRole('option')).toContainText('Add this hero to your party first.');
-  await expect(page.getByRole('button', { name: 'Apply to Dunkoro ↵', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Review current build ↵', exact: true })).toBeDisabled();
   await search.press('Enter');
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', /command|apply/);
   await search.fill('Tahlkora');
   await expect(page.locator('#hub').getByRole('option')).toHaveAttribute('aria-disabled', 'false');
   await page.screenshot({ path: info.outputPath('hub-hero-search.png') });
   await search.press('ArrowDown'); await page.keyboard.press('Enter');
+  await expect(page.locator('.hub-caption')).toHaveText('Tahlkora');
+  await expect(page.locator('#app')).not.toHaveAttribute('data-action', /command|apply/);
+  await search.press('Enter');
   await expect(page.locator('#hub')).toBeHidden();
   await expect(page.locator('#app')).toHaveAttribute('data-action', /command:/);
 });
@@ -71,3 +74,54 @@ test('only Hub locks, reset restores its default frame, and popouts have visible
     await x.click(); await expect(popup).toBeHidden();
   }
 });
+
+test('Right Arrow compares current builds without applying, and Back restores the comparison', async ({ page }, info) => {
+  await page.goto('/?hub');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const incoming = page.getByRole('region', { name: 'Build to apply', exact: true });
+  await search.fill('build monk'); await search.press('ArrowDown'); await page.keyboard.press('ArrowRight');
+  await expect(incoming).toContainText('Protection');
+  const self = page.locator('#hub').getByRole('option', { name: /Apply to me/ });
+  await expect(self).toContainText('Current build');
+  await expect(self).toContainText('Healing Prayers 12');
+  await expect(incoming.getByRole('img').first()).toHaveAttribute('aria-label', '1. Protective Spirit');
+  await expect(self.getByRole('img').first()).toHaveAttribute('aria-label', '1. Word of Healing');
+  await page.screenshot({ path: info.outputPath('hub-player-comparison.png') });
+  await search.fill('hero'); await search.press('ArrowDown'); await page.keyboard.press('ArrowRight');
+  await expect(incoming).toContainText('Protection');
+  await search.fill('Tahlkora'); await search.press('ArrowDown'); await page.keyboard.press('ArrowRight');
+  await expect(page.locator('.hub-caption')).toHaveText('Tahlkora');
+  await expect(page.locator('#hub').getByRole('option')).toContainText('Current build');
+  await expect(page.locator('#hub').getByRole('option').getByRole('img')).toHaveCount(8);
+  await expect(incoming.getByRole('img')).toHaveCount(8);
+  await search.press('ArrowDown'); await page.keyboard.press('ArrowRight');
+  await expect(page.locator('#app')).not.toHaveAttribute('data-action', /command|apply/);
+  await page.screenshot({ path: info.outputPath('hub-hero-comparison.png') });
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-scenario', { detail: 'unobserved-builds' })));
+  await expect(page.locator('#hub').getByRole('option').getByRole('img')).toHaveCount(0);
+  await expect(page.locator('#hub').getByRole('option')).toBeFocused();
+  await expect(incoming.getByRole('img')).toHaveCount(8);
+  await page.keyboard.press('Backspace');
+  await expect(page.locator('.hub-caption')).toHaveText('Heroes');
+  await expect(search).toHaveValue('Tahlkora');
+  await expect(incoming).toContainText('Protection');
+  await page.getByRole('button', { name: 'Home', exact: true }).click();
+  await expect(incoming).toBeHidden();
+});
+
+for (const viewport of [{ width: 320, height: 800 }, { width: 640, height: 500 }]) {
+  test(`build comparison remains usable at ${viewport.width}x${viewport.height}`, async ({ page }, info) => {
+    await page.setViewportSize(viewport); await page.goto('/?hub');
+    const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+    await search.fill('build monk'); await search.press('ArrowDown'); await page.keyboard.press('ArrowRight');
+    const summary = page.locator('.hub-summary');
+    await expect(summary.getByRole('img').last()).toBeInViewport();
+    await search.press('ArrowDown');
+    const current = page.locator('#hub').getByRole('option', { name: /Apply to me/ });
+    await current.getByRole('img').last().scrollIntoViewIfNeeded();
+    await expect(current.getByRole('img').last()).toBeInViewport();
+    await expect(page.getByRole('button', { name: 'Apply to me ↵', exact: true })).toBeInViewport();
+    expect(await page.locator('.hub-results').evaluate(el => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
+    await page.screenshot({ path: info.outputPath('hub-comparison-compact.png') });
+  });
+}

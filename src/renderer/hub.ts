@@ -12,7 +12,7 @@ import { openHubMaps } from './hub-maps.js';
 import { editHubShortcut, manageHubShortcuts } from './hub-preferences.js';
 import { isHubShortcuts, type HubShortcut } from '../shared/hub-preferences.js';
 import { createHubCalculator } from './hub-calculator.js';
-import { matchHubRows, parseHubQuery, normaliseHubQuery, type HubRow, type HubSource } from '../shared/hub.js';
+import { matchHubRows, parseHubQuery, normaliseHubQuery, type HubRow, type HubSource, type HubSummary } from '../shared/hub.js';
 export function createHub(parent: HTMLElement) {
   const document = parent.ownerDocument;
   const root = document.createElement('dialog');
@@ -22,6 +22,7 @@ export function createHub(parent: HTMLElement) {
   root.setAttribute('aria-label', 'Hub');
   root.innerHTML = `<section class="hub-panel ui-frame">
     <header class="hub-heading ui-window-head"><button class="ui-button hub-back" data-variant="quiet" aria-label="Back" hidden>← Back</button><span class="hub-name">Hub</span><nav class="hub-breadcrumbs" aria-label="Hub breadcrumb"><span class="hub-caption">Home</span></nav><span class="hub-context"></span><button class="ui-window-lock hub-lock" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="lock-shackle" d="M7 11V7a5 5 0 0 1 10 0v4"/><rect x="5" y="11" width="14" height="10" rx="2"/></svg></button><button class="ui-window-close hub-close" aria-label="Close Hub" title="Close Hub">×</button></header>
+    <section class="hub-summary" aria-label="Build to apply" hidden></section>
     <div class="hub-search"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 8 10-8 10L4 12 12 2Zm0 5v10M8 12h8"/></svg><span class="hub-scope" hidden></span><input type="text" role="combobox" aria-label="Search people, places, builds" aria-autocomplete="list" aria-controls="hub-results" aria-expanded="true" placeholder="Search people, places, builds…" autocomplete="off" spellcheck="false" maxlength="120"></div>
     <p class="hub-hint" id="hub-hint" hidden></p><div class="hub-rate-controls" hidden></div><div class="hub-results ui-scroll" id="hub-results" role="listbox" aria-label="Results"></div>
     <pre class="hub-preview ui-scroll" hidden></pre><div class="hub-view" hidden></div><p class="hub-status" role="status" hidden></p>
@@ -53,7 +54,7 @@ export function createHub(parent: HTMLElement) {
   let selected: string | null = null;
   const sources = new Map<HubSource, () => void>();
   const sourceEnabled = (source: HubSource) => !source.feature || ((source.feature === 'characterSwitchEnabled' || !!window.gwToolsSettings?.().gwonmacTools) && !!window.gwToolsSettings?.()[source.feature]);
-  type RowScope = Readonly<{ title: string; rows: () => readonly HubRow[] }>;
+  type RowScope = Readonly<{ title: string; rows: () => readonly HubRow[]; summary?: HubSummary }>;
   let scope: RowScope | null = null;
   type MountedView = { title: string; mount: (target: HTMLElement, back: () => void) => () => void; available?: () => boolean };
   let activeView: MountedView | null = null;
@@ -158,7 +159,37 @@ export function createHub(parent: HTMLElement) {
     primary.disabled = !row || !!row.unavailable || pending;
     required<HTMLButtonElement>('.hub-actions').disabled = !row;
   }
+  function renderSkillBar(skills: NonNullable<HubRow['skills']>) {
+    const bar = document.createElement('span'); bar.className = 'hub-skill-bar';
+    skills.forEach((skill, index) => {
+      const slot = document.createElement('span'); slot.className = 'hub-skill';
+      slot.dataset.elite = String(skill.elite); slot.title = `${index + 1}. ${skill.name}`;
+      slot.setAttribute('role', 'img'); slot.setAttribute('aria-label', slot.title);
+      slot.textContent = String(index + 1);
+      if (skill.iconUrl) {
+        const image = document.createElement('img'); image.src = skill.iconUrl; image.alt = '';
+        image.onerror = () => image.remove(); slot.append(image);
+      }
+      bar.append(slot);
+    });
+    return bar;
+  }
+  let renderedSummary: HubSummary | undefined;
   function paintNavigation() {
+    const summary = disposeView ? undefined : scope?.summary;
+    const summaryPanel = required<HTMLElement>('.hub-summary');
+    summaryPanel.hidden = !summary;
+    if (summary !== renderedSummary) {
+      renderedSummary = summary; summaryPanel.replaceChildren();
+      if (summary) {
+        const label = document.createElement('span'); label.className = 'hub-summary-label'; label.textContent = summary.label;
+        const name = document.createElement('strong'); name.textContent = summary.title;
+        const detail = document.createElement('p'); detail.textContent = summary.detail;
+        summaryPanel.append(label, name);
+        if (summary.skills) summaryPanel.append(renderSkillBar(summary.skills));
+        summaryPanel.append(detail);
+      }
+    }
     const currentTitle = activeView?.title ?? scope?.title ?? 'Home';
     caption.textContent = currentTitle;
     const context = !scope && !disposeView && !input.value.trim()
@@ -211,7 +242,7 @@ export function createHub(parent: HTMLElement) {
     const ids = new Set([...extra, ...savedRows].map(row => row.id));
     rows = scope ? matchHubRows(extra, input.value) : [...savedRows, ...extra.filter(row => !savedRows.some(saved => saved.id === row.id)), ...(parseHubQuery(input.value).scope ? [] : matchHubRows(commands().filter(row => !ids.has(row.id)), input.value))];
     rows = [...rows].sort((a, b) => {
-      const groups = ["Pinned", "Calculator", "Teams", "Builds", "Accounts", "Characters", "Heroes", "People", "Places", "Continue", "Tools", "Commands"];
+      const groups = ["Pinned", "Calculator", "Teams", "Builds", "Targets", "Current build", "Accounts", "Characters", "Heroes", "People", "Places", "Continue", "Tools", "Commands"];
       const groupOrder = groups.indexOf(a.group) - groups.indexOf(b.group);
       if (groupOrder || scope || a.group !== 'Tools') return groupOrder;
       // Keep everyday game actions ahead of account management, independent of provider order.
@@ -229,8 +260,9 @@ export function createHub(parent: HTMLElement) {
       const previous = previousRows[index];
       return previous && row.id === previous.id && row.title === previous.title
         && row.detail === previous.detail && row.group === previous.group
-        && row.action === previous.action && row.unavailable === previous.unavailable && row.preview === previous.preview && JSON.stringify(row.skills) === JSON.stringify(previous.skills);
+        && row.action === previous.action && row.unavailable === previous.unavailable && row.preview === previous.preview && row.skillDetails === previous.skillDetails && JSON.stringify(row.skills) === JSON.stringify(previous.skills);
     })) { select(selected); return; }
+    const hadRowFocus = list.contains(document.activeElement);
     list.replaceChildren();
     let group = '';
     rows.forEach((row, index) => {
@@ -263,19 +295,8 @@ export function createHub(parent: HTMLElement) {
         option.append(hubIcon(document, row), title, detail, type);
         if (row.skills) {
           option.classList.add('hub-build-row');
-          const bar = document.createElement('span'); bar.className = 'hub-skill-bar';
-          row.skills.forEach((skill, index) => {
-            const slot = document.createElement('span'); slot.className = 'hub-skill';
-            slot.dataset.elite = String(skill.elite); slot.title = `${index + 1}. ${skill.name}`;
-            slot.setAttribute('role', 'img'); slot.setAttribute('aria-label', slot.title);
-            slot.textContent = String(index + 1);
-            if (skill.iconUrl) {
-              const image = document.createElement('img'); image.src = skill.iconUrl; image.alt = '';
-              image.onerror = () => image.remove(); slot.append(image);
-            }
-            bar.append(slot);
-          });
-          option.append(bar);
+          option.append(renderSkillBar(row.skills));
+          if (row.skillDetails) { const details = document.createElement('span'); details.className = 'hub-skill-details'; details.textContent = row.skillDetails; option.append(details); }
         }
       }
       option.addEventListener('pointermove', () => select(row.id));
@@ -288,6 +309,7 @@ export function createHub(parent: HTMLElement) {
     const revised = prior && rows.find(row => row.id === selected)?.preview !== prior.preview;
     const initial = !scope && !input.value.trim() ? rows.find(row => !row.unavailable) : rows[0];
     select((prior?.id === 'quote-state' || prior?.id === 'market-state') && !!rows[0]?.conversion ? rows[0].id : reset ? exactCount > 1 ? null : initial?.id ?? null : !revised && rows.some(row => row.id === selected) ? selected : null);
+    if (hadRowFocus) (list.querySelector<HTMLElement>('[aria-selected="true"]') ?? input).focus();
     if (!rows.length) {
       const empty = document.createElement('p'); empty.className = 'hub-empty'; empty.textContent = 'No matches'; list.append(empty);
     }
@@ -352,10 +374,11 @@ export function createHub(parent: HTMLElement) {
       return;
     }
     const row = target.closest<HTMLElement>('.hub-row');
-    if (row && ['ArrowUp', 'ArrowDown', 'Enter'].includes(event.key)) {
+    if (row && ['ArrowUp', 'ArrowDown', 'ArrowRight', 'Enter'].includes(event.key)) {
       event.preventDefault();
       const index = rows.findIndex(item => item.id === row.dataset.id);
-      if (event.key === 'Enter') { if (!event.repeat) void run(); }
+      if (event.key === 'ArrowRight') { if (!event.repeat) rows[index]?.navigate?.(); }
+      else if (event.key === 'Enter') { if (!event.repeat) void run(); }
       else if (event.key === 'ArrowUp' && index <= 0) input.focus();
       else if (event.key === 'ArrowDown' && index === rows.length - 1) primary.focus();
       else {
@@ -433,11 +456,11 @@ export function createHub(parent: HTMLElement) {
         if (root.open && (!disposeView || !viewAvailable || !viewAvailable())) home();
       };
     },
-    showRows(title: string, getRows: () => readonly HubRow[]) {
+    showRows(title: string, getRows: () => readonly HubRow[], summary?: HubSummary) {
       const fromOpenHub = root.open;
       if (!fromOpenHub) show();
       if (!scope) restoreQuery = input.value;
-      if (fromOpenHub && !restoring) remember(); resetView(); scope = { title, rows: getRows }; root.dataset.page = 'section'; caption.textContent = title;
+      if (fromOpenHub && !restoring) remember(); resetView(); scope = { title, rows: getRows, ...(summary ? { summary } : {}) }; root.dataset.page = 'section'; caption.textContent = title;
       backButton.hidden = false; input.placeholder = 'Search actions…'; input.value = ''; report(''); refresh(true); input.focus();
     },
     showView(title: string, mount: (target: HTMLElement, back: () => void) => () => void, available?: () => boolean) {

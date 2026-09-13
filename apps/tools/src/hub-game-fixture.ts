@@ -27,6 +27,11 @@ export function createHubGameFixture(record: (action: string) => void) {
     unlockObserved: true, unlocked: Array.from({ length: 39 }, (_, i) => i + 1),
     slots: [{ index: 0, occupied: true, hero: null, agentId: 1, level: 20, professions: [3, 0], behaviour: null, skills: Array(8).fill(0), attributes: [], disabled: 0 }, ...original.slots.flatMap((slot, index) => slot.hero === null ? [] : [{ index, occupied: true, hero: Number(slot.hero), agentId: Number(slot.hero) + 100, level: 20, professions: [3, 0], behaviour: 1, skills: Array(8).fill(0), attributes: [], disabled: 0 }])],
   } }));
+  // Distinct equipped bars make incoming/current comparisons visible in the workbench.
+  party.value = { ...party.value,
+    player: party.value.player ? { ...party.value.player, skills: skillBarOf(index => first.skills[(index + 1) % 8]!), attributes: first.attributes } : null,
+    heroes: party.value.heroes.map((member, offset) => ({ ...member, skills: skillBarOf(index => first.skills[(index + offset + 2) % 8]!), attributes: first.attributes })),
+  };
   const change = () => { sent++; record(`command:${sent}`); if (partial && sent > 1) throw new Error('Synthetic interruption. 1 change was confirmed before Apply stopped.'); };
   const professions = (previous: ProfessionPair | null, secondary: number): ProfessionPair => [previous?.[0] ?? 'Mo', Object.entries(PROFESSIONS).find(([, value]) => value.id === secondary)?.[0] as ProfessionPair[1] ?? null];
   const attributes = (ranks: readonly (readonly [number, number])[]) => Object.fromEntries(ranks.map(([id, rank]) => [Object.entries(ATTRIBUTES).find(([, value]) => value.id === id)?.[0] ?? '', rank]));
@@ -66,6 +71,6 @@ export function createHubGameFixture(record: (action: string) => void) {
   };
   return { host, setScenario(value: string) {
     partial = value === 'partial'; duplicate = value === 'duplicate'; sent = 0;
-    party.value = { ...party.value, inOutpost: value !== 'explorable' };
+    party.value = { ...party.value, status: value === 'unobserved-builds' ? 'unavailable' : 'ready', inOutpost: value !== 'explorable' };
   } };
 }

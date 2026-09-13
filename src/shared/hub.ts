@@ -13,6 +13,9 @@ export type HubRow = Readonly<{
   action: string;
   preview?: string;
   skills?: readonly Readonly<{ name: string; iconUrl: string | null; elite: boolean }>[];
+  skillDetails?: string;
+  /** Opens a read-only child page; Right Arrow must never apply a build. */
+  navigate?(): void;
   searchQuery?: string;
   icon?: string;
   quoteBasis?: Readonly<{ value:string; options:readonly {value:string;label:string}[]; choose(value:string):void }>;
@@ -57,9 +60,11 @@ export function matchHubRows(rows: readonly HubRow[], query: string): readonly H
     .sort((a, b) => rank(a) - rank(b) || a.title.localeCompare(b.title) || a.id.localeCompare(b.id));
 }
 
+export type HubSummary = Readonly<Pick<HubRow, 'title' | 'detail' | 'skills'> & { label: string }>;
+
 export interface HubPresenter<Target> {
   close(): void;
   attach(source: HubSource): () => void;
-  showRows(title: string, rows: () => readonly HubRow[]): void;
+  showRows(title: string, rows: () => readonly HubRow[], summary?: HubSummary): void;
   showView(title: string, mount: (target: Target, back: () => void) => () => void, available?: () => boolean): void;
 }

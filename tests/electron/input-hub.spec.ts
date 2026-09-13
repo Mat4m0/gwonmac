@@ -41,6 +41,9 @@ test('Command-R opens Core Hub, keeps editing local and restores game focus', as
     await expect(hub.locator('.hub-caption')).toHaveText('Build Library');
     await expect(page.locator('#toolbox-builds .tools-window')).toBeHidden();
     await expect(hub.getByRole('option', { name: /Guild Wars templates/ })).toBeVisible();
+    await search.press('ArrowDown'); await page.keyboard.press('ArrowRight');
+    await expect(hub.locator('.hub-caption')).toHaveText('Guild Wars templates');
+    await hub.getByRole('button', { name: 'Back', exact: true }).click();
     await hub.getByRole('button', { name: 'Back', exact: true }).click();
     await search.fill('1250 gold in p');
     await app.evaluate(({ BrowserWindow }, url) => {

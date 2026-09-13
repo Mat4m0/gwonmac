@@ -310,3 +310,13 @@
 .hub-panel[data-locked=false] .hub-heading { cursor:grab; }
 .hub-row:focus-visible { outline:1px solid var(--ui-focus); outline-offset:-2px; }
 @media(max-width:600px) { .hub-context { display:none; } .hub-breadcrumbs { flex:1; } .hub-name { display:none; } .hub-back::before { content:none; } .hub-back { font-size:var(--ui-type-body-size); } }
+
+/* The incoming build remains above the target search and equipped bars. */
+.hub-summary { flex-shrink:0; margin:2px 12px 4px; padding:10px 12px; border-bottom:1px solid var(--ui-edge); }
+.hub-summary-label { display:block; color:var(--ui-accent); font-size:11px; margin-bottom:4px; }
+.hub-summary strong { color:var(--ui-text-bright); font-weight:600; }
+.hub-summary p { margin:8px 0 0; color:var(--ui-text-muted); font-size:12px; white-space:pre-line; }
+.hub-skill-details { grid-column:2; color:var(--ui-text-muted); font-size:11px; line-height:1.5; padding-top:6px; }
+@media(max-height:600px) { .hub-summary { padding-block:5px; } .hub-summary p { margin-top:4px; } .hub-summary .hub-skill-bar { margin-top:4px; } }
+.hub-summary .hub-skill-bar, .hub-row .hub-skill-bar { display:grid; grid-template-columns:repeat(8,minmax(0,1fr)); width:min(100%,284px); }
+.hub-summary .hub-skill, .hub-row .hub-skill { width:100%; height:auto; aspect-ratio:1; }
