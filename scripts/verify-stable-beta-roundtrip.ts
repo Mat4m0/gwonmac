@@ -398,6 +398,7 @@ const candidateSettingsDomains = Array.from(
   { length: domainCaseCount },
   (_, index): AppSettings => {
     const settings: AppSettings = {
+      hubShortcuts: [],
       renderScale: cycle(RENDER_SCALES, index),
       uiStyle: cycle(UI_STYLES, index),
       uiCustomTheme: cycle(customThemeValues, index),

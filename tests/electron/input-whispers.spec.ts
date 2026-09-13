@@ -29,6 +29,8 @@ test("embedded whispers open on the first click and retain draft input when rais
     await launcher.click();
     const panel = page.locator("#whisper-window");
     await expect(panel).toBeVisible();
+    await panel.getByRole("button", { name: "Pop out chat", exact: true }).click();
+    await expect(page.locator("#hub")).toBeHidden();
     await panel.getByRole("button", { name: /Test Friend Message 30/ }).click();
     const transcript = panel.locator("[data-transcript]");
     await panel.getByRole("button", { name: "30 new · Show latest" }).click();
@@ -102,9 +104,10 @@ test("whisper toggle focuses the picker or draft and returns focus to the game",
     await expect(page.locator("#whisper-window")).toBeAttached();
     const toggle = () => page.evaluate(() => window.dispatchEvent(new CustomEvent("gw:whispers-toggle", { cancelable: true })));
     await toggle();
+    await page.getByRole("button", { name: "Pop out chat", exact: true }).click();
     await expect(page.locator("#whisper-person")).toBeFocused();
     await page.locator("#whisper-person").fill("Test Friend");
-    await page.locator(".whisper-search").getByRole("button", { name: "Chat", exact: true }).click();
+    await page.locator(".whisper-search").getByRole("button", { name: "Whisper", exact: true }).click();
     const draft = page.getByRole("textbox", { name: "Message Test Friend" });
     await draft.fill("Unsent draft");
     await toggle();

@@ -1,3 +1,4 @@
+import type { HubShortcut } from "../../../src/shared/hub-preferences";
 import { computed, onMounted, ref, shallowRef } from "vue";
 import {
   LIBRARY_VERSION,
@@ -773,6 +774,9 @@ export function useLibrary(host: ToolsHost) {
     validate: validateInContext,
     renameBuild, toggleBuildFavourite, updateBuildNotes, setTags,
     saveBuildDraft,
+    async saveHubShortcuts(hubShortcuts: readonly HubShortcut[]) {
+      if (!await commit("Hub preferences saved", current => ({ ...current, hubShortcuts }))) throw new Error("Could not save Hub preferences. Try again.");
+    },
     createFork, deleteBuild, detachVariant, mergeVariant,
     updateTeam, duplicateTeam, deleteTeam,
     publish, applyTeam, cancelTeamApply, undo, reset,

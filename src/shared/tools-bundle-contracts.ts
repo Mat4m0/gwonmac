@@ -4,6 +4,7 @@
  * import these shapes directly instead of restating them on either side.
  */
 import type { EliteMapHandle } from "./elite-map.js";
+import type { HubPresenter, HubSource } from "./hub.js";
 import type { WhisperSession } from "./whisper-session.js";
 import type { TravelFriends } from "./friends.js";
 import type { ToolboxObservation } from "./builds/live-party.js";
@@ -32,6 +33,7 @@ export type ToolsAppHandle = Readonly<{
 }>;
 
 export type ToolsAppMountOptions = Readonly<{
+  readTemplates?: () => Promise<readonly { path: string; contents: string }[]>;
   initiallyVisible?: boolean;
   onVisibilityChange?: (visible: boolean) => void;
   publishTemplate:
@@ -53,14 +55,8 @@ export type TravelPaletteHandle = Readonly<{
   dispose: () => void;
 }>;
 
-export type TravelPaletteMountOptions = Readonly<{
-  command: TravelCommand;
-  development: boolean;
-  initiallyVisible?: boolean;
-  onVisibilityChange?: (visible: boolean) => void;
-}>;
-
 export type TradeChatHandle = Readonly<{
+  search: (query: string) => void;
   show: () => void;
   hide: () => void;
   toggle: () => void;
@@ -81,12 +77,17 @@ export type EmbeddedToolsBundle<Target> = Readonly<{
   mountWhispers: (target: Target, options: { session: WhisperSession }) => { dispose(): void };
   mountToolsApp: (
     target: Target,
-    options: ToolsAppMountOptions & Readonly<{ nativeApi: ToolsGwNativeApi }>,
+    options: ToolsAppMountOptions & Readonly<{ nativeApi: ToolsGwNativeApi; hub?: HubPresenter<Target> }>,
   ) => ToolsAppHandle;
-  mountTravelPalette: (
-    target: Target,
-    options: TravelPaletteMountOptions & Readonly<{ nativeApi: ToolsGwNativeApi }>,
-  ) => TravelPaletteHandle;
+  createHubTravel: (options: { nativeApi: ToolsGwNativeApi; command: TravelCommand; development: boolean; hub: HubPresenter<Target> }) => {
+    source: HubSource;
+    readonly active: boolean;
+    open(): void;
+    travel(mapId: number): Promise<void>;
+    update(state: TravelGameState): void;
+    updateFriends(friends: TravelFriends): void;
+    dispose(): void;
+  };
   mountTradeChat: (
     target: Target,
     options: TradeChatMountOptions & Readonly<{ nativeApi: ToolsGwNativeApi }>,

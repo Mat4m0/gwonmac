@@ -46,6 +46,7 @@ test.describe("sandbox boundary", () => {
         // if a member is added there without a call — the two files change
         // together.
         keys: [
+          "accounts",
           "app",
           "cartography",
           "client",
@@ -54,6 +55,7 @@ test.describe("sandbox boundary", () => {
           "credentials",
           "diagnostics",
           "dns",
+          "hubSettings",
           "init",
           "inputTrace",
           "profileTemplates",

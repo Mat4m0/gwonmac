@@ -2,11 +2,10 @@
 import { computed, onBeforeUnmount, ref } from "vue";
 import { Ellipsis } from "lucide-vue-next";
 import type { LauncherNativeApi, LauncherSnapshot } from "@shared/launcher-contracts";
-import { DEFAULT_SHORTCUTS, SHORTCUT_LABELS, shortcutConflict, shortcutDisplay, type ShortcutAction, type ShortcutBinding } from "@shared/keyboard-shortcuts";
+import { DEFAULT_SHORTCUTS, SHORTCUT_LABELS, shortcutConflict, shortcutKeycaps, SHORTCUT_CAPTURE_HINT, type ShortcutAction, type ShortcutBinding } from "@shared/keyboard-shortcuts";
 
 const props = defineProps<{
   action: ShortcutAction;
-  suggestedBinding?: ShortcutBinding | undefined;
   shortcuts: LauncherSnapshot["shortcuts"];
   api?: LauncherNativeApi["tools"] | undefined;
   disabled?: boolean;
@@ -42,7 +41,7 @@ async function capture() {
   if (!props.api) { message.value = "Shortcut editing is available in the app."; return; }
   pending.value = null;
   capturing.value = true;
-  message.value = "Press Command with a letter or number. Escape cancels; Delete clears.";
+  message.value = SHORTCUT_CAPTURE_HINT;
   try {
     const result = await props.api.captureShortcut(props.action);
     if (!mounted || props.disabled) return;
@@ -52,7 +51,7 @@ async function capture() {
       pending.value = { binding: result.binding, owner: result.action };
       message.value = `Already used by ${SHORTCUT_LABELS[result.action]}. Replacing it will clear that shortcut.`;
     } else if (result.status === "reserved") message.value = "That shortcut is reserved by macOS or the application.";
-    else if (result.status === "invalid") message.value = "Use Command with a letter or number. Shift and Option are supported.";
+    else if (result.status === "invalid") message.value = SHORTCUT_CAPTURE_HINT;
     else message.value = "Shortcut change cancelled.";
   } catch { message.value = "The shortcut could not be captured. Try again."; }
   finally { capturing.value = false; }
@@ -62,8 +61,7 @@ async function capture() {
 <template>
   <div class="shortcut-setting" :aria-label="`${label} shortcut`">
     <span class="visually-hidden">Shortcut</span>
-    <button v-if="suggestedBinding && !shortcuts[action]" class="secondary" :disabled="disabled || capturing" @click="choose(suggestedBinding)">Enable {{ shortcutDisplay(suggestedBinding) }}</button>
-    <button class="secondary shortcut-value" :disabled="disabled || capturing" :aria-label="`Change ${label} shortcut`" @click="capture"><kbd>{{ capturing ? 'Listening…' : shortcutDisplay(shortcuts[action]) }}</kbd><span aria-hidden="true">Change</span></button>
+    <button class="secondary shortcut-value" :disabled="disabled || capturing" :aria-label="`Change ${label} shortcut`" @click="capture"><span v-if="capturing">Press keys…</span><span v-else-if="!shortcuts[action]">Not set</span><span v-else class="shortcut-keycaps"><kbd v-for="cap in shortcutKeycaps(shortcuts[action])" :key="cap.name" :title="cap.name">{{ cap.label }}</kbd></span><span aria-hidden="true">Change</span></button>
     <details class="shortcut-options" @keydown.esc.prevent="($event.currentTarget as HTMLDetailsElement).open = false"><summary :aria-label="`${label} shortcut options`" title="Shortcut options"><Ellipsis /></summary><div class="shortcut-actions">
       <button class="text-link" :disabled="disabled || capturing || !shortcuts[action]" :aria-label="`Clear ${label} shortcut`" @click="save(null)">Clear</button>
       <button class="text-link" :disabled="disabled || capturing" :aria-label="`Restore ${label} default shortcut`" @click="choose(DEFAULT_SHORTCUTS[action])">Restore default</button>
@@ -90,5 +88,6 @@ async function capture() {
 .shortcut-options .text-link:hover { background: var(--surface-hover); }
 .shortcut-setting > .inline-message, .shortcut-setting > .shortcut-actions { flex-basis: 100%; }
 .shortcut-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-kbd { font: inherit; font-variant-numeric: tabular-nums; }
+.shortcut-keycaps { display:flex; gap:4px; }
+kbd { display:grid; place-items:center; min-width:23px; height:25px; border:1px solid var(--line-strong); border-radius:5px; background:var(--control); padding-inline:4px; font: inherit; font-variant-numeric: tabular-nums; }
 </style>

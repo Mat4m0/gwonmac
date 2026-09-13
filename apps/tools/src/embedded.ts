@@ -5,7 +5,7 @@ import { mountWhispers } from "./whispers-mount";
 import { createNativeHost } from "./host";
 import { mountToolsApp as mount } from "./mount";
 import { createNativeTravelHost } from "./travel-host";
-import { mountTravelPalette as mountTravel } from "./travel-mount";
+import { createHubTravel as createTravel } from "./hub-travel";
 import { createNativeTradeHost } from "./trade-host";
 import { mountTradeChat as mountTrade } from "./trade-mount";
 import type {
@@ -28,24 +28,19 @@ const embedded: EmbeddedToolsBundle<HTMLElement> = Object.freeze({
       options.applyUnavailable,
       options.development,
       options.observationUnavailable,
+      options.readTemplates,
     ),
     mode: "embedded",
     ...options,
   }),
-  mountTravelPalette: (target, { nativeApi, ...options }) => mountTravel(target, {
-    ...options,
-    nativeDialog: true,
-    host: createNativeTravelHost(
-      nativeApi,
-      options.command,
-      options.development,
-    ),
-  }),
+  createHubTravel: ({ nativeApi, command, development, hub }) => createTravel(
+    createNativeTravelHost(nativeApi, command, development), hub,
+  ),
   mountTradeChat: (target, { nativeApi, ...options }) => mountTrade(target, {
     ...options,
     host: createNativeTradeHost(nativeApi),
   }),
 });
 
-export const { mountEliteSkills, mountToolsApp, mountTravelPalette, mountTradeChat } = embedded;
+export const { mountEliteSkills, mountToolsApp, createHubTravel, mountTradeChat } = embedded;
 export { mountWhispers };

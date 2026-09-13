@@ -15,6 +15,7 @@ describe("native trade host", () => {
       onEvent() { return () => undefined; },
       async getSaved() { return { offers: [], players: [] }; },
       setSaved,
+      async getMarketRates() { return { fetchedAt: 1, quotes: [] }; },
       async getTraderQuotes() { return { updatedAt: 1, quotes: [] }; },
       async getTraderPriceHistory() { return { status: "ok" as const, points: [] }; },
     };

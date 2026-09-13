@@ -31,6 +31,7 @@ import {
   type MountedTool,
 } from "./toolbox-foundation.js";
 import {
+  exportEntries,
   applyImport,
   planImport,
   templateFilesystem,
@@ -142,9 +143,11 @@ export function mountToolsInto(
           : 'Live game information is temporarily unavailable. Saved builds and teams still work.'
         : null;
       const app = bundle.mountToolsApp(host, {
+        ...(window.gwHub ? { hub: window.gwHub } : {}),
         nativeApi: native,
         initiallyVisible: false,
         onVisibilityChange,
+        readTemplates: async () => { const fs = templateFilesystem(); return fs ? exportEntries(fs) : []; },
         publishTemplate: templatePublishingAvailable ? publishTemplate : null,
         commands,
         storage,
@@ -191,6 +194,7 @@ export function mountTradeInto(
         setVisible: (visible: boolean) => visible ? app.show() : app.hide(),
         setActive: app.setActive,
         requestClose: app.hide,
+        search: app.search,
         update: () => {},
         dispose: app.dispose,
       };

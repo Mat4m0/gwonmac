@@ -1,122 +1,104 @@
 /**
- * Renderer boundary for the Cmd+T Travel palette. It owns visibility, focus,
- * event isolation, lazy Vue loading, and nothing about destination search.
+ * Owns lazy optional Travel presentation inside the Core Hub surface.
+ * The existing Travel host remains the command and preference owner.
  */
-import type { TravelFriends } from "../shared/friends.js";
-import type {
-  TravelCommand,
-  TravelGameState,
-} from "../shared/travel-command.js";
-import type {
-  EmbeddedToolsBundle,
-  TravelPaletteHandle,
-} from "../shared/tools-bundle-contracts.js";
-import { ensureToolsStylesheet } from "./tools-stylesheet.js";
-import { requireToolsApi } from "./tools-native-api.js";
+import { currentTravelFriend, type TravelFriend, type TravelFriends } from '../shared/friends.js';
+import type { TravelCommand, TravelGameState } from '../shared/travel-command.js';
+import type { EmbeddedToolsBundle } from '../shared/tools-bundle-contracts.js';
+import { matchHubRows, type HubSource } from '../shared/hub.js';
+import { ensureToolsStylesheet } from './tools-stylesheet.js';
+import { requireToolsApi } from './tools-native-api.js';
 
-export function createTravelPalette(
-  parent: HTMLElement,
-  command: TravelCommand,
-) {
+export function createTravelPalette(parent: HTMLElement, command: TravelCommand) {
+  const installed = window.gwHub;
+  if (!installed) throw new Error('Hub is not installed');
+  const hub = installed;
   const native = requireToolsApi();
-  const canvas = parent.ownerDocument.getElementById("canvas");
-  if (!(canvas instanceof HTMLCanvasElement)) {
-    throw new Error("Travel game canvas is missing");
-  }
-  const style = parent.ownerDocument.createElement("style");
-  style.textContent = `
-    #travel-palette-host { position: absolute; inset: 0; pointer-events: none; }
-  `;
-  const root = parent.ownerDocument.createElement("dialog");
-  root.id = "travel-palette-root";
-  root.className = "ui-modal ui-modal-layer";
-  root.setAttribute("aria-label", "Quick Travel");
-  const host = parent.ownerDocument.createElement("div");
-  host.id = "travel-palette-host";
-  root.append(host);
-  parent.append(style, root);
-
   let enabled = false;
-  let requested = false;
+  let visibilityGeneration = 0;
   let disposed = false;
-  let state: TravelGameState = { status: "waiting", reason: "game" };
-  let friends: TravelFriends = { status: "waiting", reason: "unavailable" };
-  let app: TravelPaletteHandle | null = null;
-  function setOpen(next: boolean): void {
-    if (!enabled && next) throw new Error(command.unavailable() ?? "Travel is turned off");
-    if (root.open === next) return;
-    if (next) modal.show();
-    else {
-      modal.close();
-      friends = { status: "waiting", reason: "unavailable" };
-      app?.updateFriends(friends);
-    }
-    if (next && !requested) {
-      requested = true;
+  let state: TravelGameState = { status: 'waiting', reason: 'game' };
+  let friends: TravelFriends = { status: 'waiting', reason: 'unavailable' };
+  let app: ReturnType<EmbeddedToolsBundle<HTMLElement>['createHubTravel']> | null = null;
+  let loading: Promise<void> | null = null;
+  let detach: (() => void) | null = null;
+  let unsubscribe = () => {};
+  const listeners = new Set<() => void>();
+  const refresh = () => { for (const listener of listeners) listener(); };
+  async function load() {
+    if (app) return app;
+    if (!loading) loading = (async () => {
       ensureToolsStylesheet(parent.ownerDocument);
-      const specifier = "./tools/tools-app.js";
-      void import(specifier).then((bundle: EmbeddedToolsBundle<HTMLElement>) => {
-        if (disposed) return;
-        app = bundle.mountTravelPalette(host, {
-          nativeApi: native,
-          command,
-          development: window.gwNative.init.development,
-          initiallyVisible: root.open,
-          onVisibilityChange: (visible) => setOpen(visible),
-        });
-        app.update(state);
-        app.updateFriends(friends);
-      }).catch((cause: unknown) => {
-        console.error("[travel] the Travel palette failed to load", cause);
-        modal.close();
-      });
-    } else if (app) {
-      if (next) app.show();
-      else app.hide();
-    }
+      const specifier = './tools/tools-app.js';
+      const bundle: EmbeddedToolsBundle<HTMLElement> = await import(specifier);
+      if (disposed) return;
+      app = bundle.createHubTravel({ nativeApi: native, command, development: window.gwNative.init.development, hub });
+      app.update(state); app.updateFriends(friends);
+      unsubscribe = app.source.subscribe(refresh);
+      app.source.setVisible(enabled && hub.visible); refresh();
+    })().finally(() => { loading = null; });
+    await loading;
+    return app;
   }
-  const modal = window.gwSurfaces.registerDialog({
-    root,
-    priority: 6,
-    transient: true,
-    dismiss: () => setOpen(false),
-    restoreFocus: () => canvas,
-  });
-
-  const onCommand = (event: Event) => {
-    if (!(event instanceof CustomEvent)) return;
-    event.preventDefault();
+  async function open() {
+    if (app) { app.open(); return; }
+    let active = true;
+    hub.showView('Travel', target => {
+      const message = target.ownerDocument.createElement('p');
+      message.className = 'hub-empty'; message.textContent = 'Loading Travel…';
+      target.append(message);
+      return () => { active = false; message.remove(); };
+    });
     try {
-      setOpen(!root.open);
-    } catch (error) {
-      if (event.detail !== null && typeof event.detail === "object") {
-        (event.detail as { error?: unknown }).error = error;
-      }
-    }
+      const loaded = await load();
+      if (active && !disposed && enabled) loaded?.open();
+    } catch (error) { if (active) throw error; }
+  }
+  const source: HubSource = {
+    feature: 'travelPalette',
+    lookup: id => app?.source.lookup?.(id),
+    subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
+    setVisible(visible) {
+      if (!visible) visibilityGeneration++;
+      app?.source.setVisible(visible);
+      if (visible) void load().catch(() => { /* The explicit Travel action offers a retry. */ });
+    },
+    search(query) {
+      return app?.source.search(query) ?? matchHubRows([{ id: 'travel', title: 'Travel', detail: 'Outposts, favourites and recent places', group: 'Tools', keywords: 'tp teleport destination', action: 'Browse travel', run: open }], query);
+    },
   };
-  window.addEventListener("gw:travel-toggle", onCommand);
-
-  return Object.freeze({
-    observingFriends: () => root.open,
+  const onCommand = (event: Event) => {
+    if (!enabled) return;
+    event.preventDefault();
+    if (app?.active && (!(event instanceof CustomEvent) || event.detail !== 'show')) { hub.close(); return; }
+    void open().catch(() => hub.showRows('Travel could not load', () => [{ id: 'retry-travel', title: 'Try again', detail: 'Your Travel preferences are unchanged', group: 'Travel', action: 'Retry', run: open }]));
+  };
+  window.addEventListener('gw:travel-toggle', onCommand);
+  return {
+    observingFriends: () => enabled && hub.visible,
+    async travelToFriend(friend: TravelFriend, generation: number) {
+      if (!enabled) throw new Error('Travel is turned off');
+      const intent = visibilityGeneration;
+      await load();
+      if (intent !== visibilityGeneration) throw new Error('Travel cancelled');
+      if (!enabled || disposed || !app) throw new Error('Travel is unavailable');
+      const current = currentTravelFriend(friends, friend, generation);
+      if (!current) {
+        throw new Error('This friend’s location changed. Select them again.');
+      }
+      await app.travel(current.mapId);
+    },
     setEnabled(next: boolean) {
+      if (enabled === next) return;
       enabled = next;
-      if (!next && root.open) setOpen(false);
+      if (next) detach = hub.attach(source);
+      else { detach?.(); detach = null; }
     },
-    updateFriends(next: TravelFriends) {
-      friends = next;
-      app?.updateFriends(next);
-    },
-    update(next: TravelGameState) {
-      state = next;
-      app?.update(next);
-    },
+    updateFriends(next: TravelFriends) { friends = next; app?.updateFriends(next); },
+    update(next: TravelGameState) { state = next; app?.update(next); },
     dispose() {
-      disposed = true;
-      window.removeEventListener("gw:travel-toggle", onCommand);
-      app?.dispose();
-      modal.dispose();
-      style.remove();
-      root.remove();
+      disposed = true; detach?.(); unsubscribe(); app?.dispose(); listeners.clear();
+      window.removeEventListener('gw:travel-toggle', onCommand);
     },
-  });
+  };
 }

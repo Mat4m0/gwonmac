@@ -28,6 +28,15 @@ The committed `assets/AppIcon.icns` was prepared by the independent
 for macOS. The artwork and Guild Wars marks remain the property of their
 respective owners and are not covered by this project's GPL license.
 
+## Browser fixture skill artwork
+
+`apps/tools/src/assets/fixture-skills/` contains original skill icons from Guild
+Wars Wiki for the offline browser fixture. File links and attribution are recorded
+in that directory's README. ArenaNet/NCsoft retain ownership; these images are
+excluded from GPL licensing and used under ArenaNet's
+[Content Terms of Use](https://www.arena.net/en/legal/content-terms-of-use).
+Production skill previews use the existing native catalogue and icon route.
+
 ## ArenaNet visual material
 
 The launcher video, poster, and logo in `src/renderer/images/` were published

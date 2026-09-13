@@ -41,7 +41,7 @@
  * hold, and a rank of 15 in a saved record is not a value to round-trip,
  * it is a bug to make unrepresentable.
  */
-
+import type { HubShortcut } from "../hub-preferences.js";
 // The brand is declared, never exported and never constructed, so the only way
 // to produce a branded value is one of the minting functions below. That keeps
 // "which kind of id is this" a compile-time question instead of the prototype's
@@ -388,6 +388,8 @@ export interface Team {
 export const LIBRARY_VERSION = 3;
 
 export interface BuildLibrary {
+  /** Private search preferences follow this library’s existing account ownership. */
+  readonly hubShortcuts?: readonly HubShortcut[];
   readonly version: typeof LIBRARY_VERSION;
   readonly builds: readonly Build[];
   readonly teams: readonly Team[];
@@ -470,6 +472,7 @@ export function forkBuild(
 export function removeBuild(library: BuildLibrary, removedId: BuildId): BuildLibrary {
   return {
     ...library,
+    ...(library.hubShortcuts ? { hubShortcuts: library.hubShortcuts.filter(entry => entry.id !== `build:${removedId}`) } : {}),
     builds: library.builds
       .filter((build) => build.id !== removedId)
       .map((build) => build.parent === removedId ? { ...build, parent: null } : build),
@@ -507,6 +510,7 @@ export function removeTeam(
   const withoutTeam = {
     ...library,
     teams: library.teams.filter((team) => team.id !== removedId),
+    ...(library.hubShortcuts ? { hubShortcuts: library.hubShortcuts.filter(entry => entry.id !== `team:${removedId}`) } : {}),
   };
   return exclusive.reduce(removeBuild, withoutTeam);
 }

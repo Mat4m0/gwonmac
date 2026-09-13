@@ -1,7 +1,9 @@
 /**
- * Keeps Command-R owned by Core even when the current game build is unsupported.
+ * Keeps Command-E owned by Core even when the current game build is unsupported.
  * A certified installation may replace only the source, never shortcut ownership.
  */
+import { matchHubRows, parseHubQuery, type HubSource } from '../shared/hub.js';
+import { professionPresentation } from '../shared/profession-assets.js';
 import type { CharacterSwitchSource } from "./character-switch-model.js";
 import { createCharacterSwitchPalette } from "./character-switch-palette.js";
 
@@ -41,6 +43,23 @@ export function installCharacterSwitchHost(parent: HTMLElement): CharacterSwitch
     subscribe(listener: () => void) { listeners.add(listener); listener(); return () => { listeners.delete(listener); }; },
   });
   const palette = createCharacterSwitchPalette(parent, proxy);
+  const hubSource: HubSource = {
+    feature: 'characterSwitchEnabled',
+    setVisible() {}, subscribe: proxy.subscribe,
+    search(query) {
+      const parsed = parseHubQuery(query);
+      if ((parsed.scope && parsed.scope !== 'char') || !parsed.term || source.characters.status !== 'ready') return [];
+      const characters = source.characters;
+      return matchHubRows(characters.characters.map((character, index) => ({ id: `character:${character.characterKey}`, title: character.name,
+        ...(professionPresentation(character.primaryProfession) ? { icon: professionPresentation(character.primaryProfession)!.icon } : {}),
+        detail: `${professionPresentation(character.primaryProfession)?.name ?? ''} · Level ${character.level}`,
+        keywords: professionPresentation(character.primaryProfession)?.name ?? '', group: 'Characters', action: index === characters.selectedIndex ? 'Current character' : `Switch to ${character.name}`,
+        ...(index === characters.selectedIndex ? { unavailable: 'Current character' } : {}),
+        run: () => { window.dispatchEvent(new CustomEvent('gw:character-toggle', { cancelable: true, detail: { characterKey: character.characterKey, activate: true } })); },
+      })), parsed.term);
+    },
+  };
+  const detachHub = window.gwHub?.attach(hubSource);
   return Object.freeze({
     attach(next: CharacterSwitchSource) {
       detachSource();
@@ -55,6 +74,6 @@ export function installCharacterSwitchHost(parent: HTMLElement): CharacterSwitch
         for (const listener of listeners) listener();
       };
     },
-    dispose() { detachSource(); listeners.clear(); palette.dispose(); },
+    dispose() { detachHub?.(); detachSource(); listeners.clear(); palette.dispose(); },
   });
 }

@@ -19,7 +19,16 @@ Core is required and has no player switch. Optional Tools are off by default.
 The first enable selects a Tools-capable module and requires a restart. The
 Current integrated features are:
 
-- **Character Switch** (Core): Command-R opens an account-character palette
+- **Scry** (Core): Command-R opens the shared command palette. The Core shell
+  imports no optional Tools implementation. Travel contributes its existing
+  command host and detailed view; people search consumes the same friend feed
+  as Travel and Whispers. Quick replies use the existing `WhisperSession` and
+  named sender. No new native command, chat persistence, or observer is added.
+  Command-K belongs to Scry while it is open and falls back to its configured
+  action outside the palette. A saved Command-R override takes priority; Scry
+  remains available from View. Its default is not serialized as a new shortcut
+  key because older settings readers reject unknown keys.
+- **Character Switch** (Core): Command-Shift-R opens an account-character palette
   independently of Tools. Its default horizontal layout follows Guild Wars'
   character-selection order, opens on the current character, and wraps only
   after navigation reaches a visible end. Its alternative vertical layout is
@@ -33,7 +42,7 @@ Current integrated features are:
   menu.
 
 - **Resign**: an optional Tools switch, off by default. Its configurable shortcut
-  defaults to Command-Shift-R and opens a small in-game confirmation before sending the fixed `/resign` command
+  is unassigned by default and opens a small in-game confirmation before sending the fixed `/resign` command
   through the certified native chat sender in PvE. It does not type into chat.
   Turning off Resign or Tools disables the command and cancels a queued request.
   Enter or the Resign button confirms. Escape, Cancel, the close button, an

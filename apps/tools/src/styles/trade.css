@@ -37,7 +37,7 @@
 
 .trade-toolbar {
   display: grid;
-  grid-template-columns: auto minmax(280px, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: var(--ui-gap);
   padding-top: var(--ui-gap);
@@ -47,6 +47,8 @@
 .intent-segment { width: auto; }
 
 .trade-toolbar-actions {
+  grid-column:1 / -1;
+  flex-wrap:wrap;
   display: flex;
   align-items: center;
   gap: var(--ui-space-2);

@@ -5,6 +5,7 @@
  * URLs and reconnect mechanics stop here; subscribers receive only the bounded
  * shared contract and no message text is ever written to diagnostics.
  */
+import { estimateMarketRates, MARKET_CACHE_MS, MARKET_MAX_AGE_MS, MARKET_SEARCHES, type MarketSnapshot } from "../../shared/market-rates.js";
 import WebSocket, { type ClientOptions, type RawData } from "ws";
 import { AppError } from "../../shared/errors.js";
 import {
@@ -83,6 +84,9 @@ export class TradeChatService {
   readonly #fetch: typeof fetch;
   readonly #random: () => number;
   readonly #timing: TradeServiceTiming;
+  #marketCache: MarketSnapshot | null = null;
+  #marketRequest: Promise<MarketSnapshot> | null = null;
+  #disposed = false;
   #quoteCache: { value: TraderQuoteSnapshot; expiresAt: number } | null = null;
   #quoteRequest: Promise<TraderQuoteSnapshot> | null = null;
   readonly #historyCache = new Map<
@@ -103,6 +107,46 @@ export class TradeChatService {
       pongTimeoutMs: options.timing?.pongTimeoutMs ?? PONG_TIMEOUT_MS,
       reconnectDelaysMs: options.timing?.reconnectDelaysMs ?? RECONNECT_DELAYS_MS,
     };
+  }
+
+  getMarketRates(): Promise<MarketSnapshot> {
+    if (this.#disposed) return Promise.reject(new Error("trade service disposed"));
+    if (this.#marketCache && Date.now() - this.#marketCache.fetchedAt < MARKET_CACHE_MS) {
+      return Promise.resolve(this.#marketCache);
+    }
+    if (this.#marketRequest) return this.#marketRequest;
+    this.#marketRequest = this.#fetchMarketRates().finally(() => { this.#marketRequest = null; });
+    return this.#marketRequest;
+  }
+
+  async #fetchMarketRates(): Promise<MarketSnapshot> {
+    const now = Date.now();
+    const messages: TradeMessage[] = [];
+    // Two pages per fixed alias, at most 250 ads. No background refresh or
+    // user-supplied endpoint. Stop paging once results leave the evidence window.
+    for (const query of MARKET_SEARCHES) {
+      let offset = 0;
+      for (let page = 0; page < 2; page++) {
+        if (this.#disposed) throw new Error("trade service disposed");
+        try {
+          const raw = await this.#getJson(`/s/${encodeURIComponent(query)}/0/${offset}`);
+          const payload = parseTradePayload("kamadan", typeof raw === "object" && raw !== null ? { ...raw, query } : null);
+          if (!payload || payload.kind !== "search") break;
+          messages.push(...payload.messages.slice(0, 25));
+          const oldest = Math.min(...payload.messages.map(message => message.timestamp));
+          if (payload.messages.length < 25 || !Number.isSafeInteger(oldest) || now - oldest > MARKET_MAX_AGE_MS || (offset && oldest >= offset)) break;
+          offset = oldest;
+        } catch {
+          // Keep partial evidence, but stop demand on network failure/rate limit.
+          const value = estimateMarketRates(messages, now);
+          if (!this.#disposed) this.#marketCache = value;
+          return value;
+        }
+      }
+    }
+    const value = estimateMarketRates(messages, now);
+    if (!this.#disposed) this.#marketCache = value;
+    return value;
   }
 
   getTraderQuotes(): Promise<TraderQuoteSnapshot> {
@@ -255,6 +299,8 @@ export class TradeChatService {
   }
 
   dispose(): void {
+    this.#disposed = true;
+    this.#marketCache = null;
     this.#subscriptions.clear();
     for (const feed of this.#feeds.values()) {
       feed.subscribers.clear();

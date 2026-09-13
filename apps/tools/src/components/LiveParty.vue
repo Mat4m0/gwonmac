@@ -4,6 +4,7 @@ import type { LiveParty } from "../../../../src/shared/builds/live-party";
 import { heroLabel } from "../../../../src/shared/builds/heroes";
 
 const props = defineProps<{
+  initiallyExpanded?: boolean;
   party: LiveParty;
   saving: boolean;
   unavailableReason: string | null;
@@ -37,7 +38,7 @@ const canCapture = computed(() =>
 </script>
 
 <template>
-  <details class="live-party" open>
+  <details class="live-party" :open="initiallyExpanded !== false">
     <summary class="live-party-head">
       <span class="live-party-title">Party in Guild Wars</span>
       <span

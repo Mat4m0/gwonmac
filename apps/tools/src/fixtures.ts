@@ -48,6 +48,7 @@ const catalogueAttributes: Partial<Record<Profession, readonly (Attribute | null
   Rt: ["RestorationMagic", "RestorationMagic", "RestorationMagic", "ChannelingMagic", "ChannelingMagic", "Communing", "SpawningPower", null],
   E: ["AirMagic", "AirMagic", "AirMagic", "AirMagic", "EnergyStorage", "EnergyStorage", null, null],
 };
+const fixtureIcons = import.meta.glob<string>('./assets/fixture-skills/*.jpg', { eager: true, query: '?url', import: 'default' });
 const presentations: SkillPresentation[] = names.map((name, index) => {
   const profession = index < 48
     ? professions[Math.floor(index / 8)] ?? null
@@ -69,7 +70,7 @@ const presentations: SkillPresentation[] = names.map((name, index) => {
     aftercastSeconds: 0.75,
     rechargeSeconds: 5 + index % 4,
     description: `${name} demonstrates the client-owned skill description in the standalone workbench.`,
-    iconUrl: null,
+    iconUrl: fixtureIcons[`./assets/fixture-skills/${name.replaceAll(' ', '_')}.jpg`] ?? null,
   };
 });
 

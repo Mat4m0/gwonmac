@@ -1,0 +1,48 @@
+/**
+ * Original Guild Wars currency and material artwork for conversion cards.
+ * Shared material images are the same assets used by Trade's item catalogue.
+ */
+import type { Currency } from './hub-calculator.js';
+const images: Readonly<Record<string,string>> = {
+  gold:new URL('./images/currency/Gold.png',import.meta.url).href,
+  platinum:new URL('./images/currency/Platinum.png',import.meta.url).href,
+  armbrace:new URL('./images/currency/Armbrace_of_Truth.png',import.meta.url).href,
+  zkey:new URL('./images/currency/Zaishen_Key.png',import.meta.url).href,
+  'item:0b1985':new URL('./images/materials/0b1985.png',import.meta.url).href,
+  'item:0b1984':new URL('./images/materials/0b1984.png',import.meta.url).href,
+  'item:0b039b':new URL('./images/materials/0b039b.png',import.meta.url).href,
+  'item:0b03b4':new URL('./images/materials/0b03b4.png',import.meta.url).href,
+  'item:0b03bb':new URL('./images/materials/0b03bb.png',import.meta.url).href,
+  'item:0b03a8':new URL('./images/materials/0b03a8.png',import.meta.url).href,
+  'item:0b03a9':new URL('./images/materials/0b03a9.png',import.meta.url).href,
+  'item:0b03bc':new URL('./images/materials/0b03bc.png',import.meta.url).href,
+  'item:0b03b5':new URL('./images/materials/0b03b5.png',import.meta.url).href,
+  'item:0b039a':new URL('./images/materials/0b039a.png',import.meta.url).href,
+  'item:0b03b7':new URL('./images/materials/0b03b7.png',import.meta.url).href,
+  'item:0b03ba':new URL('./images/materials/0b03ba.png',import.meta.url).href,
+  'item:0b03b6':new URL('./images/materials/0b03b6.png',import.meta.url).href,
+  'item:0b039d':new URL('./images/materials/0b039d.png',import.meta.url).href,
+  'item:0b03b2':new URL('./images/materials/0b03b2.png',import.meta.url).href,
+  'item:0b039e':new URL('./images/materials/0b039e.png',import.meta.url).href,
+  'item:0b03b1':new URL('./images/materials/0b03b1.png',import.meta.url).href,
+  'item:0b03b0':new URL('./images/materials/0b03b0.png',import.meta.url).href,
+  'item:0b039f':new URL('./images/materials/0b039f.png',import.meta.url).href,
+  'item:0b03a1':new URL('./images/materials/0b03a1.png',import.meta.url).href,
+  'item:0b03af':new URL('./images/materials/0b03af.png',import.meta.url).href,
+  'item:0b03a0':new URL('./images/materials/0b03a0.png',import.meta.url).href,
+  'ecto':new URL('./images/materials/0b03a2.png',import.meta.url).href,
+  'item:0b03ad':new URL('./images/materials/0b03ad.png',import.meta.url).href,
+  'item:0b03ae':new URL('./images/materials/0b03ae.png',import.meta.url).href,
+  'item:0b03a3':new URL('./images/materials/0b03a3.png',import.meta.url).href,
+  'item:0b03aa':new URL('./images/materials/0b03aa.png',import.meta.url).href,
+  'item:0b03a7':new URL('./images/materials/0b03a7.png',import.meta.url).href,
+  'item:0b03a6':new URL('./images/materials/0b03a6.png',import.meta.url).href,
+  'item:0b03b8':new URL('./images/materials/0b03b8.png',import.meta.url).href,
+  'item:0b03ab':new URL('./images/materials/0b03ab.png',import.meta.url).href,
+  'item:0b03a4':new URL('./images/materials/0b03a4.png',import.meta.url).href,
+  'item:0b03a5':new URL('./images/materials/0b03a5.png',import.meta.url).href,
+  'item:0b03ac':new URL('./images/materials/0b03ac.png',import.meta.url).href,
+  'item:0b03b9':new URL('./images/materials/0b03b9.png',import.meta.url).href,
+  'item:0b0399':new URL('./images/materials/0b0399.png',import.meta.url).href,
+};
+export const currencyIcon = (unit:Currency):string|undefined => images[unit];

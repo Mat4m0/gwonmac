@@ -817,6 +817,8 @@ export async function assertPackagedHostOnlyToolsSession() {
     });
     if (await dismissNotice.isVisible()) await dismissNotice.click();
     await fixture.page.getByRole("button", { name: "Done" }).click();
+    // The Hub-sized Library opens a selected build in its compact detail view.
+    await fixture.page.locator(".mobile-back").click();
     await fixture.page.getByRole("tab", { name: "Teams" }).click();
     await fixture.page.getByRole("button", { name: "New team", exact: true }).click();
     await fixture.page.getByLabel("Name optional").fill("Patch-day team");

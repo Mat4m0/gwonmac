@@ -2,6 +2,7 @@
  * Parses and repairs the durable build-library domain without performing I/O.
  * Disk and transport callers receive the same canonical value from this boundary.
  */
+import { isHubShortcuts } from "../hub-preferences.js";
 import { AppError } from "../errors.js";
 import { ATTRIBUTES, PROFESSIONS } from "./heroes.js";
 import {
@@ -179,7 +180,9 @@ export function parseBuildLibrary(raw: unknown): BuildLibrary {
   const teams = array(source.teams, "teams").map((team, index) =>
     parseTeam(team, `teams[${index}]`, known));
   unique(teams, "teams");
+  if (source.hubShortcuts !== undefined && (!isHubShortcuts(source.hubShortcuts) || source.hubShortcuts.some(entry => !/^(build|team):/u.test(entry.id)))) fail("hubShortcuts", "must contain valid library search preferences");
   return {
+    ...(source.hubShortcuts !== undefined && isHubShortcuts(source.hubShortcuts) ? { hubShortcuts: source.hubShortcuts } : {}),
     version: LIBRARY_VERSION,
     builds,
     teams,

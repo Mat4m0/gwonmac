@@ -13,6 +13,10 @@
  * arguments and either forwards one owner-local capability directly or calls
  * the workflow owner; it returns codes rather than inventing prose.
  */
+import { parseHubSettingsChange, type HubSettingsApi } from "../shared/hub-settings.js";
+import { parseShortcutAction } from "../shared/keyboard-shortcuts.js";
+import type { HubAccountsSnapshot, HubAccountRequest } from '../shared/accounts-contracts.js';
+import { parseHubAccountRequest } from './accounts-ipc-values.js';
 import { clipboard, shell, type BrowserWindow } from "electron";
 import {
   CLIPBOARD_TEXT_CEILING,
@@ -134,6 +138,11 @@ export interface IpcContext {
     parent: BrowserWindow,
     record: (event: SteamAcquireEvent) => void,
   ) => Promise<SteamAcquireResult>;
+  hubAccountsGet: (win: BrowserWindow) => HubAccountsSnapshot;
+  hubAccountOpen: (win: BrowserWindow, request: HubAccountRequest) => Promise<void>;
+  hubSettings: Omit<HubSettingsApi, "capture"> & { capture: (win: BrowserWindow, action: Parameters<HubSettingsApi["capture"]>[0]) => ReturnType<HubSettingsApi["capture"]> };
+  showLauncher: () => void;
+  openSettings: () => void;
   requestQuit: (win: BrowserWindow) => void;
   reloadGame: (win: BrowserWindow, cause: GameReloadCause) => Promise<void>;
   claimRelogIntent: (win: BrowserWindow) => boolean;
@@ -579,6 +588,13 @@ export function registerIpcHandlers(ctx: IpcContext): {
       if (kind === "gameData") shell.showItemInFolder(paths.game);
     }),
 
+    hubAccountsGet: channel(nothing, win => ctx.hubAccountsGet(win)),
+    hubAccountOpen: channel(one(parseHubAccountRequest), (win, request) => ctx.hubAccountOpen(win, request)),
+    hubSettingsGet: channel(nothing, () => ctx.hubSettings.get()),
+    hubSettingsUpdate: channel(one(parseHubSettingsChange), (_win, change) => ctx.hubSettings.update(change)),
+    hubShortcutCapture: channel(one(parseShortcutAction), (win, action) => ctx.hubSettings.capture(win, action)),
+    appShowLauncher: channel(nothing, () => ctx.showLauncher()),
+    appOpenSettings: channel(nothing, () => ctx.openSettings()),
     appRequestQuit: channel(nothing, (win) => ctx.requestQuit(win)),
 
     appReloadGame: channel(asGameReloadCause, (win, cause) =>

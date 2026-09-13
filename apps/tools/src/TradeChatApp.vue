@@ -35,6 +35,14 @@ const props = defineProps<{
   visible: boolean;
   active: boolean;
 }>();
+const whispersEnabled = ref(false);
+const updateWhispersEnabled = () => { whispersEnabled.value = !!window.gwToolsSettings?.().gwonmacTools && !!window.gwToolsSettings?.().whispersEnabled; };
+onMounted(() => { updateWhispersEnabled(); window.addEventListener('gw:tools-settings', updateWhispersEnabled); });
+onBeforeUnmount(() => window.removeEventListener('gw:tools-settings', updateWhispersEnabled));
+function whisperSeller(name: string) {
+  if (!whispersEnabled.value) return;
+  window.dispatchEvent(new CustomEvent('gw:whisper-person', { detail: name }));
+}
 const emit = defineEmits<{ close: []; ready: [] }>();
 
 type SourceState = {
@@ -53,6 +61,8 @@ type PlayerReturnState = {
   visibleLimit: number;
   focusTimestamp: number | null;
 };
+
+defineExpose({ search(value: string) { query.value = value; view.value = "listings"; void runSearch(); } });
 
 const source = ref<TradeSource>("kamadan");
 const view = ref<"listings" | "prices">("listings");
@@ -783,6 +793,7 @@ function exactTime(timestamp: number): string {
           </div>
           <footer class="inspector-actions">
             <div class="inspector-action-group" role="group" aria-label="Offer actions">
+              <button v-if="whispersEnabled" class="ui-button" @click="whisperSeller(selected.sender)">Whisper {{ selected.sender }}</button>
               <button
                 class="ui-button"
                 :aria-pressed="offerSaved(selected)"

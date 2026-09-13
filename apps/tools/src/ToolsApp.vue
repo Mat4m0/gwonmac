@@ -22,6 +22,8 @@ import {
   countLabel,
   teamMemberLabel,
 } from "./model";
+import type { HubPresenter } from '../../../src/shared/hub';
+import { createHubLibrary } from './hub-library';
 import { useLibrary } from "./use-library";
 import BuildDetail from "./components/BuildDetail.vue";
 import LiveParty from "./components/LiveParty.vue";
@@ -33,6 +35,7 @@ import { useFloatingWindow } from "./use-floating-window";
 
 const props = defineProps<{
   host: ToolsHost;
+  hub?: HubPresenter<HTMLElement>;
   mode: "standalone" | "embedded";
   visible: boolean;
   active: boolean;
@@ -43,6 +46,8 @@ const emit = defineEmits<{
 }>();
 
 const controller = useLibrary(props.host);
+const hubLibrary = props.hub ? createHubLibrary(controller, props.host, props.hub) : null;
+onBeforeUnmount(() => hubLibrary?.dispose());
 const search = ref<HTMLInputElement | null>(null);
 const mobileView = ref<"list" | "detail">("list");
 const { panel, resizeGrip, panelStyle, startDrag } = useFloatingWindow({
@@ -343,6 +348,7 @@ onBeforeUnmount(() => {
             </div>
 
             <LiveParty
+              :initially-expanded="!props.hub"
               v-if="controller.kind.value === 'team'"
               :party="host.party.value"
               :saving="controller.saving.value"

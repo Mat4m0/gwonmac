@@ -9,6 +9,7 @@
  * other's assumptions.
  */
 import type { AlcoholTimerPosition } from "../shared/alcohol-timer.js";
+import type { ShortcutOverrides } from "../shared/keyboard-shortcuts.js";
 import type {
   AppSettings,
   RendererGwNativeApi,
@@ -43,6 +44,7 @@ import type {
   WorldMapAnchorSpikeController,
 } from "../shared/cartography-spike.js";
 import type { CompanionCharacterListState } from "./companion-character-list-snapshot.js";
+import type { Hub } from "./hub.js";
 import type { CharacterSwitchHost } from "./character-switch-host.js";
 import type {
   CharacterSwitchContext as SharedCharacterSwitchContext,
@@ -296,7 +298,10 @@ declare global {
     /** Pointer-free atomic epoch and classification diagnostics; development only. */
     gwCartographyModelStats?(): CartographyModelStats;
     gwSurfaces: GwonmacSurfaceController;
+    gwHub?: Hub;
     gwToolsSettings(): Readonly<{
+      shortcutOverrides?: ShortcutOverrides;
+      hubShortcuts?: AppSettings['hubShortcuts'];
       gwonmacTools: boolean;
       buildLibrary: boolean;
       tradeChat: boolean;

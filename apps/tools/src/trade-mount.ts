@@ -13,6 +13,7 @@ export function mountTradeChat(
     onVisibilityChange?: (visible: boolean) => void;
   },
 ): TradeChatHandle {
+  const view = ref<InstanceType<typeof TradeChatApp> | null>(null);
   const visible = ref(options.initiallyVisible ?? options.mode === "standalone");
   const active = ref(options.mode === "standalone");
   const setVisible = (next: boolean) => {
@@ -22,6 +23,7 @@ export function mountTradeChat(
   };
   const app = createApp({
     setup: () => () => h(TradeChatApp, {
+      ref: view,
       host: options.host,
       mode: options.mode,
       visible: visible.value,
@@ -32,6 +34,7 @@ export function mountTradeChat(
   });
   app.mount(target);
   return Object.freeze({
+    search: (query: string) => view.value?.search(query),
     show: () => setVisible(true),
     hide: () => setVisible(false),
     toggle: () => setVisible(!visible.value),

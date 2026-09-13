@@ -181,3 +181,23 @@ revisioned launcher snapshot and request validated profile, setup, settings,
 Tools, game-file, update, and external-link actions. It cannot access game
 sockets, credentials, Steam tokens, player files, templates, snapshots, or game
 diagnostics. Game windows cannot invoke launcher mutation channels.
+
+## Account switching from Hub
+
+Hub exposes the existing account launcher through two game-only capabilities:
+`accounts.get` returns names and runtime state, and `accounts.open` accepts one
+saved target ID plus `open` or `replace`. Main resolves the current account from
+its immutable window registry. The renderer cannot submit a source account or
+close an arbitrary window. No credentials or filesystem paths enter Hub.
+
+`acc second` presents explicit choices to keep the current account open or replace
+it. An already-running target is focused rather than duplicated. Replacement first
+activates the target and checks its running state, then invokes the source window's
+normal filesystem-save and close path. A refused, incomplete or duplicate launch
+leaves the source open. A cancelled close leaves both windows open. The user still
+signs in through the normal game flow; this is a profile-window switch, not an
+automatic login or cross-account character lookup.
+
+Focused tests cover launch ordering, keep-open behavior, failures, duplicate
+requests, current-account refusal and request validation. The offline Hub fixture
+records synthetic actions and never opens or closes a real account.

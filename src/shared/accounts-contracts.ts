@@ -55,3 +55,12 @@ export interface AccountProfileCreateRequest {
 export interface AccountProfileUpdateRequest extends AccountProfileRequest {
   readonly id: ProfileId;
 }
+
+export interface HubAccountsSnapshot {
+  readonly current: ProfileId;
+  readonly profiles: readonly Pick<AccountProfileSummary, 'id' | 'name' | 'state'>[];
+}
+export interface HubAccountRequest {
+  readonly id: ProfileId;
+  readonly mode: 'open' | 'replace';
+}

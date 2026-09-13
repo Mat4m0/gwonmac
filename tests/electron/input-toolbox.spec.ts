@@ -48,11 +48,13 @@ const GAME_POINT = {
 } as const;
 
 test.describe("renderer Tools input", () => {
-  test("floats over the game without stealing it", async () => {
+  test("detached tools float over the game without stealing it", async () => {
     const fixture = await launchPlayableClient("gw-toolbox-input-e2e-");
     try {
       const { page } = fixture;
       await startGameInput(page);
+      // This suite exercises the detached foundation; Hub handoffs have their own coverage.
+      await page.evaluate(() => { window.gwHub?.close(); delete window.gwHub; });
       await page.evaluate(async (toolWindow) => {
         globalThis.document.getElementById("loading")?.classList.add("gone");
         const canvas = globalThis.document.getElementById("canvas");
@@ -319,6 +321,14 @@ test.describe("renderer Tools input", () => {
       await page.getByRole("button", { name: "Trade action" }).click();
       await expect(trade).toHaveAttribute("data-active", "true");
       await expect(tool).toHaveAttribute("data-active", "false");
+      // Hub's explicit Open action raises an existing tool instead of toggling it off.
+      await page.evaluate(() => window.dispatchEvent(new CustomEvent('gw:tools-toggle', { cancelable: true, detail: 'show' })));
+      await expect(tool).toBeVisible();
+      await expect(tool).toHaveAttribute('data-active', 'true');
+      await expect(trade).toHaveAttribute('data-active', 'false');
+      await page.evaluate(() => window.dispatchEvent(new CustomEvent('gw:trade-toggle', { cancelable: true, detail: 'show' })));
+      await expect(trade).toBeVisible();
+      await expect(trade).toHaveAttribute('data-active', 'true');
       await page.keyboard.press("Escape");
       await expect(trade).toBeHidden();
       await expect(tool).toBeVisible();
@@ -480,7 +490,7 @@ test.describe("renderer Tools input", () => {
     }
   });
 
-  test("mounts the shipped embedded Tools window and persists one library change", async () => {
+  test("mounts the shipped detached Tools window and persists one library change", async () => {
     test.setTimeout(60_000);
     const fixture = await launchPlayableClient(
       "gw-toolbox-embedded-e2e-",
@@ -491,12 +501,15 @@ test.describe("renderer Tools input", () => {
           gwonmacTools: true,
           buildLibrary: true,
           xunlaiStorage: true,
+          shortcutOverrides: { "storage.open": { key: "c", shift: true, option: false } },
         }),
       ),
     );
     try {
       const { app, page } = fixture;
       await startGameInput(page);
+      // This suite exercises the detached foundation; Hub handoffs have their own coverage.
+      await page.evaluate(() => { window.gwHub?.close(); delete window.gwHub; });
       await page.evaluate(async () => {
         globalThis.document.getElementById("loading")?.classList.add("gone");
         const canvas = document.getElementById("canvas");
@@ -573,7 +586,6 @@ test.describe("renderer Tools input", () => {
       await expect(page.locator("#toolbox-builds")).toHaveAttribute("data-ready", "true");
       await expect(page.locator('.tools-stage[data-mode="embedded"]')).toBeVisible();
       await expect(page.getByRole("heading", { name: "Build Library" })).toBeVisible();
-      await expect(page.getByText("Saved on this Mac")).toBeVisible();
       await settleEmbeddedShow();
       await expect.poll(() => isDomActiveElement(canvas)).toBe(true);
 
@@ -642,7 +654,7 @@ test.describe("renderer Tools input", () => {
       );
       await expect.poll(() => isDomActiveElement(canvas)).toBe(true);
 
-      // The successful Command-Shift-C route must release Shift before it
+      // The preserved custom Command-Shift-C route must release Shift before it
       // opens native storage. macOS can consume the physical release while
       // Command is held; without this reset Guild Wars keeps Shift pressed and
       // then refuses ordinary click-to-walk and NPC interaction.

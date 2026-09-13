@@ -540,3 +540,16 @@
     outline-offset: 2px;
   }
 }
+
+/* Hub owns placement, material and Escape; Travel keeps its existing controls. */
+.hub-view .travel-palette {
+  position: relative;
+  inset: auto;
+  transform: none;
+  width: 100%;
+  max-height: min(62vh, 560px);
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+  animation: none;
+}

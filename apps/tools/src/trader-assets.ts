@@ -1,4 +1,4 @@
-import type { TraderItem, TraderProfession } from "./trader-catalog";
+import type { TraderItem, TraderProfession } from "../../../src/shared/trader-catalog";
 import { professionPresentation } from "../../../src/shared/profession-assets";
 
 const ASSETS = import.meta.glob<string>("./assets/trader/**/*.png", {
@@ -6,6 +6,8 @@ const ASSETS = import.meta.glob<string>("./assets/trader/**/*.png", {
   import: "default",
   query: "?url",
 });
+
+const MATERIALS = import.meta.glob<string>("../../../src/shared/images/materials/*.png", { eager: true, import: "default", query: "?url" });
 
 const PROFESSION_IDS: Readonly<Partial<Record<TraderProfession, number>>> = Object.freeze({
   warrior: 1,
@@ -29,7 +31,9 @@ export function traderItemIcon(item: TraderItem): string {
     const modelId = Number.parseInt(item.modelId.slice(2, 6), 16);
     return requiredAsset(`runes/${modelId}.png`);
   }
-  return requiredAsset(`materials/${item.modelId}.png`);
+  const icon = MATERIALS[`../../../src/shared/images/materials/${item.modelId}.png`];
+  if (!icon) throw new Error(`missing trader material asset: ${item.modelId}`);
+  return icon;
 }
 
 export function traderProfessionIcon(profession: TraderProfession): string {

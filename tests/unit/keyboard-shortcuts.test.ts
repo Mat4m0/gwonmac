@@ -7,6 +7,8 @@ import {
   shortcutAccelerator,
   shortcutConflict,
   shortcutDisplay,
+  shortcutEquals,
+  shortcutKeycaps,
   shortcutFromInput,
   shortcutMatches,
   shortcutReserved,
@@ -26,7 +28,7 @@ describe("keyboard shortcuts", () => {
       "game.resign": DEFAULT_SHORTCUTS["game.resign"],
       "character.switch": DEFAULT_SHORTCUTS["character.switch"],
       "tools.toggle": { key: "k", shift: true, option: false },
-      "whispers.toggle": null,
+      "whispers.toggle": { key: "d", shift: false, option: false },
       "trade.toggle": DEFAULT_SHORTCUTS["trade.toggle"],
       "storage.open": null,
       "travel.open": DEFAULT_SHORTCUTS["travel.open"],
@@ -72,15 +74,15 @@ describe("keyboard shortcuts", () => {
     assert.deepEqual(shortcutFromInput({
       code: "KeyK", meta: true, control: false, shift: true, alt: true,
     }), { key: "k", shift: true, option: true });
-    assert.equal(shortcutFromInput({
+    assert.deepEqual(shortcutFromInput({
       code: "F1", meta: true, control: false, shift: false, alt: false,
-    }), null);
+    }), { key: "f1", shift: false, option: false });
     assert.equal(shortcutFromInput({
       code: "KeyK", meta: false, control: false, shift: false, alt: false,
     }), null);
-    assert.equal(shortcutFromInput({
+    assert.deepEqual(shortcutFromInput({
       code: "KeyK", meta: true, control: true, shift: false, alt: false,
-    }), null);
+    }), { key: "k", shift: false, option: false, control: true });
   });
 
   it("protects editing and lifecycle shortcuts and finds action conflicts", () => {
@@ -100,7 +102,7 @@ describe("keyboard shortcuts", () => {
   it("formats the same binding for Electron and for players", () => {
     const binding = { key: "c", shift: true, option: false };
     assert.equal(shortcutAccelerator(binding), "Command+Shift+C");
-    assert.equal(shortcutDisplay(binding), "⌘⇧C");
+    assert.equal(shortcutDisplay(binding), "⇧⌘C");
     assert.equal(shortcutDisplay(null), "Not set");
   });
 
@@ -116,4 +118,31 @@ describe("keyboard shortcuts", () => {
       "tools.toggle": { key: "b", shift: false, option: false, extra: true },
     }), false);
   });
+});
+
+
+it('captures, persists and exactly matches every modifier combination', () => {
+  for (const meta of [false,true]) for (const control of [false,true]) for (const alt of [false,true]) for (const shift of [false,true]) {
+    const input = { code:'KeyJ', meta, control, alt, shift };
+    const binding = shortcutFromInput(input);
+    if (!meta && !control && !alt) { assert.equal(binding,null); continue; }
+    assert.ok(binding); assert.ok(isShortcutOverrides({'character.switch':binding}));
+    assert.equal(shortcutMatches(binding,input),true);
+    assert.equal(shortcutMatches(binding,{...input,control:!control}),false);
+    assert.equal(shortcutMatches(binding,{...input,meta:!meta}),false);
+    assert.equal(shortcutEquals(binding,JSON.parse(JSON.stringify(binding))),true);
+  }
+  assert.equal(shortcutEquals({key:'j',option:false,shift:false},{key:'j',option:false,shift:false,command:true,control:false}),true);
+});
+it('supports function, navigation, punctuation and numpad keys through the same model', () => {
+  for (const code of ['F1','F24','Space','Tab','Enter','ArrowLeft','ArrowUp','Home','End','PageUp','PageDown','Minus','Equal','BracketLeft','Backslash','Semicolon','Numpad0','NumpadAdd']) {
+    const input = { code, meta:false, control:true, alt:true, shift:false };
+    const binding = shortcutFromInput(input); assert.ok(binding,code);
+    assert.equal(shortcutMatches(binding,input),true,code);
+    assert.equal(isShortcutOverrides({'travel.open':binding}),true,code);
+    assert.ok(shortcutAccelerator(binding)?.startsWith('Control+Alt+'));
+    assert.deepEqual(shortcutKeycaps(binding).slice(0,2).map(cap=>cap.name),['Control','Option']);
+  }
+  assert.deepEqual(shortcutFromInput({code:'F12',meta:false,control:false,alt:false,shift:false}),{key:'f12',shift:false,option:false,command:false});
+  assert.equal(shortcutFromInput({code:'F25',meta:true,control:false,alt:false,shift:false}),null);
 });

@@ -7,6 +7,7 @@
  * and quit registration. Feature rules belong to the module it hands work to;
  * a feature decision that starts growing here should move to that owner.
  */
+import { hubSettingsSnapshot } from "../shared/hub-settings.js";
 import {
   app,
   autoUpdater,
@@ -68,6 +69,7 @@ import {
   stopDiagnostics,
 } from "./diagnostics.js";
 import type { AppPhase } from "./diagnostics/schema-fields.js";
+import { hubAccountSnapshot, activateHubAccount } from './hub-account-actions.js';
 import { emitSocketEvent, registerIpcHandlers } from "./ipc.js";
 import {
   AppUpdater,
@@ -95,6 +97,7 @@ import {
   prepareWindowState,
   RENDERER_URL,
   requestGameQuit,
+  closeProfileWindow,
   type WindowHost,
   updateLongRunningTaskFeedback,
   gameReadyToPresent,
@@ -1038,6 +1041,31 @@ if (primaryInstance) void app.whenReady().then(async () => {
     loadAccountTemplates: (win) => accounts.loadTemplates(win),
     saveAccountTemplates: (win, entries) => accounts.saveTemplates(win, entries),
     requestQuit: requestGameQuit,
+    hubAccountsGet: win => {
+      const context = windowRegistry.contextForWebContents(win.webContents.id);
+      if (context?.role !== 'game') throw new Error('Game account required');
+      return hubAccountSnapshot(host.accounts, context.profileId);
+    },
+    hubAccountOpen: (win, request) => {
+      const context = windowRegistry.contextForWebContents(win.webContents.id);
+      if (context?.role !== 'game') throw new Error('Game account required');
+      return activateHubAccount(host.accounts, context.profileId, request, async () => {
+        await closeProfileWindow(win);
+        if (!win.isDestroyed()) throw new Error('The other account is open. This account stayed open because closing was cancelled.');
+      });
+    },
+    hubSettings: {
+      get: async () => hubSettingsSnapshot(launcherOrchestrator!.snapshot()),
+      update: async change => {
+        if (change.kind === 'settings') await preferences.updateSettings(change.patch);
+        else if (change.kind === 'tool') await preferences.updateSettings(globalToolPatch(change.tool, change.enabled));
+        else if (change.kind === 'master') await preferences.updateSettings({ gwonmacTools: change.enabled });
+        else await preferences.replaceShortcut(change.action, change.binding);
+      },
+      capture: (win, action) => captureLauncherShortcut(win, action, () => currentSettings ?? settings),
+    },
+    showLauncher: () => host.revealLauncher(),
+    openSettings: () => host.revealLauncher("settings"),
     reloadGame: (win, cause) => host.reloadGame(win, cause),
     claimRelogIntent: (win) => host.claimRelogIntent(win),
   });
