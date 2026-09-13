@@ -35,7 +35,7 @@ export function createHub(parent: HTMLElement) {
     return element;
   };
   const disposeFrame = attachClassicFrame(required<HTMLElement>('.hub-panel'));
-  const disposeWindow = installHubWindow(required<HTMLElement>('.hub-panel'), required<HTMLElement>('.hub-heading'), required<HTMLButtonElement>('.hub-lock'), required<HTMLElement>('.hub-resize'));
+  const hubWindow = installHubWindow(required<HTMLElement>('.hub-panel'), required<HTMLElement>('.hub-heading'), required<HTMLButtonElement>('.hub-lock'), required<HTMLElement>('.hub-resize'));
   const input = required<HTMLInputElement>('input');
   const search = required<HTMLElement>('.hub-search');
   const list = required<HTMLElement>('.hub-results');
@@ -89,13 +89,13 @@ export function createHub(parent: HTMLElement) {
     }] : [];
     return [
       ...tool('travel', 'Travel', 'Outposts, favourites and recent places', 'outpost destination teleport tp', settings?.gwonmacTools && settings.travelPalette, 'gw:travel-toggle'),
-      ...tool('builds', 'Build Library', 'Saved builds and teams', 'teams templates skills', settings?.gwonmacTools && settings.buildLibrary, 'gw:tools-toggle'),
+      ...tool('builds', 'Build Library', 'Saved builds and teams', 'teams templates skills', settings?.gwonmacTools && settings.buildLibrary, 'gw:tools-toggle').map(row => ({ ...row, unavailable: 'Build Library is loading.' })),
       ...tool('trade', 'Trade Chat', 'Find offers and contact sellers', 'kamadan prices trading market', settings?.gwonmacTools && settings.tradeChat, 'gw:trade-toggle'),
       ...tool('whispers', 'Whispers', 'Conversations, friends and drafts', 'friends people message chat', settings?.gwonmacTools && settings.whispersEnabled, 'gw:whispers-toggle'),
       ...(settings?.characterSwitchEnabled ? [{ id: 'character', title: 'Switch Character', detail: 'Choose another character', keywords: 'relog profession', group: 'Tools', action: 'Choose character', run: () => dispatch('gw:character-toggle') }] : []),
       ...tool('storage', 'Open Xunlai Storage', 'Open your storage chest', 'chest bank', settings?.gwonmacTools && settings.xunlaiStorage, 'gw:storage-open'),
       ...(settings?.gwonmacTools && settings.cartographyEnabled ? [{ id: 'maps', title: 'Maps', detail: 'Exploration grid, walkable terrain and compass ranges', keywords: 'grid terrain compass opacity', group: 'Tools', action: 'Adjust maps', run: () => openHubMaps(presenter) }] : []),
-      { id: 'hub-preferences', title: 'Hub preferences', detail: 'Pins and exact search phrases', keywords: 'aliases vocabulary', group: 'Commands', action: 'Adjust Hub', run: () => manageHubShortcuts(presenter, shortcuts, lookup, saveShortcuts) },
+      { id: 'hub-preferences', title: 'Hub preferences', detail: 'Pins and exact search phrases', keywords: 'aliases vocabulary', group: 'Commands', action: 'Adjust Hub', run: () => manageHubShortcuts(presenter, shortcuts, lookup, saveShortcuts, hubWindow.reset) },
       { id: 'settings', title: 'Settings', detail: 'In-game appearance, tools and shortcuts', keywords: 'preferences graphics appearance accounts hotkeys', group: 'Commands', action: 'Open Settings', run: openSettings },
       { id: 'launcher', title: 'Show Launcher', detail: 'Accounts, updates and game files', keywords: 'launcher administration', group: 'Commands', action: 'Show Launcher', run: async () => { await window.gwNative.app.showLauncher(); close(); } },
       { id: 'commands', title: 'Commands', detail: 'Examples you can edit and run', keywords: 'help guide examples', group: 'Commands', action: 'Browse examples', run: () => presenter.showRows('Commands', commandExamples) },
@@ -108,8 +108,8 @@ export function createHub(parent: HTMLElement) {
     ];
   };
   const shortcuts = () => [...(window.gwToolsSettings?.().hubShortcuts ?? []), ...[...sources.keys()].filter(sourceEnabled).flatMap(source => source.shortcuts?.get() ?? [])];
-  const lookup = (id: string): HubRow | undefined => commands().find(row => row.id === id)
-    ?? [...sources.keys()].filter(sourceEnabled).map(source => source.lookup?.(id)).find(Boolean);
+  const lookup = (id: string): HubRow | undefined => [...sources.keys()].filter(sourceEnabled).map(source => source.lookup?.(id)).find(Boolean)
+    ?? commands().find(row => row.id === id);
   async function saveShortcuts(value: readonly HubShortcut[]) {
     if (!isHubShortcuts(value)) throw new Error('Invalid Hub shortcuts');
     const privateEntries = value.filter(entry => /^(build|team):/u.test(entry.id));
@@ -211,7 +211,7 @@ export function createHub(parent: HTMLElement) {
     const ids = new Set([...extra, ...savedRows].map(row => row.id));
     rows = scope ? matchHubRows(extra, input.value) : [...savedRows, ...extra.filter(row => !savedRows.some(saved => saved.id === row.id)), ...(parseHubQuery(input.value).scope ? [] : matchHubRows(commands().filter(row => !ids.has(row.id)), input.value))];
     rows = [...rows].sort((a, b) => {
-      const groups = ["Pinned", "Calculator", "Teams", "Builds", "Accounts", "Characters", "People", "Places", "Continue", "Tools", "Commands"];
+      const groups = ["Pinned", "Calculator", "Teams", "Builds", "Accounts", "Characters", "Heroes", "People", "Places", "Continue", "Tools", "Commands"];
       const groupOrder = groups.indexOf(a.group) - groups.indexOf(b.group);
       if (groupOrder || scope || a.group !== 'Tools') return groupOrder;
       // Keep everyday game actions ahead of account management, independent of provider order.
@@ -456,7 +456,9 @@ export function createHub(parent: HTMLElement) {
       paintNavigation();
       if (!content.contains(document.activeElement)) content.querySelector<HTMLElement>('input,select,button,[tabindex="0"]')?.focus();
     },
-    dispose() { close(); disposeWindow(); disposeFrame(); for (const unsubscribe of sources.values()) unsubscribe(); sources.clear(); modal.dispose(); root.remove(); window.removeEventListener('blur', onBlur); window.removeEventListener('gw:tools-settings', onSettings); },
+    browseBuilds() { const row = lookup('builds'); if (row && !row.unavailable) void row.run(); else report('Build Library is loading. Try again.'); },
+    resetPosition: hubWindow.reset,
+    dispose() { close(); hubWindow.dispose(); disposeFrame(); for (const unsubscribe of sources.values()) unsubscribe(); sources.clear(); modal.dispose(); root.remove(); window.removeEventListener('blur', onBlur); window.removeEventListener('gw:tools-settings', onSettings); },
   };
   presenter.attach(createHubAccounts(presenter, { get: () => window.gwNative.accounts.get(), open: request => window.gwNative.accounts.open(request) }));
   presenter.attach(createHubCalculator({

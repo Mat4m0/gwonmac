@@ -22,7 +22,6 @@ export function useFloatingWindow(options: {
   viewportMargin?: number;
   placementStorageKey?: string;
 }) {
-  const locked = ref(true);
   const panel = ref<HTMLElement | null>(null);
   const resizeGrip = ref<HTMLButtonElement | null>(null);
   const margin = options.viewportMargin ?? 0;
@@ -75,7 +74,7 @@ export function useFloatingWindow(options: {
   };
 
   const startDrag = (event: PointerEvent) => {
-    if (locked.value || event.button !== 0 || options.mode !== "embedded" || !panel.value) return;
+    if (event.button !== 0 || options.mode !== "embedded" || !panel.value) return;
     if ((event.target as Element).closest("button, input, select, textarea, a, summary, label")) return;
     const element = panel.value;
     const handle = event.currentTarget as HTMLElement;
@@ -152,7 +151,7 @@ export function useFloatingWindow(options: {
         maxWidth: window.innerWidth - position.value.left - margin,
         maxHeight: window.innerHeight - position.value.top - margin,
       }),
-      resize: (width, height) => { if (!locked.value) size.value = { width, height }; },
+      resize: (width, height) => { size.value = { width, height }; },
       setActive: (active) => {
         if (!panel.value) return;
         if (active) panel.value.dataset.resizing = "";
@@ -173,5 +172,5 @@ export function useFloatingWindow(options: {
     if (visible) requestAnimationFrame(fitToViewport);
   });
 
-  return { panel, resizeGrip, panelStyle, startDrag, fitToViewport, locked };
+  return { panel, resizeGrip, panelStyle, startDrag, fitToViewport };
 }

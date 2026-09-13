@@ -128,7 +128,7 @@ test('exact team applies through the observed runner, prefixes only review', asy
   await search.press('Enter');
   await expect(page.getByRole('heading', { name: 'GOM AFK' })).toBeVisible();
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', /command|apply/);
-  await page.keyboard.press('Meta+r');
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
   await search.fill('team gom afk');
   await expect(page.getByRole('button', { name: 'Apply team GOM AFK ↵' })).toBeEnabled();
   await search.press('Enter');
@@ -140,11 +140,14 @@ test('exact build has a visible target and does not apply while typing', async (
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
   await search.fill('build smiter');
-  await expect(page.getByRole('button', { name: 'Load Smiter on Your character ↵' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Choose target ↵' })).toBeEnabled();
   await expect(page.locator('.hub-preview')).toContainText('Mo/Me');
   await expect(page.locator('.hub-preview')).not.toContainText('Templates/Skills');
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', /command|apply/);
   await search.press('Enter');
+  await expect(page.getByRole('dialog', { name: 'Hub', exact: true })).toBeVisible();
+  await expect(page.locator('#app')).not.toHaveAttribute('data-action', /command|apply/);
+  await page.getByRole('button', { name: 'Apply to me ↵', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Hub', exact: true })).not.toBeVisible();
 });
 
@@ -195,11 +198,15 @@ test('a saved search phrase and pin survive reload and resolve the original item
   await expect(page.getByRole('heading', { name: 'GOM AFK' })).toBeVisible();
 });
 
-test('Builds and Trade always open as independent windows', async ({ page }) => {
+test('Build shortcut browses inside Hub and opens the authoring window outside Hub', async ({ page }) => {
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
   await expect(search).toBeFocused();
   await search.press('Meta+b');
+  await expect(page.locator('.hub-caption')).toHaveText('Build Library');
+  await expect(page.locator('#toolbox-builds .tools-window')).toBeHidden();
+  await page.getByRole('button', { name: 'Close Hub', exact: true }).click();
+  await page.keyboard.press('Meta+b');
   await expect(page.locator('#toolbox-builds .tools-window')).toBeVisible();
   await page.keyboard.press('Meta+k');
   await expect(page.locator('#toolbox-trade .trade-window')).toBeVisible();
@@ -218,7 +225,7 @@ test('duplicate exact names require a deliberate selection', async ({ page }) =>
   await search.press('Enter');
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', /command|apply/);
   await search.press('ArrowDown'); await search.press('Enter');
-  await expect(page.getByRole('combobox', { name: 'Build target' })).toBeVisible();
+  await expect(page.locator('#hub').getByRole('option', { name: /Apply to hero/ })).toBeVisible();
 });
 
 test('disabled capabilities disappear including friend child actions', async ({ page }) => {
@@ -419,21 +426,21 @@ test('profession build search previews eight skills and reviews without applying
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
   const builds = page.locator('.hub-build-row');
   await search.fill('build monk');
-  await expect(builds).toHaveCount(3);
-  await expect(page.locator('.hub-skill')).toHaveCount(24);
+  await expect(builds).toHaveCount(4);
+  await expect(page.locator('.hub-skill')).toHaveCount(32);
   await expect.poll(() => page.locator('.hub-skill img').evaluateAll(images => images.every(image => image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0))).toBe(true);
-  await expect(page.getByRole('button', { name: 'Review ↵', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Choose target ↵', exact: true })).toBeVisible();
   await search.press('ArrowDown');
   await search.press('Enter');
-  await expect(page.getByRole('combobox', { name: 'Build target' })).toBeVisible();
+  await expect(page.locator('#hub').getByRole('option', { name: /Apply to hero/ })).toBeVisible();
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', /command|apply/);
-  await page.getByRole('button', { name: 'Open Hub', exact: true }).click();
-  await search.fill('build mo'); await expect(builds).toHaveCount(3);
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await search.fill('build mo'); await expect(builds).toHaveCount(4);
   await search.fill('build monk smit'); await expect(builds).toHaveCount(1);
   await expect(builds).toContainText('Smiter');
   await search.fill('build monkk'); await expect(builds).toHaveCount(0);
-  await search.fill('build mesmer'); await expect(builds).toHaveCount(1);
-  await expect(builds).toContainText('Domination shutdown');
+  await search.fill('build mesmer'); await expect(builds).toHaveCount(2);
+  await expect(builds.first()).toContainText('Domination shutdown');
 });
 
 

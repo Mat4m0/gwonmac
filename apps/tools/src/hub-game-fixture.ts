@@ -55,7 +55,11 @@ export function createHubGameFixture(record: (action: string) => void) {
   const host: ToolsHost = { ...base, party,
     async loadLibrary() { return { library, recovered: false }; },
     async saveLibrary(value) { library = value; localStorage.setItem("hub-fixture-library", JSON.stringify(value)); return value; },
-    async loadTemplates() { return duplicate ? [{ path: 'Other/Smiter.txt', contents: encodeSkillTemplate(smiter) ?? '' }] : []; },
+    async loadTemplates() { return [
+      { path: 'Skills/Monk/Protection.txt', contents: encodeSkillTemplate(first) ?? '' },
+      { path: 'Skills/Mesmer/Panic.txt', contents: encodeSkillTemplate(demoLibrary.builds.find(build => build.professions[0] === 'Me')!) ?? '' },
+      ...(duplicate ? [{ path: 'Other/Smiter.txt', contents: encodeSkillTemplate(smiter) ?? '' }] : []),
+    ]; },
     async applyTeam(plan, onEvent) { record('apply-team'); return runTeamApply(plan, { ...environment(), ...(onEvent ? { onEvent } : {}) }, 1); },
     async applyBuild(build, id, onEvent) { record('apply-build'); return runBuildApply(build, id, { ...environment(), ...(onEvent ? { onEvent } : {}) }, 2); },
     async openStorage() { throw new Error('Synthetic storage refusal'); },

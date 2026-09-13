@@ -601,7 +601,6 @@ test.describe("renderer Tools input", () => {
       });
       expect(storedTeams).toContain("Embedded smoke team");
 
-      await panel.getByRole("button", { name: "Unlock window position", exact: true }).click();
       const before = await panel.boundingBox();
       expect(before).not.toBeNull();
       if (!before) throw new Error("The embedded Tools window has no bounds");

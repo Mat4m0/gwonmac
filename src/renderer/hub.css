@@ -310,8 +310,3 @@
 .hub-panel[data-locked=false] .hub-heading { cursor:grab; }
 .hub-row:focus-visible { outline:1px solid var(--ui-focus); outline-offset:-2px; }
 @media(max-width:600px) { .hub-context { display:none; } .hub-breadcrumbs { flex:1; } .hub-name { display:none; } .hub-back::before { content:none; } .hub-back { font-size:var(--ui-type-body-size); } }
-
-.library-review { flex:1; min-height:0; padding:8px; }
-.library-review .hub-detail { display:grid; gap:12px; padding:12px 0; }
-.library-review h2 { margin:0; font:var(--ui-type-window-size)/1.4 var(--ui-font-interface); }
-.library-review .hub-review-roster { display:grid; gap:10px; }

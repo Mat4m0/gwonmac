@@ -184,7 +184,8 @@ export function createToolboxFoundation(
   const onBuildsCommand = (event: Event) => {
     if (!availability.builds) return;
     event.preventDefault();
-    if (window.gwHub?.visible || event instanceof CustomEvent && event.detail === "show") openFloating(builds);
+    if (window.gwHub?.visible) window.gwHub.browseBuilds();
+    else if (event instanceof CustomEvent && event.detail === "show") openFloating(builds);
     else toggle(builds);
   };
   const onTradeCommand = (event: Event) => {

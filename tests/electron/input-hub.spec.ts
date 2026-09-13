@@ -28,6 +28,14 @@ test('Command-R opens Core Hub, keeps editing local and restores game focus', as
       images.length === 2 && images.every(image => image instanceof HTMLImageElement && image.naturalWidth > 0),
     )).toBe(true);
     await search.press('Meta+a'); await expect(search).toHaveValue('1250 gold in p');
+    await search.fill('');
+    await expect(hub.getByRole('option', { name: /Build Library Browse saved builds/ })).toBeVisible();
+    await search.press('Meta+b');
+    await expect(hub.locator('.hub-caption')).toHaveText('Build Library');
+    await expect(page.locator('#toolbox-builds .tools-window')).toBeHidden();
+    await expect(hub.getByRole('option', { name: /Guild Wars templates/ })).toBeVisible();
+    await hub.getByRole('button', { name: 'Back', exact: true }).click();
+    await search.fill('1250 gold in p');
     await app.evaluate(({ BrowserWindow }, url) => {
       const win = BrowserWindow.getAllWindows().find(win => win.webContents.getURL() === url);
       if (!win) throw new Error('Game fixture window is missing');

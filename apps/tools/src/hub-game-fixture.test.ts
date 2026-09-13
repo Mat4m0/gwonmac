@@ -4,6 +4,36 @@ import { createHubGameFixture } from './hub-game-fixture';
 import { resolveTeamApplyPlan } from '../../../src/shared/builds/team-apply';
 import { validateBuildFor } from '../../../src/shared/builds/validate';
 
+test('Hub rereads a native template before applying and refuses a replaced file', async () => {
+  const { createApp, h, nextTick } = await import('vue');
+  const { useLibrary } = await import('./use-library');
+  const { createHubLibrary } = await import('./hub-library');
+  const { encodeSkillTemplate } = await import('../../../src/shared/builds/skill-template');
+  const { host } = createHubGameFixture(() => {});
+  const { library } = await host.loadLibrary();
+  const monk = library.builds.find(build => build.professions[0] === 'Mo')!;
+  let contents = encodeSkillTemplate(monk)!;
+  let calls = 0;
+  let source: import('../../../src/shared/hub').HubSource | undefined;
+  let rows: (() => readonly import('../../../src/shared/hub').HubRow[]) | undefined;
+  let dispose: (() => void) | undefined;
+  const app = createApp({ setup() {
+    dispose = createHubLibrary(useLibrary(host), { ...host,
+      async loadTemplates() { return [{ path: 'Skills/Monk/Native.txt', contents }]; },
+      async applyBuild() { calls++; return { commandId: 1, completedChanges: 1, skippedSkills: [] }; },
+    }, { attach(next) { source = next; return () => {}; }, close() {}, showRows(_title, getRows) { rows = getRows; }, showView() {} }).dispose;
+    return () => h('div');
+  } });
+  app.mount(document.createElement('div')); await nextTick(); await nextTick();
+  source!.setVisible(true); await nextTick(); await nextTick();
+  await source!.search('build native')[0]!.run();
+  const apply = rows!().find(row => row.title === 'Apply to me')!;
+  contents = encodeSkillTemplate({ ...monk, attributes: {} })!;
+  await expect(apply.run()).rejects.toThrow('saved configuration changed');
+  expect(calls).toBe(0);
+  dispose?.(); app.unmount();
+});
+
 test('the flagship team passes canonical validation', async () => {
   const { host } = createHubGameFixture(() => {});
   const { library } = await host.loadLibrary();
@@ -64,6 +94,6 @@ test('profession search includes every saved primary-profession build without a 
   expect(source!.search('build mo')).toHaveLength(15);
   expect(source!.search('build mesmer')).toHaveLength(0);
   expect(source!.search('build monk support')).toHaveLength(15);
-  expect(source!.search('build monk')[0]).toMatchObject({ action: 'Review', skills: expect.arrayContaining([expect.objectContaining({ name: 'Word of Healing' })]) });
+  expect(source!.search('build monk')[0]).toMatchObject({ action: 'Choose target', skills: expect.arrayContaining([expect.objectContaining({ name: 'Word of Healing' })]) });
   dispose?.(); app.unmount();
 });

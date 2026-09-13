@@ -45,7 +45,6 @@ it("restores the Messenger window and icon positions in the current profile", as
   expect(launcher.attributes("style")).toContain("left: 1276px");
   expect(launcher.attributes("style")).toContain("top: 932px");
 
-  await wrapper.get('[aria-label="Unlock window position"]').trigger("click");
   const header = wrapper.get<HTMLElement>(".whisper-head").element;
   Object.defineProperty(header, "setPointerCapture", { value: () => {} });
   header.dispatchEvent(new PointerEvent("pointerdown", {

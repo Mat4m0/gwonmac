@@ -1439,7 +1439,7 @@ button.ui-chip[aria-disabled="true"] {
   display:inline-flex; align-items:center; justify-content:center; padding:0; flex:none;
   cursor:pointer; font:inherit; min-width:28px; min-height:28px;
 }
-.ui-window-close { font-size:22px; line-height:1; }
+.ui-window-head > .ui-window-close { font:22px/1 var(--ui-font-reading); }
 .ui-window-close:hover, .ui-window-lock:hover, .hub-crumb:hover { color:var(--ui-text-bright); }
 .ui-window-close:focus-visible, .ui-window-lock:focus-visible, .hub-crumb:focus-visible { outline:1px solid var(--ui-focus); outline-offset:-2px; }
 .ui-window-lock svg { width:15px; height:15px; fill:none; stroke:currentColor; stroke-width:1.6; }

@@ -78,6 +78,9 @@ export function openHubSettings(hub: Hub) {
         if (snapshot.tools.restartRequired) { const note = doc.createElement('p'); note.className = 'hub-settings-note'; note.textContent = 'Saved. Close your game windows and restart gwonmac to finish loading or unloading Tools.'; body.append(note); }
         for (const tool of GLOBAL_TOOLS) { const info = TOOL_PRESENTATION[tool]; toggle(info.label, snapshot.tools.features[tool].enabled, enabled => ({ kind: 'tool', tool, enabled }), info.description, tool !== 'character-switch' && !snapshot.tools.configured); }
       } else if (page === 'Appearance') {
+        const resetPosition = doc.createElement('button'); resetPosition.className = 'ui-button'; resetPosition.textContent = 'Reset';
+        resetPosition.onclick = () => { hub.resetPosition(); status.textContent = 'Hub position and size reset. Window locked.'; };
+        row('Reset Hub position', resetPosition, 'Restore the default position and size, and lock the Hub.');
         select('Panel style', 'uiStyle', [{ label: 'Guild Wars', value: 'guild-wars' }, { label: 'Modern', value: 'obsidian' }, { label: 'Your custom theme', value: 'custom' }]);
         range('Panel opacity', 'uiPanelOpacity', UI_PANEL_OPACITY_MIN);
         select('Panel font', 'uiFont', UI_FONTS.map(value => ({ label: value === 'guild-wars' ? 'Guild Wars' : value.charAt(0).toUpperCase() + value.slice(1), value })), 'Changes Hub and other in-game panels. Messages keep a readable text face.');

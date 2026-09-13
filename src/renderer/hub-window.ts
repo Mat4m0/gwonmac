@@ -68,5 +68,10 @@ export function installHubWindow(panel: HTMLElement, heading: HTMLElement, lock:
   const onShow = (event: Event) => { if (event.target instanceof HTMLDialogElement && event.target.open) fit(); };
   panel.closest('dialog')?.addEventListener('toggle', onShow);
   paint();
-  return () => { panel.closest('dialog')?.removeEventListener('toggle', onShow); finishDrag?.(); disposeResize(); lock.removeEventListener('click', toggle); lock.removeEventListener('keydown', moveWithKeys); heading.removeEventListener('pointerdown', drag); window.removeEventListener('resize', fit); };
+  const reset = () => {
+    finishDrag?.(); placed = false; locked = true;
+    for (const property of ['left', 'top', 'width', 'height', 'transform']) panel.style.removeProperty(property);
+    paint();
+  };
+  return { reset, dispose() { panel.closest('dialog')?.removeEventListener('toggle', onShow); finishDrag?.(); disposeResize(); lock.removeEventListener('click', toggle); lock.removeEventListener('keydown', moveWithKeys); heading.removeEventListener('pointerdown', drag); window.removeEventListener('resize', fit); } };
 }

@@ -2,12 +2,12 @@
 
 Research and delivery plan — 12 September 2026.
 
-**Amended after Matthias's in-game review on 13 September:** Trade, Builds
-(including reviews) and Whispers always use floating windows. Hub now has
-ancestor breadcrumbs, Backspace history navigation, directional focus, and a
-locked-by-default movable/resizable frame. These decisions supersede the
-original docking and fixed-size proposals below. The current interaction owner
-is [Tools design](../apps/tools/DESIGN.md#hub-task-presentation).
+**Amended after Matthias's follow-up on 13 September:** Build search, template
+folder browsing, target selection and application stay inside Hub. Trade and
+Whispers remain floating. Only Hub has a lock; other floating tools move and
+resize directly. Hub settings can restore its default geometry. These decisions
+supersede the earlier floating-build-review and shared-lock proposals below.
+The current interaction owner is [Tools design](../apps/tools/DESIGN.md#hub-task-presentation).
 
 Implementation completed locally across the three review layers. See the
 [verification record](hub-verification.md#unified-hub-candidate--12-september-2026)

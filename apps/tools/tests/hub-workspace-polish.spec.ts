@@ -34,7 +34,7 @@ test('team authoring prioritizes the roster while options and persisted edits st
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
-  await search.fill('build'); await search.press('Enter');
+  await page.getByRole('button', { name: 'Close Hub', exact: true }).click(); await page.keyboard.press('Meta+b');
   await page.getByRole('button', { name: /Favourite GOM AFK/ }).click();
   await expect(page.locator('.team-options')).not.toHaveAttribute('open');
   const visibleSlots = await page.locator('.team-scroll').evaluate(list => {
@@ -65,8 +65,7 @@ for (const viewport of [{ width: 390, height: 650 }, { width: 640, height: 480 }
   test(`team options remain reachable in a constrained Hub at ${viewport.width}`, async ({ page }, info) => {
     await page.setViewportSize(viewport);
     await page.goto('/?hub');
-    const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
-    await search.fill('build'); await search.press('Enter');
+    await page.getByRole('button', { name: 'Close Hub', exact: true }).click(); await page.keyboard.press('Meta+b');
     await page.getByRole('button', { name: /Favourite GOM AFK/ }).click();
     await page.locator('.team-options > summary').click();
     await page.getByRole('button', { name: 'Normal', exact: true }).click();

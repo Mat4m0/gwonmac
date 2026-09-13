@@ -70,9 +70,11 @@ weight families use the same semantic weight tokens at 500, 600, and 700.
   centre preserves one application of the saved panel material and opacity.
   Source regions and asset notices are in the
   [frame provenance](../../src/shared/ui/frame/README.md).
-- Keep Travel, Characters and settings inside Hub. Trade, Build Library and
-  Whispers always open as independent floating windows, including Hub searches
-  and direct shortcuts. Their existing owners preserve state across hide/show.
+- Keep Travel, Characters, settings and build search/application inside Hub.
+  Build Library in Home browses saved builds and the existing Guild Wars template
+  folders. With Hub open, the Build shortcut enters this browser. Outside Hub, it opens
+  the full authoring window.
+  Trade and Whispers use independent floating windows with state across hide/show.
 - Use `.ui-well` for a recessed content surface.
 - Use `.ui-raised` for a pressable raised surface.
 - Do not add a generic Card. Panes, sidebars, toolbars, and sections are
@@ -259,7 +261,12 @@ relevant example. Neither examples nor typing execute an action.
 Full team search previews show the difficulty and one line per assigned member.
 Skill and attribute details remain available in Review. Template paths stay out
 of these primary summaries. Preview content scrolls inside the current frame.
-Review opens in the floating Library and retains explicit target/apply guards.
+Review remains inside Hub and retains explicit target/apply guards. Every single
+build selection opens Apply to me / Apply to hero, including exact-name searches.
+Hero search lists observed unlocked heroes and current party members. Heroes
+outside the party require adding first; single-build apply cannot change the roster.
+Template browsing is read-only and shows populated folders from the existing
+file reader. Apply rereads the selected template and refuses changed content.
 Team authoring keeps the roster first; Team options expands difficulty and tags,
 with the current difficulty visible in its summary.
 
@@ -269,12 +276,15 @@ replacing the ledger. Opening a seller's Whisper leaves the Trade query and
 selected offer intact. Floating windows share visual and keyboard stacking.
 Escape closes an expanded Actions menu before its window.
 
-Hub and floating tools start locked. A subtle top-bar lock enables dragging by
-the header and resizing through a 36px corner hit area. Classic uses its corner
+Only Hub starts locked. Its subtle top-bar lock enables dragging by
+the header and resizing through a 36px corner hit area. Floating tools have no
+lock control and remain directly movable and resizable. Classic uses its corner
 artwork without painting a second resize button. Close is a plain X with a usable
 hit target and visible keyboard focus. Hub retains its adjusted geometry across
 pages; windows remain bounded by the viewport. Alt+arrows on Hub's unlocked lock
-control move it; arrows on its resize handle resize it.
+control move it; arrows on its resize handle resize it. Reset Hub position is
+available in Hub preferences and Settings → Appearance. It restores default
+position and size, and locks the Hub.
 
 Whispers paints its background once across the complete frame interior. Its
 title is vertically centered, and conversation controls sit above the picker

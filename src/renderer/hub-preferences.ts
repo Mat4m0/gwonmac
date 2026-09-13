@@ -31,7 +31,7 @@ export function editHubShortcut(hub: HubPresenter<HTMLElement>, row: HubRow, get
 }
 
 /** Edit only references currently resolvable under the active feature/account rules. */
-export function manageHubShortcuts(hub: HubPresenter<HTMLElement>, get: () => readonly HubShortcut[], lookup: (id: string) => HubRow | undefined, save: (value: readonly HubShortcut[]) => Promise<void>) {
+export function manageHubShortcuts(hub: HubPresenter<HTMLElement>, get: () => readonly HubShortcut[], lookup: (id: string) => HubRow | undefined, save: (value: readonly HubShortcut[]) => Promise<void>, resetPosition: () => void) {
   hub.showView('Hub preferences', target => {
     const doc = target.ownerDocument;
     const view = doc.createElement('section'); view.className = 'hub-detail'; target.append(view);
@@ -54,7 +54,9 @@ export function manageHubShortcuts(hub: HubPresenter<HTMLElement>, get: () => re
       if (!entries.length) { const hint = doc.createElement('p'); hint.textContent = 'Choose a result, then Actions to pin it or give it a search phrase.'; view.append(hint); }
       const reset = doc.createElement('button'); reset.className = 'ui-button'; reset.textContent = 'Reset aliases'; reset.disabled = !entries.some(entry => entry.phrase);
       reset.onclick = () => { const visible = new Set(entries.map(entry => entry.id)); void change(get().flatMap(entry => !visible.has(entry.id) ? [entry] : entry.pinned ? [{ ...entry, phrase: '' }] : [])); };
-      view.append(reset, status);
+      const position = doc.createElement('button'); position.className = 'ui-button'; position.textContent = 'Reset Hub position';
+      position.onclick = () => { resetPosition(); status.textContent = 'Hub position and size reset. Window locked.'; };
+      view.append(reset, position, status);
     };
     render(); return () => view.remove();
   });

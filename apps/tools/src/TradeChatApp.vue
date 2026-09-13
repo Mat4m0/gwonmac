@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import UiWindowLock from "./ui/UiWindowLock.vue";
 import {
   computed,
   nextTick,
@@ -102,7 +101,7 @@ const states = reactive<Record<TradeSource, SourceState>>({
   kamadan: state(),
   "pre-searing": state(),
 });
-const { panel, resizeGrip, panelStyle, startDrag, locked } = useFloatingWindow({
+const { panel, resizeGrip, panelStyle, startDrag } = useFloatingWindow({
   mode: props.mode,
   visible: toRef(props, "visible"),
   initialPosition: { left: 64, top: 54 },
@@ -617,7 +616,7 @@ useClassicFrame(panel);
     <section
       ref="panel"
       class="ui-frame ui-panel tools-window trade-window"
-      :style="panelStyle" :data-locked="locked"
+      :style="panelStyle"
       role="dialog"
       aria-label="Trade Chat"
       data-design-contract="trade-ledger-v1"
@@ -632,14 +631,13 @@ useClassicFrame(panel);
           <h1 class="ui-panel-title">{{ view === "prices" ? "Trader Prices" : `${sourceLabel} Trade` }}</h1>
           <p class="ui-field-hint">{{ view === "prices" ? "Current Guild Wars trader quotes · history from Kamadan" : "Public trade feed · listings are posted in Guild Wars" }}</p>
         </div>
-        <UiWindowLock v-if="mode === 'embedded'" v-model="locked" />
         <button
           v-if="mode === 'embedded'"
           class="ui-window-close window-close"
           data-icon
           aria-label="Close Trade Chat"
           @click="emit('close')"
-        ><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 3 10 10M13 3 3 13"/></svg></button>
+        >×</button>
       </header>
 
       <TraderPrices
@@ -874,7 +872,7 @@ useClassicFrame(panel);
               <strong>Saved</strong>
               <span>{{ savedCount }} {{ savedCount === 1 ? "item" : "items" }}</span>
             </div>
-            <button ref="savedClose" class="ui-button" data-icon aria-label="Close Saved" @click="closeSaved"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 3 10 10M13 3 3 13" /></svg></button>
+            <button ref="savedClose" class="ui-button" data-icon aria-label="Close Saved" @click="closeSaved">×</button>
           </header>
           <div class="ui-segment saved-tabs" data-fill role="group" aria-label="Saved item type">
             <button :aria-pressed="savedTab === 'offers'" @click="savedTab = 'offers'">Offers {{ saved.offers.length }}</button>
@@ -917,7 +915,7 @@ useClassicFrame(panel);
         v-if="mode === 'embedded'"
         ref="resizeGrip"
         type="button"
-        v-show="!locked" class="ui-resize-grip"
+        class="ui-resize-grip"
         aria-label="Resize Trade Chat"
       />
     </section>

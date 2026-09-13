@@ -86,7 +86,7 @@ for (const material of ['Guild Wars', 'Modern']) test(`floating Whispers paints 
   await search.fill('whisper Romi'); await search.press('Enter');
   const panel = page.locator('#whisper-window');
   await expect(page.locator('#hub')).toBeHidden();
-  await expect(panel).toHaveAttribute('data-locked', 'true');
+  await expect(panel.locator('.ui-window-lock')).toHaveCount(0);
   const draft = page.getByRole('textbox', { name: 'Message Romi Ranger', exact: true });
   await draft.fill('Keep this draft');
   await page.getByRole('button', { name: 'Hide Whispers' }).click();

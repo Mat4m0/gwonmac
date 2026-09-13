@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import UiWindowLock from "./ui/UiWindowLock.vue";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import { whisperPersonKey, whisperUnread, type WhisperSession, type WhisperSound } from "../../../src/shared/whisper-session";
 import { TRAVEL_DESTINATIONS } from "../../../src/shared/travel-destinations";
@@ -23,7 +22,7 @@ const VIEWPORT_MARGIN = 8;
 const state = shallowRef(props.session.state);
 const unsubscribe = props.session.subscribe(value => { state.value = value; });
 const visible = computed(() => state.value.visible);
-const { panel, resizeGrip, panelStyle, startDrag, locked } = useFloatingWindow({
+const { panel, resizeGrip, panelStyle, startDrag } = useFloatingWindow({
   mode: "embedded", visible, initialPosition: { left: 72, top: 80 },
   minWidth: 288, minHeight: 300, viewportMargin: VIEWPORT_MARGIN,
   placementStorageKey: WINDOW_PLACEMENT_KEY,
@@ -400,10 +399,9 @@ useClassicFrame(panel);
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3C6.49 3 2 6.59 2 11c0 2.91 1.9 5.51 5 6.93V21c0 .38.21.73.55.89c.14.07.29.11.45.11c.21 0 .42-.07.6-.2l3.74-2.8c5.36-.14 9.66-3.68 9.66-8s-4.49-8-10-8"/></svg>
     <span v-if="unread" class="whisper-badge" aria-hidden="true">{{ unread > 99 ? '99+' : unread }}</span>
   </button>
-  <section v-show="visible" id="whisper-window" ref="panel" class="ui-frame ui-reading-surface whisper-window" data-variant="quiet" :style="windowStyle" :data-locked="locked" :data-chat-selected="Boolean(selected)" aria-label="Whispers" @keydown="escapeOptions">
+  <section v-show="visible" id="whisper-window" ref="panel" class="ui-frame ui-reading-surface whisper-window" data-variant="quiet" :style="windowStyle" :data-chat-selected="Boolean(selected)" aria-label="Whispers" @keydown="escapeOptions">
     <header class="ui-panel-head ui-window-head whisper-frame-head" @pointerdown="startDrag">
       <h2 class="ui-panel-title">Whispers</h2>
-      <UiWindowLock v-model="locked" />
       <button class="ui-window-close" aria-label="Hide Whispers" @click="session.setVisible(false)">×</button>
     </header>
     <div class="whisper-layout">
@@ -496,7 +494,7 @@ useClassicFrame(panel);
     </div>
     </div>
     <div class="whisper-hints" aria-hidden="true"><span>{{ selected ? 'Enter sends' : '↑ ↓ choose · Enter opens' }}</span><span>Esc hides</span></div>
-    <button v-show="!locked" ref="resizeGrip" class="ui-window-resize whisper-resize" aria-label="Resize whispers"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 19 7-7m-1 7 1-1"/></svg></button>
+    <button ref="resizeGrip" class="ui-window-resize whisper-resize" aria-label="Resize whispers"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 19 7-7m-1 7 1-1"/></svg></button>
   </section>
 </template>
 
