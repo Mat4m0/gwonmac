@@ -33,7 +33,11 @@ test('Command-R opens Core Hub, keeps editing local and restores game focus', as
     await search.press('Meta+a'); await expect(search).toHaveValue('1250 gold in p');
     await search.fill('');
     await expect(hub.getByRole('option', { name: /Build Library Browse saved builds/ })).toBeVisible();
-    await search.press('Meta+b');
+    await app.evaluate(({ BrowserWindow }, url) => {
+      const contents = BrowserWindow.getAllWindows().find(win => win.webContents.getURL() === url)?.webContents;
+      contents?.sendInputEvent({ type: 'keyDown', keyCode: 'B', modifiers: ['meta'] });
+      contents?.sendInputEvent({ type: 'keyUp', keyCode: 'B', modifiers: ['meta'] });
+    }, page.url());
     await expect(hub.locator('.hub-caption')).toHaveText('Build Library');
     await expect(page.locator('#toolbox-builds .tools-window')).toBeHidden();
     await expect(hub.getByRole('option', { name: /Guild Wars templates/ })).toBeVisible();
