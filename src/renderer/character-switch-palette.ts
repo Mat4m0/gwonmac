@@ -2,6 +2,7 @@
  * Owns the Core Command-E character palette, including focus and keyboard use.
  * It renders one bounded source and never reads game memory or native exports.
  */
+import { resumeSearchInput } from "./search-input.js";
 import { hubMatch, normaliseHubQuery } from "../shared/hub.js";
 import type {
   CharacterSummary,
@@ -193,6 +194,7 @@ export function createCharacterSwitchPalette(
       hubBack = back;
       target.append(root); root.open = true;
       if (view.kind === "closed") { view = Object.freeze({ kind: "characters" }); render(); }
+      focusSelected();
       return () => { hubBack = undefined; root.open = false; parent.append(root); if (view.kind === 'confirming') source.cancelConfirmation(); view = { kind: 'closed' }; };
     }, () => !!window.gwToolsSettings?.().characterSwitchEnabled); },
     close() { hub.close(); },
@@ -546,17 +548,7 @@ export function createCharacterSwitchPalette(
     }
     if (normaliseCharacterQuery(query) === ""
       && numberedCharacterPosition(event.key, Math.min(rows.length, 10)) !== null) return;
-    if (searchEnabled && event.key.length === 1
-      && !event.metaKey && !event.ctrlKey && !event.altKey) {
-      event.preventDefault();
-      event.stopPropagation();
-      query = event.key.slice(0, CHARACTER_SEARCH_LIMIT);
-      queryInput.value = query;
-      selected = 0;
-      render(false);
-      queryInput.focus({ preventScroll: true });
-      revealSelected();
-    }
+    if (searchEnabled) resumeSearchInput(event, queryInput);
   });
   list.addEventListener("focusin", (event) => {
     const button = event.target instanceof Element

@@ -177,7 +177,7 @@ export function createToolboxFoundation(
   }
 
   const openFloating = (slot: Slot) => {
-    window.gwHub?.close();
+    window.gwHub?.suspend();
     setOpen(slot, true); activate(slot);
     requestAnimationFrame(() => slot.host.querySelector<HTMLInputElement>('input[type="search"], input')?.focus());
   };

@@ -10,6 +10,8 @@ export type HubRow = Readonly<{
   group: string;
   keywords?: string;
   aliases?: readonly string[];
+  /** A domain-specific matcher shared by global search and scoped browsing. */
+  matches?(query: string): boolean;
   action: string;
   preview?: string;
   skills?: readonly Readonly<{ name: string; iconUrl: string | null; elite: boolean }>[];
@@ -59,7 +61,7 @@ export function hubMatch(name: string, query: string, aliases: readonly string[]
 export function matchHubRows(rows: readonly HubRow[], query: string): readonly HubRow[] {
   if (!normaliseHubQuery(query)) return rows;
   const rank = (row: HubRow) => hubMatch(row.title, query, row.aliases) === 'exact' ? 0 : 1;
-  return rows.filter(row => hubMatch(row.title, query, [...(row.aliases ?? []), row.keywords ?? '']) !== null)
+  return rows.filter(row => row.matches ? row.matches(query) : hubMatch(row.title, query, [...(row.aliases ?? []), row.keywords ?? '']) !== null)
     .sort((a, b) => rank(a) - rank(b) || a.title.localeCompare(b.title) || a.id.localeCompare(b.id));
 }
 

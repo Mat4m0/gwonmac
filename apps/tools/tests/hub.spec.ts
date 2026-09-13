@@ -80,6 +80,8 @@ test('one floating whisper view keeps drafts through dismissal and failures', as
   await draft.fill('Meet in Kamadan?');
   await page.getByRole('button', { name: 'Hide Whispers', exact: true }).click();
   await page.getByRole('button', { name: 'Open Hub', exact: true }).click();
+  await expect(page.locator('.hub-caption')).toHaveText('Romi Ranger');
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
   await search.fill('whispers'); await search.press('Enter');
   await expect(draft).toBeFocused();
   await expect(draft).toHaveValue('Meet in Kamadan?');
@@ -379,7 +381,9 @@ test('Travel uses Hub typography and supports empty-query arrows, favorites and 
   await search.press('ArrowDown');
   await expect(page.locator('.travel-history [aria-selected=true]')).toContainText('Kaineng Center');
   await search.press('ArrowUp');await search.press('ArrowUp');
-  await expect(page.locator('.travel-favorites [aria-selected=true]')).toHaveAttribute('aria-label','Travel to Embark Beach, shortcut 6');
+  await expect(page.getByRole('button', {name:'Back',exact:true})).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(search).toBeFocused();
   await search.press('Tab');
   await expect(page.getByRole('button',{name:'Customize Travel'})).toBeFocused();
   await page.keyboard.press('Enter');

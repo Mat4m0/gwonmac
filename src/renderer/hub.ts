@@ -2,6 +2,7 @@
  * Owns the Core command palette, its search focus and transient modal lifetime.
  * Optional Tools contributes local results and views without entering Core's imports.
  */
+import { resumeSearchInput } from './search-input.js';
 import { installHubWindow } from './hub-window.js';
 import { attachClassicFrame } from '../shared/ui/frame.js';
 import { resolveShortcuts, shortcutKeycaps, type ShortcutAction } from '../shared/keyboard-shortcuts.js';
@@ -62,14 +63,65 @@ export function createHub(parent: HTMLElement) {
   let viewAvailable: (() => boolean) | null = null;
   let returnFromView: (() => void) | null = null;
   let restoreQuery = '';
-  const history: { scope: RowScope | null; query: string; selected: string | null; scroll: number; view: MountedView | null }[] = [];
-  function remember() { history.push({ scope, query: input.value, selected, scroll: list.scrollTop, view: activeView }); }
+  type FocusPlace = { selector: string; range?: readonly [number, number] };
+  type Page = { scope: RowScope | null; query: string; selected: string | null; scroll: number; view: MountedView | null; focus: FocusPlace };
+  const history: Page[] = [];
+  let suspended: Page | null = null;
+  let restoringFocus: MutationObserver | null = null;
+  const focusPlace = (): FocusPlace => {
+    const active = document.activeElement;
+    const row = active instanceof Element ? active.closest<HTMLElement>('.hub-row') : null;
+    let selector = '.hub-search input';
+    if (row?.dataset.id) selector = `.hub-row[data-id="${CSS.escape(row.dataset.id)}"]`;
+    else if (active instanceof HTMLElement && root.contains(active)) {
+      for (const attribute of ['id', 'data-character-key', 'data-section', 'aria-label']) {
+        const value = active.getAttribute(attribute);
+        if (value) { selector = `[${attribute}="${CSS.escape(value)}"]`; break; }
+      }
+      if (active === primary) selector = '.hub-primary';
+      if (active === required('.hub-actions')) selector = '.hub-actions';
+    }
+    return { selector, ...(active instanceof HTMLInputElement && active.selectionStart !== null
+      ? { range: [active.selectionStart, active.selectionEnd ?? active.selectionStart] as const } : {}) };
+  };
+  const focusResult = () => (list.querySelector<HTMLElement>('[aria-selected="true"]') ?? input).focus({ preventScroll: true });
+  function restoreFocus(place: FocusPlace) {
+    restoringFocus?.disconnect();
+    const attempt = () => {
+      const control = root.querySelector<HTMLElement>(place.selector);
+      if (!control || !control.getClientRects().length || control.matches(':disabled')) return false;
+      control.focus({ preventScroll: true });
+      if (place.range && control instanceof HTMLInputElement && control.selectionStart !== null) control.setSelectionRange(...place.range);
+      restoringFocus?.disconnect(); restoringFocus = null;
+      return true;
+    };
+    if (!attempt()) {
+      if (!content.hidden) (content.querySelector<HTMLElement>('input,button,select,[tabindex="0"]') ?? backButton).focus();
+      else focusResult();
+      restoringFocus = new MutationObserver(attempt);
+      restoringFocus.observe(content, { childList: true, subtree: true });
+    }
+  }
+  const capture = (): Page => ({ scope, query: input.value, selected, scroll: list.scrollTop, view: activeView, focus: focusPlace() });
+  function remember() { history.push(capture()); }
+  function restorePage(page: Page) {
+    resetView(); scope = page.scope;
+    if (page.view) {
+      if (page.view.available && !page.view.available()) { restoreParent(); return; }
+      restoring = true; presenter.showView(page.view.title, page.view.mount, page.view.available); restoring = false;
+    } else {
+      input.value = page.query; caption.textContent = scope?.title ?? 'Home'; root.dataset.page = scope ? 'section' : 'home';
+      input.placeholder = scope ? 'Search actions…' : 'Search people, places, builds…'; report(''); refresh(true);
+      select(rows.some(row => row.id === page.selected) ? page.selected : null); list.scrollTop = page.scroll;
+      if (page.selected && selected === null) report('The previous selection is no longer available. Choose a result.');
+    }
+    backButton.hidden = history.length === 0;
+    restoreFocus(page.focus);
+  }
   function restoreParent() {
     const parent = history.pop();
     if (!parent) { close(); return; }
-    resetView(); scope = parent.scope;
-    if (parent.view && (!parent.view.available || parent.view.available())) { const view = parent.view; restoring = true; presenter.showView(view.title, view.mount, view.available); restoring = false; return; } input.value = parent.query; caption.textContent = scope?.title ?? 'Home'; backButton.hidden = !scope; root.dataset.page = scope ? 'section' : 'home';
-    input.placeholder = scope ? 'Search actions…' : 'Search people, places, builds…'; report(''); refresh(true); select(parent.selected); list.scrollTop = parent.scroll; input.focus();
+    restorePage(parent);
   }
   let restoring = false;
   let previousFocus: HTMLElement | null = null;
@@ -81,7 +133,7 @@ export function createHub(parent: HTMLElement) {
       throw new Error('Unavailable in the current game state.');
     }
   };
-  const handoff = (name: string, detail?: unknown) => { dispatch(name, detail); close(); };
+  const handoff = (name: string, detail?: unknown) => { dispatch(name, detail); suspend(); };
   const commands = (): HubRow[] => {
     const settings = window.gwToolsSettings?.();
     const tool = (id: string, title: string, detail: string, keywords: string, enabled: boolean | undefined, event: string): HubRow[] => enabled ? [{
@@ -93,7 +145,7 @@ export function createHub(parent: HTMLElement) {
       ...tool('builds', 'Build Library', 'Saved builds and teams', 'teams templates skills', settings?.gwonmacTools && settings.buildLibrary, 'gw:tools-toggle').map(row => ({ ...row, unavailable: 'Build Library is loading.' })),
       ...tool('trade', 'Trade Chat', 'Find offers and contact sellers', 'kamadan prices trading market', settings?.gwonmacTools && settings.tradeChat, 'gw:trade-toggle'),
       ...tool('whispers', 'Whispers', 'Conversations, friends and drafts', 'friends people message chat', settings?.gwonmacTools && settings.whispersEnabled, 'gw:whispers-toggle'),
-      ...(settings?.characterSwitchEnabled ? [{ id: 'character', title: 'Switch Character', detail: 'Choose another character', keywords: 'relog profession', group: 'Tools', action: 'Choose character', run: () => dispatch('gw:character-toggle') }] : []),
+      ...(settings?.characterSwitchEnabled ? [{ id: 'character', title: 'Switch Character', detail: 'Choose another character', keywords: 'relog profession', group: 'Tools', action: 'Choose character', navigate: () => dispatch('gw:character-toggle'), run: () => dispatch('gw:character-toggle') }] : []),
       ...tool('storage', 'Open Xunlai Storage', 'Open your storage chest', 'chest bank', settings?.gwonmacTools && settings.xunlaiStorage, 'gw:storage-open'),
       ...(settings?.gwonmacTools && settings.cartographyEnabled ? [{ id: 'maps', title: 'Maps', detail: 'Exploration grid, walkable terrain and compass ranges', keywords: 'grid terrain compass opacity', group: 'Tools', action: 'Adjust maps', run: () => openHubMaps(presenter) }] : []),
       { id: 'hub-preferences', title: 'Hub preferences', detail: 'Pins and exact search phrases', keywords: 'aliases vocabulary', group: 'Commands', action: 'Adjust Hub', run: () => manageHubShortcuts(presenter, shortcuts, lookup, saveShortcuts, hubWindow.reset) },
@@ -341,21 +393,22 @@ export function createHub(parent: HTMLElement) {
           const cap = document.createElement('kbd'); cap.className = 'ui-kbd'; cap.textContent = key.label; cap.setAttribute('aria-label', key.name); type.append(cap);
         }
         option.append(row.professions?.length ? renderProfessions(row.professions) : hubIcon(document, row), title, detail, type);
+        if (row.navigate) { const child = document.createElement('span'); child.className = 'hub-child-cue'; child.textContent = '›'; child.setAttribute('aria-hidden', 'true'); type.append(child); }
         detail.hidden = !detail.textContent;
         if (row.skills) {
           option.classList.add('hub-build-row');
           option.append(renderBuildInfo(row));
         }
       }
-      option.addEventListener('pointermove', () => select(row.id));
-      option.addEventListener('click', () => { select(row.id); void run(); });
+      option.addEventListener('pointermove', event => { if (event.movementX || event.movementY) select(row.id); });
+      option.addEventListener('click', () => { select(row.id); option.focus({ preventScroll: true }); void run(); });
       list.append(option);
     });
     count.textContent = `${rows.length} result${rows.length === 1 ? '' : 's'}`;
     const exactCount = rows.filter(row => normaliseHubQuery(row.title) === parsed.term || savedRows.some(saved => saved.id === row.id)).length;
     const prior = previousRows.find(row => row.id === selected);
     const revised = prior && rows.find(row => row.id === selected)?.preview !== prior.preview;
-    const initial = !scope && !input.value.trim() ? rows.find(row => !row.unavailable) : rows[0];
+    const initial = !input.value.trim() ? rows.find(row => !row.unavailable) : rows[0];
     select((prior?.id === 'quote-state' || prior?.id === 'market-state') && !!rows[0]?.conversion ? rows[0].id : reset ? exactCount > 1 ? null : initial?.id ?? null : !revised && rows.some(row => row.id === selected) ? selected : null);
     if (hadRowFocus) (list.querySelector<HTMLElement>('[aria-selected="true"]') ?? input).focus();
     if (!rows.length) {
@@ -376,6 +429,7 @@ export function createHub(parent: HTMLElement) {
     finally { pending = false; select(selected); }
   }
   function resetView() {
+    restoringFocus?.disconnect(); restoringFocus = null;
     disposeView?.(); disposeView = null; activeView = null; viewAvailable = null; returnFromView = null; content.replaceChildren(); content.hidden = true;
     search.hidden = false; list.hidden = false; footer.hidden = false;
   }
@@ -388,8 +442,13 @@ export function createHub(parent: HTMLElement) {
     else restoreParent();
   }
   function close() {
-    epoch++; history.length = 0; resetView(); modal.close(); for (const source of sources.keys()) source.setVisible(false); scope = null;
+    suspended = null; epoch++; history.length = 0; resetView(); modal.close(); for (const source of sources.keys()) source.setVisible(false); scope = null;
     input.value = ''; restoreQuery = ''; report(''); selected = null;
+  }
+  function suspend() {
+    if (!root.open) return;
+    suspended = capture(); epoch++; modal.close();
+    for (const source of sources.keys()) source.setVisible(false);
   }
   const modal = window.gwSurfaces.registerDialog({ root, priority: 6, transient: true,
     dismiss: () => history.length ? back() : close(),
@@ -399,7 +458,10 @@ export function createHub(parent: HTMLElement) {
     if (root.open) { home(); return; }
     previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     window.dispatchEvent(new Event('gw:input-reset'));
-    modal.show(); window.dispatchEvent(new Event('gw:hub-visible')); for (const source of sources.keys()) source.setVisible(sourceEnabled(source)); home();
+    modal.show(); window.dispatchEvent(new Event('gw:hub-visible'));
+    const resume = suspended; suspended = null;
+    for (const source of sources.keys()) source.setVisible(sourceEnabled(source));
+    if (resume) restorePage(resume); else home();
   }
   input.addEventListener('input', () => { report(''); refresh(true); });
   input.addEventListener('keydown', event => {
@@ -413,6 +475,8 @@ export function createHub(parent: HTMLElement) {
     } else if (event.key === 'Enter') { event.preventDefault(); if (!event.repeat) void run(); }
   });
   root.addEventListener('keydown', event => {
+    restoringFocus?.disconnect(); restoringFocus = null;
+    if (!event.defaultPrevented && event.target instanceof Element && event.target.closest('.hub-row') && resumeSearchInput(event, input)) return;
     if (event.defaultPrevented || event.isComposing || event.metaKey || event.ctrlKey || event.altKey) return;
     const target = event.target instanceof HTMLElement ? event.target : null;
     if (!target || target === required<HTMLElement>('.hub-resize')) return;
@@ -422,11 +486,6 @@ export function createHub(parent: HTMLElement) {
       return;
     }
     const row = target.closest<HTMLElement>('.hub-row');
-    if (row && event.key.length === 1) {
-      // Let the browser insert into the newly focused input, preserving native editing.
-      event.stopPropagation(); input.focus();
-      return;
-    }
     if (row && ['ArrowUp', 'ArrowDown', 'ArrowRight', 'Enter'].includes(event.key)) {
       event.preventDefault();
       const index = rows.findIndex(item => item.id === row.dataset.id);
@@ -452,6 +511,9 @@ export function createHub(parent: HTMLElement) {
       if (event.key === 'ArrowDown') { event.preventDefault(); (search.hidden ? content.querySelector<HTMLElement>('input[type=search],input[type=text]') ?? content.querySelector<HTMLElement>('input,select,button,[tabindex="0"]') : input)?.focus(); }
       else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); controls[Math.max(0, Math.min(controls.length - 1, index + (event.key === 'ArrowRight' ? 1 : -1)))]?.focus(); }
       return;
+    }
+    if (content.contains(target) && event.key === 'ArrowUp' && target.matches('input[role=combobox]')) {
+      event.preventDefault(); (backButton.hidden ? required<HTMLButtonElement>('.hub-lock') : backButton).focus(); return;
     }
     if (content.contains(target) && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
       if (target.matches('select,input[type="range"],textarea') || target.isContentEditable) return;
@@ -487,8 +549,8 @@ export function createHub(parent: HTMLElement) {
   required<HTMLButtonElement>('.hub-close').onclick = close;
   backButton.onclick = back; primary.onclick = () => { void run(); };
   root.addEventListener('click', event => { if (event.target === root) { event.stopImmediatePropagation(); close(); } }, true);
-  root.addEventListener('close', () => { if (!root.open) close(); });
-  const onBlur = () => close();
+  root.addEventListener('close', () => { if (!root.open && !suspended) close(); });
+  const onBlur = () => suspend();
   let enabledSources = new Set<HubSource>();
   const onSettings = () => {
     const disabled = [...enabledSources].some(source => !sourceEnabled(source));
@@ -499,7 +561,7 @@ export function createHub(parent: HTMLElement) {
   };
   window.addEventListener('blur', onBlur); window.addEventListener('gw:tools-settings', onSettings);
   const presenter = {
-    show, close, openSettings, toggle: () => root.open ? close() : show(), actions,
+    show, close, suspend, openSettings, toggle: () => root.open ? close() : show(), actions,
     get visible() { return root.open; },
     attach(next: HubSource) {
       if (sourceEnabled(next)) enabledSources.add(next);
@@ -511,19 +573,19 @@ export function createHub(parent: HTMLElement) {
     },
     showRows(title: string, getRows: () => readonly HubRow[], summary?: HubSummary) {
       const fromOpenHub = root.open;
-      if (!fromOpenHub) show();
+      if (!fromOpenHub) { suspended = null; show(); }
       if (!scope) restoreQuery = input.value;
       if (fromOpenHub && !restoring) remember(); resetView(); scope = { title, rows: getRows, ...(summary ? { summary } : {}) }; root.dataset.page = 'section'; caption.textContent = title;
-      backButton.hidden = false; input.placeholder = 'Search actions…'; input.value = ''; report(''); refresh(true); input.focus();
+      backButton.hidden = history.length === 0; input.placeholder = 'Search actions…'; input.value = ''; report(''); refresh(true); focusResult();
     },
     showView(title: string, mount: (target: HTMLElement, back: () => void) => () => void, available?: () => boolean) {
       const fromOpenHub = root.open;
-      if (!fromOpenHub) show();
+      if (!fromOpenHub) { suspended = null; show(); }
       if (!scope) restoreQuery = input.value;
       if (fromOpenHub && !restoring) remember();
       resetView();
       returnFromView = restoreParent;
-      root.dataset.page = 'section'; caption.textContent = title; backButton.hidden = false;
+      root.dataset.page = 'section'; caption.textContent = title; backButton.hidden = history.length === 0;
       required<HTMLElement>('.hub-preview').hidden = true; required<HTMLElement>('.hub-rate-controls').hidden = true;
       search.hidden = true; list.hidden = true; footer.hidden = true; content.hidden = false;
       activeView = { title, mount, ...(available ? { available } : {}) };
@@ -536,7 +598,7 @@ export function createHub(parent: HTMLElement) {
     resetPosition: hubWindow.reset,
     dispose() { close(); hubWindow.dispose(); disposeFrame(); for (const unsubscribe of sources.values()) unsubscribe(); sources.clear(); modal.dispose(); root.remove(); window.removeEventListener('blur', onBlur); window.removeEventListener('gw:tools-settings', onSettings); },
   };
-  presenter.attach(createHubAccounts(presenter, { get: () => window.gwNative.accounts.get(), open: request => window.gwNative.accounts.open(request) }));
+  presenter.attach(createHubAccounts(presenter, { get: () => window.gwNative.accounts.get(), open: request => window.gwNative.accounts.open(request), manage: () => window.gwNative.app.showLauncher() }));
   presenter.attach(createHubCalculator({
     hub: presenter,
     copy: value => window.gwNative.clipboard.writeText(value),

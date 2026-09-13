@@ -646,6 +646,7 @@ function onKeydown(event: KeyboardEvent): void {
     return;
   }
   if (mode.value === "travel" && event.target === input.value && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+    if (props.inset && event.key === "ArrowUp" && active.value === 0) return;
     event.preventDefault();
     void moveActive(event.key === "ArrowDown" ? 1 : -1);
     return;

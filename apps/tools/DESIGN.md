@@ -153,7 +153,8 @@ shared tokens; local palette literals are not allowed.
 
 ## Window and interaction rules
 
-- Settings, Builds and teams, and Trade Chat use the same visible resize grip.
+- Windows share the resize interaction. Classic uses its corner artwork and an
+  invisible hit area; Modern and Custom may show the shared grip.
 - Pointer resize uses capture and handles cancellation and lost capture.
 - Arrow keys resize the window. Shift increases the step.
 - Start a Tools drag only from title-bar furniture.
@@ -252,7 +253,12 @@ Tool rows show meaningful descriptions and resolved shortcut keycaps.
 
 The top bar shows clickable ancestor breadcrumbs and an understated Back arrow.
 Backspace returns to the previous page when no text is being edited; an empty
-search can also go Back. History restores the query, selection and scroll.
+search can also go Back. History restores query, selection, scroll and the actual
+focused row/control. First entry and restoration are separate: character cards,
+account choices and action lists start on their useful item; search stays optional.
+Fresh Home starts in search. Temporary app blur and popout handoffs retain the
+session task; explicit closure starts a fresh task next time. Resume refreshes
+current facts before execution. Account replacement invalidates prior targets.
 Arrow keys connect results, search, navigation and actions. Character cards use
 Left/Right; Up returns to search, then to Back. Native text editing, range and
 select controls retain their own keys. Actions only opens contextual actions. Known query scopes stay visible, and typing a command name offers one

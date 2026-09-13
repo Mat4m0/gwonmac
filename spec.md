@@ -2,7 +2,7 @@
 
 Status: implementation specification. This document owns the target Hub experience.
 It does not claim that the current development build implements these requirements.
-Task class: normal feature development; this change contains documentation only.
+The current refinement is tracked in [the Hub delivery plan](docs/hub-overhaul-plan.md).
 
 Hub replaces the earlier Scry product proposal. Existing runtime documentation
 continues to describe the development build until each implementation lands.
@@ -11,7 +11,8 @@ continues to describe the development build until each implementation lands.
 
 Hub is the central keyboard interface for gwonmac. It searches and operates
 people, places, characters, saved builds, saved teams, enabled tools, and conversions.
-Short tasks finish inside Hub. Longer tasks expand inside Hub or detach a shared view.
+Short tasks finish inside Hub. Trade and Whispers use independent popouts.
+Build browsing/application stays in Hub; authoring uses the Build workspace.
 
 Three defining journeys:
 
@@ -51,9 +52,9 @@ selected ⌘E. The other Layout 1 assignments remain.
 | ⌘R | Hub home; dismiss Hub when it is already active |
 | ⌘E | Hub Characters |
 | ⌘T | Hub Travel |
-| ⌘B | Hub Builds and Teams |
-| ⌘K | Hub Trade |
-| ⌘D | Hub Whispers |
+| ⌘B | Browse Builds when Hub is open; Build workspace otherwise |
+| ⌘K | Trade popout |
+| ⌘D | Whispers popout |
 | ⌘S | Open Xunlai Storage directly, silently |
 | ⌘G | Existing opt-in Call Target command |
 | No default | Settings, Resign, map layers, diagnostics |
@@ -62,9 +63,11 @@ Keep editing, window, and macOS system shortcuts intact. Do not bind ⌘F yet.
 Keep Travel's existing ⌘1–9 assignment behavior. Do not overload ⌘K for Hub actions.
 Remove the dedicated Settings accelerator as requested; retain the explicit menu item.
 
-Direct shortcuts enter the same Hub sections as search. They focus an existing
-section rather than create duplicate windows. Disabled-feature shortcuts do nothing.
-Repeated section shortcuts focus the section; only the Hub chord toggles the panel.
+Direct shortcuts enter the same feature owner as search. They use its Hub view
+or popout according to the table. Do not create duplicate windows. Disabled-feature shortcuts do nothing.
+Keep each existing shortcut toggle/focus contract. Direct entry has no artificial
+Home history step. Returning restores the actual launching control; first entry
+focuses the task control, such as the current character card, rather than always search.
 The shortcuts are window-scoped, not system-wide hotkeys.
 
 Preserve custom bindings and cleared assignments. A custom binding wins over a

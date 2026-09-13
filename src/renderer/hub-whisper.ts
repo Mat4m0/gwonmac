@@ -9,7 +9,7 @@ export function toggleHubWhispers(event: Event, hub: Hub, root: HTMLElement, ses
   event.preventDefault();
   const intent = event instanceof CustomEvent ? event.detail : undefined;
   const show = hub.visible || intent === 'show';
-  hub.close();
+  hub.suspend();
   root.classList.add('whisper-popout-host');
   session.setVisible(show || !session.state.visible);
   if (session.state.visible) requestAnimationFrame(() => {
