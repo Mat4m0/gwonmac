@@ -216,6 +216,8 @@ export function createToolboxFoundation(
   window.addEventListener("gw:hub-visible", onHub);
   window.addEventListener("gw:tools-toggle", onBuildsCommand);
   window.addEventListener("gw:trade-toggle", onTradeCommand);
+  // The client may finish mounting Tools after Hub has already opened.
+  if (window.gwHub?.visible) onHub();
 
   return {
     update(next: ToolboxState) {
@@ -225,6 +227,7 @@ export function createToolboxFoundation(
     setAvailable(next: ToolboxAvailability) {
       availability = next;
       if (!next.builds) setOpen(builds, false);
+      else if (window.gwHub?.visible) ensure(builds);
       if (trade && !next.trade) setOpen(trade, false);
     },
     get state() { return state; },
