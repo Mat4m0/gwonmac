@@ -202,6 +202,12 @@ export function createHub(parent: HTMLElement) {
     }
     return pair;
   }
+  function appendProfessionLabel(title: HTMLElement, professions: HubRow['professions']) {
+    if (!professions?.length) return;
+    const label = document.createElement('span'); label.className = 'hub-profession-label';
+    label.textContent = `(${professions.map(profession => profession.code).join('/')})`;
+    title.append(' ', label);
+  }
   let renderedSummary: HubSummary | undefined;
   function paintNavigation() {
     const summary = disposeView ? undefined : scope?.summary;
@@ -212,6 +218,7 @@ export function createHub(parent: HTMLElement) {
       if (summary) {
         const label = document.createElement('span'); label.className = 'hub-summary-label'; label.textContent = summary.label;
         const name = document.createElement('strong'); name.textContent = summary.title;
+        appendProfessionLabel(name, summary.professions);
         const detail = document.createElement('p'); detail.textContent = summary.detail;
         summaryPanel.append(label);
         if (summary.professions) name.prepend(renderProfessions(summary.professions));
@@ -306,6 +313,7 @@ export function createHub(parent: HTMLElement) {
       option.id = `hub-result-${index}`; option.dataset.id = row.id; option.className = 'hub-row';
       option.setAttribute('role', 'option'); option.setAttribute('aria-disabled', String(!!row.unavailable));
       const title = document.createElement('span'); title.className = 'hub-title'; title.textContent = row.title;
+      appendProfessionLabel(title, row.professions);
       const detail = document.createElement('span'); detail.className = 'hub-detail'; detail.textContent = row.unavailable ?? row.detail;
       const arrow = document.createElement('span'); arrow.className = 'hub-row-arrow'; arrow.textContent = '↵'; arrow.setAttribute('aria-hidden', 'true');
       if (row.conversion) {

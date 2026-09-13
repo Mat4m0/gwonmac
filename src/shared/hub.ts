@@ -15,7 +15,7 @@ export type HubRow = Readonly<{
   skills?: readonly Readonly<{ name: string; iconUrl: string | null; elite: boolean }>[];
   attributes?: readonly Readonly<{ name: string; icon: string; attributes: readonly Readonly<{ name: string; label: string; rank: number }>[] }>[];
   attributeStatus?: string;
-  professions?: readonly Readonly<{ name: string; icon: string }>[];
+  professions?: readonly Readonly<{ name: string; icon: string; code: string }>[];
   /** Opens a read-only child page; Right Arrow must never apply a build. */
   navigate?(): void;
   searchQuery?: string;

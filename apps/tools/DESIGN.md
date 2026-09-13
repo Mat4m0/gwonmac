@@ -305,7 +305,9 @@ failed writes restore saved state and show a recoverable inline error.
 
 Hub build results keep the skill bar and invested attribute ranks in each row.
 There is no separate lower preview for individual builds and no visible template
-file path. Incoming and equipped comparisons use the same compact presentation.
+file path. Profession codes remain beside the title, such as Protection
+(Mo/Me), in smaller muted text. Incoming and equipped comparisons use the same
+compact presentation.
 Attributes are grouped under one Tango icon per profession, with abbreviated
 labels and ranks separated by fine dividers; tooltips and
 accessible names retain the full attribute name. Labels distinguish Illusion

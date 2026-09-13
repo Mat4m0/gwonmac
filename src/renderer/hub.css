@@ -334,3 +334,5 @@
 
 .hub-attribute-group { display:inline-flex; align-items:center; flex-wrap:wrap; gap:5px; max-width:100%; }
 .hub-attribute + .hub-attribute::before { content:""; height:10px; border-left:1px solid var(--ui-edge); margin-inline:2px 3px; }
+
+.hub-profession-label { color:var(--ui-text-muted); font-size:.8em; font-weight:400; white-space:nowrap; }

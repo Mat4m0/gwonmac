@@ -21,8 +21,9 @@ const ATTRIBUTE_LABELS = {
 
 export function buildProfessions(professions: readonly (Profession | null)[]) {
   return professions.flatMap(code => {
-    const presentation = code ? professionPresentation(PROFESSIONS[code].id) : null;
-    return presentation ? [presentation] : [];
+    if (!code) return [];
+    const presentation = professionPresentation(PROFESSIONS[code].id);
+    return presentation ? [{ ...presentation, code }] : [];
   });
 }
 

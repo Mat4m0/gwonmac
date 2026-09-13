@@ -135,6 +135,7 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 320, height: 800 
     const rows = page.locator('.hub-build-row');
     await expect(rows).toHaveCount(4);
     await expect(rows.first()).not.toContainText('.txt');
+    await expect(rows.first().locator('.hub-title')).toHaveText('Protection (Mo/Me)');
     await expect(rows.first().locator('.hub-attribute').first()).toHaveText('HP12');
     await expect(rows.first().getByRole('img', { name: 'Healing Prayers 12', exact: true })).toBeVisible();
     await expect(rows.first().locator('.hub-professions img')).toHaveCount(2);
