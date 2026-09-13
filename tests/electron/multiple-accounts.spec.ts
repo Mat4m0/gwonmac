@@ -721,7 +721,8 @@ test("a production renderer reveals the game only after its first submitted fram
         win.webContents.getURL() === "gw://app/")?.isVisible() ?? true,
     )).toBe(false);
     expect(await game.evaluate(() => ({
-      canvas: document.querySelectorAll("canvas").length,
+      // Shared window artwork is decorative; only the game owns a live surface.
+      canvas: document.querySelectorAll('canvas:not(.ui-frame-artwork[aria-hidden="true"])').length,
       launcherBridge: typeof (window as Window & { launcherNative?: unknown }).launcherNative,
       forbiddenText: /Play Guild Wars|Check for updates|Repair game files|Settings/.test(document.body.innerText),
     }))).toEqual({ canvas: 1, launcherBridge: "undefined", forbiddenText: false });
