@@ -89,6 +89,13 @@ export function createToolboxFoundation(
   let state: ToolboxState = Object.freeze({ status: "waiting" });
   let disposed = false;
   let active: Slot | null = null;
+  let focusFrame: number | undefined;
+  const cancelPendingFocus = () => {
+    if (focusFrame !== undefined) cancelAnimationFrame(focusFrame);
+    focusFrame = undefined;
+  };
+  window.addEventListener("keydown", cancelPendingFocus, true);
+  window.addEventListener("pointerdown", cancelPendingFocus, true);
   let availability: ToolboxAvailability = { builds: true, trade: true };
 
   const requestClose = (slot: Slot): void => {
@@ -123,6 +130,7 @@ export function createToolboxFoundation(
   const slots = (): Slot[] => trade ? [builds, trade] : [builds];
 
   const activate = (slot: Slot) => {
+    cancelPendingFocus();
     active = slot;
     slot.surface.raise();
     for (const candidate of slots()) {
@@ -149,6 +157,7 @@ export function createToolboxFoundation(
 
   const setOpen = (slot: Slot, next: boolean) => {
     if (slot.visible === next) return;
+    cancelPendingFocus();
     slot.visible = next;
     if (!next && slot.host.closest('#hub')) window.gwHub?.close();
     if (next) {
@@ -179,7 +188,11 @@ export function createToolboxFoundation(
   const openFloating = (slot: Slot) => {
     window.gwHub?.suspend();
     setOpen(slot, true); activate(slot);
-    requestAnimationFrame(() => [...slot.host.querySelectorAll<HTMLInputElement>('input')].find(input => !input.disabled && input.getClientRects().length)?.focus());
+    // A later surface change or user input owns focus over this deferred handoff.
+    focusFrame = requestAnimationFrame(() => {
+      focusFrame = undefined;
+      if (!disposed && slot.visible && active === slot) [...slot.host.querySelectorAll<HTMLInputElement>('input')].find(input => !input.disabled && input.getClientRects().length)?.focus();
+    });
   };
   const onBuildsCommand = (event: Event) => {
     if (!availability.builds) return;
@@ -234,6 +247,9 @@ export function createToolboxFoundation(
     get state() { return state; },
     dispose() {
       disposed = true;
+      cancelPendingFocus();
+      window.removeEventListener("keydown", cancelPendingFocus, true);
+      window.removeEventListener("pointerdown", cancelPendingFocus, true);
       for (const slot of slots()) {
         slot.tool?.dispose();
         slot.surface.dispose();

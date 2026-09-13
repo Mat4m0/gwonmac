@@ -333,6 +333,28 @@ test.describe("renderer Tools input", () => {
       await expect(trade).toBeHidden();
       await expect(tool).toBeVisible();
 
+      // Run an open/raise/close sequence before its focus frame can fire.
+      // Closing Trade must cancel its handoff and any superseded Builds handoff.
+      await page.evaluate(async () => {
+        const request = window.requestAnimationFrame;
+        const cancel = window.cancelAnimationFrame;
+        const pending = new Map<number, FrameRequestCallback>();
+        let next = 0;
+        window.requestAnimationFrame = callback => { pending.set(++next, callback); return next; };
+        window.cancelAnimationFrame = handle => { pending.delete(handle); };
+        try {
+          window.dispatchEvent(new CustomEvent('gw:tools-toggle', { cancelable: true, detail: 'show' }));
+          window.dispatchEvent(new CustomEvent('gw:trade-toggle', { cancelable: true, detail: 'show' }));
+          window.dispatchEvent(new CustomEvent('gw:trade-toggle', { cancelable: true }));
+        } finally {
+          window.requestAnimationFrame = request;
+          window.cancelAnimationFrame = cancel;
+        }
+        await new Promise<void>(resolve => request(time => {
+          for (const callback of pending.values()) callback(time);
+          resolve();
+        }));
+      });
       await expect.poll(() => isDomActiveElement(page.locator("#canvas")))
         .toBe(true);
       await expect(body).toHaveAttribute("data-toolbox-input-resets", "0");

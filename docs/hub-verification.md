@@ -721,3 +721,35 @@ Packaging and release checks were not rerun for this renderer/Tools refinement.
 No push, merge or release was performed. Rollback reverts the bounded refinement
 commits; geometry may be reset independently without deleting profiles, templates,
 drafts or saved bindings.
+
+## Beta preparation — 13 September 2026
+
+Matthias accepted developer candidate `8d65a984` in live use and requested the
+stack PRs and next Beta. PRs #446, #447 and #448 form that stack. The planned
+version is `2026.9.2-beta.1`, cut from verified main after the stack merges.
+
+The versioned candidate passed the complete local `pnpm verify` gate: 125 browser
+checks, 159 native checks with one explicit live-client skip, and both packaged
+smokes, as well as types, lint, policy, unit, integration and release checks.
+The log is `/tmp/gwonmac-beta-version-verify.log`.
+
+Hosted verification exposed stale lower-layer test expectations. Existing final
+carousel, sandbox, shortcut, drag and compact-layout corrections now belong to
+the layers that introduce their behavior. Frame tests explicitly cover both
+transparency preferences and distinguish decorative canvas from the game.
+
+Hosted native verification also exposed a real deferred-focus race: closing or
+superseding a tool could leave its queued focus callback active. Tool ownership
+changes, user input and disposal now cancel that callback. A deterministic
+regression failed on the previous runtime and passes with the fix. The updated
+runtime passed `pnpm check`, a fresh build, nine native input/editing checks and
+both compact/desktop editor handoffs. Logs are
+`/tmp/gwonmac-hub-focus-race-red.log`, `/tmp/gwonmac-hub-focus-check.log`,
+`/tmp/gwonmac-hub-focus-build.log`, `/tmp/gwonmac-hub-focus-green.log` and
+`/tmp/gwonmac-hub-focus-handoff.log`. The complete local gate above predates this
+bounded focus fix; exact-head CI remains required for merging and releasing.
+
+The existing developer game session was preserved. Acceptance of that session
+does not certify the later signed assets. Signed qualification, Stable/Beta
+round-trip and the exact-draft live checklist in
+[Release verification](release-verification.md) remain release gates.
