@@ -62,6 +62,8 @@ function rendererCheckout(): string {
   // the Tools application reads it too, and apps/** may only reach src/shared.
   write("src/shared/ui/tokens.css", "tokens");
   write("src/shared/ui/components.css", "components");
+  write("src/shared/ui/frame/body.png", "frame-body");
+  write("src/shared/ui/frame/header.png", "frame-header");
   for (let profession = 1; profession <= 10; profession += 1) {
     write(`src/shared/images/professions/${profession}.png`, `profession-${profession}`);
   }
@@ -176,6 +178,8 @@ describe("scripts/copy-renderer.mjs only copies assets", () => {
       "shared/images/professions/9.png",
       // Copied out of src/shared, and flattened to `ui/` so the renderer and
       // the Tools bundle load the one design system by the same href.
+      "shared/ui/frame/body.png",
+      "shared/ui/frame/header.png",
       "ui/components.css",
       "ui/tokens.css",
     ]);

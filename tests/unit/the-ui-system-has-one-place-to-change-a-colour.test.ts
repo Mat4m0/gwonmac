@@ -24,6 +24,7 @@ const TOKENS = "src/shared/ui/tokens.css";
 const CONSUMERS = [
   "src/shared/ui/components.css",
   "src/renderer/cartography-overlay-controls.css",
+  "src/renderer/hub.css",
   "apps/tools/src/styles.css",
   "apps/tools/src/styles/base-shell.css",
   "apps/tools/src/styles/library.css",
@@ -155,7 +156,7 @@ test("persistent interaction states do not leak into neutral controls", () => {
   const toolsShell = readFileSync("apps/tools/src/styles/base-shell.css", "utf8");
   const rule = (source: string, selector: string): string => {
     const escaped = selector.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-    return source.match(new RegExp(`${escaped}\\s*\\{([^}]*)\\}`, "u"))?.[1] ?? "";
+    return source.match(new RegExp(`^${escaped}\\s*\\{([^}]*)\\}`, "mu"))?.[1] ?? "";
   };
 
   assert.match(rule(components, ".ui-button"), /var\(--ui-command-fill\)/u);

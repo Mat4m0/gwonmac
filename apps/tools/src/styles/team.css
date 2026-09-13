@@ -545,7 +545,7 @@
     height: calc(100vh - 2 * var(--ui-space-2));
   }
 
-  .detail-header { padding: var(--ui-space-2) var(--ui-space-4); }
+  .detail-header { padding: var(--ui-space-1) var(--ui-space-4); }
   .team-editor > .ui-banner { display: none; }
   .section-heading { margin-bottom: var(--ui-space-2); align-items: center; }
   .section-heading p { display: none; }

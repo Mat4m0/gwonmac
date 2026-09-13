@@ -208,3 +208,20 @@ private task identifiers in the new planning document; those references were
 removed and the policy suite passed again. Home and Travel were inspected in
 the production offline fixture at 1280 × 720. No live gameplay, account switch,
 real message, signed package or VoiceOver result is claimed by this baseline.
+
+## Shared Classic frame layer
+
+The DOM Hub and Vue Library/Trade windows now use the study's decorative
+canvas reconstruction through one shared owner. The retained source centre is
+cleared before composition, so panel opacity and custom colours still come
+from the appearance projector. Frame assets are copied through the explicit
+package input list and carry provenance and ArenaNet notices.
+
+Home, Travel, build search, Trade review and detached Trade were visually
+inspected. All 40 Hub journeys and two appearance checks passed. The latter
+exercise 1×/2× pixel density, a transparent canvas centre, pointer exclusion,
+65% opacity, a Modern round trip and 800 × 600 Travel geometry. Typecheck,
+lint and links passed. The full unit pass found stale copy-fixture inputs and
+an unanchored CSS selector assertion; both were corrected, and all 24 affected
+checks passed. The 182 policy, 200 Tools and 81 Launcher tests passed, as did
+the production build. Later layers must rerun the complete final gate.

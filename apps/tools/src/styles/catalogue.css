@@ -403,11 +403,12 @@
 }
 
 @container detail-pane (max-width: 390px) {
-  .catalogue-workspace { padding: var(--ui-space-3); }
+  .catalogue-workspace,
+  [data-catalogue-open] .catalogue-workspace { padding: var(--ui-space-2); }
   .catalogue-workspace > .workspace-heading { gap: var(--ui-space-2); }
   .catalogue-heading-actions { gap: var(--ui-space-1); }
   .catalogue-heading-actions .ui-button { padding-inline: var(--ui-space-2); }
-  .catalogue-tools { grid-template-columns: 1fr; }
+  .catalogue-tools { grid-template-columns: 1fr; margin-top:var(--ui-space-2); }
   .catalogue-count { display: none; }
   .catalogue-workspace > .workspace-heading p,
   .skill-inspector .skill-stats,

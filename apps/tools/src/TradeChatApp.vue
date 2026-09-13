@@ -25,6 +25,7 @@ import {
   tradeMessageIntents,
   type TradeIntent,
 } from "./trade-ledger";
+import { useClassicFrame } from "./ui/use-classic-frame";
 import { useFloatingWindow } from "./use-floating-window";
 import TradeIcon from "./TradeIcon.vue";
 import TraderPrices from "./components/TraderPrices.vue";
@@ -554,6 +555,7 @@ function exactTime(timestamp: number): string {
   return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "medium" })
     .format(timestamp);
 }
+useClassicFrame(panel);
 </script>
 
 <template>

@@ -677,3 +677,11 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
+
+### Classic window frame
+
+The original Guild Wars window frame regions in `src/shared/ui/frame/` are
+ArenaNet artwork used in this noncommercial fan project under the content
+terms cited above. They are not covered by this repository's GPL license.
+Source texture identifiers, reconstruction measurements and hashes are in
+[src/shared/ui/frame/README.md](src/shared/ui/frame/README.md).
