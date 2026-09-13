@@ -243,7 +243,6 @@ test("a 27-character account uses the Hub carousel and preserves search, identit
     await expect.poll(() => isDomActiveElement(search)).toBe(true);
     await page.keyboard.press("Escape");
     await expect(dialog).toBeHidden();
-    await page.getByRole("button", { name: "Close Hub", exact: true }).click();
     await expect.poll(() => isDomActiveElement(page.locator("#canvas"))).toBe(true);
     await page.evaluate(() => window.dispatchEvent(
       new CustomEvent("gw:character-toggle", { cancelable: true }),
