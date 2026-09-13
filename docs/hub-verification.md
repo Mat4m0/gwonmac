@@ -510,3 +510,54 @@ Enhancement runtime with Toolbox lifecycles and rollback. The log is
 `/tmp/gwonmac-hub-feedback-final-smoke.log`. The earlier playtest game process had
 closed before the final primary build; no running game was terminated for this
 update.
+
+## Hub builds and window controls — 13 September 2026
+
+`9455ff02` implements the follow-up clarification. Build browsing and target
+selection stay inside Hub. The full authoring editor remains a separate window.
+Command-B browses builds when Hub is open and opens the editor outside Hub.
+
+The first slice reads populated Guild Wars skill-template folders through the
+existing template reader. It does not create or change template files. Each
+single build requires an explicit target, including exact-name search results.
+Hero search includes observed unlocked heroes. Application requires an existing
+party member and uses the existing guarded apply runner. Templates are read
+again before application; changed files refuse the stale selection.
+
+Only Hub has a lock. Whispers, Trade Chat and the authoring editor move and resize
+directly. Their plain X controls are visible in the Classic frame. Hub preferences
+and Settings → Appearance can restore the default Hub position, size and lock.
+
+The repository gate passed: types, lint, links, 1,756 unit, 182 policy, 207 Tools
+and 81 Launcher checks. All 105 browser checks passed. The browser checks cover
+folders, keyboard target selection, unlocked-hero search, party-only application,
+Hub reset, direct popout dragging and visible close controls. A focused unit test
+also refuses a template file changed between selection and application.
+
+Computer-use inspection confirmed the Classic folder breadcrumbs, build target
+screen and editor X. Screenshots are retained in ignored
+`test-results/hub-builds-v2/`: `hub-template-folder.png`, `hub-build-actions.png`
+and `hub-hero-search.png`. These use synthetic state and sample templates.
+Logs are `/tmp/gwonmac-hub-v2-gate.log` and
+`/tmp/gwonmac-hub-v2-browser-gate.log`.
+
+Compiled verification exposed a startup race and a native shortcut routing
+difference. `2435315a` loads the library when Tools mounts after Hub opens.
+`de432117` preserves Hub during the native Build Library command. The repository
+gate passed again after the startup fix, and all 50 affected browser checks
+passed. Their logs are `/tmp/gwonmac-hub-v2-final-check.log` and
+`/tmp/gwonmac-hub-v2-final-focused.log`.
+
+A fresh build with the final native routing fix passed all eight affected
+Electron checks: Hub, character switching, Toolbox and Whispers. The Hub check
+enables Build Library in its offline profile and sends Command-B through
+Electron's native input API. Test commit `cacfc036` records this setup. The final
+test source passed type checks and lint. Build and native logs are
+`/tmp/gwonmac-hub-v2-build-accepted.log` and
+`/tmp/gwonmac-hub-v2-electron-green.log`. Verification used a separate checkout
+and disposable offline profiles; the temporary checkout was removed afterward.
+
+The browser preview remains at `http://127.0.0.1:4194/?hub`. Verification did not
+rebuild the primary checkout or restart its game. The earlier playtest process
+was no longer running at the final check. These checks do not establish live
+gameplay acceptance. No push, merge or release was performed.
