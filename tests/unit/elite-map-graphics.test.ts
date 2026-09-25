@@ -61,7 +61,7 @@ test("each marker is one world rectangle from a screen-resolution atlas; a pan u
   assert.equal(upload!.quads.length, 2, "one rectangle per marker");
   const [x0, y0, x1, y1, u0, v0, u1, v1] = upload!.quads[0]!;
   assert.equal((x0! + x1!) / 2, 1100); assert.equal((y0! + y1!) / 2, 2100);
-  assert.equal(x1! - x0!, 50, "at 1 pixel per map unit a 100-texel cell at ratio 2 covers 50 map units");
+  assert.equal(x1! - x0!, 52, "at 1 pixel per map unit a 104-texel cell at ratio 2 covers 52 map units");
   assert.ok(u0! >= 0 && v0! >= 0 && u1! <= 1 && v1! <= 1 && u1! > u0!);
   const panned = graphics.update("mission", input(markers, -1010));
   assert.deepEqual(panned.map(item => item.x), [90, 190], "hit targets follow the pan");

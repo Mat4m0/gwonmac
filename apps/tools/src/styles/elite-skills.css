@@ -139,3 +139,4 @@
 .elite-notice strong { color: var(--ui-success); font-weight: normal; }
 .elite-notice span { color: var(--ui-text-muted); }
 .skill-details .skill-rank { color: var(--ui-text-muted); }
+.elite-panel .ui-panel-head .elite-classes { margin-right: auto; margin-left: var(--ui-space-2); padding: 1px 8px; border-radius: var(--ui-radius-pill); background: var(--ui-well-fill); color: var(--ui-text-muted); font-size: var(--ui-font-size-sm); }

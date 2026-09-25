@@ -31,7 +31,7 @@ export type EliteMapHit = Readonly<{
 }>;
 
 /** Screen sizes in CSS pixels. Emphasis stays readable without covering the map. */
-export const ELITE_MARKER_SIZE: Readonly<Record<EliteMarkerEmphasis, number>> = Object.freeze({ target: 26, saved: 20, match: 16 });
+export const ELITE_MARKER_SIZE: Readonly<Record<EliteMarkerEmphasis, number>> = Object.freeze({ target: 28, saved: 22, match: 18 });
 export const ELITE_MARKER_HOVER_GROWTH = 4;
 const INSET = 16;
 const TOUCHING = 24;
