@@ -4,9 +4,8 @@
  */
 import { disposeCartographyResources } from "../cartography-lifecycle.js";
 import { NATIVE_PUBLISH_BUSY } from "../../shared/native-publish.js";
-import { NATIVE_MAP_GRAPHICS_HEADER_BYTES, NATIVE_MAP_GRAPHICS_MAGIC,
-  NATIVE_MAP_GRAPHICS_MAX_SIZE, NATIVE_MAP_GRAPHICS_SURFACES,
-  type NativeMapGraphicsSurface } from "../../shared/native-map-graphics.js";
+import { CARTOGRAPHY_MAP_GRAPHICS_SURFACES, NATIVE_MAP_GRAPHICS_HEADER_BYTES, NATIVE_MAP_GRAPHICS_MAGIC,
+  NATIVE_MAP_GRAPHICS_MAX_SIZE, type NativeMapGraphicsSurface } from "../../shared/native-map-graphics.js";
 import type { MapUnitProjection } from "./map-projections.js";
 
 export type MapPainterImage = Readonly<{ canvas: HTMLCanvasElement; version: string }>;
@@ -34,9 +33,12 @@ export function nativeMapGraphicsCorners(projection: MapUnitProjection): readonl
   return corners.every((value) => Number.isFinite(value) && Math.abs(value) <= 1000000) ? corners : null;
 }
 
-export function createNativeMapGraphicsLayer(exports: WebAssembly.Exports, document: Document): NativeMapGraphicsLayer {
+/** Cartography owns the development statistics; another owner passes its own surfaces. */
+export function createNativeMapGraphicsLayer(exports: WebAssembly.Exports, document: Document,
+  owned: readonly NativeMapGraphicsSurface[] = CARTOGRAPHY_MAP_GRAPHICS_SURFACES): NativeMapGraphicsLayer {
   const memory = exports.memory; const malloc = exports.malloc; const free = exports.free;
-  const surfaces = NATIVE_MAP_GRAPHICS_SURFACES.map((name) => {
+  const cartography = owned === CARTOGRAPHY_MAP_GRAPHICS_SURFACES;
+  const surfaces = owned.map((name) => {
     const publish = exports[`gwonmac_${name}_graphics_publish`];
     const hide = exports[`gwonmac_${name}_graphics_hide`];
     const serial = exports[`gwonmac_${name}_graphics_serial`];
@@ -48,7 +50,7 @@ export function createNativeMapGraphicsLayer(exports: WebAssembly.Exports, docum
     const target = surfaces.find((item) => item?.name === surface);
     if (target) { target.hide(); target.version = ""; }
   };
-  const reset = () => { for (const name of NATIVE_MAP_GRAPHICS_SURFACES) withdraw(name); };
+  const reset = () => { for (const name of owned) withdraw(name); };
   const view = document.defaultView;
   view?.addEventListener("gw:graphics-context-reset", reset);
   const stats = () => {
@@ -62,7 +64,7 @@ export function createNativeMapGraphicsLayer(exports: WebAssembly.Exports, docum
     };
     return {mission: read("mission"), world: read("world"), mission_hover: read("mission_hover"), world_hover: read("world_hover"), ranges: read("ranges")};
   };
-  if (view) view.gwNativeMapGraphicsStats = stats;
+  if (view && cartography) view.gwNativeMapGraphicsStats = stats;
   return Object.freeze({
     available: surface => !disposed && memory instanceof WebAssembly.Memory
       && typeof malloc === "function" && typeof free === "function"
@@ -119,7 +121,7 @@ export function createNativeMapGraphicsLayer(exports: WebAssembly.Exports, docum
       if (view?.gwNativeMapGraphicsStats === stats) delete view.gwNativeMapGraphicsStats;
       disposed = true;
       try {
-        disposeCartographyResources(NATIVE_MAP_GRAPHICS_SURFACES.map(name => () => withdraw(name)));
+        disposeCartographyResources(owned.map(name => () => withdraw(name)));
       } finally {
         view?.removeEventListener("gw:graphics-context-reset", reset);
         for (const target of surfaces) if (target) { target.canvas.width = 0; target.canvas.height = 0; }

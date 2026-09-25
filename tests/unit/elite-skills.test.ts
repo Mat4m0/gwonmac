@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -104,7 +104,9 @@ describe("elite view persistence", () => {
       assert.deepEqual(saved.view, view);
       assert.deepEqual(saved.skills, [338]);
       assert.equal(saved.activeLocation, lissah.id);
-      assert.equal(saved.missionMap, false);
+      // The retired per-character mission switch loads and disappears on save.
+      assert.equal("missionMap" in saved, false);
+      assert.doesNotMatch(await readFile(path, "utf8"), /missionMap/);
       assert.deepEqual(await restart.get(path, characterB), EMPTY_ELITE_TRACKING);
       const none = { ...view, professions: { kind: "custom" as const, values: [] } };
       await restart.update(path, { characterKey: characterA, change: { kind: "view", view: none } });

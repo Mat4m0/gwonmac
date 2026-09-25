@@ -15,7 +15,7 @@ import type {
 const embedded: EmbeddedToolsBundle<HTMLElement> = Object.freeze({
   mountEliteSkills: (target, options) => mountElites(target, {
     tracking: options.nativeApi.eliteTracking, loadSkills: loadInstalledSkills,
-    onOpenChange: options.onOpenChange,
+    onOpenChange: options.onOpenChange, present: options.present, setMissionMarkers: options.setMissionMarkers,
     openWiki: (location, page) => options.nativeApi.eliteTracking.openWiki({ locationId: location.id, page }),
   }),
   mountWhispers,

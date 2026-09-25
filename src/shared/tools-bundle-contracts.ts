@@ -3,7 +3,7 @@
  * Tools bundle. The runtime import uses a generated file name, so both builds
  * import these shapes directly instead of restating them on either side.
  */
-import type { EliteMapHandle } from "./elite-map.js";
+import type { EliteMapHandle, EliteMapHost } from "./elite-map.js";
 import type { HubPresenter, HubSource } from "./hub.js";
 import type { WhisperSession } from "./whisper-session.js";
 import type { TravelFriends } from "./friends.js";
@@ -73,7 +73,7 @@ export type TradeChatMountOptions = Readonly<{
 
 /** The exact named exports of the generated Tools module. */
 export type EmbeddedToolsBundle<Target> = Readonly<{
-  mountEliteSkills: (target: Target, options: Readonly<{ nativeApi: ToolsGwNativeApi; onOpenChange(open: boolean): void }>) => EliteMapHandle;
+  mountEliteSkills: (target: Target, options: Readonly<{ nativeApi: ToolsGwNativeApi; onOpenChange(open: boolean): void } & EliteMapHost>) => EliteMapHandle;
   mountWhispers: (target: Target, options: { session: WhisperSession }) => { dispose(): void };
   mountToolsApp: (
     target: Target,
