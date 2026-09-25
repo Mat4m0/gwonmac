@@ -73,8 +73,12 @@ on demand. Inspection never changes map filters. **Show only this skill** explic
 focuses both maps; **Clear skill focus** exits it.
 The Builds skill inspector opens the same details through **Find capture locations**.
 Both interfaces read descriptions, mechanics, and skill artwork from the installed client.
-The shared detail component shows locally bundled Tango-style cost and timing icons
-with accessible labels. See [icon attribution](../THIRD-PARTY-NOTICES.md#guild-wars-wiki-stat-icons).
+The shared detail component follows the game's own skill description: the
+skill type ("Elite Axe Attack"), costs in the game's order (adrenaline in
+strikes, energy, overcast, sacrifice, activation, recharge), quarter seconds as
+fractions, and attribute-scaled values such as `10...45` highlighted. Aftercast
+appears only when it differs from the usual ¾ second. Cost and timing icons are
+locally bundled Tango-style artwork with accessible labels. See [icon attribution](../THIRD-PARTY-NOTICES.md#guild-wars-wiki-stat-icons).
 
 **Save** keeps a skill for this character. **Set target** also saves the skill
 and selects one active capture location. The footer shows that target and keeps

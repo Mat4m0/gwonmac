@@ -30,7 +30,7 @@ test("catalogue and icon refusals are retryable without restarting", async (cont
   );
   await mkdir(cache, { recursive: true });
   await writeFile(path.join(cache, "catalogue.json"), JSON.stringify({
-    version: 3,
+    version: 4,
     skills: [{ id: 42, name: "Recovered skill" }],
     icons: {},
   }));

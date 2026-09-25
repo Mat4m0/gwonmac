@@ -15,14 +15,29 @@ export const SKILL_AVAILABILITIES = [
 export type SkillAvailability = (typeof SKILL_AVAILABILITIES)[number];
 
 /** The complete JSON record served by Main and accepted by Tools. */
+/**
+ * The game's own skill-type labels, as its skill descriptions begin
+ * ("Elite Axe Attack."). The elite prefix stays with the `elite` flag.
+ */
+export const SKILL_TYPES = [
+  "Skill", "Stance", "Hex Spell", "Spell", "Enchantment Spell", "Flash Enchantment Spell", "Signet", "Well Spell",
+  "Ward Spell", "Glyph", "Axe Attack", "Bow Attack", "Dagger Attack", "Lead Attack", "Off-Hand Attack", "Dual Attack",
+  "Hammer Attack", "Scythe Attack", "Spear Attack", "Ranged Attack", "Sword Attack", "Melee Attack", "Shout",
+  "Preparation", "Pet Attack", "Trap", "Nature Ritual", "Binding Ritual", "Ebon Vanguard Ritual", "Item Spell",
+  "Weapon Spell", "Form", "Chant", "Echo", "Disguise",
+] as const;
+export type SkillType = typeof SKILL_TYPES[number];
+
 export interface SkillCatalogueRecord {
   readonly id: number;
   readonly name: string;
   readonly profession: Profession | null;
   readonly attribute: Attribute | null;
   readonly elite: boolean;
+  readonly type: SkillType;
   readonly availability: SkillAvailability;
   readonly energyCost: number;
+  /** Strikes, as the game shows them; the client stores 25 units per strike. */
   readonly adrenalineCost: number;
   readonly healthCost: number;
   readonly overcast: number;
@@ -34,6 +49,7 @@ export interface SkillCatalogueRecord {
 }
 
 const AVAILABILITIES: ReadonlySet<string> = new Set(SKILL_AVAILABILITIES);
+const TYPES: ReadonlySet<string> = new Set(SKILL_TYPES);
 const PROFESSION_NAMES: ReadonlySet<string> = new Set(Object.keys(PROFESSIONS));
 const ATTRIBUTE_NAMES: ReadonlySet<string> = new Set(Object.keys(ATTRIBUTES));
 const fail = (field: string, why: string): never => {
@@ -98,6 +114,7 @@ function parseRecord(value: unknown, index: number): SkillCatalogueRecord {
       ATTRIBUTE_NAMES,
     ),
     elite: boolean(raw.elite, `${field}.elite`),
+    type: TYPES.has(raw.type as string) ? raw.type as SkillType : fail(`${field}.type`, "must be a known skill type"),
     availability: availability(raw.availability, `${field}.availability`),
     energyCost: finite(raw.energyCost, `${field}.energyCost`),
     adrenalineCost: finite(raw.adrenalineCost, `${field}.adrenalineCost`),

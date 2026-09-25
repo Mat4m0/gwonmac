@@ -33,6 +33,7 @@ export function createSkillCatalogue(
         profession: null,
         attribute: null,
         elite: false,
+        type: "Skill",
         availability: "not-equippable",
         energyCost: 0,
         adrenalineCost: 0,

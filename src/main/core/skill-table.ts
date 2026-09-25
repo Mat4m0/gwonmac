@@ -32,10 +32,12 @@ const FIELD = {
   campaign: 0x08,
   type: 0x0c,
   special: 0x10,
+  weaponRequirement: 0x24,
   profession: 0x28,
   attribute: 0x29,
   title: 0x2a,
   pvpReplacement: 0x2c,
+  combo: 0x30,
   equipType: 0x33,
   overcast: 0x34,
   energy: 0x35,
@@ -63,6 +65,8 @@ const FIELD = {
 const ELITE = 0x4;
 /** The byte at 0x34 is meaningful only for skills carrying this flag. */
 const HAS_OVERCAST = 0x1;
+/** GWToolbox++ `SkillListingWindow` names enchantments with this bit "Flash". */
+const FLASH = 0x800000;
 /** `Skill::IsPlayable()`: unset means a player can equip the record. */
 const NOT_PLAYABLE = 0x02000000;
 const PVP = 0x00400000;
@@ -73,6 +77,11 @@ export interface SkillRecord {
   readonly campaign: number;
   readonly type: number;
   readonly elite: boolean;
+  readonly flash: boolean;
+  /** Weapon bit mask an attack needs: 1 axe, 2 bow, 8 dagger, 16 hammer, 32 scythe, 64 spear, 128 sword. */
+  readonly weaponRequirement: number;
+  /** Dagger chain position: 1 lead, 2 off-hand, 3 dual. */
+  readonly combo: number;
   readonly playable: boolean;
   readonly pvp: boolean;
   readonly pve: boolean;
@@ -117,6 +126,9 @@ export function parseSkillRecord(bytes: Uint8Array, at: number): SkillRecord {
     campaign: data.getUint32(at + FIELD.campaign, true),
     type: data.getUint32(at + FIELD.type, true),
     elite: (special & ELITE) !== 0,
+    flash: (special & FLASH) !== 0,
+    weaponRequirement: data.getUint32(at + FIELD.weaponRequirement, true),
+    combo: bytes[at + FIELD.combo]!,
     playable: (special & NOT_PLAYABLE) === 0,
     pvp: (special & PVP) !== 0,
     pve: (special & PVE) !== 0,
