@@ -278,6 +278,15 @@ fixed logout/Selector/Play state machine, and is absent from the reconnect
 profile. A read-only pre-game observer therefore cannot enqueue a native
 action.
 
+The account character array does not follow the Selector carousel, and the
+player can sort that carousel. The same capability adds the read-only
+`enhancement_character_selector_slot` export. For one account index, it
+repeats the certified Selector traversal, compares names inside the module, and
+returns only the carousel slot or -1. It makes no call, store, or UI message.
+The renderer samples it on the character-selection screen and keeps the order
+in memory for that game window. It never persists character identities.
+Characters not seen on the selector follow in account order.
+
 Character Switch requires focus when a request or explorable confirmation is
 accepted. That one window-local transaction then owns the native action channel
 through Logout, Selector, and Play, including while the window is unfocused or

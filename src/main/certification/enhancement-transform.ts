@@ -760,6 +760,9 @@ function assembleEnhancementTransform(
   const characterExecuteTypeIndex = capabilities.characterSwitchAction
     ? appendType({ params: [0x7f, 0x7f, 0x7f], results: [] })
     : null;
+  const characterSelectorSlotTypeIndex = capabilities.characterSwitchAction
+    ? appendType({ params: [0x7f], results: [0x7f] })
+    : null;
   const quickTypes = reserveQuickItemMoveTypes({
     enabled: capabilities.quickItemMove,
     appendType,
@@ -887,6 +890,7 @@ function assembleEnhancementTransform(
       characterEnqueue: characterEnqueueTypeIndex,
       characterConfigure: characterConfigureTypeIndex,
       characterExecute: characterExecuteTypeIndex,
+      characterSelectorSlot: characterSelectorSlotTypeIndex,
     },
     globalIndices: {
       commandPending: commandPendingGlobalIndex,

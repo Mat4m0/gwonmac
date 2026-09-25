@@ -56,6 +56,7 @@ for (const [boundary, heldAction] of [["immediately", 1], ["after logout", 2], [
           };
           const controller = module.createCharacterSwitchController({
             memory, payloadPointer: pointer, buildId: 7, programId: 1,
+            selectorSlot: () => -1,
             configure(payload, policy) {
               enabled = payload === pointer && policy === 1;
               if (!enabled) pending = null;

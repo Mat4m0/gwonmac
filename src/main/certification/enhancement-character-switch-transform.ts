@@ -125,7 +125,7 @@ export function characterActionConfigure(
   );
 }
 
-function visible(frameLocal: number, layout: CharacterActionConfig["layout"]): Uint8Array {
+function visible(frameLocal: number, layout: Pick<CharacterActionConfig["layout"], "frameState">): Uint8Array {
   return concat(
     getLocal(frameLocal), load(layout.frameState), i32(4), Uint8Array.of(0x71, 0x45, 0x45),
     getLocal(frameLocal), load(layout.frameState), i32(0x200), Uint8Array.of(0x71, 0x45, 0x71),
@@ -394,6 +394,149 @@ export function characterActionExecute(config: CharacterActionConfig): Uint8Arra
       Uint8Array.of(0x10), uleb(config.frameDispatchFunctionIndex),
       result(RESULT.sent), Uint8Array.of(0x0b),
     result(RESULT.invalid), Uint8Array.of(0x0b),
+  );
+}
+
+/** Read-only export that reports one account character's Selector carousel slot. */
+export const CHARACTER_SELECTOR_SLOT_EXPORT = "enhancement_character_selector_slot";
+
+export type CharacterSelectorSlotConfig = Readonly<{
+  layout: Pick<CharacterActionConfig["layout"],
+    | "characterArrayPointer" | "characterArrayCount" | "frameArray" | "frameCount"
+    | "frameBytes" | "frameId" | "frameState" | "frameHashId">;
+  frameDispatchOffset: number;
+  selectorHash: number;
+}>;
+
+/**
+ * Returns the Selector-owned array index for one account-array index, or -1.
+ * The account array does not follow the carousel, which the player can sort.
+ * This repeats the select action's certified traversal without any call,
+ * write, or message: names are compared here and only an index leaves.
+ */
+export function characterSelectorSlot(config: CharacterSelectorSlotConfig): Uint8Array {
+  const { layout } = config;
+  const fail = () => concat(i32(-1), Uint8Array.of(0x0f));
+  const failIf = (condition: Uint8Array) => concat(
+    condition, Uint8Array.of(0x04, 0x40), fail(), Uint8Array.of(0x0b),
+  );
+  return concat(
+    // Local 0 is the account index; locals 1..16 hold bounded traversal state.
+    uleb(1), uleb(16), Uint8Array.of(0x7f),
+    i32(layout.characterArrayCount), load(), setLocal(1),
+    failIf(concat(
+      getLocal(0), getLocal(1), Uint8Array.of(0x4f),
+      getLocal(1), i32(64), Uint8Array.of(0x4b, 0x72),
+    )),
+    i32(layout.characterArrayPointer), load(), setLocal(2),
+    failIf(concat(getLocal(2), Uint8Array.of(0x45))),
+    getLocal(2), getLocal(0), i32(CHARACTER_RECORD_BYTES), Uint8Array.of(0x6c, 0x6a),
+    i32(ACCOUNT_CHARACTER_NAME_OFFSET), Uint8Array.of(0x6a), setLocal(11),
+    failIf(concat(
+      characterActionFramePointerWithinMemory(11, CHARACTER_NAME_UNITS * 2),
+      Uint8Array.of(0x45),
+    )),
+
+    // Find the one visible Selector frame in the bounded frame registry.
+    i32(layout.frameCount), load(), setLocal(1),
+    i32(layout.frameArray), load(), setLocal(2),
+    failIf(concat(
+      getLocal(1), i32(1), Uint8Array.of(0x49),
+      getLocal(1), i32(16_384), Uint8Array.of(0x4b, 0x72),
+      getLocal(2), Uint8Array.of(0x45, 0x72),
+    )),
+    failIf(concat(
+      getLocal(2), memoryBytes(), getLocal(1), i32(2), Uint8Array.of(0x74, 0x6b, 0x4b),
+    )),
+    i32(0), setLocal(3), i32(0), setLocal(5),
+    Uint8Array.of(0x02, 0x40, 0x03, 0x40),
+      getLocal(3), getLocal(1), Uint8Array.of(0x4f, 0x0d), uleb(1),
+      getLocal(2), getLocal(3), i32(4), Uint8Array.of(0x6c, 0x6a), load(), setLocal(4),
+      characterActionFramePointerWithinMemory(4, layout.frameBytes),
+      Uint8Array.of(0x04, 0x40),
+        getLocal(4), load(layout.frameId), getLocal(3), Uint8Array.of(0x46, 0x04, 0x40),
+          getLocal(4), load(layout.frameHashId), i32(config.selectorHash), Uint8Array.of(0x46),
+          visible(4, layout), Uint8Array.of(0x71, 0x04, 0x40),
+            getLocal(4), setLocal(5), Uint8Array.of(0x0c), uleb(4),
+          Uint8Array.of(0x0b),
+        Uint8Array.of(0x0b),
+      Uint8Array.of(0x0b),
+      getLocal(3), i32(1), Uint8Array.of(0x6a), setLocal(3), Uint8Array.of(0x0c), uleb(0),
+    Uint8Array.of(0x0b, 0x0b),
+    failIf(concat(getLocal(5), Uint8Array.of(0x45))),
+
+    // The latest non-null callback row owns the Selector component context.
+    getLocal(5), load(config.frameDispatchOffset), setLocal(6),
+    getLocal(5), load(FRAME_CALLBACK_COUNT_OFFSET), setLocal(7),
+    failIf(concat(
+      getLocal(7), i32(1), Uint8Array.of(0x49),
+      getLocal(7), i32(64), Uint8Array.of(0x4b, 0x72),
+      getLocal(6), Uint8Array.of(0x45, 0x72),
+    )),
+    failIf(concat(
+      getLocal(6), memoryBytes(), getLocal(7), i32(FRAME_CALLBACK_BYTES),
+      Uint8Array.of(0x6c, 0x6b, 0x4b),
+    )),
+    i32(0), setLocal(8),
+    Uint8Array.of(0x02, 0x40, 0x03, 0x40),
+      getLocal(7), Uint8Array.of(0x45, 0x0d), uleb(1),
+      getLocal(7), i32(1), Uint8Array.of(0x6b), setLocal(7),
+      getLocal(6), getLocal(7), i32(FRAME_CALLBACK_BYTES), Uint8Array.of(0x6c, 0x6a),
+      load(FRAME_CALLBACK_CONTEXT_OFFSET), setLocal(8),
+      getLocal(8), Uint8Array.of(0x0d), uleb(1),
+      Uint8Array.of(0x0c), uleb(0),
+    Uint8Array.of(0x0b, 0x0b),
+    failIf(concat(characterActionFramePointerWithinMemory(8, 20), Uint8Array.of(0x45))),
+    failIf(concat(
+      getLocal(8), load(SELECTOR_CONTEXT_FRAME_ID_OFFSET),
+      getLocal(5), load(layout.frameId), Uint8Array.of(0x47),
+    )),
+    getLocal(8), load(SELECTOR_CONTEXT_CHARACTERS_OFFSET), setLocal(9),
+    getLocal(8), load(SELECTOR_CONTEXT_CHARACTER_COUNT_OFFSET), setLocal(10),
+    getLocal(8), load(SELECTOR_CONTEXT_CHARACTER_CAPACITY_OFFSET), setLocal(16),
+    failIf(concat(
+      getLocal(10), i32(1), Uint8Array.of(0x49),
+      getLocal(10), i32(64), Uint8Array.of(0x4b, 0x72),
+      getLocal(9), Uint8Array.of(0x45, 0x72),
+      getLocal(16), getLocal(10), Uint8Array.of(0x49, 0x72),
+      getLocal(16), i32(64), Uint8Array.of(0x4b, 0x72),
+    )),
+    failIf(concat(
+      getLocal(9), memoryBytes(), getLocal(10), i32(4), Uint8Array.of(0x6c, 0x6b, 0x4b),
+    )),
+
+    // Exact bounded UTF-16 equality. Empty purchased slots are skipped; a
+    // duplicate name is ambiguous and reports no slot.
+    i32(-1), setLocal(15), i32(0), setLocal(3),
+    Uint8Array.of(0x02, 0x40, 0x03, 0x40),
+      getLocal(3), getLocal(10), Uint8Array.of(0x4f, 0x0d), uleb(1),
+      getLocal(9), getLocal(3), i32(4), Uint8Array.of(0x6c, 0x6a), load(), setLocal(12),
+      getLocal(12), Uint8Array.of(0x04, 0x40),
+        failIf(concat(
+          characterActionFramePointerWithinMemory(
+            12,
+            SELECTOR_CHARACTER_NAME_OFFSET + CHARACTER_NAME_UNITS * 2,
+          ),
+          Uint8Array.of(0x45),
+        )),
+        i32(1), setLocal(14), i32(0), setLocal(13),
+        Uint8Array.of(0x02, 0x40, 0x03, 0x40),
+          getLocal(13), i32(CHARACTER_NAME_UNITS), Uint8Array.of(0x4f, 0x0d), uleb(1),
+          getLocal(12), getLocal(13), i32(2), Uint8Array.of(0x6c, 0x6a),
+          load16(SELECTOR_CHARACTER_NAME_OFFSET),
+          getLocal(11), getLocal(13), i32(2), Uint8Array.of(0x6c, 0x6a), load16(),
+          Uint8Array.of(0x47, 0x04, 0x40), i32(0), setLocal(14), Uint8Array.of(0x0c), uleb(2),
+          Uint8Array.of(0x0b),
+          getLocal(13), i32(1), Uint8Array.of(0x6a), setLocal(13), Uint8Array.of(0x0c), uleb(0),
+        Uint8Array.of(0x0b, 0x0b),
+        getLocal(14), Uint8Array.of(0x04, 0x40),
+          failIf(concat(getLocal(15), i32(-1), Uint8Array.of(0x47))),
+          getLocal(3), setLocal(15),
+        Uint8Array.of(0x0b),
+      Uint8Array.of(0x0b),
+      getLocal(3), i32(1), Uint8Array.of(0x6a), setLocal(3), Uint8Array.of(0x0c), uleb(0),
+    Uint8Array.of(0x0b, 0x0b),
+    getLocal(15), Uint8Array.of(0x0b),
   );
 }
 

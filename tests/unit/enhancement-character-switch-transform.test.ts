@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   characterActionExecute,
   characterActionFramePointerWithinMemory,
+  characterSelectorSlot,
 } from "../../src/main/certification/enhancement-character-switch-transform.js";
 import { decodeFunctions } from "../../src/main/certification/wasm-instruction-evidence.js";
 import type { ModuleShape } from "../../src/main/certification/enhancement-evidence-types.js";
@@ -138,4 +139,100 @@ test("character switching uses only the certified internal frame dispatcher", ()
     && body[index + 4] === 0x01
     && body[index + 5] === 0x4b), -1,
   "logout must accept only outpost/explorable instance values 0 and 1");
+});
+
+function selectorSlotModule(body: Uint8Array): Uint8Array {
+  const type = concat(
+    uleb(1), Uint8Array.of(0x60),
+    uleb(1), Uint8Array.of(0x7f),
+    uleb(1), Uint8Array.of(0x7f),
+  );
+  const memoryName = new TextEncoder().encode("memory");
+  const slotName = new TextEncoder().encode("slot");
+  return concat(
+    WASM_HEADER,
+    section(1, type),
+    section(3, concat(uleb(1), uleb(0))),
+    section(5, concat(uleb(1), Uint8Array.of(0x00), uleb(1))),
+    section(7, concat(
+      uleb(2),
+      uleb(memoryName.byteLength), memoryName, Uint8Array.of(0x02), uleb(0),
+      uleb(slotName.byteLength), slotName, Uint8Array.of(0x00), uleb(0),
+    )),
+    section(10, encodeCode([body])),
+  );
+}
+
+test("the Selector slot reader maps account characters to carousel slots read-only", async () => {
+  const layout = {
+    characterArrayPointer: 104,
+    characterArrayCount: 112,
+    frameArray: 116,
+    frameCount: 124,
+    frameBytes: 0x1c8,
+    frameId: 0xbc,
+    frameState: 0x18c,
+    frameHashId: 0x134,
+  };
+  const body = characterSelectorSlot({ layout, frameDispatchOffset: 0xa8, selectorHash: 11 });
+  const decoded = decodeFunctions(bodyModule(body), [])[0]!;
+  assert.equal(decoded.calls.size, 0, "the reader must not call game functions");
+  assert.equal(body.includes(0x36), false, "the reader must not store to memory");
+
+  const bytes = selectorSlotModule(body);
+  const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+  assert.equal(WebAssembly.validate(buffer), true);
+  const instance = await WebAssembly.instantiate(await WebAssembly.compile(buffer));
+  const memory = instance.exports.memory as WebAssembly.Memory;
+  const slot = instance.exports.slot as (accountIndex: number) => number;
+  const view = new DataView(memory.buffer);
+  const u32 = (at: number, value: number) => view.setUint32(at, value, true);
+  const name = (at: number, value: string) => {
+    for (let index = 0; index < 20; index += 1) {
+      view.setUint16(at + index * 2, index < value.length ? value.charCodeAt(index) : 0, true);
+    }
+  };
+
+  // Account array order: Alpha, Beta, Gamma.
+  u32(layout.characterArrayPointer, 0x1000);
+  u32(layout.characterArrayCount, 3);
+  ["Alpha", "Beta", "Gamma"].forEach((value, index) => name(0x1000 + index * 0x84 + 0x18, value));
+  // Frame 1 is the visible Selector; frame 2 has its hash but is hidden.
+  u32(layout.frameArray, 0x2000);
+  u32(layout.frameCount, 3);
+  [0x3000, 0x3400, 0x3800].forEach((frame, index) => {
+    u32(0x2000 + index * 4, frame);
+    u32(frame + layout.frameId, index);
+  });
+  u32(0x3000 + layout.frameHashId, 99);
+  u32(0x3000 + layout.frameState, 4);
+  u32(0x3400 + layout.frameHashId, 11);
+  u32(0x3400 + layout.frameState, 4);
+  u32(0x3800 + layout.frameHashId, 11);
+  // The latest non-null callback row owns the context.
+  u32(0x3400 + 0xa8, 0x4000);
+  u32(0x3400 + 0xb0, 2);
+  u32(0x4000 + 12 + 4, 0x4100);
+  u32(0x4100 + 4, 1);
+  u32(0x4100 + 8, 0x4200);
+  u32(0x4100 + 12, 4);
+  u32(0x4100 + 16, 4);
+  // Carousel: Beta, an empty purchased slot, Gamma, Alpha.
+  [0x5000, 0, 0x5100, 0x5200].forEach((record, index) => u32(0x4200 + index * 4, record));
+  name(0x5000 + 0x20, "Beta");
+  name(0x5100 + 0x20, "Gamma");
+  name(0x5200 + 0x20, "Alpha");
+
+  assert.deepEqual([0, 1, 2].map(slot), [3, 0, 2]);
+  assert.equal(slot(3), -1, "an index outside the account array reports no slot");
+
+  name(0x5100 + 0x20, "Alpha");
+  assert.equal(slot(0), -1, "a duplicate carousel name is ambiguous");
+  name(0x5100 + 0x20, "Gamma");
+
+  u32(0x3400 + layout.frameState, 0x204);
+  assert.equal(slot(0), -1, "a hidden Selector reports no slot");
+  u32(0x3400 + layout.frameState, 4);
+  u32(0x4100 + 4, 2);
+  assert.equal(slot(0), -1, "a context owned by another frame reports no slot");
 });

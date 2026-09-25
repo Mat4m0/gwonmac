@@ -112,12 +112,17 @@ export async function installCoreCertifiedCompanion(
     && typeof exports.enhancement_configure_character_action === "function"
     ? exports.enhancement_configure_character_action as (payload: number, enabled: number) => number
     : null;
+  const characterSelectorSlot = capabilities.characterSwitchAction
+    && typeof exports.enhancement_character_selector_slot === "function"
+    ? exports.enhancement_character_selector_slot as (accountIndex: number) => number
+    : null;
   if (capabilities.preGameControls
     && (preGameStateReader === null || preGameDiagnosticReader === null)) {
     throw new Error("the pre-game profile derived a module with incomplete readers");
   }
   if (capabilities.characterSwitchAction
-    && (characterActionEnqueue === null || characterActionConfigure === null)) {
+    && (characterActionEnqueue === null || characterActionConfigure === null
+      || characterSelectorSlot === null)) {
     throw new Error("the character-switch profile derived an incomplete action");
   }
   if (manifest.tableSlot >= table.length) {
@@ -513,6 +518,7 @@ export async function installCoreCertifiedCompanion(
       && installedCharacterList
       && characterActionEnqueue
       && characterActionConfigure
+      && characterSelectorSlot
       && characterActionPointer !== 0
     ) {
       new Uint8Array(
@@ -525,6 +531,7 @@ export async function installCoreCertifiedCompanion(
         payloadPointer: characterActionPointer,
         enqueue: characterActionEnqueue,
         configure: characterActionConfigure,
+        selectorSlot: (accountIndex) => Number(characterSelectorSlot(accountIndex)) | 0,
         characters: installedCharacterList,
         controls: installedPreGameControls,
         buildId: manifest.buildId,

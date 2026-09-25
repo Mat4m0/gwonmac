@@ -20,9 +20,14 @@ import {
 const TRANSITION_LIMIT = 32;
 const SELECTOR_READY_BUDGET_MS = 8_000;
 const SELECTOR_READY_POLL_MS = 100;
+// One bounded frame-table scan per check: frequent only while Selector is
+// visible, where the player can change its sort.
+const SELECTOR_ORDER_VISIBLE_MS = 500;
+const SELECTOR_ORDER_ABSENT_MS = 2_000;
 
 type Enqueue = (action: number, argument: number) => number;
 type Configure = (payload: number, enabled: number) => number;
+type SelectorSlot = (accountIndex: number) => number;
 type NativeSend = "sent" | "refused" | "invalid" | "timeout"
   | "selector-frame" | "selector-child" | "selector-index"
   | "selector-context" | "selector-target"
@@ -105,6 +110,8 @@ export function createCharacterSwitchController(options: Readonly<{
   payloadPointer: number;
   enqueue: Enqueue;
   configure: Configure;
+  /** Carousel slot of one account-array index while Selector is visible, else -1. */
+  selectorSlot: SelectorSlot;
   characters: CharacterListSource;
   controls: PreGameControls;
   buildId: number;
@@ -124,6 +131,13 @@ export function createCharacterSwitchController(options: Readonly<{
   const transitions: CharacterSwitchDiagnosticTransition[] = [];
   let pendingCharacterKey: string | null = null;
   const listeners = new Set<() => void>();
+  // The account array does not follow the carousel, and Selector exists only
+  // on the character-selection screen. Keep its last order for this session
+  // only; character identities are never persisted.
+  let selectorSlots: ReadonlyMap<string, number> | null = null;
+  let presentedSource: CompanionCharacterListState | null = null;
+  let presentedSlots: ReadonlyMap<string, number> | null = null;
+  let presented: CompanionCharacterListState = options.characters.state;
 
   const emit = () => { for (const listener of listeners) listener(); };
   const transition = (stage: CharacterSwitchTransitionStage) => {
@@ -342,6 +356,58 @@ export function createCharacterSwitchController(options: Readonly<{
     publish({ status: "complete" }, "confirmation:complete");
   };
 
+  // Selector is built after the list is published, and the player can change
+  // its sort at any time. The slot reader itself proves that Selector is
+  // visible, so no separate pre-game scan is needed.
+  const sampleSelectorOrder = (): boolean => {
+    const state = options.characters.state;
+    if (disposed || document.visibilityState !== "visible" || state.status !== "ready") return false;
+    const slots = new Map<string, number>();
+    for (const [index, character] of state.characters.entries()) {
+      let slot: number;
+      try {
+        slot = options.selectorSlot(index);
+      } catch {
+        return false;
+      }
+      if (!Number.isInteger(slot) || slot < 0) return false;
+      slots.set(character.characterKey, slot);
+    }
+    const previous = selectorSlots;
+    if (previous?.size === slots.size
+      && [...slots].every(([key, slot]) => previous.get(key) === slot)) return true;
+    selectorSlots = slots;
+    emit();
+    return true;
+  };
+  const presentCharacters = (): CompanionCharacterListState => {
+    const state = options.characters.state;
+    const slots = selectorSlots;
+    if (state === presentedSource && slots === presentedSlots) return presented;
+    presentedSource = state;
+    presentedSlots = slots;
+    if (state.status !== "ready" || slots === null) {
+      presented = state;
+      return presented;
+    }
+    // Characters created after the last selector visit follow, in account order.
+    const ranked = state.characters
+      .map((character, index) => ({
+        character,
+        index,
+        slot: slots.get(character.characterKey) ?? Number.MAX_SAFE_INTEGER,
+      }))
+      .sort((left, right) => left.slot - right.slot || left.index - right.index);
+    presented = Object.freeze({
+      ...state,
+      characters: Object.freeze(ranked.map(({ character }) => character)),
+      selectedIndex: state.selectedIndex === null
+        ? null
+        : ranked.findIndex(({ index }) => index === state.selectedIndex),
+    });
+    return presented;
+  };
+
   const start = (characterKey: string, confirmedExplorable: boolean) => {
     if (disposed) return;
     if (action.status === "switching" || (action.status === "confirming" && !confirmedExplorable)) {
@@ -424,10 +490,20 @@ export function createCharacterSwitchController(options: Readonly<{
   };
 
   options.configure(0, 0);
+  let selectorOrderTimer: ReturnType<typeof setTimeout> | null = null;
+  const watchSelectorOrder = () => {
+    const visible = sampleSelectorOrder();
+    if (disposed) return;
+    selectorOrderTimer = setTimeout(
+      watchSelectorOrder,
+      visible ? SELECTOR_ORDER_VISIBLE_MS : SELECTOR_ORDER_ABSENT_MS,
+    );
+  };
+  watchSelectorOrder();
 
   return Object.freeze({
     payloadBytes: CHARACTER_SWITCH_ACTION_ABI.bytes,
-    get characters() { return options.characters.state; },
+    get characters() { return presentCharacters(); },
     get action() { return action; },
     get context() { return options.controls.switchContext(); },
     request(characterKey: string) { start(characterKey, false); },
@@ -527,6 +603,7 @@ export function createCharacterSwitchController(options: Readonly<{
     },
     dispose() {
       disposed = true;
+      if (selectorOrderTimer !== null) clearTimeout(selectorOrderTimer);
       pendingCharacterKey = null;
       options.configure(0, 0);
       listeners.clear();
