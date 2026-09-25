@@ -57,6 +57,7 @@ import {
   stringShardIndex,
 } from "./skill-strings.js";
 import { findSkillTable, type SkillRecord } from "./skill-table.js";
+import { skillType } from "./skill-type.js";
 import type { SkillCatalogueRecord } from "../../shared/skill-catalogue.js";
 
 /**
@@ -122,7 +123,8 @@ function descriptionValues(
   skill: SkillRecord,
 ): readonly [string, string, string] {
   const range = (low: number, high: number) =>
-    low === high ? String(low) : `${low}–${high}`;
+    // The game's own notation for a value that grows with its attribute.
+    low === high ? String(low) : `${low}...${high}`;
   return [
     range(skill.scale0, skill.scale15),
     range(skill.bonusScale0, skill.bonusScale15),
@@ -202,7 +204,7 @@ interface Archive {
  * recognised and the assets are decoded again, which is why nothing here needs
  * a migration.
  */
-const CACHE_VERSION = 3;
+const CACHE_VERSION = 4;
 
 /**
  * Where one icon's bytes sit in the archive.
@@ -422,10 +424,11 @@ export class SkillAssets {
         name: strings.get(skill.nameStringId) ?? `Skill ${skill.id}`,
         profession: PROFESSION_BY_ID.get(skill.profession) ?? null,
         elite: skill.elite,
+        type: skillType(skill),
         availability: skillAvailability(skill),
         attribute: ATTRIBUTE_BY_ID.get(skill.attribute) ?? null,
         energyCost: skill.energyCost,
-        adrenalineCost: skill.adrenalineCost,
+        adrenalineCost: skill.adrenalineCost / 25,
         healthCost: skill.healthCost,
         overcast: skill.overcast,
         activationSeconds: skill.activationSeconds,

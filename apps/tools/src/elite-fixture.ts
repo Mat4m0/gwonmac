@@ -15,23 +15,23 @@ import { installEliteMapPointer, type EliteMapPointer, type EliteMapPointerSurfa
 import type { SkillPresentation } from "./skill-catalog";
 import { mountEliteSkills } from "./elite-mount";
 const fixtureSkills = [
-  { boss: "Lissah the Packleader", name: "Eviscerate", profession: "W", attribute: "AxeMastery" },
-  { boss: "Fenrir", name: "Crippling Slash", profession: "W", attribute: "Swordsmanship" },
-  { boss: "Jormungand", name: "Earth Shaker", profession: "W", attribute: "HammerMastery" },
-  { boss: "Warrior's Construct", name: "Hundred Blades", profession: "W", attribute: "Swordsmanship" },
-  { boss: "Markis", name: "Barrage", profession: "R", attribute: "Marksmanship" },
-  { boss: "Dwayna's Cursed", name: "Restore Condition", profession: "Mo", attribute: "ProtectionPrayers" },
+  { boss: "Lissah the Packleader", name: "Eviscerate", profession: "W", attribute: "AxeMastery", type: "Axe Attack" },
+  { boss: "Fenrir", name: "Crippling Slash", profession: "W", attribute: "Swordsmanship", type: "Sword Attack" },
+  { boss: "Jormungand", name: "Earth Shaker", profession: "W", attribute: "HammerMastery", type: "Hammer Attack" },
+  { boss: "Warrior's Construct", name: "Hundred Blades", profession: "W", attribute: "Swordsmanship", type: "Skill" },
+  { boss: "Markis", name: "Barrage", profession: "R", attribute: "Marksmanship", type: "Bow Attack" },
+  { boss: "Dwayna's Cursed", name: "Restore Condition", profession: "Mo", attribute: "ProtectionPrayers", type: "Spell" },
 ] as const;
-export const ELITE_FIXTURE_SKILLS: readonly SkillPresentation[] = fixtureSkills.map(({ boss, name, profession, attribute }) => {
+export const ELITE_FIXTURE_SKILLS: readonly SkillPresentation[] = fixtureSkills.map(({ boss, name, profession, attribute, type }) => {
   const location = ELITE_LOCATIONS.find((entry) => entry.boss === boss)!;
   const color = profession === "W" ? "#ad7431" : profession === "R" ? "#37774b" : "#416caa";
   const initials = name.split(" ").map(part => part[0]).join("").slice(0, 2);
   // Reproduce the client texture's baked-in 4px rim so marker polish is visible offline.
   const iconUrl = `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#000"/><rect x="4" y="4" width="56" height="56" fill="${color}"/><path d="M4 60 60 4v56Z" fill="#000" opacity=".25"/><text x="32" y="40" text-anchor="middle" fill="#fff" font-family="sans-serif" font-size="24">${initials}</text></svg>`)}`;
-  return { id: skillId(location.skillId), name, profession, attribute,
+  return { id: skillId(location.skillId), name, profession, attribute, type,
     elite: true, availability: "pve", energyCost: profession === "W" ? 0 : 5, adrenalineCost: profession === "W" ? 8 : 0, healthCost: 0, overcast: 0,
     activationSeconds: profession === "Mo" ? 0.75 : 0, aftercastSeconds: 0.75, rechargeSeconds: profession === "Mo" ? 2 : 0,
-    description: "Illustrative skill details for the offline fixture. In game, the exact description and costs come from the installed client.", iconUrl };
+    description: "Illustrative details for the offline fixture: this value grows 10...45 with the attribute. In game, the description and costs come from the installed client.", iconUrl };
 });
 const characterA = travelCharacterKey("0123456789abcdef");
 const characterB = travelCharacterKey("fedcba9876543210");

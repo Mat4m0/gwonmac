@@ -56,6 +56,7 @@ const presentations: SkillPresentation[] = names.map((name, index) => {
   return {
     id: skillId(200 + index),
     name,
+    type: "Spell",
     profession,
     attribute: profession === null
       ? null

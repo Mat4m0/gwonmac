@@ -4,7 +4,9 @@
 .skill-details .inspector-identity .skill { width: 48px; height: 48px; }
 .skill-details .inspector-identity strong { font-size: var(--ui-font-size-lg); line-height: 1.2; overflow-wrap: anywhere; }
 .skill-details .inspector-identity small { font-size: var(--ui-font-size-sm); line-height: 1.4; }
-.skill-details .inspector-identity .skill-elite-label { color: var(--ui-accent); }
+.skill-details .inspector-identity .skill-type { color: var(--ui-text-muted); }
+.skill-details .inspector-identity .skill-type[data-elite] { color: var(--ui-warning); }
+.skill-details .skill-scaled { color: var(--ui-success); font-variant-numeric: tabular-nums; }
 .skill-stats { display: flex; flex-wrap: wrap; align-items: center; gap: var(--ui-space-2) var(--ui-space-4); margin: 0; }
 .skill-stats > div { display: inline-flex; align-items: center; gap: var(--ui-space-1); }
 .skill-stats dt, .skill-stats dd { margin: 0; }
