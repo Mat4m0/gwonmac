@@ -115,8 +115,24 @@ darkens the area outside walkable terrain while leaving the interior clear,
 with the chosen boundary color. The continent-scale view keeps remaining
 markers and clusters. Explored cells are clear on every map.
 
+**Reveal range** selects Off, Normal 3×3, or Bird's Eye 7×7. Set it in Maps
+settings or with **Reach** in the in-game Cartography panel. When it is on, the
+Mission Map and World Map draw a reach guide:
+
+- Each cell where the reveal square touches a remaining marker receives a tint.
+  A stronger tint means that standing there reveals more remaining cells.
+- A faint lattice inside the tinted area lets the player count cells.
+- A thin outline in the lattice color marks the edge of the reach. Cells outside
+  it reveal nothing and stay clear.
+
+The guide disappears with the last marker in an area. At clustered zoom levels,
+only the tint and outline remain. The Compass does not draw the guide; it shows
+the range around the player instead. Cyan and magenta stay reserved for hover
+inspection, so a thick range square always means a hover.
+
 Hold Shift while hovering the map window to inspect the normal 3×3 reveal
-range. Hold Option+Shift for Bird's Eye 7×7 inspection. The diamond is the
+range. Hold Option+Shift for Bird's Eye 7×7 inspection. A badge on the corner of the range
+shows how many remaining cells standing in the hovered cell reveals. The diamond is the
 default marker; custom styles can select corner brackets, crosses, stipple, or
 hatching.
 

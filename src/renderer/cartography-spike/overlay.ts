@@ -445,6 +445,7 @@ export function mountCartographyOverlay(options: Readonly<{
       const walkabilityOpacity = previewWalkabilityOpacity
         ?? settings.cartographyWalkabilityOpacity;
       const revealRadius = settings.cartographyRevealMode === "birds-eye" ? 3 : 1;
+      const reachRadius = settings.cartographyRevealMode === "off" ? 0 : revealRadius;
       const explorationKey = `${state.continent.status === "ready"
         ? `${state.continent.continent}:${state.continent.generation}`
         : "unavailable"}:${explorationVersion}`;
@@ -543,7 +544,7 @@ export function mountCartographyOverlay(options: Readonly<{
             scaleY: box.height / (compass.top - compass.bottom),
             style: style.walkability,
             opacity: settings.cartographyOverlayEnabled ? walkabilityOpacity : 0,
-            ...(cartography ? {cartography, inspectionRadius: settings.cartographyRevealMode === "off" ? 0 : revealRadius} : {}),
+            ...(cartography ? {cartography, inspectionRadius: reachRadius} : {}),
           });
         } else compassTerrainLayer.hide();
       });
@@ -587,13 +588,13 @@ export function mountCartographyOverlay(options: Readonly<{
               revealabilityVersion: actionabilityKey,
               canCurrentMapReveal,
               canVisitedMapReveal,
-              hoveredCell: null, revealRadius: 0,
+              hoveredCell: null, revealRadius: 0, reachRadius,
             });
             if (hoveredCell && options.nativeMapGraphics.available("mission_hover")) {
               const hoverProjection = nativeMapHoverProjection(mapProjection, hoveredCell, cartographyHoverRevealRadius(shiftHeld, optionHeld));
               missionHoverLayer.update({projection: hoverProjection, style: style.grid, opacity: gridOpacity,
-                explorationVersion: "inspection", revealabilityVersion: "inspection", isExplored, isRemaining,
-                canCurrentMapReveal, canVisitedMapReveal, hoveredCell, revealRadius: cartographyHoverRevealRadius(shiftHeld, optionHeld)});
+                explorationVersion: explorationKey, revealabilityVersion: actionabilityKey, isExplored, isRemaining,
+                canCurrentMapReveal, canVisitedMapReveal, hoveredCell, revealRadius: cartographyHoverRevealRadius(shiftHeld, optionHeld), reachRadius: 0});
               options.nativeMapGraphics.update("mission_hover", {area: mission.generation, continent: state.continent.continent,
                 projection: hoverProjection, images: [missionHoverLayer.image()]});
             } else { missionHoverLayer.hide(); options.nativeMapGraphics.hide("mission_hover"); }
@@ -657,7 +658,7 @@ export function mountCartographyOverlay(options: Readonly<{
           revealabilityVersion: actionabilityKey,
           canCurrentMapReveal,
           canVisitedMapReveal,
-          hoveredCell: null, revealRadius: 0,
+          hoveredCell: null, revealRadius: 0, reachRadius,
         });
         options.nativeMapGraphics.update("world", { area: world.generation, continent: world.continent,
           projection: tileProjection, images: [worldGridLayer.image()],
@@ -665,8 +666,8 @@ export function mountCartographyOverlay(options: Readonly<{
         if (hoveredCell && options.nativeMapGraphics.available("world_hover")) {
           const hoverProjection = nativeMapHoverProjection(mapProjection, hoveredCell, cartographyHoverRevealRadius(shiftHeld, optionHeld));
           worldHoverLayer.update({projection: hoverProjection, style: style.grid, opacity: gridOpacity,
-            explorationVersion: "inspection", revealabilityVersion: "inspection", isExplored, isRemaining,
-            canCurrentMapReveal, canVisitedMapReveal, hoveredCell, revealRadius: cartographyHoverRevealRadius(shiftHeld, optionHeld)});
+            explorationVersion: explorationKey, revealabilityVersion: actionabilityKey, isExplored, isRemaining,
+            canCurrentMapReveal, canVisitedMapReveal, hoveredCell, revealRadius: cartographyHoverRevealRadius(shiftHeld, optionHeld), reachRadius: 0});
           options.nativeMapGraphics.update("world_hover", {area: world.generation, continent: world.continent,
             projection: hoverProjection, images: [worldHoverLayer.image()]});
         } else { worldHoverLayer.hide(); options.nativeMapGraphics.hide("world_hover"); }

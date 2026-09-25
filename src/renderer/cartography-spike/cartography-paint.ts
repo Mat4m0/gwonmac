@@ -77,7 +77,7 @@ function pointInCell(corners: CellCorners, u: number, v: number): PaintPoint {
   };
 }
 
-function lineBetween(
+export function lineBetween(
   context: CanvasRenderingContext2D,
   from: PaintPoint,
   to: PaintPoint,
