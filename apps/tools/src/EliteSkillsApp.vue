@@ -4,7 +4,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch 
 import { installResizeGrip } from "../../../src/shared/ui/resize";
 import type { EliteMapView } from "../../../src/shared/elite-map";
 import type { EliteMapHit, EliteMarkerScene, EliteSceneMarker } from "../../../src/shared/elite-map-scene";
-import { ELITE_MISSION_MAP_MARKERS, ELITE_MISSION_MAP_MARKER_LABELS, type EliteMissionMapMarkers } from "../../../src/shared/elite-map-settings";
+import { ELITE_MISSION_MAP_MARKERS, ELITE_MISSION_MAP_MARKER_SHORT_LABELS, type EliteMissionMapMarkers } from "../../../src/shared/elite-map-settings";
 import { ELITE_LOCATIONS } from "../../../src/shared/elite-locations";
 import { eliteContinent, eliteLearned, type EliteLocation, type EliteViewPreferences } from "../../../src/shared/elite-skills";
 import { guildWarsMapName } from "../../../src/shared/guild-wars-map-names";
@@ -65,9 +65,10 @@ const selectedProfessions = computed(() => {
   if (filter.kind === "custom") return filter.values;
   return party.value.player?.professions?.filter((value): value is Profession => value !== null) ?? [];
 });
+/** Filters differ from the defaults: every class, not yet learned, every region, no search. */
 const filtered = computed(() => {
   const pref = preferences.value;
-  return pref.professions.kind !== "all" || pref.learned !== "missing" || !!pref.region || !!pref.search || pref.focusedSkill !== null;
+  return pref.professions.kind !== "all" || pref.learned !== "missing" || !!pref.region || !!pref.search;
 });
 const normalized = (text: string) => text.normalize("NFKD").replace(/\p{M}/gu, "").toLocaleLowerCase();
 const matching = computed(() => {
@@ -77,8 +78,9 @@ const matching = computed(() => {
   return ELITE_LOCATIONS.filter((entry) => {
     const info = skill(entry.skillId);
     if (!props.catalogue.has(skillId(entry.skillId)) || !info.elite) return false;
+    // A focused skill shows alone, whatever the filters; the filters stay saved for later.
+    if (pref.focusedSkill !== null) return entry.skillId === pref.focusedSkill;
     if (selectedProfessions.value && (!info.profession || !selectedProfessions.value.includes(info.profession))) return false;
-    if (pref.focusedSkill !== null && entry.skillId !== pref.focusedSkill) return false;
     if (pref.region && entry.region !== pref.region) return false;
     if (status === "missing" && captured(entry.skillId)) return false;
     if (status === "learned" && !captured(entry.skillId)) return false;
@@ -96,7 +98,7 @@ const matchingSkills = computed(() => grouped(matching.value).sort((a, b) => a.s
 const huntLocations = computed(() => ELITE_LOCATIONS.filter(entry => tracked(entry.skillId)));
 const hunt = computed(() => grouped(huntLocations.value)
   .sort((a, b) => tracking.value.skills.indexOf(a.skill.id) - tracking.value.skills.indexOf(b.skill.id)));
-const huntOpen = computed(() => hunt.value.filter(entry => !captured(entry.skill.id)));
+const huntOpenSkills = computed(() => hunt.value.filter(entry => !captured(entry.skill.id)));
 const huntDone = computed(() => hunt.value.filter(entry => captured(entry.skill.id)));
 const hereRegion = computed(() => ELITE_LOCATIONS.find(entry => entry.mapId === props.view.mapId)?.region ?? null);
 const chosen = computed(() => ELITE_LOCATIONS.find((entry) => entry.id === tracking.value.activeLocation) ?? null);
@@ -114,11 +116,13 @@ const target = computed(() => {
   return next ? { location: next, automatic: true } : null;
 });
 const isTarget = (location: EliteLocation) => target.value?.location.id === location.id;
+/** The Hunt list's open skills, with the target's skill first. */
+const huntOpen = computed(() => [...huntOpenSkills.value].sort((a, b) => Number(b.locations.some(isTarget)) - Number(a.locations.some(isTarget))));
 
 // ---------- Map markers ----------
 const worldLocations = computed(() => {
   const world = props.view.world;
-  if (!world || !preferences.value.worldMap || !ready.value) return [];
+  if (!world || !ready.value) return [];
   const shown = preferences.value.mode === "tracked" ? huntLocations.value : matching.value;
   return unique([...(target.value ? [target.value.location] : []), ...shown]).filter((entry) => eliteContinent(entry.region) === world.continent);
 });
@@ -145,19 +149,28 @@ const scene = computed<EliteMarkerScene>(() => ({
 }));
 watch(scene, (value) => props.present?.(value), { immediate: true });
 
-// ---------- Capture notice ----------
-const notice = ref<{ name: string; done: number; total: number; next: EliteLocation | null } | null>(null);
+// ---------- Notices ----------
+const notice = ref<{ title: string; kind: "captured" | "info"; details: readonly string[] } | null>(null);
 let noticeTimer: ReturnType<typeof setTimeout> | undefined;
-const capturedHunt = computed(() => party.value.characterSkills
-  ? `${character.value}|${hunt.value.filter(entry => captured(entry.skill.id)).map(entry => entry.skill.id).join(",")}` : null);
-watch(capturedHunt, (next, previous) => {
-  if (!next || !previous || next.split("|")[0] !== previous.split("|")[0]) return;
-  const before = new Set(previous.split("|")[1]!.split(",").filter(Boolean));
-  const gained = next.split("|")[1]!.split(",").filter(id => id && !before.has(id));
+function announce(title: string, kind: "captured" | "info", details: readonly string[], ms = 6000) {
+  notice.value = { title, kind, details };
+  clearTimeout(noticeTimer); noticeTimer = setTimeout(() => { notice.value = null; }, ms);
+}
+/**
+ * A capture is a Hunt list skill that was open in the last observation of the
+ * same loaded character and is learned now. Loading, switching characters, or
+ * adding an already learned skill never announces one.
+ */
+const huntProgress = computed(() => character.value && loaded.value && party.value.characterSkills ? {
+  character: character.value, open: huntOpenSkills.value.map(entry => entry.skill.id), done: huntDone.value.map(entry => entry.skill.id),
+} : null);
+watch(huntProgress, (next, previous) => {
+  if (!next || !previous || next.character !== previous.character) return;
+  const gained = next.done.filter(id => previous.open.includes(id));
   if (!gained.length) return;
-  notice.value = { name: skill(Number(gained.at(-1))).name, done: huntDone.value.length, total: hunt.value.length,
-    next: target.value?.location ?? null };
-  clearTimeout(noticeTimer); noticeTimer = setTimeout(() => { notice.value = null; }, 8000);
+  const following = target.value?.location;
+  announce(`✓ ${skill(gained.at(-1)!).name} captured`, "captured", [`${next.done.length} of ${next.done.length + next.open.length} on your Hunt list`,
+    ...(following ? [`Next: ${following.boss} · ${guildWarsMapName(following.mapId)}`] : [])], 9000);
 });
 
 // ---------- Panel geometry ----------
@@ -197,15 +210,20 @@ watch(resizeGrip, (handle, _, onCleanup) => {
 }, { flush: "post" });
 const targetMessage = computed(() => {
   const location = target.value?.location;
-  if (!location) return tracking.value.skills.length ? "Everything on your Hunt list is captured." : "Add skills to your Hunt list to get a target.";
+  if (!location) {
+    if (!hunt.value.length) return "Add skills to your Hunt list to get a target.";
+    if (huntOpenSkills.value.length) return "No boss position is known for the rest of your Hunt list. Open a skill to read its notes.";
+    return "Everything on your Hunt list is captured.";
+  }
   if (location.mapId !== props.view.mapId) return `In ${guildWarsMapName(location.mapId)}.`;
-  if (props.view.missionMarkers === "off") return "Here. Mission Map markers are off.";
-  if (props.view.mission && !props.view.mission.transform) return "Here. Boss markers are unavailable in this area; use the notes.";
+  if (!location.points.length) return "In this area. Position unknown; use the notes.";
+  if (props.view.missionMarkers === "off") return "In this area. Mission Map markers are off.";
+  if (props.view.mission && !props.view.mission.transform) return "In this area. Boss markers are unavailable here; use the notes.";
   return "In this area.";
 });
 
 // ---------- Preview ----------
-const preview = ref<{ location: EliteLocation; x: number; y: number; keyboard: boolean; nearby: readonly EliteLocation[]; pinned?: boolean } | null>(null);
+const preview = ref<{ location: EliteLocation; x: number; y: number; keyboard: boolean; nearby: readonly EliteLocation[]; pinned?: boolean; fromMap?: boolean } | null>(null);
 const nearbySkills = computed(() => [...new Map(preview.value?.nearby.map(location => [location.skillId, location])).values()]);
 const previewElement = ref<HTMLElement | null>(null);
 let previewClose: ReturnType<typeof setTimeout> | undefined;
@@ -228,13 +246,13 @@ function dismissPreview(event: KeyboardEvent) {
 }
 watch(() => matching.value.map(location => location.id).join("|"), () => { if (!preview.value?.pinned) preview.value = null; });
 const otherBosses = (location: EliteLocation) => ELITE_LOCATIONS.filter(entry => entry.skillId === location.skillId && entry.id !== location.id).length;
-function inspect(location: EliteLocation | null, x: number, y: number, keyboard = false, nearby: readonly EliteLocation[] = [], pinned = false) {
+function inspect(location: EliteLocation | null, x: number, y: number, keyboard = false, nearby: readonly EliteLocation[] = [], pinned = false, fromMap = false) {
   if (!location) { hidePreview(); return; }
   keepPreview();
   // Place beside the marker instead of clamping the card over nearby pointer targets.
   const left = x + 360 <= window.innerWidth - 8 ? x + 20 : x - 360;
   const next = { location, x: Math.max(8, Math.min(window.innerWidth - 348, left)),
-    y: Math.max(8, Math.min(window.innerHeight - 488, y + 16)), keyboard, nearby, pinned };
+    y: Math.max(8, Math.min(window.innerHeight - 488, y + 16)), keyboard, nearby, pinned, fromMap };
   preview.value = next;
   const shown = preview.value;
   void nextTick(() => {
@@ -263,21 +281,26 @@ function pointer(hit: EliteMapHit | null) {
   const location = hit ? locationsOf(hit.locationIds)[0] : undefined;
   if (!hit || !location) { if (!previewHovered) hidePreview(); return; }
   if (preview.value?.location.id === location.id) { keepPreview(); return; }
-  inspect(location, hit.x, hit.y, false, locationsOf(hit.nearbyIds));
+  inspect(location, hit.x, hit.y, false, locationsOf(hit.nearbyIds), false, true);
 }
 /** A marker click opens its details in an open planner, or pins a small action card. */
 function activate(hit: EliteMapHit) {
   const location = locationsOf(hit.locationIds)[0];
   if (!location) return;
   if (open.value) { selectLocation(location); return; }
-  inspect(location, hit.x, hit.y, false, locationsOf(hit.nearbyIds), true);
+  inspect(location, hit.x, hit.y, false, locationsOf(hit.nearbyIds), true, true);
 }
 function unpin() { keepPreview(); preview.value = null; }
 function dismissPinned(event: PointerEvent) {
   if (preview.value?.pinned && !(event.target instanceof Node && previewElement.value?.contains(event.target))) unpin();
 }
-onMounted(() => window.addEventListener("pointerdown", dismissPinned, true));
-onBeforeUnmount(() => window.removeEventListener("pointerdown", dismissPinned, true));
+/** A pinned card is opened from the game map, so Escape closes it even while the game keeps focus. */
+function escapePinned(event: KeyboardEvent) {
+  if (event.key !== "Escape" || !preview.value?.pinned) return;
+  unpin(); event.preventDefault(); event.stopImmediatePropagation();
+}
+onMounted(() => { window.addEventListener("pointerdown", dismissPinned, true); window.addEventListener("keydown", escapePinned, true); });
+onBeforeUnmount(() => { window.removeEventListener("pointerdown", dismissPinned, true); window.removeEventListener("keydown", escapePinned, true); });
 
 // ---------- Actions ----------
 async function showWiki(location: EliteLocation, page: "boss" | "skill") {
@@ -297,11 +320,9 @@ function setOpen(value: boolean, keyboard = false, remember = true) {
 function browse(event?: MouseEvent) { setOpen(true, event?.detail === 0); }
 function showView(mode: EliteViewPreferences["mode"]) { if (preferences.value.mode !== mode) updatePreferences({ mode, focusedSkill: null }); }
 function find(id: number) {
-  if (!ELITE_LOCATIONS.some((entry) => entry.skillId === id)) return;
-  selectedId.value = id;
-  focusSkill(id);
-  browse();
-  revealSelected();
+  const location = detailLocations(id)[0];
+  if (!location) return;
+  selectLocation(location);
 }
 function revealSelected(keyboard = false) {
   void nextTick(() => {
@@ -310,9 +331,11 @@ function revealSelected(keyboard = false) {
     if (keyboard) row?.focus({ preventScroll: true });
   });
 }
+/** Opens a skill's details where its row is visible: the Hunt list, the matches, or a temporary focus. */
 function selectLocation(location: EliteLocation, keyboard = false) {
   selectedId.value = location.skillId;
-  if (!tracked(location.skillId) && preferences.value.mode === "tracked") showView("browse");
+  if (tracked(location.skillId)) showView("tracked");
+  else if (preferences.value.mode === "tracked" || !matchingSkills.value.some(entry => entry.skill.id === location.skillId)) focusSkill(location.skillId);
   setOpen(true);
   revealSelected(keyboard);
 }
@@ -320,16 +343,19 @@ function showDetails(id: number) {
   selectedId.value = selectedId.value === id ? null : id;
   keepPreview(); preview.value = null;
 }
-function focusSkill(id: number) {
-  updatePreferences({ search: "", focusedSkill: id, professions: { kind: "all" }, region: "", mode: "browse", learned: "any", worldMap: true });
-}
+/** Shows one skill alone; its filters stay saved and return with "Clear skill focus". */
+function focusSkill(id: number) { updatePreferences({ focusedSkill: id, mode: "browse" }); }
 function close(event?: MouseEvent) {
   const keyboard = event ? event.detail === 0 : root.value?.contains(document.activeElement) === true;
   setOpen(false, keyboard);
 }
 function toggleTrack(id: number) { void plan.change({ kind: tracked(id) ? "remove" : "track", skillId: id }); }
-function setTarget(location: EliteLocation) { void plan.change({ kind: "target", locationId: location.id }); }
-async function removeCaptured() { for (const entry of huntDone.value) await plan.change({ kind: "remove", skillId: entry.skill.id }); }
+function setTarget(location: EliteLocation) {
+  if (!tracked(location.skillId)) announce("Target set", "info", [`${skill(location.skillId).name} is now on your Hunt list`]);
+  void plan.change({ kind: "target", locationId: location.id });
+}
+function useAutomaticTarget() { void plan.change({ kind: "target", locationId: null }); }
+function removeCaptured() { void plan.change({ kind: "remove-skills", skillIds: huntDone.value.map(entry => entry.skill.id) }); }
 function chooseMissionMarkers(mode: EliteMissionMapMarkers) { void props.setMissionMarkers?.(mode); }
 const detailLocations = (id: number) => ELITE_LOCATIONS.filter((entry) => entry.skillId === id)
   .sort((a, b) => Number(isTarget(b)) - Number(isTarget(a)) || Number(b.mapId === props.view.mapId) - Number(a.mapId === props.view.mapId) || a.boss.localeCompare(b.boss));
@@ -357,8 +383,8 @@ defineExpose({ find, close, pointer, activate });
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 8 9-8 9-8-9Z"/></svg>
       </button>
       <div class="ui-segment elite-view-switch" role="group" aria-label="Elite markers on this map">
-        <button :aria-pressed="preferences.mode === 'tracked'" :disabled="!ready" title="Your Hunt list" @click="showView('tracked')">Hunt <small>{{ huntDone.length }}/{{ hunt.length }}</small></button>
-        <button :aria-pressed="preferences.mode === 'browse'" :disabled="!ready" title="Everything the planner filters match" @click="showView('browse')">All <small>{{ matchingSkills.length }}</small></button>
+        <button :aria-pressed="preferences.mode === 'tracked'" :disabled="!ready" title="Your Hunt list" :aria-label="`Hunt list, ${huntDone.length} of ${hunt.length} captured`" @click="showView('tracked')">Hunt <small>{{ huntDone.length }}/{{ hunt.length }}</small></button>
+        <button :aria-pressed="preferences.mode === 'browse'" :disabled="!ready" title="Everything the planner filters match" :aria-label="`All matches, ${matchingSkills.length} skills`" @click="showView('browse')">All <small>{{ matchingSkills.length }}</small></button>
       </div>
       <span v-if="problem" class="elite-summary-problem" role="alert" :title="loaded ? 'Changes are not saved. Open the planner to retry.' : 'Your setup could not load. Open the planner to retry.'"
         :aria-label="loaded ? 'Changes are not saved. Open the planner to retry.' : 'Your setup could not load. Open the planner to retry.'">!</span>
@@ -366,14 +392,19 @@ defineExpose({ find, close, pointer, activate });
     <section v-if="open" class="ui-frame elite-panel" :data-resizing="resizing || undefined" :style="panelStyle" aria-label="Elite skills">
       <header class="ui-panel-head">
         <h2>Elite skills</h2>
-        <span v-if="myClasses" class="elite-classes" :title="`This character's professions`">{{ myClasses }}</span>
-        <button class="ui-button" aria-label="Collapse Elite Skills" @click="close">Hide</button>
+        <span v-if="myClasses" class="elite-classes" title="This character's professions">{{ myClasses }}</span>
+        <button class="ui-button" aria-label="Hide Elite skills" @click="close">Hide</button>
       </header>
       <div class="elite-view-bar">
-        <div class="ui-segment elite-view-switch" data-fill role="group" aria-label="Show">
-          <button :aria-pressed="preferences.mode === 'browse'" @click="showView('browse')">All matches <small>{{ matchingSkills.length }}</small></button>
-          <button :aria-pressed="preferences.mode === 'tracked'" @click="showView('tracked')">Hunt list <small>{{ huntDone.length }}/{{ hunt.length }}</small></button>
+        <div class="ui-segment elite-view-switch" data-fill role="group" aria-label="Planner view">
+          <button :aria-pressed="preferences.mode === 'browse'" :disabled="!ready" :aria-label="`All matches, ${matchingSkills.length} skills`" @click="showView('browse')">All matches <small>{{ matchingSkills.length }}</small></button>
+          <button :aria-pressed="preferences.mode === 'tracked'" :disabled="!ready" :aria-label="`Hunt list, ${huntDone.length} of ${hunt.length} captured`" @click="showView('tracked')">Hunt list <small>{{ huntDone.length }}/{{ hunt.length }}</small></button>
         </div>
+      </div>
+      <div v-if="notice" class="elite-notice elite-notice-inline" :data-kind="notice.kind" role="status">
+        <strong>{{ notice.title }}</strong>
+        <span v-for="detail in notice.details" :key="detail">{{ detail }}</span>
+        <button class="ui-button elite-preview-close" aria-label="Dismiss" @click="notice = null"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
       </div>
       <div v-if="problem" class="elite-message" role="alert">
         <p>{{ problem }}</p><button class="ui-button" :disabled="busy" @click="plan.retry">Retry</button>
@@ -383,68 +414,70 @@ defineExpose({ find, close, pointer, activate });
       <div v-if="catalogueProblem" class="elite-message" role="status"><p>{{ catalogueProblem }}</p><button class="ui-link" @click="reloadSkills">Reload skills</button></div>
       <p v-if="catalogueVersion === 0 && !catalogueProblem" class="elite-save-state" role="status">Loading skill details…</p>
       <p v-if="!view.characterKey" class="elite-message">Select a PvE character to build a Hunt list. You can still browse.</p>
-      <div v-if="preferences.mode === 'browse'" class="elite-filter-panel"><EliteFilters ref="filters" :preferences="preferences" :disabled="!!character && !loaded"
-        :my-professions="party.player?.professions ?? null" :learned-available="!!party.characterSkills" @change="updatePreferences" /></div>
-      <div class="elite-results-heading">
-        <span v-if="preferences.mode === 'browse'">{{ matchingSkills.length }} {{ matchingSkills.length === 1 ? 'skill' : 'skills' }}<template v-if="filtered"> · <button class="ui-link" @click="clearFilters">Clear {{ preferences.focusedSkill !== null ? 'skill focus' : 'filters' }}</button></template></span>
-        <span v-else>{{ huntOpen.length }} to capture</span>
-        <span v-if="busy" role="status">{{ loaded ? 'Saving…' : 'Loading setup…' }}</span>
-      </div>
       <div class="ui-scroll elite-panel-content">
+        <div v-if="preferences.mode === 'browse' && preferences.focusedSkill === null" class="elite-filter-panel"><EliteFilters ref="filters" :preferences="preferences" :disabled="!ready"
+          :my-professions="party.player?.professions ?? null" :learned-available="!!party.characterSkills" @change="updatePreferences" /></div>
+        <div class="elite-results-heading">
+          <span v-if="preferences.mode === 'browse' && preferences.focusedSkill !== null">One skill shown · <button class="ui-link" :disabled="!ready" @click="updatePreferences({ focusedSkill: null })">Clear skill focus</button></span>
+          <span v-else-if="preferences.mode === 'browse'">{{ matchingSkills.length }} {{ matchingSkills.length === 1 ? 'skill' : 'skills' }}<template v-if="filtered"> · <button class="ui-link" :disabled="!ready" @click="clearFilters">Clear filters</button></template></span>
+          <span v-if="busy" role="status">{{ loaded ? 'Saving…' : 'Loading setup…' }}</span>
+        </div>
         <div class="elite-results">
-          <template v-for="section in (preferences.mode === 'browse' ? [{ key: 'all', title: '', entries: matchingSkills }] : [{ key: 'open', title: '', entries: huntOpen }, { key: 'done', title: `Captured · ${huntDone.length}`, entries: huntDone }])" :key="section.key">
+          <template v-for="section in (preferences.mode === 'browse' ? [{ key: 'all', title: '', entries: matchingSkills }] : [{ key: 'open', title: `To capture · ${huntOpen.length}`, entries: huntOpen }, { key: 'done', title: `Captured · ${huntDone.length}`, entries: huntDone }])" :key="section.key">
             <h3 v-if="section.title && section.entries.length" class="elite-section-title">{{ section.title }}</h3>
             <div v-for="result in section.entries" :key="result.skill.id" class="elite-result" :data-expanded="selectedId === result.skill.id" :data-captured="captured(result.skill.id) || undefined">
               <div class="elite-result-heading">
                 <button class="elite-result-main" :data-skill-id="result.skill.id" :aria-expanded="selectedId === result.skill.id" :aria-controls="`elite-detail-${result.skill.id}`"
                   :aria-describedby="preview?.location.skillId === result.skill.id ? 'elite-skill-preview' : undefined" @click="showDetails(result.skill.id)" @pointerenter="inspectRow(detailLocations(result.skill.id)[0]!, $event)" @pointerleave="hidePreview" @focus="inspectRow(detailLocations(result.skill.id)[0]!, $event)" @blur="hidePreview">
                   <span class="ui-slot elite-skill-icon" :data-profession="result.skill.profession" data-elite><img v-if="result.skill.iconUrl" :src="result.skill.iconUrl" alt="" draggable="false"><span v-else>{{ result.skill.profession?.slice(0, 1) ?? '?' }}</span></span>
-                  <span class="elite-result-label"><strong>{{ result.skill.name }}</strong>
-                    <span class="elite-tags">
+                  <span class="elite-result-label">
+                    <span class="elite-result-title"><strong>{{ result.skill.name }}</strong>
                       <span v-if="result.locations.some(isTarget)" class="elite-tag" data-kind="target">Target</span>
                       <span v-if="captured(result.skill.id)" class="elite-tag" data-kind="captured">✓ Captured</span>
                       <span v-else-if="result.locations.some(entry => entry.mapId === view.mapId)" class="elite-tag" data-kind="here">In this area</span>
                     </span>
                     <small>{{ rowMeta(result.skill, result.locations) }}</small></span>
                 </button>
-                <button class="ui-button elite-track-button" :aria-label="`${tracked(result.skill.id) ? 'Remove' : 'Add'} ${result.skill.name} ${tracked(result.skill.id) ? 'from' : 'to'} Hunt list`" :title="tracked(result.skill.id) ? 'Remove from Hunt list' : 'Add to Hunt list'" :aria-pressed="tracked(result.skill.id)" :disabled="blocked" @click="toggleTrack(result.skill.id)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9Z" /></svg></button>
+                <button class="ui-button elite-track-button" :aria-label="`Hunt ${result.skill.name}`" :title="tracked(result.skill.id) ? 'On your Hunt list · click to remove' : 'Add to Hunt list'" :aria-pressed="tracked(result.skill.id)" :disabled="blocked" @click="toggleTrack(result.skill.id)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9Z" /></svg></button>
               </div>
               <div v-if="selectedId === result.skill.id" :id="`elite-detail-${result.skill.id}`" class="elite-inline-detail">
                 <SkillDetails :skill="result.skill" :rank="rankOf(result.skill)" />
                 <h3>Capture from</h3>
-                <EliteCaptureLocation v-for="location in detailLocations(result.skill.id)" :key="location.id" :location="location" :active="isTarget(location)" :here="location.mapId === view.mapId" :disabled="blocked"
-                  @target="setTarget(location)" @wiki="showWiki(location, 'boss')" />
-                <div class="elite-detail-links"><button v-if="preferences.mode === 'browse'" class="ui-link" :disabled="!!character && !loaded" @click="focusSkill(result.skill.id)">Show only this skill</button>
+                <EliteCaptureLocation v-for="location in detailLocations(result.skill.id)" :key="location.id" :location="location" :active="isTarget(location)" :here="location.mapId === view.mapId"
+                  :learned="captured(result.skill.id)" :disabled="blocked" @target="setTarget(location)" @wiki="showWiki(location, 'boss')" />
+                <div class="elite-detail-links"><button v-if="preferences.mode === 'browse' && preferences.focusedSkill === null" class="ui-link" :disabled="!ready" @click="focusSkill(result.skill.id)">Show only this skill</button>
                   <button class="ui-link" @click="showWiki(result.locations[0]!, 'skill')">Skill wiki</button></div>
               </div>
             </div>
           </template>
-          <div v-if="preferences.mode === 'browse' && !matchingSkills.length" class="ui-empty"><strong>No elite skills match</strong><p>Try another name or fewer filters.</p><button class="ui-button" @click="clearFilters">Clear filters</button></div>
-          <div v-if="preferences.mode === 'tracked' && !hunt.length" class="ui-empty"><strong>Your Hunt list is empty</strong><p>Use the star beside a skill in All matches to hunt it with this character.</p><button class="ui-button" @click="showView('browse')">Find elite skills</button></div>
+          <div v-if="preferences.mode === 'browse' && !matchingSkills.length" class="ui-empty"><strong>No elite skills match</strong><p>Try another name or fewer filters.</p><button class="ui-button" :disabled="!ready" @click="clearFilters">Clear filters</button></div>
+          <div v-if="preferences.mode === 'tracked' && !hunt.length" class="ui-empty">
+            <strong>Your Hunt list is empty</strong>
+            <p>{{ view.characterKey ? 'Use the star beside a skill in All matches to hunt it with this character.' : 'Select a PvE character to build a Hunt list.' }}</p>
+            <button class="ui-button" :disabled="!ready" @click="showView('browse')">Find elite skills</button></div>
           <p v-if="preferences.mode === 'tracked' && huntDone.length" class="elite-clear-captured"><button class="ui-link" :disabled="blocked" @click="removeCaptured">Remove captured from Hunt list</button></p>
         </div>
       </div>
       <footer class="elite-panel-footer">
         <div v-if="target" class="elite-current-target">
           <span><strong>Target: {{ target.location.boss }}</strong> · {{ skill(target.location.skillId).name }}</span>
-          <small>{{ target.automatic ? 'Chosen for you · ' : '' }}{{ targetMessage }}</small>
+          <small>{{ target.automatic ? 'Chosen for you · ' : '' }}{{ targetMessage }}<template v-if="!target.automatic"> · <button class="ui-link" :disabled="blocked" @click="useAutomaticTarget">Use automatic target</button></template></small>
         </div>
         <p v-else class="elite-support">{{ targetMessage }}</p>
-        <div class="elite-mission-markers"><span>Mission Map</span>
-          <div class="ui-segment" role="group" aria-label="Mission Map markers">
-            <button v-for="mode in ELITE_MISSION_MAP_MARKERS" :key="mode" :aria-pressed="view.missionMarkers === mode" :disabled="!setMissionMarkers" @click="chooseMissionMarkers(mode)">{{ ELITE_MISSION_MAP_MARKER_LABELS[mode] === 'All planner matches' ? 'All' : ELITE_MISSION_MAP_MARKER_LABELS[mode] }}</button>
+        <div class="elite-mission-markers"><span>Mission Map shows</span>
+          <div class="ui-segment" role="group" aria-label="Mission Map shows">
+            <button v-for="mode in ELITE_MISSION_MAP_MARKERS" :key="mode" :aria-pressed="view.missionMarkers === mode" :disabled="!setMissionMarkers" @click="chooseMissionMarkers(mode)">{{ ELITE_MISSION_MAP_MARKER_SHORT_LABELS[mode] }}</button>
           </div>
         </div>
-        <label class="elite-check"><input type="checkbox" :checked="preferences.worldMap" :disabled="!!character && !loaded" @change="updatePreferences({ worldMap: !preferences.worldMap })"> World Map markers</label>
       </footer>
-      <button ref="resizeGrip" class="elite-panel-resize" aria-label="Resize Elite Skills height" title="Drag to resize · Arrow keys adjust height" :disabled="!!character && !loaded"><span aria-hidden="true"></span></button>
+      <button ref="resizeGrip" class="elite-panel-resize" aria-label="Resize Elite skills height" title="Drag to resize · Arrow keys adjust height" :disabled="!ready"><span aria-hidden="true"></span></button>
     </section>
     <aside v-if="preview" id="elite-skill-preview" ref="previewElement" class="ui-frame elite-preview" :data-keyboard="preview.keyboard ? '' : undefined" @pointerenter="enterPreview" @pointerleave="leavePreview" @focusin="keepPreview" @focusout="leavePreviewFocus" :style="{ left: `${preview.x}px`, top: `${preview.y}px`, maxHeight: `min(520px, calc(100dvh - ${preview.y + 8}px))` }" :role="preview.pinned || preview.nearby.length > 1 ? 'region' : 'tooltip'" :aria-label="preview.pinned ? `${skill(preview.location.skillId).name} capture location` : preview.nearby.length > 1 ? 'Nearby elite skills' : undefined">
       <div v-if="preview.pinned" class="elite-preview-actions">
-        <button class="ui-button" :disabled="blocked || captured(preview.location.skillId) || (isTarget(preview.location) && !target?.automatic)" @click="setTarget(preview.location)">{{ isTarget(preview.location) ? '✓ Target' : 'Set as target' }}</button>
-        <button class="ui-button" :aria-pressed="tracked(preview.location.skillId)" :disabled="blocked" @click="toggleTrack(preview.location.skillId)">{{ tracked(preview.location.skillId) ? '★ Hunting' : '☆ Hunt' }}</button>
+        <button class="ui-button" :disabled="blocked || captured(preview.location.skillId) || (isTarget(preview.location) && !target?.automatic)" @click="setTarget(preview.location)">{{ captured(preview.location.skillId) ? '✓ Learned' : isTarget(preview.location) ? target?.automatic ? 'Keep as target' : '✓ Target' : 'Set target' }}</button>
+        <button class="ui-button" :aria-pressed="tracked(preview.location.skillId)" :aria-label="`Hunt ${skill(preview.location.skillId).name}`" :disabled="blocked" @click="toggleTrack(preview.location.skillId)">{{ tracked(preview.location.skillId) ? '★ Hunting' : '☆ Hunt' }}</button>
         <button class="ui-link" @click="selectLocation(preview.location)">Planner</button>
-        <button class="ui-button elite-preview-close" aria-label="Close capture details" @click="unpin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+        <button class="ui-button elite-preview-close" aria-label="Close capture details" title="Close · Esc" @click="unpin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
       </div>
       <div class="ui-scroll elite-preview-content">
         <div v-if="nearbySkills.length > 1" class="elite-nearby">
@@ -461,9 +494,9 @@ defineExpose({ find, close, pointer, activate });
         </div>
         <SkillDetails :skill="skill(preview.location.skillId)" :rank="rankOf(skill(preview.location.skillId))">
           <template #context><div class="elite-preview-where">
-            <p><strong>{{ preview.location.boss }}</strong> · {{ guildWarsMapName(preview.location.mapId) }}<template v-if="preview.location.mapId === view.mapId"> · you are here</template></p>
+            <p><strong>{{ preview.location.boss }}</strong> · {{ guildWarsMapName(preview.location.mapId) }}<template v-if="preview.location.mapId === view.mapId"> · in this area</template></p>
             <p v-if="preview.location.points.length > 1" class="elite-support" title="Known spawn references, not live boss positions">{{ preview.location.points.length }} possible positions · spawns at one of them</p>
-            <p v-else-if="!preview.location.points.length" class="elite-support">Position unknown · use the notes</p>
+            <p v-else-if="!preview.location.points.length" class="elite-support">Position unknown. Use the notes.</p>
             <p v-if="preview.location.note" class="elite-location-note">{{ preview.location.note }}</p>
             <p class="elite-preview-status">
               <span v-if="captured(preview.location.skillId)" data-kind="captured">✓ Captured by this character</span>
@@ -474,12 +507,13 @@ defineExpose({ find, close, pointer, activate });
             </p>
           </div></template>
         </SkillDetails>
-        <p v-if="!preview.pinned" class="elite-preview-hint">Click for actions</p>
+        <p v-if="preview.fromMap && !preview.pinned" class="elite-preview-hint">Click the marker for actions</p>
       </div>
     </aside>
-    <div v-if="notice" class="ui-frame elite-notice" role="status">
-      <strong>✓ {{ notice.name }} captured</strong><span>{{ notice.done }} of {{ notice.total }} on your Hunt list</span>
-      <span v-if="notice.next">Next: {{ notice.next.boss }} · {{ guildWarsMapName(notice.next.mapId) }}</span>
+    <!-- With the planner open the notice joins it, so it never covers the planner; otherwise it floats. -->
+    <div v-if="notice && !open" class="ui-frame elite-notice" :data-kind="notice.kind" role="status">
+      <strong>{{ notice.title }}</strong>
+      <span v-for="detail in notice.details" :key="detail">{{ detail }}</span>
       <button class="ui-button elite-preview-close" aria-label="Dismiss" @click="notice = null"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
     </div>
   </div>

@@ -15,3 +15,8 @@ export const ELITE_MISSION_MAP_MARKER_LABELS: Readonly<Record<EliteMissionMapMar
 export function isEliteMissionMapMarkers(value: unknown): value is EliteMissionMapMarkers {
   return ELITE_MISSION_MAP_MARKERS.includes(value as EliteMissionMapMarkers);
 }
+
+/** Labels for the compact planner switch, where the context names the Mission Map. */
+export const ELITE_MISSION_MAP_MARKER_SHORT_LABELS: Readonly<Record<EliteMissionMapMarkers, string>> = Object.freeze({
+  saved: "Hunt list", all: "All", off: "Off",
+});

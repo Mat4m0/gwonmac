@@ -48,7 +48,10 @@ export const EMPTY_ELITE_TRACKING: EliteTracking = Object.freeze({
 });
 export type EliteChange =
   | Readonly<{ kind: "track" | "remove"; skillId: number }>
-  | Readonly<{ kind: "target"; locationId: string }>
+  /** A null location returns to the automatic target. */
+  | Readonly<{ kind: "target"; locationId: string | null }>
+  /** Removes several skills in one save, such as every captured Hunt list skill. */
+  | Readonly<{ kind: "remove-skills"; skillIds: readonly number[] }>
   | Readonly<{ kind: "view"; view: EliteViewPreferences }>;
 export type EliteUpdate = Readonly<{ characterKey: TravelCharacterKey; change: EliteChange }>;
 
@@ -118,10 +121,17 @@ export function parseEliteUpdate(value: unknown): EliteUpdate {
   }
   if (change.kind === "target") {
     exact(change, ["kind", "locationId"]);
-    if (typeof change.locationId !== "string" || !/^[a-f0-9]{16}$/u.test(change.locationId)) {
+    if (change.locationId !== null && (typeof change.locationId !== "string" || !/^[a-f0-9]{16}$/u.test(change.locationId))) {
       throw new TypeError("Invalid capture location");
     }
     return { characterKey, change: { kind: "target", locationId: change.locationId } };
+  }
+  if (change.kind === "remove-skills") {
+    exact(change, ["kind", "skillIds"]);
+    const ids: unknown = change.skillIds;
+    if (!Array.isArray(ids) || ids.length < 1 || ids.length > 500 || new Set(ids).size !== ids.length
+      || !ids.every((id: unknown) => typeof id === "number" && Number.isSafeInteger(id) && id >= 1 && id <= 10_000)) throw new TypeError("Invalid skills");
+    return { characterKey, change: { kind: "remove-skills", skillIds: Object.freeze([...ids as number[]]) } };
   }
   throw new TypeError("Unknown tracking action");
 }
@@ -155,10 +165,17 @@ export function changeEliteTracking(
     return { ...current, view };
   }
   if (change.kind === "target") {
+    if (change.locationId === null) return { ...current, activeLocation: null };
     const location = locations.find((entry) => entry.id === change.locationId);
     if (!location) throw new TypeError("Unknown capture location");
     return { ...current, activeLocation: location.id,
       skills: [...new Set([...current.skills, location.skillId])] };
+  }
+  if (change.kind === "remove-skills") {
+    const removed = new Set(change.skillIds);
+    const active = locations.find((entry) => entry.id === current.activeLocation);
+    return { ...current, skills: current.skills.filter((id) => !removed.has(id)),
+      activeLocation: active && removed.has(active.skillId) ? null : current.activeLocation };
   }
   if (!locations.some((entry) => entry.skillId === change.skillId)) throw new TypeError("Unknown capture skill");
   if (change.kind === "track") return { ...current, skills: [...new Set([...current.skills, change.skillId])] };

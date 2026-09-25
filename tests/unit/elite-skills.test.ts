@@ -66,6 +66,23 @@ describe("elite capture plans", () => {
 });
 
 
+describe("hunt list changes", () => {
+  it("returns to the automatic target and removes several skills in one change", () => {
+    const [first, second] = [ELITE_LOCATIONS[0]!, ELITE_LOCATIONS.find(entry => entry.skillId !== ELITE_LOCATIONS[0]!.skillId)!];
+    let plan = changeEliteTracking(EMPTY_ELITE_TRACKING, { kind: "target", locationId: first.id }, ELITE_LOCATIONS);
+    plan = changeEliteTracking(plan, { kind: "track", skillId: second.skillId }, ELITE_LOCATIONS);
+    assert.equal(changeEliteTracking(plan, { kind: "target", locationId: null }, ELITE_LOCATIONS).activeLocation, null);
+    const pruned = changeEliteTracking(plan, { kind: "remove-skills", skillIds: [first.skillId, second.skillId] }, ELITE_LOCATIONS);
+    assert.deepEqual([pruned.skills, pruned.activeLocation], [[], null]);
+    const parse = (change: unknown) => parseEliteUpdate({ characterKey: characterA, change });
+    assert.deepEqual(parse({ kind: "target", locationId: null }).change, { kind: "target", locationId: null });
+    assert.deepEqual(parse({ kind: "remove-skills", skillIds: [1, 2] }).change, { kind: "remove-skills", skillIds: [1, 2] });
+    for (const skillIds of [[], [1, 1], [0], [1.5], "1", new Array(501).fill(0).map((_, index) => index + 1)]) {
+      assert.throws(() => parse({ kind: "remove-skills", skillIds }));
+    }
+  });
+});
+
 describe("elite view persistence", () => {
   it("validates bounded preferences and rejects malformed or unknown choices", () => {
     const valid = { ...DEFAULT_ELITE_VIEW, search: "Hundred Blades", professions: { kind: "custom", values: ["W", "R"] } };

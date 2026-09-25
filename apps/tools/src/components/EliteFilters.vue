@@ -41,7 +41,7 @@ defineExpose({ searchInput });
         <button class="ui-link" :aria-pressed="preferences.professions.kind === 'all'" @click="emit('change', { professions: { kind: 'all' }, focusedSkill: null })">All</button>
       </span>
       <div class="ui-segment elite-learned" role="group" aria-label="Learned status" :title="learnedAvailable ? undefined : 'Learned status is unavailable, so every skill is shown'">
-        <button v-for="[value, label] in LEARNED" :key="value" :aria-pressed="preferences.learned === value" :disabled="!learnedAvailable && value !== 'any'"
+        <button v-for="[value, label] in LEARNED" :key="value" :aria-pressed="(learnedAvailable ? preferences.learned : 'any') === value" :disabled="!learnedAvailable && value !== 'any'"
           @click="emit('change', { learned: value, focusedSkill: null })">{{ label }}</button>
       </div>
     </div>
