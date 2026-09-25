@@ -42,7 +42,7 @@ function peer() {
       return 1;
     };
   }
-  return { graphics: createEliteMapGraphics(exports as WebAssembly.Exports, document), published, hidden, canvases };
+  return { graphics: createEliteMapGraphics(exports as WebAssembly.Exports, document), published, hidden, canvases, view };
 }
 const marker = (key: string, mapX: number, mapY: number, emphasis: EliteSceneMarker["emphasis"] = "match"): EliteSceneMarker =>
   ({ key, locationId: key, skillId: Number(key.length), mapId: 1, mapX, mapY, iconUrl: null, emphasis, hovered: false, captured: false, position: null });
@@ -123,4 +123,37 @@ test("markers grow with the game's zoom, and a hovered boss's positions are join
   assert.ok(dots.length >= 8, "a 150-pixel link carries a row of dots");
   assert.ok(dots.every(([x0, y0, x1, y1]) => x0! > 1100 && x1! < 1250 && (y0! + y1!) / 2 === 2100), "dots lie between the two positions");
   assert.ok(dots.every(([x0, , x1]) => x1! - x0! < 16), "dots are small quads, not icon cells");
+});
+
+test("a full atlas keeps the target, links survive an edge target, and a context reset republishes", () => {
+  const { graphics, published, view } = peer();
+  const crowd = Array.from({ length: 120 }, (_, index) => ({ ...marker(`m${index}`, 1000 + index * 3, 2100), iconUrl: `icon-${index}` }));
+  graphics.update("mission", { ...input([...crowd, { ...marker("goal", 1300, 2200, "target"), iconUrl: "goal" }]), pixelRatio: 3, zoom: 1 });
+  const cells = published.at(-1)!.quads.length;
+  assert.ok(cells < 121, "this atlas cannot hold every look");
+  graphics.update("mission", { ...input([{ ...marker("goal", 1300, 2200, "target"), iconUrl: "goal" }]), pixelRatio: 3, zoom: 1 });
+  const alone = published.at(-1)!.quads[0]!;
+  graphics.update("mission", { ...input([...crowd, { ...marker("goal", 1300, 2200, "target"), iconUrl: "goal" }]), pixelRatio: 3, zoom: 1 });
+  assert.ok(published.at(-1)!.quads.some(quad => quad[0] === alone[0] && quad[1] === alone[1]), "the target keeps a cell when looks overflow");
+
+  const spawn = (key: string, x: number): EliteSceneMarker => ({ ...marker(key, x, 2100, "target"), locationId: "boss" });
+  // The view spans x 1000–1400; a position at 1392 sits in the edge band and becomes the arrow.
+  graphics.update("mission", input([spawn("boss:0", 1200), spawn("boss:1", 1392)]));
+  const edgeCase = published.filter(item => item.surface === "mission_elite").at(-1)!;
+  assert.ok(edgeCase.quads.length > 1, "dots still join the position shown as the edge arrow");
+  const before = published.length;
+  graphics.update("mission", input([spawn("boss:0", 1200), spawn("boss:1", 1392)]));
+  assert.equal(published.length, before, "an unchanged frame publishes nothing");
+  view.dispatchEvent(new Event("gw:graphics-context-reset"));
+  graphics.update("mission", input([spawn("boss:0", 1200), spawn("boss:1", 1392)]));
+  assert.ok(published.length > before, "a context reset republishes from the cached computation");
+});
+
+test("the edge arrow texture grows with the zoomed marker", () => {
+  const { graphics, published } = peer();
+  graphics.update("mission", { ...input([marker("far", 5000, 2100, "target")]), zoom: 0 });
+  const small = published.filter(item => item.surface === "mission_elite_edge").at(-1)!.width;
+  graphics.update("mission", { ...input([{ ...marker("far", 5000, 2100, "target"), hovered: true }]), zoom: 1 });
+  const large = published.filter(item => item.surface === "mission_elite_edge").at(-1)!.width;
+  assert.ok(large > small, "a grown, hovered target gets a larger arrow texture");
 });
