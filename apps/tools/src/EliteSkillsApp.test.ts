@@ -72,13 +72,13 @@ describe("Elite Skills", () => {
     const maxHeight = Math.min(view.world!.box.height - 24, window.innerHeight - view.world!.box.top - 28);
     const height = () => Number.parseFloat(wrapper.get<HTMLElement>('.elite-panel').element.style.height);
     expect(height()).toBe(Math.min(maxHeight, Math.max(440, window.innerHeight * 0.8)));
-    const grip = wrapper.get('[aria-label="Resize Elite Skills height"]');
+    const grip = wrapper.get('[aria-label="Resize Elite skills height"]');
     await grip.trigger('keydown', { key: 'ArrowUp', shiftKey: true });
     await flushPromises();
     const smaller = height();
     expect(smaller).toBeLessThan(maxHeight);
     expect((await api.get({ characterKey: view.characterKey! })).view.panelHeightRatio).toBe(smaller / window.innerHeight);
-    await wrapper.get('[aria-label="Collapse Elite Skills"]').trigger('click');
+    await wrapper.get('[aria-label="Hide Elite skills"]').trigger('click');
     expect(wrapper.get<HTMLElement>('.elite-map-summary').element.style.height).toBe('');
     await wrapper.get('.elite-map-trigger').trigger('click');
     expect(height()).toBe(smaller);
@@ -92,7 +92,7 @@ describe("Elite Skills", () => {
     wrapper.unmount();
     const restarted = await planner(api);
     expect(Number.parseFloat(restarted.get<HTMLElement>('.elite-panel').element.style.height)).toBe(smaller);
-    const nextGrip = restarted.get('[aria-label="Resize Elite Skills height"]');
+    const nextGrip = restarted.get('[aria-label="Resize Elite skills height"]');
     for (let index = 0; index < 20; index++) await nextGrip.trigger('keydown', { key: 'ArrowDown', shiftKey: true });
     expect(Number.parseFloat(restarted.get<HTMLElement>('.elite-panel').element.style.height)).toBe(maxHeight);
     restarted.unmount();
@@ -105,7 +105,7 @@ describe("Elite Skills", () => {
     expect(wrapper.get('.elite-result').text()).toContain('Eviscerate');
     await wrapper.get('.elite-result-main').trigger('click');
     const target = wrapper.findAll('.elite-location').find((entry) => entry.text().includes('Lissah'))!;
-    await target.get('button').trigger('click');
+    await target.get('.elite-target-button').trigger('click');
     await flushPromises();
     expect(target.text()).toContain('✓ Target');
     expect(wrapper.get('.elite-current-target').text()).toContain('Target: Lissah the Packleader');
@@ -126,7 +126,7 @@ describe("Elite Skills", () => {
     expect(scene().mission).toEqual([]);
     (wrapper.vm as unknown as { find(id: number): void }).find(lissah.skillId);
     await flushPromises();
-    expect(wrapper.get('.elite-panel-footer').text()).toContain('Boss markers are unavailable in this area');
+    expect(wrapper.get('.elite-panel-footer').text()).toContain('Boss markers are unavailable here');
     await wrapper.setProps({ view: { ...eliteFixtureView(true), mapId: 55 } });
     expect(scene().mission).toEqual([]);
     expect(wrapper.get('.elite-panel-footer').text()).toContain('In Bjora Marches');
@@ -137,11 +137,11 @@ describe("Elite Skills", () => {
     const wrapper = await planner(api);
     await wrapper.get('input[type="search"]').setValue('Hundred Blades');
     const markers = ids(scene().world);
-    await wrapper.get('[aria-label="Add Hundred Blades to Hunt list"]').trigger('click');
+    await wrapper.get('[aria-label="Hunt Hundred Blades"]').trigger('click');
     await flushPromises();
     expect(wrapper.get('.elite-result-main').attributes('aria-expanded')).toBe('false');
     expect(wrapper.find('.elite-inline-detail').exists()).toBe(false);
-    expect(wrapper.get('[aria-label="Remove Hundred Blades from Hunt list"]').attributes('aria-pressed')).toBe('true');
+    expect(wrapper.get('[aria-label="Hunt Hundred Blades"]').attributes('aria-pressed')).toBe('true');
     expect(ids(scene().world)).toEqual(markers);
     // The only uncaptured Hunt list boss becomes the target automatically; nothing is saved for it.
     expect(scene().world.every(marker => marker.emphasis === 'saved' || marker.emphasis === 'target')).toBe(true);
@@ -149,7 +149,7 @@ describe("Elite Skills", () => {
     const saved = await api.get({ characterKey: eliteFixtureView().characterKey! });
     expect(saved.skills).toContain(ELITE_FIXTURE_SKILLS.find(skill => skill.name === 'Hundred Blades')!.id);
     expect(saved.activeLocation).toBe(null);
-    await wrapper.get('[aria-label="Remove Hundred Blades from Hunt list"]').trigger('click');
+    await wrapper.get('[aria-label="Hunt Hundred Blades"]').trigger('click');
     await flushPromises();
     expect((await api.get({ characterKey: eliteFixtureView().characterKey! })).skills).toEqual([]);
     wrapper.unmount();
@@ -261,7 +261,7 @@ describe("Elite Skills", () => {
     await wrapper.get('.elite-result-main').trigger('click', { detail: 0 });
     expect(document.activeElement).toBe(wrapper.get('.elite-result-main').element);
     expect(wrapper.get<HTMLInputElement>('input[type="search"]').element.value).toBe('Eviscerate');
-    await wrapper.get('[aria-label="Collapse Elite Skills"]').trigger('click', { detail: 0 });
+    await wrapper.get('[aria-label="Hide Elite skills"]').trigger('click', { detail: 0 });
     expect(document.activeElement).toBe(wrapper.get('.elite-map-trigger').element);
     wrapper.unmount();
   });
@@ -300,7 +300,7 @@ describe("elite map preferences", () => {
     expect(markers()).toEqual(original);
     await wrapper.get('.elite-result-main').trigger('click');
     expect(wrapper.get<HTMLElement>('.elite-panel-content').element.scrollTop).toBe(177);
-    await wrapper.get('[aria-label="Collapse Elite Skills"]').trigger('click');
+    await wrapper.get('[aria-label="Hide Elite skills"]').trigger('click');
     expect(markers()).toEqual(original);
     expect(wrapper.find('.elite-map-trigger').exists()).toBe(true);
     wrapper.unmount();
@@ -318,7 +318,7 @@ describe("elite map preferences", () => {
     wrapper = await planner(api);
     expect(wrapper.get<HTMLInputElement>('input[type="search"]').element.value).toBe('Hundred Blades');
     expect(wrapper.findAll('.elite-result')).toHaveLength(1);
-    await wrapper.get('[aria-label="Collapse Elite Skills"]').trigger('click');
+    await wrapper.get('[aria-label="Hide Elite skills"]').trigger('click');
     await flushPromises();
     wrapper.unmount();
     const saved = await api.get({ characterKey: eliteFixtureView().characterKey! });
@@ -373,7 +373,7 @@ describe("elite map preferences", () => {
     wrapper.unmount();
     const hunting = await planner(plan);
     await hunting.get('input[type="search"]').setValue('Eviscerate');
-    await hunting.get('[aria-label="Add Eviscerate to Hunt list"]').trigger('click');
+    await hunting.get('[aria-label="Hunt Eviscerate"]').trigger('click');
     await flushPromises();
     await hunting.get('input[type="search"]').setValue('Hundred Blades');
     await hunting.setProps({ view: eliteFixtureView(true, false, false, 2, 'saved') });
@@ -393,19 +393,18 @@ describe("elite map preferences", () => {
     expect(wrapper.props('setMissionMarkers')).toHaveBeenCalledWith('all');
     wrapper.unmount();
   });
-  it("isolates search and marker visibility between characters", async () => {
+  it("isolates search between characters", async () => {
     const api = host();
     const wrapper = await planner(api);
     await wrapper.get('input[type="search"]').setValue('Hundred Blades');
-    await wrapper.findAll('.elite-panel-footer label').find(label => label.text() === 'World Map markers')!.get('input').setValue(false);
     await flushPromises();
     await wrapper.setProps({ view: eliteFixtureView(false, true) });
     await flushPromises();
-    expect(scene().world.length).toBeGreaterThan(0);
+    expect(scene().world.length).toBeGreaterThan(1);
     await wrapper.setProps({ view: eliteFixtureView() });
     await flushPromises();
     expect(wrapper.get<HTMLInputElement>('input[type="search"]').element.value).toBe('Hundred Blades');
-    expect(scene().world).toHaveLength(0);
+    expect(ids(scene().world).every(id => ELITE_LOCATIONS.find(entry => entry.id === id)!.skillId === ELITE_FIXTURE_SKILLS.find(skill => skill.name === 'Hundred Blades')!.id)).toBe(true);
     wrapper.unmount();
   });
   it("only focuses a skill through an explicit action", async () => {
@@ -526,7 +525,7 @@ describe("overlapping elite markers", () => {
   });
   it("keeps overlapping choices reachable, changes the preview, and opens details without filtering", async () => {
     const wrapper = await planner();
-    await wrapper.get('[aria-label="Collapse Elite Skills"]').trigger('click');
+    await wrapper.get('[aria-label="Hide Elite skills"]').trigger('click');
     const crowded = { ...eliteFixtureView().world!, transform: { a: 0.001, b: 0, c: 0, d: 0.001, e: 100, f: 100 } };
     const placed = placeEliteMarkers(scene().world, crowded);
     const first = eliteMarkerAt(placed, placed[0]!.x, placed[0]!.y)!;
@@ -561,7 +560,7 @@ describe("marker activation", () => {
   it("pins a small action card on a marker click and targets without opening the planner", async () => {
     const plan = host();
     const wrapper = await planner(plan);
-    await wrapper.get('[aria-label="Collapse Elite Skills"]').trigger('click');
+    await wrapper.get('[aria-label="Hide Elite skills"]').trigger('click');
     await wrapper.setProps({ view: eliteFixtureView(true, false, false, 2, 'all') });
     api(wrapper).activate(hitOn(lissah));
     await flushPromises();
@@ -570,7 +569,7 @@ describe("marker activation", () => {
     // A pinned card ignores later pointer reports until it is closed.
     api(wrapper).pointer(null);
     await flushPromises();
-    await wrapper.findAll('.elite-preview-actions button').find(button => button.text() === 'Set as target')!.trigger('click');
+    await wrapper.findAll('.elite-preview-actions button').find(button => button.text() === 'Set target')!.trigger('click');
     await flushPromises();
     expect((await plan.get({ characterKey: eliteFixtureView().characterKey! })).activeLocation).toBe(lissah.id);
     expect(wrapper.get('.elite-preview-actions').text()).toContain('✓ Target');
@@ -663,14 +662,16 @@ describe("hunting", () => {
     expect(wrapper.get('.elite-current-target').text()).toContain('Target: Lissah the Packleader');
     expect(wrapper.get('.elite-current-target').text()).toContain('Chosen for you · In this area.');
     await wrapper.findAll('.elite-view-switch button').find(button => button.text().startsWith('Hunt list'))!.trigger('click');
-    expect(wrapper.findAll('.elite-result').map(row => row.find('strong').text())).toEqual(['Barrage', 'Eviscerate']);
+    // The target's skill leads the open section.
+    expect(wrapper.findAll('.elite-result').map(row => row.find('strong').text())).toEqual(['Eviscerate', 'Barrage']);
+    expect(wrapper.findAll('.elite-section-title').map(title => title.text())).toEqual(['To capture · 2']);
     await wrapper.setProps({ view: eliteFixtureView(false, false, true) });
     await flushPromises();
     expect(wrapper.get('.elite-notice').text()).toContain('✓ Eviscerate captured');
     expect(wrapper.get('.elite-notice').text()).toContain('1 of 2 on your Hunt list');
     expect(wrapper.get('.elite-current-target').text()).not.toContain('Lissah');
     expect(wrapper.get('.elite-view-switch').text()).toContain('1/2');
-    expect(wrapper.findAll('.elite-section-title').map(title => title.text())).toEqual(['Captured · 1']);
+    expect(wrapper.findAll('.elite-section-title').map(title => title.text())).toEqual(['To capture · 1', 'Captured · 1']);
     expect(scene().world.filter(marker => marker.locationId === lissah.id).every(marker => marker.captured)).toBe(true);
     await wrapper.findAll('button').find(button => button.text() === 'Remove captured from Hunt list')!.trigger('click');
     await flushPromises();
@@ -699,6 +700,70 @@ describe("spawn positions", () => {
     await flushPromises();
     const hovered = scene().world.filter(marker => marker.locationId === lissah.id);
     expect(hovered.map(marker => marker.position)).toEqual(lissah.points.length > 1 ? lissah.points.map((_, index) => `${index + 1}/${lissah.points.length}`) : [null]);
+    wrapper.unmount();
+  });
+});
+
+describe("review fixes", () => {
+  it("announces only a live capture, never loading, switching back, or adding a learned skill", async () => {
+    const plan = host();
+    const key = eliteFixtureView().characterKey!;
+    await plan.update({ characterKey: key, change: { kind: 'track', skillId: lissah.skillId } });
+    scenes = [];
+    const wrapper = mount(EliteSkillsApp, { attachTo: document.body, props: { view: eliteFixtureView(false, false, true), catalogue: createSkillCatalogue(ELITE_FIXTURE_SKILLS),
+      catalogueVersion: 1, catalogueProblem: "", trackingHost: plan, openWiki: vi.fn(), reloadSkills: vi.fn(), present: (next: EliteMarkerScene) => { scenes.push(next); } } });
+    await flushPromises();
+    expect(wrapper.find('.elite-notice').exists()).toBe(false);
+    await wrapper.setProps({ view: eliteFixtureView(false, true, true) }); await flushPromises();
+    await wrapper.setProps({ view: eliteFixtureView(false, false, true) }); await flushPromises();
+    expect(wrapper.find('.elite-notice').exists()).toBe(false);
+    wrapper.unmount();
+  });
+  it("focuses a skill from Builds without losing the saved filters", async () => {
+    const wrapper = await planner();
+    await wrapper.findAll('.elite-quick-classes button').find(button => button.text() === 'Mine')!.trigger('click');
+    await wrapper.get('input[type="search"]').setValue('Barrage');
+    const restoreCondition = ELITE_FIXTURE_SKILLS.find(skill => skill.name === 'Restore Condition')!;
+    (wrapper.vm as unknown as { find(id: number): void }).find(restoreCondition.id);
+    await flushPromises();
+    expect(wrapper.findAll('.elite-result').map(row => row.find('strong').text())).toEqual(['Restore Condition']);
+    expect(wrapper.find('.elite-inline-detail').exists()).toBe(true);
+    await wrapper.findAll('button').find(button => button.text() === 'Clear skill focus')!.trigger('click');
+    expect(wrapper.get<HTMLInputElement>('input[type="search"]').element.value).toBe('Barrage');
+    expect(wrapper.findAll('.elite-quick-classes button').find(button => button.text() === 'Mine')!.attributes('aria-pressed')).toBe('true');
+    wrapper.unmount();
+  });
+  it("returns to the automatic target and removes captured skills in one save", async () => {
+    const plan = host();
+    const key = eliteFixtureView().characterKey!;
+    const barrage = ELITE_FIXTURE_SKILLS.find(skill => skill.name === 'Barrage')!;
+    const barrageBoss = ELITE_LOCATIONS.find(entry => entry.skillId === barrage.id && entry.points.length)!;
+    await plan.update({ characterKey: key, change: { kind: 'track', skillId: lissah.skillId } });
+    await plan.update({ characterKey: key, change: { kind: 'target', locationId: barrageBoss.id } });
+    const wrapper = await planner(plan);
+    expect(wrapper.get('.elite-current-target').text()).toContain(barrageBoss.boss);
+    await wrapper.findAll('button').find(button => button.text() === 'Use automatic target')!.trigger('click');
+    await flushPromises();
+    expect(wrapper.get('.elite-current-target').text()).toContain('Chosen for you');
+    expect((await plan.get({ characterKey: key })).activeLocation).toBe(null);
+    await wrapper.setProps({ view: eliteFixtureView(false, false, true) });
+    await wrapper.findAll('.elite-view-switch button').find(button => button.text().startsWith('Hunt list'))!.trigger('click');
+    const saves = vi.mocked(plan.update).mock.calls.length;
+    await wrapper.findAll('button').find(button => button.text() === 'Remove captured from Hunt list')!.trigger('click');
+    await flushPromises();
+    expect(vi.mocked(plan.update).mock.calls.length).toBe(saves + 1);
+    expect((await plan.get({ characterKey: key })).skills).toEqual([barrage.id]);
+    wrapper.unmount();
+  });
+  it("closes a pinned card with Escape while the game keeps focus", async () => {
+    const wrapper = await planner();
+    await wrapper.get('[aria-label="Hide Elite skills"]').trigger('click');
+    api(wrapper).activate(hitOn(lissah, 'world'));
+    await flushPromises();
+    expect(wrapper.find('.elite-preview-actions').exists()).toBe(true);
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await flushPromises();
+    expect(wrapper.find('.elite-preview').exists()).toBe(false);
     wrapper.unmount();
   });
 });

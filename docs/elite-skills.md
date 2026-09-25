@@ -18,8 +18,9 @@ The existing privacy-safe character key separates characters. Named actions
 are validated and serialized before an atomic save. Concurrent actions merge
 against current disk state. Tracking records skill IDs, one active boss, and
 each character’s planner preferences.
-Preferences include search, profession selection, region, learned and tracked
-filters, explicit skill focus, World Map marker visibility, and the expanded panel choice.
+Preferences include search, profession selection, region, learned status, the
+All matches or Hunt list view, explicit skill focus, panel height, and the
+expanded panel choice.
 Older files that still contain the retired per-character `missionMap` switch
 load normally and drop it on their next save.
 An absent preferences object uses defaults without discarding an existing plan.
@@ -40,7 +41,7 @@ while **Maps** is enabled. The in-game Hub **Maps** view has the on/off switch.
   layers.
 - **Mission Map markers** (`eliteMissionMapMarkers`) chooses what the Mission
   Map shows while you play: **Hunt list** (default), **All planner matches**, or
-  **Off**. The Hunt list always includes the target, even when planner filters
+  **Off**. Both marker modes include the target, even when planner filters
   would hide it.
 
 The planner footer has the same Mission Map choice.
@@ -52,11 +53,17 @@ star on each skill adds or removes it. A captured skill stays on the list with
 a ✓ as progress, and **Remove captured from Hunt list** clears them in one step.
 The list and its progress ("1/3") are kept per character.
 
-The **target** is the boss to go for now. Players do not have to choose it:
-the next uncaptured Hunt list boss is chosen automatically, preferring this
-area, then this region, then list order. **Set target** overrides that choice
-until its skill is captured. When live observation shows a Hunt list skill
-became learned, a short notice confirms the capture and names the next target.
+The **target** is the boss to capture next. Players do not have to choose it.
+The next uncaptured Hunt list boss with a known position is chosen
+automatically: this area first, then this region, then list order. **Set target**
+overrides that choice until its skill is captured; **Use automatic target**
+returns to the automatic choice. Setting a target on a skill that is not on the
+Hunt list adds it and says so. A learned skill cannot become the target.
+
+A capture notice appears only when a Hunt list skill that was open in the last
+observation becomes learned for the same loaded character. Loading a plan,
+switching characters, or adding a learned skill never shows one. The notice
+names the next target. **Remove captured from Hunt list** saves in one change.
 
 ## Map planner
 
@@ -86,8 +93,10 @@ Hover or focus a skill for a preview. Click a result to expand its details in
 place; only one result expands at a time. The details list every capture
 location, target first, with **Set target** and boss wiki links. Inspection
 never changes map filters. **Show only this skill** explicitly focuses both maps;
-**Clear skill focus** exits it. The Builds skill inspector opens the same details
-through **Find capture locations**. Both interfaces read descriptions,
+**Clear skill focus** exits it and brings back the saved filters, which focus
+never changes. The Builds skill inspector opens the same details through **Find
+capture locations**: a Hunt list skill opens in the Hunt list, and any other
+skill opens as a focus. Both interfaces read descriptions,
 mechanics, and skill artwork from the installed client.
 The shared detail component follows the game's own skill description: the
 skill type ("Elite Axe Attack"), costs in the game's order (adrenaline in
@@ -108,32 +117,39 @@ The World Map shows the Hunt list or all matches, always with the target. The
 Mission Map shows the chosen Mission Map markers for the current map ID. Markers
 are skill icons without the client's built-in four-pixel rim. A gold frame marks
 Hunt list skills; a heavier gold frame marks the target. Other matches are
-smaller. Captured skills dim and carry a ✓. On the Mission Map, a boss with
-several possible spawn positions shows "1/4", "2/4", … on each position. Different
+smaller. Captured skills dim and carry a ✓. Markers grow with the game's own
+map zoom, up to 1.8 times their size fully zoomed in. On the Mission Map, a
+boss with several possible spawn positions shows "1/4", "2/4", … on each
+position. The World Map shows those labels for the hovered boss and the target.
+Dotted links join the possible positions of the hovered boss and the target
+along the shortest paths. Different
 skills keep their own icons. Touching copies of the same skill in the same map
 area share one marker; distant positions remain separate.
 
 Markers draw inside the native map draw event, after Cartography. Game panels,
 tooltips, map fades, and map clipping cover them exactly like the map's own
 icons. Each distinct marker look is painted once into an atlas at the game's
-framebuffer resolution, and each marker is one native world rectangle that
-samples it, so markers stay sharp at every zoom. A pan changes nothing; a zoom
-step moves only the rectangles, and only a changed look re-uploads the atlas. A target outside the map view moves to the map edge with an
+framebuffer resolution. Each marker and each link dot is one native world
+rectangle that samples the atlas, so markers stay sharp at every zoom. A pan
+changes nothing. A zoom step moves the rectangles and sends the unchanged atlas
+again from a cached copy. Only a changed look paints the atlas again. A target outside the map view moves to the map edge with an
 arrow toward its position.
 
 Guild Wars keeps receiving every pointer move. The host asks the game which
 frame is under the pointer. A marker responds only when that frame is its map or
 one of the map's children, so a panel over a marker keeps the pointer. Hover a
 marker to see its preview; when positions overlap, the preview offers each
-distinct skill once and lists every possible boss. Hover previews stay available
+distinct skill once. Hover previews stay available
 while the pointer crosses onto them. They fit within the viewport and scroll for
 long descriptions.
 
-The preview shows the boss, the area ("you are here"), how many positions the
+The preview shows the boss, the area ("in this area"), how many positions the
 boss can spawn at, encounter notes, and the Hunt list status. Click a marker to
-pin a small card with **Set as target**, **☆ Hunt**, and **Planner**. With the planner open, a click opens that skill's details instead.
-Only a left press on a marker is taken from the game; right-drag panning and all
-other presses reach the map. Clicking elsewhere or **Close** removes the card.
+pin a small card with **Set target**, **☆ Hunt**, and **Planner**. Press Esc or
+click elsewhere to close the card, even while the game keeps keyboard focus.
+With the planner open, a click opens that skill's details instead. Only a left
+press on a marker is taken from the game; right-drag panning and all other
+presses reach the map.
 Closing either native map removes its preview immediately, with no exit animation.
 Map markers are pointer targets only; the planner list is the keyboard path to
 the same details and actions.
