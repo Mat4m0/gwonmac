@@ -83,7 +83,8 @@ export function createNativeMapGraphicsLayer(exports: WebAssembly.Exports, docum
       const width = dimension(largestWidth); const height = dimension(largestHeight);
       if (target.canvas.width !== width) target.canvas.width = width;
       if (target.canvas.height !== height) target.canvas.height = height;
-      const context = target.canvas.getContext("2d");
+      // A scratch canvas that is only read back into the native texture.
+      const context = target.canvas.getContext("2d", {willReadFrequently: true});
       if (!context) { withdraw(surface); return; }
       context.clearRect(0, 0, width, height);
       for (const { canvas } of images) context.drawImage(canvas, 0, 0, width, height);

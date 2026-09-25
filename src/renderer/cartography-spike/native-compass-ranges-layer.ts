@@ -32,7 +32,8 @@ export function createNativeCompassRangesLayer(exports: WebAssembly.Exports, doc
       const size = Math.min(NATIVE_COMPASS_TERRAIN_MAX_SIZE, Math.max(64, 2 ** Math.ceil(Math.log2(Math.max(image.canvas.width, image.canvas.height)))));
       if (canvas.width !== size) canvas.width = size;
       if (canvas.height !== size) canvas.height = size;
-      const context = canvas.getContext("2d");
+      // A scratch canvas that is only read back into the native texture.
+      const context = canvas.getContext("2d", {willReadFrequently: true});
       if (!context) { withdraw(); return; }
       context.clearRect(0, 0, size, size); context.drawImage(image.canvas, 0, 0, size, size);
       const pixels = context.getImageData(0, 0, size, size).data;

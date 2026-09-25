@@ -15,7 +15,8 @@ class CanvasPeer {
     stroke: () => { this.strokes += 1; }, fill: () => { this.fills += 1; }, fillText: (value: string) => { this.texts.push(value); }, strokeText() {},
     getImageData: (_x: number, _y: number, width: number, height: number) => ({data: new Uint8ClampedArray(width * height * 4)}),
   };
-  getContext() { return this.context; }
+  options: CanvasRenderingContext2DSettings | undefined;
+  getContext(...args: [string, CanvasRenderingContext2DSettings?]) { this.options ??= args[1]; return this.context; }
 }
 const projection: CartographyGridProjection = {
   surface: "mission-map", box: {left: 100, top: 200, width: 128, height: 128},
@@ -126,6 +127,7 @@ test("native maps cache textures and release copied input on success, refusal an
   const image = new CanvasPeer();
   const input = {area: 7, continent: 2, projection, images: [{canvas: image as unknown as HTMLCanvasElement, version: "1"}]};
   layer.update("mission", input); layer.update("mission", input); assert.equal(uploads, 1);
+  assert.equal(canvases.at(-1)?.options?.willReadFrequently, true, "the upload canvas is read back on the CPU");
   layer.update("mission", {...input, projection: {...projection, box: {...projection.box, left: 900}}});
   assert.equal(uploads, 1, "moving the native window does not repaint map artwork");
   view.dispatchEvent(new Event("gw:graphics-context-reset")); layer.update("mission", input); assert.equal(uploads, 2);
@@ -249,7 +251,7 @@ test("native maps and Compass ranges upload and free copied pixels above 2 GiB",
 
 test("Compass ranges keep their texture and retry while the native renderer holds it", async () => {
   const {createNativeCompassRangesLayer} = await import("../../src/renderer/cartography-spike/native-compass-ranges-layer.js");
-  const {document} = documentPeer();
+  const {document, canvases} = documentPeer();
   const memory = new WebAssembly.Memory({initial: 8});
   const serial = new WebAssembly.Global({value: "i32", mutable: true});
   const area = new WebAssembly.Global({value: "i32", mutable: true});
@@ -266,6 +268,7 @@ test("Compass ranges keep their texture and retry while the native renderer hold
   const image = {canvas: new CanvasPeer() as unknown as HTMLCanvasElement, version: "1"};
   range.update(image, 7); range.update(image, 7);
   assert.equal(uploads, 2, "a busy publish is retried"); assert.equal(hides, 0, "a busy publish never hides the ranges");
+  assert.equal(canvases[0]?.options?.willReadFrequently, true, "the upload canvas is read back on the CPU");
   result = 1; range.update(image, 7); range.update(image, 7);
   assert.equal(uploads, 3); assert.equal(hides, 0);
   result = 0; range.update({...image, version: "2"}, 7); assert.equal(hides, 1, "a refused publish still withdraws");
