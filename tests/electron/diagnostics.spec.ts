@@ -637,10 +637,15 @@ test.describe("diagnostics", () => {
     try {
       const { app, page } = fixture;
       // A crash usually arrives after the game has started and the loading
-      // surface has been dismissed.
-      await page.evaluate(() => window.gwLoading.done());
-      await expect(page.locator("#loading")).toBeHidden();
-      await page.evaluate(() => window.gwLoading.failCrash(1));
+      // surface has been dismissed. One synchronous step reproduces the state
+      // done() leaves after its fade, so the fixture's own asynchronous client
+      // failure cannot interleave.
+      await page.evaluate(() => {
+        window.gwLoading.done();
+        const loading = document.getElementById("loading");
+        if (loading) loading.style.display = "none";
+        window.gwLoading.failCrash(1);
+      });
       await expect(page.locator("#loading-label")).toBeVisible();
       await expect(page.locator("#loading-retry, #loading-report")).toHaveCount(0);
 
