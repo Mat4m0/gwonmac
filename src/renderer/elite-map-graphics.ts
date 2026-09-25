@@ -30,7 +30,7 @@ const REACH = (ELITE_MARKER_SIZE.target + ELITE_MARKER_HOVER_GROWTH) / 2 + 12;
 const EDGE_PIXELS = 64;
 const power = (value: number) => 2 ** Math.ceil(Math.log2(Math.max(64, value)));
 const signature = (placed: readonly PlacedEliteMarker[]) =>
-  placed.map(item => `${item.marker.key}:${item.marker.emphasis}:${Number(item.marker.hovered)}:${item.locationIds.length}`).join("|");
+  placed.map(item => `${item.marker.key}:${item.marker.emphasis}:${Number(item.marker.hovered)}:${item.locationIds.length}:${item.marker.iconUrl}`).join("|");
 
 export function createEliteMapGraphics(exports: WebAssembly.Exports, document: Document, changed: () => void = () => {}): EliteMapGraphics {
   const layer = createNativeMapGraphicsLayer(exports, document, ELITE_MAP_GRAPHICS_SURFACES);
@@ -60,7 +60,7 @@ export function createEliteMapGraphics(exports: WebAssembly.Exports, document: D
         transform: { a: frame.scaleX, b: 0, c: 0, d: frame.scaleY, e: -frame.x0 * frame.scaleX, f: -frame.y0 * frame.scaleY } } });
   };
 
-  const updateTile = (name: EliteMapSurfaceName, input: EliteMapGraphicsInput) => {
+  const updateTile = (name: EliteMapSurfaceName, input: EliteMapGraphicsInput, edge: string | null) => {
     const surface = `${name}_elite` as const;
     const { a, d, e, f } = input.surface.transform; const { width, height } = input.surface.box;
     // Raster detail changes in sixteenth-octave steps: icon size stays within 2.2%.
@@ -68,7 +68,8 @@ export function createEliteMapGraphics(exports: WebAssembly.Exports, document: D
     const stepX = SNAP_PIXELS / qa; const stepY = SNAP_PIXELS / qd;
     const view = { x0: Math.floor((-e / a) / stepX - 1) * stepX, y0: Math.floor((-f / d) / stepY - 1) * stepY,
       x1: Math.ceil(((width - e) / a) / stepX + 1) * stepX, y1: Math.ceil(((height - f) / d) / stepY + 1) * stepY };
-    const points = input.markers.filter(marker => marker.mapX >= view.x0 && marker.mapX <= view.x1 && marker.mapY >= view.y0 && marker.mapY <= view.y1);
+    // The edge texture owns a clamped target; the tile never draws a second copy.
+    const points = input.markers.filter(marker => marker.key !== edge && marker.mapX >= view.x0 && marker.mapX <= view.x1 && marker.mapY >= view.y0 && marker.mapY <= view.y1);
     if (!points.length) { hide(surface); return; }
     const x0 = Math.max(view.x0, Math.min(...points.map(marker => marker.mapX)) - REACH / qa);
     const y0 = Math.max(view.y0, Math.min(...points.map(marker => marker.mapY)) - REACH / qd);
@@ -98,7 +99,7 @@ export function createEliteMapGraphics(exports: WebAssembly.Exports, document: D
     const mapX = (item.x - e) / a; const mapY = (item.y - f) / d;
     const direction = Math.atan2(d * item.marker.mapY + f - item.y, a * item.marker.mapX + e - item.x);
     const frame = { x0: mapX - size / 2 / (a * ratio), y0: mapY - size / 2 / (d * ratio), scaleX: a * ratio, scaleY: d * ratio, width: size, height: size };
-    const key = [item.marker.key, Number(item.marker.hovered), Math.round(direction * 32), size, artwork.version].join(":");
+    const key = [item.marker.key, item.marker.iconUrl, Number(item.marker.hovered), Math.round(direction * 32), size, artwork.version].join(":");
     publish(surface, input, frame, key, context => paintEliteMarker(context,
       { x: size / 2, y: size / 2, size: item.size * ratio, marker: item.marker, direction }, ratio, artwork));
   };
@@ -111,7 +112,7 @@ export function createEliteMapGraphics(exports: WebAssembly.Exports, document: D
         hide(`${name}_elite`); hide(`${name}_elite_edge`); return [];
       }
       const placed = placeEliteMarkers(input.markers, input.surface);
-      updateTile(name, input);
+      updateTile(name, input, placed.find(item => item.outside)?.marker.key ?? null);
       if (layer.available(`${name}_elite_edge`)) updateEdge(name, input, placed);
       return placed;
     },

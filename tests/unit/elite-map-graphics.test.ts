@@ -90,3 +90,17 @@ test("refuses rotated projections and withdraws only its own surfaces", () => {
   assert.ok(ELITE_MAP_GRAPHICS_SURFACES.every(surface => hidden.includes(surface)));
   assert.equal(hidden.includes("mission"), false, "Cartography keeps its own texture");
 });
+
+test("a loaded icon, a near-edge target and several target spawns each draw exactly once", () => {
+  const { graphics, published } = peer();
+  const plain = marker("a", 1100, 2100);
+  graphics.update("mission", input([plain]));
+  graphics.update("mission", input([{ ...plain, iconUrl: "data:image/png;base64,AA" }]));
+  assert.equal(published.length, 2, "an icon arriving from the catalogue repaints the placeholder");
+  const near = marker("near", 1392, 2100, "target");
+  const edge = graphics.update("mission", input([near]));
+  assert.deepEqual(edge.map(item => item.outside), [true]);
+  assert.equal(published.at(-1)?.surface, "mission_elite_edge", "only the edge texture shows a target inside the edge band");
+  const spawns = graphics.update("mission", input([marker("t:0", 5000, 2100, "target"), marker("t:1", 1100, 9000, "target")]));
+  assert.equal(spawns.length, 1, "several off-view spawn points share one arrow and one hit target");
+});

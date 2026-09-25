@@ -617,6 +617,18 @@ describe("elite map pointer", () => {
     expect(reached).toHaveBeenCalledTimes(3);
     pointer.dispose(); game.remove();
   });
+  it("never carries a claimed press past a lost window", () => {
+    const { game, activate, pointer, send } = install(() => true);
+    send('pointermove', 110, 120);
+    expect(send('pointerdown', 110, 120).defaultPrevented).toBe(true);
+    window.dispatchEvent(new Event('blur'));
+    const ui = document.createElement('button'); document.body.append(ui);
+    const release = new PointerEvent('pointerup', { bubbles: true, cancelable: true, button: 0, isPrimary: true });
+    const reached = vi.fn(); ui.addEventListener('pointerup', reached); ui.dispatchEvent(release);
+    expect(reached).toHaveBeenCalledTimes(1);
+    expect(activate).not.toHaveBeenCalled();
+    pointer.dispose(); game.remove(); ui.remove();
+  });
   it("leaves a covered marker to the game panel above it", () => {
     const { game, hover, activate, reached, pointer, send } = install(() => false);
     send('pointermove', 110, 120);

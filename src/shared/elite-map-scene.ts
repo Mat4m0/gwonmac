@@ -37,24 +37,33 @@ const ORDER: Readonly<Record<EliteMarkerEmphasis, number>> = { match: 0, saved: 
 const rank = (placed: PlacedEliteMarker) => ORDER[placed.marker.emphasis] * 2 + Number(placed.marker.hovered);
 
 /**
- * Projects markers onto one surface. Only the target stays when it leaves the
- * view; it is clamped to the edge. Later entries draw above earlier ones.
+ * Projects markers onto one surface. Other markers leave with the box; only the
+ * target stays near the edge, clamped inside it, and only its nearest point.
+ * Later entries draw above earlier ones.
  */
 export function placeEliteMarkers(markers: readonly EliteSceneMarker[], surface: EliteMapSurface): readonly PlacedEliteMarker[] {
   const { a, b, c, d, e, f } = surface.transform;
   const { width, height } = surface.box;
   if (width < INSET * 2 || height < INSET * 2) return [];
   const single: PlacedEliteMarker[] = [];
+  let edge: Readonly<{ placed: PlacedEliteMarker; distance: number }> | null = null;
   for (const marker of markers) {
     const px = a * marker.mapX + c * marker.mapY + e;
     const py = b * marker.mapX + d * marker.mapY + f;
     if (!Number.isFinite(px) || !Number.isFinite(py)) continue;
-    const outside = px < INSET || py < INSET || px > width - INSET || py > height - INSET;
-    if (outside && marker.emphasis !== "target") continue;
+    const target = marker.emphasis === "target";
+    const outside = target ? px < INSET || py < INSET || px > width - INSET || py > height - INSET
+      : px < 0 || py < 0 || px > width || py > height;
+    if (outside && !target) continue;
     const size = ELITE_MARKER_SIZE[marker.emphasis] + (marker.hovered ? ELITE_MARKER_HOVER_GROWTH : 0);
-    single.push({ x: Math.max(INSET, Math.min(width - INSET, px)), y: Math.max(INSET, Math.min(height - INSET, py)),
-      size, marker, locationIds: [marker.locationId], outside });
+    const placed = { x: outside ? Math.max(INSET, Math.min(width - INSET, px)) : px, y: outside ? Math.max(INSET, Math.min(height - INSET, py)) : py,
+      size, marker, locationIds: [marker.locationId], outside };
+    if (!outside) { single.push(placed); continue; }
+    // One edge arrow per target: several spawn points would stack invisible hit targets.
+    const distance = Math.hypot(px - placed.x, py - placed.y);
+    if (!edge || distance < edge.distance) edge = { placed, distance };
   }
+  if (edge) single.push(edge.placed);
   // Deduplicate artwork only where same-skill markers touch in the same map area.
   // Source locations stay intact for boss choices and capture targets.
   const groups: PlacedEliteMarker[][] = [];
