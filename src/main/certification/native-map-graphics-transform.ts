@@ -11,8 +11,9 @@ import { encodeName } from "./cartography-transform-internals.js";
 import { NATIVE_RENDER_REFERENCE_FUNCTIONS, nativeGraphicsBusy, nativeModelBusy } from "./native-render-reference.js";
 import { functionBodySha256, wasmEvidence } from "./wasm-evidence.js";
 import { NATIVE_PUBLISH_BUSY } from "../../shared/native-publish.js";
-import { NATIVE_MAP_GRAPHICS_HEADER_BYTES, NATIVE_MAP_GRAPHICS_MAGIC,
-  NATIVE_MAP_GRAPHICS_MAX_SIZE, NATIVE_MAP_GRAPHICS_SURFACES } from "../../shared/native-map-graphics.js";
+import { NATIVE_MAP_GRAPHICS_HEADER_BYTES, NATIVE_MAP_GRAPHICS_MAGIC, NATIVE_MAP_GRAPHICS_MAX_SIZE,
+  NATIVE_MAP_GRAPHICS_SURFACES, NATIVE_MAP_QUAD_BYTES, NATIVE_MAP_QUADS_MAGIC, NATIVE_MAP_QUADS_MAX,
+  NATIVE_MAP_QUAD_SURFACES } from "../../shared/native-map-graphics.js";
 
 const CHECKED = [
   [
@@ -162,6 +163,9 @@ export function appendNativeMapGraphics(input: Uint8Array): Uint8Array {
   for (const [surfaceIndex, surface] of NATIVE_MAP_GRAPHICS_SURFACES.entries()) {
     const base = globals.count + surfaceIndex * scalarNames.length;
     const isWorld = surface.startsWith("world");
+    // Quad surfaces draw many world rectangles from one atlas: each marker stays
+    // at screen resolution instead of sharing one view-sized bitmap.
+    const quads = (NATIVE_MAP_QUAD_SURFACES as readonly string[]).includes(surface);
     const g = (index: number) => concat(op(0x23), uleb(base + index));
     const put = (index: number) => concat(op(0x24), uleb(base + index));
     const increment = (index: number) => concat(g(index), i(1), op(0x6a), put(index));
@@ -191,26 +195,63 @@ export function appendNativeMapGraphics(input: Uint8Array): Uint8Array {
       l(local), l(local), i(1), op(0x6b, 0x71, 0x45, 0x71));
     // Native bitmap layers (14205) use alpha stage 7 / translucent order 11.
     // The Compass ring's additive stage 4 cannot darken the terrain outside.
+    const quadLoop = (body: Uint8Array) => concat(i(0), s(10), op(0x02, 0x40, 0x03, 0x40),
+      l(10), l(9), op(0x4f, 0x0d, 1), body, l(10), i(1), op(0x6a), s(10), op(0x0c, 0, 0x0b, 0x0b));
+    const bitmapMesh = concat(
+      g(1), i(4), call(1446), s(8),
+      ...Array.from({length: 4}, (_, vertex) => concat(
+        l(8), l(0), load(32 + vertex * 8, true), save(vertex * 24, true),
+        l(8), l(0), load(36 + vertex * 8, true), op(0x8c), save(vertex * 24 + 4, true),
+        l(8), f(0), save(vertex * 24 + 8, true), l(8), i(-1), save(vertex * 24 + 12),
+        l(8), f(vertex === 1 || vertex === 2 ? 1 : 0), save(vertex * 24 + 16, true),
+        l(8), f(vertex >= 2 ? 1 : 0), save(vertex * 24 + 20, true))),
+      g(1), i(6), call(1445), s(8),
+      ...[0, 1, 2, 0, 2, 3].map((vertex, index) => concat(l(8), i(vertex), op(0x3b, 1), uleb(index * 2))));
+    // Each quad record is x0, y0, x1, y1 in world units, then u0, v0, u1, v1.
+    const quadMesh = concat(
+      g(1), l(9), i(4), op(0x6c), call(1446), s(8),
+      l(0), i(NATIVE_MAP_GRAPHICS_HEADER_BYTES), op(0x6a), s(12),
+      quadLoop(concat(
+        ...Array.from({length: 4}, (_, vertex) => concat(
+          l(8), l(12), load(vertex === 1 || vertex === 2 ? 8 : 0, true), save(vertex * 24, true),
+          l(8), l(12), load(vertex >= 2 ? 12 : 4, true), op(0x8c), save(vertex * 24 + 4, true),
+          l(8), f(0), save(vertex * 24 + 8, true), l(8), i(-1), save(vertex * 24 + 12),
+          l(8), l(12), load(vertex === 1 || vertex === 2 ? 24 : 16, true), save(vertex * 24 + 16, true),
+          l(8), l(12), load(vertex >= 2 ? 28 : 20, true), save(vertex * 24 + 20, true))),
+        l(8), i(96), op(0x6a), s(8), l(12), i(NATIVE_MAP_QUAD_BYTES), op(0x6a), s(12))),
+      g(1), l(9), i(6), op(0x6c), call(1445), s(11),
+      quadLoop(concat(
+        ...[0, 1, 2, 0, 2, 3].map((vertex, index) => concat(l(11), l(10), i(4), op(0x6c), i(vertex), op(0x6a), op(0x3b, 1), uleb(index * 2))),
+        l(11), i(12), op(0x6a), s(11))));
+    // Every quad float must be finite and bounded before any native call.
+    const quadFloats = concat(i(0), s(10), op(0x02, 0x40, 0x03, 0x40),
+      l(10), l(9), i(8), op(0x6c), op(0x4f, 0x0d, 1),
+      l(0), l(10), i(4), op(0x6c), op(0x6a), load(NATIVE_MAP_GRAPHICS_HEADER_BYTES, true), op(0x8b), f(1000000), op(0x5f, 0x45),
+      op(0x04, 0x40), i(0), op(0x0f, 0x0b),
+      l(10), i(1), op(0x6a), s(10), op(0x0c, 0, 0x0b, 0x0b));
+    const pixelOffset = quads ? concat(i(NATIVE_MAP_GRAPHICS_HEADER_BYTES), l(9), i(NATIVE_MAP_QUAD_BYTES), op(0x6c, 0x6a)) : i(NATIVE_MAP_GRAPHICS_HEADER_BYTES);
     // A retained model's texture swap asserts while the renderer holds it; this
     // runs from the host's frame, so report busy before hiding or allocating.
-    const publish = concat(op(1, 8, 0x7f),
-      nativeGraphicsBusy(9), op(0x04, 0x40), i(NATIVE_PUBLISH_BUSY), op(0x0f, 0x0b),
-      g(2), op(0x04, 0x40), nativeModelBusy(g(2), 9), op(0x04, 0x40), i(NATIVE_PUBLISH_BUSY), op(0x0f, 0x0b, 0x0b),
+    const busyScratch = quads ? 13 : 9;
+    const publish = concat(op(1, quads ? 12 : 8, 0x7f),
+      nativeGraphicsBusy(busyScratch), op(0x04, 0x40), i(NATIVE_PUBLISH_BUSY), op(0x0f, 0x0b),
+      g(2), op(0x04, 0x40), nativeModelBusy(g(2), busyScratch), op(0x04, 0x40), i(NATIVE_PUBLISH_BUSY), op(0x0f, 0x0b, 0x0b),
       call(hideIndex),
       l(0), i(0), op(0x4b), l(0), i(3), op(0x71, 0x45, 0x71),
       l(1), i(NATIVE_MAP_GRAPHICS_HEADER_BYTES), op(0x4f, 0x71), memoryEnd(i(NATIVE_MAP_GRAPHICS_HEADER_BYTES)), op(0x71),
       op(0x45, 0x04, 0x40), i(0), op(0x0f, 0x0b),
-      l(0), load(12), s(5), l(0), load(16), s(6), l(0), load(8), s(7),
-      l(0), load(0), i(NATIVE_MAP_GRAPHICS_MAGIC), op(0x46), l(0), load(4), l(1), op(0x46, 0x71),
+      l(0), load(12), s(5), l(0), load(16), s(6), l(0), load(8), s(7), ...(quads ? [l(0), load(28), s(9)] : []),
+      l(0), load(0), i(quads ? NATIVE_MAP_QUADS_MAGIC : NATIVE_MAP_GRAPHICS_MAGIC), op(0x46), l(0), load(4), l(1), op(0x46, 0x71),
       dimension(5), op(0x71), dimension(6), op(0x71),
-      l(1), l(5), l(6), op(0x6c), i(4), op(0x6c), i(NATIVE_MAP_GRAPHICS_HEADER_BYTES), op(0x6a, 0x46, 0x71),
+      ...(quads ? [l(9), i(1), op(0x4f, 0x71), l(9), i(NATIVE_MAP_QUADS_MAX), op(0x4d, 0x71)] : []),
+      l(1), l(5), l(6), op(0x6c), i(4), op(0x6c), pixelOffset, op(0x6a, 0x46, 0x71),
       memoryEnd(l(1)), op(0x71), l(7), i(0), op(0x4a, 0x71), l(7), op(0x23), uleb(epoch), op(0x46, 0x71),
       op(0x23), uleb(status), i(1), op(0x46, 0x71), g(0), i(0), op(0x47, 0x71),
       l(0), load(20), i(0), op(0x4a, 0x71),
       ...(isWorld ? [l(0), load(24), g(9), op(0x46, 0x71)] : []),
-      ...Array.from({length: 8}, (_, index) => concat(finite(32 + index * 4), op(0x71))),
-      op(0x45, 0x04, 0x40), i(0), op(0x0f, 0x0b), stack(4, 64),
-      l(4), l(0), i(NATIVE_MAP_GRAPHICS_HEADER_BYTES), op(0x6a), save(0),
+      ...(quads ? [] : Array.from({length: 8}, (_, index) => concat(finite(32 + index * 4), op(0x71)))),
+      op(0x45, 0x04, 0x40), i(0), op(0x0f, 0x0b), ...(quads ? [quadFloats] : []), stack(4, 64),
+      l(4), l(0), pixelOffset, op(0x6a), save(0),
       l(4), l(5), save(8), l(4), l(6), save(12),
       l(4), i(0), l(4), i(8), op(0x6a), i(1), i(112), call(2249), s(2),
       l(4), l(2), save(16), l(4), i(7), save(20), l(4), i(482), save(24),
@@ -220,15 +261,7 @@ export function appendNativeMapGraphics(input: Uint8Array): Uint8Array {
         i(1), l(4), i(28), op(0x6a), l(4), i(32), op(0x6a), i(0), i(0), call(1554), put(2), increment(7),
       op(0x05), g(2), i(0), l(3), call(1569), op(0x0b),
       l(3), call(748), l(2), call(748),
-      g(1), i(4), call(1446), s(8),
-      ...Array.from({length: 4}, (_, vertex) => concat(
-        l(8), l(0), load(32 + vertex * 8, true), save(vertex * 24, true),
-        l(8), l(0), load(36 + vertex * 8, true), op(0x8c), save(vertex * 24 + 4, true),
-        l(8), f(0), save(vertex * 24 + 8, true), l(8), i(-1), save(vertex * 24 + 12),
-        l(8), f(vertex === 1 || vertex === 2 ? 1 : 0), save(vertex * 24 + 16, true),
-        l(8), f(vertex >= 2 ? 1 : 0), save(vertex * 24 + 20, true))),
-      g(1), i(6), call(1445), s(8),
-      ...[0, 1, 2, 0, 2, 3].map((vertex, index) => concat(l(8), i(vertex), op(0x3b, 1), uleb(index * 2))),
+      quads ? quadMesh : bitmapMesh,
       ...[36, 40, 44].map((offset) => concat(l(4), f(-1000000), save(offset, true))),
       ...[48, 52, 56].map((offset) => concat(l(4), f(1000000), save(offset, true))),
       g(1), l(4), i(36), op(0x6a), l(4), i(48), op(0x6a), call(1449), g(1), call(1448),

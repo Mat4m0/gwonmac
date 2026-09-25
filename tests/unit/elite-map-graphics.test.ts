@@ -25,7 +25,7 @@ function peer() {
   } } as unknown as Document;
   const memory = new WebAssembly.Memory({ initial: 512 });
   let next = 1024;
-  const published: { surface: string; width: number; height: number; corners: number[] }[] = [];
+  const published: { surface: string; width: number; height: number; corners: number[]; quads: number[][] }[] = [];
   const hidden: string[] = [];
   const exports: Record<string, unknown> = { memory, malloc: (bytes: number) => { const at = next; next += bytes + 64; return at; }, free: () => {} };
   for (const surface of [...ELITE_MAP_GRAPHICS_SURFACES, "mission"]) {
@@ -35,8 +35,10 @@ function peer() {
     exports[`gwonmac_${surface}_graphics_publish`] = (region: number) => {
       const header = new DataView(memory.buffer, region, 64);
       serial.value = header.getUint32(20, true);
+      const count = header.getUint32(28, true); const floats = new DataView(memory.buffer, region + 64, count * 32);
       published.push({ surface, width: header.getUint32(12, true), height: header.getUint32(16, true),
-        corners: Array.from({ length: 8 }, (_, index) => Math.round(header.getFloat32(32 + index * 4, true))) });
+        corners: Array.from({ length: 8 }, (_, index) => Math.round(header.getFloat32(32 + index * 4, true))),
+        quads: Array.from({ length: count }, (_, quad) => Array.from({ length: 8 }, (_, index) => floats.getFloat32((quad * 8 + index) * 4, true))) });
       return 1;
     };
   }
@@ -47,7 +49,7 @@ const marker = (key: string, mapX: number, mapY: number, emphasis: EliteSceneMar
 const input = (markers: readonly EliteSceneMarker[], e = -1000, a = 1): EliteMapGraphicsInput => ({ area: 7, continent: 0, pixelRatio: 2, markers,
   surface: { box: { left: 100, top: 50, width: 400, height: 300 }, transform: { a, b: 0, c: 0, d: a, e, f: -2000 * a } } });
 
-test("markers draw in world units and a pan reuses the uploaded texture", () => {
+test("each marker is one world rectangle from a screen-resolution atlas; a pan uploads nothing", () => {
   const { graphics, published } = peer();
   const markers = [marker("a", 1100, 2100), marker("b", 1200, 2150, "target")];
   const placed = graphics.update("mission", input(markers));
@@ -56,8 +58,11 @@ test("markers draw in world units and a pan reuses the uploaded texture", () => 
   const [upload] = published;
   assert.equal(upload?.surface, "mission_elite");
   assert.ok([upload!.width, upload!.height].every(size => Number.isInteger(Math.log2(size))), "power-of-two textures upload without resampling");
-  const [left, top, right, , , bottom] = upload!.corners;
-  assert.ok(left! < 1100 && right! > 1200 && top! < 2100 && bottom! > 2150, "corners cover the markers in world units");
+  assert.equal(upload!.quads.length, 2, "one rectangle per marker");
+  const [x0, y0, x1, y1, u0, v0, u1, v1] = upload!.quads[0]!;
+  assert.equal((x0! + x1!) / 2, 1100); assert.equal((y0! + y1!) / 2, 2100);
+  assert.equal(x1! - x0!, 42, "at 1 pixel per map unit a 84-texel cell at ratio 2 covers 42 map units");
+  assert.ok(u0! >= 0 && v0! >= 0 && u1! <= 1 && v1! <= 1 && u1! > u0!);
   const panned = graphics.update("mission", input(markers, -1010));
   assert.deepEqual(panned.map(item => item.x), [90, 190], "hit targets follow the pan");
   assert.equal(published.length, 1, "the native camera moves the texture; nothing uploads");
@@ -73,7 +78,7 @@ test("an off-view target moves to a small edge texture and nothing else is drawn
   const { graphics, published, hidden } = peer();
   const placed = graphics.update("mission", input([marker("far", 5000, 2100, "target"), marker("gone", 6000, 2100)]));
   assert.deepEqual(placed.map(item => [item.marker.key, item.outside, item.x]), [["far", true, 384]]);
-  assert.ok(hidden.includes("mission_elite"), "no main texture without a visible marker");
+  assert.equal(published.find(item => item.surface === "mission_elite")?.quads.length, 1, "the arrow owns the target; others stay in world units");
   assert.equal(published.at(-1)?.surface, "mission_elite_edge");
   assert.ok(published.at(-1)!.width <= 128, "the edge arrow stays a small upload");
   graphics.update("mission", input([]));
@@ -92,7 +97,7 @@ test("refuses rotated projections and withdraws only its own surfaces", () => {
 });
 
 test("a loaded icon, a near-edge target and several target spawns each draw exactly once", () => {
-  const { graphics, published } = peer();
+  const { graphics, published, hidden } = peer();
   const plain = marker("a", 1100, 2100);
   graphics.update("mission", input([plain]));
   graphics.update("mission", input([{ ...plain, iconUrl: "data:image/png;base64,AA" }]));
@@ -100,7 +105,8 @@ test("a loaded icon, a near-edge target and several target spawns each draw exac
   const near = marker("near", 1392, 2100, "target");
   const edge = graphics.update("mission", input([near]));
   assert.deepEqual(edge.map(item => item.outside), [true]);
-  assert.equal(published.at(-1)?.surface, "mission_elite_edge", "only the edge texture shows a target inside the edge band");
+  assert.equal(published.at(-1)?.surface, "mission_elite_edge", "the edge texture shows a target inside the edge band");
+  assert.ok(hidden.includes("mission_elite"), "and no rectangle draws it a second time");
   const spawns = graphics.update("mission", input([marker("t:0", 5000, 2100, "target"), marker("t:1", 1100, 9000, "target")]));
   assert.equal(spawns.length, 1, "several off-view spawn points share one arrow and one hit target");
 });
