@@ -227,7 +227,8 @@ that view. Escape or Left at the start of a draft returns to people; closing Hub
 keeps drafts for the game session. Character changes, leaving the game, or turning
 off Whispers clear the session.
 
-In an outpost, choose **Invite to party** on a person to invite that character.
+In an outpost, choose **Invite to party** on a person, or type
+`invite Character Name`, to invite that character.
 For a friend in another outpost, **Travel and invite** travels there (Any
 district) and invites them once you arrive. If you land in a different district,
 Guild Wars cannot find them; Hub then shows the game's answer in chat. Both

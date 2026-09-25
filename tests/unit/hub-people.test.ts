@@ -84,16 +84,16 @@ const actions = (rows: readonly HubRow[]) => rows.map(row => `${row.title}${row.
 test('a person page offers Invite to party and, for a friend elsewhere, Travel and invite', async () => {
   const { party, calls } = invitePort();
   await withPeople(ALL_TOOLS, async ({ source, page, receipts }) => {
-    void source.search('Mo Kai').find(row => row.title === 'Mo Kai')!.run();
+    void source.search('moira')[0]!.run();
     assert.deepEqual(actions(page()), ['Whisper', 'Invite to party']);
     await page().find(row => row.id === 'person:invite')!.run();
     void source.search('mo kaiser')[0]!.run();
     assert.deepEqual(actions(page()), ['Whisper', 'Travel to outpost', 'Invite to party', 'Travel and invite']);
     await page().find(row => row.id === 'person:travel-invite')!.run();
     await Promise.resolve();
-    assert.deepEqual(calls, ['invite:Mo Kai', 'travel:Mo Kaiser']);
+    assert.deepEqual(calls, ['invite:Moira Chatter', 'travel:Mo Kaiser']);
     assert.deepEqual(receipts, [
-      'Invited Mo Kai. Guild Wars shows the answer in chat.',
+      'Invited Moira Chatter. Guild Wars shows the answer in chat.',
       'Travelling to Kamadan, Jewel of Istan. Mo Kaiser is invited on arrival.',
       'Invited Mo Kaiser. If you landed in another district, Guild Wars cannot find them.',
     ]);
@@ -110,4 +110,19 @@ test('invite rows explain why they are unavailable and stay absent without Whisp
     void source.search('mo kaiser')[0]!.run();
     assert.deepEqual(actions(page()), ['Travel to outpost']);
   }, party);
+});
+
+test('the invite scope invites a known person or the exact typed name', async () => {
+  const { party, calls } = invitePort();
+  await withPeople(ALL_TOOLS, async ({ source, receipts }) => {
+    const rows = source.search('invite Mo Kai');
+    assert.deepEqual(rows.map(row => `${row.title}|${row.action}`), ['Kai Account|Invite', 'Mo Kai|Invite']);
+    await rows[0]!.run();
+    await rows[1]!.run();
+    assert.deepEqual(calls, ['invite:Mo Kaiser', 'invite:Mo Kai'], 'a friend is invited by character name');
+    assert.equal(receipts.at(-1), 'Invited Mo Kai. Guild Wars shows the answer in chat.');
+  }, party);
+  await withPeople(ALL_TOOLS, ({ source }) => {
+    assert.deepEqual(source.search('invite Mo Kai'), [], 'no invite scope without the certified invite');
+  });
 });
