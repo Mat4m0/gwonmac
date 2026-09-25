@@ -208,8 +208,9 @@ and `/tp` also open Travel inside Hub.
 
 Search a friend's alias or character name and press Enter to choose an action.
 With Whispers enabled, people search also finds your conversations, recent
-people, and names seen in chat during this game session. A full name that Hub
-does not know yet stays available as its own result, spelled as you typed it.
+people, and names seen in chat during this game session. `whisper Character Name`
+always offers that exact name, spelled as you typed it, after any similar known
+people.
 **Travel to outpost** uses Any district; it does not join the friend's exact
 instance. Offline or stale locations cannot start a trip. **Whisper** opens a
 compact conversation. You can also type `whisper Character Name` to start one.

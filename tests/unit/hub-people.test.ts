@@ -36,15 +36,14 @@ test('Hub finds names seen in chat beside friends', () => withPeople(ALL_TOOLS, 
   assert.deepEqual(search('mo'), [KAISER, 'Moira Chatter|Seen in chat']);
 }));
 
-test('Hub keeps a typed full name reachable and spelled as typed', () => withPeople(ALL_TOOLS, ({ search, source, session }) => {
-  assert.deepEqual(search('Mo Kai'), [KAISER, 'Mo Kai|Character name'], 'a similar friend does not hide the typed name');
+test('Hub keeps an addressed full name reachable and spelled as typed', () => withPeople(ALL_TOOLS, ({ search, source, session }) => {
+  assert.deepEqual(search('Mo Kai'), [KAISER], 'unscoped search offers only known people');
   const scoped = source.search('whisper Mo\u00a0Kai ');
   assert.deepEqual(scoped.map(row => `${row.title}|${row.action}`), ['Kai Account|Write whisper', 'Mo Kai|Write whisper'],
     'Enter on a partial name still chooses the known person');
   void scoped[1]!.run();
   assert.deepEqual(session.state.conversations.map(c => c.name), ['Mo Kai']);
-  assert.deepEqual(search('Mo Kaiser'), [KAISER], 'an exact known name is not offered twice');
-  assert.deepEqual(search('kamadan'), [], 'one unscoped word is a search, not a name');
+  assert.deepEqual(source.search('whisper Mo Kaiser').map(row => row.title), ['Kai Account'], 'an exact known name is not offered twice');
 }));
 
 test('Hub respects the Messenger source switches', () => withPeople(ALL_TOOLS, ({ search, session }) => {
