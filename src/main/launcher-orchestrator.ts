@@ -126,6 +126,8 @@ export class LauncherOrchestrator {
         cartographyWalkabilityOpacity: settings.cartographyWalkabilityOpacity,
         cartographyGridOpacity: settings.cartographyGridOpacity,
         cartographyControlIdleOpacity: settings.cartographyControlIdleOpacity,
+        eliteSkillsEnabled: settings.eliteSkillsEnabled,
+        eliteMissionMapMarkers: settings.eliteMissionMapMarkers,
       },
       shortcuts: resolveShortcuts(settings.shortcutOverrides),
       texturePacks: this.options.getTexturePacks?.() ?? {

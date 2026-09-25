@@ -316,6 +316,8 @@ declare global {
       cartographyOverlayEnabled: boolean;
       cartographyGridEnabled: boolean;
       compassRangeIndicatorsEnabled: boolean;
+      eliteSkillsEnabled: boolean;
+      eliteMissionMapMarkers: AppSettings['eliteMissionMapMarkers'];
       skillKeyBindings: AppSettings['skillKeyBindings'];
       skillKeyLabelsEnabled: boolean;
       skillCooldownOverlayEnabled: boolean;

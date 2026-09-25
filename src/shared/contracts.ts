@@ -17,6 +17,7 @@
  */
 import { DEFAULT_ALCOHOL_TIMER_POSITION, type AlcoholTimerPosition } from "./alcohol-timer.js";
 import type { EliteWikiRequest } from "./elite-wiki.js";
+import type { EliteMissionMapMarkers } from "./elite-map-settings.js";
 import type { EliteTracking, EliteUpdate } from "./elite-skills.js";
 import type { HubSettingsApi } from "./hub-settings.js";
 import type { MarketSnapshot } from "./market-rates.js";
@@ -424,6 +425,10 @@ export interface AppSettings {
   cartographyGridOpacity: number;
   /** Visibility of the collapsed Compass control, as a whole percentage. */
   cartographyControlIdleOpacity: number;
+  /** Show the Elite Skills planner and its map markers while Maps are on. */
+  eliteSkillsEnabled: boolean;
+  /** Capture locations that the Mission Map shows during play. */
+  eliteMissionMapMarkers: EliteMissionMapMarkers;
   /** Master opt-in for the optional executable Tools Beta capability. */
   gwonmacTools: boolean;
   /** Show the saved Build Library and allow its app shortcut. */
@@ -546,6 +551,8 @@ export const RENDERER_WRITABLE_SETTINGS = [
   "cartographyGridOpacity",
   "cartographyWalkabilityOpacity",
   "cartographyRevealMode",
+  "eliteSkillsEnabled",
+  "eliteMissionMapMarkers",
   "characterSwitchProfession",
   "characterSwitchLevel",
   "characterSwitchLocation",
@@ -614,6 +621,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   cartographyWalkabilityOpacity: 55,
   cartographyGridOpacity: 65,
   cartographyControlIdleOpacity: 35,
+  eliteSkillsEnabled: true,
+  eliteMissionMapMarkers: "saved",
   gwonmacTools: false,
   buildLibrary: true,
   tradeChat: true,
