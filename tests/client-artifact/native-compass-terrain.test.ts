@@ -21,7 +21,7 @@ test("native terrain owns bounded resources, follows its Canvas and refuses inva
   assert.ok(publishIndex !== undefined);
   const first = publishIndex - 5;
   const selected = Array.from({length: 6}, (_, index) => first + index);
-  const peers = [1444, 1445, 1446, 1448, 1449, 1556, 1565, 1579, 748, 6827, 2249, 3137, 1569];
+  const peers = [1444, 1445, 1446, 1448, 1449, 1556, 1565, 1579, 748, 6827, 2249, 3137, 1569, 750];
   const indices = new Map([...peers, ...selected].map((index, position) => [index, position]));
   const decoded = evidence.decodeFunctions([]);
   const rewritten = selected.map((index) => {
@@ -43,7 +43,8 @@ test("native terrain owns bounded resources, follows its Canvas and refuses inva
     section(1, sectionById(sections, 1)),
     section(2, concat(uleb(peers.length), ...peers.map((index) => concat(encodeName("peer"), encodeName(String(index)), Uint8Array.of(0), uleb(module.functionTypeIndices[index]!))))),
     section(3, concat(uleb(selected.length), ...selected.map((index) => uleb(module.functionTypeIndices[index]!)))),
-    section(5, Uint8Array.of(1, 0, 4)), section(6, sectionById(sections, 6)),
+    // Large enough for the native model-type word the render-reference guard reads.
+    section(5, Uint8Array.of(1, 0, 24)), section(6, sectionById(sections, 6)),
     section(7, concat(uleb(labels.length + globals.length + 2),
       ...labels.map((name, index) => concat(encodeName(name), Uint8Array.of(0), uleb(peers.length + index))),
       encodeName("memory"), Uint8Array.of(2, 0), encodeName("stack"), Uint8Array.of(3, 0),
@@ -69,11 +70,17 @@ test("native terrain owns bounded resources, follows its Canvas and refuses inva
     3137: (count: number, texture: number, sampler: number, shader: number, a: number, b: number, flags: number, mode: number) => {
       assert.deepEqual([count, view.getUint32(texture, true), view.getUint32(sampler, true), view.getUint32(shader, true), a, b, flags, mode], [1, 21, surface === "ranges" ? 4 : 7, 482, 0, 0, 33555424, surface === "ranges" ? 4 : 11]); return 22;
     },
-    1569: (draw: number, index: number, material: number) => { assert.deepEqual([draw, index, material], [12, 0, 22]); },
+    1569: (draw: number, index: number, material: number) => {
+      assert.equal(view.getUint32(MODEL + 152, true), 0, "a texture swap never reaches a referenced model");
+      assert.deepEqual([draw, index, material], [12, 0, 22]);
+    },
+    750: (handle: number, type: number) => { assert.deepEqual([handle, type], [12, MODEL_TYPE]); return MODEL; },
   }});
   assert.ok(exports.memory instanceof WebAssembly.Memory); const view = new DataView(exports.memory.buffer);
   const scalar = (name: string, value: number) => { const target = exports[name]; assert.ok(target instanceof WebAssembly.Global); target.value = value; };
   const invoke = (name: string, ...args: number[]) => { const target = exports[name]; assert.equal(typeof target, "function"); if (typeof target === "function") return target(...args); };
+  const MODEL = 196608 + 4096; const MODEL_TYPE = 20;
+  view.setUint32(20 + 1341168, MODEL_TYPE, true);
   scalar("stack", 196608); scalar("gwonmac_cartography_context_status", 1); scalar("gwonmac_cartography_context_area_epoch", 7);
   const owner = 256; const camera = 768; const direction = 784; const region = 2048; const bytes = 32 + 64 * 64 * 4;
   const rectangle = (width: number, height: number) => {
@@ -88,6 +95,13 @@ test("native terrain owns bounded resources, follows its Canvas and refuses inva
   header(); assert.equal(invoke("publish", region, bytes), 0); assert.equal(textureCreates, 0);
   invoke("init", owner); invoke("attach", owner, 43); assert.equal(attachments, 1);
   assert.equal(invoke("publish", region, bytes), 1); assert.deepEqual(released.splice(0), [22, 21]);
+  // While the native renderer holds the model, publishing reports busy and
+  // changes nothing; the host retries on a later frame.
+  view.setUint32(MODEL + 152, 1, true); header();
+  assert.equal(invoke("publish", region, bytes), 2);
+  assert.equal(textureCreates, 1); assert.deepEqual(released, []);
+  view.setUint32(MODEL + 152, 0, true); header();
+  assert.equal(invoke("publish", region, bytes), 1); assert.deepEqual(released.splice(0), [22, 21]);
   invoke("update", owner, camera, direction); assert.deepEqual(vertices.splice(0), [129]); assert.equal(indicesAllocated.at(-1), 576);
   assert.equal(view.getFloat32(65536, true), 122.5); assert.equal(view.getFloat32(65540, true), 122.5);
   assert.equal(view.getFloat32(65552, true), 0.5); assert.equal(view.getFloat32(65556, true), 0.5);
@@ -98,7 +112,7 @@ test("native terrain owns bounded resources, follows its Canvas and refuses inva
     rectangle(width, height); invoke("update", owner, camera, direction);
     assert.equal(view.getFloat32(65536, true), width / 2); assert.equal(view.getFloat32(65540, true), height / 2);
   }
-  assert.equal(textureCreates, 1, "camera and rectangle updates do not allocate textures");
+  assert.equal(textureCreates, 2, "camera and rectangle updates do not allocate textures");
   const allocationsBeforeIdle = indicesAllocated.length;
   invoke("update", owner, camera, direction); invoke("update", owner, camera, direction);
   assert.equal(indicesAllocated.length, allocationsBeforeIdle, "idle native frames do not rewrite mesh buffers");
@@ -108,8 +122,8 @@ test("native terrain owns bounded resources, follows its Canvas and refuses inva
   for (const [offset, value] of [[0, 0], [8, 6], [12, 63], [12, 4096], [28, 0]] as const) {
     header(); view.setUint32(region + offset, value, true); assert.equal(invoke("publish", region, bytes), 0);
   }
-  assert.equal(invoke("publish", 262140, bytes), 0); assert.equal(invoke("publish", -1, bytes), 0);
-  assert.equal(textureCreates, 1);
+  assert.equal(invoke("publish", exports.memory.buffer.byteLength - 4, bytes), 0); assert.equal(invoke("publish", -1, bytes), 0);
+  assert.equal(textureCreates, 2);
   header(); assert.equal(invoke("publish", region, bytes), 1); released.length = 0;
   scalar("gwonmac_cartography_context_area_epoch", 8); invoke("update", owner, camera, direction);
   assert.equal(indicesAllocated.at(-1), 0);

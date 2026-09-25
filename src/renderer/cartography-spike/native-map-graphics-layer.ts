@@ -3,6 +3,7 @@
  * These canvases stay detached; only each game's map draw event presents them.
  */
 import { disposeCartographyResources } from "../cartography-lifecycle.js";
+import { NATIVE_PUBLISH_BUSY } from "../../shared/native-publish.js";
 import { NATIVE_MAP_GRAPHICS_HEADER_BYTES, NATIVE_MAP_GRAPHICS_MAGIC,
   NATIVE_MAP_GRAPHICS_MAX_SIZE, NATIVE_MAP_GRAPHICS_SURFACES,
   type NativeMapGraphicsSurface } from "../../shared/native-map-graphics.js";
@@ -105,8 +106,10 @@ export function createNativeMapGraphicsLayer(exports: WebAssembly.Exports, docum
           output[at] = pixels[at + 2]!; output[at + 1] = pixels[at + 1]!;
           output[at + 2] = pixels[at]!; output[at + 3] = pixels[at + 3]!;
         }
-        if (target.publish(region, bytes) === 1) target.version = key;
-        else withdraw(surface);
+        const result = target.publish(region, bytes);
+        // Busy: the native renderer still holds the texture. Keep it and retry.
+        if (result === 1) target.version = key;
+        else if (result !== NATIVE_PUBLISH_BUSY) withdraw(surface);
       } finally { free(region); }
     },
     hide: withdraw,

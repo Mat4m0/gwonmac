@@ -4,6 +4,7 @@
  */
 import { NATIVE_HUD_ATLAS_SIZE as SIZE, NATIVE_HUD_HEADER, NATIVE_HUD_MAGIC, NATIVE_HUD_QUADS, NATIVE_HUD_KEYCAP, NATIVE_HUD_SKILLS, NATIVE_HUD_LABELS,
   type NativeHudQuad } from "../shared/native-hud.js";
+import { NATIVE_PUBLISH_BUSY } from "../shared/native-publish.js";
 import { type SkillKeyBinding } from "../shared/skill-key-bindings.js";
 import { paintSkillKeyPlate, skillKeyPlateLayout } from "./skill-key-artwork.js";
 import { ensureGuildWarsFont } from "./appearance.js";
@@ -32,7 +33,8 @@ export function createNativeHudLayer(exports: WebAssembly.Exports, document: Doc
   const items = new Map<NativeHudChannel, readonly (NativeHudItem | null)[]>();
   const signatures = new Map<number, string>();
   const sprites = new Map<string, Sprite>();
-  let atlasGeneration = 0, disposed = false, fontReady = false;
+  // A busy upload leaves the repainted sprites without their native atlas.
+  let atlasGeneration = 0, atlasPending = false, disposed = false, fontReady = false;
   let nextX = 2, nextY = 2, rowHeight = 0;
   const write = (bytes: number, operation: (region: number, view: DataView) => boolean) => {
     if (!available) return false;
@@ -55,7 +57,7 @@ export function createNativeHudLayer(exports: WebAssembly.Exports, document: Doc
       ctx = canvas.getContext("2d", {willReadFrequently: true});
     }
     const context = ctx;
-    if (!context) return false;
+    if (!context) return "failed";
     sprites.clear(); nextX = 2; nextY = 2; rowHeight = 0; context.clearRect(0, 0, SIZE, SIZE);
     const styles = new Map<string, {effect: boolean; color: string}>();
     for (const color of ["#eadcc2", "#e5ad52", "#c86c65"]) styles.set(`effect:${color}`, {effect: true, color});
@@ -91,12 +93,17 @@ export function createNativeHudLayer(exports: WebAssembly.Exports, document: Doc
       }
     }
     const rgba = context.getImageData(0, 0, SIZE, SIZE).data;
-    return write(8 + rgba.length, (region, view) => {
+    let busy = false;
+    const uploaded = write(8 + rgba.length, (region, view) => {
       view.setUint32(0, NATIVE_HUD_MAGIC, true); view.setUint32(4, SIZE, true);
       const bytes = new Uint8Array(view.buffer, region + 8, rgba.length);
       for (let at = 0; at < rgba.length; at += 4) { bytes[at] = rgba[at + 2]!; bytes[at + 1] = rgba[at + 1]!; bytes[at + 2] = rgba[at]!; bytes[at + 3] = rgba[at + 3]!; }
-      return typeof upload === "function" && upload(region, 8 + rgba.length) === 1;
+      const result = typeof upload === "function" ? upload(region, 8 + rgba.length) : 0;
+      busy = result === NATIVE_PUBLISH_BUSY;
+      return result === 1;
     });
+    // Busy: a native icon still holds the current atlas. Nothing changed; retry.
+    return uploaded ? "uploaded" : busy ? "busy" : "failed";
   };
   const quad = (entry: Sprite, x: number, y: number, width: number, height: number, bottomLimit = 1): NativeHudQuad => {
     // Clip pixels and UVs together to keep all drawing inside the owning icon.
@@ -142,8 +149,11 @@ export function createNativeHudLayer(exports: WebAssembly.Exports, document: Doc
     if (atlasGeneration === 0 && ![...items.values()].some(entries => entries.some(Boolean))) return;
     const missing = [...items].some(([channel, entries]) => entries.some((item) => item &&
       !sprites.has(item.binding ? `key:${JSON.stringify(item.binding)}` : `${style(channel, item)}:0`)));
-    if (atlasGeneration === 0 || missing) {
-      if (!rebuild()) { reset(); atlasGeneration = 0; signatures.clear(); return; }
+    if (atlasGeneration === 0 || missing || atlasPending) {
+      const rebuilt = rebuild();
+      atlasPending = rebuilt === "busy";
+      if (rebuilt === "busy") return;
+      if (rebuilt === "failed") { reset(); atlasGeneration = 0; signatures.clear(); return; }
       atlasGeneration++;
       // Repacking moves UVs. Invalidate live labels while keeping their old
       // signatures until withdrawn; clearing the map would lose removed slots.

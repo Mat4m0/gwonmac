@@ -159,6 +159,15 @@ support or stale map identity hides Compass terrain without changing settings.
 Stationary Compass geometry is reused; range geometry changes only with its
 Canvas rectangle or artwork, not camera motion.
 
+Textures are published from the application's animation frame, outside the
+client's own frame. Guild Wars asserts `m_renderRefCount == 0` in
+`GrModel.cpp` when a retained model is retextured while its renderer still
+holds it, and that assertion aborts the client. Every Compass and map publish
+therefore reads the same native field first. While it is held, the publish
+reports busy, changes nothing, and the current texture stays drawn; the next
+frame publishes again. The guard's native lookup and field owner are part of
+each transform's exact function proof.
+
 Mission and World Map cache artwork in world coordinates, with a margin around
 the visible rectangle. Small pans reuse it. Zoom moves it continuously through
 the native camera; raster detail changes in eighth-octave steps. Textures are

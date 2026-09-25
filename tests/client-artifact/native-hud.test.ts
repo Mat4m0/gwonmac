@@ -22,7 +22,7 @@ for (const channel of ["cooldowns", "keys", "effects"] as const) {
   const label = exported.find((entry) => entry.name === "gwonmac_hud_label")?.index; assert.ok(label);
   const first = label - 8;
   const selected = [...Array.from({length: 7}, (_, n) => first + 2 + n), first, 6492, 6585, first + 9];
-  const peers = [17640, 6587, 294, 295, 322, 334, 6588, 6598, 6599, 6601, 6602, first + 1, 6593, 748, 17791, 17793, 1444, 1445, 1446, 1448, 1449, 1554, 1572, 6446, 1563, 1569, 1579, 1333, 1334, 1357, 264, 1559, 5595, 2249, 3137];
+  const peers = [17640, 6587, 294, 295, 322, 334, 6588, 6598, 6599, 6601, 6602, first + 1, 6593, 748, 17791, 17793, 1444, 1445, 1446, 1448, 1449, 1554, 1572, 6446, 1563, 1569, 1579, 1333, 1334, 1357, 264, 1559, 5595, 2249, 3137, 750];
   const indices = new Map([...peers, ...selected].map((index, position) => [index, position]));
   const decoded = evidence.decodeFunctions([]);
   const rewritten = selected.map((index) => {
@@ -92,7 +92,12 @@ for (const channel of ["cooldowns", "keys", "effects"] as const) {
     },
     1572: (_draw: number, flags: number) => { assert.equal(flags, 6); },
     6446: (position: number) => { assert.equal(position, 256 + 208); },
-    1563: () => {}, 1569: () => {}, 1579: () => {},
+    1563: () => {}, 1579: () => {},
+    1569: (draw: number) => {
+      assert.ok(refs.has(draw));
+      assert.equal(view.getUint32(MODEL + 152, true), 0, "a texture swap never reaches a referenced model");
+    },
+    750: (handle: number, type: number) => { assert.ok(refs.has(handle)); assert.equal(type, MODEL_TYPE); return MODEL; },
     1333: () => 1000, 1334: () => {}, 1357: () => {},
     264: (to: number, from: number, bytes: number) => { new Uint8Array(view.buffer).copyWithin(to >>> 0, from >>> 0, (from >>> 0) + bytes); },
     1559: (_handle: number, alpha: number) => { assert.equal(alpha, 127); },
@@ -107,6 +112,8 @@ for (const channel of ["cooldowns", "keys", "effects"] as const) {
   assert.ok(exports.memory instanceof WebAssembly.Memory); let view = new DataView(exports.memory.buffer);
   const invoke = (name: string, ...args: number[]) => { const target = exports[name]; assert.equal(typeof target, "function"); if (typeof target === "function") return target(...args); };
   const scalar = (name: string, value: number) => { const target = exports[name]; assert.ok(target instanceof WebAssembly.Global); target.value = value; };
+  const MODEL = 7_500_000, MODEL_TYPE = 20;
+  view.setUint32(20 + 1341168, MODEL_TYPE, true);
   scalar("stack", 7_900_000); scalar("skillbar", 43);
   const region = 2048, atlasBytes = 8 + 1024 * 1024 * 4;
   view.setUint32(region, NATIVE_HUD_MAGIC, true); view.setUint32(region + 4, 1024, true);
@@ -179,6 +186,15 @@ for (const channel of ["cooldowns", "keys", "effects"] as const) {
   const invalidationsBefore = invalidations;
   header(); f(region + HEADER, .125); assert.equal(invoke("label", region, HEADER + 32), 1);
   assert.equal(textureCreates, 1); assert.equal(invalidations, invalidationsBefore, "countdown changes retain the compiled native batch");
+  // Repacking the atlas retextures every retained label. While the native
+  // renderer holds one, the upload reports busy and changes nothing.
+  u(region, NATIVE_HUD_MAGIC); u(region + 4, 1024);
+  u(MODEL + 152, 1);
+  const resourcesBeforeBusy = refs.size;
+  assert.equal(invoke("atlas", region, atlasBytes), 2);
+  assert.equal(textureCreates, 1); assert.equal(refs.size, resourcesBeforeBusy);
+  u(MODEL + 152, 0);
+  assert.equal(invoke("atlas", region, atlasBytes), 1); assert.equal(textureCreates, 2);
   assert.equal(view.getFloat32(6_000_000, true), 108);
   f(frame + 276, 228); invoke("collect", frame + 4, 9, outputVector);
   assert.equal(view.getFloat32(6_000_000, true), 116, "native icon resize updates geometry without a texture upload");
@@ -208,7 +224,7 @@ for (const channel of ["cooldowns", "keys", "effects"] as const) {
   assert.equal(invoke("destroy", frame + 4), frame + 4); assert.equal(destroyed, 1);
   assert.equal(refs.size, 1, "icon destruction leaves only the shared atlas material");
   invoke("reset"); invoke("reset"); assert.equal(refs.size, 0); assert.equal(allocations.size, 0);
-  assert.equal(textureCreates, 1);
+  assert.equal(textureCreates, 2);
   if (channel === "cooldowns") {
     const memory = exports.memory;
     const highRegion = 0x80000800;

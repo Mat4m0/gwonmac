@@ -19,7 +19,7 @@ test("each native map owns its mesh, restores matrices and refuses stale or malf
     const publishIndex = exported.find((entry) => entry.name === `gwonmac_${surface}_graphics_publish`)?.index;
     assert.ok(publishIndex !== undefined);
     const selected = Array.from({length: 4}, (_, index) => publishIndex - 3 + index);
-    const peers = [1444, 1445, 1446, 1448, 1449, 1554, 1564, 1569, 1579, 1333, 1334, 1357, 264, 2956, 2249, 3137, 748];
+    const peers = [1444, 1445, 1446, 1448, 1449, 1554, 1564, 1569, 1579, 1333, 1334, 1357, 264, 2956, 2249, 3137, 748, 750];
     const indices = new Map([...peers, ...selected].map((index, position) => [index, position]));
     const rewritten = selected.map((index) => {
       const body = bodies[index - module.functionImportCount]!;
@@ -39,7 +39,8 @@ test("each native map owns its mesh, restores matrices and refuses stale or malf
     const fixture = concat(WASM_HEADER, section(1, sectionById(sections, 1)),
       section(2, concat(uleb(peers.length), ...peers.map((index) => concat(encodeName("peer"), encodeName(String(index)), Uint8Array.of(0), uleb(module.functionTypeIndices[index]!))))),
       section(3, concat(uleb(selected.length), ...selected.map((index) => uleb(module.functionTypeIndices[index]!)))),
-      section(5, Uint8Array.of(1, 0, 4)), section(6, sectionById(sections, 6)),
+      // Large enough for the native model-type word the render-reference guard reads.
+      section(5, Uint8Array.of(1, 0, 24)), section(6, sectionById(sections, 6)),
       section(7, concat(uleb(labels.length + globals.length + 2),
         ...labels.map((name, index) => concat(encodeName(name), Uint8Array.of(0), uleb(peers.length + index))),
         encodeName("memory"), Uint8Array.of(2, 0), encodeName("stack"), Uint8Array.of(3, 0),
@@ -56,7 +57,11 @@ test("each native map owns its mesh, restores matrices and refuses stale or malf
         assert.deepEqual([count, view.getUint32(buffer, true), view.getUint32(material, true), flags, extra], [1, 11, 22, 0, 0]); return 12;
       },
       1564: (count: number, pointer: number) => { assert.deepEqual([count, view.getUint32(pointer, true)], [1, 12]); matrixEvents.push("capture-view"); },
-      1569: (draw: number, index: number, material: number) => { assert.deepEqual([draw, index, material], [12, 0, 22]); },
+      1569: (draw: number, index: number, material: number) => {
+        assert.equal(view.getUint32(MODEL + 152, true), 0, "a texture swap never reaches a referenced model");
+        assert.deepEqual([draw, index, material], [12, 0, 22]);
+      },
+      750: (handle: number, type: number) => { assert.deepEqual([handle, type], [12, MODEL_TYPE]); return MODEL; },
       1579: (draw: number, index: number) => { assert.deepEqual([draw, index], [12, 0]); matrixEvents.push("capture-model"); },
       1333: (matrix: number) => { assert.equal(matrix, 2); matrixEvents.push("save"); return 1024; },
       1334: (matrix: number, pointer: number) => { assert.equal(matrix, 2); assert.equal(view.getFloat32(pointer, true), 17); matrixEvents.push("restore"); },
@@ -71,6 +76,8 @@ test("each native map owns its mesh, restores matrices and refuses stale or malf
     const memory = exports.memory; assert.ok(memory instanceof WebAssembly.Memory); const view = new DataView(memory.buffer);
     const scalar = (name: string, value: number) => { const target = exports[name]; assert.ok(target instanceof WebAssembly.Global); target.value = value; };
     const invoke = (name: string, ...args: number[]) => { const target = exports[name]; assert.equal(typeof target, "function"); if (typeof target === "function") return target(...args); };
+    const MODEL = 196608 + 4096; const MODEL_TYPE = 20;
+    view.setUint32(20 + 1341168, MODEL_TYPE, true);
     scalar("stack", 196608); scalar("gwonmac_cartography_context_status", 1); scalar("gwonmac_cartography_context_area_epoch", 7);
     const owner = 256; const region = 2048; const bytes = 64 + 64 * 64 * 4;
     view.setFloat32(1024, 17, true); view.setUint32(owner + 4, 2, true);
@@ -85,12 +92,19 @@ test("each native map owns its mesh, restores matrices and refuses stale or malf
     assert.deepEqual(matrixEvents.splice(0), ["save", "identity", "capture-model", "capture-view", "draw", "restore"]);
     assert.equal(view.getFloat32(65536, true), 100); assert.equal(view.getFloat32(65540, true), -200);
     invoke("render", owner); assert.equal(textures, 1, "native draws reuse the texture");
+    // While the native renderer holds the model, publishing reports busy and
+    // changes nothing; the host retries on a later frame.
+    view.setUint32(MODEL + 152, 1, true); header();
+    assert.equal(invoke("publish", region, bytes), 2); assert.equal(textures, 1); assert.deepEqual(released, []);
+    const drawn = draws; invoke("render", owner);
+    assert.equal(draws, drawn + 1, "a busy publish keeps the current texture drawn");
+    view.setUint32(MODEL + 152, 0, true);
     header(); assert.equal(invoke("publish", region, bytes), 1); assert.equal(meshes, 1);
     for (const [offset, value] of [[0, 0], [8, 6], [12, 63], [16, 4096], [20, 0]] as const) {
       header(); view.setUint32(region + offset, value, true); assert.equal(invoke("publish", region, bytes), 0);
     }
     header(); view.setFloat32(region + 32, NaN, true); assert.equal(invoke("publish", region, bytes), 0);
-    assert.equal(invoke("publish", 262140, bytes), 0); assert.equal(invoke("publish", -1, bytes), 0);
+    assert.equal(invoke("publish", memory.buffer.byteLength - 4, bytes), 0); assert.equal(invoke("publish", -1, bytes), 0);
     assert.equal(textures, 2);
     header(); assert.equal(invoke("publish", region, bytes), 1);
     const before = draws;

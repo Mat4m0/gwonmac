@@ -5,7 +5,9 @@
 import { concat, encodeCode, encodeIndexVector, encodeSection, parseCode, parseExports,
   parseIndexVector, sectionById, sleb, splitSections, uleb, vectorPayload, WASM_HEADER } from "../core/wasm-binary.js";
 import { encodeName } from "./cartography-transform-internals.js";
+import { NATIVE_RENDER_REFERENCE_FUNCTIONS, nativeModelBusy } from "./native-render-reference.js";
 import { functionBodySha256, wasmEvidence } from "./wasm-evidence.js";
+import { NATIVE_PUBLISH_BUSY } from "../../shared/native-publish.js";
 import { NATIVE_HUD_MAGIC, NATIVE_HUD_ATLAS_SIZE, NATIVE_HUD_LABELS, NATIVE_HUD_QUADS,
   NATIVE_HUD_HEADER, NATIVE_HUD_KEYCAP, NATIVE_HUD_SKILLS } from "../../shared/native-hud.js";
 
@@ -98,7 +100,8 @@ const CHECKED = [
   [
     264,
     "0265ff024218606f270c9dcca6166d3a5d4bc28809071377662ab1ce0f13e562"
-  ]
+  ],
+  ...NATIVE_RENDER_REFERENCE_FUNCTIONS,
 ] as const;
 /** Exact native draw owners and resource operations bound by local verification. */
 export const NATIVE_HUD_RENDERING_PROOF = Object.freeze({ functionBodies: CHECKED });
@@ -276,7 +279,12 @@ export function appendNativeHud(input: Uint8Array, skillBarGlobal: number): Uint
   const validMemory = (bytes: Uint8Array) => concat(l(0), i(0), op(0x4b), l(0), i(3), op(0x71, 0x45, 0x71),
     l(0), op(0xad), bytes, op(0xad, 0x7c), op(0x3f, 0, 0xad, 0x42), sleb(65536), op(0x7e, 0x58, 0x71));
   const atlasBytes = 8 + NATIVE_HUD_ATLAS_SIZE ** 2 * 4;
-  const atlas = concat(op(1, 4, 0x7f), validMemory(i(atlasBytes)), l(1), i(atlasBytes), op(0x46, 0x71, 0x45, 0x04, 0x40), i(0), op(0x0f, 0x0b),
+  // Retexturing a record's retained model asserts while the renderer holds it;
+  // this runs from the host's frame, so report busy before changing any record.
+  const atlas = concat(op(1, 5, 0x7f),
+    each(5, concat(record(5), load(8), op(0x04, 0x40),
+      nativeModelBusy(concat(record(5), load(8)), 6), op(0x04, 0x40), i(NATIVE_PUBLISH_BUSY), op(0x0f, 0x0b), op(0x0b))),
+    validMemory(i(atlasBytes)), l(1), i(atlasBytes), op(0x46, 0x71, 0x45, 0x04, 0x40), i(0), op(0x0f, 0x0b),
     l(0), load(0), i(NATIVE_HUD_MAGIC), op(0x47), l(0), load(4), i(NATIVE_HUD_ATLAS_SIZE), op(0x47, 0x72, 0x04, 0x40), i(0), op(0x0f, 0x0b),
     stack(2, 48), l(2), add(l(0), 8), save(0), l(2), i(NATIVE_HUD_ATLAS_SIZE), save(8), l(2), i(NATIVE_HUD_ATLAS_SIZE), save(12),
     l(2), i(0), add(l(2), 8), i(1), i(112), call(2249), s(3),

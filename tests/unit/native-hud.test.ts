@@ -71,13 +71,13 @@ test("all HUDs share cached artwork; countdowns, urgency and resize upload only 
   const view = new EventTarget();
   const document = {defaultView: view, createElement(tag: string) { assert.equal(tag, "canvas"); return canvas; }} as unknown as Document;
   const memory = new WebAssembly.Memory({initial: 80});
-  let uploads = 0, publications = 0, resets = 0, allocated = 0, freed = 0;
+  let uploads = 0, publications = 0, resets = 0, allocated = 0, freed = 0, atlasResult = 1;
   const labels = new Map<number, number>();
   const positions = new Map<number, number[]>();
   const layer = createNativeHudLayer({memory,
     malloc: () => { allocated++; return 1024; }, free: () => { freed++; },
     gwonmac_hud_reset: () => { resets++; },
-    gwonmac_hud_atlas: () => { uploads++; return 1; },
+    gwonmac_hud_atlas: () => { uploads++; return atlasResult; },
     gwonmac_hud_label: (region: number, bytes: number) => {
       const v = new DataView(memory.buffer, region, bytes);
       assert.equal(v.getUint32(0, true), NATIVE_HUD_MAGIC); assert.equal(v.getUint32(4, true), bytes);
@@ -126,7 +126,15 @@ test("all HUDs share cached artwork; countdowns, urgency and resize upload only 
   assert.equal(labels.get(0), 2);
   layer.update("cooldowns", [{...item, parent: 99, text: "8"}]);
   assert.equal(labels.get(0), 1, "different icon generations must not be merged");
-  view.dispatchEvent(new Event("gw:graphics-context-reset")); assert.equal(uploads, 2);
+  // A new color repacks the atlas. While a native icon still holds the current
+  // atlas, the upload is busy: labels stay as they are and the repack retries.
+  atlasResult = 2; const resetsBeforeBusy = resets; const publishedBeforeBusy = publications;
+  layer.update("cooldowns", [{...item, parent: 99, text: "8", color: "#123456"}]);
+  assert.equal(uploads, 2); assert.equal(resets, resetsBeforeBusy, "a busy atlas never resets native labels");
+  assert.equal(publications, publishedBeforeBusy);
+  atlasResult = 1; layer.update("cooldowns", [{...item, parent: 99, text: "8", color: "#123456"}]);
+  assert.equal(uploads, 3); assert.ok(publications > publishedBeforeBusy, "the retried repack publishes the labels");
+  view.dispatchEvent(new Event("gw:graphics-context-reset")); assert.equal(uploads, 4);
   layer.dispose(); layer.dispose(); assert.equal(resets, 2); assert.equal(allocated, freed); assert.equal(canvas.width, 0);
   layer.update("keys", []); assert.equal(allocated, freed);
 });

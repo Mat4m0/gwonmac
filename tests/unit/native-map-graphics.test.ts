@@ -104,7 +104,7 @@ test("native maps cache textures and release copied input on success, refusal an
   const {document, view, canvases} = documentPeer();
   const memory = new WebAssembly.Memory({initial: 8});
   const serial = new WebAssembly.Global({value: "i32", mutable: true});
-  let allocations = 0; let releases = 0; let uploads = 0; let behavior: "accept" | "refuse" | "throw" = "accept";
+  let allocations = 0; let releases = 0; let uploads = 0; let behavior: "accept" | "busy" | "refuse" | "throw" = "accept";
   const exports = {memory, gwonmac_mission_graphics_serial: serial,
     malloc: () => { allocations += 1; return 2048; }, free: () => { releases += 1; },
     gwonmac_mission_graphics_hide: () => { serial.value = 0; },
@@ -115,6 +115,7 @@ test("native maps cache textures and release copied input on success, refusal an
       assert.equal(header.getFloat32(48, true), 128);
       if (behavior === "throw") throw new Error("native failure");
       if (behavior === "refuse") return 0;
+      if (behavior === "busy") return 2;
       serial.value = header.getUint32(20, true); return 1;
     },
   };
@@ -128,6 +129,12 @@ test("native maps cache textures and release copied input on success, refusal an
   layer.update("mission", {...input, projection: {...projection, box: {...projection.box, left: 900}}});
   assert.equal(uploads, 1, "moving the native window does not repaint map artwork");
   view.dispatchEvent(new Event("gw:graphics-context-reset")); layer.update("mission", input); assert.equal(uploads, 2);
+  // Busy: the native renderer still holds the texture. It stays drawn and the
+  // new artwork is published on a later frame.
+  const shown = serial.value; const next = {...input, images: [{...input.images[0]!, version: "2"}]};
+  behavior = "busy"; layer.update("mission", next); layer.update("mission", next);
+  assert.equal(uploads, 4); assert.equal(serial.value, shown, "a busy publish keeps the current texture");
+  behavior = "accept"; layer.update("mission", next); layer.update("mission", next); assert.equal(uploads, 5);
   behavior = "refuse"; layer.hide("mission"); layer.update("mission", input); assert.equal(serial.value, 0);
   behavior = "throw"; assert.throws(() => layer.update("mission", input), /native failure/);
   assert.equal(allocations, releases);
@@ -238,4 +245,29 @@ test("native maps and Compass ranges upload and free copied pixels above 2 GiB",
   assert.deepEqual(published, ["mission", "ranges"]);
   assert.deepEqual(freed, [address, address]);
   map.dispose(); range.dispose();
+});
+
+test("Compass ranges keep their texture and retry while the native renderer holds it", async () => {
+  const {createNativeCompassRangesLayer} = await import("../../src/renderer/cartography-spike/native-compass-ranges-layer.js");
+  const {document} = documentPeer();
+  const memory = new WebAssembly.Memory({initial: 8});
+  const serial = new WebAssembly.Global({value: "i32", mutable: true});
+  const area = new WebAssembly.Global({value: "i32", mutable: true});
+  let result = 2; let uploads = 0; let hides = 0;
+  const range = createNativeCompassRangesLayer({memory, malloc: () => 2048, free: () => {},
+    gwonmac_compass_ranges_serial: serial, gwonmac_compass_ranges_area: area,
+    gwonmac_compass_ranges_hide: () => { hides += 1; serial.value = 0; },
+    gwonmac_compass_ranges_publish: (region: number) => {
+      uploads += 1;
+      if (result === 1) { serial.value = new DataView(memory.buffer, region, 32).getUint32(28, true); area.value = 7; }
+      return result;
+    },
+  }, document);
+  const image = {canvas: new CanvasPeer() as unknown as HTMLCanvasElement, version: "1"};
+  range.update(image, 7); range.update(image, 7);
+  assert.equal(uploads, 2, "a busy publish is retried"); assert.equal(hides, 0, "a busy publish never hides the ranges");
+  result = 1; range.update(image, 7); range.update(image, 7);
+  assert.equal(uploads, 3); assert.equal(hides, 0);
+  result = 0; range.update({...image, version: "2"}, 7); assert.equal(hides, 1, "a refused publish still withdraws");
+  range.dispose();
 });
