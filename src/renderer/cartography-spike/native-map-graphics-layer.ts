@@ -52,7 +52,8 @@ export function createNativeMapGraphicsLayer(exports: WebAssembly.Exports, docum
     const hide = exports[`gwonmac_${name}_graphics_hide`];
     const serial = exports[`gwonmac_${name}_graphics_serial`];
     if (typeof publish !== "function" || typeof hide !== "function" || !(serial instanceof WebAssembly.Global)) return null;
-    return { name, publish, hide, serial, canvas: document.createElement("canvas"), version: "", nextSerial: 0 };
+    return { name, publish, hide, serial, canvas: document.createElement("canvas"), version: "", nextSerial: 0,
+      atlas: null as Readonly<{ version: string; pixels: Uint8ClampedArray }> | null };
   });
   let disposed = false;
   const withdraw = (surface: NativeMapGraphicsSurface) => {
@@ -144,10 +145,14 @@ export function createNativeMapGraphicsLayer(exports: WebAssembly.Exports, docum
         || !edge(canvas.width) || !edge(canvas.height)) { withdraw(surface); return; }
       const key = [input.area, input.continent, input.atlas.version, input.version].join(":");
       if (key === target.version && Number(target.serial.value) === target.nextSerial) return;
-      const context = canvas.getContext("2d");
-      if (!context) { withdraw(surface); return; }
+      // Zoom steps move only rectangles: read the unchanged atlas pixels once per version.
+      if (target.atlas?.version !== input.atlas.version) {
+        const context = canvas.getContext("2d");
+        if (!context) { withdraw(surface); return; }
+        target.atlas = { version: input.atlas.version, pixels: context.getImageData(0, 0, canvas.width, canvas.height).data };
+      }
       send(target, surface, key, NATIVE_MAP_QUADS_MAGIC, input.area, input.continent, count,
-        input.quads, NATIVE_MAP_GRAPHICS_HEADER_BYTES, context.getImageData(0, 0, canvas.width, canvas.height).data, canvas.width, canvas.height);
+        input.quads, NATIVE_MAP_GRAPHICS_HEADER_BYTES, target.atlas.pixels, canvas.width, canvas.height);
     },
     hide: withdraw,
     dispose() {
@@ -158,7 +163,7 @@ export function createNativeMapGraphicsLayer(exports: WebAssembly.Exports, docum
         disposeCartographyResources(owned.map(name => () => withdraw(name)));
       } finally {
         view?.removeEventListener("gw:graphics-context-reset", reset);
-        for (const target of surfaces) if (target) { target.canvas.width = 0; target.canvas.height = 0; }
+        for (const target of surfaces) if (target) { target.canvas.width = 0; target.canvas.height = 0; target.atlas = null; }
       }
     },
   });

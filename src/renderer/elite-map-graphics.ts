@@ -3,7 +3,8 @@
  * panels, tooltips, fades, and clipping treat them like the map's own icons.
  * Each distinct marker look is painted once into an atlas at the game's own
  * framebuffer resolution; every marker is one native world rectangle that
- * samples its cell. A pan moves nothing; a zoom step moves only rectangles.
+ * samples its cell. A pan moves nothing; a zoom step rewrites rectangles and
+ * re-sends the unchanged atlas from a cached copy; only a changed look repaints.
  */
 import { ELITE_MAP_GRAPHICS_SURFACES, NATIVE_MAP_GRAPHICS_MAX_SIZE, NATIVE_MAP_QUADS_MAX } from "../shared/native-map-graphics.js";
 import type { EliteMapSurface } from "../shared/elite-map.js";
@@ -29,7 +30,6 @@ export type EliteMapGraphics = Readonly<{
 
 /** Room around the largest marker for its shadow, hover outline, position badge, and filtering. */
 const CELL_MARGIN = 20;
-const EDGE_PIXELS = 64;
 /** Spawn links: one dot every few screen pixels, clear of the icons they join. */
 const DOT_SPACING = 9;
 const DOT_RADIUS = 2.5;
@@ -67,12 +67,23 @@ export function createEliteMapGraphics(exports: WebAssembly.Exports, document: D
         transform: { a: frame.scaleX, b: 0, c: 0, d: frame.scaleY, e: -frame.x0 * frame.scaleX, f: -frame.y0 * frame.scaleY } } });
   };
 
+  // Most frames change only the pan. Reuse the computed publish when nothing it
+  // depends on changed; the layer still republishes it after a context reset.
+  type Publish = Parameters<typeof layer.updateQuads>[1];
+  const last = new Map<string, Readonly<{ inputs: readonly unknown[]; publish: Publish | null }>>();
   const updateMarkers = (name: EliteMapSurfaceName, input: EliteMapGraphicsInput, edge: string | null) => {
     const surface = `${name}_elite` as const;
-    const markers = input.markers.filter(marker => marker.key !== edge);
-    if (!markers.length) { hide(surface); return; }
     const qa = step(input.surface.transform.a); const qd = step(input.surface.transform.d);
     const ratio = Math.max(1, Math.min(3, input.pixelRatio));
+    const inputs = [input.markers, edge, qa, qd, ratio, eliteZoomGrowth(input.zoom), input.area, input.continent, artwork.version];
+    const previous = last.get(surface);
+    if (previous && previous.inputs.every((value, index) => value === inputs[index])) {
+      if (previous.publish) layer.updateQuads(surface, previous.publish); else hide(surface);
+      return;
+    }
+    last.set(surface, { inputs, publish: null });
+    const markers = input.markers.filter(marker => marker.key !== edge);
+    if (!markers.length) { hide(surface); return; }
     // Place against a box that holds every marker: grouping follows the zoom,
     // and markers outside the view are ready before a pan reveals them.
     const xs = markers.map(marker => marker.mapX * qa); const ys = markers.map(marker => marker.mapY * qd);
@@ -83,7 +94,9 @@ export function createEliteMapGraphics(exports: WebAssembly.Exports, document: D
     // Dots between possible positions of the hovered boss and the target draw
     // beneath the icons; icons keep the quad budget first.
     const clear = (ELITE_MARKER_SIZE.target * growth) / 2 + 4;
-    const dots = eliteSpawnLinks(markers).flatMap(link => {
+    // Links use every position, including a target position shown as the edge arrow.
+    const links = eliteSpawnLinks(input.markers);
+    const dots = links.flatMap(link => {
       const dx = (link.to[0] - link.from[0]) * qa; const dy = (link.to[1] - link.from[1]) * qd; const length = Math.hypot(dx, dy);
       const count = Math.floor((length - clear * 2) / DOT_SPACING);
       return Array.from({ length: Math.max(0, count) }, (_, index) => {
@@ -94,7 +107,8 @@ export function createEliteMapGraphics(exports: WebAssembly.Exports, document: D
     const cell = Math.ceil((ELITE_MARKER_SIZE.target + ELITE_MARKER_HOVER_GROWTH) * growth * ratio + CELL_MARGIN * ratio);
     const columns = Math.floor(NATIVE_MAP_GRAPHICS_MAX_SIZE / cell);
     const dotLooks = [...new Set(dots.map(dot => dot.hovered ? "dot|1" : "dot|0"))];
-    const looks = [...new Map(placed.map(item => [look(item), item])).values()].slice(0, columns * columns - dotLooks.length);
+    // When the atlas is full, the target and hovered markers keep their cells first.
+    const looks = [...new Map([...placed].reverse().map(item => [look(item), item])).values()].slice(0, columns * columns - dotLooks.length);
     const index = new Map([...looks.map(look), ...dotLooks].map((key, position) => [key, position]));
     const cells = index.size;
     const width = power(Math.min(cells, columns) * cell); const height = power(Math.ceil(cells / columns) * cell);
@@ -104,7 +118,7 @@ export function createEliteMapGraphics(exports: WebAssembly.Exports, document: D
       if (atlas.canvas.width !== width) atlas.canvas.width = width;
       if (atlas.canvas.height !== height) atlas.canvas.height = height;
       const context = atlas.canvas.getContext("2d");
-      if (!context) { hide(surface); return; }
+      if (!context) { hide(surface); last.delete(surface); return; }
       context.clearRect(0, 0, width, height);
       const centre = (position: number) => ({ x: (position % columns + 0.5) * cell, y: (Math.floor(position / columns) + 0.5) * cell });
       looks.forEach((item, position) => paintEliteMarker(context, { ...centre(position),
@@ -125,10 +139,12 @@ export function createEliteMapGraphics(exports: WebAssembly.Exports, document: D
     const dotSpan = Math.ceil((DOT_RADIUS * growth + 2) * 2 * ratio);
     dots.forEach((dot, position) => quad(position, dot.hovered ? "dot|1" : "dot|0", dot.x, dot.y, dotSpan));
     drawn.forEach((item, position) => quad(dots.length + position, look(item), item.marker.mapX, item.marker.mapY, cell));
-    layer.updateQuads(surface, { area: input.area, continent: input.continent, quads,
+    const publish: Publish = { area: input.area, continent: input.continent, quads,
       atlas: { canvas: atlas.canvas, version: atlasKey },
-      version: [qa, qd, growth, dots.length, ...dots.slice(0, 1).map(dot => `${dot.x},${dot.y}`),
-        ...drawn.map(item => `${item.marker.key}:${look(item)}`)].join("|") });
+      version: [qa, qd, growth, ...links.map(link => `${link.from}>${link.to}:${Number(link.hovered)}`),
+        ...drawn.map(item => `${item.marker.key}:${look(item)}`)].join("|") };
+    last.set(surface, { inputs, publish });
+    layer.updateQuads(surface, publish);
   };
 
   const updateEdge = (name: EliteMapSurfaceName, input: EliteMapGraphicsInput, placed: readonly PlacedEliteMarker[]) => {
@@ -136,12 +152,13 @@ export function createEliteMapGraphics(exports: WebAssembly.Exports, document: D
     const item = placed.find(entry => entry.outside);
     if (!item) { hide(surface); return; }
     const { a, d, e, f } = input.surface.transform;
-    const ratio = Math.max(0.5, input.pixelRatio);
-    const size = power(EDGE_PIXELS * ratio);
+    const ratio = Math.max(1, Math.min(3, input.pixelRatio));
+    // Room for the grown marker plus its arrow (reach 10) and target glow (8) on every side.
+    const size = power((item.size + 36) * ratio);
     const mapX = (item.x - e) / a; const mapY = (item.y - f) / d;
     const direction = Math.atan2(d * item.marker.mapY + f - item.y, a * item.marker.mapX + e - item.x);
     const frame = { x0: mapX - size / 2 / (a * ratio), y0: mapY - size / 2 / (d * ratio), scaleX: a * ratio, scaleY: d * ratio, width: size, height: size };
-    const key = [item.marker.key, item.marker.iconUrl, Number(item.marker.hovered), Number(item.marker.captured), Math.round(direction * 32), size, artwork.version].join(":");
+    const key = [item.marker.key, item.marker.iconUrl, Number(item.marker.hovered), Number(item.marker.captured), item.size, Math.round(direction * 32), size, artwork.version].join(":");
     publish(surface, input, frame, key, context => paintEliteMarker(context,
       { x: size / 2, y: size / 2, size: item.size * ratio, marker: item.marker, direction }, ratio, artwork));
   };

@@ -79,16 +79,26 @@ export function placeEliteMarkers(markers: readonly EliteSceneMarker[], surface:
   }
   if (edge) single.push(edge.placed);
   // Deduplicate artwork only where same-skill markers touch in the same map area.
-  // Source locations stay intact for boss choices and capture targets.
-  const groups: PlacedEliteMarker[][] = [];
-  for (const placed of single) {
-    const touching = groups.filter(group => group.some(other =>
-      other.marker.skillId === placed.marker.skillId && other.marker.mapId === placed.marker.mapId
-      && other.outside === placed.outside && Math.abs(other.x - placed.x) <= TOUCHING && Math.abs(other.y - placed.y) <= TOUCHING));
-    for (const group of touching) groups.splice(groups.indexOf(group), 1);
-    groups.push([...touching.flat(), placed]);
-  }
-  return groups.map(group => {
+  // Source locations stay intact for boss choices and capture targets. A grid
+  // of touching-sized cells keeps this linear for a full continent of markers.
+  const parent = single.map((_, index) => index);
+  const root = (index: number): number => { while (parent[index] !== index) index = parent[index] = parent[parent[index]!]!; return index; };
+  const cells = new Map<string, number[]>();
+  const cellOf = (item: PlacedEliteMarker, dx: number, dy: number) =>
+    `${item.marker.skillId}|${item.marker.mapId}|${Number(item.outside)}|${Math.floor(item.x / TOUCHING) + dx}|${Math.floor(item.y / TOUCHING) + dy}`;
+  single.forEach((item, index) => {
+    for (let dx = -1; dx <= 1; dx += 1) for (let dy = -1; dy <= 1; dy += 1) {
+      for (const other of cells.get(cellOf(item, dx, dy)) ?? []) {
+        const near = single[other]!;
+        if (Math.abs(near.x - item.x) <= TOUCHING && Math.abs(near.y - item.y) <= TOUCHING) parent[root(other)] = root(index);
+      }
+    }
+    const own = cellOf(item, 0, 0); cells.set(own, [...cells.get(own) ?? [], index]);
+  });
+  const groups = new Map<number, number[]>();
+  single.forEach((_, index) => { const key = root(index); groups.set(key, [...groups.get(key) ?? [], index]); });
+  return [...groups.values()].sort((left, right) => left.at(-1)! - right.at(-1)!).map(members => {
+    const group = members.map(index => single[index]!);
     const representative = group.reduce((best, next) => rank(next) > rank(best) ? next : best);
     return { ...representative, locationIds: [...new Set(group.flatMap(placed => placed.locationIds))] };
   }).sort((left, right) => rank(left) - rank(right));
