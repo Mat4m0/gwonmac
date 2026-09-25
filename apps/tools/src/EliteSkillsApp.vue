@@ -129,16 +129,20 @@ const missionLocations = computed(() => {
   const first = target.value && here(target.value.location) ? [target.value.location] : [];
   return unique([...first, ...(mode === "saved" ? huntLocations.value : matching.value).filter(here)]);
 });
-function sceneMarkers(locations: readonly EliteLocation[], positions: boolean): readonly EliteSceneMarker[] {
+/** Position badges label every multi-spawn boss on the Mission Map, and the hovered boss and target on the World Map. */
+function sceneMarkers(locations: readonly EliteLocation[], positions: (location: EliteLocation) => boolean): readonly EliteSceneMarker[] {
   return locations.flatMap(location => location.points.map(([mapX, mapY], index) => ({
     key: `${location.id}:${index}`, locationId: location.id, skillId: location.skillId, mapId: location.mapId, mapX, mapY,
     iconUrl: skill(location.skillId).iconUrl, hovered: preview.value?.location.id === location.id,
     emphasis: isTarget(location) ? "target" as const : tracked(location.skillId) ? "saved" as const : "match" as const,
     captured: captured(location.skillId),
-    position: positions && location.points.length > 1 ? `${index + 1}/${location.points.length}` : null,
+    position: positions(location) && location.points.length > 1 ? `${index + 1}/${location.points.length}` : null,
   })));
 }
-const scene = computed<EliteMarkerScene>(() => ({ world: sceneMarkers(worldLocations.value, false), mission: sceneMarkers(missionLocations.value, true) }));
+const scene = computed<EliteMarkerScene>(() => ({
+  world: sceneMarkers(worldLocations.value, location => isTarget(location) || preview.value?.location.id === location.id),
+  mission: sceneMarkers(missionLocations.value, () => true),
+}));
 watch(scene, (value) => props.present?.(value), { immediate: true });
 
 // ---------- Capture notice ----------

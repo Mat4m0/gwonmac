@@ -33,6 +33,16 @@ export type EliteMapHit = Readonly<{
 /** Screen sizes in CSS pixels. Emphasis stays readable without covering the map. */
 export const ELITE_MARKER_SIZE: Readonly<Record<EliteMarkerEmphasis, number>> = Object.freeze({ target: 28, saved: 22, match: 18 });
 export const ELITE_MARKER_HOVER_GROWTH = 4;
+/** Markers grow with the game's own map zoom, up to this factor fully zoomed in. */
+export const ELITE_MARKER_MAX_ZOOM_GROWTH = 1.8;
+/**
+ * Converts the game's normalized zoom (0 fully out, 1 fully in) to a marker
+ * size factor in tenths, so a zoom animation repaints only a few times.
+ */
+export function eliteZoomGrowth(zoom: number): number {
+  const t = Number.isFinite(zoom) ? Math.max(0, Math.min(1, zoom)) : 0;
+  return Math.round((1 + (ELITE_MARKER_MAX_ZOOM_GROWTH - 1) * t) * 10) / 10;
+}
 const INSET = 16;
 const TOUCHING = 24;
 const NEARBY = 28;
@@ -45,7 +55,7 @@ const rank = (placed: PlacedEliteMarker) => ORDER[placed.marker.emphasis] * 2 + 
  * target stays near the edge, clamped inside it, and only its nearest point.
  * Later entries draw above earlier ones.
  */
-export function placeEliteMarkers(markers: readonly EliteSceneMarker[], surface: EliteMapSurface): readonly PlacedEliteMarker[] {
+export function placeEliteMarkers(markers: readonly EliteSceneMarker[], surface: EliteMapSurface, growth = 1): readonly PlacedEliteMarker[] {
   const { a, b, c, d, e, f } = surface.transform;
   const { width, height } = surface.box;
   if (width < INSET * 2 || height < INSET * 2) return [];
@@ -59,7 +69,7 @@ export function placeEliteMarkers(markers: readonly EliteSceneMarker[], surface:
     const outside = target ? px < INSET || py < INSET || px > width - INSET || py > height - INSET
       : px < 0 || py < 0 || px > width || py > height;
     if (outside && !target) continue;
-    const size = ELITE_MARKER_SIZE[marker.emphasis] + (marker.hovered ? ELITE_MARKER_HOVER_GROWTH : 0);
+    const size = Math.round((ELITE_MARKER_SIZE[marker.emphasis] + (marker.hovered ? ELITE_MARKER_HOVER_GROWTH : 0)) * growth);
     const placed = { x: outside ? Math.max(INSET, Math.min(width - INSET, px)) : px, y: outside ? Math.max(INSET, Math.min(height - INSET, py)) : py,
       size, marker, locationIds: [marker.locationId], outside };
     if (!outside) { single.push(placed); continue; }
@@ -97,4 +107,36 @@ export function eliteMarkerAt(placed: readonly PlacedEliteMarker[], x: number, y
     return { marker, nearbyIds };
   }
   return null;
+}
+
+/** A connection between two possible spawn positions of one boss, in map units. */
+export type EliteSpawnLink = Readonly<{ locationId: string; from: readonly [number, number]; to: readonly [number, number]; hovered: boolean }>;
+
+/**
+ * Joins the possible spawn positions of each hovered or targeted boss into one
+ * tree of the shortest links, so they read as one hunt without zig-zags.
+ */
+export function eliteSpawnLinks(markers: readonly EliteSceneMarker[]): readonly EliteSpawnLink[] {
+  const byLocation = new Map<string, EliteSceneMarker[]>();
+  for (const marker of markers) {
+    if (!marker.hovered && marker.emphasis !== "target") continue;
+    byLocation.set(marker.locationId, [...byLocation.get(marker.locationId) ?? [], marker]);
+  }
+  const links: EliteSpawnLink[] = [];
+  for (const [locationId, points] of byLocation) {
+    if (points.length < 2) continue;
+    // Prim's minimum spanning tree over a handful of points.
+    const joined = [points[0]!]; const rest = points.slice(1);
+    while (rest.length) {
+      let best = { from: joined[0]!, index: 0, distance: Infinity };
+      for (const from of joined) rest.forEach((to, index) => {
+        const distance = Math.hypot(to.mapX - from.mapX, to.mapY - from.mapY);
+        if (distance < best.distance) best = { from, index, distance };
+      });
+      const [to] = rest.splice(best.index, 1);
+      links.push({ locationId, from: [best.from.mapX, best.from.mapY], to: [to!.mapX, to!.mapY], hovered: points.some(point => point.hovered) });
+      joined.push(to!);
+    }
+  }
+  return links;
 }

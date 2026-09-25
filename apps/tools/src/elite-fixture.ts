@@ -8,9 +8,9 @@ import { EMPTY_ELITE_TRACKING, changeEliteTracking, parseEliteTracking } from ".
 import { travelCharacterKey } from "../../../src/shared/travel-history";
 import { skillId } from "../../../src/shared/builds/library";
 import type { EliteMapSurface, EliteMapView } from "../../../src/shared/elite-map";
-import { EMPTY_ELITE_SCENE, placeEliteMarkers, type EliteMapSurfaceName, type PlacedEliteMarker } from "../../../src/shared/elite-map-scene";
+import { EMPTY_ELITE_SCENE, eliteSpawnLinks, placeEliteMarkers, type EliteMapSurfaceName, type PlacedEliteMarker } from "../../../src/shared/elite-map-scene";
 import { ELITE_MISSION_MAP_MARKERS, type EliteMissionMapMarkers } from "../../../src/shared/elite-map-settings";
-import { createEliteArtwork, paintEliteMarker } from "../../../src/shared/ui/elite-marker-paint";
+import { createEliteArtwork, paintEliteDot, paintEliteMarker } from "../../../src/shared/ui/elite-marker-paint";
 import { installEliteMapPointer, type EliteMapPointer, type EliteMapPointerSurface } from "../../../src/shared/ui/elite-map-pointer";
 import type { SkillPresentation } from "./skill-catalog";
 import { mountEliteSkills } from "./elite-mount";
@@ -73,6 +73,15 @@ export function mountEliteFixture(target: HTMLElement): void {
       if (!surface) continue;
       const placed: readonly PlacedEliteMarker[] = placeEliteMarkers(scene[name], surface);
       const { a, d, e, f } = surface.transform;
+      const screen = ([x, y]: readonly [number, number]) => [(surface.box.left + a * x + e) * ratio, (surface.box.top + d * y + f) * ratio] as const;
+      for (const link of eliteSpawnLinks(scene[name])) {
+        const [x0, y0] = screen(link.from); const [x1, y1] = screen(link.to); const length = Math.hypot(x1 - x0, y1 - y0);
+        const clear = 18 * ratio; const count = Math.floor((length - clear * 2) / (9 * ratio));
+        for (let index = 0; index < count; index += 1) {
+          const t = (clear + (index + 0.5) * ((length - clear * 2) / count)) / length;
+          paintEliteDot(context, x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, 2.5 * ratio, link.hovered);
+        }
+      }
       for (const item of placed) paintEliteMarker(context, { x: (surface.box.left + item.x) * ratio, y: (surface.box.top + item.y) * ratio,
         size: item.size * ratio, marker: item.marker,
         direction: item.outside ? Math.atan2(d * item.marker.mapY + f - item.y, a * item.marker.mapX + e - item.x) : null }, ratio, artwork);

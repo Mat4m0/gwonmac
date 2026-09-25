@@ -8,7 +8,7 @@ import { useEliteTracking, type EliteTrackingHost } from "./use-elite-tracking";
 import { ELITE_LOCATIONS } from "../../../src/shared/elite-locations";
 import { EMPTY_ELITE_TRACKING, changeEliteTracking, type EliteTracking } from "../../../src/shared/elite-skills";
 import { travelCharacterKey, type TravelCharacterKey } from "../../../src/shared/travel-history";
-import { eliteMarkerAt, placeEliteMarkers, type EliteMapHit, type EliteMarkerScene, type EliteSceneMarker } from "../../../src/shared/elite-map-scene";
+import { eliteMarkerAt, eliteSpawnLinks, eliteZoomGrowth, placeEliteMarkers, type EliteMapHit, type EliteMarkerScene, type EliteSceneMarker } from "../../../src/shared/elite-map-scene";
 import type { EliteLocation } from "../../../src/shared/elite-skills";
 import { installEliteMapPointer } from "../../../src/shared/ui/elite-map-pointer";
 import { skillId } from "../../../src/shared/builds/library";
@@ -675,6 +675,30 @@ describe("hunting", () => {
     await wrapper.findAll('button').find(button => button.text() === 'Remove captured from Hunt list')!.trigger('click');
     await flushPromises();
     expect((await plan.get({ characterKey: key })).skills).toEqual([barrage.id]);
+    wrapper.unmount();
+  });
+});
+
+describe("spawn positions", () => {
+  it("joins one boss's positions by the shortest links, only while hovered or targeted", () => {
+    const at = (key: string, x: number, y: number, extra: Partial<EliteSceneMarker> = {}): EliteSceneMarker => ({ key, locationId: "boss", skillId: 1, mapId: 1,
+      mapX: x, mapY: y, iconUrl: null, emphasis: "match", hovered: false, captured: false, position: null, ...extra });
+    expect(eliteSpawnLinks([at("a", 0, 0), at("b", 10, 0)])).toEqual([]);
+    const links = eliteSpawnLinks([at("a", 0, 0, { hovered: true }), at("c", 100, 0, { hovered: true }), at("b", 50, 0, { hovered: true })]);
+    expect(links.map(link => [link.from[0], link.to[0]])).toEqual([[0, 50], [50, 100]]);
+    expect(eliteSpawnLinks([at("a", 0, 0, { emphasis: "target" }), at("b", 0, 30, { emphasis: "target" })])[0]).toMatchObject({ hovered: false });
+  });
+  it("grows markers with the game's zoom in tenths and never beyond 1.8×", () => {
+    expect([0, 0.5, 1, 7, Number.NaN].map(eliteZoomGrowth)).toEqual([1, 1.4, 1.8, 1.8, 1]);
+  });
+  it("labels positions of the hovered boss and the target on the World Map only", async () => {
+    const wrapper = await planner();
+    await wrapper.get('input[type="search"]').setValue('Lissah');
+    expect(scene().world.every(marker => marker.position === null)).toBe(true);
+    api(wrapper).pointer(hitOn(lissah, 'world'));
+    await flushPromises();
+    const hovered = scene().world.filter(marker => marker.locationId === lissah.id);
+    expect(hovered.map(marker => marker.position)).toEqual(lissah.points.length > 1 ? lissah.points.map((_, index) => `${index + 1}/${lissah.points.length}`) : [null]);
     wrapper.unmount();
   });
 });

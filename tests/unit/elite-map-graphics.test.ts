@@ -46,7 +46,7 @@ function peer() {
 }
 const marker = (key: string, mapX: number, mapY: number, emphasis: EliteSceneMarker["emphasis"] = "match"): EliteSceneMarker =>
   ({ key, locationId: key, skillId: Number(key.length), mapId: 1, mapX, mapY, iconUrl: null, emphasis, hovered: false, captured: false, position: null });
-const input = (markers: readonly EliteSceneMarker[], e = -1000, a = 1): EliteMapGraphicsInput => ({ area: 7, continent: 0, pixelRatio: 2, markers,
+const input = (markers: readonly EliteSceneMarker[], e = -1000, a = 1): EliteMapGraphicsInput => ({ area: 7, continent: 0, pixelRatio: 2, zoom: 0, markers,
   surface: { box: { left: 100, top: 50, width: 400, height: 300 }, transform: { a, b: 0, c: 0, d: a, e, f: -2000 * a } } });
 
 test("each marker is one world rectangle from a screen-resolution atlas; a pan uploads nothing", () => {
@@ -109,4 +109,18 @@ test("a loaded icon, a near-edge target and several target spawns each draw exac
   assert.ok(hidden.includes("mission_elite"), "and no rectangle draws it a second time");
   const spawns = graphics.update("mission", input([marker("t:0", 5000, 2100, "target"), marker("t:1", 1100, 9000, "target")]));
   assert.equal(spawns.length, 1, "several off-view spawn points share one arrow and one hit target");
+});
+
+test("markers grow with the game's zoom, and a hovered boss's positions are joined by dots beneath the icons", () => {
+  const { graphics, published } = peer();
+  const spawn = (key: string, x: number, hovered = false): EliteSceneMarker => ({ ...marker(key, x, 2100), locationId: "boss", hovered });
+  const zoomed = graphics.update("mission", { ...input([spawn("boss:0", 1100), spawn("boss:1", 1250)]), zoom: 1 });
+  assert.deepEqual(zoomed.map(item => item.size), [32, 32], "18-pixel markers grow 1.8× fully zoomed in");
+  assert.equal(published.at(-1)?.quads.length, 2, "no link without hover or target");
+  graphics.update("mission", { ...input([spawn("boss:0", 1100, true), spawn("boss:1", 1250, true)]), zoom: 1 });
+  const quads = published.at(-1)!.quads;
+  const dots = quads.slice(0, -2);
+  assert.ok(dots.length >= 8, "a 150-pixel link carries a row of dots");
+  assert.ok(dots.every(([x0, y0, x1, y1]) => x0! > 1100 && x1! < 1250 && (y0! + y1!) / 2 === 2100), "dots lie between the two positions");
+  assert.ok(dots.every(([x0, , x1]) => x1! - x0! < 16), "dots are small quads, not icon cells");
 });

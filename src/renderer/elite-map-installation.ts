@@ -115,10 +115,11 @@ export function createEliteMapInstallation(options: {
         if (signature !== lastView) { lastView = signature; app.update(next); }
         const pixelRatio = canvas.width / Math.max(1, canvasBox.width);
         const placedWorld = graphics.update("world", next.world && worldFrame ? { area: worldFrame.generation, continent: worldFrame.continent,
-          surface: next.world, markers: scene.world, pixelRatio } : null);
+          surface: next.world, markers: scene.world, pixelRatio, zoom: worldFrame.zoom } : null);
         const missionSurface = next.mission?.transform ? { box: next.mission.box, transform: next.mission.transform } : null;
         const placedMission = graphics.update("mission", missionSurface && missionFrame ? { area: missionFrame.generation, continent: 0,
-          surface: missionSurface, markers: scene.mission, pixelRatio } : null);
+          // The Mission Map zooms from 1 to 3.5; markers grow over that same range.
+          surface: missionSurface, markers: scene.mission, pixelRatio, zoom: (missionFrame.zoom - 1) / 2.5 } : null);
         const target = (name: "world" | "mission", box: EliteMapPointerSurface["box"], placed: readonly PlacedEliteMarker[], frameId: number) =>
           placed.length ? [{ name, box, placed, ownsPointer: () => owns(frameId) }] : [];
         targets = [

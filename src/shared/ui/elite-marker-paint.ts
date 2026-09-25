@@ -96,6 +96,15 @@ export function paintEliteMarker(context: CanvasRenderingContext2D, paint: Elite
   context.restore();
 }
 
+/** One dot of a spawn link, in the game's dotted-route style. */
+export function paintEliteDot(context: CanvasRenderingContext2D, x: number, y: number, radius: number, hovered: boolean): void {
+  context.save();
+  context.beginPath(); context.arc(x, y, radius, 0, Math.PI * 2);
+  context.fillStyle = hovered ? HOVER : GOLD; context.globalAlpha = hovered ? 0.95 : 0.7; context.fill();
+  context.lineWidth = Math.max(1, radius * 0.45); context.strokeStyle = OUTLINE; context.globalAlpha = 1; context.stroke();
+  context.restore();
+}
+
 function paintArrow(context: CanvasRenderingContext2D, x: number, y: number, size: number, direction: number, line: number): void {
   const reach = size / 2 + 3 * line; const length = 7 * line; const half = 5 * line;
   const cos = Math.cos(direction); const sin = Math.sin(direction);
