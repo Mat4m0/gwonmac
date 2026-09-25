@@ -41,7 +41,9 @@ export function nativeMapTileProjection(projection: CartographyGridProjection): 
 
 export function nativeMapHoverProjection(projection: CartographyGridProjection, cell: CartographyCell, radius: CartographyRevealRadius): CartographyGridProjection {
   const size = CARTOGRAPHY_CELL_MAP_UNITS;
-  const marginX = 6 / projection.transform.a; const marginY = 6 / projection.transform.d;
+  // Range inspections carry a corner badge; a plain cell hover needs only its casing.
+  const margin = radius > 0 ? 18 : 6;
+  const marginX = margin / projection.transform.a; const marginY = margin / projection.transform.d;
   return worldRectangle({...projection, currentCell: cell}, (cell.x - radius) * size - marginX, (cell.y - radius) * size - marginY,
     (cell.x + radius + 1) * size + marginX, (cell.y + radius + 1) * size + marginY);
 }

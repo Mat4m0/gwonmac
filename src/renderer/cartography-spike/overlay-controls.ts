@@ -256,6 +256,21 @@ export function createCartographyOverlayControls(options: Readonly<{
   };
   const gridOpacity = makeSlider("Grid");
   const walkabilityOpacity = makeSlider("Walkable");
+  const reachRow = document.createElement("label");
+  reachRow.className = "cartography-overlay-field";
+  reachRow.dataset.kind = "preset";
+  const reachLabel = document.createElement("span");
+  reachLabel.textContent = "Reach";
+  const reach = document.createElement("select");
+  reach.setAttribute("aria-label", "Reveal range");
+  for (const [value, text] of [["off", "Off"], ["normal", "3×3"], ["birds-eye", "7×7"]] as const) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = text;
+    reach.append(option);
+  }
+  reachRow.append(reachLabel, reach);
+  fields.append(reachRow);
   const presetRow = document.createElement("label");
   presetRow.className = "cartography-overlay-field";
   presetRow.dataset.kind = "preset";
@@ -313,6 +328,7 @@ export function createCartographyOverlayControls(options: Readonly<{
   const syncDisabled = (): void => {
     gridButton.disabled = saving || !gridAvailable;
     gridOpacity.input.disabled = saving || !gridAvailable;
+    reach.disabled = saving || !gridAvailable;
     for (const control of [walkabilityButton, walkabilityOpacity.input, preset]) {
       control.disabled = saving;
     }
@@ -336,6 +352,7 @@ export function createCartographyOverlayControls(options: Readonly<{
     if (document.activeElement !== walkabilityOpacity.input) walkabilityOpacity.input.value = String(settings.cartographyWalkabilityOpacity);
     gridOpacity.output.value = `${gridOpacity.input.value}%`;
     walkabilityOpacity.output.value = `${walkabilityOpacity.input.value}%`;
+    reach.value = settings.cartographyRevealMode;
     renderPresetOptions(settings);
     preset.value = encodeCartographyPresetRef(settings.cartographyPresetLibrary.activePreset);
     const style = resolveCartographyPreset(settings.cartographyPresetLibrary);
@@ -441,6 +458,10 @@ export function createCartographyOverlayControls(options: Readonly<{
   };
   bindSlider("grid", gridOpacity, "cartographyGridOpacity");
   bindSlider("walkability", walkabilityOpacity, "cartographyWalkabilityOpacity");
+  reach.addEventListener("change", () => {
+    const value = reach.value;
+    if (value === "off" || value === "normal" || value === "birds-eye") apply({ cartographyRevealMode: value });
+  });
   preset.addEventListener("change", () => {
     const settings = currentSettings();
     const activePreset = settings === null ? null

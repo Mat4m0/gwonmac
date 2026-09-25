@@ -545,6 +545,7 @@ export const RENDERER_WRITABLE_SETTINGS = [
   "compassRangeTheme",
   "cartographyGridOpacity",
   "cartographyWalkabilityOpacity",
+  "cartographyRevealMode",
   "characterSwitchProfession",
   "characterSwitchLevel",
   "characterSwitchLocation",

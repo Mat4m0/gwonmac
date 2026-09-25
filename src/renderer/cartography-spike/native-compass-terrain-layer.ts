@@ -19,7 +19,7 @@ export type NativeCompassTerrainInput = Readonly<{
   area: number;
   version: string;
   terrain: WalkableTerrainSurface | null;
-  cartography?: Omit<Parameters<CartographyGridLayer["update"]>[0], "projection" | "hoveredCell" | "revealRadius">;
+  cartography?: Omit<Parameters<CartographyGridLayer["update"]>[0], "projection" | "hoveredCell" | "revealRadius" | "reachRadius">;
   inspectionRadius?: 0 | 1 | 3;
   anchorX: number;
   anchorY: number;
@@ -120,7 +120,7 @@ export function createNativeCompassTerrainLayer(exports: WebAssembly.Exports, do
       }
       if (input.cartography) {
         const span = NATIVE_COMPASS_TERRAIN_WORLD_SPAN / 96;
-        if (currentCell) grid.update({ ...input.cartography, hoveredCell: inspectionRadius > 0 ? currentCell : null, revealRadius: inspectionRadius,
+        if (currentCell) grid.update({ ...input.cartography, hoveredCell: inspectionRadius > 0 ? currentCell : null, revealRadius: inspectionRadius, reachRadius: 0,
           projection: { surface: "compass", box: {left: 0, top: 0, width: logicalSize, height: logicalSize},
             clip: {kind: "rectangle"}, transform: {a: mapScale, b: 0, c: 0, d: mapScale, e: -mapLeft * mapScale, f: -mapTop * mapScale},
             firstCellX: Math.floor(mapLeft / 32), lastCellX: Math.floor((mapLeft + span) / 32),

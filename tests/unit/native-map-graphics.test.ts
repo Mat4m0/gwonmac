@@ -11,7 +11,7 @@ class CanvasPeer {
   strokes = 0; fills = 0; texts: string[] = [];
   context = {
     setTransform() {}, clearRect: () => { this.strokes = 0; this.fills = 0; this.texts = []; }, save() {}, restore() {}, scale() {},
-    beginPath() {}, rect() {}, arc() {}, clip() {}, drawImage() {}, fillRect() {}, moveTo() {}, lineTo() {}, closePath() {}, setLineDash() {},
+    beginPath() {}, rect() {}, roundRect() {}, arc() {}, measureText: (value: string) => ({width: value.length * 6}), clip() {}, drawImage() {}, fillRect() {}, moveTo() {}, lineTo() {}, closePath() {}, setLineDash() {},
     stroke: () => { this.strokes += 1; }, fill: () => { this.fills += 1; }, fillText: (value: string) => { this.texts.push(value); }, strokeText() {},
     getImageData: (_x: number, _y: number, width: number, height: number) => ({data: new Uint8ClampedArray(width * height * 4)}),
   };
@@ -37,7 +37,8 @@ test("explored areas paint nothing; all maps retain the chosen remaining icon an
   const layer = createCartographyGridLayer(document);
   const input = {projection, style: CARTOGRAPHY_BUILTIN_PRESETS.cartographer.style.grid, opacity: 70,
     explorationVersion: "1", revealabilityVersion: "1", isExplored: () => true, isRemaining: () => false,
-    canCurrentMapReveal: () => true, canVisitedMapReveal: () => false, hoveredCell: null, revealRadius: 1 as const};
+    canCurrentMapReveal: () => true, canVisitedMapReveal: () => false, hoveredCell: null, revealRadius: 1 as const,
+    reachRadius: 0 as const};
   layer.update(input);
   assert.equal(canvases[0]?.strokes, 0, "no permanent lattice, current-cell border or reveal range");
   assert.equal(canvases[0]?.fills, 0, "no explored-area wash");
@@ -53,6 +54,41 @@ test("explored areas paint nothing; all maps retain the chosen remaining icon an
   layer.update({...input, hoveredCell: {x: 2, y: 2}, revealRadius: 0});
   assert.equal(canvases[0]?.strokes, 2, "hover outlines only the selected cell");
   layer.dispose(); assert.equal(layer.image(), null); assert.equal(canvases[0]?.width, 0);
+});
+
+test("the reach guide tints standing cells and disappears once they are explored", () => {
+  const {document, canvases} = documentPeer();
+  const layer = createCartographyGridLayer(document);
+  const input = {projection, style: CARTOGRAPHY_BUILTIN_PRESETS.cartographer.style.grid, opacity: 70,
+    explorationVersion: "1", revealabilityVersion: "1", isExplored: (x: number, y: number) => x !== 2 || y !== 2,
+    isRemaining: (x: number, y: number) => x === 2 && y === 2, canCurrentMapReveal: () => true,
+    canVisitedMapReveal: () => false, hoveredCell: null, revealRadius: 0 as const, reachRadius: 1 as const};
+  layer.update(input);
+  assert.equal(canvases[0]?.fills, 1, "one heat level for cells that each reveal one remaining cell");
+  assert.equal(canvases[0]?.strokes, 5, "faint lattice, one cased outline and one cased marker");
+  layer.update({...input, projection: {...projection, surface: "compass"}});
+  assert.equal(canvases[0]?.strokes, 2, "the Compass keeps only its marker");
+  assert.equal(canvases[0]?.fills, 0);
+  layer.update({...input, projection: {...projection, transform: {...projection.transform, a: 0.4, d: 0.4}}});
+  assert.equal(canvases[0]?.strokes, 2, "clustered zoom keeps the tint and cased outline without a lattice");
+  layer.update({...input, explorationVersion: "2", isExplored: () => true, isRemaining: () => false});
+  assert.equal(canvases[0]?.strokes, 0, "explored areas lose their reach guide");
+  assert.equal(canvases[0]?.fills, 0);
+  layer.dispose();
+});
+
+test("hover inspection labels how many remaining cells it reveals", () => {
+  const {document, canvases} = documentPeer();
+  const layer = createCartographyGridLayer(document, true);
+  const input = {projection, style: CARTOGRAPHY_BUILTIN_PRESETS.cartographer.style.grid, opacity: 70,
+    explorationVersion: "1", revealabilityVersion: "1", isExplored: (x: number) => x < 2,
+    isRemaining: (x: number) => x >= 2, canCurrentMapReveal: () => true,
+    canVisitedMapReveal: () => false, hoveredCell: {x: 1, y: 1}, revealRadius: 1 as const, reachRadius: 0 as const};
+  layer.update(input);
+  assert.deepEqual(canvases[0]?.texts, ["+3"]);
+  layer.update({...input, explorationVersion: "2", isExplored: () => true, isRemaining: () => false});
+  assert.deepEqual(canvases[0]?.texts, ["0"]);
+  layer.dispose();
 });
 
 test("native corners preserve world coordinates through pan, zoom and window moves", () => {
@@ -127,7 +163,8 @@ test("large cached map tiles retain remaining guidance above the detailed-marker
     const input = {projection: tile, style: CARTOGRAPHY_BUILTIN_PRESETS.cartographer.style.grid,
       opacity: 70, explorationVersion: "1", revealabilityVersion: "1",
       isExplored: () => false, isRemaining: () => true, canCurrentMapReveal: () => true,
-      canVisitedMapReveal: () => false, hoveredCell: null, revealRadius: 0 as const};
+      canVisitedMapReveal: () => false, hoveredCell: null, revealRadius: 0 as const,
+      reachRadius: 0 as const};
     layer.update(input);
     assert.ok(canvases[0]!.texts.length > 0, "overscan must not blank remaining guidance");
     assert.ok(canvases[0]!.texts.length <= 4096, "cluster artwork remains bounded");

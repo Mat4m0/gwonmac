@@ -223,6 +223,7 @@ async function updateUnseen(patch: Partial<CartographyPresetStyle["grid"]["unsee
     <div class="map-appearance-controls">
     <div v-if="active" class="setting-row"><span><strong>Terrain border thickness</strong><small>0 hides the border. Changing a built-in style saves a custom copy.</small></span><RangeControl label="Terrain border thickness" :value="active.style.walkability.boundaryWidth" :min="0" :max="4" unit="px" @change="updateWalkability({ boundaryWidth: $event })" /></div>
     <div class="setting-row"><span><strong>Grid opacity</strong></span><RangeControl label="Grid opacity" :value="settings.cartographyGridOpacity" :min="0" :max="100" unit="%" @change="persist({ cartographyGridOpacity: $event })" /></div>
+    <label><span><strong>Reveal range</strong><small>Outlines where to stand to reveal the remaining diamonds, and marks your range on the Compass.</small></span><select :value="settings.cartographyRevealMode" @change="persist({ cartographyRevealMode: ($event.currentTarget as HTMLSelectElement).value as LauncherSettings['cartographyRevealMode'] })"><option value="off">Off</option><option value="normal">Normal · 3×3</option><option value="birds-eye">Bird’s Eye · 7×7</option></select></label>
     <div class="setting-row"><span><strong>Walkable terrain opacity</strong></span><RangeControl label="Walkable terrain opacity" :value="settings.cartographyWalkabilityOpacity" :min="0" :max="100" unit="%" @change="persist({ cartographyWalkabilityOpacity: $event })" /></div>
     </div>
     <MapStylePreview v-if="active" :style="active.style" :grid-opacity="settings.cartographyGridOpacity" :terrain-opacity="settings.cartographyWalkabilityOpacity" />
@@ -246,9 +247,8 @@ async function updateUnseen(patch: Partial<CartographyPresetStyle["grid"]["unsee
     </fieldset>
     </details>
   </div>
-  <details class="setting-group compass-options"><summary>Compass controls and inspection</summary>
+  <details class="setting-group compass-options"><summary>Compass controls</summary>
     <div class="setting-row"><span><strong>Compass control visibility</strong><small>Visibility while the control is idle.</small></span><RangeControl label="Compass control visibility" :value="settings.cartographyControlIdleOpacity" :min="15" :max="100" unit="%" @change="persist({ cartographyControlIdleOpacity: $event })" /></div>
-    <label><span><strong>Compass inspection range</strong><small>Mission Map inspection still uses Shift.</small></span><select :value="settings.cartographyRevealMode" @change="persist({ cartographyRevealMode: ($event.currentTarget as HTMLSelectElement).value as LauncherSettings['cartographyRevealMode'] })"><option value="off">Off</option><option value="normal">Normal · 3×3</option><option value="birds-eye">Bird’s Eye · 7×7</option></select></label>
   </details>
 
   <div class="setting-group map-library">

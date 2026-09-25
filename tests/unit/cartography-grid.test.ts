@@ -18,6 +18,7 @@ import {
   cartographyClusterPresentation,
   cartographyProgressClusterOrigin,
   cartographyProgressClusterSize,
+  cartographyRevealCounts,
 } from "../../src/renderer/cartography-spike/cartography-grid-layer.js";
 
 test("lets proven map knowledge replace a larger continent estimate", () => {
@@ -330,4 +331,30 @@ test("refuses stale, hidden, malformed, and excessive projections", () => {
     compass: { ...compassFrame, status: 0 },
     box: compassBox,
   }), null);
+});
+
+test("reveal counts match every remaining cell inside the reveal square", () => {
+  const bounds = { firstX: 0, lastX: 19, firstY: 0, lastY: 14 };
+  for (let trial = 0; trial < 200; trial += 1) {
+    const radius = trial % 2 === 0 ? 1 : 3;
+    const marked = new Set<string>();
+    for (let index = 0; index < 25; index += 1) {
+      marked.add(`${(trial * 7 + index * 13) % 30 - 5},${(trial * 11 + index * 17) % 26 - 5}`);
+    }
+    const counts = cartographyRevealCounts(bounds, radius, (x, y) => marked.has(`${x},${y}`));
+    for (let y = bounds.firstY; y <= bounds.lastY; y += 1) {
+      for (let x = bounds.firstX; x <= bounds.lastX; x += 1) {
+        let expected = 0;
+        for (const cell of marked) {
+          const [markedX, markedY] = cell.split(",").map(Number);
+          if (Math.abs(markedX! - x) <= radius && Math.abs(markedY! - y) <= radius) expected += 1;
+        }
+        assert.equal(counts.count(x, y), expected, `radius ${radius} at ${x},${y}`);
+      }
+    }
+  }
+  const edge = cartographyRevealCounts(bounds, 3, (x, y) => x === -3 && y === 0);
+  assert.equal(edge.count(0, 0), 1, "remaining cells beyond the field border still count");
+  assert.equal(edge.count(1, 0), 0);
+  assert.equal(edge.count(-1, 0), 0, "cells outside the field are out of reach");
 });

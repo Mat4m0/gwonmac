@@ -527,6 +527,10 @@ describe("settings", () => {
     assert.deepEqual(parseRendererSettingsPatch({ autoRelogAfterReload: true }), {
       autoRelogAfterReload: true,
     });
+    assert.deepEqual(parseRendererSettingsPatch({ cartographyRevealMode: "birds-eye" }), {
+      cartographyRevealMode: "birds-eye",
+    });
+    assert.throws(() => parseRendererSettingsPatch({ cartographyRevealMode: "wide" }), /RevealMode is invalid/u);
     assert.deepEqual(parseRendererSettingsPatch({
       cartographyPresetSelection: { kind: "builtin", id: "synthwave" },
     }), {
