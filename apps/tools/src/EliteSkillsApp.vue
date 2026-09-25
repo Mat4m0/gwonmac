@@ -1,8 +1,10 @@
-<!-- Elite skill discovery and one capture plan shared by both native maps. -->
+<!-- Elite skill discovery and one capture plan shared by both native maps. The host draws the chosen markers natively. -->
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import { installResizeGrip } from "../../../src/shared/ui/resize";
 import type { EliteMapView } from "../../../src/shared/elite-map";
+import type { EliteMapHit, EliteMarkerScene, EliteSceneMarker } from "../../../src/shared/elite-map-scene";
+import { ELITE_MISSION_MAP_MARKERS, ELITE_MISSION_MAP_MARKER_LABELS, isEliteMissionMapMarkers, type EliteMissionMapMarkers } from "../../../src/shared/elite-map-settings";
 import { ELITE_LOCATIONS } from "../../../src/shared/elite-locations";
 import { eliteContinent, eliteLearned, type EliteLocation, type EliteViewPreferences } from "../../../src/shared/elite-skills";
 import { guildWarsMapName } from "../../../src/shared/guild-wars-map-names";
@@ -12,7 +14,6 @@ import { skillId, type Profession } from "../../../src/shared/builds/library";
 import type { SkillCatalogue, SkillPresentation } from "./skill-catalog";
 import { useEliteTracking, type EliteTrackingHost } from "./use-elite-tracking";
 import SkillDetails from "./components/SkillDetails.vue";
-import EliteMarkers from "./components/EliteMarkers.vue";
 import EliteFilters from "./components/EliteFilters.vue";
 import EliteCaptureLocation from "./components/EliteCaptureLocation.vue";
 import "./styles/elite-skills.css";
@@ -21,6 +22,8 @@ const props = defineProps<{
   catalogueProblem: string; trackingHost: EliteTrackingHost;
   openWiki: (location: EliteLocation, page: "boss" | "skill") => void | Promise<void>;
   reloadSkills: () => void;
+  present?: (scene: EliteMarkerScene) => void;
+  setMissionMarkers?: (mode: EliteMissionMapMarkers) => void | Promise<void>;
 }>();
 const emit = defineEmits<{ openChange: [open: boolean] }>();
 const open = ref(false);
@@ -43,7 +46,7 @@ const party = shallowRef(unavailableParty());
 watch(() => props.view.observation, (observation) => { party.value = liveParty(observation); }, { immediate: true });
 const active = computed(() => ELITE_LOCATIONS.find((entry) => entry.id === tracking.value.activeLocation) ?? null);
 const blocked = computed(() => !loaded.value || problem.value !== "");
-const preview = ref<{ location: EliteLocation; x: number; y: number; keyboard: boolean; nearby: readonly EliteLocation[] } | null>(null);
+const preview = ref<{ location: EliteLocation; x: number; y: number; keyboard: boolean; nearby: readonly EliteLocation[]; pinned?: boolean } | null>(null);
 const nearbySkills = computed(() => [...new Map(preview.value?.nearby.map(location => [location.skillId, location])).values()]);
 const previewBosses = computed(() => {
   if (!preview.value) return [];
@@ -55,8 +58,13 @@ let previewClose: ReturnType<typeof setTimeout> | undefined;
 function keepPreview() { clearTimeout(previewClose); }
 function hidePreview() {
   keepPreview();
+  if (preview.value?.pinned) return;
   previewClose = setTimeout(() => { preview.value = null; }, 100);
 }
+// The pointer reaches a preview through host UI, not the game; the host then reports no marker.
+let previewHovered = false;
+function enterPreview() { previewHovered = true; keepPreview(); }
+function leavePreview() { previewHovered = false; hidePreview(); }
 function dismissPreview(event: KeyboardEvent) {
   if (!preview.value) return;
   if (previewElement.value?.contains(document.activeElement)) {
@@ -111,12 +119,32 @@ const results = computed(() => {
 });
 const selectedLocations = computed(() => ELITE_LOCATIONS.filter((entry) => entry.skillId === selectedId.value)
   .sort((a, b) => Number(b.mapId === props.view.mapId) - Number(a.mapId === props.view.mapId) || a.boss.localeCompare(b.boss)));
-const worldLocations = computed(() => matching.value.filter((entry) => eliteContinent(entry.region) === props.view.world?.continent));
-const missionLocations = computed(() => matching.value.filter((entry) => entry.mapId === props.view.mapId));
-const missionSurface = computed(() => {
-  const mission = props.view.mission;
-  return mission?.transform ? { box: mission.box, transform: mission.transform } : null;
+const unique = (locations: readonly EliteLocation[]) => [...new Map(locations.map(location => [location.id, location])).values()];
+const ready = computed(() => !character.value || loaded.value);
+// The World Map is the planning surface: it shows the planner's matches and the target.
+const worldLocations = computed(() => {
+  const world = props.view.world;
+  if (!world || !preferences.value.worldMap || !ready.value) return [];
+  return unique([...(active.value ? [active.value] : []), ...matching.value]).filter((entry) => eliteContinent(entry.region) === world.continent);
 });
+// The Mission Map is for play: it shows only what the chosen mode asks for.
+const missionLocations = computed(() => {
+  const mode = props.view.missionMarkers;
+  if (!props.view.mission?.transform || !ready.value || mode === "off") return [];
+  const here = (entry: EliteLocation) => entry.mapId === props.view.mapId;
+  const target = active.value && here(active.value) ? [active.value] : [];
+  if (mode === "target") return target;
+  return unique([...target, ...(mode === "saved" ? ELITE_LOCATIONS.filter(entry => here(entry) && tracked(entry.skillId)) : matching.value.filter(here))]);
+});
+function sceneMarkers(locations: readonly EliteLocation[]): readonly EliteSceneMarker[] {
+  return locations.flatMap(location => location.points.map(([mapX, mapY], index) => ({
+    key: `${location.id}:${index}`, locationId: location.id, skillId: location.skillId, mapId: location.mapId, mapX, mapY,
+    iconUrl: skill(location.skillId).iconUrl, hovered: preview.value?.location.id === location.id,
+    emphasis: location.id === tracking.value.activeLocation ? "target" as const : tracked(location.skillId) ? "saved" as const : "match" as const,
+  })));
+}
+const scene = computed<EliteMarkerScene>(() => ({ world: sceneMarkers(worldLocations.value), mission: sceneMarkers(missionLocations.value) }));
+watch(scene, (value) => props.present?.(value), { immediate: true });
 const viewport = ref({ width: window.innerWidth, height: window.innerHeight });
 const resizeGrip = ref<HTMLButtonElement | null>(null);
 const resizing = ref(false);
@@ -151,17 +179,13 @@ watch(resizeGrip, (handle, _, onCleanup) => {
   });
   onCleanup(() => { draggedHeight.value = null; dispose(); });
 }, { flush: "post" });
-const trackerStyle = computed(() => {
-  const box = props.view.mission?.box;
-  return box ? { left: `${box.left + 8}px`, top: `${box.top + 8}px`, right: "auto", maxWidth: `${Math.max(140, box.width - 16)}px` } : {};
-});
 const missionMessage = computed(() => {
-  if (!tracking.value.missionMap) return "Mission map markers are off.";
+  if (props.view.missionMarkers === "off") return "Mission Map markers are off.";
   if (props.view.mission && !props.view.mission.transform) return "Boss markers are unavailable in this area. Use the capture notes.";
-  if (!active.value) return `${new Set(missionLocations.value.map(entry => entry.skillId)).size} matching skills in this area.`;
+  if (!active.value) return `${new Set(missionLocations.value.map(entry => entry.skillId)).size} skills shown in this area.`;
   if (active.value.points.length === 0) return "Boss position unavailable. Use the encounter notes.";
   if (active.value.mapId !== props.view.mapId) return `Target is in ${guildWarsMapName(active.value.mapId)}.`;
-  if (!props.view.mission) return "Open the mission map to see capture locations.";
+  if (!props.view.mission) return "Open the Mission Map to see the capture location.";
   return "Known spawn location; this is not a live boss position.";
 });
 async function showWiki(location: EliteLocation, page: "boss" | "skill") {
@@ -171,7 +195,7 @@ async function showWiki(location: EliteLocation, page: "boss" | "skill") {
 }
 function setOpen(value: boolean, keyboard = false, remember = true) {
   if (remember) updatePreferences({ panelOpen: value });
-  keepPreview(); open.value = value; preview.value = null;
+  keepPreview(); open.value = value; preview.value = null; previewHovered = false;
   emit("openChange", value);
   if (keyboard) void nextTick(() => {
     const target = value ? filters.value?.searchInput : mapTrigger.value;
@@ -200,13 +224,13 @@ function selectLocation(location: EliteLocation, keyboard = false) {
   setOpen(true);
   revealSelected(keyboard);
 }
-function inspect(location: EliteLocation | null, x: number, y: number, keyboard = false, nearby: readonly EliteLocation[] = []) {
+function inspect(location: EliteLocation | null, x: number, y: number, keyboard = false, nearby: readonly EliteLocation[] = [], pinned = false) {
   if (!location) { hidePreview(); return; }
   keepPreview();
   // Place beside the marker instead of clamping the card over nearby pointer targets.
   const left = x + 340 <= window.innerWidth - 8 ? x + 20 : x - 340;
   const next = { location, x: Math.max(8, Math.min(window.innerWidth - 328, left)),
-    y: Math.max(8, Math.min(window.innerHeight - 488, y + 16)), keyboard, nearby };
+    y: Math.max(8, Math.min(window.innerHeight - 488, y + 16)), keyboard, nearby, pinned };
   preview.value = next;
   const shown = preview.value;
   void nextTick(() => {
@@ -228,6 +252,31 @@ function inspectRow(location: EliteLocation, event: PointerEvent | FocusEvent) {
   const box = event.currentTarget.getBoundingClientRect();
   inspect(location, box.left - 352, box.top - 16, event.type === "focus");
 }
+const locationsOf = (ids: readonly string[]) => ids.flatMap(id => ELITE_LOCATIONS.find(entry => entry.id === id) ?? []);
+/** The host reports the drawn marker under the pointer while the game routes it to that map. */
+function pointer(hit: EliteMapHit | null) {
+  if (preview.value?.pinned) return;
+  const location = hit ? locationsOf(hit.locationIds)[0] : undefined;
+  if (!hit || !location) { if (!previewHovered) hidePreview(); return; }
+  if (preview.value?.location.id === location.id) { keepPreview(); return; }
+  inspect(location, hit.x, hit.y, false, locationsOf(hit.nearbyIds));
+}
+/** A marker click opens its details in an open planner, or pins a small action card. */
+function activate(hit: EliteMapHit) {
+  const location = locationsOf(hit.locationIds)[0];
+  if (!location) return;
+  if (open.value) { selectLocation(location); return; }
+  inspect(location, hit.x, hit.y, false, locationsOf(hit.nearbyIds), true);
+}
+function unpin() { keepPreview(); preview.value = null; previewHovered = false; }
+function dismissPinned(event: PointerEvent) {
+  if (preview.value?.pinned && !(event.target instanceof Node && previewElement.value?.contains(event.target))) unpin();
+}
+onMounted(() => window.addEventListener("pointerdown", dismissPinned, true));
+onBeforeUnmount(() => window.removeEventListener("pointerdown", dismissPinned, true));
+function chooseMissionMarkers(value: string) {
+  if (isEliteMissionMapMarkers(value)) void props.setMissionMarkers?.(value);
+}
 function showDetails(id: number) {
   selectedId.value = selectedId.value === id ? null : id;
   keepPreview(); preview.value = null;
@@ -246,23 +295,17 @@ watch(() => [Boolean(props.view.world), loaded.value] as const, ([world, ready],
   else if (world && ready) setOpen(preferences.value.panelOpen, false, false);
 });
 watch(() => props.view.mission, (value, previous) => {
-  if (!value && previous) { preview.value = null; if (!props.view.world) setOpen(false, false, false); }
+  if (!value && previous) { preview.value = null; previewHovered = false; if (!props.view.world) setOpen(false, false, false); }
 });
 onBeforeUnmount(() => { keepPreview(); plan.dispose(); });
-defineExpose({ find, close });
+defineExpose({ find, close, pointer, activate });
 </script>
 <template>
   <div ref="root" class="elite-skills-root" @keydown.esc="dismissPreview">
-    <EliteMarkers v-if="view.world && preferences.worldMap && (!character || loaded)" :surface="view.world" :locations="worldLocations"
-      :active-location="tracking.activeLocation" :preview-location-id="preview?.location.id ?? null" :catalogue="catalogue" label="Elite capture locations on world map" @select="selectLocation" @inspect="inspect" />
-    <EliteMarkers v-if="missionSurface && tracking.missionMap && (!character || loaded)" :surface="missionSurface" :locations="missionLocations"
-      :active-location="tracking.activeLocation" :preview-location-id="preview?.location.id ?? null" :catalogue="catalogue" label="Elite capture locations on mission map" @select="selectLocation" @inspect="inspect" />
-    <div v-if="(view.world || view.mission) && !open" class="ui-frame elite-map-summary" :style="view.world ? panelPosition : trackerStyle">
-      <label class="elite-visibility" title="Show elites on this map"><input type="checkbox" aria-label="Show elites" :checked="view.world ? preferences.worldMap : tracking.missionMap" :disabled="!!character && !loaded"
-        @change="view.world ? updatePreferences({ worldMap: !preferences.worldMap }) : plan.change({ kind: 'mission-map', show: !tracking.missionMap })"></label>
+    <div v-if="view.world && !open" class="ui-frame elite-map-summary" :style="panelPosition">
       <button ref="mapTrigger" class="ui-button elite-map-trigger" aria-label="Open Elite Skills" :aria-expanded="false"
-        :title="[filterSummary, view.mission && !view.world ? [active?.boss, missionMessage].filter(Boolean).join(' · ') : ''].filter(Boolean).join(' — ')" @click="browse">
-        Elite skills<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg>
+        :title="[filterSummary, active ? `Target: ${active.boss}` : ''].filter(Boolean).join(' — ')" @click="browse">
+        <svg class="elite-map-trigger-mark" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 8 9-8 9-8-9Z"/></svg>Elite skills<span v-if="tracking.skills.length" class="elite-map-trigger-count" :title="`${tracking.skills.length} saved`">{{ tracking.skills.length }}</span>
       </button>
       <span v-if="problem" class="elite-summary-problem" role="alert" :title="loaded ? 'Changes are not saved. Open Elite Skills to retry.' : 'Your setup could not load. Open Elite Skills to retry.'"
         :aria-label="loaded ? 'Changes are not saved. Open Elite Skills to retry.' : 'Your setup could not load. Open Elite Skills to retry.'">!</span>
@@ -317,13 +360,19 @@ defineExpose({ find, close });
         <p v-if="active" class="elite-current-target" :title="missionMessage"><strong>Target: {{ active.boss }}</strong></p>
         <details class="elite-map-display"><summary>Map display</summary>
           <p v-if="active">{{ missionMessage }}</p>
-          <label class="elite-check"><input type="checkbox" :checked="tracking.missionMap" :disabled="blocked" @change="plan.change({ kind: 'mission-map', show: !tracking.missionMap })"> Show elites on mission map</label>
-          <label class="elite-check"><input type="checkbox" :checked="preferences.worldMap" :disabled="!!character && !loaded" @change="updatePreferences({ worldMap: !preferences.worldMap })"> Show world map markers</label>
+          <label class="elite-check"><input type="checkbox" :checked="preferences.worldMap" :disabled="!!character && !loaded" @change="updatePreferences({ worldMap: !preferences.worldMap })"> Show World Map markers</label>
+          <label class="elite-mission-markers"><span>Mission Map markers</span><select class="ui-select" :value="view.missionMarkers" :disabled="!setMissionMarkers" @change="chooseMissionMarkers(($event.currentTarget as HTMLSelectElement).value)"><option v-for="mode in ELITE_MISSION_MAP_MARKERS" :key="mode" :value="mode">{{ ELITE_MISSION_MAP_MARKER_LABELS[mode] }}</option></select></label>
         </details>
       </footer>
       <button ref="resizeGrip" class="elite-panel-resize" aria-label="Resize Elite Skills height" title="Drag to resize · Arrow keys adjust height" :disabled="!!character && !loaded"><span aria-hidden="true"></span></button>
     </section>
-    <aside v-if="preview" id="elite-skill-preview" ref="previewElement" class="ui-frame elite-preview" :data-keyboard="preview.keyboard ? '' : undefined" @pointerenter="keepPreview" @pointerleave="hidePreview" @focusin="keepPreview" @focusout="leavePreviewFocus" :style="{ left: `${preview.x}px`, top: `${preview.y}px`, maxHeight: `min(480px, calc(100dvh - ${preview.y + 8}px))` }" :role="preview.nearby.length > 1 ? 'region' : 'tooltip'" :aria-label="preview.nearby.length > 1 ? 'Nearby elite skills' : undefined">
+    <aside v-if="preview" id="elite-skill-preview" ref="previewElement" class="ui-frame elite-preview" :data-keyboard="preview.keyboard ? '' : undefined" @pointerenter="enterPreview" @pointerleave="leavePreview" @focusin="keepPreview" @focusout="leavePreviewFocus" :style="{ left: `${preview.x}px`, top: `${preview.y}px`, maxHeight: `min(480px, calc(100dvh - ${preview.y + 8}px))` }" :role="preview.pinned || preview.nearby.length > 1 ? 'region' : 'tooltip'" :aria-label="preview.pinned ? `${skill(preview.location.skillId).name} capture location` : preview.nearby.length > 1 ? 'Nearby elite skills' : undefined">
+      <div v-if="preview.pinned" class="elite-preview-actions">
+        <button class="ui-button" :disabled="blocked || tracking.activeLocation === preview.location.id" @click="plan.change({ kind: 'target', locationId: preview.location.id })">{{ tracking.activeLocation === preview.location.id ? 'Current target' : 'Set as target' }}</button>
+        <button class="ui-button" :aria-pressed="tracked(preview.location.skillId)" :disabled="blocked" @click="toggleTrack(preview.location.skillId)">{{ tracked(preview.location.skillId) ? 'Saved' : 'Save' }}</button>
+        <button class="ui-link" @click="selectLocation(preview.location)">Open planner</button>
+        <button class="ui-button elite-preview-close" aria-label="Close capture details" @click="unpin"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+      </div>
       <div class="ui-scroll elite-preview-content">
         <div v-if="nearbySkills.length > 1" class="elite-nearby">
           <span class="elite-field-label">Nearby skills · Click to open</span>

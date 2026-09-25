@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import { ref } from "vue";
-import EliteMarkers from "./components/EliteMarkers.vue";
 import EliteSkillsApp from "./EliteSkillsApp.vue";
 import { ELITE_FIXTURE_SKILLS, eliteFixtureView } from "./elite-fixture";
 import { createSkillCatalogue } from "./skill-catalog";
@@ -9,8 +8,10 @@ import { useEliteTracking, type EliteTrackingHost } from "./use-elite-tracking";
 import { ELITE_LOCATIONS } from "../../../src/shared/elite-locations";
 import { EMPTY_ELITE_TRACKING, changeEliteTracking, type EliteTracking } from "../../../src/shared/elite-skills";
 import { travelCharacterKey, type TravelCharacterKey } from "../../../src/shared/travel-history";
-import { eliteMarkers } from "./elite-map-markers";
-
+import { eliteMarkerAt, placeEliteMarkers, type EliteMapHit, type EliteMarkerScene, type EliteSceneMarker } from "../../../src/shared/elite-map-scene";
+import type { EliteLocation } from "../../../src/shared/elite-skills";
+import { installEliteMapPointer } from "../../../src/shared/ui/elite-map-pointer";
+import { skillId } from "../../../src/shared/builds/library";
 function host(): EliteTrackingHost {
   const saved = new Map<string, EliteTracking>();
   return { get: vi.fn(async ({ characterKey }) => saved.get(characterKey) ?? EMPTY_ELITE_TRACKING), update: vi.fn(async ({ characterKey, change }) => {
@@ -18,15 +19,29 @@ function host(): EliteTrackingHost {
     saved.set(characterKey, current); return current;
   }) };
 }
-async function planner(trackingHost = host()) {
+let scenes: EliteMarkerScene[] = [];
+const scene = () => scenes.at(-1)!;
+const ids = (markers: readonly EliteSceneMarker[]) => [...new Set(markers.map(marker => marker.locationId))];
+async function planner(trackingHost = host(), catalogue = createSkillCatalogue(ELITE_FIXTURE_SKILLS)) {
+  scenes = [];
   const wrapper = mount(EliteSkillsApp, { attachTo: document.body, props: {
-    view: eliteFixtureView(), catalogue: createSkillCatalogue(ELITE_FIXTURE_SKILLS), catalogueVersion: 1,
+    view: eliteFixtureView(), catalogue, catalogueVersion: 1,
     catalogueProblem: "", trackingHost, openWiki: vi.fn(), reloadSkills: vi.fn(),
+    present: (next: EliteMarkerScene) => { scenes.push(next); }, setMissionMarkers: vi.fn(),
   } });
   await flushPromises();
   if (wrapper.find('.elite-map-trigger').exists()) await wrapper.get('.elite-map-trigger').trigger('click');
   await flushPromises();
   return wrapper;
+}
+type PlannerApi = { pointer(hit: EliteMapHit | null): void; activate(hit: EliteMapHit): void };
+const api = (wrapper: Awaited<ReturnType<typeof planner>>) => wrapper.vm as unknown as PlannerApi;
+const hitOn = (location: EliteLocation, surface: EliteMapHit["surface"] = "mission", nearby: readonly EliteLocation[] = [location]): EliteMapHit =>
+  ({ surface, locationIds: [location.id], nearbyIds: nearby.map(entry => entry.id), x: 120, y: 140 });
+function sceneOf(locations: readonly EliteLocation[], target: string | null = null): EliteSceneMarker[] {
+  return locations.flatMap(location => location.points.map(([mapX, mapY], index) => ({ key: `${location.id}:${index}`, locationId: location.id,
+    skillId: location.skillId, mapId: location.mapId, mapX, mapY, iconUrl: null, hovered: false,
+    emphasis: location.id === target ? "target" as const : "match" as const })));
 }
 const lissah = ELITE_LOCATIONS.find((entry) => entry.boss === "Lissah the Packleader")!;
 
@@ -95,34 +110,39 @@ describe("Elite Skills", () => {
     expect(target.text()).toContain('Current target');
     await wrapper.setProps({ view: eliteFixtureView(true) });
     expect(wrapper.find('.elite-panel').exists()).toBe(false);
-    expect(wrapper.get('.elite-map-trigger').attributes('title')).toContain('Lissah');
-    expect(wrapper.findAll('.elite-marker')).toHaveLength(1);
-    await wrapper.get('.elite-marker').trigger('pointerenter');
+    // The Mission Map carries no planner controls; only the target is drawn.
+    expect(wrapper.find('.elite-map-summary').exists()).toBe(false);
+    expect(scene().mission.map(marker => [marker.locationId, marker.emphasis])).toEqual(lissah.points.map(() => [lissah.id, 'target']));
+    api(wrapper).pointer(hitOn(lissah));
+    await flushPromises();
     expect(wrapper.find('.elite-preview').exists()).toBe(true);
+    expect(scene().mission.every(marker => marker.hovered)).toBe(true);
     await wrapper.setProps({ view: { ...eliteFixtureView(true), mission: null } });
     expect(wrapper.find('.elite-preview').exists()).toBe(false);
-    expect(wrapper.find('.elite-marker').exists()).toBe(false);
-    expect(wrapper.find('.elite-map-summary').exists()).toBe(false);
+    expect(scene().mission).toEqual([]);
     const missionView = eliteFixtureView(true);
     await wrapper.setProps({ view: { ...missionView, mission: { box: missionView.mission!.box, transform: null } } });
-    expect(wrapper.findAll('.elite-marker')).toHaveLength(0);
-    expect(wrapper.get('.elite-map-trigger').attributes('title')).toContain('Boss markers are unavailable in this area');
+    expect(scene().mission).toEqual([]);
+    (wrapper.vm as unknown as { find(id: number): void }).find(lissah.skillId);
+    await flushPromises();
+    expect(wrapper.get('.elite-panel-footer').text()).toContain('Boss markers are unavailable in this area');
     await wrapper.setProps({ view: { ...eliteFixtureView(true), mapId: 55 } });
-    expect(wrapper.findAll('.elite-marker')).toHaveLength(0);
-    expect(wrapper.get('.elite-map-trigger').attributes('title')).toContain('Target is in Bjora Marches');
+    expect(scene().mission).toEqual([]);
+    expect(wrapper.get('.elite-panel-footer').text()).toContain('Target is in Bjora Marches');
     wrapper.unmount();
   });
   it("saves a matching skill directly without expanding it or changing the target", async () => {
     const api = host();
     const wrapper = await planner(api);
     await wrapper.get('input[type="search"]').setValue('Hundred Blades');
-    const markers = wrapper.findAll('.elite-marker').map(marker => marker.attributes('aria-label'));
+    const markers = ids(scene().world);
     await wrapper.get('[aria-label="Save Hundred Blades"]').trigger('click');
     await flushPromises();
     expect(wrapper.get('.elite-result-main').attributes('aria-expanded')).toBe('false');
     expect(wrapper.find('.elite-inline-detail').exists()).toBe(false);
     expect(wrapper.get('[aria-label="Unsave Hundred Blades"]').attributes('aria-pressed')).toBe('true');
-    expect(wrapper.findAll('.elite-marker').map(marker => marker.attributes('aria-label'))).toEqual(markers);
+    expect(ids(scene().world)).toEqual(markers);
+    expect(scene().world.every(marker => marker.emphasis === 'saved')).toBe(true);
     const saved = await api.get({ characterKey: eliteFixtureView().characterKey! });
     expect(saved.skills).toContain(ELITE_FIXTURE_SKILLS.find(skill => skill.name === 'Hundred Blades')!.id);
     expect(saved.activeLocation).toBe(null);
@@ -150,7 +170,7 @@ describe("Elite Skills", () => {
     expect(wrapper.findAll('.elite-profession')).toHaveLength(10);
     expect(wrapper.findAll('.elite-profession img')).toHaveLength(10);
     await wrapper.findAll('button').find(button => button.text() === 'Deselect all')!.trigger('click');
-    expect(wrapper.findAll('.elite-marker')).toHaveLength(0);
+    expect(scene().world).toHaveLength(0);
     expect(wrapper.findAll('.elite-result')).toHaveLength(0);
     for (const name of ['Warrior', 'Ranger', 'Monk', 'Necromancer', 'Mesmer', 'Elementalist', 'Assassin', 'Ritualist', 'Paragon', 'Dervish']) {
       const choice = wrapper.get(`.elite-profession[aria-label="${name}"]`);
@@ -163,7 +183,7 @@ describe("Elite Skills", () => {
     wrapper.unmount();
     wrapper = await planner(api);
     expect(wrapper.findAll('.elite-profession[aria-pressed="true"]')).toHaveLength(0);
-    expect(wrapper.findAll('.elite-marker')).toHaveLength(0);
+    expect(scene().world).toHaveLength(0);
     await wrapper.findAll('button').find(button => button.text() === 'Select all')!.trigger('click');
     expect(wrapper.findAll('.elite-profession[aria-pressed="true"]')).toHaveLength(10);
     expect(wrapper.findAll('.elite-result').length).toBeGreaterThan(0);
@@ -197,11 +217,17 @@ describe("Elite Skills", () => {
   });
   it("withdraws missing coordinates rather than placing them at zero", async () => {
     const missing = ELITE_LOCATIONS.find((entry) => entry.boss === 'Reaper of Agony')!;
+    expect(missing.points).toEqual([]);
+    const wrapper = await planner(host(), createSkillCatalogue([...ELITE_FIXTURE_SKILLS,
+      { ...ELITE_FIXTURE_SKILLS[0]!, id: skillId(missing.skillId), name: 'Missing position' }]));
+    await wrapper.get('input[type="search"]').setValue('Missing position');
+    expect(wrapper.findAll('.elite-result')).toHaveLength(1);
+    expect(scene().world.some(marker => marker.locationId === missing.id)).toBe(false);
+    wrapper.unmount();
     const view = eliteFixtureView(true);
-    expect(eliteMarkers([missing], { box: view.mission!.box, transform: view.mission!.transform! }, missing.id)).toEqual([]);
-    const markers = eliteMarkers([lissah], { ...view.mission!, transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 } }, lissah.id);
-    expect(markers[0]?.outside).toBe(true);
-    expect(markers[0]!.x).toBeLessThan(view.mission!.box.width);
+    const placed = placeEliteMarkers(sceneOf([lissah], lissah.id), { ...view.mission!, transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 } });
+    expect(placed[0]?.outside).toBe(true);
+    expect(placed[0]!.x).toBeLessThan(view.mission!.box.width);
   });
   it("deduplicates touching copies and preserves the active boss position", () => {
     const surface = { box: { left: 0, top: 0, width: 400, height: 300 },
@@ -210,12 +236,10 @@ describe("Elite Skills", () => {
       { ...lissah, id: 'a', points: [[35, 80], [36, 80]] as const },
       { ...lissah, id: 'b', points: [[37, 80]] as const },
     ];
-    const markers = eliteMarkers(locations, surface, 'b');
-    expect(markers.map(marker => [marker.key, marker.x, marker.location.id])).toEqual([
-      ['b:0', 37, 'b'],
-    ]);
-    expect(markers[0]!.locations.map(location => location.id)).toEqual(['a', 'b']);
-    expect(markers.filter(marker => marker.active).map(marker => marker.location.id)).toEqual(['b']);
+    const markers = placeEliteMarkers(sceneOf(locations, 'b'), surface);
+    expect(markers.map(marker => [marker.marker.key, marker.x, marker.marker.locationId])).toEqual([['b:0', 37, 'b']]);
+    expect(markers[0]!.locationIds).toEqual(['a', 'b']);
+    expect(markers[0]!.marker.emphasis).toBe('target');
   });
   it("maintains keyboard focus through opening, inline details, and collapse", async () => {
     const wrapper = await planner();
@@ -241,13 +265,13 @@ describe("Elite Skills", () => {
     const controller = useEliteTracking(character, api);
     character.value = travelCharacterKey('fedcba9876543210');
     await flushPromises();
-    resolveLoad({ ...EMPTY_ELITE_TRACKING, skills: [338], activeLocation: lissah.id, missionMap: true });
+    resolveLoad({ ...EMPTY_ELITE_TRACKING, skills: [338], activeLocation: lissah.id });
     await flushPromises();
     expect(controller.tracking.value.skills).toEqual([]);
     void controller.change({ kind: 'track', skillId: 338 });
     character.value = null;
     await flushPromises();
-    resolveSave({ ...EMPTY_ELITE_TRACKING, skills: [338], activeLocation: lissah.id, missionMap: true });
+    resolveSave({ ...EMPTY_ELITE_TRACKING, skills: [338], activeLocation: lissah.id });
     await flushPromises();
     expect(controller.tracking.value.skills).toEqual([]);
     expect(controller.loaded.value).toBe(false);
@@ -259,7 +283,7 @@ describe("Elite Skills", () => {
 describe("elite map preferences", () => {
   it("keeps the same markers through inline details and collapse without losing list position", async () => {
     const wrapper = await planner();
-    const markers = () => wrapper.findAll('.elite-marker').map(marker => marker.attributes('aria-label'));
+    const markers = () => ids(scene().world);
     const original = markers();
     expect(original.length).toBeGreaterThan(1);
     wrapper.get<HTMLElement>('.elite-panel-content').element.scrollTop = 177;
@@ -321,40 +345,67 @@ describe("elite map preferences", () => {
     expect(wrapper.text()).toContain('Your professions are unavailable');
     wrapper.unmount();
   });
-  it("shares filters with untracked mission markers and applies the mission visibility switch", async () => {
+  it("shows only what the Mission Map mode asks for", async () => {
     const wrapper = await planner();
     await wrapper.get('input[type="search"]').setValue('Lissah');
-    await wrapper.setProps({ view: eliteFixtureView(true) });
-    expect(wrapper.findAll('.elite-marker')).toHaveLength(1);
-    await wrapper.get('.elite-map-summary input').setValue(false);
-    expect(wrapper.findAll('.elite-marker')).toHaveLength(0);
-    await wrapper.get('.elite-map-summary input').setValue(true);
-    await wrapper.get('.elite-map-trigger').trigger('click');
+    const mission = (mode: "off" | "target" | "saved" | "all") => wrapper.setProps({ view: eliteFixtureView(true, false, false, 2, mode) });
+    await mission('saved');
+    expect(scene().mission).toEqual([]);
+    await mission('all');
+    expect(ids(scene().mission)).toEqual([lissah.id]);
+    expect(scene().mission.every(marker => marker.emphasis === 'match')).toBe(true);
+    // Returning to the World Map restores the open planner.
+    await wrapper.setProps({ view: eliteFixtureView() });
     await wrapper.get('input[type="search"]').setValue('Hundred Blades');
-    expect(wrapper.findAll('.elite-marker')).toHaveLength(0);
+    await mission('all');
+    expect(scene().mission).toEqual([]);
+    const plan = host();
+    wrapper.unmount();
+    const saved = await planner(plan);
+    await saved.get('input[type="search"]').setValue('Eviscerate');
+    await saved.get('[aria-label="Save Eviscerate"]').trigger('click');
+    await flushPromises();
+    await saved.get('input[type="search"]').setValue('Hundred Blades');
+    await saved.setProps({ view: eliteFixtureView(true, false, false, 2, 'saved') });
+    // Saved skills stay on the Mission Map even when planner filters hide them.
+    expect(ids(scene().mission)).toEqual([lissah.id]);
+    expect(scene().mission.every(marker => marker.emphasis === 'saved')).toBe(true);
+    await saved.setProps({ view: eliteFixtureView(true, false, false, 2, 'target') });
+    expect(scene().mission).toEqual([]);
+    await saved.setProps({ view: eliteFixtureView(true, false, false, 2, 'off') });
+    expect(scene().mission).toEqual([]);
+    saved.unmount();
+  });
+  it("changes the Mission Map mode through the host setting", async () => {
+    const wrapper = await planner();
+    const select = wrapper.get<HTMLSelectElement>('.elite-mission-markers select');
+    expect(select.element.value).toBe('saved');
+    expect(select.findAll('option').map(option => option.text())).toEqual(['Off', 'Target only', 'Target and saved skills', 'All planner matches']);
+    await select.setValue('all');
+    expect(wrapper.props('setMissionMarkers')).toHaveBeenCalledWith('all');
     wrapper.unmount();
   });
   it("isolates search and marker visibility between characters", async () => {
     const api = host();
     const wrapper = await planner(api);
     await wrapper.get('input[type="search"]').setValue('Hundred Blades');
-    await wrapper.findAll('.elite-panel-footer label').find(label => label.text() === 'Show world map markers')!.get('input').setValue(false);
+    await wrapper.findAll('.elite-panel-footer label').find(label => label.text() === 'Show World Map markers')!.get('input').setValue(false);
     await flushPromises();
     await wrapper.setProps({ view: eliteFixtureView(false, true) });
     await flushPromises();
     expect(wrapper.get('.elite-map-trigger').attributes('title')).not.toContain('Hundred Blades');
-    expect(wrapper.findAll('.elite-marker').length).toBeGreaterThan(0);
+    expect(scene().world.length).toBeGreaterThan(0);
     await wrapper.setProps({ view: eliteFixtureView() });
     await flushPromises();
     expect(wrapper.get<HTMLInputElement>('input[type="search"]').element.value).toBe('Hundred Blades');
-    expect(wrapper.findAll('.elite-marker')).toHaveLength(0);
+    expect(scene().world).toHaveLength(0);
     wrapper.unmount();
   });
   it("only focuses a skill through an explicit action", async () => {
     const wrapper = await planner();
-    const count = wrapper.findAll('.elite-marker').length;
+    const count = scene().world.length;
     await wrapper.get('.elite-result-main').trigger('click');
-    expect(wrapper.findAll('.elite-marker')).toHaveLength(count);
+    expect(scene().world).toHaveLength(count);
     await wrapper.findAll('button').find(button => button.text() === 'Show only this skill')!.trigger('click');
     await wrapper.get('.elite-result-main').trigger('click');
     expect(wrapper.findAll('.elite-result')).toHaveLength(1);
@@ -446,36 +497,35 @@ describe("overlapping elite markers", () => {
   it("deduplicates the real Sorrow's Furnace row without hiding another area or distant spawn", () => {
     const row = ELITE_LOCATIONS.filter(location => location.mapId === 190);
     const surface = { box: { left: 0, top: 0, width: 800, height: 600 }, transform: { a: 1, b: 0, c: 0, d: 1, e: -4800, f: -5200 } };
-    const marks = eliteMarkers(row, surface, null);
+    const marks = placeEliteMarkers(sceneOf(row), surface);
     expect(marks).toHaveLength(6);
-    const anguish = marks.find(marker => marker.location.skillId === 54)!;
-    expect(anguish.locations.map(location => location.boss).sort()).toEqual(['Garbok Handsmasher', 'Hierophant Morlog', 'Korvald Willcrusher', 'Vokur Grimshackles']);
-    const otherArea = { ...anguish.location, id: 'other-area', mapId: 100 };
-    const distant = { ...anguish.location, id: 'distant', points: [[5300, 5500]] as const };
-    expect(eliteMarkers([...row, otherArea, distant], surface, null)).toHaveLength(8);
+    const anguish = marks.find(marker => marker.marker.skillId === 54)!;
+    const bosses = anguish.locationIds.map(id => row.find(location => location.id === id)!.boss).sort();
+    expect(bosses).toEqual(['Garbok Handsmasher', 'Hierophant Morlog', 'Korvald Willcrusher', 'Vokur Grimshackles']);
+    const source = row.find(location => location.id === anguish.marker.locationId)!;
+    const otherArea = { ...source, id: 'other-area', mapId: 100 };
+    const distant = { ...source, id: 'distant', points: [[5300, 5500]] as const };
+    expect(placeEliteMarkers(sceneOf([...row, otherArea, distant]), surface)).toHaveLength(8);
   });
-  it("keeps every boss behind one shared skill marker", async () => {
+  it("finds the topmost marker and every nearby location under a point", () => {
     const surface = { box: { left: 0, top: 0, width: 400, height: 300 }, transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 } };
     const a = { ...lissah, id: 'a', points: [[80, 80], [81, 80]] as const };
     const b = { ...lissah, id: 'b', points: [[80, 80]] as const };
     const far = { ...lissah, id: 'far', points: [[180, 80]] as const };
-    const wrapper = mount(EliteMarkers, { props: { surface, locations: [a, b, far], activeLocation: null,
-      previewLocationId: null, catalogue: createSkillCatalogue(ELITE_FIXTURE_SKILLS), label: 'Test locations' } });
-    expect(wrapper.findAll('.elite-marker')).toHaveLength(2);
-    await wrapper.get('.elite-marker').trigger('pointerenter');
-    expect(wrapper.emitted('inspect')![0]).toEqual([a, 80, 80, false, [a, b]]);
-    await wrapper.setProps({ locations: [a, far] });
-    await wrapper.get('.elite-marker').trigger('focus');
-    expect(wrapper.emitted('inspect')!.at(-1)).toEqual([a, 80, 80, true, [a]]);
-    wrapper.unmount();
+    const placed = placeEliteMarkers(sceneOf([a, b, far]), surface);
+    expect(placed).toHaveLength(2);
+    expect(eliteMarkerAt(placed, 84, 82)).toMatchObject({ marker: { locationIds: ['a', 'b'] }, nearbyIds: ['a', 'b'] });
+    expect(eliteMarkerAt(placed, 130, 80)).toBeNull();
   });
   it("keeps overlapping choices reachable, changes the preview, and opens details without filtering", async () => {
     const wrapper = await planner();
-    const view = eliteFixtureView();
-    await wrapper.setProps({ view: { ...view, world: { ...view.world!, transform: { a: 0.001, b: 0, c: 0, d: 0.001, e: 100, f: 100 } } } });
     await wrapper.get('[aria-label="Collapse Elite Skills"]').trigger('click');
-    const original = wrapper.findAll('.elite-marker').map(marker => marker.attributes('aria-label'));
-    await wrapper.get('.elite-marker').trigger('pointerenter');
+    const crowded = { ...eliteFixtureView().world!, transform: { a: 0.001, b: 0, c: 0, d: 0.001, e: 100, f: 100 } };
+    const placed = placeEliteMarkers(scene().world, crowded);
+    const first = eliteMarkerAt(placed, placed[0]!.x, placed[0]!.y)!;
+    const original = ids(scene().world);
+    api(wrapper).pointer({ surface: 'world', locationIds: first.marker.locationIds, nearbyIds: first.nearbyIds, x: 100, y: 100 });
+    await flushPromises();
     expect(wrapper.get('.elite-preview').attributes('role')).toBe('region');
     const choices = wrapper.findAll('.elite-nearby-choice');
     expect(choices.length).toBeGreaterThan(1);
@@ -483,17 +533,98 @@ describe("overlapping elite markers", () => {
     const barrage = choices.find(choice => choice.attributes('aria-label')!.startsWith('Barrage —'))!;
     vi.useFakeTimers();
     try {
-      await wrapper.get('.elite-marker').trigger('pointerleave');
       await wrapper.get('.elite-preview').trigger('pointerenter');
+      // Crossing onto the preview leaves the drawn marker; the host then reports no hit.
+      api(wrapper).pointer(null);
       await barrage.trigger('pointerenter');
       await vi.advanceTimersByTimeAsync(150);
       expect(wrapper.get('.elite-preview .inspector-identity strong').text()).toBe('Barrage');
       expect(wrapper.findAll('.elite-preview-bosses li').length).toBeGreaterThan(1);
-      expect(wrapper.findAll('.elite-marker').map(marker => marker.attributes('aria-label'))).toEqual(original);
+      expect(ids(scene().world)).toEqual(original);
       await barrage.trigger('click');
       expect(wrapper.find('.elite-preview').exists()).toBe(false);
       expect(wrapper.get('.elite-panel .inspector-identity strong').text()).toBe('Barrage');
-      expect(wrapper.findAll('.elite-marker').map(marker => marker.attributes('aria-label'))).toEqual(original);
+      expect(ids(scene().world)).toEqual(original);
     } finally { wrapper.unmount(); vi.useRealTimers(); }
+  });
+});
+
+describe("marker activation", () => {
+  it("pins a small action card on a marker click and targets without opening the planner", async () => {
+    const plan = host();
+    const wrapper = await planner(plan);
+    await wrapper.get('[aria-label="Collapse Elite Skills"]').trigger('click');
+    await wrapper.setProps({ view: eliteFixtureView(true, false, false, 2, 'all') });
+    api(wrapper).activate(hitOn(lissah));
+    await flushPromises();
+    expect(wrapper.find('.elite-panel').exists()).toBe(false);
+    expect(wrapper.get('.elite-preview').attributes('aria-label')).toBe('Eviscerate capture location');
+    // A pinned card ignores later pointer reports until it is closed.
+    api(wrapper).pointer(null);
+    await flushPromises();
+    await wrapper.findAll('.elite-preview-actions button').find(button => button.text() === 'Set as target')!.trigger('click');
+    await flushPromises();
+    expect((await plan.get({ characterKey: eliteFixtureView().characterKey! })).activeLocation).toBe(lissah.id);
+    expect(wrapper.get('.elite-preview-actions').text()).toContain('Current target');
+    expect(scene().mission.every(marker => marker.emphasis === 'target')).toBe(true);
+    await wrapper.get('[aria-label="Close capture details"]').trigger('click');
+    expect(wrapper.find('.elite-preview').exists()).toBe(false);
+    api(wrapper).activate(hitOn(lissah));
+    await flushPromises();
+    document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    await flushPromises();
+    expect(wrapper.find('.elite-preview').exists()).toBe(false);
+    wrapper.unmount();
+  });
+  it("opens the details in an open planner instead of pinning a card", async () => {
+    const wrapper = await planner();
+    api(wrapper).activate(hitOn(lissah, 'world'));
+    await flushPromises();
+    expect(wrapper.find('.elite-preview').exists()).toBe(false);
+    expect(wrapper.get('.elite-panel .inspector-identity strong').text()).toBe('Eviscerate');
+    wrapper.unmount();
+  });
+});
+
+describe("elite map pointer", () => {
+  const surface = { box: { left: 10, top: 20, width: 400, height: 300 }, transform: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 } };
+  const placed = placeEliteMarkers(sceneOf([{ ...lissah, id: 'a', points: [[100, 100]] as const }]), surface);
+  function install(owns: () => boolean) {
+    const game = document.createElement('canvas'); document.body.append(game);
+    const hover = vi.fn(); const activate = vi.fn(); const reached = vi.fn();
+    game.addEventListener('pointerdown', reached); game.addEventListener('pointermove', reached);
+    const pointer = installEliteMapPointer({ view: window, accepts: target => target === game,
+      surfaces: () => [{ name: 'mission', box: surface.box, placed, ownsPointer: owns }], hover, activate });
+    const send = (type: string, x: number, y: number) => {
+      const event = new PointerEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0, isPrimary: true });
+      game.dispatchEvent(event); return event;
+    };
+    return { game, hover, activate, reached, pointer, send };
+  }
+  it("lets every move reach the game and claims only a press on a marker the map owns", () => {
+    const { game, hover, activate, reached, pointer, send } = install(() => true);
+    send('pointermove', 110, 120);
+    expect(hover).toHaveBeenLastCalledWith(expect.objectContaining({ surface: 'mission', locationIds: ['a'], x: 110, y: 120 }));
+    expect(reached).toHaveBeenCalledTimes(1);
+    const press = send('pointerdown', 110, 120);
+    expect(press.defaultPrevented).toBe(true);
+    expect(reached).toHaveBeenCalledTimes(1);
+    send('pointerup', 110, 120);
+    expect(activate).toHaveBeenCalledTimes(1);
+    send('pointermove', 300, 300);
+    expect(hover).toHaveBeenLastCalledWith(null);
+    expect(send('pointerdown', 300, 300).defaultPrevented).toBe(false);
+    expect(reached).toHaveBeenCalledTimes(3);
+    pointer.dispose(); game.remove();
+  });
+  it("leaves a covered marker to the game panel above it", () => {
+    const { game, hover, activate, reached, pointer, send } = install(() => false);
+    send('pointermove', 110, 120);
+    expect(hover).not.toHaveBeenCalled();
+    expect(send('pointerdown', 110, 120).defaultPrevented).toBe(false);
+    send('pointerup', 110, 120);
+    expect(activate).not.toHaveBeenCalled();
+    expect(reached).toHaveBeenCalledTimes(2);
+    pointer.dispose(); game.remove();
   });
 });

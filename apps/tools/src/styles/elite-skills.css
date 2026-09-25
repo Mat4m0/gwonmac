@@ -4,10 +4,10 @@
 .elite-skills-root svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .elite-skills-root .elite-panel, .elite-skills-root .elite-map-summary { position: fixed; top: 16px; right: 16px; pointer-events: auto; }
 .elite-map-summary { display: flex; align-items: center; width: max-content; max-width: calc(100vw - 24px); padding: 4px; background: var(--ui-panel-fill); }
-.elite-visibility { display: grid; place-items: center; width: 40px; height: 40px; cursor: pointer; }
-.elite-visibility input { margin: 0; accent-color: var(--ui-accent); cursor: inherit; }
 .elite-map-trigger { display: inline-flex; align-items: center; gap: var(--ui-space-2); min-height: 40px; white-space: nowrap; }
 .elite-map-trigger svg { width: 14px; height: 14px; }
+.elite-map-trigger .elite-map-trigger-mark { width: 12px; height: 12px; fill: var(--ui-warning); }
+.elite-map-trigger-count { min-width: 20px; padding: 1px 6px; border-radius: var(--ui-radius-pill); background: var(--ui-well-fill); color: var(--ui-text-muted); font-size: var(--ui-font-size-sm); text-align: center; }
 .elite-summary-problem { padding-inline: var(--ui-space-2); color: var(--ui-accent); font-weight: bold; }
 .elite-panel { display: flex; flex-direction: column; width: min(356px, calc(100vw - 24px)); height: 80dvh; max-height: calc(100dvh - 32px); background: rgb(from var(--ui-panel-fill) r g b / 1); overflow: hidden; }
 .elite-panel .ui-panel-head { position: sticky; top: 0; z-index: 3; background-color: var(--ui-panel-fill); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
@@ -68,20 +68,13 @@
 .elite-message p { margin: 0 0 var(--ui-space-2); }
 .elite-message .ui-link { margin-left: var(--ui-space-2); }
 .elite-save-state { margin: 0; padding: 0 var(--ui-space-4); font-size: var(--ui-font-size-sm); }
-.elite-markers { position: fixed; pointer-events: none; overflow: hidden; }
-.elite-marker { position: absolute; display: grid; place-items: center; width: 28px; height: 28px; padding: 2px; transform: translate(-50%, -50%); border: 0; background: transparent; color: var(--ui-text-bright); pointer-events: auto; cursor: pointer; }
-.elite-marker-art { display: grid; place-items: center; width: 24px; height: 24px; border: 1px solid rgb(0 0 0 / 70%); border-radius: 2px; background: var(--ui-panel-fill); }
-/* Client skill textures have a 4px rim inside 64px. Display only the inner 56px;
-   leave the decoded asset untouched for other consumers and keep one CSS edge. */
-.elite-marker img { display: block; width: 22px; height: 22px; border-radius: 1px; clip-path: inset(6.25%); transform: scale(calc(64 / 56)); }
-.elite-marker--active { z-index: 1; }
-.elite-marker--active .elite-marker-art { border-color: var(--ui-accent); box-shadow: 0 0 0 1px var(--ui-accent); }
-.elite-marker--outside .elite-marker-art { border-style: dashed; }
-.elite-marker:hover, .elite-marker:focus-visible { z-index: 3; }
-.elite-skills-root .elite-marker:focus-visible { outline: none; }
-.elite-marker:hover .elite-marker-art, .elite-marker:focus-visible .elite-marker-art { border-color: var(--ui-focus); box-shadow: 0 0 0 1px var(--ui-focus), 0 2px 6px rgb(0 0 0 / 45%); }
-.elite-marker-label { position: absolute; top: 32px; width: max-content; max-width: 180px; padding: 3px 6px; background: var(--ui-panel-fill); color: var(--ui-text-bright); font-size: var(--ui-font-size-sm); pointer-events: none; }
 .elite-preview { position: fixed; display: flex; width: min(320px, calc(100vw - 16px)); max-height: min(480px, calc(100dvh - 16px)); overflow: hidden; pointer-events: auto; background: var(--ui-panel-fill); z-index: 2; }
+.elite-preview:has(.elite-preview-actions) { flex-direction: column; }
+.elite-preview-actions { display: flex; align-items: center; gap: var(--ui-space-2); padding: var(--ui-space-2) var(--ui-space-3); border-bottom: 1px solid var(--ui-line); }
+.elite-preview-actions .ui-button { min-height: 30px; font-size: var(--ui-font-size-sm); }
+.elite-preview-actions .ui-link { font-size: var(--ui-font-size-sm); }
+.elite-preview-close { margin-left: auto; display: grid; place-items: center; width: 30px; padding: 0; }
+.elite-preview-close svg { width: 14px; height: 14px; stroke: currentColor; stroke-width: 2; fill: none; }
 .elite-preview-content { min-width: 0; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: var(--ui-space-4); flex: 1; }
 .elite-nearby { margin-bottom: var(--ui-space-3); padding-bottom: var(--ui-space-2); border-bottom: 1px solid var(--ui-line); }
 .elite-nearby-choices { display: flex; flex-wrap: wrap; gap: 2px; margin-top: var(--ui-space-1); }
@@ -120,6 +113,8 @@
 .elite-detail-links { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--ui-space-2); margin-top: var(--ui-space-3); }
 .elite-detail-links .ui-link { font-size: var(--ui-font-size-sm); }
 .elite-map-display .elite-check { padding-block: var(--ui-space-2); }
+.elite-mission-markers { display: flex; align-items: center; justify-content: space-between; gap: var(--ui-space-2); padding-block: var(--ui-space-1); font-size: var(--ui-font-size-sm); }
+.elite-mission-markers .ui-select { padding: 4px; min-height: 30px; font-size: var(--ui-font-size-sm); max-width: 60%; }
 .elite-current-target { display: grid; gap: 2px; }
 .elite-current-target strong { color: var(--ui-accent); font-weight: normal; }
 .elite-learned-badge { color: var(--ui-success); }

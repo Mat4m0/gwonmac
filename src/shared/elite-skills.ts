@@ -38,17 +38,15 @@ export type EliteLocation = Readonly<{
 export type EliteTracking = Readonly<{
   skills: readonly number[];
   activeLocation: string | null;
-  missionMap: boolean;
   view: EliteViewPreferences;
 }>;
 export const EMPTY_ELITE_TRACKING: EliteTracking = Object.freeze({
-  skills: Object.freeze([]), activeLocation: null, missionMap: true, view: DEFAULT_ELITE_VIEW,
+  skills: Object.freeze([]), activeLocation: null, view: DEFAULT_ELITE_VIEW,
 });
 export type EliteChange =
   | Readonly<{ kind: "track" | "remove"; skillId: number }>
   | Readonly<{ kind: "target"; locationId: string }>
-  | Readonly<{ kind: "view"; view: EliteViewPreferences }>
-  | Readonly<{ kind: "mission-map"; show: boolean }>;
+  | Readonly<{ kind: "view"; view: EliteViewPreferences }>;
 export type EliteUpdate = Readonly<{ characterKey: TravelCharacterKey; change: EliteChange }>;
 
 function object(value: unknown): Record<string, unknown> {
@@ -119,23 +117,20 @@ export function parseEliteUpdate(value: unknown): EliteUpdate {
     }
     return { characterKey, change: { kind: "target", locationId: change.locationId } };
   }
-  if (change.kind === "mission-map") {
-    exact(change, ["kind", "show"]);
-    if (typeof change.show !== "boolean") throw new TypeError("Invalid mission map choice");
-    return { characterKey, change: { kind: "mission-map", show: change.show } };
-  }
   throw new TypeError("Unknown tracking action");
 }
 export function parseEliteTracking(value: unknown, locations: readonly EliteLocation[]): EliteTracking {
   const input = object(value);
-  // An absent view means the player has not saved map preferences yet.
-  exact(input, "view" in input ? ["skills", "activeLocation", "missionMap", "view"] : ["skills", "activeLocation", "missionMap"]);
+  // An absent view means the player has not saved map preferences yet. The
+  // per-character missionMap switch moved to the eliteMissionMapMarkers setting;
+  // an older file keeps loading and drops it on its next save.
+  exact(input, ["skills", "activeLocation", ...("view" in input ? ["view"] : []), ...("missionMap" in input ? ["missionMap"] : [])]);
   const view = "view" in input ? parseEliteView(input.view) : DEFAULT_ELITE_VIEW;
   const known = new Set(locations.map((location) => location.skillId));
   if (!Array.isArray(input.skills) || input.skills.length > known.size
     || input.skills.some((id: unknown) => typeof id !== "number" || !known.has(id))
     || new Set(input.skills).size !== input.skills.length
-    || typeof input.missionMap !== "boolean") throw new TypeError("Invalid tracking choices");
+    || ("missionMap" in input && typeof input.missionMap !== "boolean")) throw new TypeError("Invalid tracking choices");
   const skills: number[] = input.skills.map(Number);
   const active = input.activeLocation;
   if (active !== null && (typeof active !== "string" || !locations.some((location) =>
@@ -143,7 +138,7 @@ export function parseEliteTracking(value: unknown, locations: readonly EliteLoca
     throw new TypeError("Active boss must belong to a tracked skill");
   }
   if (view.focusedSkill !== null && !known.has(view.focusedSkill)) throw new TypeError("Unknown focused skill");
-  return Object.freeze({ skills: Object.freeze(skills), activeLocation: active, missionMap: input.missionMap, view });
+  return Object.freeze({ skills: Object.freeze(skills), activeLocation: active, view });
 }
 export function changeEliteTracking(
   current: EliteTracking, change: EliteChange, locations: readonly EliteLocation[],
@@ -153,7 +148,6 @@ export function changeEliteTracking(
     if (view.focusedSkill !== null && !locations.some(entry => entry.skillId === view.focusedSkill)) throw new TypeError("Unknown focused skill");
     return { ...current, view };
   }
-  if (change.kind === "mission-map") return { ...current, missionMap: change.show };
   if (change.kind === "target") {
     const location = locations.find((entry) => entry.id === change.locationId);
     if (!location) throw new TypeError("Unknown capture location");

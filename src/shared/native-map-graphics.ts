@@ -9,3 +9,6 @@ export const NATIVE_MAP_GRAPHICS_MAX_SIZE = 2048;
 export const NATIVE_MAP_GRAPHICS_SURFACES = ["mission", "world", "mission_hover", "world_hover",
   "mission_elite", "world_elite", "mission_elite_edge", "world_elite_edge"] as const;
 export type NativeMapGraphicsSurface = typeof NATIVE_MAP_GRAPHICS_SURFACES[number];
+/** Each consumer owns and withdraws only its own surfaces. */
+export const CARTOGRAPHY_MAP_GRAPHICS_SURFACES = ["mission", "world", "mission_hover", "world_hover"] as const satisfies readonly NativeMapGraphicsSurface[];
+export const ELITE_MAP_GRAPHICS_SURFACES = ["mission_elite", "world_elite", "mission_elite_edge", "world_elite_edge"] as const satisfies readonly NativeMapGraphicsSurface[];
