@@ -81,8 +81,18 @@ const delay = (milliseconds = 25) => new Promise<void>((resolve) => {
 const elapsedBucket = (started: number): number =>
   Math.min(60_000, Math.floor((performance.now() - started) / 250) * 250);
 
-function accountSignature(state: Extract<CompanionCharacterListState, { status: "ready" }>): string {
-  return state.characters.map(({ characterKey }) => characterKey).sort().join("");
+type ReadyCharacterList = Extract<CompanionCharacterListState, { status: "ready" }>;
+
+const accountKeys = (state: ReadyCharacterList): readonly string[] =>
+  state.characters.map(({ characterKey }) => characterKey);
+
+/**
+ * A different account must stop the switch. A character created in game joins
+ * the list only when Selector reloads it, so a new key alone is not a change.
+ */
+function sameAccount(initialKeys: readonly string[], state: ReadyCharacterList): boolean {
+  const keys = new Set(accountKeys(state));
+  return initialKeys.every((key) => keys.has(key));
 }
 
 export interface CharacterSwitchController extends CharacterSwitchSource {
@@ -238,7 +248,7 @@ export function createCharacterSwitchController(options: Readonly<{
     snapshotSequence: number,
     targetName: string,
     targetKey: string,
-    initialSignature: string,
+    initialKeys: readonly string[],
     startsAtSelector: boolean,
   ) => {
     window.dispatchEvent(new Event("gw:character-switch-claim"));
@@ -261,7 +271,7 @@ export function createCharacterSwitchController(options: Readonly<{
       }
     }
     const fresh = options.characters.state;
-    if (fresh.status !== "ready" || accountSignature(fresh) !== initialSignature) {
+    if (fresh.status !== "ready" || !sameAccount(initialKeys, fresh)) {
       fail("target-missing");
       return;
     }
@@ -282,7 +292,7 @@ export function createCharacterSwitchController(options: Readonly<{
     while (performance.now() < selectorDeadline) {
       const settledList = options.characters.state;
       if (!switching()) return;
-      if (settledList.status !== "ready" || accountSignature(settledList) !== initialSignature) {
+      if (settledList.status !== "ready" || !sameAccount(initialKeys, settledList)) {
         fail("target-missing");
         return;
       }
@@ -406,7 +416,7 @@ export function createCharacterSwitchController(options: Readonly<{
       state.sequence,
       targetName,
       characterKey,
-      accountSignature(state),
+      accountKeys(state),
       startsAtSelector,
     ).catch(() => {
       if (switching() && actionSequence === sequence) fail("state-unavailable");

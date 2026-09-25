@@ -83,6 +83,78 @@ describe("character switch controller", { concurrency: false }, () => {
     });
   });
 
+  for (const [label, afterLogout, expected] of [
+    [
+      "accepts a character created in game when Selector reloads the list",
+      "created",
+      { status: "complete", calls: [1, 2, 3] },
+    ],
+    [
+      "stops before selection when Selector loads a different account",
+      "foreign",
+      { status: "failed", calls: [1] },
+    ],
+  ] as const) {
+    it(label, async () => {
+      await withBrowserGlobals(async () => {
+        const memory = new WebAssembly.Memory({ initial: 1 });
+        const pointer = 64;
+        const calls: number[] = [];
+        const reloaded = (sequence: number, selectedIndex: number): CompanionCharacterListState => {
+          const base = ready(sequence, selectedIndex);
+          if (base.status !== "ready") throw new Error("expected a ready list");
+          const extra = Object.freeze({
+            ...base.characters[0]!,
+            name: "Private Gamma",
+            characterKey: "0000000000000003",
+          });
+          return Object.freeze({
+            ...base,
+            characters: Object.freeze(afterLogout === "created"
+              ? [...base.characters, extra]
+              : [extra, Object.freeze({ ...base.characters[1]!, characterKey: "0000000000000004" })]),
+          });
+        };
+        // The in-game list predates the new character; only logout reloads it.
+        let list = ready(2, 0);
+        let preGame: PreGameState = "unknown";
+        const controller = createCharacterSwitchController({
+          memory,
+          payloadPointer: pointer,
+          configure: () => 1,
+          enqueue(action) {
+            calls.push(action);
+            new DataView(memory.buffer).setUint32(pointer + 20, 1, true);
+            if (action === 1) { preGame = "character-select"; list = reloaded(4, 0); }
+            if (action === 2) list = reloaded(6, 1);
+            return 1;
+          },
+          characters: {
+            get state() { return list; },
+            subscribe() { return () => false; },
+            dispose() {},
+          },
+          controls: {
+            state: () => preGame,
+            switchContext: () => "outpost",
+            diagnosticMask: () => 0,
+          },
+          buildId: 7,
+          programId: 1,
+        });
+
+        controller.request("0000000000000002");
+        await new Promise((resolve) => setTimeout(resolve, 1_000));
+        assert.equal(controller.action.status, expected.status);
+        if (controller.action.status === "failed") {
+          assert.equal(controller.action.code, "target-missing");
+        }
+        assert.deepEqual(calls, expected.calls);
+        controller.dispose();
+      });
+    });
+  }
+
   it("enters the last entered character from the selector without a logout", async () => {
     await withBrowserGlobals(async () => {
       const memory = new WebAssembly.Memory({ initial: 1 });
