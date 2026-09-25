@@ -1,5 +1,6 @@
 /**
- * Owns bounded Cartography textures drawn by the native Mission and World Map.
+ * Owns bounded map textures drawn by the native Mission and World Map, and the
+ * read-only answer to whether the game routes the pointer to one of those maps.
  * Exact draw events retain the game's clipping, ordering and graphics context.
  */
 import {
@@ -99,7 +100,30 @@ const CHECKED = [
     "150d8921520d98fbfa28dc4faf5e2fe488a65c69832b13d7dcf489b2f07d7b60"
   ],
   ...NATIVE_RENDER_REFERENCE_FUNCTIONS,
+  // FrMouse owns the frame under the pointer: 6271 sets a state slot, 6285
+  // moves hover into UNDER_MOUSE, and 6284/6295 clear it on destroy or mode change.
+  [
+    6271,
+    "892ddf5dea9cc02118524bbba718a4ab13c4fd8a87b11ac06b812a0042b428e4"
+  ],
+  [
+    6284,
+    "0accbe055da29e2795b2863459de19c822cf60b8b4571c5c6d6d650ba5057209"
+  ],
+  [
+    6285,
+    "9af865306eea824efa28b02ad0a0b763a6d3a4b0004ec695004d0c7dbfe0d038"
+  ],
+  [
+    6295,
+    "5012cf591c2b1edee0fd41b642a3ce2407b3385d6f776ae6d3357b5b22a329f8"
+  ]
 ] as const;
+/** FrMouse's hovered frame pointer; frames keep their ID at 0xbc and parent relation at 0x128. */
+const UNDER_MOUSE = 5911100;
+const FRAME_ID = 0xbc;
+const FRAME_RELATION = 0x128;
+const MAX_POINTER_DEPTH = 16;
 const op = (...bytes: number[]) => Uint8Array.of(...bytes);
 const i = (value: number) => concat(op(0x41), sleb(value));
 const l = (index: number) => concat(op(0x20), uleb(index));
@@ -132,10 +156,12 @@ export function appendNativeMapGraphics(input: Uint8Array): Uint8Array {
   const extraBodies: Uint8Array[] = []; const extraExports: Uint8Array[] = [];
   const scalarNames = ["owner", "buffer", "draw", "area", "serial", "uploads", "draws", "created", "destroyed", "continent"];
   const first = module.functionImportCount + bodies.length;
+  // Later surfaces draw after earlier ones on the same map: each hook lands
+  // after the calls already inserted at that original offset.
+  const inserted = new Map<number, number>();
   for (const [surfaceIndex, surface] of NATIVE_MAP_GRAPHICS_SURFACES.entries()) {
     const base = globals.count + surfaceIndex * scalarNames.length;
     const isWorld = surface.startsWith("world");
-    const isHover = surface.endsWith("_hover");
     const g = (index: number) => concat(op(0x23), uleb(base + index));
     const put = (index: number) => concat(op(0x24), uleb(base + index));
     const increment = (index: number) => concat(g(index), i(1), op(0x6a), put(index));
@@ -212,13 +238,10 @@ export function appendNativeMapGraphics(input: Uint8Array): Uint8Array {
       ? [[16136, 939, concat(l(0), call(renderIndex))], [16125, 3, concat(l(0), call(destroyIndex))]] as const
       : [[16224, 830, concat(l(4), load(0), call(renderIndex))], [16170, 3, concat(l(0), call(destroyIndex))]] as const;
     for (const [index, originalOffset, bytes] of hooks) {
-      let offset = originalOffset;
-      if (isHover && (index === 16136 || index === 16224)) {
-        const earlierRender = first + (isWorld ? 4 : 0) + 2;
-        offset += (isWorld ? concat(l(4), load(0), call(earlierRender)) : concat(l(0), call(earlierRender))).length;
-      }
+      const offset = originalOffset + (inserted.get(index) ?? 0);
       const local = index - module.functionImportCount; const body = bodies[local]!;
       bodies[local] = concat(body.slice(0, offset), bytes, body.slice(offset));
+      inserted.set(index, (inserted.get(index) ?? 0) + bytes.length);
     }
     for (const [name, index] of [["hide", hideIndex], ["publish", publishIndex]] as const) {
       extraExports.push(concat(encodeName(`gwonmac_${surface}_graphics_${name}`), op(0), uleb(index)));
@@ -227,10 +250,25 @@ export function appendNativeMapGraphics(input: Uint8Array): Uint8Array {
       extraExports.push(concat(encodeName(`gwonmac_${surface}_graphics_${scalarNames[index]}`), op(3), uleb(base + index)));
     }
   }
-  const extraTypes = [op(0x60, 0, 0), op(0x60, 1, 0x7f, 0), op(0x60, 2, 0x7f, 0x7f, 1, 0x7f)];
+  // Answers 1 only when the hovered frame or one of its ancestors has the map's
+  // frame ID. Every frame read is bounded by memory; no game state is written.
+  const pointerIndex = first + extraBodies.length;
+  extraBodies.push(concat(op(1, 2, 0x7f),
+    l(0), i(0), op(0x4c, 0x04, 0x40), i(0), op(0x0f, 0x0b),
+    i(0), load(UNDER_MOUSE), s(1),
+    op(0x03, 0x40),
+      l(1), op(0x45), l(1), op(0xad), i(FRAME_RELATION + 4), op(0xad, 0x7c),
+      op(0x3f, 0, 0xad), op(0x42), sleb(65536), op(0x7e, 0x58, 0x45, 0x72, 0x04, 0x40), i(0), op(0x0f, 0x0b),
+      l(1), load(FRAME_ID), l(0), op(0x46, 0x04, 0x40), i(1), op(0x0f, 0x0b),
+      l(1), load(FRAME_RELATION), s(1), l(1), op(0x45, 0x04, 0x40), i(0), op(0x0f, 0x0b),
+      l(1), i(FRAME_RELATION), op(0x6b), s(1),
+      l(2), i(1), op(0x6a), s(2), l(2), i(MAX_POINTER_DEPTH), op(0x49, 0x0d, 0),
+    op(0x0b), i(0), op(0x0b)));
+  extraExports.push(concat(encodeName("gwonmac_map_pointer_within"), op(0), uleb(pointerIndex)));
+  const extraTypes = [op(0x60, 0, 0), op(0x60, 1, 0x7f, 0), op(0x60, 2, 0x7f, 0x7f, 1, 0x7f), op(0x60, 1, 0x7f, 1, 0x7f)];
   return concat(WASM_HEADER, ...sections.map((section) => encodeSection({id: section.id,
     body: section.id === 1 ? concat(uleb(signatures.count + extraTypes.length), signatures.entries, ...extraTypes)
-      : section.id === 3 ? encodeIndexVector([...types, ...NATIVE_MAP_GRAPHICS_SURFACES.flatMap(() => [0, 1, 1, 2].map((type) => signatures.count + type))])
+      : section.id === 3 ? encodeIndexVector([...types, ...NATIVE_MAP_GRAPHICS_SURFACES.flatMap(() => [0, 1, 1, 2].map((type) => signatures.count + type)), signatures.count + 3])
       : section.id === 6 ? concat(uleb(globals.count + scalarNames.length * NATIVE_MAP_GRAPHICS_SURFACES.length), globals.entries, ...Array.from({length: scalarNames.length * NATIVE_MAP_GRAPHICS_SURFACES.length}, () => concat(op(0x7f, 1), i(0), op(0x0b))))
       : section.id === 7 ? concat(uleb(exportVector.count + extraExports.length), exportVector.entries, ...extraExports)
       : section.id === 10 ? encodeCode([...bodies, ...extraBodies]) : section.body,
