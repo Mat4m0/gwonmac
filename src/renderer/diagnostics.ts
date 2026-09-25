@@ -38,6 +38,7 @@
     'audio.resumeFailed',
     'pointerLock.failed',
     'snapshot.readFailed',
+    'snapshot.cacheFailed',
     'graphics.programCacheSaturated',
     'clipboard.copied',
     'clipboard.writeFailed',

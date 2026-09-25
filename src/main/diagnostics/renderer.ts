@@ -220,6 +220,7 @@ export function recordRendererMetrics(
       case "audio.resumeFailed":
       case "pointerLock.failed":
       case "snapshot.readFailed":
+      case "snapshot.cacheFailed":
       case "graphics.programCacheSaturated":
       case "clipboard.copied":
       case "clipboard.writeFailed":
