@@ -9,6 +9,7 @@ import { normaliseCharacterName } from '../shared/player-text.js';
 import { findPeople, whisperPersonKey, whisperUnread, type Person, type WhisperSession } from '../shared/whisper-session.js';
 import { isCharacterName } from '../shared/whispers.js';
 import type { Hub } from './hub.js';
+import type { PartyInvite } from './party-invite.js';
 
 const toolEnabled = (setting: 'whispersEnabled' | 'travelPalette') =>
   !!window.gwToolsSettings?.().gwonmacTools && !!window.gwToolsSettings?.()[setting];
@@ -18,7 +19,8 @@ type FriendTravel = Readonly<{
   unavailable(): string | null;
   run(friend: TravelFriend, generation: number): Promise<void>;
 }>;
-export function createHubPeople(hub: Pick<Hub, 'attach' | 'showRows'>, session: WhisperSession, travel: FriendTravel | null) {
+export function createHubPeople(hub: Pick<Hub, 'attach' | 'showRows' | 'close' | 'notify'>, session: WhisperSession,
+  travel: FriendTravel | null, party: PartyInvite | null = null) {
   let friends: TravelFriends = { status: 'waiting', reason: 'unavailable' };
   let enabled = false;
   let detach: (() => void) | null = null;
@@ -56,6 +58,30 @@ export function createHubPeople(hub: Pick<Hub, 'attach' | 'showRows'>, session: 
           if (!selectedFriend || selectedFeed.status !== 'ready' || !travel) throw new Error('Friend travel is unavailable');
           await travel.run(selectedFriend, selectedFeed.generation);
         } });
+      if (party && toolEnabled('whispersEnabled')) {
+        // Invites address a character; an offline friend has only an account alias.
+        const target = friendKey ? friend?.character ?? '' : name;
+        const offline = !!friendKey && (!friend || friend.status === 'offline' || !friend.character);
+        const inviteReason = changed ? 'This friend changed or is unavailable. Select them again.'
+          : offline ? 'This friend is offline' : party.unavailable();
+        rows.push({ id: 'person:invite', title: 'Invite to party', detail: `Add ${target || name} to your party`, group: 'Actions', action: 'Invite',
+          ...(inviteReason ? { unavailable: inviteReason } : {}), run: async () => {
+            await party.invite(target);
+            hub.close(`Invited ${target}. Guild Wars shows the answer in chat.`);
+          } });
+        if (friendKey && friend && travel && toolEnabled('travelPalette')) {
+          const place = destination?.name ?? 'the outpost';
+          const travelInviteReason = reason ?? (offline ? 'This friend is offline' : party.travelUnavailable(friend));
+          rows.push({ id: 'person:travel-invite', title: 'Travel and invite', detail: `${place} · Any district, then invite ${target}`, group: 'Actions', action: 'Travel and invite',
+            ...(travelInviteReason ? { unavailable: travelInviteReason } : {}), run: async () => {
+              if (!selectedFriend || selectedFeed.status !== 'ready') throw new Error('Friend travel is unavailable');
+              const { invited } = await party.travelAndInvite(selectedFriend, selectedFeed.generation);
+              hub.close(`Travelling to ${place}. ${target} is invited on arrival.`);
+              invited.then(() => hub.notify(`Invited ${target}. If you landed in another district, Guild Wars cannot find them.`),
+                error => hub.notify(error instanceof Error ? error.message : 'The invite was not sent.'));
+            } });
+        }
+      }
       return rows;
     });
   }

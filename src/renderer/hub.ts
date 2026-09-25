@@ -451,7 +451,11 @@ export function createHub(parent: HTMLElement) {
   function close(message?: string) {
     suspended = null; epoch++; history.length = 0; resetView(); modal.close(); for (const source of sources.keys()) source.setVisible(false); scope = null;
     input.value = ''; restoreQuery = ''; report(''); selected = null;
-    if (typeof message === 'string' && message) { clearTimeout(receiptTimer); receipt.textContent = message; receipt.hidden = false; receiptTimer = setTimeout(() => { receipt.hidden = true; }, 8000); }
+    if (typeof message === 'string' && message) notify(message);
+  }
+  /** Shows a short outcome receipt without changing what Hub shows. */
+  function notify(message: string) {
+    clearTimeout(receiptTimer); receipt.textContent = message; receipt.hidden = false; receiptTimer = setTimeout(() => { receipt.hidden = true; }, 8000);
   }
   function suspend() {
     if (!root.open) return;
@@ -624,6 +628,7 @@ export function createHub(parent: HTMLElement) {
       paintNavigation();
       if (!content.contains(document.activeElement)) content.querySelector<HTMLElement>('input,select,button,[tabindex="0"]')?.focus();
     },
+    notify,
     browseBuilds() { const row = lookup('builds'); if (row && !row.unavailable) void row.run(); else report('Build Library is loading. Try again.'); },
     resetPosition: hubWindow.reset,
     dispose() { close(); disposeSearchEditing(); clearTimeout(receiptTimer); receipt.remove(); hubWindow.dispose(); disposeFrame(); for (const unsubscribe of sources.values()) unsubscribe(); sources.clear(); modal.dispose(); root.remove(); window.removeEventListener('blur', onBlur); window.removeEventListener('gw:tools-settings', onSettings); },
