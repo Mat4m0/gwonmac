@@ -83,6 +83,121 @@ describe("character switch controller", { concurrency: false }, () => {
     });
   });
 
+  for (const [label, afterLogout, expected] of [
+    [
+      "accepts a character created in game when Selector reloads the list",
+      "created",
+      { status: "complete", calls: [1, 2, 3] },
+    ],
+    [
+      "stops before selection when Selector loads a different account",
+      "foreign",
+      { status: "failed", calls: [1] },
+    ],
+  ] as const) {
+    it(label, async () => {
+      await withBrowserGlobals(async () => {
+        const memory = new WebAssembly.Memory({ initial: 1 });
+        const pointer = 64;
+        const calls: number[] = [];
+        const reloaded = (sequence: number, selectedIndex: number): CompanionCharacterListState => {
+          const base = ready(sequence, selectedIndex);
+          if (base.status !== "ready") throw new Error("expected a ready list");
+          const extra = Object.freeze({
+            ...base.characters[0]!,
+            name: "Private Gamma",
+            characterKey: "0000000000000003",
+          });
+          return Object.freeze({
+            ...base,
+            characters: Object.freeze(afterLogout === "created"
+              ? [...base.characters, extra]
+              : [extra, Object.freeze({ ...base.characters[1]!, characterKey: "0000000000000004" })]),
+          });
+        };
+        // The in-game list predates the new character; only logout reloads it.
+        let list = ready(2, 0);
+        let preGame: PreGameState = "unknown";
+        const controller = createCharacterSwitchController({
+          memory,
+          payloadPointer: pointer,
+          configure: () => 1,
+          enqueue(action) {
+            calls.push(action);
+            new DataView(memory.buffer).setUint32(pointer + 20, 1, true);
+            if (action === 1) { preGame = "character-select"; list = reloaded(4, 0); }
+            if (action === 2) list = reloaded(6, 1);
+            return 1;
+          },
+          characters: {
+            get state() { return list; },
+            subscribe() { return () => false; },
+            dispose() {},
+          },
+          controls: {
+            state: () => preGame,
+            switchContext: () => "outpost",
+            diagnosticMask: () => 0,
+          },
+          buildId: 7,
+          programId: 1,
+        });
+
+        controller.request("0000000000000002");
+        await new Promise((resolve) => setTimeout(resolve, 1_000));
+        assert.equal(controller.action.status, expected.status);
+        if (controller.action.status === "failed") {
+          assert.equal(controller.action.code, "target-missing");
+        }
+        assert.deepEqual(calls, expected.calls);
+        controller.dispose();
+      });
+    });
+  }
+
+  it("enters the last entered character from the selector without a logout", async () => {
+    await withBrowserGlobals(async () => {
+      const memory = new WebAssembly.Memory({ initial: 1 });
+      const pointer = 64;
+      const calls: number[] = [];
+      let context: CharacterSwitchContext = "character-select";
+      const controller = createCharacterSwitchController({
+        memory,
+        payloadPointer: pointer,
+        configure: () => 1,
+        enqueue(action) {
+          calls.push(action);
+          new DataView(memory.buffer).setUint32(pointer + 20, 1, true);
+          if (action === 3) context = "outpost";
+          return 1;
+        },
+        characters: {
+          state: ready(7, 0),
+          subscribe() { return () => false; },
+          dispose() {},
+        },
+        controls: {
+          state: () => "character-select",
+          switchContext: () => context,
+          diagnosticMask: () => 0,
+        },
+        buildId: 7,
+        programId: 1,
+      });
+
+      // Index 0 is the last entered character. At the selector it is not
+      // current, so selecting it must enter it rather than refuse.
+      controller.request("0000000000000001");
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      assert.equal(controller.action.status, "complete");
+      assert.deepEqual(calls, [2, 3]);
+      const diagnostics = controller.diagnostics();
+      if (diagnostics.version !== 7) throw new Error("expected live diagnostics");
+      assert.deepEqual(diagnostics.counters, { logout: 0, select: 1, play: 1 });
+      controller.dispose();
+    });
+  });
+
   it("resolves stable keys and refuses missing or current targets before a native action", async () => {
     await withBrowserGlobals(async () => {
       const memory = new WebAssembly.Memory({ initial: 1 });

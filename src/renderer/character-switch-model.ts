@@ -19,7 +19,6 @@ export type CharacterSwitchFailureCode =
   | "busy"
   | "active-pvp"
   | "game-loading"
-  | "character-select"
   | "state-unavailable"
   | "focus-lost"
   | "target-missing"
@@ -136,4 +135,17 @@ export interface CharacterSwitchSource {
   reset(): void;
   diagnostics(): CharacterSwitchDiagnostics;
   subscribe(listener: () => void): () => void;
+}
+
+/**
+ * At the Guild Wars selector, the list index names the last entered character.
+ * It is not an active character and must not block selecting it again.
+ */
+export function currentCharacterIndex(
+  source: Pick<CharacterSwitchSource, "characters" | "context">,
+): number | null {
+  const state = source.characters;
+  return state.status === "ready" && source.context !== "character-select"
+    ? state.selectedIndex
+    : null;
 }

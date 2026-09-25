@@ -11,6 +11,12 @@ test('search ranks exact names and prefixes before keywords without executing an
   assert.deepEqual(matchHubRows(rows, 'RANGER romi').map(row => row.id), ['prefix']);
   assert.equal(matchHubRows(rows, 'unknown').length, 0);
 });
+test('ordered search keeps source order after exact names', () => {
+  const rows = [row('third', 'Zed Mesmer'), row('first', 'Ada Monk'), row('exact', 'Mo')];
+  assert.deepEqual(matchHubRows(rows, 'm').map(row => row.id), ['first', 'exact', 'third']);
+  assert.deepEqual(matchHubRows(rows, 'm', true).map(row => row.id), ['third', 'first', 'exact']);
+  assert.deepEqual(matchHubRows(rows, 'mo', true).map(row => row.id), ['exact', 'first']);
+});
 test('Hub and Switch Character defaults preserve custom and cleared overrides', () => {
   assert.equal(hubShortcutAvailable({}), true);
   assert.equal(hubShortcutAvailable({ 'travel.open': { key: 'r', shift: false, option: false } }), false);

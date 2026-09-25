@@ -11,6 +11,7 @@ import type {
   CharacterSwitchSource,
   CharacterSwitchTransitionStage,
 } from "./character-switch-model.js";
+import { currentCharacterIndex } from "./character-switch-model.js";
 import {
   CHARACTER_SWITCH_ACTION_ABI,
   type CharacterSwitchActionKind,
@@ -80,8 +81,18 @@ const delay = (milliseconds = 25) => new Promise<void>((resolve) => {
 const elapsedBucket = (started: number): number =>
   Math.min(60_000, Math.floor((performance.now() - started) / 250) * 250);
 
-function accountSignature(state: Extract<CompanionCharacterListState, { status: "ready" }>): string {
-  return state.characters.map(({ characterKey }) => characterKey).sort().join("");
+type ReadyCharacterList = Extract<CompanionCharacterListState, { status: "ready" }>;
+
+const accountKeys = (state: ReadyCharacterList): readonly string[] =>
+  state.characters.map(({ characterKey }) => characterKey);
+
+/**
+ * A different account must stop the switch. A character created in game joins
+ * the list only when Selector reloads it, so a new key alone is not a change.
+ */
+function sameAccount(initialKeys: readonly string[], state: ReadyCharacterList): boolean {
+  const keys = new Set(accountKeys(state));
+  return initialKeys.every((key) => keys.has(key));
 }
 
 export interface CharacterSwitchController extends CharacterSwitchSource {
@@ -237,27 +248,30 @@ export function createCharacterSwitchController(options: Readonly<{
     snapshotSequence: number,
     targetName: string,
     targetKey: string,
-    initialSignature: string,
+    initialKeys: readonly string[],
+    startsAtSelector: boolean,
   ) => {
     window.dispatchEvent(new Event("gw:character-switch-claim"));
-    publish({ status: "switching", stage: "logout" }, "logout:queued");
-    const logout = await settle("logout", 2_000);
-    if (logout !== "sent") {
-      fail(logout === "refused" ? "logout-refused"
-          : logout === "invalid" ? "logout-invalid" : "logout-timeout");
-      return;
-    }
-    publish({ status: "switching", stage: "selector" }, "logout:sent");
-    const selectorSettled = await waitFor(() => {
-      const state = options.characters.state;
-      return state.status === "ready" && state.sequence !== snapshotSequence;
-    }, 3_000, 50);
-    if (!selectorSettled) {
-      fail("selector-timeout");
-      return;
+    if (!startsAtSelector) {
+      publish({ status: "switching", stage: "logout" }, "logout:queued");
+      const logout = await settle("logout", 2_000);
+      if (logout !== "sent") {
+        fail(logout === "refused" ? "logout-refused"
+            : logout === "invalid" ? "logout-invalid" : "logout-timeout");
+        return;
+      }
+      publish({ status: "switching", stage: "selector" }, "logout:sent");
+      const selectorSettled = await waitFor(() => {
+        const state = options.characters.state;
+        return state.status === "ready" && state.sequence !== snapshotSequence;
+      }, 3_000, 50);
+      if (!selectorSettled) {
+        fail("selector-timeout");
+        return;
+      }
     }
     const fresh = options.characters.state;
-    if (fresh.status !== "ready" || accountSignature(fresh) !== initialSignature) {
+    if (fresh.status !== "ready" || !sameAccount(initialKeys, fresh)) {
       fail("target-missing");
       return;
     }
@@ -278,7 +292,7 @@ export function createCharacterSwitchController(options: Readonly<{
     while (performance.now() < selectorDeadline) {
       const settledList = options.characters.state;
       if (!switching()) return;
-      if (settledList.status !== "ready" || accountSignature(settledList) !== initialSignature) {
+      if (settledList.status !== "ready" || !sameAccount(initialKeys, settledList)) {
         fail("target-missing");
         return;
       }
@@ -341,11 +355,14 @@ export function createCharacterSwitchController(options: Readonly<{
       .filter((index) => index >= 0);
     if (matches.length !== 1) { fail("target-missing", true); return; }
     const targetIndex = matches[0]!;
-    if (state.selectedIndex === targetIndex) { fail("current-target"); return; }
     const context = options.controls.switchContext();
+    const startsAtSelector = context === "character-select";
+    if (currentCharacterIndex({ characters: state, context }) === targetIndex) {
+      fail("current-target");
+      return;
+    }
     if (context === "pvp-explorable") { fail("active-pvp"); return; }
     if (context === "loading") { fail("game-loading", true); return; }
-    if (context === "character-select") { fail("character-select"); return; }
     if (context === "unavailable") { fail("state-unavailable", true); return; }
     if (context === "pve-explorable" && !confirmedExplorable) {
       pendingCharacterKey = characterKey;
@@ -363,22 +380,31 @@ export function createCharacterSwitchController(options: Readonly<{
     requestedListIndex = targetIndex;
     pendingCharacterKey = null;
     const drainContext = options.controls.switchContext();
-    if (drainContext !== "outpost"
-      && !(confirmedExplorable && drainContext === "pve-explorable")) {
-      fail(drainContext === "pvp-explorable" ? "active-pvp"
-        : drainContext === "loading" ? "game-loading" : "logout-refused");
+    const drainContextAccepted = startsAtSelector
+      ? drainContext === "character-select"
+      : drainContext === "outpost"
+        || (confirmedExplorable && drainContext === "pve-explorable");
+    if (!drainContextAccepted) {
+      fail(startsAtSelector ? "selector-context-invalid"
+        : drainContext === "pvp-explorable" ? "active-pvp"
+          : drainContext === "loading" ? "game-loading" : "logout-refused");
       return;
     }
-    if (!validPayload()) { fail("logout-invalid"); return; }
+    const invalidCode = startsAtSelector ? "selector-invalid" : "logout-invalid";
+    if (!validPayload()) { fail(invalidCode); return; }
     // Focus authorizes this one bounded transaction, not each later stage.
     // Claim ownership before enabling or enqueueing; blur cannot revoke it.
-    action = Object.freeze({ status: "switching", stage: "logout" });
-    let logout: NativeEnqueue;
+    // At the selector, the transaction starts at selection without a logout.
+    action = Object.freeze({
+      status: "switching",
+      stage: startsAtSelector ? "selector" : "logout",
+    });
+    let logout: NativeEnqueue = "queued";
     try {
       options.configure(options.payloadPointer, 1);
-      logout = queue("logout", 0);
+      if (!startsAtSelector) logout = queue("logout", 0);
     } catch {
-      fail("logout-invalid");
+      fail(invalidCode);
       return;
     }
     if (logout !== "queued") {
@@ -390,7 +416,8 @@ export function createCharacterSwitchController(options: Readonly<{
       state.sequence,
       targetName,
       characterKey,
-      accountSignature(state),
+      accountKeys(state),
+      startsAtSelector,
     ).catch(() => {
       if (switching() && actionSequence === sequence) fail("state-unavailable");
     });

@@ -322,6 +322,16 @@ describe("Companion kernel", () => {
     assert.notEqual(ready.characters[0]?.characterKey, "0000000000000000");
     assert.notEqual(ready.characters[0]?.characterKey, ready.characters[1]?.characterKey);
 
+    // A newly created character is selected before the account array reloads.
+    writeUtf16(kernel.view, ADDRESSES.selectedCharacterName, "Gamma");
+    kernel.tick();
+    const created = readCompanionCharacterList(kernel.memory.buffer, ADDRESSES.characterList);
+    assert.equal(created.status, "ready");
+    if (created.status !== "ready") return;
+    assert.equal(created.selectedIndex, null);
+    assert.deepEqual(created.characters.map(({ name }) => name), ["Alpha", "Beta"]);
+    writeUtf16(kernel.view, ADDRESSES.selectedCharacterName, "Beta");
+
     for (let index = 0; index < 16; index += 1) {
       kernel.view.setUint8(
         ADDRESSES.characterRecordBuffer + 0x84 + 8 + index,
