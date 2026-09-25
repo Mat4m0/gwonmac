@@ -58,6 +58,11 @@ describe("launcher presentation state", () => {
     assert.deepEqual(parseLauncherSettingsPatch({ cartographyCompassGridEnabled: true }), { cartographyCompassGridEnabled: true });
     assert.throws(() => parseLauncherSettingsPatch({ cartographyCompassGridEnabled: 1 }));
   });
+  it("validates the Elite Skills settings", () => {
+    assert.deepEqual(parseLauncherSettingsPatch({ eliteSkillsEnabled: false, eliteMissionMapMarkers: "all" }), { eliteSkillsEnabled: false, eliteMissionMapMarkers: "all" });
+    assert.throws(() => parseLauncherSettingsPatch({ eliteSkillsEnabled: 0 }));
+    assert.throws(() => parseLauncherSettingsPatch({ eliteMissionMapMarkers: "boss" }));
+  });
   it("validates Compass range visibility and opacity settings", () => {
     const patch = {
       compassRangeIndicatorsEnabled: true,
