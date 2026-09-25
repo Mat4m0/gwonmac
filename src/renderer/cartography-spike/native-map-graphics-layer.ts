@@ -5,7 +5,8 @@
 import { disposeCartographyResources } from "../cartography-lifecycle.js";
 import { NATIVE_PUBLISH_BUSY } from "../../shared/native-publish.js";
 import { CARTOGRAPHY_MAP_GRAPHICS_SURFACES, NATIVE_MAP_GRAPHICS_HEADER_BYTES, NATIVE_MAP_GRAPHICS_MAGIC,
-  NATIVE_MAP_GRAPHICS_MAX_SIZE, type NativeMapGraphicsSurface } from "../../shared/native-map-graphics.js";
+  NATIVE_MAP_GRAPHICS_MAX_SIZE, NATIVE_MAP_QUAD_BYTES, NATIVE_MAP_QUADS_MAGIC, NATIVE_MAP_QUADS_MAX,
+  type NativeMapGraphicsSurface } from "../../shared/native-map-graphics.js";
 import type { MapUnitProjection } from "./map-projections.js";
 
 export type MapPainterImage = Readonly<{ canvas: HTMLCanvasElement; version: string }>;
@@ -14,6 +15,14 @@ export type NativeMapGraphicsLayer = Readonly<{
   update(surface: NativeMapGraphicsSurface, input: Readonly<{
     area: number; continent: number; projection: MapUnitProjection;
     images: readonly (MapPainterImage | null)[];
+  }>): void;
+  /**
+   * Draws one world rectangle per quad from an atlas. `quads` holds eight
+   * floats per quad: x0, y0, x1, y1 in world units, then u0, v0, u1, v1. The
+   * atlas must already have power-of-two edges; it is never resampled.
+   */
+  updateQuads(surface: NativeMapGraphicsSurface, input: Readonly<{
+    area: number; continent: number; atlas: MapPainterImage; quads: Float32Array; version: string;
   }>): void;
   hide(surface: NativeMapGraphicsSurface): void;
   dispose(): void;
@@ -65,6 +74,36 @@ export function createNativeMapGraphicsLayer(exports: WebAssembly.Exports, docum
     return {mission: read("mission"), world: read("world"), mission_hover: read("mission_hover"), world_hover: read("world_hover"), ranges: read("ranges")};
   };
   if (view && cartography) view.gwNativeMapGraphicsStats = stats;
+  type Target = NonNullable<typeof surfaces[number]>;
+  /** Copies one payload into client memory, publishes it, and always releases the copy. */
+  const send = (target: Target, surface: NativeMapGraphicsSurface, key: string, magic: number, area: number, continent: number,
+    count: number, floats: Float32Array, floatOffset: number, pixels: Uint8ClampedArray, width: number, height: number) => {
+    if (!(memory instanceof WebAssembly.Memory) || typeof malloc !== "function" || typeof free !== "function") { withdraw(surface); return; }
+    const pixelsAt = magic === NATIVE_MAP_QUADS_MAGIC ? NATIVE_MAP_GRAPHICS_HEADER_BYTES + count * NATIVE_MAP_QUAD_BYTES : NATIVE_MAP_GRAPHICS_HEADER_BYTES;
+    const bytes = pixelsAt + pixels.length;
+    // The certified wasm32 allocator returns signed i32 bits, including addresses above 2 GiB.
+    const region = Number(malloc(bytes)) >>> 0;
+    if (!Number.isSafeInteger(region) || region <= 0 || region % 4 !== 0 || region + bytes > memory.buffer.byteLength) {
+      if (Number.isSafeInteger(region) && region > 0) free(region);
+      withdraw(surface); return;
+    }
+    try {
+      target.nextSerial = target.nextSerial >= 0x7ffffffe ? 1 : target.nextSerial + 1;
+      const header = new DataView(memory.buffer, region, pixelsAt);
+      [magic, bytes, area, width, height, target.nextSerial, continent, count]
+        .forEach((value, index) => header.setUint32(index * 4, value, true));
+      floats.forEach((value, index) => header.setFloat32(floatOffset + index * 4, value, true));
+      const output = new Uint8Array(memory.buffer, region + pixelsAt, pixels.length);
+      for (let at = 0; at < pixels.length; at += 4) {
+        output[at] = pixels[at + 2]!; output[at + 1] = pixels[at + 1]!;
+        output[at + 2] = pixels[at]!; output[at + 3] = pixels[at + 3]!;
+      }
+      const result = target.publish(region, bytes);
+      // Busy: the native renderer still holds the texture. Keep it and retry.
+      if (result === 1) target.version = key;
+      else if (result !== NATIVE_PUBLISH_BUSY) withdraw(surface);
+    } finally { free(region); }
+  };
   return Object.freeze({
     available: surface => !disposed && memory instanceof WebAssembly.Memory
       && typeof malloc === "function" && typeof free === "function"
@@ -90,30 +129,25 @@ export function createNativeMapGraphicsLayer(exports: WebAssembly.Exports, docum
       if (!context) { withdraw(surface); return; }
       context.clearRect(0, 0, width, height);
       for (const { canvas } of images) context.drawImage(canvas, 0, 0, width, height);
-      const pixels = context.getImageData(0, 0, width, height).data;
-      const bytes = NATIVE_MAP_GRAPHICS_HEADER_BYTES + pixels.length;
-      // The certified wasm32 allocator returns signed i32 bits, including addresses above 2 GiB.
-      const region = Number(malloc(bytes)) >>> 0;
-      if (!Number.isSafeInteger(region) || region <= 0 || region % 4 !== 0 || region + bytes > memory.buffer.byteLength) {
-        if (Number.isSafeInteger(region) && region > 0) free(region);
-        withdraw(surface); return;
-      }
-      try {
-        target.nextSerial = target.nextSerial >= 0x7ffffffe ? 1 : target.nextSerial + 1;
-        const header = new DataView(memory.buffer, region, NATIVE_MAP_GRAPHICS_HEADER_BYTES);
-        [NATIVE_MAP_GRAPHICS_MAGIC, bytes, input.area, width, height, target.nextSerial, input.continent, 0]
-          .forEach((value, index) => header.setUint32(index * 4, value, true));
-        corners.forEach((value, index) => header.setFloat32(32 + index * 4, value, true));
-        const output = new Uint8Array(memory.buffer, region + NATIVE_MAP_GRAPHICS_HEADER_BYTES, pixels.length);
-        for (let at = 0; at < pixels.length; at += 4) {
-          output[at] = pixels[at + 2]!; output[at + 1] = pixels[at + 1]!;
-          output[at + 2] = pixels[at]!; output[at + 3] = pixels[at + 3]!;
-        }
-        const result = target.publish(region, bytes);
-        // Busy: the native renderer still holds the texture. Keep it and retry.
-        if (result === 1) target.version = key;
-        else if (result !== NATIVE_PUBLISH_BUSY) withdraw(surface);
-      } finally { free(region); }
+      send(target, surface, key, NATIVE_MAP_GRAPHICS_MAGIC, input.area, input.continent, 0,
+        Float32Array.from(corners), 32, context.getImageData(0, 0, width, height).data, width, height);
+    },
+    updateQuads(surface, input) {
+      const target = surfaces.find((item) => item?.name === surface);
+      if (disposed || !target) return;
+      const count = input.quads.length / 8;
+      const { canvas } = input.atlas;
+      const edge = (size: number) => size >= 64 && size <= NATIVE_MAP_GRAPHICS_MAX_SIZE && Number.isInteger(Math.log2(size));
+      if (!Number.isInteger(input.area) || input.area <= 0 || input.area > 0x7fffffff
+        || !Number.isInteger(count) || count < 1 || count > NATIVE_MAP_QUADS_MAX
+        || !input.quads.every((value) => Number.isFinite(value) && Math.abs(value) <= 1000000)
+        || !edge(canvas.width) || !edge(canvas.height)) { withdraw(surface); return; }
+      const key = [input.area, input.continent, input.atlas.version, input.version].join(":");
+      if (key === target.version && Number(target.serial.value) === target.nextSerial) return;
+      const context = canvas.getContext("2d");
+      if (!context) { withdraw(surface); return; }
+      send(target, surface, key, NATIVE_MAP_QUADS_MAGIC, input.area, input.continent, count,
+        input.quads, NATIVE_MAP_GRAPHICS_HEADER_BYTES, context.getImageData(0, 0, canvas.width, canvas.height).data, canvas.width, canvas.height);
     },
     hide: withdraw,
     dispose() {

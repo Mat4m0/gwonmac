@@ -98,9 +98,10 @@ area share one marker; distant positions remain separate.
 
 Markers draw inside the native map draw event, after Cartography. Game panels,
 tooltips, map fades, and map clipping cover them exactly like the map's own
-icons. Their texture is anchored in world-map units, so native pan and zoom move
-it at the game's frame rate. Only a changed marker set, icon, hover, or zoom
-step repaints it. A target outside the map view moves to the map edge with an
+icons. Each distinct marker look is painted once into an atlas at the game's
+framebuffer resolution, and each marker is one native world rectangle that
+samples it, so markers stay sharp at every zoom. A pan changes nothing; a zoom
+step moves only the rectangles, and only a changed look re-uploads the atlas. A target outside the map view moves to the map edge with an
 arrow toward its position.
 
 Guild Wars keeps receiving every pointer move. The host asks the game which
