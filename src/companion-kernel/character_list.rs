@@ -209,17 +209,13 @@ pub(crate) unsafe fn tick(layout: Layout) {
         unsafe { publish(0, 0, u32::MAX, &empty) };
         return;
     };
-    let selected_index = if selected_name.first() == Some(&0) {
-        u32::MAX
-    } else {
-        let Some(index) = records.iter().take(count as usize)
-            .position(|record| names_equal(&record.name, &selected_name))
-        else {
-            unsafe { publish(0, 0, u32::MAX, &empty) };
-            return;
-        };
-        index as u32
-    };
+    // A character created in game is selected before Guild Wars reloads this
+    // array on the next Selector visit. Publish the account without a current
+    // character instead of withholding every other character until then.
+    let selected_index = records.iter().take(count as usize)
+        .position(|record| selected_name.first() != Some(&0)
+            && names_equal(&record.name, &selected_name))
+        .map_or(u32::MAX, |index| index as u32);
     let flags = if unsafe { STABLE_READS } >= 3 {
         FLAG_CHARACTER_LIST_READY
     } else {
