@@ -636,6 +636,10 @@ test.describe("diagnostics", () => {
     const fixture = await launchOffline("gw-crash-panel-e2e-");
     try {
       const { app, page } = fixture;
+      // A crash usually arrives after the game has started and the loading
+      // surface has been dismissed.
+      await page.evaluate(() => window.gwLoading.done());
+      await expect(page.locator("#loading")).toBeHidden();
       await page.evaluate(() => window.gwLoading.failCrash(1));
       await expect(page.locator("#loading-label")).toBeVisible();
       await expect(page.locator("#loading-retry, #loading-report")).toHaveCount(0);

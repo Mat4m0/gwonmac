@@ -35,6 +35,9 @@ window.gwLoading = (function (): LoadingController {
   const showFailure = (text: string, explanation = ''): void => {
     root.classList.add('failed');
     root.classList.remove('gone');
+    // done() hid the element outright once the game started; a crash after
+    // that point must still reach the player.
+    root.style.display = '';
     label.textContent = text;
     detail.textContent = explanation;
   };
@@ -50,7 +53,9 @@ window.gwLoading = (function (): LoadingController {
     done() {
       if (root.classList.contains('gone')) return;
       root.classList.add('gone');
-      setTimeout(() => { root.style.display = 'none'; }, 220);
+      setTimeout(() => {
+        if (root.classList.contains('gone')) root.style.display = 'none';
+      }, 220);
       required('canvas').focus();
     },
     async waitForClient() { return true; },

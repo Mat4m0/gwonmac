@@ -735,6 +735,7 @@ Module = {
       instance: () => gameWasmInstance,
       onExit: () => Module.onExit(0),
       onFailure: (error) => Module.onAbort(error),
+      aborted: () => crashRecorded,
       log,
     });
     host.installTemplateSaveCompatibility({
