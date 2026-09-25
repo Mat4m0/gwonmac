@@ -2,8 +2,9 @@
  * Owns the disposable whisper view derived from this game's observed chat log.
  * Unread and recent contacts are derived from these records; nothing is stored.
  */
-import { whisperLine, type ObservedChatEvent, type ObservedWhisper } from "./whispers.js";
-import type { TravelFriends } from "./friends.js";
+import { isCharacterName, whisperLine, type ObservedChatEvent, type ObservedWhisper } from "./whispers.js";
+import type { TravelFriend, TravelFriends } from "./friends.js";
+import { normaliseCharacterName } from "./player-text.js";
 
 export type WhisperSound = "off" | "background" | "every";
 export type WhisperConversation = Readonly<{
@@ -15,13 +16,16 @@ type RecentPerson = Readonly<{ key: string; name: string; activity: number }>;
 export type WhisperSessionState = Readonly<{
   conversations: readonly WhisperConversation[]; recent: readonly RecentPerson[];
   participants: readonly RecentPerson[];
+  /** Session-only switches for the people sources that the player did not start. */
+  suggest: Readonly<{ friends: boolean; chat: boolean }>;
   friends: TravelFriends; selected: string | null; visible: boolean;
   available: boolean; sound: WhisperSound; backgroundOpacity: number; missed: number;
 }>;
-export const whisperPersonKey = (name: string) => name.trim().toLocaleLowerCase("en-US");
+export const whisperPersonKey = (name: string) => normaliseCharacterName(name).toLocaleLowerCase("en-US");
 export const whisperUnread = (conversation: WhisperConversation) => conversation.messages
   .filter(message => message.direction === "incoming" && message.id > conversation.readThrough).length;
 const initial = (): WhisperSessionState => ({ conversations: [], recent: [], participants: [],
+  suggest: { friends: true, chat: true },
   friends: { status: "waiting", reason: "unavailable" }, selected: null,
   visible: false, available: false, sound: "background", backgroundOpacity: 100, missed: 0 });
 const MAX_CONVERSATIONS = 32;
@@ -46,16 +50,17 @@ export function createWhisperSession(send: (recipient: string, message: string) 
     const existing = state.conversations.find(c => c.key === key);
     if (existing) return existing;
     if (state.conversations.length >= MAX_CONVERSATIONS) return null;
-    const conversation: WhisperConversation = { key, name: name.trim(), messages: [], draft: "",
+    const conversation: WhisperConversation = { key, name: normaliseCharacterName(name), messages: [], draft: "",
       readThrough: 0, muted: false, sent: false, sending: false, error: "", activity: 0, trimmed: false };
     publish({ conversations: [...state.conversations, conversation], recent: state.recent.filter(p => p.key !== key) });
     return conversation;
   };
   const rememberParticipant = (name: string, activity: number) => {
-    try { whisperLine(name, "x"); } catch { return; }
+    name = normaliseCharacterName(name);
+    if (!isCharacterName(name)) return;
     const key = whisperPersonKey(name);
     publish({ participants: [
-      { key, name: name.trim(), activity },
+      { key, name, activity },
       ...state.participants.filter(person => person.key !== key),
     ].slice(0, MAX_PARTICIPANTS) });
   };
@@ -68,6 +73,9 @@ export function createWhisperSession(send: (recipient: string, message: string) 
     setAvailable(available: boolean) { if (available !== state.available) publish({ available }); },
     setVisible(visible: boolean) { publish({ visible }); },
     setSound(sound: WhisperSound) { publish({ sound }); },
+    setSuggest(source: keyof WhisperSessionState["suggest"], enabled: boolean) {
+      publish({ suggest: { ...state.suggest, [source]: enabled } });
+    },
     setBackgroundOpacity(backgroundOpacity: number) {
       if (Number.isInteger(backgroundOpacity) && backgroundOpacity >= 15 && backgroundOpacity <= 100) {
         publish({ backgroundOpacity });
@@ -82,7 +90,8 @@ export function createWhisperSession(send: (recipient: string, message: string) 
       if (state.recent.some(p => keys.has(p.key))) publish({ recent: state.recent.filter(p => !keys.has(p.key)) });
     },
     open(name: string, options: { visible?: boolean } = {}) {
-      whisperLine(name.trim(), "x");
+      name = normaliseCharacterName(name);
+      whisperLine(name, "x");
       const conversation = ensure(name);
       if (!conversation) throw new Error("Close a conversation before starting another (32 open).");
       publish({ selected: conversation.key, visible: options.visible ?? true });
@@ -155,3 +164,53 @@ export function createWhisperSession(send: (recipient: string, message: string) 
   return api;
 }
 export type WhisperSession = ReturnType<typeof createWhisperSession>;
+
+export type PersonSource = "friend" | "conversation" | "recent" | "chat";
+export type Person = Readonly<{
+  key: string; name: string; source: PersonSource; activity: number;
+  /** The typed text names this person exactly, ignoring case and spacing. */
+  exact: boolean;
+  friend?: TravelFriend; conversation?: WhisperConversation;
+}>;
+const SOURCE_ORDER: readonly PersonSource[] = ["friend", "conversation", "recent", "chat"];
+
+/** 0 exact, 1 name prefix, 2 word prefix, 3 every word prefixed; null otherwise. */
+function nameRank(name: string, query: string): number | null {
+  if (name === query) return 0;
+  if (name.startsWith(query)) return 1;
+  const words = name.split(" ");
+  if (words.some(word => word.startsWith(query))) return 2;
+  return query.split(" ").every(token => words.some(word => word.startsWith(token))) ? 3 : null;
+}
+
+/**
+ * Everyone this session knows by name, ranked for one typed query.
+ * Hub and the Messenger picker share it, so both find the same people in the same order.
+ */
+export function findPeople(state: WhisperSessionState, query: string,
+  friends: TravelFriends = state.friends): readonly Person[] {
+  const term = whisperPersonKey(query);
+  if (!term) return [];
+  const people = new Map<string, Person & { rank: number }>();
+  const add = (name: string, source: PersonSource, activity: number, extra: Partial<Person> = {}, alias = "") => {
+    const key = whisperPersonKey(name);
+    if (!key || people.has(key)) return;
+    const ranks = [name, alias].filter(Boolean)
+      .map(value => nameRank(whisperPersonKey(value), term)).filter(rank => rank !== null);
+    if (!ranks.length) return;
+    const rank = Math.min(...ranks);
+    people.set(key, { key, name: normaliseCharacterName(name), source, activity, exact: rank === 0, rank, ...extra });
+  };
+  if (state.suggest.friends && friends.status === "ready") for (const friend of friends.friends) {
+    add(friend.character || friend.alias, "friend", 0, { friend }, friend.alias);
+  }
+  for (const conversation of state.conversations) {
+    add(conversation.name, "conversation", conversation.activity, { conversation });
+  }
+  for (const person of state.recent) add(person.name, "recent", person.activity);
+  if (state.suggest.chat) for (const person of state.participants) add(person.name, "chat", person.activity);
+  return [...people.values()]
+    .sort((a, b) => a.rank - b.rank || SOURCE_ORDER.indexOf(a.source) - SOURCE_ORDER.indexOf(b.source)
+      || b.activity - a.activity || a.name.localeCompare(b.name))
+    .map(({ rank: _rank, ...person }) => person);
+}

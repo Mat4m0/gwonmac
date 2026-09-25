@@ -359,10 +359,14 @@ const asGameTextEditRequest = one((value: unknown): GameTextEditRequest => {
     return { command: request.command, text: request.text };
   }
   if (
-    (request.command === "paste" || request.command === "selectAll")
-    && Object.keys(request).length === 1
+    request.command === "paste"
+    && Object.keys(request).length === 2
+    && (request.field === "text" || request.field === "secret")
   ) {
-    return { command: request.command };
+    return { command: "paste", field: request.field };
+  }
+  if (request.command === "selectAll" && Object.keys(request).length === 1) {
+    return { command: "selectAll" };
   }
   throw new ValidationError("invalid game text edit request");
 });

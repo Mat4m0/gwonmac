@@ -65,8 +65,14 @@ the standalone fixture retains floating-window placement and opacity controls.
   event used by public player chat. It observes names from Alliance, Allies,
   All, Guild, Group, Trade, and Whisper chat. Non-whisper message bodies are
   discarded in the native ring; the picker retains only the 50 most recent valid
-  character names for session-only prefix and word completion. Friends and Chat
-  are the only completion sources and either can be switched off in the picker.
+  character names for session-only prefix and word completion.
+- One `findPeople` search owns name matching for the Messenger picker and Hub.
+  It returns friends, open conversations, recent people and chat names once
+  each, ranked exact name, name prefix, word prefix, then every word prefixed.
+  Friends and Chat can be switched off in the picker; the switches are
+  session-only and apply to Hub too. Hub always offers an exact typed name that
+  is not already a known person. Names ignore case, repeated spaces, typographic
+  spaces and invisible format characters.
 - Sound offers Off, Background and Every incoming whisper. Muting a person
   suppresses sound while retaining unread badges. There are no notification cards.
 - Unsupported client facts withdraw the optional feature. Original Guild Wars

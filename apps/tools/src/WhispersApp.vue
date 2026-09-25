@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
-import { whisperPersonKey, whisperUnread, type WhisperSession, type WhisperSound } from "../../../src/shared/whisper-session";
+import { findPeople, whisperPersonKey, whisperUnread, type Person, type WhisperSession, type WhisperSound } from "../../../src/shared/whisper-session";
 import { TRAVEL_DESTINATIONS } from "../../../src/shared/travel-destinations";
-import { hubMatch } from "../../../src/shared/hub";
 import { WHISPER_LINE_UNITS, WHISPER_MESSAGE_UNITS } from "../../../src/shared/whispers";
 import type { FriendPresence, TravelFriend } from "../../../src/shared/friends";
 import { useClassicFrame } from "./ui/use-classic-frame";
@@ -35,8 +34,8 @@ const windowStyle = computed(() => ({
 }));
 const search = ref("");
 const suggestionIndex = ref(-1);
-const suggestFriends = ref(true);
-const suggestChat = ref(true);
+const suggestFriends = computed(() => state.value.suggest.friends);
+const suggestChat = computed(() => state.value.suggest.chat);
 const pickerError = ref("");
 const closing = ref<string | null>(null);
 const optionsMenu = ref<HTMLDetailsElement | null>(null);
@@ -109,36 +108,10 @@ const friends = computed(() => state.value.friends.status === "ready"
   ? state.value.friends.friends.filter(f => (f.status === "online" || f.status === "away" || f.status === "do-not-disturb") && !openKeys.value.has(whisperPersonKey(f.character || f.alias))
     && `${f.character} ${f.alias}`.toLocaleLowerCase().includes(search.value.toLocaleLowerCase())) : []);
 const recent = computed(() => state.value.recent.filter(p => p.name.toLocaleLowerCase().includes(search.value.toLocaleLowerCase())));
-type Suggestion = Readonly<{ key: string; name: string; source: "friend" | "chat"; detail: string; searchable: string; priority: number; activity: number }>;
-const suggestions = computed(() => {
-  const query = search.value.trim().toLocaleLowerCase("en-US");
-  if (!query) return [];
-  const people = new Map<string, Suggestion>();
-  const add = (person: Suggestion) => { if (!people.has(person.key)) people.set(person.key, person); };
-  if (suggestFriends.value) {
-    for (const friend of observedFriends.value) {
-      const name = friend.character || friend.alias;
-      add({ key: whisperPersonKey(name), name, source: "friend", detail: `Friend · ${presenceLabel(friend.status)}`,
-        searchable: `${name} ${friend.alias}`, priority: 0, activity: 0 });
-    }
-  }
-  if (suggestChat.value) {
-    for (const person of state.value.participants) add({
-      ...person, source: "chat", detail: "Chat", searchable: person.name, priority: 1,
-    });
-  }
-  const matchRank = (person: Suggestion) => {
-    const value = person.searchable.toLocaleLowerCase("en-US");
-    if (value === query) return 0;
-    if (value.startsWith(query)) return 1;
-    if (value.split(/\s+/u).some(word => word.startsWith(query))) return 2;
-    return hubMatch(value, query) !== null ? 3 : 4;
-  };
-  return [...people.values()].filter(person => matchRank(person) < 4)
-    .sort((a, b) => matchRank(a) - matchRank(b) || a.priority - b.priority
-      || b.activity - a.activity || a.name.localeCompare(b.name))
-    .slice(0, 8);
-});
+const suggestionDetail = (person: Person) => person.friend ? `Friend · ${presenceLabel(person.friend.status)}`
+  : person.source === "conversation" ? "Conversation" : person.source === "recent" ? "Recent" : "Seen in chat";
+const suggestions = computed(() => findPeople(state.value, search.value).slice(0, 8)
+  .map(person => ({ ...person, detail: suggestionDetail(person) })));
 const maxLength = computed(() => Math.min(WHISPER_MESSAGE_UNITS, WHISPER_LINE_UNITS - (selected.value?.name.length ?? 0) - 2));
 function open(name: string) {
   try {
@@ -406,12 +379,12 @@ useClassicFrame(panel);
     </header>
     <div class="whisper-layout">
     <div v-show="!selected" class="ui-scroll whisper-picker" :data-searching="Boolean(search.trim())">
-      <form class="ui-input-group whisper-search" @submit.prevent="submitSearch"><label class="whisper-sr-only" for="whisper-person">Character name</label><input id="whisper-person" v-model="search" maxlength="20" placeholder="Find a friend…" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="whisper-suggestions" :aria-expanded="Boolean(search.trim() && suggestions.length)" :aria-activedescendant="suggestionIndex >= 0 ? `whisper-suggestion-${suggestionIndex}` : undefined" @input="searchInput" @keydown="searchKeydown"/><button data-variant="primary" class="ui-button whisper-control" type="submit" :disabled="!search.trim()" aria-label="Whisper"><span class="whisper-compose-label">Whisper</span><svg class="whisper-compose-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5 4 4M4 20l4-1L21 6l-4-4L4 15v5Zm7-16H4v7"/></svg></button></form>
+      <form class="ui-input-group whisper-search" @submit.prevent="submitSearch"><label class="whisper-sr-only" for="whisper-person">Character name</label><input id="whisper-person" v-model="search" placeholder="Find a friend…" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="whisper-suggestions" :aria-expanded="Boolean(search.trim() && suggestions.length)" :aria-activedescendant="suggestionIndex >= 0 ? `whisper-suggestion-${suggestionIndex}` : undefined" @input="searchInput" @keydown="searchKeydown"/><button data-variant="primary" class="ui-button whisper-control" type="submit" :disabled="!search.trim()" aria-label="Whisper"><span class="whisper-compose-label">Whisper</span><svg class="whisper-compose-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5 4 4M4 20l4-1L21 6l-4-4L4 15v5Zm7-16H4v7"/></svg></button></form>
       <p v-if="pickerError" class="whisper-notice" role="alert">{{ pickerError }}</p>
       <div class="whisper-source-filters" role="group" aria-label="Suggestion sources">
         <span>Suggest from</span>
-        <button data-variant="quiet" class="ui-button whisper-control whisper-source-toggle" type="button" :aria-pressed="suggestFriends" @click="suggestFriends = !suggestFriends; suggestionIndex = -1">Friends</button>
-        <button data-variant="quiet" class="ui-button whisper-control whisper-source-toggle" type="button" :aria-pressed="suggestChat" @click="suggestChat = !suggestChat; suggestionIndex = -1">Chat</button>
+        <button data-variant="quiet" class="ui-button whisper-control whisper-source-toggle" type="button" :aria-pressed="suggestFriends" @click="session.setSuggest('friends', !suggestFriends); suggestionIndex = -1">Friends</button>
+        <button data-variant="quiet" class="ui-button whisper-control whisper-source-toggle" type="button" :aria-pressed="suggestChat" @click="session.setSuggest('chat', !suggestChat); suggestionIndex = -1">Chat</button>
       </div>
       <template v-if="search.trim()">
         <div v-if="suggestions.length" id="whisper-suggestions" role="listbox" aria-label="Character suggestions">

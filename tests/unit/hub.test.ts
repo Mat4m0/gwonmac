@@ -47,10 +47,11 @@ test('Hub preserves diacritics, refuses typos and does not match inside words', 
 });
 
 test('explicit scopes never reinterpret the remaining words as another action', () => {
-  assert.deepEqual(parseHubQuery(' TEAM  gom AFK '), { scope: 'team', term: 'gom afk' });
-  assert.deepEqual(parseHubQuery('build smiter'), { scope: 'build', term: 'smiter' });
-  assert.deepEqual(parseHubQuery('team'), { scope: null, term: 'team' });
-  assert.deepEqual(parseHubQuery('gmo afk'), { scope: null, term: 'gmo afk' });
+  assert.deepEqual(parseHubQuery(' TEAM  gom AFK '), { scope: 'team', term: 'gom afk', text: 'gom AFK' });
+  assert.deepEqual(parseHubQuery('build smiter'), { scope: 'build', term: 'smiter', text: 'smiter' });
+  assert.deepEqual(parseHubQuery('team'), { scope: null, term: 'team', text: 'team' });
+  assert.deepEqual(parseHubQuery('gmo afk'), { scope: null, term: 'gmo afk', text: 'gmo afk' });
+  assert.deepEqual(parseHubQuery('Whisper  Mo Kai'), { scope: 'whisper', term: 'mo kai', text: 'Mo Kai' }, 'names keep their capitalisation');
 });
 
 test('saved phrases reject grammar conflicts and private references in global settings', async () => {

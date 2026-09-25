@@ -9,6 +9,7 @@ import {
   CLIPBOARD_TEXT_CEILING,
   type GameTextEditRequest,
 } from '../shared/contracts.js';
+import { cleanPastedText } from '../shared/player-text.js';
 
 const sendControlChord = (contents: WebContents, keyCode: 'A' | 'X'): void => {
   contents.sendInputEvent({
@@ -69,5 +70,13 @@ export async function editGameText(
   // hidden field but does not commit the edit to Guild Wars.
   const text = clipboard.readText();
   if (!text || text.length > CLIPBOARD_TEXT_CEILING) return;
+  if (request.field === 'text') {
+    // A name copied from a web page often carries a trailing space or an
+    // invisible character; Guild Wars then cannot find that player. Chromium
+    // pastes only from the pasteboard, so the cleaned text replaces it there.
+    const cleaned = cleanPastedText(text);
+    if (!cleaned) return;
+    if (cleaned !== text) clipboard.writeText(cleaned);
+  }
   sendControlPaste(contents);
 }

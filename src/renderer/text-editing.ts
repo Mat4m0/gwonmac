@@ -47,6 +47,9 @@ const isOrdinaryEditable = (value: Element | null): boolean => {
 const canExportText = (field: GameTextField): boolean =>
   field instanceof HTMLTextAreaElement || field.type !== 'password';
 
+const isSecretField = (field: GameTextField): boolean =>
+  field.type === 'password' || field.type === 'email';
+
 const selectedText = (field: GameTextField): string | null => {
   const start = field.selectionStart;
   const end = field.selectionEnd;
@@ -88,9 +91,7 @@ export const installTextEditing = ({
     trace.record({
       source: 'renderer',
       kind: 'text',
-      owner: field.type === 'password' || field.type === 'email'
-        ? 'secret'
-        : 'text',
+      owner: isSecretField(field) ? 'secret' : 'text',
       phase,
       trusted: event.isTrusted,
       inputType: type,
@@ -153,7 +154,7 @@ export const installTextEditing = ({
       active.select();
       request = { command: 'selectAll' };
     } else if (detail.command === 'paste') {
-      request = { command: detail.command };
+      request = { command: 'paste', field: isSecretField(active) ? 'secret' : 'text' };
     } else if (canExportText(active)) {
       const selected = selectedText(active);
       if (detail.command === 'copy') {
