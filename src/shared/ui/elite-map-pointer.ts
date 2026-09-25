@@ -47,10 +47,12 @@ export function installEliteMapPointer(options: Readonly<{
     x = event.clientX; y = event.clientY; over = options.accepts(event.target);
     refresh();
   };
-  const leave = () => { over = false; refresh(); };
+  // Losing the window can drop the release; never carry a claim into the next press.
+  const leave = () => { over = false; pressed = null; swallowClick = false; refresh(); };
   // Canceling pointerdown also suppresses the compatibility mousedown and
   // mouseup, so the game never sees half of a claimed press.
   const down = (event: PointerEvent) => {
+    pressed = null; swallowClick = false;
     if (event.button !== 0 || !event.isPrimary || !options.accepts(event.target)) return;
     x = event.clientX; y = event.clientY; over = true;
     const hit = hitAt();
@@ -76,7 +78,8 @@ export function installEliteMapPointer(options: Readonly<{
   view.addEventListener("pointercancel", cancel, true);
   view.addEventListener("click", click, true);
   view.addEventListener("blur", leave);
-  view.document.addEventListener("pointerleave", leave);
+  // Leave events do not reach Document; the root element receives them.
+  view.document.documentElement.addEventListener("pointerleave", leave);
   return {
     refresh,
     dispose() {
@@ -86,7 +89,7 @@ export function installEliteMapPointer(options: Readonly<{
       view.removeEventListener("pointercancel", cancel, true);
       view.removeEventListener("click", click, true);
       view.removeEventListener("blur", leave);
-      view.document.removeEventListener("pointerleave", leave);
+      view.document.documentElement.removeEventListener("pointerleave", leave);
       if (current !== null) { current = null; options.hover(null); }
     },
   };

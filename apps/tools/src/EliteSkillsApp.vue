@@ -64,6 +64,8 @@ function hidePreview() {
 // The pointer reaches a preview through host UI, not the game; the host then reports no marker.
 let previewHovered = false;
 function enterPreview() { previewHovered = true; keepPreview(); }
+// A removed card fires no pointerleave; every path that removes it releases the hover.
+watch(() => preview.value === null, (gone) => { if (gone) previewHovered = false; });
 function leavePreview() { previewHovered = false; hidePreview(); }
 function dismissPreview(event: KeyboardEvent) {
   if (!preview.value) return;
@@ -290,7 +292,7 @@ function close(event?: MouseEvent) {
 }
 function toggleTrack(id: number) { void plan.change({ kind: tracked(id) ? "remove" : "track", skillId: id }); }
 watch(character, () => { selectedId.value = null; preview.value = null; setOpen(false, false, false); });
-watch(() => [Boolean(props.view.world), loaded.value] as const, ([world, ready], [previous]) => {
+watch([() => Boolean(props.view.world), loaded], ([world, ready], [previous]) => {
   if (!world && previous) setOpen(false, false, false);
   else if (world && ready) setOpen(preferences.value.panelOpen, false, false);
 });
