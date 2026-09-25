@@ -20,7 +20,10 @@ import {
 const TRANSITION_LIMIT = 32;
 const SELECTOR_READY_BUDGET_MS = 8_000;
 const SELECTOR_READY_POLL_MS = 100;
-const SELECTOR_ORDER_POLL_MS = 500;
+// One bounded frame-table scan per check: frequent only while Selector is
+// visible, where the player can change its sort.
+const SELECTOR_ORDER_VISIBLE_MS = 500;
+const SELECTOR_ORDER_ABSENT_MS = 2_000;
 
 type Enqueue = (action: number, argument: number) => number;
 type Configure = (payload: number, enabled: number) => number;
@@ -354,11 +357,11 @@ export function createCharacterSwitchController(options: Readonly<{
   };
 
   // Selector is built after the list is published, and the player can change
-  // its sort at any time. Follow it while the selection screen is visible.
+  // its sort at any time. The slot reader itself proves that Selector is
+  // visible, so no separate pre-game scan is needed.
   const sampleSelectorOrder = (): boolean => {
     const state = options.characters.state;
     if (disposed || document.visibilityState !== "visible" || state.status !== "ready") return false;
-    if (options.controls.state() !== "character-select") return false;
     const slots = new Map<string, number>();
     for (const [index, character] of state.characters.entries()) {
       let slot: number;
@@ -487,8 +490,16 @@ export function createCharacterSwitchController(options: Readonly<{
   };
 
   options.configure(0, 0);
-  const selectorOrderTimer = setInterval(sampleSelectorOrder, SELECTOR_ORDER_POLL_MS);
-  sampleSelectorOrder();
+  let selectorOrderTimer: ReturnType<typeof setTimeout> | null = null;
+  const watchSelectorOrder = () => {
+    const visible = sampleSelectorOrder();
+    if (disposed) return;
+    selectorOrderTimer = setTimeout(
+      watchSelectorOrder,
+      visible ? SELECTOR_ORDER_VISIBLE_MS : SELECTOR_ORDER_ABSENT_MS,
+    );
+  };
+  watchSelectorOrder();
 
   return Object.freeze({
     payloadBytes: CHARACTER_SWITCH_ACTION_ABI.bytes,
@@ -592,7 +603,7 @@ export function createCharacterSwitchController(options: Readonly<{
     },
     dispose() {
       disposed = true;
-      clearInterval(selectorOrderTimer);
+      if (selectorOrderTimer !== null) clearTimeout(selectorOrderTimer);
       pendingCharacterKey = null;
       options.configure(0, 0);
       listeners.clear();

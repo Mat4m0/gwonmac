@@ -268,6 +268,31 @@ describe("character switch controller", { concurrency: false }, () => {
     });
   });
 
+  it("probes for Selector once per two seconds while it is absent", async () => {
+    await withBrowserGlobals(async () => {
+      let probes = 0;
+      const controller = createCharacterSwitchController({
+        memory: new WebAssembly.Memory({ initial: 1 }),
+        payloadPointer: 64,
+        configure: () => 1,
+        selectorSlot: () => { probes += 1; return -1; },
+        enqueue: () => 1,
+        characters: { state: ready(2, 0), subscribe() { return () => false; }, dispose() {} },
+        controls: {
+          state: () => { throw new Error("order sampling must not read the pre-game state"); },
+          switchContext: () => "outpost",
+          diagnosticMask: () => 0,
+        },
+        buildId: 7,
+        programId: 1,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 2_300));
+      // One probe at start and one after two seconds; each stops at the first -1.
+      assert.equal(probes, 2);
+      controller.dispose();
+    });
+  });
+
   it("resolves stable keys and refuses missing or current targets before a native action", async () => {
     await withBrowserGlobals(async () => {
       const memory = new WebAssembly.Memory({ initial: 1 });
