@@ -225,7 +225,13 @@ Whispers uses one conversation interface for person search, the Whispers shortcu
 and the unread launcher. Messages, drafts, history, mute and unread state stay in
 that view. Escape or Left at the start of a draft returns to people; closing Hub
 keeps drafts for the game session. Character changes, leaving the game, or turning
-off Whispers clear the session. Invite remains absent without a certified action.
+off Whispers clear the session.
+
+In an outpost, choose **Invite to party** on a person to invite that character.
+For a friend in another outpost, **Travel and invite** travels there (Any
+district) and invites them once you arrive. If you land in a different district,
+Guild Wars cannot find them; Hub then shows the game's answer in chat. Both
+actions need Whispers enabled.
 
 Build Library, Trade Chat, Characters, and Whispers open inside Hub. Detach a tool
 when you want to keep it beside the game. Disabled tools are absent from search.

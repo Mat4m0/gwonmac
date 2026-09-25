@@ -36,6 +36,17 @@ export function isCharacterName(value: string): boolean {
     && !/[,"]/u.test(value) && !hasControl(value) && !/[\ud800-\udfff]/u.test(value);
 }
 
+/** The chat command that invites one character by name into the player's party. */
+export const PARTY_INVITE_PREFIX = "/invite ";
+
+/** The exact line the certified sender accepts for a party invite. */
+export function partyInviteLine(name: string): string {
+  if (!isCharacterName(name) || name !== name.trim()) {
+    throw new Error("Enter a valid character name (up to 20 characters).");
+  }
+  return `${PARTY_INVITE_PREFIX}${name}`;
+}
+
 export function whisperLine(recipient: string, message: string): string {
   if (!isCharacterName(recipient)) {
     throw new Error("Enter a valid character name (up to 20 characters).");

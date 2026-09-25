@@ -121,8 +121,9 @@ cannot run code or access game state. The complete contract and limits live in
 
 The app can replay one bounded pointer hit-test after a trusted click if Guild
 Wars produced no cursor event. It cannot originate a click. Team Apply acts
-only after an explicit player command. These actions do not permit autonomous
-play.
+only after an explicit player command. Travel and invite sends one named party
+invite after the arrival that the player requested and never retries it. These
+actions do not permit autonomous play.
 
 After an explicit Reload command, the app may send one Return after saved login
 is restored and one only while the certified native Play control is visible.

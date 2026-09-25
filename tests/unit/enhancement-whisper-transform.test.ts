@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { concat, encodeCode, encodeSection, sleb, uleb, WASM_HEADER } from "../../src/main/core/wasm-binary.js";
-import { whisperConfigure, whisperDrain, whisperEnqueue } from "../../src/main/certification/enhancement-whisper-transform.js";
-import { WHISPER_MAILBOX as M, whisperLine } from "../../src/shared/whispers.js";
+import { partyInviteEnqueue, whisperConfigure, whisperDrain, whisperEnqueue } from "../../src/main/certification/enhancement-whisper-transform.js";
+import { WHISPER_MAILBOX as M, partyInviteLine, whisperLine } from "../../src/shared/whispers.js";
 
 const bytes = (...values: number[]) => Uint8Array.of(...values);
 const name = (value: string) => concat(uleb(value.length), new TextEncoder().encode(value));
@@ -13,13 +13,14 @@ async function fixture() {
     section(1, concat(uleb(5), bytes(0x60, 2, 0x7f, 0x7f, 0),
       bytes(0x60, 2, 0x7f, 0x7f, 1, 0x7f), bytes(0x60, 0, 1, 0x7f), bytes(0x60, 0, 0), bytes(0x60, 6, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0))),
     section(2, concat(uleb(2), name("game"), name("send"), bytes(0, 0), name("game"), name("gate"), bytes(0, 4))),
-    section(3, bytes(3, 1, 2, 3)), section(4, bytes(1, 0x70, 0, 1)), section(5, bytes(1, 0, 1)),
+    section(3, bytes(4, 1, 2, 2, 3)), section(4, bytes(1, 0x70, 0, 1)), section(5, bytes(1, 0, 1)),
     section(6, concat(uleb(4), ...[0, 0, 0, 1].map(value =>
       concat(bytes(0x7f, 1, 0x41), sleb(value), bytes(0x0b))))),
-    section(7, concat(uleb(5), name("configure"), bytes(0, 2), name("enqueue"), bytes(0, 3),
-      name("drain"), bytes(0, 4), name("memory"), bytes(2, 0), name("pending"), bytes(3, 0))),
+    section(7, concat(uleb(6), name("configure"), bytes(0, 2), name("enqueue"), bytes(0, 3), name("invite"), bytes(0, 4),
+      name("drain"), bytes(0, 5), name("memory"), bytes(2, 0), name("pending"), bytes(3, 0))),
     section(9, bytes(1, 0, 0x41, 0, 0x0b, 1, 1)),
     section(10, encodeCode([whisperConfigure(0, 1, 2), whisperEnqueue(0, 1, 2, { hookGlobal: 3, dispatchType: 4 }),
+      partyInviteEnqueue(0, 1, 2, { hookGlobal: 3, dispatchType: 4 }),
       concat(uleb(0), whisperDrain(0, 1, 2, 0, { hookGlobal: 3, dispatchType: 4 }), bytes(0x0b))])),
   );
   const sent: string[] = [];
@@ -40,6 +41,7 @@ async function fixture() {
   return {
     configure: instance.exports.configure as (pointer: number, enabled: number) => number,
     enqueue: instance.exports.enqueue as () => number,
+    invite: instance.exports.invite as () => number,
     drain: instance.exports.drain as () => void,
     pending: instance.exports.pending as WebAssembly.Global,
     pointer, sent, policy,
@@ -128,4 +130,44 @@ test("native sender accepts its exact UTF-16 capacity and refuses one extra unit
   assert.equal(f.enqueue(), 0);
   f.drain();
   assert.deepEqual(f.sent, [line]);
+});
+
+
+test("party invites submit exactly one /invite line through the shared chat mailbox", async () => {
+  const f = await fixture();
+  f.write(partyInviteLine("Mo Kai"));
+  assert.equal(f.invite(), 0, "a disabled mailbox refuses");
+  f.configure(f.pointer, 1);
+  assert.equal(f.invite(), 1);
+  assert.equal(f.invite(), 0, "one request at a time");
+  f.write(partyInviteLine("Someone Else"));
+  f.drain(); f.drain();
+  assert.deepEqual(f.sent, ["/invite Mo Kai"]);
+  f.write(partyInviteLine("A".repeat(20)));
+  assert.equal(f.invite(), 1); f.drain();
+  f.write(partyInviteLine("Zoë Ärger"));
+  assert.equal(f.invite(), 1); f.drain();
+  assert.deepEqual(f.sent, ["/invite Mo Kai", `/invite ${"A".repeat(20)}`, "/invite Zoë Ärger"]);
+});
+
+test("the invite boundary refuses every other line shape and each enqueue keeps its own shape", async () => {
+  const f = await fixture();
+  f.configure(f.pointer, 1);
+  for (const line of ["/invite ", "/invite  Mo", "/invite Mo ", "/Invite Mo", "/invitee Mo", "/resign", "/invite Mo\n/resign",
+    "/invite Mo,Kai", '/invite "Mo', `/invite ${"A".repeat(21)}`, "/invite Mo\ud83c\udf3f", "/invite Mo\u007f", whisperLine("Romi", "Hi")]) {
+    f.write(line);
+    assert.equal(f.invite(), 0, JSON.stringify(line));
+    f.drain();
+  }
+  f.write(partyInviteLine("Mo Kai"));
+  assert.equal(f.enqueue(), 0, "the whisper enqueue refuses an invite line");
+  f.policy.allowed = false;
+  assert.equal(f.invite(), 0, "policy refuses at enqueue");
+  f.policy.allowed = true;
+  assert.equal(f.invite(), 1);
+  f.policy.allowed = false;
+  f.drain();
+  assert.deepEqual(f.sent, [], "policy refuses at the drain and the request never replays");
+  assert.throws(() => partyInviteLine(" Mo Kai"));
+  assert.throws(() => partyInviteLine("Mo,Kai"));
 });
