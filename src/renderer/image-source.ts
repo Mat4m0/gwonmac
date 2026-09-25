@@ -24,12 +24,6 @@ const CHUNK_CACHE_MAX = 256 * 1024 * 1024;
 // A read burst is summarised once it goes quiet, for the optional game console.
 const BURST_QUIET_MS = 400;
 const BURST_LOG_BYTES = 4 * 1024 * 1024;
-// A gw://app range response can stall between main and the renderer after main
-// has already answered it. The client waits on such a read indefinitely, so an
-// icon never appears and a sound is skipped. A resident read takes
-// milliseconds; a network one is coalesced in main, so asking again after this
-// long joins the same work instead of adding ArenaNet traffic.
-const FETCH_STALL_MS = 10_000;
 
 /** How a queued chunk read ranks against the others. */
 type Priority = 'demand' | 'prefetch';
@@ -61,7 +55,6 @@ type ImageCapability = {
 
 type ImageStats = {
   reads: number;
-  stalls: number;
   bytes: number;
   fromMemory: number;
   fromNative: number;
@@ -101,7 +94,7 @@ type ImageDiagnostics = {
    * prefetch is the quieter one: a missing icon or sound for the instance.
    */
   event?(
-    name: 'snapshot.readFailed' | 'snapshot.cacheFailed' | 'snapshot.fetchStalled',
+    name: 'snapshot.readFailed' | 'snapshot.cacheFailed',
     value?: unknown,
   ): void;
 };
@@ -130,7 +123,6 @@ type ImageSourceOptions = {
     start: number,
     length: number,
     priority: Priority,
-    signal: AbortSignal,
   ): Promise<Uint8Array>;
   writeBytes(data: Uint8Array, address: number): void;
   diagnostics?: ImageDiagnostics;
@@ -154,7 +146,7 @@ export function createImageSource({
   // Derived from snapshot-metadata residentBits — isCached must stay synchronous.
   const residentHashes = new Set<string>();
 
-  const stats = { reads: 0, stalls: 0, bytes: 0, fromMemory: 0, fromNative: 0, coalesced: 0 };
+  const stats = { reads: 0, bytes: 0, fromMemory: 0, fromNative: 0, coalesced: 0 };
   let burstBytes = 0;
   let burstTimer: ReturnType<typeof setTimeout> | null = null;
   // The code the gw://app response tagged onto the failure, or null when the
@@ -239,25 +231,6 @@ export function createImageSource({
     return tasks;
   }
 
-  // Only a stall is retried. A transport error already exhausted main's retry
-  // policy and is the client's to see.
-  async function fetchUnstalled(start: number, length: number, priority: Priority) {
-    for (;;) {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), FETCH_STALL_MS);
-      try {
-        return await fetchRange(start, length, priority, controller.signal);
-      } catch (error) {
-        if (!controller.signal.aborted || stopped) throw error;
-        stats.stalls++;
-        diagnostics?.event?.('snapshot.fetchStalled');
-        log(`[warn] image: ${priority} range ${start}+${length} stalled; asking again`);
-      } finally {
-        clearTimeout(timer);
-      }
-    }
-  }
-
   function startChunkTasks(tasks: ChunkTask[]) {
     const priority = tasks[0]!.priority;
     for (const task of tasks) task.state = 'active';
@@ -268,7 +241,7 @@ export function createImageSource({
     const lastIndex = tasks[tasks.length - 1]!.index;
     const start = firstIndex * chunkSize;
     const end = Math.min((lastIndex + 1) * chunkSize, size);
-    void fetchUnstalled(start, end - start, priority).then((buf) => {
+    void fetchRange(start, end - start, priority).then((buf) => {
       if (buf.length !== end - start) {
         throw new Error(`snapshot range ${start}+${end - start}: received ${buf.length}`);
       }
@@ -517,7 +490,6 @@ export function createImageSource({
 
     stats: () => ({
       reads: stats.reads,
-      stalls: stats.stalls,
       bytes: stats.bytes,
       fromMemory: stats.fromMemory,
       fromNative: stats.fromNative,

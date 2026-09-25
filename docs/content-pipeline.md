@@ -206,13 +206,6 @@ prefetch therefore runs while the download is paused, including one that joined
 a queued background request for the same chunk. A failed prefetch records
 `snapshot.cacheFailed` in diagnostics.
 
-A `gw://app` range response can stall in transit after the main process has
-answered it, and the client waits on such a read indefinitely. The renderer
-therefore asks again for a range that has not arrived after ten seconds and
-records `snapshot.fetchStalled`. Main coalesces the repeated request with any
-fetch still in progress, so the retry never adds ArenaNet traffic. Transport
-errors are not retried in the renderer; main's retry policy already owns them.
-
 ## Offline behavior
 
 A cached launch can use a verified published client and resident snapshot
