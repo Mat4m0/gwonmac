@@ -62,11 +62,12 @@ export function hubMatch(name: string, query: string, aliases: readonly string[]
   if (!term || term.split(' ').every(token => names.some(name => name.split(' ').some(word => word.startsWith(token))))) return 'prefix';
   return null;
 }
-export function matchHubRows(rows: readonly HubRow[], query: string): readonly HubRow[] {
+/** `ordered` keeps a meaningful source order, such as the character selector, after exact matches. */
+export function matchHubRows(rows: readonly HubRow[], query: string, ordered = false): readonly HubRow[] {
   if (!normaliseHubQuery(query)) return rows;
   const rank = (row: HubRow) => hubMatch(row.title, query, row.aliases) === 'exact' ? 0 : 1;
   return rows.filter(row => row.matches ? row.matches(query) : hubMatch(row.title, query, [...(row.aliases ?? []), row.keywords ?? '']) !== null)
-    .sort((a, b) => rank(a) - rank(b) || a.title.localeCompare(b.title) || a.id.localeCompare(b.id));
+    .sort((a, b) => rank(a) - rank(b) || (ordered ? 0 : a.title.localeCompare(b.title) || a.id.localeCompare(b.id)));
 }
 
 export type HubSummary = Readonly<Pick<HubRow, 'title' | 'detail' | 'skills' | 'attributes' | 'professions' | 'attributeStatus' | 'folder' | 'workspace'> & { label: string }>;

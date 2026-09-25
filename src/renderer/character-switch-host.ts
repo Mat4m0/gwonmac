@@ -67,7 +67,7 @@ export function installCharacterSwitchHost(parent: HTMLElement): CharacterSwitch
             if (refusal) throw refusal;
           },
         };
-      }), parsed.term);
+      }), parsed.term, true);
     },
   };
   const detachHub = window.gwHub?.attach(hubSource);
