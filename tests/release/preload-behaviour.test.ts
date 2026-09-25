@@ -407,7 +407,7 @@ const INVOCATIONS: Invocation[] = [
   },
   {
     path: "clipboard.edit",
-    args: [{ command: "paste" }],
+    args: [{ command: "paste", field: "text" }],
     channel: IPC.clipboardEdit,
   },
   {

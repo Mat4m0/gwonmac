@@ -1229,7 +1229,8 @@ export type CoreInvokeChannel = Exclude<keyof typeof CORE_IPC, EventChannel>;
 export type GameTextEditRequest =
   | { command: "copy"; text: string }
   | { command: "cut"; text: string }
-  | { command: "paste" }
+  /** A `secret` field (password or email) receives the clipboard unchanged. */
+  | { command: "paste"; field: "text" | "secret" }
   | { command: "selectAll" };
 
 export type GameTextEditCommand = GameTextEditRequest["command"];
