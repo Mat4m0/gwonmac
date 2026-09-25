@@ -56,7 +56,7 @@ export function mountEliteFixture(target: HTMLElement): void {
   const label = document.createElement("strong"); label.textContent = "Elite Skills · offline map fixture"; controls.append(label);
   let mission = false, otherCharacter = false, learned = false, failSave = false, mapOpen = true, secondary = 2, crowded = false;
   let missionMarkers: EliteMissionMapMarkers = "saved";
-  let view: EliteMapView | null = null; let scene = EMPTY_ELITE_SCENE;
+  let view: EliteMapView | null = eliteFixtureView(); let scene = EMPTY_ELITE_SCENE;
   let targets: EliteMapPointerSurface[] = [];
   let pointer: EliteMapPointer | null = null;
   const canvas = document.createElement("canvas");
