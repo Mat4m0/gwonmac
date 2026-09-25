@@ -54,6 +54,7 @@ describe("character switch controller", { concurrency: false }, () => {
         memory,
         payloadPointer: pointer,
         configure: () => 1,
+        selectorSlot: () => -1,
         enqueue(action) {
           calls.push(action);
           new DataView(memory.buffer).setUint32(pointer + 20, 1, true);
@@ -122,6 +123,7 @@ describe("character switch controller", { concurrency: false }, () => {
           memory,
           payloadPointer: pointer,
           configure: () => 1,
+          selectorSlot: () => -1,
           enqueue(action) {
             calls.push(action);
             new DataView(memory.buffer).setUint32(pointer + 20, 1, true);
@@ -165,6 +167,7 @@ describe("character switch controller", { concurrency: false }, () => {
         memory,
         payloadPointer: pointer,
         configure: () => 1,
+        selectorSlot: () => -1,
         enqueue(action) {
           calls.push(action);
           new DataView(memory.buffer).setUint32(pointer + 20, 1, true);
@@ -198,6 +201,69 @@ describe("character switch controller", { concurrency: false }, () => {
     });
   });
 
+  it("presents characters in the selector carousel order for the session", async () => {
+    await withBrowserGlobals(async () => {
+      const three = (selectedIndex: number): CompanionCharacterListState => {
+        const base = ready(20, selectedIndex);
+        if (base.status !== "ready") throw new Error("expected a ready list");
+        return Object.freeze({
+          ...base,
+          characters: Object.freeze([
+            ...base.characters,
+            Object.freeze({ ...base.characters[0]!, name: "Private Gamma", characterKey: "0000000000000003" }),
+          ]),
+        });
+      };
+      let list = three(1);
+      let preGame: PreGameState = "character-select";
+      // Carousel: Gamma, Alpha, Beta. Account array: Alpha, Beta, Gamma.
+      let slots = [1, 2, 0];
+      const listeners = new Set<(state: CompanionCharacterListState) => void>();
+      const controller = createCharacterSwitchController({
+        memory: new WebAssembly.Memory({ initial: 1 }),
+        payloadPointer: 64,
+        configure: () => 1,
+        selectorSlot: (index) => preGame === "character-select" ? slots[index] ?? -1 : -1,
+        enqueue: () => 1,
+        characters: {
+          get state() { return list; },
+          subscribe(listener) { listeners.add(listener); listener(list); return () => listeners.delete(listener); },
+          dispose() {},
+        },
+        controls: {
+          state: () => preGame,
+          switchContext: () => preGame === "character-select" ? "character-select" : "outpost",
+          diagnosticMask: () => 0,
+        },
+        buildId: 7,
+        programId: 1,
+      });
+      const names = () => {
+        const state = controller.characters;
+        if (state.status !== "ready") throw new Error("expected a ready list");
+        return { names: state.characters.map(({ name }) => name), selectedIndex: state.selectedIndex };
+      };
+
+      assert.deepEqual(names(), {
+        names: ["Private Gamma", "Private Alpha", "Private Beta"],
+        selectedIndex: 2,
+      });
+      // In game, Selector is gone; the session keeps the last carousel order.
+      preGame = "unknown";
+      list = three(0);
+      assert.deepEqual(names(), {
+        names: ["Private Gamma", "Private Alpha", "Private Beta"],
+        selectedIndex: 1,
+      });
+      // A new selector sort replaces it on the next selector visit.
+      preGame = "character-select";
+      slots = [0, 1, 2];
+      for (const listener of listeners) listener(list);
+      assert.deepEqual(names().names, ["Private Alpha", "Private Beta", "Private Gamma"]);
+      controller.dispose();
+    });
+  });
+
   it("resolves stable keys and refuses missing or current targets before a native action", async () => {
     await withBrowserGlobals(async () => {
       const memory = new WebAssembly.Memory({ initial: 1 });
@@ -212,6 +278,7 @@ describe("character switch controller", { concurrency: false }, () => {
         memory,
         payloadPointer: 64,
         configure: () => 1,
+        selectorSlot: () => -1,
         enqueue: () => { calls += 1; return 1; },
         characters: source,
         controls: {
@@ -247,6 +314,7 @@ describe("character switch controller", { concurrency: false }, () => {
         memory,
         payloadPointer: pointer,
         configure: () => 1,
+        selectorSlot: () => -1,
         enqueue: () => {
           new DataView(memory.buffer).setUint32(pointer + 20, 2, true);
           new DataView(memory.buffer).setUint32(pointer + 36, 0xff, true);
@@ -290,6 +358,7 @@ describe("character switch controller", { concurrency: false }, () => {
         memory,
         payloadPointer: 64,
         configure: () => 1,
+        selectorSlot: () => -1,
         enqueue: () => 0,
         characters: {
           state: ready(11, 0),
@@ -331,6 +400,7 @@ describe("character switch controller", { concurrency: false }, () => {
         memory,
         payloadPointer: pointer,
         configure: () => 1,
+        selectorSlot: () => -1,
         enqueue(action) {
           calls.push(action);
           const packet = new DataView(memory.buffer);
@@ -381,6 +451,7 @@ describe("character switch controller", { concurrency: false }, () => {
         memory,
         payloadPointer: pointer,
         configure: () => 1,
+        selectorSlot: () => -1,
         enqueue(action) {
           calls.push(action);
           const packet = new DataView(memory.buffer);
@@ -425,6 +496,7 @@ describe("character switch controller", { concurrency: false }, () => {
           memory,
           payloadPointer: pointer,
           configure: () => 1,
+          selectorSlot: () => -1,
           enqueue: () => {
             calls += 1;
             new DataView(memory.buffer).setUint32(pointer + 20, 2, true);
@@ -483,6 +555,7 @@ describe("character switch controller", { concurrency: false }, () => {
           memory,
           payloadPointer: 64,
           configure: () => 1,
+          selectorSlot: () => -1,
           enqueue: () => { calls += 1; return 1; },
           characters: {
             state: ready(40, 0),

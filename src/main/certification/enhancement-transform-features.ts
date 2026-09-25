@@ -40,6 +40,8 @@ import {
   characterActionDrain,
   characterActionEnqueue,
   characterActionExecute,
+  characterSelectorSlot,
+  CHARACTER_SELECTOR_SLOT_EXPORT,
 } from "./enhancement-character-switch-transform.js";
 import { ENHANCEMENT_CHAT_FILTER_CONFIGURE_EXPORT } from "./enhancement-chat-filter-transform.js";
 import {
@@ -72,7 +74,9 @@ export function featureExportNames(
     ...(capabilities.preGameControls
       ? [ENHANCEMENT_PRE_GAME_STATE_EXPORT, ENHANCEMENT_PRE_GAME_DIAGNOSTIC_EXPORT]
       : []),
-    ...(action ? [action.enqueueExport, action.configureExport] : []),
+    ...(action
+      ? [action.enqueueExport, action.configureExport, CHARACTER_SELECTOR_SLOT_EXPORT]
+      : []),
     ...(capabilities.teamApply
       ? [teamApply.thunkExport, teamApply.professionTrace.readerExport]
       : []),
@@ -118,6 +122,7 @@ export type TransformTypeIndices = Readonly<{
   characterEnqueue: number | null;
   characterConfigure: number | null;
   characterExecute: number | null;
+  characterSelectorSlot: number | null;
 }>;
 
 export type TransformGlobalIndices = Readonly<{
@@ -497,10 +502,11 @@ export function applyFeatureContributions(
     );
   }
   if (capabilities.characterSwitchAction) {
-    const action = required(
+    const certificate = required(
       resolution.preGameResolution,
       "pre-game character action certificate",
-    ).certificate.characterSwitchAction;
+    ).certificate;
+    const action = certificate.characterSwitchAction;
     addedFunctionExports.push(
       {
         name: action.enqueueExport,
@@ -526,6 +532,21 @@ export function applyFeatureContributions(
             globalIndices.characterExpectedIndex,
             globalIndices.characterConfirmationAttempts,
           ),
+        ),
+      },
+      {
+        name: CHARACTER_SELECTOR_SLOT_EXPORT,
+        index: appendFunction(
+          required(typeIndices.characterSelectorSlot, "character selector slot type"),
+          characterSelectorSlot({
+            layout: {
+              ...certificate.layout,
+              characterArrayPointer: certificate.characterListLayout.characterArrayPointer,
+              characterArrayCount: certificate.characterListLayout.characterArrayCount,
+            },
+            frameDispatchOffset: action.frameDispatchOffset,
+            selectorHash: certificate.labelHashes.selector,
+          }),
         ),
       },
     );

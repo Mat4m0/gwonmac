@@ -57,6 +57,7 @@ function fixture(t: TestContext, options: {
   };
   const controller = createCharacterSwitchController({
     memory, payloadPointer: pointer, buildId: 7, programId: 1,
+    selectorSlot: () => -1,
     configure(payload, policy) {
       enabled = payload === pointer && policy === 1;
       // Match native configure: disabling clears a queued action.
