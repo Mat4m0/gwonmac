@@ -10,11 +10,14 @@ export const ELITE_REGIONS = ["Tyria", "Cantha", "Elona", "Eye of the North"] as
 export type EliteRegion = typeof ELITE_REGIONS[number];
 export type EliteProfessionFilter = Readonly<{ kind: "all" | "mine" }>
   | Readonly<{ kind: "custom"; values: readonly Profession[] }>;
+/** Which learned status the planner lists: not yet learned, learned, or both. */
+export const ELITE_LEARNED_FILTERS = ["missing", "learned", "any"] as const;
+export type EliteLearnedFilter = typeof ELITE_LEARNED_FILTERS[number];
 export type EliteViewPreferences = Readonly<{
   search: string;
   professions: EliteProfessionFilter;
   region: EliteRegion | "";
-  hideLearned: boolean;
+  learned: EliteLearnedFilter;
   mode: "browse" | "tracked";
   worldMap: boolean;
   panelOpen: boolean;
@@ -23,7 +26,7 @@ export type EliteViewPreferences = Readonly<{
 }>;
 export const DEFAULT_ELITE_VIEW: EliteViewPreferences = Object.freeze({
   search: "", professions: Object.freeze({ kind: "all" }), region: "",
-  hideLearned: true, mode: "browse", worldMap: true, panelOpen: false, panelHeightRatio: 0.8, focusedSkill: null,
+  learned: "missing", mode: "browse", worldMap: true, panelOpen: false, panelHeightRatio: 0.8, focusedSkill: null,
 });
 export type EliteLocation = Readonly<{
   id: string;
@@ -62,8 +65,11 @@ function exact(value: Record<string, unknown>, keys: readonly string[]): void {
 }
 export function parseEliteView(value: unknown): EliteViewPreferences {
   const input = object(value);
-  const keys = ["search", "professions", "region", "hideLearned", "mode", "worldMap", "panelOpen", "focusedSkill"];
+  // Older files store the two-way `hideLearned` switch instead of `learned`.
+  const keys = ["search", "professions", "region", "learned" in input ? "learned" : "hideLearned", "mode", "worldMap", "panelOpen", "focusedSkill"];
   exact(input, "panelHeightRatio" in input ? [...keys, "panelHeightRatio"] : keys);
+  const learned = "learned" in input ? ELITE_LEARNED_FILTERS.find(value => value === input.learned)
+    : typeof input.hideLearned === "boolean" ? input.hideLearned ? "missing" : "any" : undefined;
   const panelHeightRatio = "panelHeightRatio" in input ? input.panelHeightRatio : DEFAULT_ELITE_VIEW.panelHeightRatio;
   const filter = object(input.professions);
   let professions: EliteProfessionFilter;
@@ -81,12 +87,12 @@ export function parseEliteView(value: unknown): EliteViewPreferences {
   if (typeof input.search !== "string" || input.search.length > 200
     || typeof panelHeightRatio !== "number" || !Number.isFinite(panelHeightRatio) || panelHeightRatio < 0.2 || panelHeightRatio > 1
     || region === undefined
-    || typeof input.hideLearned !== "boolean" || typeof input.worldMap !== "boolean" || typeof input.panelOpen !== "boolean"
+    || learned === undefined || typeof input.worldMap !== "boolean" || typeof input.panelOpen !== "boolean"
     || (input.mode !== "browse" && input.mode !== "tracked")
     || (input.focusedSkill !== null && (typeof input.focusedSkill !== "number" || !Number.isSafeInteger(input.focusedSkill)
       || input.focusedSkill < 1 || input.focusedSkill > 10_000))) throw new TypeError("Invalid map preferences");
   return Object.freeze({ search: input.search, professions: Object.freeze(professions),
-    region, hideLearned: input.hideLearned, mode: input.mode,
+    region, learned, mode: input.mode,
     worldMap: input.worldMap, panelOpen: input.panelOpen, panelHeightRatio, focusedSkill: input.focusedSkill });
 }
 export function parseEliteCharacter(value: unknown): Readonly<{ characterKey: TravelCharacterKey }> {

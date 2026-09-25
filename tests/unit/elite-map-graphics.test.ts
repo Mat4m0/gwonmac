@@ -45,7 +45,7 @@ function peer() {
   return { graphics: createEliteMapGraphics(exports as WebAssembly.Exports, document), published, hidden, canvases };
 }
 const marker = (key: string, mapX: number, mapY: number, emphasis: EliteSceneMarker["emphasis"] = "match"): EliteSceneMarker =>
-  ({ key, locationId: key, skillId: Number(key.length), mapId: 1, mapX, mapY, iconUrl: null, emphasis, hovered: false });
+  ({ key, locationId: key, skillId: Number(key.length), mapId: 1, mapX, mapY, iconUrl: null, emphasis, hovered: false, captured: false, position: null });
 const input = (markers: readonly EliteSceneMarker[], e = -1000, a = 1): EliteMapGraphicsInput => ({ area: 7, continent: 0, pixelRatio: 2, markers,
   surface: { box: { left: 100, top: 50, width: 400, height: 300 }, transform: { a, b: 0, c: 0, d: a, e, f: -2000 * a } } });
 
@@ -61,7 +61,7 @@ test("each marker is one world rectangle from a screen-resolution atlas; a pan u
   assert.equal(upload!.quads.length, 2, "one rectangle per marker");
   const [x0, y0, x1, y1, u0, v0, u1, v1] = upload!.quads[0]!;
   assert.equal((x0! + x1!) / 2, 1100); assert.equal((y0! + y1!) / 2, 2100);
-  assert.equal(x1! - x0!, 42, "at 1 pixel per map unit a 84-texel cell at ratio 2 covers 42 map units");
+  assert.equal(x1! - x0!, 50, "at 1 pixel per map unit a 100-texel cell at ratio 2 covers 50 map units");
   assert.ok(u0! >= 0 && v0! >= 0 && u1! <= 1 && v1! <= 1 && u1! > u0!);
   const panned = graphics.update("mission", input(markers, -1010));
   assert.deepEqual(panned.map(item => item.x), [90, 190], "hit targets follow the pan");

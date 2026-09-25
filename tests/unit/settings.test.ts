@@ -119,9 +119,10 @@ describe("settings", () => {
     const defaults = parseSettings({ cartographyEnabled: true });
     assert.equal(defaults.eliteSkillsEnabled, true);
     assert.equal(defaults.eliteMissionMapMarkers, "saved");
-    assert.deepEqual(parseRendererSettingsPatch({ eliteSkillsEnabled: false, eliteMissionMapMarkers: "target" }), {
+    assert.throws(() => parseSettingsPatch({ eliteMissionMapMarkers: "target" }), AppError);
+    assert.deepEqual(parseRendererSettingsPatch({ eliteSkillsEnabled: false, eliteMissionMapMarkers: "all" }), {
       eliteSkillsEnabled: false,
-      eliteMissionMapMarkers: "target",
+      eliteMissionMapMarkers: "all",
     });
     assert.throws(() => parseSettingsPatch({ eliteSkillsEnabled: "false" }), AppError);
     assert.throws(() => parseSettingsPatch({ eliteMissionMapMarkers: "boss" }), AppError);

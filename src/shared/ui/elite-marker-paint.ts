@@ -12,6 +12,7 @@ export type EliteArtwork = Readonly<{ get(url: string | null): HTMLImageElement 
 const GOLD = "#e8c15a";
 const OUTLINE = "rgb(0 0 0 / 78%)";
 const HOVER = "#fff4d6";
+const CAPTURED = "#7fe06a";
 const WELL = "#15120d";
 /** Client skill textures have a 4-pixel rim inside 64 pixels; show only the inner artwork. */
 const RIM = 4 / 64;
@@ -44,7 +45,7 @@ export function paintEliteMarker(context: CanvasRenderingContext2D, paint: Elite
   const line = Math.max(1, Math.round(pixelRatio));
   const left = Math.round(x - size / 2); const top = Math.round(y - size / 2); const edge = Math.round(size);
   context.save();
-  context.globalAlpha = marker.emphasis === "match" && !marker.hovered ? 0.92 : 1;
+  context.globalAlpha = marker.captured && !marker.hovered ? 0.6 : marker.emphasis === "match" && !marker.hovered ? 0.92 : 1;
   if (direction !== null) paintArrow(context, x, y, size, direction, line);
   context.shadowColor = "rgb(0 0 0 / 55%)"; context.shadowBlur = 3 * line; context.shadowOffsetY = line;
   context.fillStyle = WELL; context.fillRect(left, top, edge, edge);
@@ -71,6 +72,24 @@ export function paintEliteMarker(context: CanvasRenderingContext2D, paint: Elite
   if (marker.hovered) {
     context.lineWidth = line; context.strokeStyle = HOVER;
     context.strokeRect(left - line / 2, top - line / 2, edge + line, edge + line);
+  }
+  context.globalAlpha = 1;
+  if (marker.captured) {
+    // A captured skill stays on the map as progress, marked like a completed item.
+    const radius = Math.max(4 * line, edge * 0.2); const cx = left + edge - radius * 0.6; const cy = top + edge - radius * 0.6;
+    context.beginPath(); context.arc(cx, cy, radius, 0, Math.PI * 2);
+    context.fillStyle = "#16301a"; context.fill(); context.lineWidth = line; context.strokeStyle = OUTLINE; context.stroke();
+    context.beginPath(); context.moveTo(cx - radius * 0.45, cy); context.lineTo(cx - radius * 0.1, cy + radius * 0.4); context.lineTo(cx + radius * 0.5, cy - radius * 0.4);
+    context.lineWidth = Math.max(line, radius * 0.3); context.strokeStyle = CAPTURED; context.stroke();
+  }
+  if (marker.position) {
+    // Several possible spawn positions of one boss read as one hunt: "2/4".
+    context.font = `bold ${Math.round(9 * line)}px -apple-system, "Helvetica Neue", sans-serif`;
+    const width = context.measureText(marker.position).width + 6 * line; const height = 12 * line;
+    const bx = x - width / 2; const by = top + edge - height * 0.35;
+    context.fillStyle = "rgb(0 0 0 / 78%)"; context.beginPath(); context.roundRect(bx, by, width, height, height / 2); context.fill();
+    context.fillStyle = HOVER; context.textAlign = "center"; context.textBaseline = "middle";
+    context.fillText(marker.position, x, by + height / 2 + line * 0.5);
   }
   context.restore();
 }

@@ -27,6 +27,13 @@ describe("shared skill details", () => {
     expect(wrapper.get('.skill-type').text()).toBe('Elite Spell');
     wrapper.unmount();
   });
+  it("shows the value for the character's attribute rank and keeps the range as a hint", () => {
+    const wrapper = mount(SkillDetails, { props: { skill: ELITE_FIXTURE_SKILLS[0]!, rank: 12 } });
+    expect(wrapper.get('.skill-scaled').text()).toBe('38');
+    expect(wrapper.get('.skill-scaled').attributes('title')).toBe('10...45 across Axe Mastery 0–15 · you have 12');
+    expect(wrapper.get('.skill-rank').text()).toBe('(12)');
+    wrapper.unmount();
+  });
   it("omits zero mechanics and explains unavailable descriptions without inventing values", () => {
     const wrapper = mount(SkillDetails, { props: { skill: { ...ELITE_FIXTURE_SKILLS[0]!,
       energyCost: 0, adrenalineCost: 0, activationSeconds: 0, rechargeSeconds: 0,

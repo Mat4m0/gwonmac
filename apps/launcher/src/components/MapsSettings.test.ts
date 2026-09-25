@@ -74,7 +74,7 @@ describe("Maps settings", () => {
     const save = vi.fn(async () => undefined);
     const wrapper = mount(MapsSettings, { props: { settings: fixtureSnapshot.settings, save } });
     const markers = wrapper.get('[aria-label="Mission Map markers"]');
-    expect(markers.findAll("option").map(option => option.text())).toEqual(["Off", "Target only", "Target and saved skills", "All planner matches"]);
+    expect(markers.findAll("option").map(option => option.text())).toEqual(["Hunt list", "All planner matches", "Off"]);
     await markers.setValue("all");
     expect(save).toHaveBeenCalledWith({ eliteMissionMapMarkers: "all" });
     await wrapper.get('[aria-label="Elite skill planner"]').setValue(false);

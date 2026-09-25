@@ -25,13 +25,14 @@ export type EliteMapGraphics = Readonly<{
   dispose(): void;
 }>;
 
-/** Room around the largest marker for its shadow, hover outline, and filtering. */
-const CELL_MARGIN = 12;
+/** Room around the largest marker for its shadow, hover outline, position badge, and filtering. */
+const CELL_MARGIN = 20;
 const EDGE_PIXELS = 64;
 const power = (value: number) => 2 ** Math.ceil(Math.log2(Math.max(64, value)));
 /** Rectangles follow the zoom in sixteenth-octave steps: marker size stays within 2.2%. */
 const step = (scale: number) => 2 ** (Math.round(Math.log2(scale) * 16) / 16);
-const look = (item: PlacedEliteMarker) => `${item.marker.iconUrl}|${item.marker.emphasis}|${Number(item.marker.hovered)}|${item.size}`;
+const look = (item: PlacedEliteMarker) =>
+  `${item.marker.iconUrl}|${item.marker.emphasis}|${Number(item.marker.hovered)}|${Number(item.marker.captured)}|${item.marker.position}|${item.size}`;
 
 export function createEliteMapGraphics(exports: WebAssembly.Exports, document: Document, changed: () => void = () => {}): EliteMapGraphics {
   const layer = createNativeMapGraphicsLayer(exports, document, ELITE_MAP_GRAPHICS_SURFACES);
@@ -113,7 +114,7 @@ export function createEliteMapGraphics(exports: WebAssembly.Exports, document: D
     const mapX = (item.x - e) / a; const mapY = (item.y - f) / d;
     const direction = Math.atan2(d * item.marker.mapY + f - item.y, a * item.marker.mapX + e - item.x);
     const frame = { x0: mapX - size / 2 / (a * ratio), y0: mapY - size / 2 / (d * ratio), scaleX: a * ratio, scaleY: d * ratio, width: size, height: size };
-    const key = [item.marker.key, item.marker.iconUrl, Number(item.marker.hovered), Math.round(direction * 32), size, artwork.version].join(":");
+    const key = [item.marker.key, item.marker.iconUrl, Number(item.marker.hovered), Number(item.marker.captured), Math.round(direction * 32), size, artwork.version].join(":");
     publish(surface, input, frame, key, context => paintEliteMarker(context,
       { x: size / 2, y: size / 2, size: item.size * ratio, marker: item.marker, direction }, ratio, artwork));
   };

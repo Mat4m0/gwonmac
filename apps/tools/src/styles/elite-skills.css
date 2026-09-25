@@ -3,13 +3,8 @@
 .elite-skills-root *, .elite-skills-root *::before, .elite-skills-root *::after { box-sizing: border-box; }
 .elite-skills-root svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .elite-skills-root .elite-panel, .elite-skills-root .elite-map-summary { position: fixed; top: 16px; right: 16px; pointer-events: auto; }
-.elite-map-summary { display: flex; align-items: center; width: max-content; max-width: calc(100vw - 24px); padding: 4px; background: var(--ui-panel-fill); }
-.elite-map-trigger { display: inline-flex; align-items: center; gap: var(--ui-space-2); min-height: 40px; white-space: nowrap; }
-.elite-map-trigger svg { width: 14px; height: 14px; }
-.elite-map-trigger .elite-map-trigger-mark { width: 12px; height: 12px; fill: var(--ui-warning); }
-.elite-map-trigger-count { min-width: 20px; padding: 1px 6px; border-radius: var(--ui-radius-pill); background: var(--ui-well-fill); color: var(--ui-text-muted); font-size: var(--ui-font-size-sm); text-align: center; }
 .elite-summary-problem { padding-inline: var(--ui-space-2); color: var(--ui-accent); font-weight: bold; }
-.elite-panel { display: flex; flex-direction: column; width: min(356px, calc(100vw - 24px)); height: 80dvh; max-height: calc(100dvh - 32px); background: rgb(from var(--ui-panel-fill) r g b / 1); overflow: hidden; }
+.elite-panel { display: flex; flex-direction: column; width: min(372px, calc(100vw - 24px)); height: 80dvh; max-height: calc(100dvh - 32px); background: rgb(from var(--ui-panel-fill) r g b / 1); overflow: hidden; }
 .elite-panel .ui-panel-head { position: sticky; top: 0; z-index: 3; background-color: var(--ui-panel-fill); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
 .elite-panel-content { min-height: min(120px, 20dvh); overflow-y: auto; flex: 1 1 0px; }
 .elite-panel h2 { margin: 0; color: var(--ui-text-bright); font-size: var(--ui-font-size-lg); }
@@ -18,28 +13,6 @@
 .elite-search { display: grid; gap: var(--ui-space-1); min-width: 0; }
 .elite-field-label { color: var(--ui-text-muted); font-size: var(--ui-font-size-sm); }
 .elite-search input, .elite-search select { width: 100%; min-width: 0; }
-.elite-profession-choices { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
-.elite-profession { position: relative; display: grid; justify-items: center; gap: 2px; min-height: 48px; padding: 4px; border: 1px solid var(--ui-line); border-radius: var(--ui-radius-sm); background: transparent; color: var(--ui-text-muted); cursor: pointer; font: var(--ui-font-size-sm) var(--ui-font); }
-.elite-profession img { width: 26px; height: 26px; opacity: .55; }
-.elite-profession[aria-pressed="true"] { background: var(--ui-hover); border-color: var(--ui-accent); color: var(--ui-text-bright); }
-.elite-profession[aria-pressed="true"] img, .elite-profession:hover img { opacity: 1; }
-.elite-profession:hover { background: var(--ui-hover); }
-.elite-profession-check { position: absolute; top: 2px; right: 3px; font: 10px sans-serif; color: var(--ui-accent); }
-.elite-profession-name { display: none; position: absolute; bottom: calc(100% + 3px); z-index: 5; padding: 4px 7px; border-radius: var(--ui-radius-sm); background: rgb(from var(--ui-panel-fill) r g b / 1); color: var(--ui-text-bright); white-space: nowrap; pointer-events: none; }
-.elite-profession:hover, .elite-profession:focus-visible { z-index: 4; }
-.elite-profession:hover .elite-profession-name, .elite-profession:focus-visible .elite-profession-name { display: block; }
-.elite-profession-shortcuts { display: flex; align-items: center; justify-content: space-between; gap: var(--ui-space-2); }
-.elite-profession-shortcuts button { min-height: 30px; padding: 2px 4px; font-size: var(--ui-font-size-sm); }
-.elite-profession-shortcuts [aria-pressed="true"] { background: var(--ui-hover); border-radius: var(--ui-radius-sm); }
-.elite-filter-bottom { display: flex; flex-wrap: wrap; align-items: start; justify-content: space-between; gap: var(--ui-space-2); }
-.elite-filter-bottom .ui-select { padding: 4px; min-height: 30px; font-size: var(--ui-font-size-sm); max-width: 100%; }
-.elite-filter-bottom .elite-more-filters { flex: 1; min-width: 95px; }
-.elite-more-filters summary { padding-block: 5px; }
-.elite-more-filters[open] { flex-basis: 100%; }
-.elite-more-filters .ui-link { margin-top: var(--ui-space-2); }
-.elite-clear-search { justify-self: start; }
-.elite-more-filters summary { cursor: pointer; color: var(--ui-text-muted); font-size: var(--ui-font-size-sm); }
-.elite-more-filters[open] summary { margin-bottom: var(--ui-space-2); }
 .elite-check { display: flex; align-items: center; gap: var(--ui-space-2); font-size: var(--ui-font-size-sm); cursor: pointer; }
 .elite-check input { accent-color: var(--ui-accent); }
 .elite-results-heading { flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 var(--ui-space-4) var(--ui-space-2); color: var(--ui-text-muted); font-size: var(--ui-font-size-sm); }
@@ -109,15 +82,9 @@
 .elite-inline-detail .elite-location:first-of-type { border-top: 0; }
 .elite-target-button { flex: 1; }
 .elite-target-button[aria-pressed="true"] { color: var(--ui-accent); }
-.elite-other-locations summary, .elite-encounter-notes summary, .elite-map-display summary { cursor: pointer; color: var(--ui-text-muted); font-size: var(--ui-font-size-sm); padding: var(--ui-space-2) 0; }
+.elite-other-locations summary, .elite-encounter-notes summary { cursor: pointer; color: var(--ui-text-muted); font-size: var(--ui-font-size-sm); padding: var(--ui-space-2) 0; }
 .elite-detail-links { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--ui-space-2); margin-top: var(--ui-space-3); }
 .elite-detail-links .ui-link { font-size: var(--ui-font-size-sm); }
-.elite-map-display .elite-check { padding-block: var(--ui-space-2); }
-.elite-mission-markers { display: flex; align-items: center; justify-content: space-between; gap: var(--ui-space-2); padding-block: var(--ui-space-1); font-size: var(--ui-font-size-sm); }
-.elite-mission-markers .ui-select { padding: 4px; min-height: 30px; font-size: var(--ui-font-size-sm); max-width: 60%; }
-.elite-current-target { display: grid; gap: 2px; }
-.elite-current-target strong { color: var(--ui-accent); font-weight: normal; }
-.elite-learned-badge { color: var(--ui-success); }
 
 .elite-search-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
@@ -127,10 +94,48 @@
 .elite-panel-resize:hover, .elite-panel-resize:focus-visible, .elite-panel[data-resizing] .elite-panel-resize { color: var(--ui-accent); background: var(--ui-hover); }
 .elite-panel[data-resizing] { user-select: none; }
 
-.elite-panel-footer .elite-map-display summary { padding-block: 2px; }
 
-.elite-preview-bosses { margin-top: var(--ui-space-3); font-size: var(--ui-font-size-sm); }
-.elite-preview-bosses p { margin: 0 0 var(--ui-space-2); }
-.elite-preview-bosses ul { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--ui-space-2); }
-.elite-preview-bosses li { color: var(--ui-text-bright); }
-.elite-preview-bosses li span { color: var(--ui-text-muted); }
+
+/* Closed World Map control: open the planner, and switch what the map shows. */
+.elite-map-summary { display: flex; align-items: center; gap: 4px; width: max-content; max-width: calc(100vw - 24px); padding: 4px; background: var(--ui-panel-fill); }
+.elite-map-trigger { display: grid; place-items: center; width: var(--ui-control-height); min-width: 0; padding: 0; }
+.elite-map-trigger svg { width: 12px; height: 12px; fill: var(--ui-warning); }
+.elite-view-bar { padding: 0 var(--ui-space-3) var(--ui-space-2); }
+.elite-view-switch small { font-variant-numeric: tabular-nums; }
+/* Filters: one control per filter. */
+.elite-profession-choices { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 3px; }
+.elite-profession { display: grid; place-items: center; height: 32px; padding: 0; border: 1px solid var(--ui-line); border-radius: var(--ui-radius-sm); background: transparent; cursor: pointer; }
+.elite-profession img { width: 22px; height: 22px; opacity: .45; }
+.elite-profession:hover { background: var(--ui-hover); }
+.elite-profession:hover img, .elite-profession[aria-pressed="true"] img { opacity: 1; }
+.elite-profession[aria-pressed="true"] { background: var(--ui-hover); border-color: var(--ui-accent); }
+.elite-filter-line { display: flex; align-items: center; justify-content: space-between; gap: var(--ui-space-2); }
+.elite-quick-classes { color: var(--ui-text-muted); font-size: var(--ui-font-size-sm); white-space: nowrap; }
+.elite-quick-classes .ui-link[aria-pressed="true"] { color: var(--ui-text-bright); text-decoration: none; }
+.elite-search-controls .ui-select { width: 100%; }
+/* Rows and Hunt list sections. */
+.elite-tags { display: inline-flex; gap: 4px; margin-left: 6px; vertical-align: 1px; }
+.elite-tag { padding: 0 6px; border-radius: var(--ui-radius-pill); font-size: var(--ui-font-size-sm); background: var(--ui-well-fill); color: var(--ui-text-muted); }
+.elite-tag[data-kind="target"] { color: var(--ui-warning); }
+.elite-tag[data-kind="captured"] { color: var(--ui-success); }
+.elite-tag[data-kind="here"] { color: var(--ui-accent); }
+.elite-result[data-captured] .elite-skill-icon img { filter: grayscale(.5); opacity: .7; }
+.elite-section-title { margin: var(--ui-space-3) var(--ui-space-3) var(--ui-space-1); color: var(--ui-text-muted); font-size: var(--ui-font-size-sm); font-weight: normal; letter-spacing: .06em; text-transform: uppercase; }
+.elite-clear-captured { margin: var(--ui-space-2) var(--ui-space-3); }
+/* Footer: target, then what the maps show. */
+.elite-current-target { display: grid; gap: 2px; font-size: var(--ui-font-size-sm); }
+.elite-current-target strong { color: var(--ui-warning); font-weight: normal; }
+.elite-current-target small { color: var(--ui-text-muted); }
+.elite-mission-markers { display: flex; align-items: center; justify-content: space-between; gap: var(--ui-space-2); font-size: var(--ui-font-size-sm); color: var(--ui-text-muted); }
+/* Preview: where, then status, below the game-style skill description. */
+.elite-preview-where { display: grid; gap: 3px; margin-top: var(--ui-space-1); padding-top: var(--ui-space-2); border-top: 1px solid var(--ui-line); font-size: var(--ui-font-size-sm); }
+.elite-preview-where p { margin: 0; }
+.elite-preview-where strong { color: var(--ui-text-bright); font-weight: normal; }
+.elite-preview-status { color: var(--ui-text-muted); }
+.elite-preview-status [data-kind="target"] { color: var(--ui-warning); }
+.elite-preview-status [data-kind="captured"] { color: var(--ui-success); }
+.elite-preview-hint { margin: var(--ui-space-2) 0 0; color: var(--ui-text-muted); font-size: var(--ui-font-size-sm); opacity: .75; }
+.elite-notice { position: fixed; left: 50%; top: 16px; transform: translateX(-50%); z-index: 3; display: flex; align-items: center; gap: var(--ui-space-3); padding: var(--ui-space-2) var(--ui-space-3); pointer-events: auto; background: var(--ui-panel-fill); font-size: var(--ui-font-size-sm); }
+.elite-notice strong { color: var(--ui-success); font-weight: normal; }
+.elite-notice span { color: var(--ui-text-muted); }
+.skill-details .skill-rank { color: var(--ui-text-muted); }
