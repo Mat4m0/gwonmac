@@ -74,12 +74,19 @@ describe("elite view persistence", () => {
     assert.doesNotThrow(() => parse({ ...valid, professions: { kind: "custom", values: [] } }));
     for (const patch of [
       { search: "x".repeat(201) }, { search: 1 }, { region: "Unknown" }, { worldMap: 1 }, { panelOpen: null }, { panelHeightRatio: 0 }, { panelHeightRatio: 1.1 }, { panelHeightRatio: NaN }, { panelHeightRatio: "0.8" },
-      { hideLearned: "yes" }, { mode: "all" }, { focusedSkill: -1 }, { focusedSkill: 1.5 }, { extra: true },
+      { learned: "yes" }, { learned: true }, { mode: "all" }, { focusedSkill: -1 }, { focusedSkill: 1.5 }, { extra: true },
       { professions: { kind: "custom", values: ["W", "W"] } },
       { professions: { kind: "custom", values: ["Warrior"] } }, { professions: { kind: "mine", values: ["W"] } },
     ]) assert.throws(() => parse({ ...valid, ...patch }));
     assert.throws(() => changeEliteTracking(EMPTY_ELITE_TRACKING,
       { kind: "view", view: { ...DEFAULT_ELITE_VIEW, focusedSkill: 9999 } }, ELITE_LOCATIONS));
+    // Files from before the three-way learned filter keep their choice.
+    const legacy: Record<string, unknown> = { ...valid }; delete legacy.learned;
+    const learnedOf = (view: unknown) => { const { change } = parse(view); return change.kind === "view" ? change.view.learned : null; };
+    assert.equal(learnedOf({ ...legacy, hideLearned: true }), "missing");
+    assert.equal(learnedOf({ ...legacy, hideLearned: false }), "any");
+    assert.throws(() => parse({ ...legacy, hideLearned: "yes" }));
+    assert.throws(() => parse({ ...valid, hideLearned: true }), "one learned field only");
   });
   it("defaults height for saved preferences written before resizing was added", () => {
     const { panelHeightRatio, ...view } = DEFAULT_ELITE_VIEW;
@@ -97,7 +104,7 @@ describe("elite view persistence", () => {
       const store = new EliteTrackingStore();
       assert.deepEqual((await store.get(path, characterA)).view, DEFAULT_ELITE_VIEW);
       const view = { ...DEFAULT_ELITE_VIEW, search: "Hundred Blades", professions: { kind: "mine" as const },
-        panelOpen: true, panelHeightRatio: 0.65, worldMap: false, region: "Cantha" as const, hideLearned: false, mode: "tracked" as const };
+        panelOpen: true, panelHeightRatio: 0.65, worldMap: false, region: "Cantha" as const, learned: "any" as const, mode: "tracked" as const };
       await store.update(path, { characterKey: characterA, change: { kind: "view", view } });
       const restart = new EliteTrackingStore();
       const saved = await restart.get(path, characterA);

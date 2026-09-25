@@ -224,8 +224,8 @@ async function updateUnseen(patch: Partial<CartographyPresetStyle["grid"]["unsee
   </div>
   <h2 class="settings-subheading">Elite skills</h2>
   <div class="setting-group map-elite-skills">
-    <label><span><strong>Elite skill planner</strong><small>Adds the capture planner to the World Map and boss markers to the Mission Map.</small></span><input type="checkbox" aria-label="Elite skill planner" :checked="settings.eliteSkillsEnabled" @change="persist({ eliteSkillsEnabled: ($event.currentTarget as HTMLInputElement).checked })" /></label>
-    <label><span><strong>Mission Map markers</strong><small>Choose which capture locations appear while you play.</small></span><select aria-label="Mission Map markers" :value="settings.eliteMissionMapMarkers" :disabled="!settings.eliteSkillsEnabled" @change="persist({ eliteMissionMapMarkers: ($event.currentTarget as HTMLSelectElement).value as EliteMissionMapMarkers })"><option v-for="mode in ELITE_MISSION_MAP_MARKERS" :key="mode" :value="mode">{{ ELITE_MISSION_MAP_MARKER_LABELS[mode] }}</option></select></label>
+    <label><span><strong>Elite skill planner</strong><small>Adds the planner to the World Map and your Hunt list to the Mission Map.</small></span><input type="checkbox" aria-label="Elite skill planner" :checked="settings.eliteSkillsEnabled" @change="persist({ eliteSkillsEnabled: ($event.currentTarget as HTMLInputElement).checked })" /></label>
+    <label><span><strong>Mission Map markers</strong><small>What the Mission Map shows while you play. The Hunt list includes your target.</small></span><select aria-label="Mission Map markers" :value="settings.eliteMissionMapMarkers" :disabled="!settings.eliteSkillsEnabled" @change="persist({ eliteMissionMapMarkers: ($event.currentTarget as HTMLSelectElement).value as EliteMissionMapMarkers })"><option v-for="mode in ELITE_MISSION_MAP_MARKERS" :key="mode" :value="mode">{{ ELITE_MISSION_MAP_MARKER_LABELS[mode] }}</option></select></label>
   </div>
   <h2 class="settings-subheading">Map appearance</h2>
   <div class="setting-group map-appearance">

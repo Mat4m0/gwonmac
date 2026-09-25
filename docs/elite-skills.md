@@ -32,67 +32,84 @@ Account unlocks never imply that the current character learned a skill.
 
 ## Settings
 
-**Settings → Maps → Elite skills** and the in-game Hub **Maps** view own two
-app-wide settings. They apply only while **Maps** is enabled.
+**Settings → Maps → Elite skills** owns two app-wide settings. They apply only
+while **Maps** is enabled. The in-game Hub **Maps** view has the on/off switch.
 
 - **Elite skill planner** (`eliteSkillsEnabled`, on by default) adds the planner
   and its markers. Turning it off removes both without affecting other Maps
   layers.
 - **Mission Map markers** (`eliteMissionMapMarkers`) chooses what the Mission
-  Map shows while you play: **Off**, **Target only**, **Target and saved
-  skills** (default), or **All planner matches**. Saved skills stay visible even
-  when planner filters would hide them.
+  Map shows while you play: **Hunt list** (default), **All planner matches**, or
+  **Off**. The Hunt list always includes the target, even when planner filters
+  would hide it.
 
-The planner footer shows the same Mission Map choice under **Map display**.
+The planner footer has the same Mission Map choice.
+
+## Hunt list and target
+
+The **Hunt list** holds the elite skills this character wants to capture. The
+star on each skill adds or removes it. A captured skill stays on the list with
+a ✓ as progress, and **Remove captured from Hunt list** clears them in one step.
+The list and its progress ("1/3") are kept per character.
+
+The **target** is the boss to go for now. Players do not have to choose it:
+the next uncaptured Hunt list boss is chosen automatically, preferring this
+area, then this region, then list order. **Set target** overrides that choice
+until its skill is captured. When live observation shows a Hunt list skill
+became learned, a short notice confirms the capture and names the next target.
 
 ## Map planner
 
-Open the native world map. **Elite skills** opens the planner in its upper-right
-corner; the button also counts saved skills and names the target in its tooltip.
-The Mission Map has no planner controls. Its default height is 80% of the screen,
-limited to the available map space. The list reserves space for skill rows even
-when the filter controls need their own scrollbar. Drag the bottom grip to change its height,
-or focus the grip and use Up/Down (Shift takes larger steps). Height is saved
-for each character and fits smaller windows automatically. Filters retain their
-own space above the scrolling skill list, including with a full catalogue. Search matches skill, boss, and area names.
-**All matching skills** and **Saved skills** choose the skill scope. The ten
-profession icons toggle each class independently. **Select all** and **Deselect all**
-include or exclude every profession. An empty selection remains empty after restart.
-**Current class** follows the observed primary and secondary professions. Manual
-selections stay fixed. If live professions are unavailable, Current class shows
-no results and offers manual selection. **Hide already learned** uses this
-character's learned skills and also applies to saved skills. Capture region and
-**Reset filters** are under **More filters**.
+Open the native world map. The compact control in its upper-right corner opens
+the planner (◆) and switches the World Map between **Hunt** and **All** matches,
+with progress and match counts. The Mission Map has no planner controls. The
+planner's default height is 80% of the screen, limited to the available map
+space. Drag the bottom grip to change its height, or focus the grip and use
+Up/Down (Shift takes larger steps). Height is saved for each character.
+
+The top of the planner switches between **All matches** and **Hunt list**.
+Filters apply only to All matches; the Hunt list never loses a skill to a
+filter. Each filter has one control:
+
+- **Search** matches skill, boss, and area names.
+- The ten **class** buttons toggle freely; **Mine** follows the observed primary
+  and secondary professions and **All** clears the class filter. Without live
+  professions, Mine shows no results and asks for a manual choice.
+- **Not learned** (default), **Learned**, or **Any** uses this character's
+  learned skills. Without a learned observation every skill is shown.
+- **Region** narrows to one campaign region.
+
+The result count offers **Clear filters** whenever filters differ from the
+defaults. Rows show **Target**, **✓ Captured**, and **In this area** tags.
 
 Hover or focus a skill for a preview. Click a result to expand its details in
-place; only one result expands at a time. The search, filters, and neighboring
-results remain available. Click the same row to close its details. The star on
-every row saves or removes that skill without opening details or choosing a boss.
-The first capture location is visible; other locations and encounter notes expand
-on demand. Inspection never changes map filters. **Show only this skill** explicitly
-focuses both maps; **Clear skill focus** exits it.
-The Builds skill inspector opens the same details through **Find capture locations**.
-Both interfaces read descriptions, mechanics, and skill artwork from the installed client.
+place; only one result expands at a time. The details list every capture
+location, target first, with **Set target** and boss wiki links. Inspection
+never changes map filters. **Show only this skill** explicitly focuses both maps;
+**Clear skill focus** exits it. The Builds skill inspector opens the same details
+through **Find capture locations**. Both interfaces read descriptions,
+mechanics, and skill artwork from the installed client.
 The shared detail component follows the game's own skill description: the
 skill type ("Elite Axe Attack"), costs in the game's order (adrenaline in
 strikes, energy, overcast, sacrifice, activation, recharge), quarter seconds as
-fractions, and attribute-scaled values such as `10...45` highlighted. Aftercast
-appears only when it differs from the usual ¾ second. Cost and timing icons are
-locally bundled Tango-style artwork with accessible labels. See [icon attribution](../THIRD-PARTY-NOTICES.md#guild-wars-wiki-stat-icons).
+fractions, and attribute-scaled values highlighted. With an observed attribute
+rank, the value for that rank replaces the `10...45` range, which stays in the
+tooltip. Aftercast appears only when it differs from the usual ¾ second. Cost
+and timing icons are locally bundled Tango-style artwork with accessible labels.
+See [icon attribution](../THIRD-PARTY-NOTICES.md#guild-wars-wiki-stat-icons).
 
-**Save** keeps a skill for this character. **Set target** also saves the skill
-and selects one active capture location. The footer shows that target and keeps
-the World Map marker switch and the Mission Map choice under **Map display**.
 Search and visibility survive restart. Opening the native world map restores the
 saved panel choice; closing a native map never overwrites that choice.
 No panel opens automatically during login or gameplay without a world map.
 
 ## Map markers
 
-The World Map shows the planner's matches and the target. The Mission Map shows
-the chosen Mission Map markers for the current map ID. Markers are skill icons
-without the client's built-in four-pixel rim. A gold frame marks saved skills;
-a heavier gold frame marks the target. Other matches are smaller. Different
+The World Map shows the Hunt list or all matches, always with the target. The
+Mission Map shows the chosen Mission Map markers for the current map ID. Markers
+are skill icons without the client's built-in four-pixel rim. A gold frame marks
+Hunt list skills; a heavier gold frame marks the target. Other matches are
+smaller. Captured skills dim and carry a ✓. On the Mission Map, a boss with
+several possible spawn positions shows "1/4", "2/4", … on each position. Different
 skills keep their own icons. Touching copies of the same skill in the same map
 area share one marker; distant positions remain separate.
 
@@ -112,8 +129,9 @@ distinct skill once and lists every possible boss. Hover previews stay available
 while the pointer crosses onto them. They fit within the viewport and scroll for
 long descriptions.
 
-Click a marker to pin a small card with **Set as target**, **Save**, and **Open
-planner**. With the planner open, a click opens that skill's details instead.
+The preview shows the boss, the area ("you are here"), how many positions the
+boss can spawn at, encounter notes, and the Hunt list status. Click a marker to
+pin a small card with **Set as target**, **☆ Hunt**, and **Planner**. With the planner open, a click opens that skill's details instead.
 Only a left press on a marker is taken from the game; right-drag panning and all
 other presses reach the map. Clicking elsewhere or **Close** removes the card.
 Closing either native map removes its preview immediately, with no exit animation.

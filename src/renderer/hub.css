@@ -242,7 +242,6 @@
 .hub-map-toggle { display:flex; align-items:center; gap:10px; min-height:34px; }
 .hub-map-state { margin-left:auto; color:var(--ui-text-muted); }
 .hub-map-opacity { margin-top:8px; display:grid; grid-template-columns:1fr minmax(90px,160px) 40px; gap:12px; align-items:center; }
-.hub-map-markers { grid-template-columns:1fr auto; }
 .hub-map-settings input { accent-color:var(--ui-accent); min-width:0; }
 .hub-settings nav .ui-button { display:flex; align-items:center; gap:10px; }
 .hub-settings nav .hub-icon { width:25px; height:25px; border-radius:var(--ui-radius-sm); flex-shrink:0; }

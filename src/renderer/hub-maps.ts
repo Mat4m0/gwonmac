@@ -2,7 +2,6 @@
  * Inline Maps controls write through the existing settings owner.
  * Each layer keeps its state and opacity together and follows external changes.
  */
-import { ELITE_MISSION_MAP_MARKERS, ELITE_MISSION_MAP_MARKER_LABELS, isEliteMissionMapMarkers } from '../shared/elite-map-settings.js';
 import type { HubPresenter } from '../shared/hub.js';
 export function openHubMaps(hub: HubPresenter<HTMLElement>) {
   const available = () => !!window.gwToolsSettings?.().gwonmacTools && !!window.gwToolsSettings?.().cartographyEnabled;
@@ -48,14 +47,6 @@ export function openHubMaps(hub: HubPresenter<HTMLElement>) {
           range.oninput = () => { value.textContent = `${range.value}%`; };
           range.onchange = () => { void save({ [opacity]: Number(range.value) }); };
           control.append(range, value); group.append(control);
-        }
-        if (key === 'eliteSkillsEnabled') {
-          const control = doc.createElement('label'); control.className = 'hub-map-opacity hub-map-markers'; control.textContent = 'Mission Map markers';
-          const markers = doc.createElement('select'); markers.className = 'ui-select'; markers.setAttribute('aria-label', 'Mission Map markers');
-          for (const mode of ELITE_MISSION_MAP_MARKERS) { const option = doc.createElement('option'); option.value = mode; option.textContent = ELITE_MISSION_MAP_MARKER_LABELS[mode]; markers.append(option); }
-          painters.push(() => { markers.value = settings.eliteMissionMapMarkers; markers.disabled = saving || !available() || !settings[key]; });
-          markers.onchange = () => { if (isEliteMissionMapMarkers(markers.value)) void save({ eliteMissionMapMarkers: markers.value }); };
-          control.append(markers); group.append(control);
         }
         view.append(group);
       }

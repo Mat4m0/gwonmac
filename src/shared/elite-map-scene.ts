@@ -11,6 +11,10 @@ export type EliteSceneMarker = Readonly<{
   key: string; locationId: string; skillId: number; mapId: number;
   mapX: number; mapY: number; iconUrl: string | null;
   emphasis: EliteMarkerEmphasis; hovered: boolean;
+  /** This character already learned the skill; the marker stays as progress. */
+  captured: boolean;
+  /** "2/4" when a boss spawns at one of several positions. */
+  position: string | null;
 }>;
 export type EliteMarkerScene = Readonly<Record<EliteMapSurfaceName, readonly EliteSceneMarker[]>>;
 export const EMPTY_ELITE_SCENE: EliteMarkerScene = Object.freeze({ world: Object.freeze([]), mission: Object.freeze([]) });
