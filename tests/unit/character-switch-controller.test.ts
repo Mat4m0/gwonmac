@@ -218,7 +218,6 @@ describe("character switch controller", { concurrency: false }, () => {
       let preGame: PreGameState = "character-select";
       // Carousel: Gamma, Alpha, Beta. Account array: Alpha, Beta, Gamma.
       let slots = [1, 2, 0];
-      const listeners = new Set<(state: CompanionCharacterListState) => void>();
       const controller = createCharacterSwitchController({
         memory: new WebAssembly.Memory({ initial: 1 }),
         payloadPointer: 64,
@@ -227,7 +226,7 @@ describe("character switch controller", { concurrency: false }, () => {
         enqueue: () => 1,
         characters: {
           get state() { return list; },
-          subscribe(listener) { listeners.add(listener); listener(list); return () => listeners.delete(listener); },
+          subscribe() { return () => false; },
           dispose() {},
         },
         controls: {
@@ -255,11 +254,16 @@ describe("character switch controller", { concurrency: false }, () => {
         names: ["Private Gamma", "Private Alpha", "Private Beta"],
         selectedIndex: 1,
       });
-      // A new selector sort replaces it on the next selector visit.
+      // Changing the selector sort is followed within one poll, without a list change.
       preGame = "character-select";
       slots = [0, 1, 2];
-      for (const listener of listeners) listener(list);
+      let notified = 0;
+      const unsubscribe = controller.subscribe(() => { notified += 1; });
+      notified = 0;
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      assert.equal(notified, 1);
       assert.deepEqual(names().names, ["Private Alpha", "Private Beta", "Private Gamma"]);
+      unsubscribe();
       controller.dispose();
     });
   });
@@ -295,8 +299,9 @@ describe("character switch controller", { concurrency: false }, () => {
       controller.request("0000000000000001");
       assert.deepEqual(controller.action, { status: "failed", code: "current-target", retryable: false });
       assert.equal(calls, 0);
+      const readsBeforeDiagnostics = stateReads;
       assert.equal(controller.diagnostics().version, 7);
-      assert.equal(stateReads, 0, "diagnostics must not trigger a frame scan");
+      assert.equal(stateReads, readsBeforeDiagnostics, "diagnostics must not trigger a frame scan");
       controller.dispose();
     });
   });

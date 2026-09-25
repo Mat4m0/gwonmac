@@ -20,9 +20,7 @@ import {
 const TRANSITION_LIMIT = 32;
 const SELECTOR_READY_BUDGET_MS = 8_000;
 const SELECTOR_READY_POLL_MS = 100;
-const SELECTOR_ORDER_POLL_MS = 250;
-const SELECTOR_ORDER_ATTEMPTS = 40;
-const SELECTOR_ORDER_REFRESH_MS = 1_000;
+const SELECTOR_ORDER_POLL_MS = 500;
 
 type Enqueue = (action: number, argument: number) => number;
 type Configure = (payload: number, enabled: number) => number;
@@ -134,8 +132,6 @@ export function createCharacterSwitchController(options: Readonly<{
   // on the character-selection screen. Keep its last order for this session
   // only; character identities are never persisted.
   let selectorSlots: ReadonlyMap<string, number> | null = null;
-  let selectorOrderTimer: ReturnType<typeof setTimeout> | null = null;
-  let selectorOrderRefreshed = Number.NEGATIVE_INFINITY;
   let presentedSource: CompanionCharacterListState | null = null;
   let presentedSlots: ReadonlyMap<string, number> | null = null;
   let presented: CompanionCharacterListState = options.characters.state;
@@ -357,9 +353,11 @@ export function createCharacterSwitchController(options: Readonly<{
     publish({ status: "complete" }, "confirmation:complete");
   };
 
+  // Selector is built after the list is published, and the player can change
+  // its sort at any time. Follow it while the selection screen is visible.
   const sampleSelectorOrder = (): boolean => {
     const state = options.characters.state;
-    if (disposed || state.status !== "ready") return false;
+    if (disposed || document.visibilityState !== "visible" || state.status !== "ready") return false;
     if (options.controls.state() !== "character-select") return false;
     const slots = new Map<string, number>();
     for (const [index, character] of state.characters.entries()) {
@@ -376,27 +374,10 @@ export function createCharacterSwitchController(options: Readonly<{
     if (previous?.size === slots.size
       && [...slots].every(([key, slot]) => previous.get(key) === slot)) return true;
     selectorSlots = slots;
-    // Sampling can run inside a listener's read of `characters`.
-    queueMicrotask(() => { if (!disposed) emit(); });
+    emit();
     return true;
   };
-  // Selector is built after the list is published. Retry for a bounded time.
-  const watchSelectorOrder = (attempt = 0) => {
-    if (selectorOrderTimer !== null) clearTimeout(selectorOrderTimer);
-    selectorOrderTimer = null;
-    if (disposed || sampleSelectorOrder() || attempt >= SELECTOR_ORDER_ATTEMPTS) return;
-    selectorOrderTimer = setTimeout(
-      () => watchSelectorOrder(attempt + 1),
-      SELECTOR_ORDER_POLL_MS,
-    );
-  };
   const presentCharacters = (): CompanionCharacterListState => {
-    // A player can change the carousel sort on the selector at any time.
-    const now = performance.now();
-    if (now - selectorOrderRefreshed >= SELECTOR_ORDER_REFRESH_MS) {
-      selectorOrderRefreshed = now;
-      sampleSelectorOrder();
-    }
     const state = options.characters.state;
     const slots = selectorSlots;
     if (state === presentedSource && slots === presentedSlots) return presented;
@@ -506,9 +487,8 @@ export function createCharacterSwitchController(options: Readonly<{
   };
 
   options.configure(0, 0);
-  const unsubscribeCharacters = options.characters.subscribe((state) => {
-    if (state.status === "ready") watchSelectorOrder();
-  });
+  const selectorOrderTimer = setInterval(sampleSelectorOrder, SELECTOR_ORDER_POLL_MS);
+  sampleSelectorOrder();
 
   return Object.freeze({
     payloadBytes: CHARACTER_SWITCH_ACTION_ABI.bytes,
@@ -612,8 +592,7 @@ export function createCharacterSwitchController(options: Readonly<{
     },
     dispose() {
       disposed = true;
-      unsubscribeCharacters();
-      if (selectorOrderTimer !== null) clearTimeout(selectorOrderTimer);
+      clearInterval(selectorOrderTimer);
       pendingCharacterKey = null;
       options.configure(0, 0);
       listeners.clear();
