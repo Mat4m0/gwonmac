@@ -6,7 +6,7 @@ import { transformCartographySpikeWasm } from "../../src/main/certification/path
 import { wasmEvidence } from "../../src/main/certification/wasm-evidence.js";
 import { concat, encodeCode, encodeSection, parseCode, parseExports, sectionById, splitSections, uleb, WASM_HEADER } from "../../src/main/core/wasm-binary.js";
 import { encodeName } from "../../src/main/certification/cartography-transform-internals.js";
-import { NATIVE_MAP_GRAPHICS_MAGIC } from "../../src/shared/native-map-graphics.js";
+import { NATIVE_MAP_GRAPHICS_MAGIC, NATIVE_MAP_GRAPHICS_SURFACES } from "../../src/shared/native-map-graphics.js";
 
 test("each native map owns its mesh, restores matrices and refuses stale or malformed textures", async () => {
   assert.ok(process.env.GW_CLIENT_WASM);
@@ -15,7 +15,7 @@ test("each native map owns its mesh, restores matrices and refuses stale or malf
   const sections = splitSections(output); const bodies = parseCode(sectionById(sections, 10));
   const evidence = wasmEvidence(output); assert.ok(evidence); const module = evidence.moduleView();
   const exported = parseExports(sectionById(sections, 7)); const decoded = evidence.decodeFunctions([]);
-  for (const surface of ["mission", "world", "mission_hover", "world_hover"] as const) {
+  for (const surface of NATIVE_MAP_GRAPHICS_SURFACES) {
     const publishIndex = exported.find((entry) => entry.name === `gwonmac_${surface}_graphics_publish`)?.index;
     assert.ok(publishIndex !== undefined);
     const selected = Array.from({length: 4}, (_, index) => publishIndex - 3 + index);
@@ -132,4 +132,49 @@ test("each native map owns its mesh, restores matrices and refuses stale or malf
     }
     released.length = 0; invoke("destroy", owner); invoke("destroy", owner); assert.deepEqual(released, [12, 11]);
   }
+});
+
+test("each map draws its surfaces in the shared order", async () => {
+  assert.ok(process.env.GW_CLIENT_WASM);
+  const output = transformCartographySpikeWasm(new Uint8Array(await readFile(process.env.GW_CLIENT_WASM)), "relocated");
+  const exported = parseExports(sectionById(splitSections(output), 7));
+  const evidence = wasmEvidence(output); assert.ok(evidence); const decoded = evidence.decodeFunctions([]);
+  for (const [map, dispatcher] of [["mission", 16136], ["world", 16224]] as const) {
+    const renders = NATIVE_MAP_GRAPHICS_SURFACES.filter((surface) => surface.startsWith(map)).map((surface) => {
+      const publish = exported.find((entry) => entry.name === `gwonmac_${surface}_graphics_publish`)?.index;
+      assert.ok(publish !== undefined); return publish - 1;
+    });
+    const sites = decoded.find((row) => row.functionIndex === dispatcher)?.callSites; assert.ok(sites);
+    const offsets = renders.map((index) => { const calls = sites.get(index); assert.equal(calls?.length, 1); return calls[0]!.offset; });
+    assert.deepEqual(offsets, [...offsets].sort((a, b) => a - b), `${map} surfaces draw in declaration order`);
+  }
+});
+
+test("the map pointer answer follows the hovered frame's ancestors and refuses bad memory", async () => {
+  assert.ok(process.env.GW_CLIENT_WASM);
+  const output = transformCartographySpikeWasm(new Uint8Array(await readFile(process.env.GW_CLIENT_WASM)), "relocated");
+  const sections = splitSections(output); const bodies = parseCode(sectionById(sections, 10));
+  const evidence = wasmEvidence(output); assert.ok(evidence); const module = evidence.moduleView();
+  const index = parseExports(sectionById(sections, 7)).find((entry) => entry.name === "gwonmac_map_pointer_within")?.index;
+  assert.ok(index !== undefined);
+  assert.equal(evidence.decodeFunctions([]).find((row) => row.functionIndex === index)?.callSites.size ?? 0, 0, "the answer calls nothing");
+  const section = (id: number, body: Uint8Array) => encodeSection({id, body});
+  const fixture = concat(WASM_HEADER, section(1, sectionById(sections, 1)),
+    section(3, concat(uleb(1), uleb(module.functionTypeIndices[index]!))), section(5, concat(Uint8Array.of(1, 0), uleb(96))),
+    section(7, concat(uleb(2), encodeName("pointer"), Uint8Array.of(0, 0), encodeName("memory"), Uint8Array.of(2, 0))),
+    section(10, encodeCode([bodies[index - module.functionImportCount]!])));
+  const { exports } = new WebAssembly.Instance(new WebAssembly.Module(Uint8Array.from(fixture)));
+  const memory = exports.memory; assert.ok(memory instanceof WebAssembly.Memory); const view = new DataView(memory.buffer);
+  const pointer = exports.pointer; assert.equal(typeof pointer, "function"); if (typeof pointer !== "function") return;
+  const UNDER_MOUSE = 5911100; const [map, panel, marker] = [65536, 131072, 196608];
+  const frame = (at: number, id: number, parent: number) => { view.setUint32(at + 0xbc, id, true); view.setUint32(at + 0x128, parent ? parent + 0x128 : 0, true); };
+  frame(map, 77, 0); frame(panel, 90, 0); frame(marker, 12, map);
+  view.setUint32(UNDER_MOUSE, 0, true); assert.equal(pointer(77), 0, "nothing hovered");
+  view.setUint32(UNDER_MOUSE, map, true); assert.equal(pointer(77), 1); assert.equal(pointer(0), 0); assert.equal(pointer(-1), 0);
+  view.setUint32(UNDER_MOUSE, marker, true); assert.equal(pointer(77), 1, "a child of the map counts");
+  view.setUint32(UNDER_MOUSE, panel, true); assert.equal(pointer(77), 0, "a covering panel does not");
+  view.setUint32(UNDER_MOUSE, memory.buffer.byteLength - 8, true); assert.equal(pointer(77), 0, "out-of-bounds frames are refused");
+  let tail = 262144; frame(tail, 1, 0);
+  for (let depth = 0; depth < 20; depth += 1) { const next = tail + 1024; frame(next, 2, tail); tail = next; }
+  view.setUint32(UNDER_MOUSE, tail, true); assert.equal(pointer(1), 0, "the ancestor walk is bounded");
 });
