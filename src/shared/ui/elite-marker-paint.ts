@@ -47,7 +47,9 @@ export function paintEliteMarker(context: CanvasRenderingContext2D, paint: Elite
   context.save();
   context.globalAlpha = marker.captured && !marker.hovered ? 0.6 : marker.emphasis === "match" && !marker.hovered ? 0.92 : 1;
   if (direction !== null) paintArrow(context, x, y, size, direction, line);
-  context.shadowColor = "rgb(0 0 0 / 55%)"; context.shadowBlur = 3 * line; context.shadowOffsetY = line;
+  // The target glows gold so it reads first among many markers.
+  context.shadowColor = marker.emphasis === "target" ? "rgb(232 193 90 / 55%)" : "rgb(0 0 0 / 55%)";
+  context.shadowBlur = (marker.emphasis === "target" ? 8 : 3) * line; context.shadowOffsetY = marker.emphasis === "target" ? 0 : line;
   context.fillStyle = WELL; context.fillRect(left, top, edge, edge);
   context.shadowColor = "transparent";
   const image = artwork.get(marker.iconUrl);

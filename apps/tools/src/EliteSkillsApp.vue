@@ -329,8 +329,12 @@ async function removeCaptured() { for (const entry of huntDone.value) await plan
 function chooseMissionMarkers(mode: EliteMissionMapMarkers) { void props.setMissionMarkers?.(mode); }
 const detailLocations = (id: number) => ELITE_LOCATIONS.filter((entry) => entry.skillId === id)
   .sort((a, b) => Number(isTarget(b)) - Number(isTarget(a)) || Number(b.mapId === props.view.mapId) - Number(a.mapId === props.view.mapId) || a.boss.localeCompare(b.boss));
-const attributeName = (value: SkillPresentation) => value.attribute?.replace(/([a-z])([A-Z])/gu, "$1 $2")
-  ?? (value.profession ? PROFESSIONS[value.profession].name : "Profession unavailable");
+/** Profession · attribute · area (or boss count), as the skill reads in the game's skills window. */
+const rowMeta = (value: SkillPresentation, locations: readonly EliteLocation[]) => [
+  value.profession ? PROFESSIONS[value.profession].name : null, value.attribute?.replace(/([a-z])([A-Z])/gu, "$1 $2") ?? null,
+  locations.length === 1 ? guildWarsMapName(locations[0]!.mapId) : `${locations.length} bosses`,
+].filter(Boolean).join(" · ");
+const myClasses = computed(() => party.value.player?.professions?.filter((value): value is Profession => value !== null).join("/") ?? "");
 watch(character, () => { selectedId.value = null; preview.value = null; notice.value = null; setOpen(false, false, false); });
 watch([() => Boolean(props.view.world), loaded], ([world, isReady], [previous]) => {
   if (!world && previous) setOpen(false, false, false);
@@ -358,6 +362,7 @@ defineExpose({ find, close, pointer, activate });
     <section v-if="open" class="ui-frame elite-panel" :data-resizing="resizing || undefined" :style="panelStyle" aria-label="Elite skills">
       <header class="ui-panel-head">
         <h2>Elite skills</h2>
+        <span v-if="myClasses" class="elite-classes" :title="`This character's professions`">{{ myClasses }}</span>
         <button class="ui-button" aria-label="Collapse Elite Skills" @click="close">Hide</button>
       </header>
       <div class="elite-view-bar">
@@ -396,7 +401,7 @@ defineExpose({ find, close, pointer, activate });
                       <span v-if="captured(result.skill.id)" class="elite-tag" data-kind="captured">✓ Captured</span>
                       <span v-else-if="result.locations.some(entry => entry.mapId === view.mapId)" class="elite-tag" data-kind="here">In this area</span>
                     </span>
-                    <small>{{ attributeName(result.skill) }} · {{ result.locations.length === 1 ? guildWarsMapName(result.locations[0]!.mapId) : `${result.locations.length} bosses` }}</small></span>
+                    <small>{{ rowMeta(result.skill, result.locations) }}</small></span>
                 </button>
                 <button class="ui-button elite-track-button" :aria-label="`${tracked(result.skill.id) ? 'Remove' : 'Add'} ${result.skill.name} ${tracked(result.skill.id) ? 'from' : 'to'} Hunt list`" :title="tracked(result.skill.id) ? 'Remove from Hunt list' : 'Add to Hunt list'" :aria-pressed="tracked(result.skill.id)" :disabled="blocked" @click="toggleTrack(result.skill.id)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9Z" /></svg></button>
               </div>
