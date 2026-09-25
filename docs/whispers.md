@@ -70,8 +70,8 @@ the standalone fixture retains floating-window placement and opacity controls.
   It returns friends, open conversations, recent people and chat names once
   each, ranked exact name, name prefix, word prefix, then every word prefixed.
   Friends and Chat can be switched off in the picker; the switches are
-  session-only and apply to Hub too. Hub always offers an exact typed name that
-  is not already a known person. Names ignore case, repeated spaces, typographic
+  session-only and apply to Hub too. The Hub `whisper` scope always offers an
+  exact typed name that is not already a known person. Names ignore case, repeated spaces, typographic
   spaces and invisible format characters.
 - Sound offers Off, Background and Every incoming whisper. Muting a person
   suppresses sound while retaining unread badges. There are no notification cards.

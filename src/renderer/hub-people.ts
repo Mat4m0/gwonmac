@@ -75,12 +75,11 @@ export function createHubPeople(hub: Pick<Hub, 'attach' | 'showRows'>, session: 
       const people = findPeople(session.state, parsed.text, friends)
         .filter(person => whispersEnabled || person.source === 'friend').slice(0, MAX_PEOPLE);
       const rows = people.map(row);
-      // The name the player typed stays reachable beside similar known names. It comes
-      // last, so Enter on a partial name still chooses the known person. Outside the
-      // whisper scope a single word is more likely a search than a name.
+      // An addressed name stays reachable beside similar known names. It comes last,
+      // so Enter on a partial name still chooses the known person. Unscoped search
+      // offers only known people: any phrase could otherwise pose as a name.
       const typed = normaliseCharacterName(parsed.text);
-      if (whispersEnabled && session.state.available && isCharacterName(typed) && !people.some(person => person.exact)
-        && (parsed.scope === 'whisper' || typed.includes(' '))) {
+      if (parsed.scope === 'whisper' && session.state.available && isCharacterName(typed) && !people.some(person => person.exact)) {
         rows.push({ id: `person:typed:${whisperPersonKey(typed)}`, title: typed, detail: 'Character name', group: 'People',
           action: 'View actions', actions: () => person(typed), run: () => person(typed) });
       }
