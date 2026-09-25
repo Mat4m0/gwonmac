@@ -83,6 +83,49 @@ describe("character switch controller", { concurrency: false }, () => {
     });
   });
 
+  it("enters the last entered character from the selector without a logout", async () => {
+    await withBrowserGlobals(async () => {
+      const memory = new WebAssembly.Memory({ initial: 1 });
+      const pointer = 64;
+      const calls: number[] = [];
+      let context: CharacterSwitchContext = "character-select";
+      const controller = createCharacterSwitchController({
+        memory,
+        payloadPointer: pointer,
+        configure: () => 1,
+        enqueue(action) {
+          calls.push(action);
+          new DataView(memory.buffer).setUint32(pointer + 20, 1, true);
+          if (action === 3) context = "outpost";
+          return 1;
+        },
+        characters: {
+          state: ready(7, 0),
+          subscribe() { return () => false; },
+          dispose() {},
+        },
+        controls: {
+          state: () => "character-select",
+          switchContext: () => context,
+          diagnosticMask: () => 0,
+        },
+        buildId: 7,
+        programId: 1,
+      });
+
+      // Index 0 is the last entered character. At the selector it is not
+      // current, so selecting it must enter it rather than refuse.
+      controller.request("0000000000000001");
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      assert.equal(controller.action.status, "complete");
+      assert.deepEqual(calls, [2, 3]);
+      const diagnostics = controller.diagnostics();
+      if (diagnostics.version !== 7) throw new Error("expected live diagnostics");
+      assert.deepEqual(diagnostics.counters, { logout: 0, select: 1, play: 1 });
+      controller.dispose();
+    });
+  });
+
   it("resolves stable keys and refuses missing or current targets before a native action", async () => {
     await withBrowserGlobals(async () => {
       const memory = new WebAssembly.Memory({ initial: 1 });

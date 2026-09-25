@@ -253,7 +253,10 @@ in that case. Existing custom shortcuts and cleared bindings are preserved.
 
 ## Switch Character
 
-Press **Command-E** to open **Switch Character** from a playable outpost.
+Press **Command-E** to open **Switch Character** from a playable outpost or
+the Guild Wars character-selection screen. You can also search for a character
+in Hub and select it to switch directly. On the character-selection screen,
+every character can be selected, and the switch enters it without a logout.
 The search bar is shown for every account size. Initial focus remains on the
 current character. Press Left or Up for the previous character. Press Right or
 Down for the next character. Start typing a character name or primary profession

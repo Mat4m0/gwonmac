@@ -4,7 +4,7 @@
  */
 import { matchHubRows, parseHubQuery, type HubSource } from '../shared/hub.js';
 import { professionPresentation } from '../shared/profession-assets.js';
-import type { CharacterSwitchSource } from "./character-switch-model.js";
+import { currentCharacterIndex, type CharacterSwitchSource } from "./character-switch-model.js";
 import { createCharacterSwitchPalette } from "./character-switch-palette.js";
 
 export interface CharacterSwitchHost {
@@ -55,13 +55,19 @@ export function installCharacterSwitchHost(parent: HTMLElement): CharacterSwitch
       const parsed = parseHubQuery(query);
       if ((parsed.scope && parsed.scope !== 'char') || !parsed.term || source.characters.status !== 'ready') return [];
       const characters = source.characters;
-      return matchHubRows(characters.characters.map((character, index) => ({ id: `character:${character.characterKey}`, title: character.name,
-        ...(professionPresentation(character.primaryProfession) ? { icon: professionPresentation(character.primaryProfession)!.icon } : {}),
-        detail: `${professionPresentation(character.primaryProfession)?.name ?? ''} · Level ${character.level}`,
-        keywords: professionPresentation(character.primaryProfession)?.name ?? '', group: 'Characters', action: index === characters.selectedIndex ? 'Current character' : `Switch to ${character.name}`,
-        ...(index === characters.selectedIndex ? { unavailable: 'Current character' } : {}),
-        run: () => { window.dispatchEvent(new CustomEvent('gw:character-toggle', { cancelable: true, detail: { characterKey: character.characterKey, activate: true } })); },
-      })), parsed.term);
+      return matchHubRows(characters.characters.map((character, index) => {
+        const current = index === currentCharacterIndex(source);
+        return { id: `character:${character.characterKey}`, title: character.name,
+          ...(professionPresentation(character.primaryProfession) ? { icon: professionPresentation(character.primaryProfession)!.icon } : {}),
+          detail: `${professionPresentation(character.primaryProfession)?.name ?? ''} · Level ${character.level}`,
+          keywords: professionPresentation(character.primaryProfession)?.name ?? '', group: 'Characters', action: current ? 'Current character' : `Switch to ${character.name}`,
+          ...(current ? { unavailable: 'Current character' } : {}),
+          run: () => {
+            const refusal = palette.activate(character.characterKey);
+            if (refusal) throw refusal;
+          },
+        };
+      }), parsed.term);
     },
   };
   const detachHub = window.gwHub?.attach(hubSource);

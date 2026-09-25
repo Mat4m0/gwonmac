@@ -13,6 +13,7 @@ import type {
   CharacterSwitchFailureCode,
   CharacterSwitchSource,
 } from "./character-switch-model.js";
+import { currentCharacterIndex } from "./character-switch-model.js";
 
 const failureMessage = (code: CharacterSwitchFailureCode): string => {
   switch (code) {
@@ -22,7 +23,6 @@ const failureMessage = (code: CharacterSwitchFailureCode): string => {
     case "busy": return "A character switch is already running.";
     case "active-pvp": return "Character switching is unavailable during active PvP.";
     case "game-loading": return "Wait until Guild Wars finishes loading, then try again.";
-    case "character-select": return "Continue from the Guild Wars character selector.";
     case "state-unavailable": return "Guild Wars is not ready for character switching.";
     case "focus-lost": return "Return focus to Guild Wars and try again.";
     case "logout-refused":
@@ -186,6 +186,7 @@ export function createCharacterSwitchPalette(
   let preferenceFailure = false;
   let enabled = false;
   let rows: ReturnType<typeof orderCharacters> = [];
+  let withdrawnForSwitch = false;
   const busy = () => source.action.status === "switching";
   const carouselRadius = () => window.gwHub ? (window.innerWidth <= 640 ? 1 : 2) : window.innerWidth <= 680 ? 1 : window.innerWidth <= 1050 ? 2 : 3;
   const hub = window.gwHub;
@@ -227,8 +228,14 @@ export function createCharacterSwitchPalette(
       closePalette(true);
       return;
     }
-    if (source.action.status === "switching" && root.open) {
-      closePalette(false);
+    // An accepted switch leaves the current game state. Withdraw once from
+    // the action itself, not from local view state: a blurred Hub can keep
+    // this view mounted while it is hidden and resume it later.
+    if (!busy()) withdrawnForSwitch = false;
+    else if (!withdrawnForSwitch) {
+      withdrawnForSwitch = true;
+      view = Object.freeze({ kind: "closed" });
+      modal.close();
       return;
     }
     const state = source.characters;
@@ -284,7 +291,7 @@ export function createCharacterSwitchPalette(
         }
         const { character, index } = row;
         const profession = professionPresentation(character.primaryProfession);
-        const current = index === state.selectedIndex;
+        const current = index === currentCharacterIndex(source);
         const button = document.createElement("button");
         button.type = "button";
         button.id = `character-switch-option-${index}`;
@@ -438,7 +445,6 @@ export function createCharacterSwitchPalette(
   const openPalette = () => {
     if (source.action.status === "switching") return;
     if (source.action.status === "complete") source.reset();
-    if (source.context === "character-select" && source.action.status !== "failed") return;
     query = "";
     queryInput.value = "";
     preferenceFailure = false;
@@ -459,8 +465,8 @@ export function createCharacterSwitchPalette(
   const beginRequest = (characterKey: string) => {
     if (source.action.status === "failed") source.reset();
     source.request(characterKey);
-    if (source.action.status === "switching") closePalette(false);
-    else if (source.action.status === "confirming") {
+    if (source.action.status === "confirming") {
+      if (view.kind === "closed") openPalette();
       view = Object.freeze({ kind: "confirming" });
       render();
       stayButton.focus({ preventScroll: true });
@@ -470,7 +476,7 @@ export function createCharacterSwitchPalette(
   const requestSelected = () => {
     const state = source.characters;
     const row = rows[selected];
-    if (state.status !== "ready" || !row || row.index === state.selectedIndex) return;
+    if (state.status !== "ready" || !row || row.index === currentCharacterIndex(source)) return;
     beginRequest(row.character.characterKey);
   };
   root.addEventListener("keydown", (event) => {
@@ -648,8 +654,7 @@ export function createCharacterSwitchPalette(
     if (view.kind !== "confirming") return;
     view = Object.freeze({ kind: "characters" });
     source.confirm();
-    if (source.action.status === "switching") closePalette(false);
-    else render();
+    render();
   });
   root.querySelector(".character-switch-copy")!.addEventListener("click", () => {
     void navigator.clipboard.writeText(JSON.stringify(source.diagnostics()));
@@ -662,15 +667,7 @@ export function createCharacterSwitchPalette(
     event.preventDefault();
     if (source.action.status === "switching") return;
     if (root.open) closePalette(true);
-    else {
-      openPalette();
-      if (event instanceof CustomEvent && typeof event.detail?.characterKey === 'string') {
-        selected = rows.findIndex(row => row.character.characterKey === event.detail.characterKey);
-        if (event.detail.activate === true && selected >= 0) { requestSelected(); return; }
-        if (selected < 0) selected = 0;
-        render(false); focusSelected(); revealSelected();
-      }
-    }
+    else openPalette();
   };
   window.addEventListener("gw:character-toggle", onToggle);
   const unsubscribeSettings = window.gwNative.settings.onChange((settings) => {
@@ -690,13 +687,26 @@ export function createCharacterSwitchPalette(
     focusSelected();
   };
   window.addEventListener("resize", resize);
-  return Object.freeze({ dispose() {
-    disposeSearchEditing();
-    unsubscribe();
-    unsubscribeSettings();
-    modal.dispose();
-    window.removeEventListener("gw:character-toggle", onToggle);
-    window.removeEventListener("resize", resize);
-    root.remove();
-  } });
+  return Object.freeze({
+    // Hub selects a character directly. The palette appears only when the
+    // switch needs PvE departure confirmation; the caller reports a refusal.
+    activate(characterKey: string): Error | undefined {
+      if (!enabled) return new Error("Character switching is not available right now.");
+      if (busy()) return new Error(failureMessage("busy"));
+      beginRequest(characterKey);
+      if (source.action.status !== "failed" || view.kind !== "closed") return undefined;
+      const refusal = new Error(failureMessage(source.action.code));
+      source.reset();
+      return refusal;
+    },
+    dispose() {
+      disposeSearchEditing();
+      unsubscribe();
+      unsubscribeSettings();
+      modal.dispose();
+      window.removeEventListener("gw:character-toggle", onToggle);
+      window.removeEventListener("resize", resize);
+      root.remove();
+    },
+  });
 }

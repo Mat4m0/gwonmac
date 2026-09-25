@@ -296,7 +296,9 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
         get context() { return context; },
         request(characterKey) {
           pendingKey = characterKey;
-          phase = context === "pve-explorable" ? "confirming" : "switching";
+          phase = context === "pve-explorable" ? "confirming"
+            : context === "loading" ? "failed" : "switching";
+          if (phase === "switching") document.body.dataset.characterSwitchRequest = characterKey;
           emit();
         },
         confirm() {
@@ -379,14 +381,77 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
     await expect(dialog).toBeHidden();
     await expect(page.locator("body")).toHaveAttribute("data-character-switch-request", "0000000000000002");
 
+    // At the selector, the last entered character is selectable, not current.
     await page.evaluate(() => {
       const target = window as typeof window & {
         __characterSwitchTestSet(phase: "idle" | "confirming" | "switching" | "failed", context: CharacterSwitchContext): void;
       };
+      delete document.body.dataset.characterSwitchRequest;
       target.__characterSwitchTestSet("idle", "character-select");
       window.dispatchEvent(new CustomEvent("gw:character-toggle", { cancelable: true }));
     });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("option", { name: /Switch to Private Alpha/u }).click();
     await expect(dialog).toBeHidden();
+    await expect(page.locator("body")).toHaveAttribute(
+      "data-character-switch-request",
+      "0000000000000001",
+    );
+
+    // Hub selects directly at the selector without opening Switch Character.
+    const hub = page.getByRole("dialog", { name: "Hub", exact: true });
+    const hubSearch = hub.getByRole("combobox", { name: "Search people, places, builds" });
+    await page.evaluate(() => {
+      const target = window as typeof window & {
+        __characterSwitchTestSet(phase: "idle" | "confirming" | "switching" | "failed", context: CharacterSwitchContext): void;
+      };
+      delete document.body.dataset.characterSwitchRequest;
+      target.__characterSwitchTestSet("idle", "character-select");
+      window.gwHub?.show();
+    });
+    await hubSearch.fill("char Private Beta");
+    await hub.locator('[data-id="character:0000000000000002"]').click();
+    await expect(page.locator("body")).toHaveAttribute(
+      "data-character-switch-request",
+      "0000000000000002",
+    );
+    await expect(hub).toBeHidden();
+    await expect(dialog).toBeHidden();
+
+    // A refused Hub request is reported in Hub instead of opening the palette.
+    await page.evaluate(() => {
+      const target = window as typeof window & {
+        __characterSwitchTestSet(phase: "idle" | "confirming" | "switching" | "failed", context: CharacterSwitchContext): void;
+      };
+      delete document.body.dataset.characterSwitchRequest;
+      target.__characterSwitchTestSet("idle", "loading");
+      window.gwHub?.show();
+    });
+    await hubSearch.fill("char Private Beta");
+    await hub.locator('[data-id="character:0000000000000002"]').click();
+    await expect(hub.locator(".hub-status")).toContainText("Automatic switching stopped.");
+    await expect(dialog).toBeHidden();
+    await expect(page.locator("body")).not.toHaveAttribute("data-character-switch-request", /.*/u);
+    await page.getByRole("button", { name: "Close Hub", exact: true }).click();
+    await expect(hub).toBeHidden();
+
+    // PvE departure from Hub hands off to the palette's confirmation.
+    await page.evaluate(() => {
+      const target = window as typeof window & {
+        __characterSwitchTestSet(phase: "idle" | "confirming" | "switching" | "failed", context: CharacterSwitchContext): void;
+      };
+      target.__characterSwitchTestSet("idle", "pve-explorable");
+      window.gwHub?.show();
+    });
+    await hubSearch.fill("char Private Beta");
+    await hub.locator('[data-id="character:0000000000000002"]').click();
+    await expect(page.getByRole("heading", { name: "Leave this area?" })).toBeVisible();
+    await page.getByRole("button", { name: "Leave and switch" }).click();
+    await expect(hub).toBeHidden();
+    await expect(page.locator("body")).toHaveAttribute(
+      "data-character-switch-request",
+      "0000000000000002",
+    );
     await page.evaluate(() => {
       const target = window as typeof window & {
         __characterSwitchTestSet(phase: "idle" | "confirming" | "switching" | "failed", context: CharacterSwitchContext): void;
