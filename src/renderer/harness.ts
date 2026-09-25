@@ -633,12 +633,14 @@ async function fetchSnapshotRange(
   start: number,
   length: number,
   priority: 'demand' | 'prefetch',
+  signal: AbortSignal,
 ): Promise<Uint8Array> {
   const res = await fetch(SNAPSHOT_URL, {
     headers: {
       Range: `bytes=${start}-${start + length - 1}`,
       'X-GW-Priority': priority,
     },
+    signal,
   });
   if (!res.ok && res.status !== 206) {
     const detail = await res.text();
@@ -1524,6 +1526,7 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
       const image = source.stats();
       const s = {
         reads: image.reads,
+        stalledFetches: image.stalls,
         readMB: +(image.bytes / 1048576).toFixed(1),
         chunksFromMemory: image.fromMemory,
         chunksFromNative: image.fromNative,

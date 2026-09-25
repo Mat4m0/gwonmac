@@ -49,6 +49,7 @@ export const RENDERER_EVENT_NAMES = [
   "pointerLock.failed",
   "snapshot.readFailed",
   "snapshot.cacheFailed",
+  "snapshot.fetchStalled",
   "graphics.programCacheSaturated",
   "clipboard.copied",
   "clipboard.writeFailed",

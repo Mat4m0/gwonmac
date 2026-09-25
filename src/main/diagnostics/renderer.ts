@@ -221,6 +221,7 @@ export function recordRendererMetrics(
       case "pointerLock.failed":
       case "snapshot.readFailed":
       case "snapshot.cacheFailed":
+      case "snapshot.fetchStalled":
       case "graphics.programCacheSaturated":
       case "clipboard.copied":
       case "clipboard.writeFailed":

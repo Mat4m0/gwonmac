@@ -384,6 +384,14 @@ export const PROTOCOL_AND_RENDERER_EVENT_SCHEMA = {
     level: "error",
     fields: { fingerprint: rendererFingerprintOrNull },
   },
+  // A snapshot range response did not arrive in time and was requested again.
+  // Without the retry the client would wait on it for the rest of the session.
+  "snapshot.fetchStalled": {
+    scope: "owner",
+    subsystem: "snapshot",
+    level: "warn",
+    fields: { fingerprint: rendererFingerprintOrNull },
+  },
   // The 1024-program ceiling was reached; later programs degrade to
   // pass-through polling. Its absence in a capture rules the cache out of a
   // rendering-artifact investigation.

@@ -3,7 +3,7 @@
 // evicts, and the ranges are assembled from bytes a fake transport returns.
 // Nothing here reads source text.
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { describe, it, mock } from "node:test";
 import { createImageSource } from "../../src/renderer/image-source.js";
 
 const turn = () => new Promise<void>((resolve) => setImmediate(resolve));
@@ -41,7 +41,7 @@ function fakeTransport(
 
   return {
     requests,
-    fetchRange: (start: number, length: number, priority: Priority) =>
+    fetchRange: (start: number, length: number, priority: Priority, signal?: AbortSignal) =>
       new Promise<Uint8Array>((resolve, reject) => {
         const request: Request = {
           start,
@@ -52,6 +52,11 @@ function fakeTransport(
           reject,
         };
         requests.push(request);
+        signal?.addEventListener("abort", () => {
+          if (request.settled) return;
+          request.settled = true;
+          reject(new DOMException("aborted", "AbortError"));
+        });
         if (auto) serve(request);
       }),
     serveImmediately() {
@@ -86,7 +91,7 @@ function fakeDiagnostics() {
       snapshot: (durationUs: number, bytes: number, source: "memory" | "native") => {
         events.push(`snapshot:${source}:${bytes}`);
       },
-      event: (name: "snapshot.readFailed" | "snapshot.cacheFailed") => {
+      event: (name: "snapshot.readFailed" | "snapshot.cacheFailed" | "snapshot.fetchStalled") => {
         events.push(`event:${name}`);
       },
     },
@@ -398,6 +403,35 @@ describe("renderer image source", () => {
     await retry;
     assert.deepEqual(heap.subarray(0, 16), snapshotBytes(0, 16));
     source.stop();
+  });
+
+  it("asks again for a range whose response stalls, and completes the read", async () => {
+    mock.timers.enable({ apis: ["setTimeout"] });
+    try {
+      const { image, source, transport, diagnostics, heap, handle } = makeSource({
+        size: 128,
+        chunkSize: 64,
+      });
+
+      const reading = image.readAsync(handle, 0, null, 0, 16);
+      await turn();
+      assert.equal(transport.requests.length, 1);
+      mock.timers.tick(9_999);
+      await turn();
+      assert.equal(transport.requests.length, 1, "a slow read is not a stall yet");
+      mock.timers.tick(1);
+      await turn();
+      assert.equal(transport.requests.length, 2, "the stalled range was requested again");
+      assert.equal(diagnostics.count("event:snapshot.fetchStalled"), 1);
+      transport.serve(1);
+      await reading;
+      assert.deepEqual(heap.subarray(0, 16), snapshotBytes(0, 16));
+      assert.equal(source.stats().stalls, 1);
+      assert.equal(source.state().activeDemand, 0);
+      source.stop();
+    } finally {
+      mock.timers.reset();
+    }
   });
 
   it("reports a rejected client prefetch, which the client never retries", async () => {
