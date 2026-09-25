@@ -45,7 +45,7 @@ export type HubSource = Readonly<{
 }>;
 
 export const normaliseHubQuery = (value: string): string => value.toLowerCase().trim().replace(/\s+/gu, ' ');
-export const HUB_SCOPES = ['team', 'build', 'travel', 'char', 'whisper', 'trade', 'acc'] as const;
+export const HUB_SCOPES = ['team', 'build', 'travel', 'char', 'whisper', 'invite', 'trade', 'acc'] as const;
 export type HubScope = typeof HUB_SCOPES[number];
 /** `term` is normalised for matching; `text` keeps the typed capitalisation, e.g. for a character name. */
 export function parseHubQuery(value: string): { scope: HubScope | null; term: string; text: string } {
