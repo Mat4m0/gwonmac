@@ -615,7 +615,7 @@ useClassicFrame(panel);
   >
     <section
       ref="panel"
-      class="ui-frame ui-panel tools-window trade-window"
+      class="ui-frame ui-scene-cap ui-panel tools-window trade-window"
       :style="panelStyle"
       role="dialog"
       aria-label="Trade Chat"

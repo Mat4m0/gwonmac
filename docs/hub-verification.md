@@ -307,7 +307,10 @@ over the checkerboard, title, detail, keycap, count, placeholder and gold
 heading inks stay apart in both styles; the header's caption, game context
 and breadcrumb use the Hub's own inks (Modern's muted, apart from the titles;
 Classic's brightest on the painted strip), and a dark scene behind the panel
-composes exactly as it would without the Hub's highlight cap. The custom
+composes exactly as it would without the Hub's highlight cap. The Whispers and
+Trade popouts use the same cap and inks at 65 % in both styles, so their
+titles, muted presence and faint hints, column heads and ages still read at
+4.5:1 without flattening onto the title ink. The custom
 Modern finish is covered by its own frame-mask check. The Workbench suite separately checks critical
 team and skill feedback contrast. These are bounded contrast checks, not an
 exhaustive accessibility certification. [Hub Electron checks](../tests/electron/input-hub.spec.ts)

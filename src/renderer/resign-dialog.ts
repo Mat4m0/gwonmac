@@ -26,7 +26,7 @@ export function createResignDialog(
   root.className = "ui-modal ui-modal-layer";
   root.setAttribute("aria-labelledby", "resign-title");
   root.setAttribute("aria-describedby", "resign-description");
-  root.innerHTML = `<section class="ui-frame resign-panel">
+  root.innerHTML = `<section class="ui-frame ui-scene-cap resign-panel">
     <header class="ui-panel-head ui-window-head">
       <h2 class="ui-panel-title" id="resign-title">Resign?</h2>
       <button type="button" class="ui-button" data-icon aria-label="Close Resign">

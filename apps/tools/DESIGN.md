@@ -253,15 +253,26 @@ they must. Bright follows text wherever the guard moves it, so a recoloured
 light titlebar or surface never leaves titles near white.
 
 Over snow at low opacity, ink alone cannot keep a hierarchy: every role would
-have to be near white. The Hub, whose panel is all text, therefore holds the
-scene's highlights back behind its fill (D-28). A `backdrop-filter` soft cap
+have to be near white. Every text panel over the game (the Hub, Trade, Build
+Library, Whispers, Switch Character and Resign) therefore opts into
+`.ui-scene-cap` (`components.css`) and holds the scene's highlights back behind
+its fill (D-28). A `backdrop-filter` soft cap
 passes the scene unchanged up to 60 % of the cap and eases toward it above, so
 dark scenes keep every detail and the game around the Hub is never dimmed. The
 model picks the brightest cap at which text, muted and accent-as-text keep their
 painted ink (about 48 % of full brightness at 65 % opacity; no cap from about
-85 %), and publishes Hub-scoped inks (`--ui-hub-*`) measured against it. Faint
-then reads as muted, still well apart from titles and typed text. Surfaces
-outside the Hub keep the shared inks, which assume the uncapped scene.
+85 %), and publishes Hub-scoped inks (`--ui-hub-*`) measured against it, which
+`.ui-scene-cap` maps onto the shared ink names. A panel inside a capped panel
+does not cap again. Faint then reads as muted, still well apart from titles and
+typed text; keycaps and placeholders keep their own chrome. Only small overlays
+without the cap (map controls, tooltips, receipts) keep the shared inks, which
+assume the uncapped scene and flatten toward white at the lowest opacities.
+
+D-29 asked that low opacity never flatten title, detail and keycap into one
+tone, suggesting that secondary text switch to the Reading role at a smaller
+size. The cap keeps that hierarchy in ink on every text panel instead, so the
+type ramp does not change with opacity. Row detail, counts and previews already
+use the Reading role at caption size.
 
 - `--ui-accent-text` is the accent used as text (group headings, the scope
   chip, the build summary label, links, progress, the current-character

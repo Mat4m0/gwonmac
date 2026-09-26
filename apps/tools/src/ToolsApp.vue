@@ -266,7 +266,7 @@ useClassicFrame(panel);
   >
     <section
       ref="panel"
-      class="ui-frame ui-panel tools-window"
+      class="ui-frame ui-scene-cap ui-panel tools-window"
       :style="panelStyle"
       aria-label="Build Library"
       role="dialog"

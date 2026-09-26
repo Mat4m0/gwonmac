@@ -7,17 +7,9 @@
 }
 .hub-panel,.hub-panel * { box-sizing:border-box; }
 /* The Hub's panel is all text, so it holds bright scenes back behind its fill
- * and uses the inks measured for that (appearance.ts, D-28). The game around
- * the Hub is never dimmed. */
-#hub {
-  /* The player's Hub text size (D-16) re-derives every type role in here. */
-  --ui-text-scale:var(--ui-hub-text-scale);
-  --ui-text:var(--ui-hub-text); --ui-text-bright:var(--ui-hub-text-bright); --ui-display-text:var(--ui-hub-display-text);
-  --ui-text-muted:var(--ui-hub-text-muted); --ui-text-faint:var(--ui-hub-text-faint); --ui-accent-text:var(--ui-hub-accent-text);
-}
-#hub > .hub-panel { backdrop-filter:var(--ui-hub-backdrop); }
-#hub > .hub-panel.ui-art-frame { backdrop-filter:var(--ui-art-backdrop); }
-#hub > .hub-panel.ui-art-frame::before { backdrop-filter:var(--ui-art-surface-backdrop); }
+ * (`.ui-scene-cap`, components.css). The game around the Hub is never dimmed.
+ * The player's Hub text size (D-16) re-derives every type role in here. */
+#hub { --ui-text-scale:var(--ui-hub-text-scale); }
 .hub-heading { display:flex; align-items:center; gap:10px; min-height:44px; padding:8px 16px; flex-shrink:0; z-index:var(--ui-z-title); }
 .hub-name { color:var(--ui-display-text); font-family:var(--ui-font-display); }
 .hub-caption { color:var(--ui-text-muted); font-size:var(--ui-type-caption-size); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }

@@ -145,8 +145,8 @@ const CHECKERBOARD = 'body { background: repeating-conic-gradient(#fff 0% 25%, #
 /** Composed contrast of visible text: the ink comes from the computed colour,
  * the background from a screenshot with every glyph and shadow hidden, so the
  * game backdrop, panel material, hover and selection fills are all included. */
-async function textContrast(page: Page, selectors: Record<string, string>) {
-  const labels = await page.evaluate(selectors => {
+async function textContrast(page: Page, selectors: Record<string, string>, scope = '#hub') {
+  const labels = await page.evaluate(([selectors, scope]) => {
     const canvas = document.createElement('canvas'); canvas.width = canvas.height = 1;
     const context = canvas.getContext('2d', { willReadFrequently: true })!;
     const srgb = (color: string) => { context.clearRect(0, 0, 1, 1); context.fillStyle = color; context.fillRect(0, 0, 1, 1); return [...context.getImageData(0, 0, 1, 1).data.slice(0, 3)]; };
@@ -156,18 +156,18 @@ async function textContrast(page: Page, selectors: Record<string, string>) {
         const box = input.getBoundingClientRect();
         return input.value ? [] : [{ role, text: input.placeholder, color: srgb(getComputedStyle(input, '::placeholder').color), box: { x: box.x, y: box.y, width: 160, height: box.height } }];
       }
-      return [...document.querySelectorAll<HTMLElement>(`#hub ${selector}`)].flatMap(element => {
+      return [...document.querySelectorAll<HTMLElement>(selector.split(',').map(part => `${scope} ${part.trim()}`).join(','))].flatMap(element => {
         const range = document.createRange(); range.selectNodeContents(element);
         const box = [...range.getClientRects()].find(rect => rect.width > 2);
         if (!box) return [];
         const hit = document.elementFromPoint(box.x + Math.min(6, box.width / 2), box.y + box.height / 2);
-        const scroller = element.closest('.hub-results, .hub-view')?.getBoundingClientRect();
+        const scroller = element.closest('.hub-results, .hub-view, .ui-scroll')?.getBoundingClientRect();
         if (!hit || !element.contains(hit) || (scroller && (box.top < scroller.top || box.bottom > scroller.bottom))) return [];
         return [{ role, text: element.textContent?.trim() ?? '', color: srgb(getComputedStyle(element).color), box: { x: box.x, y: box.y, width: box.width, height: box.height } }];
       });
     });
-  }, selectors);
-  const hidden = await page.addStyleTag({ content: '#hub, #hub *, #hub input::placeholder { color:transparent !important; -webkit-text-fill-color:transparent !important; text-shadow:none !important; caret-color:transparent !important; } #hub svg, #hub img { visibility:hidden !important; }' });
+  }, [selectors, scope] as const);
+  const hidden = await page.addStyleTag({ content: `${scope}, ${scope} *, ${scope} input::placeholder { color:transparent !important; -webkit-text-fill-color:transparent !important; text-shadow:none !important; caret-color:transparent !important; } ${scope} svg, ${scope} img { visibility:hidden !important; }` });
   const composed = PNG.sync.read(await page.screenshot());
   await hidden.evaluate(element => element.remove());
   const luminance = (rgb: readonly number[]) => {
@@ -225,6 +225,39 @@ for (const [uiStyle, uiPanelOpacity] of [['obsidian', 65], ['guild-wars', 94], [
     for (const role of ['title', 'detail', 'group', 'count', 'keycap', 'name', 'caption', 'context', 'crumb', 'separator', 'summary', 'scope', 'primary', 'placeholder', 'profession', 'setting']) {
       expect(measured.some(label => label.role === role), `${role} was measured`).toBe(true);
     }
+    for (const label of measured) expect(label.ratio, `${label.role} “${label.text}”`).toBeGreaterThanOrEqual(4.5);
+  });
+}
+
+// The Hub's popouts and in-game dialogs hold the scene back like the Hub
+// (D-29), so their secondary copy keeps its muted ink and still reads.
+for (const uiStyle of ['guild-wars', 'obsidian'] as const) {
+  test(`Whispers and Trade keep the Hub's ink hierarchy at 65% over a bright scene in ${uiStyle}`, async ({ page }) => {
+    const media = await page.context().newCDPSession(page);
+    await media.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-transparency', value: 'no-preference' }] });
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/?hub');
+    await page.addStyleTag({ content: CHECKERBOARD });
+    const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+    await expect(search).toBeFocused();
+    await page.evaluate(appearance => window.gwApplyFixtureAppearance?.(appearance), { uiStyle, uiPanelOpacity: 65 });
+    const inks = (selector: string) => page.locator(selector).evaluate(element => {
+      const context = document.createElement('canvas').getContext('2d')!;
+      const read = (name: string) => { context.fillStyle = getComputedStyle(element).getPropertyValue(name); context.fillRect(0, 0, 1, 1); return [...context.getImageData(0, 0, 1, 1).data.slice(0, 3)]; };
+      return { text: read('--ui-text'), muted: read('--ui-text-muted') };
+    });
+    const hub = await inks('#hub .hub-panel');
+    expect(ratio(hub.text, hub.muted), 'Hub title over detail').toBeGreaterThanOrEqual(1.5);
+    await search.fill('whisper Romi'); await search.press('Enter');
+    await expect(page.locator('#whisper-window')).toBeVisible();
+    expect(await inks('#whisper-window')).toEqual(hub);
+    const measured = await textContrast(page, { title: '.ui-panel-title', presence: '.whisper-presence-label > span:not(.whisper-presence)', empty: '.whisper-empty', hints: '.whisper-hints span' }, '#whisper-window');
+    await page.keyboard.press('Meta+k');
+    await expect(page.locator('.trade-window')).toBeVisible();
+    expect(await inks('.trade-window')).toEqual(hub);
+    await page.locator('#whisper-window').evaluate(element => { element.style.visibility = 'hidden'; });
+    measured.push(...await textContrast(page, { title: '.ui-panel-title', columns: '.trade-columns span', age: '.age-cell' }, '.trade-window'));
+    for (const role of ['title', 'presence', 'empty', 'hints', 'columns', 'age']) expect(measured.some(label => label.role === role), `${role} was measured`).toBe(true);
     for (const label of measured) expect(label.ratio, `${label.role} “${label.text}”`).toBeGreaterThanOrEqual(4.5);
   });
 }

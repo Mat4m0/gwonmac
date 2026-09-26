@@ -372,7 +372,7 @@ useClassicFrame(panel);
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3C6.49 3 2 6.59 2 11c0 2.91 1.9 5.51 5 6.93V21c0 .38.21.73.55.89c.14.07.29.11.45.11c.21 0 .42-.07.6-.2l3.74-2.8c5.36-.14 9.66-3.68 9.66-8s-4.49-8-10-8"/></svg>
     <span v-if="unread" class="whisper-badge" aria-hidden="true">{{ unread > 99 ? '99+' : unread }}</span>
   </button>
-  <section v-show="visible" id="whisper-window" ref="panel" class="ui-frame ui-reading-surface whisper-window" data-variant="quiet" :style="windowStyle" :data-chat-selected="Boolean(selected)" aria-label="Whispers" @keydown="escapeOptions">
+  <section v-show="visible" id="whisper-window" ref="panel" class="ui-frame ui-scene-cap ui-reading-surface whisper-window" data-variant="quiet" :style="windowStyle" :data-chat-selected="Boolean(selected)" aria-label="Whispers" @keydown="escapeOptions">
     <header class="ui-panel-head ui-window-head whisper-frame-head" @pointerdown="startDrag">
       <h2 class="ui-panel-title">Whispers</h2>
       <button class="ui-window-close" aria-label="Hide Whispers" @click="session.setVisible(false)">×</button>

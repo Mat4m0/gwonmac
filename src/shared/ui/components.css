@@ -86,6 +86,25 @@
   z-index: var(--ui-art-surface-z);
 }
 .ui-frame.ui-art-frame::after { display: var(--ui-art-corners); }
+/* Text panels over the game (the Hub, its popouts and in-game dialogs) hold
+ * bright scenes back behind their fill and use the inks measured for that, so
+ * low opacity keeps the title, detail and gold hierarchy (appearance.ts,
+ * D-28, D-29). The treatment follows the layer that paints the fill. */
+.ui-scene-cap {
+  --ui-text: var(--ui-hub-text);
+  --ui-text-bright: var(--ui-hub-text-bright);
+  --ui-display-text: var(--ui-hub-display-text);
+  --ui-text-muted: var(--ui-hub-text-muted);
+  --ui-text-faint: var(--ui-hub-text-faint);
+  --ui-accent-text: var(--ui-hub-accent-text);
+  backdrop-filter: var(--ui-hub-backdrop);
+}
+.ui-scene-cap.ui-art-frame { backdrop-filter: var(--ui-art-backdrop); }
+.ui-scene-cap.ui-art-frame::before { backdrop-filter: var(--ui-art-surface-backdrop); }
+/* A panel embedded in a capped panel already sits on held-back scene. */
+.ui-scene-cap .ui-scene-cap,
+.ui-scene-cap .ui-scene-cap.ui-art-frame,
+.ui-scene-cap .ui-scene-cap.ui-art-frame::before { backdrop-filter: none; }
 .ui-frame.ui-art-frame > .ui-window-head {
   position: var(--ui-art-head-position);
   inset: var(--ui-art-head-inset);
