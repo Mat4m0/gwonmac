@@ -416,6 +416,27 @@ test('Hub text size scales every type role inside the fixed frame, keeps the tas
   await search.fill('travel'); await search.press('Enter');
   await expect(page.getByRole('combobox', { name: 'Destination, phrase, or friend' })).toBeVisible();
   expect(await page.locator('.hub-panel').evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
+
+  // Character cards grow with the text size: name, Current marker and meta stay inside every card.
+  await page.keyboard.press('Meta+E');
+  const cards = page.locator('#hub .character-switch-row');
+  await expect(cards.first()).toBeVisible();
+  for (const hubTextSize of [100, 150, 200]) {
+    await page.evaluate(hubTextSize => window.gwApplyFixtureAppearance?.({ uiStyle: 'guild-wars', uiPanelOpacity: 94, hubTextSize }), hubTextSize);
+    const spills = await cards.evaluateAll(cards => cards.flatMap(card => {
+      const frame = card.getBoundingClientRect();
+      return [...card.querySelectorAll<HTMLElement>('.character-switch-name, .character-switch-current, .character-switch-meta')].flatMap(text => {
+        const range = document.createRange(); range.selectNodeContents(text);
+        const ink = range.getBoundingClientRect();
+        const outside = Math.max(frame.left - ink.left, ink.right - frame.right, frame.top - ink.top, ink.bottom - frame.bottom, text.scrollWidth - text.clientWidth);
+        return outside > 1 ? [`${text.className} “${text.textContent}” by ${outside.toFixed(1)} px`] : [];
+      });
+    }));
+    expect(spills, `${hubTextSize}%`).toEqual([]);
+    const heights = new Set(await cards.evaluateAll(cards => cards.map(card => Math.round(card.getBoundingClientRect().height))));
+    expect([...heights], `${hubTextSize}% one card height`).toHaveLength(1);
+    if (hubTextSize === 100) expect([...heights], 'the ramp size keeps 154 px cards').toEqual([154]);
+  }
 });
 
 test('Settings navigation keeps every section on one line in every panel font', async ({ page }) => {

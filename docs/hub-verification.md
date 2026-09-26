@@ -290,7 +290,9 @@ text size at 150 % and 200 % scales titles, detail, headings, search and count
 by one factor, keeps the 780 × 590 frame and the task (query, caret, selection,
 focus), survives a reload, never changes the canvas box, device pixel ratio or
 text outside the Hub, and leaves no horizontal overflow in Home, Settings,
-Travel, `team` and the calculator. A
+Travel, `team` and the calculator. In Characters at 100 %, 150 % and 200 %,
+every card shares one height (154 px at 100 %) and its name, Current marker
+and meta stay inside it. A
 live theme, font and opacity change keeps the query, caret, selection, focus
 and the list's scroll offset (clamped only when a taller Modern list has less
 to scroll), never focuses `<body>` and never paints a second selection. At 65 %
