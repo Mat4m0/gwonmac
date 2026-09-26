@@ -15,6 +15,7 @@
  * before a later press of the run, the rest of the run is swallowed wherever
  * it lands, the game canvas included, so a double-click never runs what its
  * first click revealed and never reaches Guild Wars as a world click.
+ * Destructive confirmations share one arming rule for the same reason.
  */
 
 type Surface = Readonly<{
@@ -47,6 +48,32 @@ const FOCUSABLE = [
 /** A pointerdown belongs to the previous press of a cancelled run only this soon and this close. */
 const CLICK_RUN_MS = 500;
 const CLICK_RUN_SLOP = 8;
+/** How long a destructive confirmation waits before it accepts an activation. */
+export const CONFIRMATION_ARMING_MS = 400;
+
+/**
+ * Arms a destructive confirmation (Resign, Leave and switch, account replace):
+ * it accepts nothing until ~400 ms after it was shown, and never the later
+ * click of a multi-click, so the gesture that opened it cannot also confirm it.
+ * `data-armed` marks the button once it accepts.
+ */
+export function armConfirmation(button: HTMLElement) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const disarm = () => {
+    clearTimeout(timer);
+    delete button.dataset.armed;
+  };
+  return Object.freeze({
+    arm() {
+      disarm();
+      timer = setTimeout(() => { button.dataset.armed = ""; }, CONFIRMATION_ARMING_MS);
+    },
+    disarm,
+    accepts: (event?: Event) => button.dataset.armed !== undefined
+      && !(event instanceof MouseEvent && event.detail > 1),
+  });
+}
+
 function focusableElements(root: HTMLElement): HTMLElement[] {
   return [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((element) =>
     !element.hidden

@@ -15,6 +15,7 @@ import type {
   CharacterSwitchSource,
 } from "./character-switch-model.js";
 import { currentCharacterIndex } from "./character-switch-model.js";
+import { armConfirmation } from "./surface-controller.js";
 
 const failureMessage = (code: CharacterSwitchFailureCode): string => {
   switch (code) {
@@ -144,6 +145,7 @@ export function createCharacterSwitchPalette(
   const confirmPanel = root.querySelector<HTMLElement>(".character-switch-confirm")!;
   const stayButton = root.querySelector<HTMLButtonElement>(".character-switch-stay")!;
   const leaveButton = root.querySelector<HTMLButtonElement>(".character-switch-leave")!;
+  const leaveArming = armConfirmation(leaveButton);
   const primaryButton = root.querySelector<HTMLButtonElement>(".character-switch-action")!;
   const settingsToggle = root.querySelector<HTMLButtonElement>(".character-switch-settings-toggle")!;
   const searchCheckbox = root.querySelector<HTMLInputElement>("#character-switch-enable-search")!;
@@ -242,10 +244,12 @@ export function createCharacterSwitchPalette(
   const render = (preserveCharacterFocus = true) => {
     if (view.kind !== renderedView) {
       // A new inner page (the cards, a confirmation, the settings) cancels a
-      // click run that began before it (HUB-242).
+      // click run that began before it, and "Leave and switch" arms anew (HUB-242).
       renderedView = view.kind;
       pressedKey = undefined;
       modal.pageChanged();
+      if (view.kind === "confirming") leaveArming.arm();
+      else leaveArming.disarm();
     }
     if (!enabled) {
       closePalette(true);
@@ -691,8 +695,8 @@ export function createCharacterSwitchPalette(
     render();
     focusSelected();
   });
-  leaveButton.addEventListener("click", () => {
-    if (view.kind !== "confirming") return;
+  leaveButton.addEventListener("click", (event) => {
+    if (view.kind !== "confirming" || !leaveArming.accepts(event)) return;
     view = Object.freeze({ kind: "characters" });
     source.confirm();
     render();

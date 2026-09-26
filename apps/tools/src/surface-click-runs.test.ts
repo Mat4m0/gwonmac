@@ -3,10 +3,10 @@
  * its first click revealed, and the trailing clicks of a run whose page changed
  * reach nobody, the game canvas included. Rapid clicks on an unchanged page still count.
  */
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 // The production owner, exercised with trusted-looking events.
 // eslint-disable-next-line no-restricted-imports
-import { installSurfaceController } from '../../../src/renderer/surface-controller';
+import { armConfirmation, CONFIRMATION_ARMING_MS, installSurfaceController } from '../../../src/renderer/surface-controller';
 
 type Controller = ReturnType<typeof installSurfaceController>;
 let controller: Controller;
@@ -116,3 +116,26 @@ describe('click runs', () => {
   });
 });
 
+describe('confirmation arming', () => {
+  it('accepts nothing before ~400 ms and never the later click of a multi-click', () => {
+    vi.useFakeTimers();
+    try {
+      const button = document.createElement('button');
+      const arming = armConfirmation(button);
+      arming.arm();
+      expect(arming.accepts()).toBe(false);
+      expect(button.hasAttribute('data-armed')).toBe(false);
+      vi.advanceTimersByTime(CONFIRMATION_ARMING_MS);
+      expect(button.hasAttribute('data-armed')).toBe(true);
+      expect(arming.accepts()).toBe(true);
+      expect(arming.accepts(new MouseEvent('click', { detail: 1 }))).toBe(true);
+      expect(arming.accepts(new MouseEvent('click', { detail: 0 }))).toBe(true);
+      expect(arming.accepts(new MouseEvent('click', { detail: 2 }))).toBe(false);
+      arming.arm();
+      expect(arming.accepts()).toBe(false);
+      arming.disarm();
+      vi.advanceTimersByTime(CONFIRMATION_ARMING_MS);
+      expect(arming.accepts()).toBe(false);
+    } finally { vi.useRealTimers(); }
+  });
+});

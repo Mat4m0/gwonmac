@@ -137,6 +137,10 @@ do not focus a decorative heading or disabled primary action.
   wherever it lands, the game canvas included (HUB-242, HUB-244). Rapid clicks on
   an unchanged page still count. Footer slots disable instead of hiding, so
   nothing slides under a resting pointer. A separate details affordance may inspect without executing.
+- Destructive confirmations (Resign, "Leave and switch", closing the running
+  account) share one arming helper: they accept nothing until ~400 ms after they
+  appear, never the later click of a multi-click, and mark `data-armed` once
+  they accept.
 - Backspace deletes while editing nonempty text. Outside editing, or in empty
   search, it returns one stage. No navigation during composition. Empty textareas
   and ordinary form fields retain native editing rather than becoming Back controls.

@@ -24,7 +24,10 @@ test.describe('game lifecycle', () => {
     await search.fill('char toefte'); await search.press('Enter');
     await expect(page.locator('#character-switch-title')).toHaveText('Leave this area?');
     await expect(page.locator('#app')).not.toHaveAttribute('data-action', /Character/);
-    await page.getByRole('button', { name: 'Leave and switch', exact: true }).click();
+    // The confirmation arms after a moment, so the press that raised it cannot pass it.
+    const leave = page.getByRole('button', { name: 'Leave and switch', exact: true });
+    await expect(leave).toHaveAttribute('data-armed', '');
+    await leave.click();
     await expect(page.locator('#app')).toHaveAttribute('data-action', 'Character toefte');
   });
 

@@ -52,7 +52,7 @@ async function clicks(page: Page, target: Locator, count: number, gap = 120, at?
 const consequential: Record<string, { query?: string; open(page: Page): Promise<Locator>; footer: RegExp; ran: string[] }> = {
   'Continue Eye of the North': { open: async page => row(page, 'Eye of the North'), footer: /^Travel to Eye of the North/, ran: ['TRAVEL Eye of the North'] },
   'Apply to me': { open: async page => { await enter(page, 'build smiter'); return page.getByRole('option', { name: /Apply to me/ }); }, footer: /^Apply to me/, ran: ['apply-build', 'command:1', 'command:2'] },
-  'Close Main and open Second': { open: async page => { await enter(page, 'acc s'); return row(page, 'Close Main and open Second'); }, footer: /^Switch account/, ran: ['Account Second replace'] },
+  'Close Main and open Second': { open: async page => { await enter(page, 'acc s'); return row(page, 'Close Main and open Second'); }, footer: /^Switch account/, ran: [] },
   'character card': { open: async page => { await page.keyboard.press('Meta+e'); return page.locator('button[data-character-key="mesmer"]'); }, footer: /^Switch to Fixture Mesmer/, ran: ['Character mesmer'] },
   'Invite to party': { query: '&party', open: async page => { await enter(page, 'zed delta'); await expect(caption(page)).toHaveText('Zed Delta'); return row(page, 'Invite to party'); }, footer: /^Invite Zed Delta/, ran: ['PARTY.INVITE Zed Delta'] },
 };
@@ -75,6 +75,12 @@ test.describe('a row that changes the game', () => {
         const target = await subject.open(page);
         await page.waitForTimeout(600);
         await clicks(page, target, 2, gap);
+        if (name === 'Close Main and open Second') {
+          // Replacing the running game passes an armed confirmation first.
+          await expect(caption(page)).toHaveText('Close Main?');
+          expect(await ledger(page)).toEqual([]);
+          return;
+        }
         await expect.poll(() => ledger(page)).toEqual(subject.ran);
         expect(await canvas(page)).toEqual([]);
       });
@@ -281,6 +287,43 @@ test('Characters: rapid clicks on an unchanged page still count', async ({ page 
   await clicks(page, page.getByRole('button', { name: 'Next character' }), 2);
   await expect(page.locator('button[data-character-key="mesmer"]')).toHaveAttribute('aria-selected', 'true');
   expect(await ledger(page)).toEqual([]);
+});
+
+test('Characters: a double-click that raises Leave this area? never confirms it', async ({ page }) => {
+  for (const count of [2, 3]) {
+    await open(page, '&lifecycle=pve-explorable');
+    await page.keyboard.press('Meta+e');
+    await page.keyboard.press('ArrowLeft');
+    await clicks(page, page.locator('button[data-character-key="toefte"]'), count, 120, { x: 60, y: 12 });
+    await expect(page.locator('#character-switch-title')).toHaveText('Leave this area?');
+    const leave = page.getByRole('button', { name: 'Leave and switch', exact: true });
+    await expect(leave).toBeVisible();
+    expect(await ledger(page)).toEqual([]);
+    await expect(leave).toHaveAttribute('data-armed', '');
+    await leave.click();
+    await expect.poll(() => ledger(page)).toEqual(['Character toefte']);
+  }
+});
+
+test('Accounts: a replace needs one deliberate armed confirmation', async ({ page }) => {
+  await open(page);
+  await search(page).fill('acc second');
+  await search(page).press('Enter');
+  await expect(caption(page)).toHaveText('Close Main?');
+  const confirm = page.getByRole('button', { name: /^Close Main and open Second/ });
+  await expect(confirm).toBeFocused();
+  // An Enter or a multi-click before it arms confirms nothing.
+  await page.keyboard.press('Enter');
+  expect(await ledger(page)).toEqual([]);
+  await expect(confirm).toHaveAttribute('data-armed', '');
+  await clicks(page, confirm, 2, 0);
+  expect(await ledger(page)).toEqual(['Account Second replace']);
+  // Back cancels it.
+  await page.getByRole('button', { name: 'Open Hub', exact: true }).click();
+  await search(page).fill('acc second'); await search(page).press('Enter');
+  await page.keyboard.press('Meta+Backspace');
+  await expect(page.locator('.hub-row[aria-selected="true"]')).toContainText('Close Main and open Second');
+  expect(await ledger(page)).toEqual(['Account Second replace']);
 });
 
 test('a double-click on the calculator card copies once', async ({ page }) => {

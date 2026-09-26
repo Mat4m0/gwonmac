@@ -310,7 +310,8 @@ current character. Press Left or Up for the previous character. Press Right or
 Down for the next character. Start typing a character name or primary profession
 to move focus to search. Secondary professions are not searched. The number keys
 1–9 and 0 switch to the first ten characters. A click on a card selects it; press
-Enter, click **Switch to …** in the footer, or double-click the card to switch. Use **View → Reload Guild Wars**
+Enter, click **Switch to …** in the footer, or double-click the card to switch.
+**Leave and switch** accepts a click only after a brief moment. Use **View → Reload Guild Wars**
 to reload.
 
 Enable **Resign** in **Settings → Tools**. It is off by default and requires
@@ -318,7 +319,9 @@ Tools. Its shortcut is unassigned by default and can be assigned or cleared
 in the same row. Turning off Resign or Tools disables it immediately.
 
 Press the shortcut for **Resign** in PvE. Press Enter to confirm sending
-`/resign`, or click **Resign** in the in-game dialog. Escape, **Cancel**, the close
+`/resign`, or click **Resign** in the in-game dialog. The dialog accepts a
+confirmation only after a brief moment, so the press that opened it cannot also
+confirm it. Escape, **Cancel**, the close
 button, and clicking outside cancel. Close text fields first.
 The action stops if chat contains text or you interrupt it.
 
@@ -438,7 +441,9 @@ an explorable area retains the existing leave-area confirmation. The current
 character is labelled and cannot be switched to again.
 
 Type `acc second` to choose **Close Main and open Second** or **Open Second**.
-The first opens the target successfully before saving and closing the current
-game; the second keeps both accounts open. Already-open accounts are shown instead
+The first asks **Close Main?** before it does anything; confirm it after a brief
+moment with Enter or its button, or go back with **Keep Main**, Escape or
+Command-Backspace. It then opens the target successfully before saving and
+closing the current game. The second keeps both accounts open. Already-open accounts are shown instead
 of launched twice. Search **Switch Account** to browse all saved accounts. Sign-in
 stays in the normal Guild Wars window.

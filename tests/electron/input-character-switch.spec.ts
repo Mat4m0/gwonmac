@@ -378,6 +378,7 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
       };
       target.__characterSwitchTestRefreshCharacters();
     });
+    await expect(page.getByRole("button", { name: "Leave and switch" })).toHaveAttribute("data-armed", "");
     await page.getByRole("button", { name: "Leave and switch" }).click();
     await expect(dialog).toBeHidden();
     await expect(page.locator("body")).toHaveAttribute("data-character-switch-request", "0000000000000002");
@@ -447,6 +448,7 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
     await hubSearch.fill("char Private Beta");
     await hub.locator('[data-id="character:0000000000000002"]').dblclick();
     await expect(page.getByRole("heading", { name: "Leave this area?" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Leave and switch" })).toHaveAttribute("data-armed", "");
     await page.getByRole("button", { name: "Leave and switch" }).click();
     await expect(hub).toBeHidden();
     await expect(page.locator("body")).toHaveAttribute(
