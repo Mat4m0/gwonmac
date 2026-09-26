@@ -277,10 +277,11 @@ Current runtime travel only proves map-ID travel with its existing district poli
 Do not promise editable live district selection until the native contract supports it.
 Use fresh live location authority, not retained whisper contacts, before travelling.
 **Invite to party** sends one named `/invite` line through the certified chat
-mailbox, only from a PvE outpost. **Travel and invite** travels to the friend's
-outpost (Any district), waits for a settled arrival of the same character, and
-then sends one invite. A refused trip, a character change, or no arrival within
-60 seconds sends nothing. Guild Wars reports the invite result in chat; Hub
+mailbox, only from a PvE outpost and only to an exact name. A friend in another
+map is unavailable with their location. **Travel and invite** travels to the
+friend's PvE outpost (Any district), waits for a settled arrival of the same
+character, and then sends one invite. A refused trip, a character change, a
+non-PvE arrival, or no arrival within 60 seconds sends nothing. Guild Wars reports the invite result in chat; Hub
 claims only that Guild Wars took the command.
 
 Maps and display features retain their settings owners. Quick Item Move retains

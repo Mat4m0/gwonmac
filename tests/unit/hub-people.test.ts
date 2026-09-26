@@ -75,6 +75,7 @@ const invitePort = (overrides: Partial<PartyInvite> = {}) => {
     unavailable: () => null, travelUnavailable: () => null,
     invite: async name => { calls.push(`invite:${name}`); },
     travelAndInvite: async (friend) => { calls.push(`travel:${friend.character}`); return { invited: Promise.resolve() }; },
+    dispose() {},
     ...overrides,
   };
   return { party, calls };

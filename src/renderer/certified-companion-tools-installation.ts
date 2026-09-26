@@ -29,7 +29,7 @@ import type { ProfessionCommandTraceReader } from "./profession-command-trace.js
 import { createWhisperInstallation, type WhisperInstallation } from "./whisper-installation.js";
 import { createWhisperSession } from "../shared/whisper-session.js";
 import { createHubPeople } from "./hub-people.js";
-import { createPartyInvite } from "./party-invite.js";
+import { createPartyInvite, type PartyInvite } from "./party-invite.js";
 import { createWhisperSurface } from "./whisper-surface.js";
 import { installResignCommand } from "./resign.js";
 import type { StorageInstallation } from "./enhancement-storage-installation.js";
@@ -336,6 +336,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
   const whisperSession = createWhisperSession(whispers.send);
   const unsubscribeWhispers = whispers.subscribe((messages, missed) => whisperSession.observe(messages, missed));
   let hubPeople: ReturnType<typeof createHubPeople> | null = null;
+  let partyInvite: PartyInvite | null = null;
   let whisperSurface: ReturnType<typeof createWhisperSurface> | null = null;
   let whisperCharacter: string | null = null;
   const resign = input.resignExports ? installResignCommand(input.resignExports) : null;
@@ -425,6 +426,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
       () => { unsubscribeAlcohol?.(); unsubscribeAlcoholGeometry?.(); alcoholOverlay?.dispose(); alcoholOverlay = null; },
       () => hud?.dispose(),
       () => { resign?.dispose(); },
+      () => { partyInvite?.dispose(); partyInvite = null; },
       () => { hubPeople?.dispose(); hubPeople = null; },
       () => { whispers.setEnabled(false); unsubscribeWhispers(); whisperSurface?.dispose(); whisperSurface = null; whisperSession.dispose(); },
       () => { configureTrade?.(0); },
@@ -626,7 +628,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
   prepare(() => travel?.mount(document.body));
   const hub = window.gwHub;
   const travelToFriend = travel ? (friend: TravelFriend, generation: number) => travel.travelToFriend(friend, generation) : null;
-  const partyInvite = capabilities.whisperChat ? createPartyInvite({
+  partyInvite = capabilities.whisperChat ? createPartyInvite({
     region: () => playRegions.state,
     subscribeRegion: listener => { const unsubscribe = playRegions.subscribe(() => listener()); return () => { unsubscribe(); }; },
     chatReady: () => whispers.enabled,

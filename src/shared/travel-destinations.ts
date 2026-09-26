@@ -286,3 +286,16 @@ export function travelBrowseScope(
 export function travelDestination(mapId: number): TravelDestination | null {
   return TRAVEL_DESTINATIONS.find((candidate) => candidate.mapId === mapId) ?? null;
 }
+
+/**
+ * Competitive outposts whose game map carries the PvP flag. Tools close there, so a
+ * Hub action that must act after arrival (Travel and invite) refuses them up front.
+ * The arrival check stays authoritative for any map this list does not name.
+ */
+const PVP_OUTPOST_MAP_IDS: readonly number[] = Object.freeze([
+  188, 330, 796, 281, 282, 293, 294, 295, 296,
+]);
+
+export function isPvpTravelDestination(mapId: number): boolean {
+  return PVP_OUTPOST_MAP_IDS.includes(mapId);
+}

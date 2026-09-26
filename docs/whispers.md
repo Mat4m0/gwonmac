@@ -88,11 +88,17 @@ command is pending at a time. The drained mailbox is the only receipt; Guild
 Wars reports acceptance or refusal in original chat.
 
 `party-invite.ts` allows an invite only in a PvE outpost with the chat mailbox
-enabled. Travel and invite captures the character, starts the existing friend
-Travel, and invites once after a ready outpost of the friend's map stays ready
-for two seconds. A character change, a refused trip or 60 seconds without
-arrival withdraws the invite. The friend feed has no district, so an arrival in
-another district can fail in Guild Wars.
+enabled. A friend in another map cannot receive it, so the row says where the
+friend is and points to Travel and invite before Enter. Travel and invite
+refuses a known PvP outpost up front. It captures the character, starts the
+existing friend Travel, and invites once after a ready PvE outpost of the
+friend's map stays ready for two seconds. The first outpost after login can
+publish no character key yet; the first known key is adopted, and only two
+different known keys count as a character change. A character change, a
+refused trip, a non-PvE arrival or 60 seconds without arrival withdraws the
+invite; a non-PvE arrival withdraws it at once. Disposing Tools withdraws a
+pending arrival. The friend feed has no district, so an arrival in another
+district can fail in Guild Wars.
 
 ## Reuse and evidence
 
