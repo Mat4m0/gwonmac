@@ -235,16 +235,28 @@ for every text role. It measures the colours `tokens.css` actually paints (or
 the player's recoloured roles) against the panel at its effective opacity over
 snow, the same with the accent hover layer, and the panel over black. Reduce
 Transparency makes the effective opacity 1 while the saved opacity stays
-unchanged. Text, muted, faint and accent-as-text move only as far as they must,
-so hierarchy then comes from type role and size: row detail keeps the smaller
-Reading role.
+unchanged. Text, bright, muted, faint and accent-as-text move only as far as
+they must. Bright follows text wherever the guard moves it, so a recoloured
+light titlebar or surface never leaves titles near white.
+
+Over snow at low opacity, ink alone cannot keep a hierarchy: every role would
+have to be near white. The Hub, whose panel is all text, therefore holds the
+scene's highlights back behind its fill (D-28). A `backdrop-filter` soft cap
+passes the scene unchanged up to 60 % of the cap and eases toward it above, so
+dark scenes keep every detail and the game around the Hub is never dimmed. The
+model picks the brightest cap at which text, muted and accent-as-text keep their
+painted ink (about 48 % of full brightness at 65 % opacity; no cap from about
+85 %), and publishes Hub-scoped inks (`--ui-hub-*`) measured against it. Faint
+then reads as muted, still well apart from titles and typed text. Surfaces
+outside the Hub keep the shared inks, which assume the uncapped scene.
 
 - `--ui-accent-text` is the accent used as text (group headings, the scope
   chip, the build summary label, links, progress, the current-character
   marker). Fills, selection rails and icons keep the exact `--ui-accent`.
 - Modal layers never dim the game. `.ui-modal::backdrop` uses `--ui-scrim`,
   which is transparent in every style and under Reduce Transparency, so the
-  saved panel opacity is the only control over how much scene shows through.
+  saved panel opacity is the only control over how much scene shows through;
+  the Hub's cap only limits how bright that scene can be behind its text.
 - The Classic head sits on painted metal the model cannot measure, so its
   secondary copy (crumbs, caption, context) uses `--ui-art-head-ink`, the
   brightest ink, with the Classic text shadow.

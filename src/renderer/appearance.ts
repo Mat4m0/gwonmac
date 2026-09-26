@@ -10,7 +10,7 @@
  */
 import type { AppSettings } from "../shared/contracts.js";
 import { defaultCustomUiTheme, type UiThemeColor } from "../shared/ui-theme.js";
-import { parseRgb, compositeColor, accessibleForeground, readableForeground } from "../shared/ui-color.js";
+import { parseRgb, compositeColor, contrastRatio, accessibleForeground, readableForeground } from "../shared/ui-color.js";
 
 const fontChoices = new WeakMap<HTMLElement, AppSettings["uiFont"]>();
 const fontLoads = new Map<string, Promise<boolean>>();
@@ -61,6 +61,18 @@ const PAINTED = {
  * guarded ink at or above 4.5:1 once it is actually painted. */
 const TEXT_CONTRAST = 4.6;
 
+/* The Hub never holds the scene behind its text darker than this share of
+ * full brightness. Below it, the ink guard lifts ink instead. */
+const HUB_SCENE_CAP_MIN = 0.45;
+const HUB_SCENE_CAP_ID = "ui-hub-scene-cap";
+
+const grey = (level: number): UiThemeColor => {
+  const channel = Math.round(level * 255).toString(16).padStart(2, "0").toUpperCase();
+  return `#${channel}${channel}${channel}` as UiThemeColor;
+};
+const reads = (ink: UiThemeColor, backgrounds: readonly UiThemeColor[]) =>
+  backgrounds.every((background) => contrastRatio(ink, background) >= TEXT_CONTRAST);
+
 const reducedTransparency = typeof matchMedia === "function"
   ? matchMedia("(prefers-reduced-transparency: reduce)")
   : null;
@@ -70,12 +82,13 @@ reducedTransparency?.addEventListener("change", () => {
 });
 
 type InkRole = "text" | "bright" | "mutedText" | "faintText" | "accent";
-const INK_VARIABLES: Readonly<Record<InkRole, readonly string[]>> = {
-  text: ["--ui-text"],
-  bright: ["--ui-text-bright", "--ui-display-text"],
-  mutedText: ["--ui-text-muted"],
-  faintText: ["--ui-text-faint"],
-  accent: ["--ui-accent-text"],
+/* Published names per role: the shared ink and the Hub-scoped ink. */
+const INK_VARIABLES: Readonly<Record<InkRole, { shared: readonly string[]; hub: readonly string[] }>> = {
+  text: { shared: ["--ui-text"], hub: ["--ui-hub-text"] },
+  bright: { shared: ["--ui-text-bright", "--ui-display-text"], hub: ["--ui-hub-text-bright", "--ui-hub-display-text"] },
+  mutedText: { shared: ["--ui-text-muted"], hub: ["--ui-hub-text-muted"] },
+  faintText: { shared: ["--ui-text-faint"], hub: ["--ui-hub-text-faint"] },
+  accent: { shared: ["--ui-accent-text"], hub: ["--ui-hub-accent-text"] },
 };
 
 export const appearanceVariables = (
@@ -126,7 +139,26 @@ export const appearanceVariables = (
       [role, accessibleForeground(color, backgrounds, TEXT_CONTRAST)])) as Record<InkRole, UiThemeColor>;
   };
 
+  /* Ink alone cannot keep a hierarchy over snow at low opacity: every role
+   * would have to be near white. So the Hub, whose panel is all text, holds the
+   * scene's highlights back behind its fill (D-28, hub.css) just far enough
+   * that text, muted and accent keep their painted ink. Darker scenes pass
+   * unchanged, the game around the Hub is never dimmed, and the saved opacity
+   * still decides how much scene shows through. Roles no cap can rescue are
+   * left to the guard. */
+  const heldRoles = [roles.text, roles.mutedText, roles.accent]
+    .filter((color) => reads(color, overScene("#000000")));
+  let sceneCap = 1;
+  while (sceneCap > HUB_SCENE_CAP_MIN
+    && !heldRoles.every((color) => reads(color, overScene(grey(sceneCap))))) {
+    sceneCap = Math.max(HUB_SCENE_CAP_MIN, Math.round(sceneCap * 255 - 1) / 255);
+  }
   const shared = inksUnder("#FFFFFF");
+  const hub = sceneCap < 1 ? inksUnder(grey(sceneCap)) : shared;
+  if (sceneCap < 1) {
+    variables["--ui-hub-scene-cap"] = sceneCap.toFixed(4);
+    variables["--ui-hub-backdrop"] = `url("#${HUB_SCENE_CAP_ID}")`;
+  }
 
   /* Each role moves only as far as it must, so one opacity step never
    * re-inks a whole role at once and faint stays distinct from muted wherever
@@ -142,7 +174,12 @@ export const appearanceVariables = (
   };
   for (const role of Object.keys(roles) as InkRole[]) {
     if (recoloured[role] || shared[role] !== roles[role]) {
-      for (const name of INK_VARIABLES[role]) variables[name] = shared[role];
+      for (const name of INK_VARIABLES[role].shared) variables[name] = shared[role];
+    }
+    /* Hub ink falls back to the shared ink (tokens.css), so it is published
+     * only where the scene cap lets it differ. */
+    if (hub[role] !== shared[role]) {
+      for (const name of INK_VARIABLES[role].hub) variables[name] = hub[role];
     }
   }
   if (settings.uiStyle !== "custom") return variables;
@@ -212,6 +249,56 @@ export const appearanceVariables = (
   return variables;
 };
 
+/* The scene cap as a soft shoulder: the scene passes unchanged up to 60 % of
+ * the cap, then eases toward it, so dark scenes keep every detail and only
+ * highlights are held back. No output is brighter than its input or the cap. */
+export const sceneCapCurve = (cap: number): readonly number[] => {
+  const knee = cap * 0.6;
+  return Array.from({ length: 17 }, (_, index) => {
+    const scene = index / 16;
+    return scene <= knee
+      ? scene
+      : knee + (cap - knee) * (1 - Math.exp(-(scene - knee) / (cap - knee)));
+  });
+};
+
+/* `backdrop-filter` needs a filter element in the same document, which keeps
+ * it inside the renderer's CSP. One per document, removed when unused. */
+function writeSceneCap(root: HTMLElement, cap: string | undefined): void {
+  const document = root.ownerDocument as Document | undefined;
+  if (!document?.createElementNS) return;
+  const existing = document.getElementById(HUB_SCENE_CAP_ID)?.closest("svg");
+  if (!cap) {
+    existing?.remove();
+    return;
+  }
+  const svg = existing ?? svgElement(document, "svg", {
+    "aria-hidden": "true", width: "0", height: "0", style: "position:absolute",
+  });
+  if (!existing) {
+    const filter = svgElement(document, "filter", {
+      id: HUB_SCENE_CAP_ID, "color-interpolation-filters": "sRGB",
+    });
+    const transfer = svgElement(document, "feComponentTransfer", {});
+    for (const channel of ["feFuncR", "feFuncG", "feFuncB"]) {
+      transfer.append(svgElement(document, channel, { type: "table" }));
+    }
+    filter.append(transfer);
+    svg.append(filter);
+    (document.body ?? document.documentElement).append(svg);
+  }
+  const table = sceneCapCurve(Number(cap)).map((value) => value.toFixed(4)).join(" ");
+  for (const channel of svg.querySelectorAll("feFuncR, feFuncG, feFuncB")) {
+    channel.setAttribute("tableValues", table);
+  }
+}
+
+function svgElement(document: Document, name: string, attributes: Readonly<Record<string, string>>): SVGElement {
+  const element = document.createElementNS("http://www.w3.org/2000/svg", name);
+  for (const [attribute, value] of Object.entries(attributes)) element.setAttribute(attribute, value);
+  return element;
+}
+
 export function applyAppearance(
   settings: AppSettings,
   root: HTMLElement = document.documentElement,
@@ -228,6 +315,7 @@ export function applyAppearance(
   for (const [name, value] of Object.entries(variables)) {
     root.style.setProperty(name, value);
   }
+  writeSceneCap(root, variables["--ui-hub-scene-cap"]);
   appliedThemeVariables.set(root, Object.keys(variables));
   if (
     settings.uiStyle === "obsidian"

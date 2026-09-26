@@ -283,7 +283,10 @@ label, the scope chip, count, keycaps, placeholder, footer labels, the header
 name, crumb, separator, caption and context, and Settings rows. The same suite
 checks that the Hub never dims the game around it in either style or under
 Reduce Transparency, that Reduce Transparency restores the opaque inks, and that
-the footer stays one line while arrowing at narrow and minimum sizes. The custom
+the footer stays one line while arrowing at narrow and minimum sizes. At 65 %
+over the checkerboard, title, detail, keycap, count, placeholder and gold
+heading inks stay apart in both styles, and a dark scene behind the panel
+composes exactly as it would without the Hub's highlight cap. The custom
 Modern finish is covered by its own frame-mask check. The Workbench suite separately checks critical
 team and skill feedback contrast. These are bounded contrast checks, not an
 exhaustive accessibility certification. [Hub Electron checks](../tests/electron/input-hub.spec.ts)

@@ -25,6 +25,10 @@
   --ui-art-surface-fill: var(--ui-panel-fill);
   --ui-art-surface-mask: none;
   --ui-art-surface-z: -1;
+  /* A backdrop treatment follows the layer that paints the panel fill:
+   * Classic paints it on the inset surface, Modern on the frame itself. */
+  --ui-art-backdrop: none;
+  --ui-art-surface-backdrop: var(--ui-hub-backdrop);
   --ui-art-corners: none;
   --ui-art-head-position: absolute;
   --ui-art-head-inset: 10px 20px auto;
@@ -195,6 +199,16 @@
    * control over how much scene shows through, in every style and under
    * Reduce Transparency, and the ink guard models exactly that. */
   --ui-scrim: transparent;
+  /* Hub text regions hold the scene's highlights back behind their fill
+   * (appearance.ts publishes the cap and its inks), so Hub ink keeps its
+   * designed hierarchy at low opacity. Everything else uses the shared inks. */
+  --ui-hub-backdrop: none;
+  --ui-hub-text: var(--ui-text);
+  --ui-hub-text-bright: var(--ui-text-bright);
+  --ui-hub-display-text: var(--ui-display-text);
+  --ui-hub-text-muted: var(--ui-text-muted);
+  --ui-hub-text-faint: var(--ui-text-faint);
+  --ui-hub-accent-text: var(--ui-accent-text);
   --ui-well-strong-fill: color-mix(in srgb, var(--ui-well-fill) 95%, var(--ui-outline));
   --ui-well-overlay-fill: color-mix(in srgb, var(--ui-outline) 72%, var(--ui-well-fill));
   --ui-accent-well-fill: color-mix(in srgb, var(--ui-accent) 10%, var(--ui-well));
@@ -373,6 +387,8 @@
   --ui-art-surface-fill: var(--ui-frame);
   --ui-art-surface-mask: var(--ui-mask-paint) content-box, var(--ui-mask-paint);
   --ui-art-surface-z: var(--ui-z-frame);
+  --ui-art-backdrop: var(--ui-hub-backdrop);
+  --ui-art-surface-backdrop: none;
   --ui-art-corners: block;
   --ui-art-head-position: relative;
   --ui-art-head-inset: auto;

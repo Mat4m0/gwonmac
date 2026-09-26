@@ -162,6 +162,59 @@ for (const [uiStyle, uiPanelOpacity] of [['obsidian', 65], ['guild-wars', 94], [
   });
 }
 
+const relativeLuminance = (rgb: readonly number[]) => {
+  const linear = rgb.map(channel => { const value = channel / 255; return value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4; });
+  return .2126 * linear[0]! + .7152 * linear[1]! + .0722 * linear[2]!;
+};
+const ratio = (a: readonly number[], b: readonly number[]) => {
+  const [light, dark] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => y - x);
+  return (light! + .05) / (dark! + .05);
+};
+
+for (const uiStyle of ['guild-wars', 'obsidian'] as const) {
+  test(`at 65% over a bright scene the Hub keeps title, detail, gold and placeholder distinct in ${uiStyle}`, async ({ page }, info) => {
+    const media = await page.context().newCDPSession(page);
+    await media.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-transparency', value: 'no-preference' }] });
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/?hub');
+    const scene = await page.addStyleTag({ content: CHECKERBOARD });
+    await expect(page.getByRole('combobox', { name: 'Search people, places, builds' })).toBeFocused();
+    await page.evaluate(appearance => window.gwApplyFixtureAppearance?.(appearance), { uiStyle, uiPanelOpacity: 65 });
+    const inks = await page.evaluate(() => {
+      const canvas = document.createElement('canvas'); canvas.width = canvas.height = 1;
+      const context = canvas.getContext('2d', { willReadFrequently: true })!;
+      const srgb = (color: string) => { context.clearRect(0, 0, 1, 1); context.fillStyle = color; context.fillRect(0, 0, 1, 1); return [...context.getImageData(0, 0, 1, 1).data.slice(0, 3)]; };
+      const color = (selector: string, pseudo?: string) => srgb(getComputedStyle(document.querySelector(`#hub ${selector}`)!, pseudo).color);
+      return {
+        title: color('.hub-row:not([aria-selected=true]) .hub-title'), detail: color('.hub-row:not([aria-selected=true]) > .hub-detail'),
+        keycap: color('.hub-row:not([aria-selected=true]) .ui-kbd'), group: color('.hub-group'), count: color('.hub-count'),
+        typed: color('.hub-search input'), placeholder: color('.hub-search input', '::placeholder'),
+      };
+    });
+    expect(ratio(inks.title, inks.detail), 'title over detail').toBeGreaterThanOrEqual(1.5);
+    expect(ratio(inks.title, inks.keycap), 'title over keycap').toBeGreaterThanOrEqual(1.5);
+    expect(ratio(inks.title, inks.count), 'title over count').toBeGreaterThanOrEqual(1.5);
+    expect(ratio(inks.typed, inks.placeholder), 'typed text over placeholder').toBeGreaterThanOrEqual(1.5);
+    // Group headings stay gold: a warm hue, not a near-white tone.
+    expect(inks.group[0]! - inks.group[2]!, `group ${inks.group.join(',')}`).toBeGreaterThanOrEqual(60);
+    await page.screenshot({ path: info.outputPath(`${uiStyle}-65-hierarchy.png`) });
+    // The cap holds back only highlights: over a dark scene the panel composes
+    // exactly as it would without it, and the game around the Hub is untouched.
+    const group = (await page.locator('.hub-group').first().boundingBox())!;
+    const pixel = async () => [...PNG.sync.read(await page.screenshot({ clip: { x: Math.round(group.x + group.width - 24), y: Math.round(group.y + group.height / 2), width: 1, height: 1 } })).data.subarray(0, 3)];
+    const withoutCap = async () => {
+      await page.evaluate(() => document.documentElement.style.setProperty('--ui-hub-backdrop', 'none'));
+      const value = await pixel();
+      await page.evaluate(() => document.documentElement.style.setProperty('--ui-hub-backdrop', 'url("#ui-hub-scene-cap")'));
+      return value;
+    };
+    const brightUncapped = await withoutCap();
+    expect(relativeLuminance(await pixel())).toBeLessThan(relativeLuminance(brightUncapped));
+    await scene.evaluate(element => { element.textContent = 'body { background: #202020 !important; } .hub-fixture-controls { visibility:hidden; }'; });
+    expect(await pixel()).toEqual(await withoutCap());
+  });
+}
+
 test('one scrim policy: the game around the Hub is never dimmed, even with Reduce Transparency', async ({ page }) => {
   const media = await page.context().newCDPSession(page);
   const reduce = (value: 'reduce' | 'no-preference') => media.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-transparency', value }] });

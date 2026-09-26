@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   appearanceVariables,
   applyAppearance,
+  sceneCapCurve,
 } from "../../src/renderer/appearance.js";
 import { accessibleForeground, compositeColor, contrastRatio, parseRgb, readableForeground, readableSharedForeground } from "../../src/shared/ui-color.js";
 import {
@@ -54,6 +55,61 @@ describe("appearance settings", () => {
     }
   });
 
+  /* The Hub holds the scene's highlights back behind its fill, so its inks
+   * only have to beat the capped scene. */
+  const hubInks = (style: "guild-wars" | "obsidian", opacity: number) => {
+    const variables = appearanceVariables({ ...DEFAULT_SETTINGS, uiStyle: style, uiPanelOpacity: opacity });
+    const shared = inks(style, opacity);
+    const cap = Number(variables["--ui-hub-scene-cap"] ?? 1);
+    const level = Math.round(cap * 255).toString(16).padStart(2, "0");
+    const scene = `#${level}${level}${level}` as UiThemeColor;
+    const snow = compositeColor(PANEL[style], scene, opacity / 100);
+    return {
+      cap,
+      worstCases: [snow, compositeColor(HOVER[style], snow, 0.1), compositeColor(PANEL[style], "#000000", opacity / 100)],
+      inks: Object.fromEntries(Object.entries(shared).map(([name, color]) =>
+        [name, (variables[name.replace("--ui-", "--ui-hub-")] ?? color) as UiThemeColor])),
+    };
+  };
+
+  it("keeps the Hub's title, muted and gold ink at every opacity by capping bright scenes", () => {
+    for (const style of ["guild-wars", "obsidian"] as const) {
+      for (let opacity = 65; opacity <= 100; opacity += 1) {
+        const hub = hubInks(style, opacity);
+        for (const [name, color] of Object.entries(hub.inks)) {
+          for (const background of hub.worstCases) {
+            assert.ok(contrastRatio(color, background) >= 4.5, `Hub ${style} ${opacity}% ${name} ${color} on ${background}`);
+          }
+        }
+        for (const name of ["--ui-text", "--ui-text-muted", "--ui-accent-text"] as const) {
+          assert.equal(hub.inks[name], DEFAULT_INK[style][name], `Hub ${style} ${opacity}% keeps ${name}`);
+        }
+        /* The hierarchy the shared guard flattens stays visible in the Hub. */
+        assert.ok(contrastRatio(hub.inks["--ui-text"]!, hub.inks["--ui-text-muted"]!) >= 1.5, `${style} ${opacity}% title and detail`);
+        assert.ok(contrastRatio(hub.inks["--ui-text"]!, hub.inks["--ui-text-faint"]!) >= 1.5, `${style} ${opacity}% typed text and placeholder`);
+      }
+      assert.equal(hubInks(style, 65).cap < 0.55, true);
+      assert.equal(hubInks(style, 94).cap, 1);
+      assert.equal(appearanceVariables({ ...DEFAULT_SETTINGS, uiStyle: style, uiPanelOpacity: 94 })["--ui-hub-backdrop"], undefined);
+      assert.equal(appearanceVariables({ ...DEFAULT_SETTINGS, uiStyle: style, uiPanelOpacity: 65 }, { reducedTransparency: true })["--ui-hub-backdrop"], undefined);
+      /* At the shipped minimum the shared guard alone flattens every role. */
+      const shared = inks(style, 65);
+      assert.ok(contrastRatio(shared["--ui-text"]!, shared["--ui-text-muted"]!) < 1.1);
+    }
+  });
+
+  it("caps only highlights: dark scenes pass unchanged and nothing brightens", () => {
+    for (const cap of [0.45, 0.4824, 0.75, 0.99]) {
+      const curve = sceneCapCurve(cap);
+      assert.equal(curve.length, 17);
+      curve.forEach((value, index) => {
+        assert.ok(value <= index / 16 + 1e-9 && value <= cap, `${cap}: ${index / 16} → ${value}`);
+        if (index / 16 <= cap * 0.6) assert.equal(value, index / 16);
+        if (index > 0) assert.ok(value >= curve[index - 1]!, `${cap} stays monotonic`);
+      });
+    }
+  });
+
   it("keeps bright and display ink readable on recoloured light surfaces", () => {
     for (const recolour of [{ titlebar: "#E0E0E0" }, { surface: "#D8D8D8" }] as const) {
       for (const material of ["classic", "modern"] as const) {
@@ -96,10 +152,12 @@ describe("appearance settings", () => {
   it("moves each ink gradually and keeps faint distinct where it reads", () => {
     for (const style of ["guild-wars", "obsidian"] as const) {
       for (let opacity = 66; opacity <= 100; opacity += 1) {
-        const [before, after] = [inks(style, opacity - 1), inks(style, opacity)];
-        for (const name of Object.keys(before)) {
-          const step = parseRgb(before[name]!).map((channel, index) => Math.abs(channel - parseRgb(after[name]!)[index]!));
-          assert.ok(Math.max(...step) <= 12, `${style} ${opacity - 1}→${opacity}% ${name} jumps ${step.join(",")}`);
+        for (const [scope, read] of [["shared", inks], ["Hub", (s: typeof style, o: number) => hubInks(s, o).inks]] as const) {
+          const [before, after] = [read(style, opacity - 1), read(style, opacity)];
+          for (const name of Object.keys(before)) {
+            const step = parseRgb(before[name]!).map((channel, index) => Math.abs(channel - parseRgb(after[name]!)[index]!));
+            assert.ok(Math.max(...step) <= 12, `${scope} ${style} ${opacity - 1}→${opacity}% ${name} jumps ${step.join(",")}`);
+          }
         }
       }
       const opaque = inks(style, 100);
