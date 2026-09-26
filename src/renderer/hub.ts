@@ -450,11 +450,6 @@ export function createHub(parent: HTMLElement) {
     if (returnFromView) returnFromView();
     else restoreParent();
   }
-  /** Esc: clear a typed query, then go back one level, then close (D-4). */
-  function dismiss() {
-    if (!search.hidden && input.value) { input.value = ''; report(''); refresh(true); input.focus(); return; }
-    if (history.length) back(); else close();
-  }
   function close(message?: string) {
     suspended = null; epoch++; history.length = 0; resetView(); modal.close(); for (const source of sources.keys()) source.setVisible(false); scope = null;
     input.value = ''; restoreQuery = ''; report(''); selected = null;
@@ -470,10 +465,8 @@ export function createHub(parent: HTMLElement) {
     for (const source of sources.keys()) source.setVisible(false);
   }
   const modal = window.gwSurfaces.registerDialog({ root, priority: 6, transient: true,
-    dismiss,
-    // Focus never lands on <body>: without a visible opener it returns to the game.
-    restoreFocus: () => previousFocus?.isConnected && previousFocus !== document.body && previousFocus.getClientRects().length > 0
-      ? previousFocus : document.getElementById('canvas'),
+    dismiss: () => history.length ? back() : close(),
+    restoreFocus: () => previousFocus?.isConnected && previousFocus.getClientRects().length > 0 ? previousFocus : document.getElementById('canvas'),
   });
   function show() {
     if (root.open) { home(); return; }
@@ -500,8 +493,6 @@ export function createHub(parent: HTMLElement) {
     if (!event.defaultPrevented && event.target instanceof Element && event.target.closest('.hub-row') && resumeSearchInput(event, input)) return;
     if (event.defaultPrevented || event.isComposing || event.metaKey || event.ctrlKey || event.altKey) return;
     if (event.key === 'Enter' && event.repeat) { event.preventDefault(); return; }
-    // Hub owns Esc before the native cancel: one step per physical press.
-    if (event.key === 'Escape') { event.preventDefault(); if (!event.repeat) dismiss(); return; }
     const target = event.target instanceof HTMLElement ? event.target : null;
     if (!target || target === required<HTMLElement>('.hub-resize')) return;
     const editing = target.matches('input,textarea,select,[contenteditable="true"]');
