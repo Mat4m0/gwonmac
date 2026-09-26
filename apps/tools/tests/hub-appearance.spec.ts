@@ -482,7 +482,7 @@ test('Hub text size scales every type role inside the fixed frame, keeps the tas
       for (const height of layout.rows) expect(height, `${query} rows grow`).toBeGreaterThan(40);
       if (query === 'k') expect(layout.scrolls, 'the list scrolls').toBe(true);
       expect(layout.primaryLines, `${query} footer primary`).toBeLessThan(1.5);
-      await expect(page.locator('.hub-primary')).toHaveAccessibleName(/^(Travel to|Open|Copy|Search|Show|Whisper).+/u);
+      await expect(page.locator('.hub-primary')).toHaveAccessibleName(/^(Travel to|Open|Browse|Copy|Search|Show|Whisper).+/u);
     }
   }
   await search.fill('travel'); await search.press('Enter');

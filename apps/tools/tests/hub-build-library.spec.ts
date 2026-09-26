@@ -21,6 +21,18 @@ test('template folders and explicit self application stay inside Hub', async ({ 
   await expect(page.locator('#app')).toHaveAttribute('data-action', /command:/);
 });
 
+test('the Build Library row never claims to be loading once Tools is attached', async ({ page }) => {
+  await page.goto('/?hub');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  await search.fill('team');
+  const library = page.locator('#hub .hub-row[data-id="builds"]');
+  await expect(library).toHaveAttribute('aria-disabled', 'false');
+  await expect(library).not.toContainText('loading');
+  await expect(page.getByRole('button', { name: 'Browse builds ↵', exact: true })).toBeEnabled();
+  await search.press('Enter');
+  await expect(page.locator('.hub-caption')).toHaveText('Build Library');
+});
+
 test('hero search includes unlocked heroes and applies only to an existing party member', async ({ page }, info) => {
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });

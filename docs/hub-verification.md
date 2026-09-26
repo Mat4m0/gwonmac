@@ -96,7 +96,9 @@ Existing Travel and character tests retain refusal and preference coverage.
 `build monk` and `build mo` search saved primary professions in the same library
 and template source. Name/tag tokens can narrow the query; there is no 12-result
 cutoff. Profession-only matches open Review. Exact-name application guards remain
-unchanged. Search rows show eight ordered icons, elite outlines and named tooltips;
+unchanged. Once Tools is attached, root search offers its own Build Library row
+(`team` included), so the row never claims to be loading; the placeholder says
+so only until then. Search rows show eight ordered icons, elite outlines and named tooltips;
 missing art falls back to numbered slots. Native art comes from the existing skill
 catalogue. The offline fixture uses attributed Guild Wars Wiki artwork.
 

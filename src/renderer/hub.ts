@@ -146,7 +146,11 @@ export function createHub(parent: HTMLElement) {
     }] : [];
     return [
       ...tool('travel', 'Travel', 'Outposts, favourites and recent places', 'outpost destination teleport tp', settings?.gwonmacTools && settings.travelPalette, 'gw:travel-toggle'),
-      ...tool('builds', 'Build Library', 'Saved builds and teams', 'teams templates skills', settings?.gwonmacTools && settings.buildLibrary, 'gw:tools-toggle').map(row => ({ ...row, unavailable: 'Build Library is loading.' })),
+      // Once Tools attaches, its own Build Library row runs; only until then does the row say it is loading.
+      ...tool('builds', 'Build Library', 'Saved builds and teams', 'teams templates skills', settings?.gwonmacTools && settings.buildLibrary, 'gw:tools-toggle').map(row => {
+        const loaded = sourceRow('builds');
+        return loaded ? { ...loaded, keywords: `${row.keywords} ${loaded.keywords ?? ''}` } : { ...row, unavailable: 'Build Library is loading.' };
+      }),
       ...tool('trade', 'Trade Chat', 'Find offers and contact sellers', 'kamadan prices trading market', settings?.gwonmacTools && settings.tradeChat, 'gw:trade-toggle'),
       ...tool('whispers', 'Whispers', 'Conversations, friends and drafts', 'friends people message chat', settings?.gwonmacTools && settings.whispersEnabled, 'gw:whispers-toggle'),
       ...(settings?.characterSwitchEnabled ? [{ id: 'character', title: 'Switch Character', detail: 'Choose another character', keywords: 'relog profession', group: 'Tools', action: 'Choose character', navigate: () => dispatch('gw:character-toggle'), run: () => dispatch('gw:character-toggle') }] : []),
@@ -165,8 +169,8 @@ export function createHub(parent: HTMLElement) {
     ];
   };
   const shortcuts = () => [...(window.gwToolsSettings?.().hubShortcuts ?? []), ...[...sources.keys()].filter(sourceEnabled).flatMap(source => source.shortcuts?.get() ?? [])];
-  const lookup = (id: string): HubRow | undefined => [...sources.keys()].filter(sourceEnabled).map(source => source.lookup?.(id)).find(Boolean)
-    ?? commands().find(row => row.id === id);
+  const sourceRow = (id: string): HubRow | undefined => [...sources.keys()].filter(sourceEnabled).map(source => source.lookup?.(id)).find(Boolean);
+  const lookup = (id: string): HubRow | undefined => sourceRow(id) ?? commands().find(row => row.id === id);
   async function saveShortcuts(value: readonly HubShortcut[]) {
     if (!isHubShortcuts(value)) throw new Error('Invalid Hub shortcuts');
     const privateEntries = value.filter(entry => /^(build|team):/u.test(entry.id));
