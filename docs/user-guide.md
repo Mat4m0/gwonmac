@@ -228,11 +228,15 @@ keeps drafts for the game session. Character changes, leaving the game, or turni
 off Whispers clear the session.
 
 In an outpost, choose **Invite to party** on a person, or type
-`invite Character Name`, to invite that character.
-For a friend in another outpost, **Travel and invite** travels there (Any
-district) and invites them once you arrive. If you land in a different district,
-Guild Wars cannot find them; Hub then shows the game's answer in chat. Both
-actions need Whispers enabled.
+`invite Character Name`, to invite that character. Only the exact name invites;
+a partial name or a name seen in chat opens that person's actions instead. The
+footer names who is invited, for example **Invite Mo Kai**. Guild Wars answers
+the invite in chat.
+For a friend in another outpost, **Invite to party** says where they are. Use
+**Travel and invite**: it travels there (Any district) and invites them once you
+arrive. It is unavailable for PvP outposts such as Random Arenas. If you land in
+a different district, Guild Wars cannot find them; Hub then shows the game's
+answer in chat. Both actions need Whispers enabled.
 
 Build Library, Trade Chat, Characters, and Whispers open inside Hub. Detach a tool
 when you want to keep it beside the game. Disabled tools are absent from search.

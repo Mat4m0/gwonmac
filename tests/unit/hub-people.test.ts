@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createHubPeople } from '../../src/renderer/hub-people.ts';
-import type { PartyInvite } from '../../src/renderer/party-invite.ts';
+import { createPartyInvite, type PartyInvite } from '../../src/renderer/party-invite.ts';
 import type { HubRow, HubSource } from '../../src/shared/hub.ts';
 import { createWhisperSession } from '../../src/shared/whisper-session.ts';
 
@@ -94,10 +94,10 @@ test('a person page offers Invite to party and, for a friend elsewhere, Travel a
     await Promise.resolve();
     assert.deepEqual(calls, ['invite:Moira Chatter', 'travel:Mo Kaiser']);
     assert.deepEqual(receipts, [
-      'Invited Moira Chatter. Guild Wars shows the answer in chat.',
-      'Travelling to Kamadan, Jewel of Istan. Mo Kaiser is invited on arrival.',
-      'Invited Mo Kaiser. If you landed in another district, Guild Wars cannot find them.',
-    ]);
+      'Sent /invite Moira Chatter. Guild Wars answers in chat.',
+      'Travelling to Kamadan, Jewel of Istan. Hub sends /invite Mo Kaiser on arrival.',
+      'Sent /invite Mo Kaiser. Guild Wars answers in chat.',
+    ], 'receipts claim only the sent command, never an accepted invite');
   }, party);
 });
 
@@ -113,17 +113,51 @@ test('invite rows explain why they are unavailable and stay absent without Whisp
   }, party);
 });
 
-test('the invite scope invites a known person or the exact typed name', async () => {
+test('the invite scope invites only an exact name, first, and names it in the footer', async () => {
   const { party, calls } = invitePort();
-  await withPeople(ALL_TOOLS, async ({ source, receipts }) => {
+  await withPeople(ALL_TOOLS, async ({ source, session, page, receipts }) => {
+    session.observe([{ id: 2, sender: 'Mo Kaiser Bearer', direction: 'participant' }]);
     const rows = source.search('invite Mo Kai');
-    assert.deepEqual(rows.map(row => `${row.title}|${row.action}`), ['Kai Account|Invite', 'Mo Kai|Invite']);
-    await rows[0]!.run();
+    assert.deepEqual(rows.map(row => `${row.title}|${row.detail}|${row.action}`),
+      ['Mo Kai|Character name|Invite Mo Kai', `${KAISER}|View actions`, 'Mo Kaiser Bearer|Seen in chat|View actions']);
     await rows[1]!.run();
-    assert.deepEqual(calls, ['invite:Mo Kaiser', 'invite:Mo Kai'], 'a friend is invited by character name');
-    assert.equal(receipts.at(-1), 'Invited Mo Kai. Guild Wars shows the answer in chat.');
+    await rows[2]!.run();
+    assert.deepEqual(calls, [], 'a prefix row opens the person page and never invites');
+    assert.deepEqual(actions(page()), ['Whisper', 'Invite to party']);
+    await rows[0]!.run();
+    assert.deepEqual(calls, ['invite:Mo Kai']);
+    assert.equal(receipts.at(-1), 'Sent /invite Mo Kai. Guild Wars answers in chat.');
+
+    const exact = source.search('invite Mo Kaiser');
+    assert.deepEqual(exact.map(row => `${row.title}|${row.action}`), ['Kai Account|Invite Mo Kaiser', 'Mo Kaiser Bearer|View actions'],
+      'an exact friend is invited by character name');
+    await exact[0]!.run();
+    assert.deepEqual(source.search('invite Kai Account').map(row => row.action), ['Invite Mo Kaiser'], 'an exact alias names the character');
+    for (const row of source.search('invite m')) if (!row.id.startsWith('person:typed:')) await row.run();
+    assert.deepEqual(calls, ['invite:Mo Kai', 'invite:Mo Kaiser'], 'chat and friend prefixes never invite');
   }, party);
   await withPeople(ALL_TOOLS, ({ source }) => {
     assert.deepEqual(source.search('invite Mo Kai'), [], 'no invite scope without the certified invite');
   });
+});
+
+test('Invite is unavailable for a friend in another map and says where they are', async () => {
+  const invited: string[] = [];
+  const region = { status: 'ready', sequence: 1, mapId: 55, instanceType: 0, playRegion: 'pve', travelContext: 'world', characterKey: 'a',
+    unlockedMapWords: null, guildHall: false, hasGuildHall: false } as const;
+  const party = createPartyInvite({ region: () => region, subscribeRegion: () => () => {}, chatReady: () => true,
+    invite: async name => { invited.push(name); }, travel: async () => {} });
+  await withPeople(ALL_TOOLS, async ({ source, page }) => {
+    const reason = 'Mo Kaiser is in Kamadan, Jewel of Istan. Use Travel and invite.';
+    void source.search('mo kaiser')[0]!.run();
+    const invite = page().find(row => row.id === 'person:invite')!;
+    assert.equal(invite.unavailable, reason);
+    assert.equal(invite.action, 'Invite Mo Kaiser');
+    assert.equal(page().find(row => row.id === 'person:travel-invite')!.unavailable, undefined);
+    await assert.rejects(Promise.resolve(invite.run()), /is in Kamadan/);
+    assert.equal(source.search('invite Mo Kaiser')[0]!.unavailable, reason);
+    void source.search('moira')[0]!.run();
+    assert.equal(page().find(row => row.id === 'person:invite')!.unavailable, undefined, 'a chat name has no known map');
+    assert.deepEqual(invited, []);
+  }, party);
 });
