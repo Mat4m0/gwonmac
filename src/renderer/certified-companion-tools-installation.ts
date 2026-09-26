@@ -14,7 +14,7 @@ import {
 } from "../shared/enhancement-contracts.js";
 import type { AppSettings } from "../shared/contracts.js";
 import type { ToolboxObservation } from "../shared/builds/live-party.js";
-import type { TravelFriends } from "../shared/friends.js";
+import type { TravelFriend, TravelFriends } from "../shared/friends.js";
 import {
   companionFriendsSignature,
   readCompanionFriends,
@@ -29,6 +29,7 @@ import type { ProfessionCommandTraceReader } from "./profession-command-trace.js
 import { createWhisperInstallation, type WhisperInstallation } from "./whisper-installation.js";
 import { createWhisperSession } from "../shared/whisper-session.js";
 import { createHubPeople } from "./hub-people.js";
+import { createPartyInvite, type PartyInvite } from "./party-invite.js";
 import { createWhisperSurface } from "./whisper-surface.js";
 import { installResignCommand } from "./resign.js";
 import type { StorageInstallation } from "./enhancement-storage-installation.js";
@@ -335,6 +336,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
   const whisperSession = createWhisperSession(whispers.send);
   const unsubscribeWhispers = whispers.subscribe((messages, missed) => whisperSession.observe(messages, missed));
   let hubPeople: ReturnType<typeof createHubPeople> | null = null;
+  let partyInvite: PartyInvite | null = null;
   let whisperSurface: ReturnType<typeof createWhisperSurface> | null = null;
   let whisperCharacter: string | null = null;
   const resign = input.resignExports ? installResignCommand(input.resignExports) : null;
@@ -424,6 +426,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
       () => { unsubscribeAlcohol?.(); unsubscribeAlcoholGeometry?.(); alcoholOverlay?.dispose(); alcoholOverlay = null; },
       () => hud?.dispose(),
       () => { resign?.dispose(); },
+      () => { partyInvite?.dispose(); partyInvite = null; },
       () => { hubPeople?.dispose(); hubPeople = null; },
       () => { whispers.setEnabled(false); unsubscribeWhispers(); whisperSurface?.dispose(); whisperSurface = null; whisperSession.dispose(); },
       () => { configureTrade?.(0); },
@@ -624,10 +627,18 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
   prepare(() => storage?.mount());
   prepare(() => travel?.mount(document.body));
   const hub = window.gwHub;
-  if (hub) hubPeople = prepare(() => createHubPeople(hub, whisperSession, travel ? {
-    unavailable: () => { const command = travel.command(); return command ? command.unavailable() : "Travel is unavailable"; },
-    run: (friend, generation) => travel.travelToFriend(friend, generation),
-  } : null));
+  const travelToFriend = travel ? (friend: TravelFriend, generation: number) => travel.travelToFriend(friend, generation) : null;
+  partyInvite = capabilities.whisperChat ? createPartyInvite({
+    region: () => playRegions.state,
+    subscribeRegion: listener => { const unsubscribe = playRegions.subscribe(() => listener()); return () => { unsubscribe(); }; },
+    chatReady: () => whispers.enabled,
+    invite: name => whispers.invite(name),
+    travel: travelToFriend,
+  }) : null;
+  if (hub) hubPeople = prepare(() => createHubPeople(hub, whisperSession, travelToFriend ? {
+    unavailable: () => { const command = travel?.command(); return command ? command.unavailable() : "Travel is unavailable"; },
+    run: travelToFriend,
+  } : null, partyInvite));
   const storageCommand = storage?.command() ?? null;
   toolbox = foundation ? prepare(() => tools.createToolboxLifecycle(document.body, {
     mountTool: (host, visible) => import("./tools-host.js").then(({ mountToolsInto }) =>

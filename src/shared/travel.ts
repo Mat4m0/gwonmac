@@ -18,6 +18,7 @@ import {
 
 export {
   TRAVEL_DESTINATIONS,
+  isPvpTravelDestination,
   travelBrowseScope,
   travelDestination,
   type TravelDestination,

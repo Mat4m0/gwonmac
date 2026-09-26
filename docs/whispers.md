@@ -78,6 +78,41 @@ the standalone fixture retains floating-window placement and opacity controls.
 - Unsupported client facts withdraw the optional feature. Original Guild Wars
   remains playable. Existing Tools region policy remains in force.
 
+## Party invite
+
+`enhancement_send_party_invite` shares the whisper mailbox, policy gate and
+game-thread drain. Its enqueue accepts only `/invite ` followed by one to twenty
+name units without a control character, quote, comma, surrogate, or leading or
+trailing space. The whisper enqueue still accepts only whisper lines. One chat
+command is pending at a time. The drained mailbox is the only receipt; Guild
+Wars reports acceptance or refusal in original chat.
+
+`party-invite.ts` allows an invite only in a PvE outpost with the chat mailbox
+enabled. A friend in another map cannot receive it, so the row says where the
+friend is before Enter. It points to Travel and invite only when the friend is
+in a PvE travel destination; an explorable area or PvP outpost gets no pointer
+to a row that cannot start. Travel and invite
+refuses a known PvP outpost up front. It captures the character, starts the
+existing friend Travel, and invites once after a ready PvE outpost of the
+friend's map stays ready for two seconds. The first outpost after login can
+publish no character key yet; the first known key is adopted, and only two
+different known keys count as a character change. Once a key is known, only an
+arrival with that key counts, and a return to character selection counts as a
+character change, so a relogged character never sends the invite. A character
+change, a refused trip, a non-PvE arrival or 60 seconds without arrival withdraws the
+invite; a non-PvE arrival withdraws it at once. Disposing Tools withdraws a
+pending arrival. The friend feed has no district, so an arrival in another
+district can fail in Guild Wars.
+
+In the `invite` scope only an exact name invites: the exact typed name or an
+exact known person comes first, and the footer names the target, such as
+**Invite Mo Kai**. A prefix or "Seen in chat" match opens the person page.
+Every Guild Wars character name has at least two words, so a typed single word
+never invites: it stays after known people and reads "Type the full character
+name".
+Receipts claim only the sent command: "Sent /invite Mo Kai. Guild Wars answers
+in chat."
+
 ## Reuse and evidence
 
 The older `gwonmac-whispers` worktree contains incoming-event research and a

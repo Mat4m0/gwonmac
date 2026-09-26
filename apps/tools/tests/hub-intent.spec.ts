@@ -134,3 +134,113 @@ test('held Enter on footer actions and Backspace in ordinary fields keep their s
   await expect(page.locator('.hub-caption')).toHaveText('Search phrase');
   await expect(phrase).toBeFocused();
 });
+
+test('a legacy phrase that is now a scope word keeps its pins and only stops matching', async ({ page }) => {
+  await page.goto('/?hub');
+  const legacy = JSON.stringify([{ id: 'whispers', phrase: 'invite', pinned: true }, { id: 'travel', phrase: '', pinned: true }]);
+  await page.evaluate(value => localStorage.setItem('hub-fixture-shortcuts', value), legacy);
+  await page.reload();
+  const search = page.getByRole('combobox', { name: searchName });
+  await expect(page.locator('.hub-group').first()).toHaveText('Pinned');
+  await expect(page.locator('.hub-row').nth(0)).toContainText('Whispers');
+  await expect(page.locator('.hub-row').nth(1)).toContainText('Travel');
+  await search.pressSequentially('invite ');
+  await expect(page.locator('.hub-hint')).toContainText('invite Romi');
+  await expect(page.locator('.hub-row[data-id="whispers"]')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Close Hub', exact: true }).click();
+  expect(await page.evaluate(() => localStorage.getItem('hub-fixture-shortcuts'))).toBe(legacy);
+});
+
+test('the phrase editor refuses a new phrase that starts with a scope word', async ({ page }) => {
+  await page.goto('/?hub');
+  const search = page.getByRole('combobox', { name: searchName });
+  await search.fill('team gom afk');
+  await page.getByRole('button', { name: 'Actions', exact: true }).click();
+  await page.getByRole('option', { name: /Set search phrase/ }).click();
+  const phrase = page.getByRole('textbox', { name: 'Search phrase', exact: true });
+  await phrase.fill('invite x'); await phrase.press('Enter');
+  await expect(page.locator('.hub-view [role="status"]')).toHaveText('Choose a unique phrase. Command words are reserved.');
+  await phrase.fill('gom night'); await phrase.press('Enter');
+  await expect(page.locator('.hub-view [role="status"]')).toHaveText('Saved');
+});
+
+test.describe('party invite', () => {
+  const invites = (page: import('@playwright/test').Page) => page.locator('#app').getAttribute('data-invites');
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/?hub');
+    await page.getByLabel('Fixture scenario', { exact: true }).selectOption('party');
+  });
+
+  test('the invite scope invites only an exact name and names it before Enter', async ({ page }) => {
+    const search = page.getByRole('combobox', { name: searchName });
+    const primary = page.locator('.hub-primary');
+    await search.fill('invite Mo Kai');
+    await expect(page.locator('.hub-row').nth(0)).toContainText('Mo Kai');
+    await expect(primary).toHaveText(/^Invite Mo Kai/);
+    await search.press('ArrowDown'); await page.keyboard.press('ArrowDown');
+    await expect(page.locator('.hub-row[aria-selected="true"]')).toContainText('Mo Kaiser');
+    await expect(primary).toHaveText(/^View actions/);
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.hub-caption')).toHaveText('Mo Kaiser');
+    await page.getByRole('button', { name: 'Home', exact: true }).click();
+    for (const partial of ['invite a', 'invite Mo']) {
+      await search.fill(partial);
+      await expect(page.locator('.hub-row').last()).toContainText('Type the full character name');
+      await search.press('Enter');
+      expect(await invites(page)).toBeNull();
+      await expect(page.locator('#hub')).toBeVisible();
+      await page.getByRole('button', { name: 'Home', exact: true }).click();
+    }
+    await search.fill('invite Mo Kai'); await search.press('Enter');
+    await expect(page.locator('#app')).toHaveAttribute('data-invites', /(^|\|)Mo Kai$/);
+    await expect(page.locator('.hub-receipt')).toHaveText('Sent /invite Mo Kai. Guild Wars answers in chat.');
+  });
+
+  test('Invite to a friend in another map says why before Enter and sends nothing', async ({ page }) => {
+    const search = page.getByRole('combobox', { name: searchName });
+    await search.fill('romi'); await search.press('Enter');
+    await page.keyboard.press('ArrowDown'); await page.keyboard.press('ArrowDown');
+    const row = page.locator('.hub-row[aria-selected="true"]');
+    await expect(row).toContainText('Invite to party');
+    await expect(row).toContainText('Romi Ranger is in Kamadan, Jewel of Istan. Use Travel and invite.');
+    await expect(page.locator('.hub-primary')).toBeDisabled();
+    await expect(page.locator('.hub-primary')).toHaveText(/^Invite Romi Ranger/);
+    await page.keyboard.press('Enter');
+    expect(await invites(page)).toBeNull();
+  });
+
+  test('Travel and invite travels, then sends one invite on arrival', async ({ page }) => {
+    const search = page.getByRole('combobox', { name: searchName });
+    await search.fill('romi'); await search.press('Enter');
+    for (let step = 0; step < 3; step++) await page.keyboard.press('ArrowDown');
+    await expect(page.locator('.hub-primary')).toHaveText(/^Travel and invite Romi Ranger/);
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.hub-receipt')).toHaveText('Travelling to Kamadan, Jewel of Istan. Hub sends /invite Romi Ranger on arrival.');
+    await expect(page.locator('#app')).toHaveAttribute('data-invites', 'Romi Ranger');
+    await expect(page.locator('.hub-receipt')).toHaveText('Sent /invite Romi Ranger. Guild Wars answers in chat.');
+  });
+
+  test('a PvP outpost and an explorable area refuse invites before Enter', async ({ page }) => {
+    const search = page.getByRole('combobox', { name: searchName });
+    await search.fill('arena ace'); await search.press('Enter');
+    await expect(page.locator('.hub-row[data-id="person:travel-invite"]')).toContainText('Invites from Hub need a PvE outpost');
+    await page.getByLabel('Fixture scenario', { exact: true }).selectOption('explorable');
+    await search.fill('invite romi');
+    await expect(page.locator('.hub-row').first()).toContainText('Invite players from an outpost');
+    await expect(page.locator('.hub-primary')).toBeDisabled();
+  });
+
+  // HUB-242: a double-click runs the action that its first click revealed. The pointer
+  // owner fixes it for every page; until then this documents the open P0.
+  test('double-clicking a friend opens the person page and runs nothing', async ({ page }) => {
+    test.fail(true, 'HUB-242: the shared pointer owner has not landed');
+    const search = page.getByRole('combobox', { name: searchName });
+    for (const [index, name] of ['Zed Beta', 'Zed Delta', 'Zed Gamma'].entries()) {
+      await search.fill('zed');
+      await page.locator('.hub-row').nth(index + 1).dblclick();
+      await expect(page.locator('.hub-caption')).toHaveText(name, { timeout: 2_000 });
+      await expect(page.locator('#app')).not.toHaveAttribute('data-action', /TRAVEL|INVITE/);
+      await page.getByRole('button', { name: 'Home', exact: true }).click();
+    }
+  });
+});

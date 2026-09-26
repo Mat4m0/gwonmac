@@ -225,7 +225,21 @@ Whispers uses one conversation interface for person search, the Whispers shortcu
 and the unread launcher. Messages, drafts, history, mute and unread state stay in
 that view. Escape or Left at the start of a draft returns to people; closing Hub
 keeps drafts for the game session. Character changes, leaving the game, or turning
-off Whispers clear the session. Invite remains absent without a certified action.
+off Whispers clear the session.
+
+In an outpost, choose **Invite to party** on a person, or type
+`invite Character Name`, to invite that character. Only the exact name invites;
+a partial name or a name seen in chat opens that person's actions instead.
+Character names have at least two words, so a single typed word stays below
+known people and says **Type the full character name**. The
+footer names who is invited, for example **Invite Mo Kai**. Guild Wars answers
+the invite in chat.
+For a friend elsewhere, **Invite to party** says where they are. For a PvE
+outpost, use **Travel and invite**: it travels there (Any district) and invites them once you
+arrive. If you change character or return to character selection first, no
+invite is sent. It is unavailable for PvP outposts such as Random Arenas. If you land in
+a different district, Guild Wars cannot find them; Hub then shows the game's
+answer in chat. Both actions need Whispers enabled.
 
 Build Library, Trade Chat, Characters, and Whispers open inside Hub. Detach a tool
 when you want to keep it beside the game. Disabled tools are absent from search.
@@ -253,7 +267,10 @@ selector. Material names and common aliases such as iron, feathers, dust and
 obby shards use Trade's catalogue and its quoted batch quantities. Fractional
 item results are labelled Equivalent value.
 
-Use Actions to pin a result or give it an exact search phrase. Search **Hub
+Use Actions to pin a result or give it an exact search phrase. A new phrase cannot
+start with a command word such as `team` or `invite`, or read as a calculation. A
+phrase saved before its first word became a command word keeps its pin but no
+longer matches. Search **Hub
 preferences** to reorder pins, remove saved actions, or reset aliases. Search `resign` for its existing
 confirmation, or `reload` for the account's Quit or Reload dialog.
 

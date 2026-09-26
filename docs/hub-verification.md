@@ -11,10 +11,20 @@ Run `pnpm hub:dev` from the repository root. Open
 This uses the production Hub shell, Builds, Trade, Travel, Characters and Whispers
 presentation. Only the game/native/network boundary is synthetic. Prices are sample
 NPC quotes and synthetic player advertisements, never live prices. The scenario selector exposes an outpost,
-an explorable area, interrupted application, and duplicate names. Reset fixture
-clears only fixture data. The fixture is excluded from the embedded entry point.
+an explorable area, interrupted application, duplicate names, and **People to
+invite**. Reset fixture clears only fixture data. The fixture is excluded from
+the embedded entry point.
 
-Try `team gom afk`, `build smiter`, `10 ecto in p`, `trade ecto`, and `char war`.
+The fixture wires the production party invite to a synthetic play region that
+follows the demo Travel host. The player starts in Lion's Arch; Romi Ranger is
+in Kamadan. **People to invite** adds the chat names Mo Kaiser and Kai Mo Bearer,
+four online friends named Zed (Kamadan, Ascalon City, Lion's Arch, Kaineng
+Center), and Arena Ace in Random Arenas. The app element records each sent
+invite in `data-invites` and the last action in `data-action`, such as
+`PARTY.INVITE Mo Kai`, `PARTY.TRAVEL Romi Ranger` or `FRIEND.TRAVEL Zed Beta`.
+
+Try `team gom afk`, `build smiter`, `10 ecto in p`, `trade ecto`, `char war`,
+and `invite Mo Kai`.
 Build and team previews use the existing planner and observed execution runner.
 
 ## Verified behavior
@@ -41,7 +51,7 @@ and the library version remain unchanged. No compatibility service is introduced
 
 Remote conversion reuses Trade's NPC trader source and buy/sell interpretation.
 An observation older than five minutes is labelled Last observed. Quotes are estimates,
-not executable bulk prices. Armbrace and Zaishen key estimates use the production median estimator with synthetic ads in the browser workbench. Manual rates remain an explicit override. Guided multi-action flows remain future work. Invite stays absent without a certified named capability.
+not executable bulk prices. Armbrace and Zaishen key estimates use the production median estimator with synthetic ads in the browser workbench. Manual rates remain an explicit override. Guided multi-action flows remain future work. Invite and Travel and invite use the certified `enhancement_send_party_invite` export; their live semantics need a two-account check.
 
 All 19 focused Electron input tests passed across the final targeted runs, including
 Core Hub’s Command-R interception, text editing and game-focus restoration, character

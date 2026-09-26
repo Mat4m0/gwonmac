@@ -261,7 +261,7 @@ the independent calculator and fixed conversions can remain enabled.
 | Section | Presentation | Completion |
 | --- | --- | --- |
 | Travel | Existing destinations, aliases, favourites, history, Guild Hall | Explicit destination action, then quiet close |
-| People | Identity, presence, available Whisper/Travel actions | No automatic social or travel action |
+| People | Identity, presence, available Whisper/Invite/Travel actions | No social or travel action without an explicit choice |
 | Whispers | Floating conversation with unread state, history, composer and delivery/retry | Send stays in conversation; Escape preserves draft |
 | Trade | Floating ledger with sources, search, filters, message detail and quotes | Contact opens addressed composer without sending |
 | Builds/Teams | Browse, inspect and apply in Hub; authoring in the Build workspace | Open the same saved record in its editor; preserve draft |
@@ -276,7 +276,13 @@ Travel to a friend means **Travel to outpost**, not join their exact instance.
 Current runtime travel only proves map-ID travel with its existing district policy.
 Do not promise editable live district selection until the native contract supports it.
 Use fresh live location authority, not retained whisper contacts, before travelling.
-Invite remains absent until a named certified implementation exists.
+**Invite to party** sends one named `/invite` line through the certified chat
+mailbox, only from a PvE outpost and only to an exact name. A friend in another
+map is unavailable with their location. **Travel and invite** travels to the
+friend's PvE outpost (Any district), waits for a settled arrival of the same
+character, and then sends one invite. A refused trip, a character change or a
+return to character selection, a non-PvE arrival, or no arrival within 60 seconds sends nothing. Guild Wars reports the invite result in chat; Hub
+claims only that Guild Wars took the command.
 
 Maps and display features retain their settings owners. Quick Item Move retains
 its direct game interaction; Hub does not add inventory automation. Call Target

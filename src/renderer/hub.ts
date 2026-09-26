@@ -10,7 +10,7 @@ import { openHubSettings } from "./hub-settings.js";
 import { createHubAccounts } from './hub-accounts.js';
 import { hubIcon } from "./hub-icons.js";
 import { openHubMaps } from './hub-maps.js';
-import { editHubShortcut, manageHubShortcuts } from './hub-preferences.js';
+import { editHubShortcut, hubPhraseReserved, manageHubShortcuts } from './hub-preferences.js';
 import { isHubShortcuts, type HubShortcut } from '../shared/hub-preferences.js';
 import { createHubCalculator } from './hub-calculator.js';
 import { matchHubRows, parseHubQuery, normaliseHubQuery, type HubRow, type HubSource, type HubSummary } from '../shared/hub.js';
@@ -178,7 +178,7 @@ export function createHub(parent: HTMLElement) {
   }
   function commandExamples(): HubRow[] {
     const enabled = new Set(commands().map(row => row.id));
-    const examples = [ ['trade', 'trade arms', 'Find offers or a seller'], ['travel', 'travel kamadan', 'Find an outpost'], ['character', 'char Toefte', 'Find a character by name'], ['builds', 'build monk', 'Browse saved Monk builds'], ['builds', 'team gom afk', 'Find your saved team'], ['whispers', 'whisper Romi', 'Choose a person; write before sending'], ['', '1p in g', 'Convert platinum to gold'], ['trade', '10e in p', 'Estimate ecto value'], ['', 'titles', 'Plan title points'], ['', 'acc second', 'Choose how to open a saved account'], ['builds', 'build folder:Monk monk', 'Monk builds in a folder and its descendants'], ['builds', 'build folder:"Team Builds/Farming" monk', 'Quotes keep spaces; paths match consecutive folder names'], ['builds', 'build folder:/Monk/ mesmer', 'Leading slash starts at Skills; trailing slash matches the complete folder name'], ['builds', 'build Mo/Me', 'Exact profession pair; use folder:Mo/Me to search that folder instead'], ['builds', 'build folder:/', 'Templates saved directly in the Skills root'] ];
+    const examples = [ ['trade', 'trade arms', 'Find offers or a seller'], ['travel', 'travel kamadan', 'Find an outpost'], ['character', 'char Toefte', 'Find a character by name'], ['builds', 'build monk', 'Browse saved Monk builds'], ['builds', 'team gom afk', 'Find your saved team'], ['whispers', 'whisper Romi', 'Choose a person; write before sending'], ['whispers', 'invite Romi', 'Invite a person to your party from an outpost'], ['', '1p in g', 'Convert platinum to gold'], ['trade', '10e in p', 'Estimate ecto value'], ['', 'titles', 'Plan title points'], ['', 'acc second', 'Choose how to open a saved account'], ['builds', 'build folder:Monk monk', 'Monk builds in a folder and its descendants'], ['builds', 'build folder:"Team Builds/Farming" monk', 'Quotes keep spaces; paths match consecutive folder names'], ['builds', 'build folder:/Monk/ mesmer', 'Leading slash starts at Skills; trailing slash matches the complete folder name'], ['builds', 'build Mo/Me', 'Exact profession pair; use folder:Mo/Me to search that folder instead'], ['builds', 'build folder:/', 'Templates saved directly in the Skills root'] ];
     return examples.filter(([tool]) => !tool || enabled.has(tool)).map(([, query, detail], index) => ({ id: `example:${index}`, title: query!, detail: detail!, group: 'Commands', action: 'Edit example', searchQuery: query!, run() {} }));
   }
   function openSettings() { openHubSettings(presenter); }
@@ -341,7 +341,8 @@ export function createHub(parent: HTMLElement) {
       ? [{ id: "trade-query", title: `Search Trade for ${tradeQuery.term}`, detail: "Kamadan listings", group: "Tools", action: "Search Trade", run: () => dispatch("gw:trade-toggle", { query: tradeQuery.term }) }] : [];
     const extra = scope ? scope.rows() : [...sources.keys()].filter(sourceEnabled).flatMap(source => source.search(input.value)).concat(tradeRows);
     const parsed = parseHubQuery(input.value);
-    const saved = shortcuts().filter(entry => !parsed.term ? entry.pinned : entry.phrase === parsed.term)
+    // A phrase saved before its words joined the grammar stays stored but no longer matches.
+    const saved = shortcuts().filter(entry => !parsed.term ? entry.pinned : entry.phrase === parsed.term && !hubPhraseReserved(entry.phrase))
       .filter(entry => !parsed.scope || entry.id.startsWith(`${parsed.scope}:`));
     const savedRows = saved.flatMap(entry => { const row = lookup(entry.id); return row ? [{ ...row, group: parsed.term ? row.group : 'Pinned' }] : []; });
     const ids = new Set([...extra, ...savedRows].map(row => row.id));
@@ -451,7 +452,11 @@ export function createHub(parent: HTMLElement) {
   function close(message?: string) {
     suspended = null; epoch++; history.length = 0; resetView(); modal.close(); for (const source of sources.keys()) source.setVisible(false); scope = null;
     input.value = ''; restoreQuery = ''; report(''); selected = null;
-    if (typeof message === 'string' && message) { clearTimeout(receiptTimer); receipt.textContent = message; receipt.hidden = false; receiptTimer = setTimeout(() => { receipt.hidden = true; }, 8000); }
+    if (typeof message === 'string' && message) notify(message);
+  }
+  /** Shows a short outcome receipt without changing what Hub shows. */
+  function notify(message: string) {
+    clearTimeout(receiptTimer); receipt.textContent = message; receipt.hidden = false; receiptTimer = setTimeout(() => { receipt.hidden = true; }, 8000);
   }
   function suspend() {
     if (!root.open) return;
@@ -624,6 +629,7 @@ export function createHub(parent: HTMLElement) {
       paintNavigation();
       if (!content.contains(document.activeElement)) content.querySelector<HTMLElement>('input,select,button,[tabindex="0"]')?.focus();
     },
+    notify,
     browseBuilds() { const row = lookup('builds'); if (row && !row.unavailable) void row.run(); else report('Build Library is loading. Try again.'); },
     resetPosition: hubWindow.reset,
     dispose() { close(); disposeSearchEditing(); clearTimeout(receiptTimer); receipt.remove(); hubWindow.dispose(); disposeFrame(); for (const unsubscribe of sources.values()) unsubscribe(); sources.clear(); modal.dispose(); root.remove(); window.removeEventListener('blur', onBlur); window.removeEventListener('gw:tools-settings', onSettings); },
