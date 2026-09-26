@@ -107,6 +107,8 @@ invite; a non-PvE arrival withdraws it at once. Disposing Tools withdraws a
 pending arrival. The friend feed has no district, so an arrival in another
 district can fail in Guild Wars.
 
+`invite ` with an empty name lists the online friends, those invitable from
+here first, each as an exact invite by character name.
 In the `invite` scope only an exact name invites: the exact typed name or an
 exact known person comes first, and the footer names the target, such as
 **Invite Mo Kai**. A prefix or "Seen in chat" match opens the person page.

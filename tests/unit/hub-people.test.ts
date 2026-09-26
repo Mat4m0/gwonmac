@@ -206,3 +206,24 @@ test('Invite points to Travel and invite only when that row is shown and can sta
     assert.equal(inviteReason(page), 'Mo Kaiser is in Random Arenas.', 'a PvP outpost is never pointed to');
   }, lionsArchInvite());
 });
+
+test('`invite ` lists the online friends as named invites, those invitable now first', async () => {
+  const { party, calls } = invitePort({ unavailable: friend => friend?.mapId === 55 ? null : 'Elsewhere' });
+  await withPeople(ALL_TOOLS, async ({ source, setFriends }) => {
+    setFriends([
+      { key: 'z', character: 'Zed Delta', alias: 'Zed', status: 'away', mapId: 55 },
+      { key: 'f', character: 'Mo Kaiser', alias: 'Kai Account', status: 'online', mapId: 449 },
+      { key: 'o', character: '', alias: 'Offline Friend', status: 'offline', mapId: 0 },
+      { key: 'u', character: 'Unknown Status', alias: 'Unknown', status: 'unknown', mapId: 55 },
+    ]);
+    const rows = source.search('invite ');
+    assert.deepEqual(rows.map(row => `${row.title}|${row.action}|${row.unavailable ?? ''}`), ['Zed|Invite Zed Delta|', 'Kai Account|Invite Mo Kaiser|Elsewhere'],
+      'online friends by character name; offline and unknown friends are left out');
+    await rows[0]!.run();
+    assert.deepEqual(calls, ['invite:Zed Delta']);
+    assert.deepEqual(source.search('whisper '), [], 'a bare whisper scope lists only conversations that need the player');
+  }, party);
+  await withPeople(ALL_TOOLS, ({ source }) => {
+    assert.deepEqual(source.search('invite '), [], 'no invite scope without the certified invite');
+  });
+});

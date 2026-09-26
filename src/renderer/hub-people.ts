@@ -104,6 +104,14 @@ export function createHubPeople(hub: Pick<Hub, 'attach' | 'showRows' | 'close' |
       // `whisper` and `invite` address one person; both need the Whispers chat mailbox.
       const addressed = parsed.scope === 'whisper' || (parsed.scope === 'invite' && !!party);
       if (parsed.scope && (!addressed || !whispersEnabled)) return [];
+      if (parsed.scope === 'invite' && party && !parsed.term) {
+        // `invite ` lists the online friends, each an exact invite by character name:
+        // those who can be invited now first, then by name.
+        const online = friends.status === 'ready' && session.state.suggest.friends
+          ? friends.friends.filter(friend => friend.character && friend.status !== 'offline' && friend.status !== 'unknown') : [];
+        return online.map(friend => inviteRow(party, row({ key: whisperPersonKey(friend.character), name: friend.character, source: 'friend', activity: 0, exact: true, friend }), friend))
+          .sort((a, b) => Number(!!a.unavailable) - Number(!!b.unavailable) || a.action.localeCompare(b.action) || a.id.localeCompare(b.id)).slice(0, MAX_PEOPLE);
+      }
       if (!parsed.term) {
         // Home lists only conversations that still need the player.
         return whispersEnabled ? session.state.conversations.filter(conversation => whisperUnread(conversation) || conversation.draft)

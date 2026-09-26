@@ -232,8 +232,9 @@ In an outpost, choose **Invite to party** on a person, or type
 a partial name or a name seen in chat opens that person's actions instead.
 Character names have at least two words, so a single typed word stays below
 known people and says **Type the full character name**. The
-footer names who is invited, for example **Invite Mo Kai**. Guild Wars answers
-the invite in chat.
+footer names who is invited, for example **Invite Mo Kai**. Type `invite `
+with a space to list your online friends, those you can invite from here first.
+Guild Wars answers the invite in chat.
 For a friend elsewhere, **Invite to party** says where they are. For a PvE
 outpost, when the Travel tool is on, use **Travel and invite**: it travels there (Any district) and invites them once you
 arrive. If you change character or return to character selection first, no

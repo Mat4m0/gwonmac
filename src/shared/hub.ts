@@ -47,11 +47,14 @@ export type HubSource = Readonly<{
 export const normaliseHubQuery = (value: string): string => value.toLowerCase().trim().replace(/\s+/gu, ' ');
 export const HUB_SCOPES = ['team', 'build', 'travel', 'char', 'whisper', 'invite', 'trade', 'acc'] as const;
 export type HubScope = typeof HUB_SCOPES[number];
-/** `term` is normalised for matching; `text` keeps the typed capitalisation, e.g. for a character name. */
+/**
+ * `term` is normalised for matching; `text` keeps the typed capitalisation, e.g. for a character name.
+ * A scope word followed by a space enters its scope with an empty term; a lone word is still a search.
+ */
 export function parseHubQuery(value: string): { scope: HubScope | null; term: string; text: string } {
   const words = value.trim().split(/\s+/u);
   const scopes: readonly string[] = HUB_SCOPES;
-  const scoped = words.length > 1 && scopes.includes(words[0]!.toLowerCase());
+  const scoped = (words.length > 1 || /\S\s+$/u.test(value)) && scopes.includes(words[0]!.toLowerCase());
   const text = (scoped ? words.slice(1) : words).join(' ');
   return { scope: scoped ? words[0]!.toLowerCase() as HubScope : null, term: normaliseHubQuery(text), text };
 }
