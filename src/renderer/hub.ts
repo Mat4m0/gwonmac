@@ -27,7 +27,7 @@ export function createHub(parent: HTMLElement) {
     <div class="hub-search"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 8 10-8 10L4 12 12 2Zm0 5v10M8 12h8"/></svg><span class="hub-scope" hidden></span><input type="text" role="combobox" aria-label="Search people, places, builds" aria-autocomplete="list" aria-controls="hub-results" aria-expanded="true" placeholder="Search people, places, builds…" autocomplete="off" spellcheck="false" maxlength="120"></div>
     <p class="hub-hint" id="hub-hint" hidden></p><div class="hub-rate-controls" hidden></div><div class="hub-results ui-scroll" id="hub-results" role="listbox" aria-label="Results" tabindex="-1"></div>
     <pre class="hub-preview ui-scroll" hidden></pre><div class="hub-view" hidden></div><p class="hub-status" role="status" hidden></p><p class="hub-lifecycle" hidden></p>
-    <footer class="hub-footer"><button class="hub-primary ui-button" data-variant="primary"></button><span class="hub-count"></span><button class="hub-actions ui-button" data-variant="quiet">Actions</button></footer>
+    <footer class="hub-footer"><span class="hub-legend"></span><span class="hub-count"></span><button class="hub-primary ui-button" data-variant="primary"></button><button class="hub-actions ui-button" data-variant="quiet">Actions</button></footer>
     <button class="ui-window-resize hub-resize" aria-label="Resize Hub" title="Drag to resize, or use arrow keys" hidden></button>
   </section>`;
   parent.append(root);
@@ -51,6 +51,7 @@ export function createHub(parent: HTMLElement) {
   const footer = required<HTMLElement>('footer');
   const primary = required<HTMLButtonElement>('.hub-primary');
   const count = required<HTMLElement>('.hub-count');
+  const legend = required<HTMLElement>('.hub-legend');
   const lifecycle = required<HTMLElement>('.hub-lifecycle');
   let rows: readonly HubRow[] = [];
   let shortcutRevision = '';
@@ -211,10 +212,26 @@ export function createHub(parent: HTMLElement) {
     primary.replaceChildren(document.createTextNode(row ? row.action : 'Select a result'));
     if (row) { const key = document.createElement('kbd'); key.textContent = '↵'; primary.append(key); }
     primary.disabled = !row || !!row.unavailable || pending;
+    // Footer slots never hide, so nothing slides under a resting pointer; they disable instead.
     const actionsButton = required<HTMLButtonElement>('.hub-actions');
-    actionsButton.disabled = !row;
-    actionsButton.hidden = !!scope && !row?.skills && !scope.summary?.skills;
+    actionsButton.disabled = !row || (!!scope && !row.skills && !scope.summary?.skills);
     actionsButton.textContent = scope ? 'Details' : 'Actions';
+    paintLegend(row);
+  }
+  /** The footer's key legend names only keys that act here and now. */
+  function paintLegend(row: HubRow | undefined) {
+    const keys: [string[], string][] = [];
+    if (rows.length > 1) keys.push([['↑', '↓'], 'Select']);
+    if (row?.navigate) keys.push([['→'], 'Open']);
+    keys.push([['Esc'], input.value ? 'Clear' : history.length ? 'Back' : 'Close']);
+    const next = JSON.stringify(keys);
+    if (legend.dataset.keys === next) return;
+    legend.dataset.keys = next; legend.replaceChildren();
+    for (const [caps, label] of keys) {
+      const entry = document.createElement('span');
+      for (const cap of caps) { const key = document.createElement('kbd'); key.className = 'ui-kbd'; key.textContent = cap; entry.append(key); }
+      entry.append(` ${label}`); legend.append(entry);
+    }
   }
   function renderSkillBar(skills: NonNullable<HubRow['skills']>) {
     const bar = document.createElement('span'); bar.className = 'hub-skill-bar';
@@ -321,9 +338,6 @@ export function createHub(parent: HTMLElement) {
     backButton.textContent = '←';
     backButton.title = `Back to ${destination}`;
     backButton.setAttribute('aria-description', `Return to ${destination}`);
-    const actionsButton = required<HTMLButtonElement>('.hub-actions');
-    actionsButton.hidden = !!scope && !scope.summary?.skills && !rows.find(row => row.id === selected)?.skills;
-    actionsButton.disabled = !selected;
     const query = parseHubQuery(input.value);
     const scopeLabel = required<HTMLElement>('.hub-scope');
     scopeLabel.textContent = query.scope ?? '';

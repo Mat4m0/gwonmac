@@ -330,6 +330,10 @@ test.describe('party invite', () => {
     // D-2: the person page keeps focus in search and moves the active descendant.
     await expect(page.locator('.hub-caption')).toHaveText('Zed Alpha');
     await expect(search).toBeFocused();
+    // The footer keeps both slots and a key legend; a person page has no details to show.
+    await expect(page.locator('.hub-actions')).toBeVisible();
+    await expect(page.locator('.hub-actions')).toBeDisabled();
+    await expect(page.locator('.hub-legend')).toHaveText('↑↓ SelectEsc Back');
     await page.keyboard.press('ArrowDown'); await page.keyboard.press('ArrowDown');
     await expect(search).toBeFocused();
     await expect(search).toHaveAttribute('aria-activedescendant', 'hub-result-2');

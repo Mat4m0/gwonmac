@@ -99,6 +99,10 @@ Globs of Ectoplasm, and platinum. Prefer clear action verbs over invented lore.
 
 Every row has a stable identity, full name, type, and an explicit primary action.
 The footer names what Enter will do. Do not rely on colour or icons alone.
+Its left side is a key legend that names only keys that act in the current view,
+such as ↑↓ Select, → Open and Esc Clear, Back or Close. Footer buttons never hide;
+a secondary action that does not apply is disabled, so nothing moves under the
+pointer.
 
 - Up/Down selects rows. Enter performs the displayed action.
 - Escape closes an action menu, then clears a non-empty query, then goes back
