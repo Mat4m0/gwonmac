@@ -1,19 +1,20 @@
-/** Party invite and Travel-then-invite: outpost gate, fresh arrival, one invite, no retry. */
+/** Party invite and Travel-then-invite: outpost gate, fresh arrival, one invite, no retry, PvE only. */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { CompanionPlayRegionState } from '../../src/renderer/companion-play-region-snapshot.ts';
 import { createPartyInvite } from '../../src/renderer/party-invite.ts';
 import type { TravelFriend } from '../../src/shared/friends.ts';
 
-const outpost = (mapId: number, characterKey = 'a', instanceType = 0) => ({
-  status: 'ready', sequence: 1, mapId, instanceType, playRegion: 'pve', travelContext: 'world', characterKey,
+const outpost = (mapId: number, characterKey: string | null = 'a', instanceType = 0, playRegion = 'pve') => ({
+  status: 'ready', sequence: 1, mapId, instanceType, playRegion, travelContext: 'world', characterKey,
   unlockedMapWords: null, guildHall: false, hasGuildHall: false,
 }) as unknown as CompanionPlayRegionState;
 const loading = { status: 'waiting', reason: 'stale' } as const;
 const friend: TravelFriend = { key: 'f', character: 'Mo Kaiser', alias: 'Kai', status: 'online', mapId: 449 };
 
-function harness(options: { travel?: () => Promise<void> } = {}) {
-  let region: CompanionPlayRegionState = outpost(55);
+function harness(options: { travel?: () => Promise<void>; start?: CompanionPlayRegionState } = {}) {
+  let region: CompanionPlayRegionState = options.start ?? outpost(55);
+  let trips = 0;
   let chat = true;
   const listeners = new Set<() => void>();
   const invited: string[] = [];
@@ -22,10 +23,10 @@ function harness(options: { travel?: () => Promise<void> } = {}) {
     subscribeRegion: listener => { listeners.add(listener); return () => { listeners.delete(listener); }; },
     chatReady: () => chat,
     invite: async name => { invited.push(name); },
-    travel: options.travel ?? (async () => {}),
+    travel: options.travel ?? (async () => { trips++; }),
     settleMs: 2_000, arrivalTimeoutMs: 60_000,
   });
-  return { party, invited, listeners,
+  return { party, invited, listeners, trips: () => trips,
     move(next: CompanionPlayRegionState) { region = next; for (const listener of [...listeners]) listener(); },
     setChat(next: boolean) { chat = next; } };
 }
@@ -80,4 +81,59 @@ test('Travel and invite never invites after a refused trip, a character change o
   context.mock.timers.tick(60_000);
   await assert.rejects(stuckInvite, /Travel did not finish/);
   assert.deepEqual([...refused.invited, ...switched.invited, ...stuck.invited], []);
+});
+
+test('Invite is unavailable for a friend in another map and names where they are', () => {
+  const h = harness();
+  assert.equal(h.party.unavailable(friend), 'Mo Kaiser is in Kamadan, Jewel of Istan. Use Travel and invite.');
+  assert.equal(h.party.unavailable({ ...friend, mapId: 55 }), null);
+  assert.equal(h.party.unavailable(), null, 'a name without a known map is not refused');
+});
+
+test('Travel and invite from the first outpost after login adopts the first known character key', async (context) => {
+  context.mock.timers.enable({ apis: ['setTimeout'] });
+  for (const known of [false, true]) {
+    const h = harness({ start: outpost(55, null) });
+    const { invited } = await h.party.travelAndInvite(friend, 1);
+    if (known) h.move(outpost(55, 'a'));
+    h.move(loading);
+    h.move(outpost(449, 'a'));
+    context.mock.timers.tick(2_000);
+    await invited;
+    assert.deepEqual(h.invited, ['Mo Kaiser'], known ? 'key published before departure' : 'key published on arrival');
+  }
+  const h = harness({ start: outpost(55, null) });
+  const { invited } = await h.party.travelAndInvite(friend, 1);
+  h.move(outpost(55, 'a'));
+  h.move(outpost(449, 'b'));
+  await assert.rejects(invited, /character changed/);
+  assert.deepEqual(h.invited, []);
+});
+
+test('Travel and invite refuses a PvP outpost up front and a non-PvE arrival at once', async (context) => {
+  context.mock.timers.enable({ apis: ['setTimeout'] });
+  const h = harness();
+  for (const mapId of [188, 330]) {
+    assert.equal(h.party.travelUnavailable({ ...friend, mapId }), 'Invites from Hub need a PvE outpost');
+    await assert.rejects(h.party.travelAndInvite({ ...friend, mapId }, 1), /need a PvE outpost/);
+  }
+  assert.equal(h.trips(), 0);
+  const { invited } = await h.party.travelAndInvite(friend, 1);
+  h.move(outpost(449, 'a', 0, 'pvp'));
+  await assert.rejects(invited, /need a PvE outpost\. The invite was not sent/);
+  assert.equal(h.listeners.size, 0, 'no 60 s wait');
+  context.mock.timers.tick(60_000);
+  assert.deepEqual(h.invited, []);
+});
+
+test('dispose withdraws a pending arrival, so no invite is sent after Tools leave', async (context) => {
+  context.mock.timers.enable({ apis: ['setTimeout'] });
+  const h = harness();
+  const { invited } = await h.party.travelAndInvite(friend, 1);
+  h.party.dispose();
+  await assert.rejects(invited, /The invite was not sent/);
+  h.move(outpost(449));
+  context.mock.timers.tick(2_000);
+  assert.deepEqual(h.invited, []);
+  assert.equal(h.listeners.size, 0);
 });
