@@ -219,6 +219,19 @@ test('a narrow or minimum Hub keeps one footer line while arrowing', async ({ pa
   }
 });
 
+test('Settings navigation keeps every section on one line in every panel font', async ({ page }) => {
+  await page.goto('/?hub');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  await search.fill('settings'); await search.press('Enter');
+  const nav = page.getByRole('navigation', { name: 'Settings sections' });
+  await expect(nav.getByRole('button')).toHaveText(['Tools', 'Appearance', 'Shortcuts', 'Maps', 'Characters', 'Chat']);
+  for (const uiFont of ['guild-wars', 'inter', 'system', 'georgia', 'avenir', 'palatino']) {
+    await page.evaluate(uiFont => window.gwApplyFixtureAppearance?.({ uiStyle: 'guild-wars', uiPanelOpacity: 94, uiFont }), uiFont);
+    const heights = await nav.getByRole('button').evaluateAll(buttons => buttons.map(button => Math.round(button.getBoundingClientRect().height)));
+    expect(new Set(heights).size, `${uiFont} ${heights.join(',')}`).toBe(1);
+  }
+});
+
 test('compact Hub keeps navigation reachable with reduced motion over a bright backdrop', async ({ page }, info) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize({ width: 390, height: 800 });

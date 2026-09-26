@@ -22,10 +22,10 @@ export function openHubSettings(hub: Hub) {
     view.append(nav, body, status); target.append(view);
     let snapshot: HubSettingsSnapshot | null = null; let disposed = false; let pending = false;
     const api = window.gwNative.hubSettings;
-    const sections = ['Tools', 'Appearance', 'Shortcuts', 'Maps', 'Chat & characters'];
+    const sections = ['Tools', 'Appearance', 'Shortcuts', 'Maps', 'Characters', 'Chat'];
     const buttons = sections.map(name => {
       const button = doc.createElement('button'); button.type = 'button'; button.textContent = name; button.className = 'ui-button'; button.dataset.section = name;
-      const icons: Record<string, string> = { Tools: 'settings', Appearance: 'appearance', Shortcuts: 'keyboard', Maps: 'maps', 'Chat & characters': 'whispers' };
+      const icons: Record<string, string> = { Tools: 'settings', Appearance: 'appearance', Shortcuts: 'keyboard', Maps: 'maps', Characters: 'character', Chat: 'whispers' };
       button.prepend(hubIcon(doc, { id: icons[name] ?? 'settings', group: 'Settings' }));
       button.onclick = () => { page = name; status.textContent = ''; render(); };
       button.onkeydown = event => {
@@ -115,8 +115,9 @@ export function openHubSettings(hub: Hub) {
       } else if (page === 'Maps') {
         settingToggle('Exploration grid', 'cartographyGridEnabled'); settingToggle('Walkable terrain', 'cartographyOverlayEnabled'); range('Grid opacity', 'cartographyGridOpacity'); range('Terrain opacity', 'cartographyWalkabilityOpacity');
         settingToggle('Compass ranges', 'compassRangeIndicatorsEnabled'); settingToggle('Earshot range', 'compassRangeEarshotEnabled'); settingToggle('Casting range', 'compassRangeCastEnabled'); settingToggle('Spirit range', 'compassRangeSpiritEnabled'); settingToggle('Extended spirit range', 'compassRangeSpiritExtendedEnabled');
-      } else {
+      } else if (page === 'Characters') {
         settingToggle('Show character profession', 'characterSwitchProfession'); settingToggle('Show character level', 'characterSwitchLevel'); settingToggle('Show character location', 'characterSwitchLocation');
+      } else {
         settingToggle('Hide other players’ item drops', 'chatFilterAllyDrops'); settingToggle('Hide Hall of Heroes announcements', 'chatFilterHallOfHeroes'); settingToggle('Hide title announcements', 'chatFilterTitleAchievements');
         const note = doc.createElement('p'); note.textContent = 'Whisper sound and pop-out opacity are in Chat options. Drafts stay in this game session.'; body.append(note);
       }

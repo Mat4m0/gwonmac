@@ -410,7 +410,7 @@ the search query without executing an action. Unknown item names are not guessed
 
 `Settings` opens inside the fixed Hub frame. The game’s macOS Settings menu opens
 the same view; Settings from the launcher continues to configure the launcher.
-Hub includes Tools, Appearance, Shortcuts, Maps, and Chat & characters. Tool switches
+Hub includes Tools, Appearance, Shortcuts, Maps, Characters, and Chat. Tool switches
 remain visible in Settings so disabled tools can be enabled, while search hides
 those tools. Changing a tool does not dismiss Settings. The Tools master switch
 reports when a restart is required; it never closes an account automatically.
