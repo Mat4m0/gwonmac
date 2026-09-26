@@ -254,8 +254,10 @@ Tool rows show meaningful descriptions and resolved shortcut keycaps.
 The top bar shows clickable ancestor breadcrumbs and an understated Back arrow.
 Command-Backspace returns to the previous page from any focus in Hub, one page per
 physical press; a page opened directly by its shortcut returns to Home, and Home
-ignores it. Backspace only edits text and never navigates. History restores query,
-selection, scroll and the focused control. Hub lists keep focus in search and move the active descendant. First entry and restoration are separate: character cards,
+ignores it. The press bubbles to Hub, so a mounted view with its own inner level
+(a confirmation, Character Switch settings, Travel Customize) steps out of it first,
+the way Esc does, and marks the press handled. Backspace only edits text and never
+navigates. History restores query, selection, scroll and the focused control. Hub lists keep focus in search and move the active descendant. First entry and restoration are separate: character cards,
 account choices and action lists start on their useful item; search stays optional.
 Fresh Home starts in search. Temporary app blur and popout handoffs retain the
 session task; explicit closure starts a fresh task next time. Resume refreshes

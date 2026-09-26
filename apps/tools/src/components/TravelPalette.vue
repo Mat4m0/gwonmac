@@ -20,6 +20,7 @@ import {
 } from "../../../../src/shared/travel-command";
 import { TRAVEL_HISTORY_VISIBLE_LIMIT } from "../../../../src/shared/travel-history";
 import { guildWarsMapName } from "../../../../src/shared/guild-wars-map-names";
+import { isHubBackKey } from "../../../../src/shared/keyboard-shortcuts";
 import { useTravelPreferences } from "../travel-preferences";
 import TravelDestinationPicker from "./TravelDestinationPicker.vue";
 
@@ -662,6 +663,14 @@ function onKeydown(event: KeyboardEvent): void {
   const atStart = event.target === input.value && input.value?.selectionStart === 0 && input.value.selectionEnd === 0;
   if (props.inset && mode.value === 'travel' && !hasQuery.value && event.target === input.value && plainArrow && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
     event.preventDefault(); void moveActive(event.key === 'ArrowRight' ? 1 : -1); return;
+  }
+  // In the Hub, ⌘⌫ leaves Customize like Esc; an open picker closes first, and from the
+  // destination list the press is the Hub's own Back.
+  if (props.inset && mode.value === "customize" && isHubBackKey(event)
+    && !(event.target instanceof Element && event.target.closest("details[open]"))) {
+    event.preventDefault();
+    if (!event.repeat) void selectMode("travel");
+    return;
   }
   if (event.key === "Escape" || (event.key === "ArrowLeft" && plainArrow && atStart && !hasQuery.value)) {
     event.preventDefault();

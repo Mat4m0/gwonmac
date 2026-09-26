@@ -5,7 +5,7 @@
 import { resumeSearchInput } from './search-input.js';
 import { installHubWindow } from './hub-window.js';
 import { attachClassicFrame } from '../shared/ui/frame.js';
-import { resolveShortcuts, shortcutKeycaps, type ShortcutAction } from '../shared/keyboard-shortcuts.js';
+import { isHubBackKey, resolveShortcuts, shortcutKeycaps, type ShortcutAction } from '../shared/keyboard-shortcuts.js';
 import { openHubSettings } from "./hub-settings.js";
 import { createHubAccounts } from './hub-accounts.js';
 import { hubIcon } from "./hub-icons.js";
@@ -557,14 +557,18 @@ export function createHub(parent: HTMLElement) {
   // A press on a result keeps the keyboard in search.
   list.addEventListener('mousedown', event => event.preventDefault());
   // ⌘⌫ is Back from any focus inside the Hub, text fields included; ⌫ alone only edits text.
+  // It bubbles here, so a mounted view first steps out of its own inner level (a confirmation,
+  // its settings) and marks the press handled; the Hub still owns the press either way.
   root.addEventListener('keydown', event => {
-    if (event.key !== 'Backspace' || !event.metaKey || event.ctrlKey || event.altKey || event.shiftKey || event.isComposing) return;
-    event.preventDefault(); event.stopPropagation();
+    if (!isHubBackKey(event)) return;
+    event.stopPropagation();
+    if (event.defaultPrevented) return;
+    event.preventDefault();
     if (event.repeat) return;
     const expanded = event.target instanceof Element ? event.target.closest<HTMLDetailsElement>('details[open]') : null;
     if (expanded && root.contains(expanded)) { expanded.open = false; expanded.querySelector('summary')?.focus(); return; }
     backOneLevel();
-  }, true);
+  });
   root.addEventListener('mouseup', event => { if (event.button === 3) { event.preventDefault(); backOneLevel(); } });
   root.addEventListener('keydown', event => {
     restoringFocus?.disconnect(); restoringFocus = null;

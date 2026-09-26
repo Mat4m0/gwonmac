@@ -222,6 +222,48 @@ test('a page opened directly returns to the real Home, and Home ignores Command-
   await expect(search).toBeFocused();
 });
 
+test('Command-Backspace steps out of a view\'s own inner level before it leaves the view', async ({ page }) => {
+  await page.goto('/?hub&lifecycle=pve-explorable');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const caption = page.locator('.hub-caption');
+  // On a confirmation it acts as Cancel, like Esc and Stay here.
+  await search.fill('char toefte'); await search.press('Enter');
+  await expect(page.locator('#character-switch-title')).toHaveText('Leave this area?');
+  await page.keyboard.press('Meta+Backspace');
+  await expect(page.locator('#character-switch-title')).toHaveText('Switch Character');
+  await expect(caption).toHaveText('Characters');
+  await expect(page.locator('.character-switch-row[data-selected=true]')).toBeFocused();
+  await expect(page.locator('#app')).not.toHaveAttribute('data-action', /Character/);
+  // Characters settings return to the cards; the next press leaves Characters.
+  await page.getByRole('button', { name: 'Character Switch settings', exact: true }).click();
+  await expect(page.locator('.character-switch-settings')).toBeVisible();
+  await page.keyboard.press('Meta+Backspace');
+  await expect(page.locator('.character-switch-settings')).toBeHidden();
+  await expect(caption).toHaveText('Characters');
+  await page.keyboard.press('Meta+Backspace');
+  await expect(caption).toHaveText('Home');
+  await expect(search).toHaveValue('char toefte');
+  // Travel Customize returns to the destination list; an open picker closes first.
+  await page.keyboard.press('Meta+t');
+  await page.getByRole('button', { name: 'Customize Travel', exact: true }).click();
+  const customize = page.locator('#travel-customize-panel');
+  await expect(customize).toBeVisible();
+  await customize.getByRole('button', { name: /shortcut 1\b/ }).click();
+  const picker = customize.locator('details.travel-destination-picker');
+  await picker.locator('summary').click();
+  await expect(picker).toHaveAttribute('open', '');
+  await page.keyboard.press('Meta+Backspace');
+  await expect(picker).not.toHaveAttribute('open', '');
+  await expect(customize).toBeVisible();
+  await page.keyboard.press('Meta+Backspace');
+  await expect(customize).toBeHidden();
+  await expect(caption).toHaveText('Travel');
+  await expect(page.locator('#travel-search-input')).toBeFocused();
+  await page.keyboard.press('Meta+Backspace');
+  await expect(caption).toHaveText('Home');
+});
+
 test('the mouse back button goes back one level and never closes the Hub', async ({ page }) => {
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });

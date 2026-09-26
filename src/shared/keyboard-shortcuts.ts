@@ -196,6 +196,10 @@ function shortcutKey(code: string): string | null {
 
 /** The Hub's Back chord (⌘⌫); no game shortcut may take it. */
 export const HUB_BACK_SHORTCUT: ShortcutBinding = Object.freeze({ key: "backspace", shift: false, option: false });
+/** A ⌘⌫ press, matched by key so every layout agrees; never during composition. */
+export function isHubBackKey(event: Readonly<{ key: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean; isComposing: boolean }>): boolean {
+  return event.key === "Backspace" && event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && !event.isComposing;
+}
 
 const RESERVED_SHORTCUTS: readonly ShortcutBinding[] = [
   HUB_BACK_SHORTCUT,
