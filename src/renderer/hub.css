@@ -59,8 +59,12 @@
 .hub-currency { justify-self:center; font-size:var(--ui-type-caption-size); padding:3px 9px; border-radius:var(--ui-radius-sm); background:var(--ui-well-fill); color:var(--ui-text-muted); text-transform:capitalize; }
 .hub-currency-from { grid-column:1; grid-row:2; }
 .hub-currency-to { grid-column:3; grid-row:2; }
-.hub-preference-row { display:flex; align-items:center; gap:8px; }
-.hub-preference-row span { flex:1; }
+.hub-preference-list { display:grid; gap:2px; max-height:220px; overflow:auto; padding:2px; border-radius:var(--ui-radius-sm); }
+.hub-preference-list:focus-visible { outline:1px solid var(--ui-focus); outline-offset:1px; }
+.hub-preference-option { position:relative; padding:8px 10px; border-radius:var(--ui-radius-sm); cursor:pointer; color:var(--ui-text); }
+.hub-preference-option[aria-selected=true] { background:var(--ui-selection-fill); box-shadow:var(--ui-shadow-selected); color:var(--ui-selection-ink); }
+.hub-preference-option[aria-selected=true]::before { content:''; position:absolute; left:0; top:8px; bottom:8px; width:2px; background:var(--ui-selection-marker); }
+.hub-preference-tools { display:flex; gap:8px; }
 @media(max-width:600px) {
   .hub-panel { width:calc(100vw - 16px); }
   .hub-row { grid-template-columns:28px minmax(0,1fr); column-gap:8px; row-gap:2px; }

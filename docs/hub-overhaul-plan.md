@@ -166,10 +166,12 @@ do not focus a decorative heading or disabled primary action.
 - The Hub footer stays in every view with its key legend. A view names its
   primary and secondary through the presenter (`HubViewFooter`): the team
   review's "Apply team GOM AFK", a confirmation's armed destructive primary and
-  its "Keep …" secondary, and "Save phrase". Enter
+  its "Keep …" secondary, "Save phrase", "Set phrase for …" and "Remove …". Enter
   outside a control that Enter activates itself runs the named primary. A form
   that saves as it changes (Settings, Maps) shows "Done", which steps back.
-  Travel and Characters name their primary in their own footer.
+  Travel and Characters name their primary in their own footer. Hub preferences
+  keeps one selected pin; Move up and Move down stay in place, so a double-click
+  moves the same pin twice, and ⌥⌘↑/↓ move it from the list.
 
 ## 4. History stores the player's place
 

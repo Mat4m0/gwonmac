@@ -385,6 +385,50 @@ test('Accounts: a double-click on an account opens its page on Open Second and r
   }
 });
 
+test('Hub preferences: Move up keeps focus and a double-click moves the same pin twice (PTR-12)', async ({ page }) => {
+  await page.goto('/?hub');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  await page.evaluate(() => localStorage.setItem('hub-fixture-shortcuts', JSON.stringify(['place:449', 'place:194', 'place:642'].map(id => ({ id, phrase: '', pinned: true })))));
+  await open(page);
+  const saved = () => page.evaluate(() => (JSON.parse(localStorage.getItem('hub-fixture-shortcuts') ?? '[]') as { id: string }[]).map(entry => entry.id));
+  await enter(page, 'hub preferences');
+  const list = page.getByRole('listbox', { name: 'Pins and search phrases' });
+  const options = list.getByRole('option');
+  await expect(options).toHaveText([/^Kamadan/, /^Kaineng Center/, /^Eye of the North/]);
+  // The list takes focus, never a Remove button; the footer names what Enter does.
+  await expect(list).toBeFocused();
+  await expect(primary(page)).toHaveText(/^Set phrase for Kamadan/);
+  await options.nth(2).click();
+  await expect(options.nth(2)).toHaveAttribute('aria-selected', 'true');
+  const up = page.getByRole('button', { name: 'Move up', exact: true });
+  for (const gap of [0, 120]) {
+    await clicks(page, up, 2, gap);
+    await expect(options).toHaveText([/^Eye of the North/, /^Kamadan/, /^Kaineng Center/]);
+    await expect(up).toBeFocused();
+    await expect(up).toHaveAttribute('aria-disabled', 'true');
+    await expect.poll(saved).toEqual(['place:642', 'place:449', 'place:194']);
+    if (!gap) { await page.keyboard.press('Alt+Meta+ArrowDown'); await page.keyboard.press('Alt+Meta+ArrowDown'); await expect(options.nth(2)).toHaveText(/^Eye of the North/); }
+  }
+  // ⌥⌘↓ from the list moves the selected pin; ↓ only selects.
+  await list.focus();
+  await page.keyboard.press('Alt+Meta+ArrowDown');
+  await expect(options).toHaveText([/^Kamadan/, /^Eye of the North/, /^Kaineng Center/]);
+  await expect(options.nth(1)).toHaveAttribute('aria-selected', 'true');
+  await expect.poll(saved).toEqual(['place:449', 'place:642', 'place:194']);
+  // Removal names its target and passes an armed confirmation.
+  await expect(page.locator('.hub-actions')).toHaveText('Remove Eye of the North…');
+  await page.locator('.hub-actions').click();
+  await expect(caption(page)).toHaveText('Remove Eye of the North?');
+  await page.keyboard.press('Enter');
+  expect(await saved()).toHaveLength(3);
+  await expect(primary(page)).toHaveAttribute('data-armed', '');
+  await page.keyboard.press('Enter');
+  await expect(caption(page)).toHaveText('Hub preferences');
+  await expect(options).toHaveText([/^Kamadan/, /^Kaineng Center/]);
+  await expect.poll(saved).toEqual(['place:449', 'place:194']);
+  expect(await ledger(page)).toEqual([]);
+});
+
 test('every Hub view keeps the footer with a key legend and a named primary', async ({ page }) => {
   await open(page);
   for (const [query, title, named] of [['settings', 'Settings', /^Done$/], ['hub preferences', 'Hub preferences', /^Done$/], ['team gom', 'GOM AFK', /^Apply team GOM AFK↵$/]] as const) {
