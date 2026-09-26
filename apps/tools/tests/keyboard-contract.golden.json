@@ -21,8 +21,8 @@
   "home": {
     "1": "Home | focus search | sel - | q \"1\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "a": "Home | focus search | sel team:hub-gom-afk | q \"a\" | action - | life outpost | canvas down 0 up 0 pointer 0",
-    "Enter": "closed | focus canvas | sel - | q \"\" | action TRAVEL Kamadan, Jewel of Istan | life outpost | canvas down 0 up 1 pointer 0",
-    "Escape": "closed | focus canvas | sel - | q \"\" | action - | life outpost | canvas down 0 up 1 pointer 0",
+    "Enter": "closed | focus canvas | sel - | q \"\" | action TRAVEL Kamadan, Jewel of Istan | life outpost | canvas down 0 up 0 pointer 0",
+    "Escape": "closed | focus canvas | sel - | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Backspace": "Home | focus search | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Meta+Backspace": "Home | focus search | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "ArrowDown": "Home | focus search | sel place:194 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
@@ -35,12 +35,12 @@
     "Control+n": "Home | focus search | sel place:194 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Meta+Enter": "Home | focus search | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Meta+j": "Home | focus search | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
-    "Meta+r": "closed | focus canvas | sel - | q \"\" | action - | life outpost | canvas down 0 up 1 pointer 0"
+    "Meta+r": "closed | focus canvas | sel - | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0"
   },
   "home-query": {
     "1": "Home | focus search | sel - | q \"kam1\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "a": "Home | focus search | sel place:449 | q \"kama\" | action - | life outpost | canvas down 0 up 0 pointer 0",
-    "Enter": "closed | focus canvas | sel - | q \"\" | action TRAVEL Kamadan, Jewel of Istan | life outpost | canvas down 0 up 1 pointer 0",
+    "Enter": "closed | focus canvas | sel - | q \"\" | action TRAVEL Kamadan, Jewel of Istan | life outpost | canvas down 0 up 0 pointer 0",
     "Escape": "Home | focus search | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Backspace": "Home | focus search | sel place:194 | q \"ka\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Meta+Backspace": "Home | focus search | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
@@ -54,7 +54,7 @@
     "Control+n": "Home | focus search | sel trade | q \"kam\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Meta+Enter": "Home | focus search | sel place:449 | q \"kam\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Meta+j": "Home | focus search | sel place:449 | q \"kam\" | action - | life outpost | canvas down 0 up 0 pointer 0",
-    "Meta+r": "closed | focus canvas | sel - | q \"\" | action - | life outpost | canvas down 0 up 1 pointer 0"
+    "Meta+r": "closed | focus canvas | sel - | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0"
   },
   "home-row": {
     "1": "Home | focus search | sel - | q \"sw1\" | action - | life outpost | canvas down 0 up 0 pointer 0",
@@ -73,13 +73,13 @@
     "Control+n": "Home | focus search | sel accounts | q \"sw\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Meta+Enter": "Home | focus search | sel accounts | q \"sw\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Meta+j": "Home | focus search | sel accounts | q \"sw\" | action - | life outpost | canvas down 0 up 0 pointer 0",
-    "Meta+r": "closed | focus canvas | sel - | q \"\" | action - | life outpost | canvas down 0 up 1 pointer 0"
+    "Meta+r": "closed | focus canvas | sel - | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0"
   },
   "explorable-home": {
     "1": "Home | focus search | sel - | q \"1\" | action - | life pve-explorable | canvas down 0 up 0 pointer 0",
     "a": "Home | focus search | sel team:hub-gom-afk | q \"a\" | action - | life pve-explorable | canvas down 0 up 0 pointer 0",
     "Enter": "Travel | focus search | sel travel | q \"\" | action - | life pve-explorable | canvas down 0 up 0 pointer 0",
-    "Escape": "closed | focus canvas | sel - | q \"\" | action - | life pve-explorable | canvas down 0 up 1 pointer 0",
+    "Escape": "closed | focus canvas | sel - | q \"\" | action - | life pve-explorable | canvas down 0 up 0 pointer 0",
     "Backspace": "Home | focus search | sel travel | q \"\" | action - | life pve-explorable | canvas down 0 up 0 pointer 0",
     "Meta+Backspace": "Home | focus search | sel travel | q \"\" | action - | life pve-explorable | canvas down 0 up 0 pointer 0",
     "ArrowDown": "Home | focus search | sel character | q \"\" | action - | life pve-explorable | canvas down 0 up 0 pointer 0",
@@ -92,7 +92,7 @@
     "Control+n": "Home | focus search | sel character | q \"\" | action - | life pve-explorable | canvas down 0 up 0 pointer 0",
     "Meta+Enter": "Home | focus search | sel travel | q \"\" | action - | life pve-explorable | canvas down 0 up 0 pointer 0",
     "Meta+j": "Home | focus search | sel travel | q \"\" | action - | life pve-explorable | canvas down 0 up 0 pointer 0",
-    "Meta+r": "closed | focus canvas | sel - | q \"\" | action - | life pve-explorable | canvas down 0 up 1 pointer 0"
+    "Meta+r": "closed | focus canvas | sel - | q \"\" | action - | life pve-explorable | canvas down 0 up 0 pointer 0"
   },
   "travel": {
     "1": "Home | focus search | sel - | q \"\" | action TRAVEL Ascalon City | life outpost | canvas down 0 up 0 pointer 0",
@@ -111,7 +111,7 @@
     "Control+n": "Travel | focus search | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Meta+Enter": "Travel | focus search | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Meta+j": "Travel | focus search | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
-    "Meta+r": "closed | focus canvas | sel - | q \"\" | action - | life outpost | canvas down 0 up 1 pointer 0"
+    "Meta+r": "closed | focus canvas | sel - | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0"
   },
   "characters": {
     "1": "Characters | focus card:monk | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
@@ -130,7 +130,7 @@
     "Control+n": "Characters | focus card:monk | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Meta+Enter": "Characters | focus card:monk | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Meta+j": "Characters | focus card:monk | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
-    "Meta+r": "closed | focus canvas | sel - | q \"\" | action - | life outpost | canvas down 0 up 1 pointer 0"
+    "Meta+r": "closed | focus canvas | sel - | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0"
   },
   "build-library": {
     "1": "Build Library | focus search | sel - | q \"1\" | action - | life outpost | canvas down 0 up 0 pointer 0",
@@ -149,12 +149,12 @@
     "Control+n": "Build Library | focus search | sel build:b-woh | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Meta+Enter": "Build Library | focus search | sel game-templates | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Meta+j": "Build Library | focus search | sel game-templates | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
-    "Meta+r": "closed | focus canvas | sel - | q \"\" | action - | life outpost | canvas down 0 up 1 pointer 0"
+    "Meta+r": "closed | focus canvas | sel - | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0"
   },
   "build-page": {
     "1": "Smiter | focus search | sel - | q \"1\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "a": "Smiter | focus search | sel choose-hero | q \"a\" | action - | life outpost | canvas down 0 up 0 pointer 0",
-    "Enter": "closed | focus canvas | sel - | q \"\" | action command:2 | life outpost | canvas down 0 up 1 pointer 0",
+    "Enter": "closed | focus canvas | sel - | q \"\" | action command:2 | life outpost | canvas down 0 up 0 pointer 0",
     "Escape": "Home | focus search | sel build:hub-smiter | q \"build smiter\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Backspace": "Home | focus search | sel build:hub-smiter | q \"build smiter\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Meta+Backspace": "Smiter | focus search | sel apply:me | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
@@ -168,12 +168,12 @@
     "Control+n": "Smiter | focus search | sel choose-hero | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Meta+Enter": "Smiter | focus search | sel apply:me | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Meta+j": "Smiter | focus search | sel apply:me | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
-    "Meta+r": "closed | focus canvas | sel - | q \"\" | action - | life outpost | canvas down 0 up 1 pointer 0"
+    "Meta+r": "closed | focus canvas | sel - | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0"
   },
   "person": {
     "1": "Romi Ranger | focus search | sel - | q \"1\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "a": "Romi Ranger | focus search | sel person:travel-invite | q \"a\" | action - | life outpost | canvas down 0 up 0 pointer 0",
-    "Enter": "whispers | focus input#draft-romi ranger | sel - | q \"\" | action - | life outpost | canvas down 0 up 1 pointer 0",
+    "Enter": "whispers | focus input#draft-romi ranger | sel - | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Escape": "Home | focus search | sel friend:romi | q \"romi\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Backspace": "Home | focus search | sel friend:romi | q \"romi\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Meta+Backspace": "Romi Ranger | focus search | sel person:whisper | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
@@ -187,7 +187,7 @@
     "Control+n": "Romi Ranger | focus search | sel person:travel | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Meta+Enter": "Romi Ranger | focus search | sel person:whisper | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Meta+j": "Romi Ranger | focus search | sel person:whisper | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
-    "Meta+r": "closed | focus canvas | sel - | q \"\" | action - | life outpost | canvas down 0 up 1 pointer 0"
+    "Meta+r": "closed | focus canvas | sel - | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0"
   },
   "accounts": {
     "1": "Accounts | focus search | sel - | q \"1\" | action - | life outpost | canvas down 0 up 0 pointer 0",
@@ -206,7 +206,7 @@
     "Control+n": "Accounts | focus search | sel account:<profile> | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Meta+Enter": "Accounts | focus search | sel account:<profile> | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Meta+j": "Accounts | focus search | sel account:<profile> | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
-    "Meta+r": "closed | focus canvas | sel - | q \"\" | action - | life outpost | canvas down 0 up 1 pointer 0"
+    "Meta+r": "closed | focus canvas | sel - | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0"
   },
   "settings": {
     "1": "Settings | focus button.ui-button | sel settings | q \"settings\" | action - | life outpost | canvas down 0 up 0 pointer 0",
@@ -225,7 +225,7 @@
     "Control+n": "Settings | focus button.ui-button | sel settings | q \"settings\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Meta+Enter": "Settings | focus button.ui-button | sel settings | q \"settings\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Meta+j": "Settings | focus button.ui-button | sel settings | q \"settings\" | action - | life outpost | canvas down 0 up 0 pointer 0",
-    "Meta+r": "closed | focus canvas | sel - | q \"\" | action - | life outpost | canvas down 0 up 1 pointer 0"
+    "Meta+r": "closed | focus canvas | sel - | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0"
   },
   "calculator": {
     "1": "Home | focus search | sel - | q \"10 ecto in p1\" | action - | life outpost | canvas down 0 up 0 pointer 0",
@@ -244,7 +244,7 @@
     "Control+n": "Home | focus search | sel quote:result | q \"10 ecto in p\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Meta+Enter": "Home | focus search | sel quote:result | q \"10 ecto in p\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Meta+j": "Home | focus search | sel quote:result | q \"10 ecto in p\" | action - | life outpost | canvas down 0 up 0 pointer 0",
-    "Meta+r": "closed | focus canvas | sel - | q \"\" | action - | life outpost | canvas down 0 up 1 pointer 0"
+    "Meta+r": "closed | focus canvas | sel - | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0"
   },
   "trade": {
     "1": "trade | focus canvas | sel - | q \"\" | action - | life outpost | canvas down 1 up 1 pointer 0",

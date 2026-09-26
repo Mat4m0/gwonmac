@@ -100,3 +100,48 @@ test.describe('keyboard contract', () => {
     }
   }
 });
+
+test.describe('owned press (HUB-003)', () => {
+  const canvasKeys = (page: Page) => page.evaluate(() => (window.gwFixtureCanvas?.events ?? []).map(event => `${event.type}:${event.code}${event.repeat ? ':repeat' : ''}`));
+  /** Holds a key long enough for three repeats after the press that closes the Hub. */
+  const hold = async (page: Page, key: string, repeats = 3) => {
+    await page.evaluate(() => window.gwFixtureCanvas?.clear());
+    for (let press = 0; press <= repeats; press++) await page.keyboard.down(key);
+    await page.keyboard.up(key);
+    await settle(page);
+    return canvasKeys(page);
+  };
+  const search = (page: Page) => page.getByRole('combobox', { name: searchName });
+  const open = async (page: Page, query = '') => {
+    await page.goto(`/?hub${query}`);
+    await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+    await expect(search(page)).toBeFocused();
+  };
+
+  test('a held Escape that closes the Hub never reaches the game', async ({ page }) => {
+    await open(page);
+    expect(await hold(page, 'Escape')).toEqual([]);
+    await expect(page.locator('#hub')).toBeHidden();
+  });
+
+  test('the Enter that invites and closes the Hub keeps its release, and the next key reaches the game', async ({ page }) => {
+    await open(page, '&party');
+    await search(page).fill('invite Romi Ranger');
+    expect(await hold(page, 'Enter', 0)).toEqual([]);
+    await expect(page.locator('#app')).toHaveAttribute('data-action', 'PARTY.INVITE Romi Ranger');
+    await expect(page.locator('#canvas')).toBeFocused();
+    await page.evaluate(() => window.gwFixtureCanvas?.clear());
+    await page.keyboard.press('w');
+    expect(await canvasKeys(page)).toEqual(['keydown:KeyW', 'keyup:KeyW']);
+  });
+
+  test('the Enter that hands a person to Whispers never reaches the game, held or tapped', async ({ page }) => {
+    for (const repeats of [0, 3]) {
+      await open(page);
+      await enterHub(page, 'romi');
+      await expect(page.locator('.hub-caption')).toHaveText('Romi Ranger');
+      expect(await hold(page, 'Enter', repeats)).toEqual([]);
+      await expect(page.locator('#whisper-window')).toBeVisible();
+    }
+  });
+});

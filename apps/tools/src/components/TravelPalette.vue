@@ -704,6 +704,8 @@ function onKeydown(event: KeyboardEvent): void {
   }
   if (/^Digit[1-9]$/u.test(event.code) && mode.value === "travel" && !hasQuery.value && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
     event.preventDefault();
+    // One trip per physical press; a held digit never repeats it (HUB-003).
+    if (event.repeat) return;
     const slot = Number(event.code.slice(5)) - 1;
     const shortcut = shortcuts.value[slot];
     if (shortcut && isAvailable(shortcut.mapId)) void travel(shortcut);

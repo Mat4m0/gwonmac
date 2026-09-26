@@ -187,7 +187,7 @@ test('Command-Q opens the native Quit or Reload sheet over the open Hub, and Can
 });
 
 // HUB-003: a press the Hub owns keeps its key-up and repeats out of the game.
-test.fixme('the Escape that closes the Hub never reaches the game, held or tapped', async () => {
+test('the Escape that closes the Hub never reaches the game, held or tapped', async () => {
   const fixture = await launch();
   try {
     const { page } = fixture;

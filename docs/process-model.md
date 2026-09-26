@@ -194,6 +194,13 @@ Command modifier, so pressing or releasing Command cannot interrupt another
 key that is still physically held. A real focus loss remains the final cleanup
 for interrupted input.
 
+A press that starts on a GWonMac surface (the Hub, a popout or a dialog) owns
+its repeats and its release. When that press closes the surface and focus
+returns to the canvas, the surface controller keeps the remaining repeats and
+the key-up out of the game, because Guild Wars never saw the key-down. A fresh
+press after the close reaches the game normally. The buffered character-select
+Enter accepts only a fresh press, never a repeat.
+
 When Guild Wars moves focus from the canvas into one of its hidden text proxies,
 the renderer releases canvas-owned W, A, S, and D at that boundary. This keeps
 movement state out of chat without changing later text input or releasing any
