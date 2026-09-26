@@ -685,7 +685,7 @@ test('Hub text arrows cannot execute an action or clear a query', async ({ page 
   await search.fill('kamadan');
   await search.press('ArrowRight');
   await expect(page.locator('#hub')).toBeVisible();
-  await expect(page.locator('#app')).not.toHaveAttribute('data-action', /Travel/);
+  await expect(page.locator('#app')).not.toHaveAttribute('data-action', /travel/i);
   await search.press('Home'); await search.press('ArrowLeft');
   await expect(search).toHaveValue('kamadan');
 });

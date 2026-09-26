@@ -34,6 +34,8 @@ test.describe('game lifecycle', () => {
     await search.fill('kamadan');
     await expect(page.locator('.hub-primary')).toHaveText(/^Travel to Kamadan/);
     await search.press('Enter');
+    // The trip is recorded as a game action, like every other command that reaches the game.
+    await expect(page.locator('#app')).toHaveAttribute('data-action', 'TRAVEL Kamadan, Jewel of Istan');
     await expect(lifecycle(page)).toHaveValue('outpost');
     await page.getByRole('button', { name: 'Open Hub', exact: true }).click();
     await expect(page.locator('.hub-context')).toHaveText('Fixture Monk · Kamadan, Jewel of Istan');

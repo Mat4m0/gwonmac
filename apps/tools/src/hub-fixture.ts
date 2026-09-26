@@ -39,6 +39,7 @@ import { mountWhispers } from './whispers-mount';
 import { createWhisperSession } from '../../../src/shared/whisper-session';
 import { createHubTravel } from './hub-travel';
 import { createDemoTravelHost } from './travel-host';
+import { travelDestination } from '../../../src/shared/travel';
 import { estimateMarketRates } from '../../../src/shared/market-rates';
 import { DEFAULT_SETTINGS, type AppSettings, type RendererSettingsPatch } from '../../../src/shared/contracts';
 
@@ -110,6 +111,9 @@ export function mountHubFixture(target: HTMLElement) {
   window.gwHub = hub;
   // One synthetic lifecycle feeds Travel, the play region, Characters and the party (`?lifecycle=`).
   const travelHost = createDemoTravelHost();
+  // Every trip is a game action, whichever row, page or view started it.
+  const demoTravel = travelHost.travel;
+  travelHost.travel = async request => { record(`TRAVEL ${travelDestination(request.mapId)?.name ?? request.mapId}`); await demoTravel(request); };
   const lifecycle = createFixtureLifecycle(travelHost);
   const initialLifecycle = params.get('lifecycle');
   if (isFixtureLifecycle(initialLifecycle)) lifecycle.set(initialLifecycle);

@@ -10,8 +10,10 @@ import { expect, test, type Page } from '@playwright/test';
  *   KEYBOARD_GOLDEN=update npx playwright test -c <config> hub-keyboard-contract
  *
  * One cell reads: surface (Hub caption, popout or `closed`), focus, selected
- * row, search query, the last recorded game action, and the number of key events
- * that reached the game canvas during the press.
+ * row, search query, the last recorded game action (trips record `TRAVEL <place>`),
+ * the game lifecycle afterwards, and the key-downs, key-ups and pointer events
+ * that reached the game canvas during the press. A key-up that leaks after the
+ * Hub closes (the owned-press rule, HUB-003) therefore changes the table.
  */
 const GOLDEN = new URL('./keyboard-contract.golden.json', import.meta.url);
 const updating = process.env.KEYBOARD_GOLDEN === 'update';
@@ -63,9 +65,12 @@ const observe = (page: Page) => page.evaluate(() => {
   const selected = open ? document.querySelector<HTMLElement>('#hub .hub-row[aria-selected="true"]')?.dataset.id ?? '-' : '-';
   const query = open ? document.querySelector<HTMLInputElement>('#hub [role="combobox"]')?.value ?? '' : '';
   const action = document.getElementById('app')?.dataset.action ?? '-';
-  const canvas = window.gwFixtureCanvas?.events.filter(event => event.type === 'keydown').length ?? 0;
+  const events = window.gwFixtureCanvas?.events ?? [];
+  const reached = (types: readonly string[]) => events.filter(event => types.includes(event.type)).length;
+  const canvas = `down ${reached(['keydown'])} up ${reached(['keyup'])} pointer ${reached(['pointerdown', 'mousedown', 'mouseup', 'click', 'dblclick', 'auxclick', 'contextmenu'])}`;
+  const life = document.querySelector<HTMLSelectElement>('select[aria-label="Lifecycle state"]')?.value ?? '-';
   // Account profile ids stay out of the repository (forbidden-artifacts policy).
-  return `${surface} | focus ${focus} | sel ${selected} | q "${query}" | action ${action} | canvas ${canvas}`
+  return `${surface} | focus ${focus} | sel ${selected} | q "${query}" | action ${action} | life ${life} | canvas ${canvas}`
     .replace(/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}/giu, '<profile>');
 });
 
