@@ -414,9 +414,10 @@ export function createHub(parent: HTMLElement) {
     const prior = previousRows.find(row => row.id === selected);
     const revised = prior && rows.find(row => row.id === selected)?.preview !== prior.preview;
     // A bare scope (`travel `) lists without a term, so nothing in it is an explicit result:
-    // only a row that opens a page may start selected, and Enter never travels or invites on a guess.
-    const initial = !input.value.trim() ? rows.find(row => row.preferred && !row.unavailable) ?? rows.find(row => !row.unavailable) ?? rows[0]
-      : !scope && parsed.scope && !parsed.term ? rows.find(row => row.navigate && !row.unavailable) : rows[0];
+    // Enter never travels, invites, applies, switches or opens an account on a guess.
+    // A fresh Home in an explorable area never starts on a row that leaves it (D-13).
+    const initial = !input.value.trim() ? rows.find(row => row.preferred && !row.unavailable) ?? rows.find(row => !row.unavailable && !row.leavesArea) ?? rows.find(row => !row.leavesArea)
+      : !scope && parsed.scope && !parsed.term ? rows.find(row => !row.consequential && !row.unavailable) : rows[0];
     select((prior?.id === 'quote-state' || prior?.id === 'market-state') && !!rows[0]?.conversion ? rows[0].id : reset ? exactCount > 1 ? null : initial?.id ?? null : !revised && rows.some(row => row.id === selected) ? selected : null);
     if (!rows.length) {
       const empty = document.createElement('p'); empty.className = 'hub-empty'; empty.textContent = 'No matches'; list.append(empty);

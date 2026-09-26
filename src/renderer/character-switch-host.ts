@@ -60,7 +60,7 @@ export function installCharacterSwitchHost(parent: HTMLElement): CharacterSwitch
         return { id: `character:${character.characterKey}`, title: character.name,
           ...(professionPresentation(character.primaryProfession) ? { icon: professionPresentation(character.primaryProfession)!.icon } : {}),
           detail: `${professionPresentation(character.primaryProfession)?.name ?? ''} · Level ${character.level}`,
-          keywords: professionPresentation(character.primaryProfession)?.name ?? '', group: 'Characters', action: current ? 'Current character' : `Switch to ${character.name}`,
+          keywords: professionPresentation(character.primaryProfession)?.name ?? '', group: 'Characters', action: current ? 'Current character' : `Switch to ${character.name}`, consequential: true,
           ...(current ? { unavailable: 'Current character' } : {}),
           run: () => {
             const refusal = palette.activate(character.characterKey);

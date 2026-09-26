@@ -88,6 +88,8 @@ content inside it. Respect reduced motion and text scaling.
 
 Home contains a focused search field, a short Pinned section, existing relevant
 recents, and enabled sections. Do not show dangerous actions in empty-query recents.
+In an explorable area a fresh Home never starts on a place, because Enter would
+leave the area; it starts on the first pin, else **Travel**.
 Use the placeholder **Search people, places, builds…**. Use Guild Wars names for
 objects: Xunlai Storage, Guild Hall, outpost, hero, profession, skill template,
 Globs of Ectoplasm, and platinum. Prefer clear action verbs over invented lore.
@@ -122,9 +124,10 @@ Recognize a closed set of leading words: `team`, `build`, `travel`, `char`, `acc
 The rest of the input is a name query, not executable instructions. A leading word
 followed by a space enters its scope with an empty query, so `invite ` lists the
 online friends and `team ` lists the saved teams; a lone word is still a search.
-An empty query resolves nothing: only a row that opens a page, such as **Browse
-travel**, may start selected, so `travel ` then Enter never travels and `invite `
-then Enter never invites.
+An empty query resolves nothing: a row whose primary changes the game or the
+account (travel, invite, apply, switch, account) never starts selected, so
+`travel ` then Enter opens **Travel** and `invite ` then Enter invites nobody,
+while `whisper ` and `trade ` still start on their first row.
 
 Recognize conversions only when the entire input matches a supported numeric
 expression or `<amount> <unit> in <unit>`. Parse with a bounded grammar, never eval.

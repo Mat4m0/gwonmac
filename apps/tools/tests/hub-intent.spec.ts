@@ -180,6 +180,51 @@ test('a bare travel scope in an explorable area selects Browse travel, so Enter 
   await expect(page.getByLabel('Lifecycle state', { exact: true })).toHaveValue('pve-explorable');
 });
 
+test('a fresh Home in an explorable area starts on Travel, and Enter never leaves the area', async ({ page }) => {
+  await page.goto('/?hub&lifecycle=pve-explorable');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  const search = page.getByRole('combobox', { name: searchName });
+  // D-13: recent places stay listed, but none is the default.
+  await expect(page.locator('.hub-row[data-id^="place:"]').first()).toBeVisible();
+  await expect(page.locator('.hub-row[aria-selected="true"]')).toHaveAttribute('data-id', 'travel');
+  await expect(page.locator('.hub-primary')).toHaveText(/^Browse travel/);
+  await search.press('Enter');
+  await expect(page.locator('.hub-caption')).toHaveText('Travel');
+  await page.waitForTimeout(700);
+  await expect(page.getByLabel('Lifecycle state', { exact: true })).toHaveValue('pve-explorable');
+  await expect(page.locator('#app')).not.toHaveAttribute('data-action', /TRAVEL/);
+  // Entering the area with Hub open gives the same default; returning to an outpost restores Continue.
+  const lifecycle = page.getByLabel('Lifecycle state', { exact: true });
+  await lifecycle.selectOption('outpost');
+  await expect(page.locator('.hub-row[aria-selected="true"]')).toHaveAttribute('data-id', /^place:/);
+  await lifecycle.selectOption('pve-explorable');
+  await expect(page.locator('.hub-row[aria-selected="true"]')).toHaveAttribute('data-id', 'travel');
+});
+
+test('bare whisper and trade scopes start on their first row; nothing consequential starts selected', async ({ page }) => {
+  await page.goto('/?hub&party');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  await page.evaluate(() => window.dispatchEvent(new Event('hub-fixture-incoming')));
+  const search = page.getByRole('combobox', { name: searchName });
+  const selected = page.locator('.hub-row[aria-selected="true"]');
+  const primary = page.locator('.hub-primary');
+  await search.pressSequentially('whisper ');
+  await expect(selected).toHaveAttribute('data-id', /^person:/);
+  await expect(selected).toContainText('Romi Ranger');
+  await expect(primary).toHaveText(/^View actions/);
+  await search.press('Enter');
+  await expect(page.locator('.hub-caption')).toHaveText('Romi Ranger');
+  await page.getByRole('button', { name: 'Home', exact: true }).click();
+  await search.fill(''); await search.pressSequentially('trade ');
+  await expect(selected).toHaveAttribute('data-id', 'trade');
+  await expect(primary).toHaveText(/^Open Trade Chat/);
+  await expect(primary).toBeEnabled();
+  // `acc ` starts on a saved account, never on an account action.
+  await search.fill(''); await search.pressSequentially('acc ');
+  await expect(selected).toHaveAttribute('data-id', /^account:[^:]+$/);
+  await expect(primary).toHaveText(/^Choose account action/);
+});
+
 test.describe('party invite', () => {
   const invites = (page: import('@playwright/test').Page) => page.locator('#app').getAttribute('data-invites');
   test.beforeEach(async ({ page }) => {

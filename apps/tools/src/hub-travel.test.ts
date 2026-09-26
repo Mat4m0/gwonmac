@@ -19,4 +19,21 @@ describe('Hub travel recents', () => {
       expect(travel.source.search('kamadan').find(row => row.id === 'place:449')?.unavailable).toBe('Not unlocked by this character');
     } finally { travel.dispose(); }
   });
+
+  it('marks places consequential and flags leaving an explorable area', () => {
+    const host = createDemoTravelHost();
+    const hub = { showView: vi.fn(), showRows: vi.fn(), attach: vi.fn(), close: vi.fn() };
+    const travel = createHubTravel(host, hub);
+    try {
+      const state = host.state.value;
+      if (state.status !== 'ready') throw new Error('Expected outpost fixture');
+      const places = () => travel.source.search('').filter(row => row.id.startsWith('place:'));
+      expect(places().every(row => row.consequential && !row.leavesArea)).toBe(true);
+      expect(travel.source.search('').find(row => row.id === 'travel')?.consequential).toBeUndefined();
+      // North Kryta Province is no Travel destination: an explorable area.
+      host.state.value = { ...state, mapId: 58 };
+      expect(places().length).toBeGreaterThan(0);
+      expect(places().every(row => row.leavesArea)).toBe(true);
+    } finally { travel.dispose(); }
+  });
 });

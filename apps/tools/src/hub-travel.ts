@@ -33,6 +33,8 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
       return () => { active = false; app.unmount(); };
     }, () => !!window.gwToolsSettings?.().gwonmacTools && !!window.gwToolsSettings?.().travelPalette);
   }
+  /** Every ready map that is no Travel destination is an explorable area. */
+  const explorable = () => host.state.value.status === 'ready' && !travelDestination(host.state.value.mapId);
   function refusal(mapId: number) {
     const availability = travelDestinationAvailability(host.state.value, mapId);
     return host.unavailable ?? travelContextRefusal(host.state.value, mapId)
@@ -64,7 +66,7 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
         const reason = refusal(destination.mapId);
         return { id: `place:${destination.mapId}`, title: destination.name,
           detail: query.trim() ? 'Outpost · Any district' : 'Recently visited · Any district',
-          group: query.trim() ? 'Places' : 'Continue', action: `Travel to ${destination.name}`,
+          group: query.trim() ? 'Places' : 'Continue', action: `Travel to ${destination.name}`, consequential: true, leavesArea: explorable(),
           ...(reason ? { unavailable: reason } : {}), run: () => travel(destination.mapId) };
       }), ...matchHubRows(tools, query)];
     },

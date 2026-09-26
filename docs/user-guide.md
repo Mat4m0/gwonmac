@@ -202,6 +202,9 @@ Press **Command-R** to search people, outposts, tools, and commands. Type a name
 and press Enter for the action shown in the footer. The **Actions** button opens secondary actions. **Command-K** opens Trade. Escape clears typed text first, then goes back, then
 closes the palette. The game keeps running while Hub is open.
 
+In an explorable area, Hub opens on **Travel** instead of a recent place, so
+Enter never leaves the area by accident.
+
 With Travel enabled, search an outpost or your custom Travel phrase. Travel,
 favourites, recent places, and Guild Hall stay in the same window. Command-T
 and `/tp` also open Travel inside Hub.

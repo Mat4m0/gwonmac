@@ -175,7 +175,7 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
     const applyRow = (hero: HeroId | null, title: string): HubRow => {
       const refusal = unavailable(hero);
       return { id: `apply:${hero ?? 'me'}`, title, ...equipped(hero, item.value), group: 'Current build',
-        action: hero === null ? 'Apply to me' : `Apply to ${targetName(hero)}`,
+        action: hero === null ? 'Apply to me' : `Apply to ${targetName(hero)}`, consequential: true,
         ...(refusal ? { unavailable: refusal } : {}), run: () => apply(item, expected, hero) };
     };
     function compareTarget(hero: HeroId | null) {
@@ -192,7 +192,7 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
           const refusal = member ? unavailable(id) : 'Add this hero to your party first.';
           return { id: `hero:${id}`, title: heroLabel(id), ...equipped(id, item.value), group: member ? 'In your party' : 'Unlocked heroes',
             keywords: professions?.flatMap(value => value ? [PROFESSIONS[value].name] : []).join(' ') ?? '',
-            preferred: !refusal, action: refusal ? 'Review availability' : `Apply to ${heroLabel(id)}`, ...(refusal ? { detail: refusal } : {}),
+            preferred: !refusal, consequential: !refusal, action: refusal ? 'Review availability' : `Apply to ${heroLabel(id)}`, ...(refusal ? { detail: refusal } : {}),
             navigate: () => compareTarget(id), run: () => refusal ? compareTarget(id) : apply(item, expected, id) };
         }).sort((a, b) => Number(a.group !== 'In your party') - Number(b.group !== 'In your party') || a.title.localeCompare(b.title));
         return rows.length ? rows : [{ id: 'heroes-unavailable', title: 'No heroes observed', detail: 'Enter a PvE outpost to read your heroes.', group: 'Heroes', action: 'Choose hero', unavailable: 'Hero information is not available yet.', run() {} }];
@@ -307,7 +307,7 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
         const expected = revision(item);
         const refusal = direct ? assess(item, null) : null;
         return { id: `team:${item.value.id}`, title: item.value.name, detail: 'Saved team',
-          group: 'Teams', preview: preview(item), action: direct ? `Apply team ${item.value.name}` : 'Review', navigate: () => review(item),
+          group: 'Teams', preview: preview(item), action: direct ? `Apply team ${item.value.name}` : 'Review', consequential: direct, navigate: () => review(item),
           ...(refusal ? { unavailable: refusal } : {}), actions: () => review(item),
           run: () => direct ? apply(item, expected, null) : review(item) } satisfies HubRow;
       }), ...(parsed.scope === 'build' ? templateStates() : [])];

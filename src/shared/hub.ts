@@ -15,6 +15,10 @@ export type HubRow = Readonly<{
   action: string;
   /** Preferred initial browse focus, without affecting explicit user selection. */
   preferred?: boolean;
+  /** The primary changes the game or the account: travel, invite, apply, switch or account (D-24). Never selected on a guess. */
+  consequential?: boolean;
+  /** The primary travels out of an explorable area; a fresh Home never preselects it (D-13). */
+  leavesArea?: boolean;
   preview?: string;
   skills?: readonly Readonly<{ name: string; iconUrl: string | null; elite: boolean; description?: string | null; changed?: boolean }>[];
   attributes?: readonly Readonly<{ name: string; icon: string; attributes: readonly Readonly<{ name: string; label: string; rank: number; nextRank?: number }>[] }>[];
