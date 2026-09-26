@@ -144,6 +144,9 @@ test('a legacy phrase that is now a scope word keeps its pins and only stops mat
   await expect(page.locator('.hub-group').first()).toHaveText('Pinned');
   await expect(page.locator('.hub-row').nth(0)).toContainText('Whispers');
   await expect(page.locator('.hub-row').nth(1)).toContainText('Travel');
+  // HUB-060: two pins keep the Home default on the first pin, named in the footer.
+  await expect(page.locator('.hub-row').nth(0)).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('.hub-primary')).toHaveText(/^Open Whispers/);
   await search.pressSequentially('invite ');
   await expect(page.locator('.hub-hint')).toContainText('invite Romi');
   await expect(page.locator('.hub-row[data-id="whispers"]')).toHaveCount(0);
