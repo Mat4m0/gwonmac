@@ -572,15 +572,19 @@ export function createHub(parent: HTMLElement) {
     if (scope) { if (row && (row.skills || scope.summary?.skills)) showBuildDetails(row); return true; }
     if (!row) return true;
     if (isHubShortcuts([{ id: row.id, phrase: '', pinned: false }])) {
-      presenter.showRows(row.title, () => [
-        { ...row, id: 'selected-action', group: 'Actions' },
-        ...(row.skills || row.actions ? [{ id: 'review-selected', title: row.skills ? 'Details' : 'Review', detail: row.title, group: 'Actions', action: row.skills ? 'Details' : 'Review', run: () => row.skills ? showBuildDetails(row) : row.actions?.() }] : []),
-        { id: 'pin-selected', title: shortcuts().some(entry => entry.id === row.id && entry.pinned) ? 'Unpin' : 'Pin to Hub', detail: row.title, group: 'Actions', action: 'Update pin', run: async () => {
-          const entries = shortcuts(); const old = entries.find(entry => entry.id === row.id);
-          await saveShortcuts([...entries.filter(entry => entry.id !== row.id), { id: row.id, phrase: old?.phrase ?? '', pinned: !old?.pinned }]);
-        } },
-        { id: 'alias-selected', title: 'Set search phrase', detail: 'An exact name for this saved action', group: 'Actions', action: 'Edit phrase', run: () => editHubShortcut(presenter, row, shortcuts, saveShortcuts) },
-      ]); return true;
+      presenter.showRows(row.title, () => {
+        // The footer names what ↵ does next, so it follows the pin state after every toggle.
+        const pinned = shortcuts().some(entry => entry.id === row.id && entry.pinned);
+        return [
+          { ...row, id: 'selected-action', group: 'Actions' },
+          ...(row.skills || row.actions ? [{ id: 'review-selected', title: row.skills ? 'Details' : 'Review', detail: row.title, group: 'Actions', action: row.skills ? 'Details' : 'Review', run: () => row.skills ? showBuildDetails(row) : row.actions?.() }] : []),
+          { id: 'pin-selected', title: pinned ? 'Unpin' : 'Pin to Hub', detail: row.title, group: 'Actions', action: `${pinned ? 'Unpin' : 'Pin'} ${row.title}`, run: async () => {
+            const entries = shortcuts(); const old = entries.find(entry => entry.id === row.id);
+            await saveShortcuts([...entries.filter(entry => entry.id !== row.id), { id: row.id, phrase: old?.phrase ?? '', pinned: !old?.pinned }]);
+          } },
+          { id: 'alias-selected', title: 'Set search phrase', detail: 'An exact name for this saved action', group: 'Actions', action: 'Edit phrase', run: () => editHubShortcut(presenter, row, shortcuts, saveShortcuts) },
+        ];
+      }); return true;
     }
     if (row.actions) { row.actions(); return true; }
     presenter.showRows(row.title, () => [row]); return true;

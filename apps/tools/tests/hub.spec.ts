@@ -207,6 +207,24 @@ test('a saved search phrase and pin survive reload and resolve the original item
   await expect(page.getByRole('heading', { name: 'GOM AFK' })).toBeVisible();
 });
 
+test('the Actions footer names the pin change that ↵ makes next', async ({ page }) => {
+  await page.goto('/?hub');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const primary = page.locator('#hub .hub-primary');
+  const selected = page.locator('#hub .hub-row[aria-selected=true] .hub-title');
+  await search.fill('storage');
+  await page.getByRole('button', { name: 'Actions', exact: true }).click();
+  await search.press('ArrowDown');
+  await expect(selected).toHaveText('Pin to Hub');
+  await expect(primary).toHaveText('Pin Open Xunlai Storage↵');
+  await search.press('Enter');
+  await expect(selected).toHaveText('Unpin');
+  await expect(primary).toHaveText('Unpin Open Xunlai Storage↵');
+  await search.press('Enter');
+  await expect(selected).toHaveText('Pin to Hub');
+  await expect(primary).toHaveText('Pin Open Xunlai Storage↵');
+});
+
 test('Build shortcut browses inside Hub and opens the authoring window outside Hub', async ({ page }) => {
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
