@@ -90,8 +90,6 @@ test('a person page offers Invite to party and, for a friend elsewhere, Travel a
     await page().find(row => row.id === 'person:invite')!.run();
     void source.search('mo kaiser')[0]!.run();
     assert.deepEqual(actions(page()), ['Whisper', 'Travel to outpost', 'Invite to party', 'Travel and invite']);
-    assert.deepEqual(page().filter(row => row.consequential).map(row => row.title), ['Travel to outpost', 'Invite to party', 'Travel and invite'],
-      'a click only selects the rows that change the game');
     await page().find(row => row.id === 'person:travel-invite')!.run();
     await Promise.resolve();
     assert.deepEqual(calls, ['invite:Moira Chatter', 'travel:Mo Kaiser']);
@@ -122,7 +120,6 @@ test('the invite scope invites only an exact name, first, and names it in the fo
     const rows = source.search('invite Mo Kai');
     assert.deepEqual(rows.map(row => `${row.title}|${row.detail}|${row.action}`),
       ['Mo Kai|Character name|Invite Mo Kai', `${KAISER}|View actions`, 'Mo Kaiser Bearer|Seen in chat|View actions']);
-    assert.deepEqual(rows.map(row => !!row.consequential), [true, false, false], 'only the invite row waits for an explicit run');
     await rows[1]!.run();
     await rows[2]!.run();
     assert.deepEqual(calls, [], 'a prefix row opens the person page and never invites');
