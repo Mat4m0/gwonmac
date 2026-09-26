@@ -418,7 +418,10 @@ Command-Q opens an account-owned native dialog while a game window is active.
 Reload and Quit Game affect that account only. The launcher keeps the
 ordinary application Quit command because it has no game account to reload.
 The physical Q claim lasts only until that dialog settles; Cancel re-arms the
-shortcut even when AppKit consumed the original key-up.
+shortcut even when AppKit consumed the original key-up. Other claims end at the
+key-up, or at the next fresh press of the same key: Chromium never delivers the
+key-up of a key-down that main prevented, so a non-repeat press is decided
+again instead of being contained as a repeat.
 
 Main-to-renderer events stop after the window or its `webContents` is destroyed.
 The app attempts renderer recovery only after unexpected renderer loss. It does
