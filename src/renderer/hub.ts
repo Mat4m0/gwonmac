@@ -2,7 +2,7 @@
  * Owns the Core command palette, its search focus and transient modal lifetime.
  * Optional Tools contributes local results and views without entering Core's imports.
  */
-import { installSearchEditing, resumeSearchInput } from './search-input.js';
+import { resumeSearchInput } from './search-input.js';
 import { installHubWindow } from './hub-window.js';
 import { attachClassicFrame } from '../shared/ui/frame.js';
 import { resolveShortcuts, shortcutKeycaps, type ShortcutAction } from '../shared/keyboard-shortcuts.js';
@@ -25,7 +25,7 @@ export function createHub(parent: HTMLElement) {
     <header class="hub-heading ui-window-head"><button class="ui-button hub-back" data-variant="quiet" aria-label="Back" hidden>← Back</button><span class="hub-name">Hub</span><nav class="hub-breadcrumbs" aria-label="Hub breadcrumb"><span class="hub-caption">Home</span></nav><span class="hub-context"></span><button class="ui-window-lock hub-lock" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="lock-shackle" d="M7 11V7a5 5 0 0 1 10 0v4"/><rect x="5" y="11" width="14" height="10" rx="2"/></svg></button><button class="ui-window-close hub-close" aria-label="Close Hub" title="Close Hub">×</button></header>
     <section class="hub-summary" aria-label="Build to apply" hidden></section>
     <div class="hub-search"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 8 10-8 10L4 12 12 2Zm0 5v10M8 12h8"/></svg><span class="hub-scope" hidden></span><input type="text" role="combobox" aria-label="Search people, places, builds" aria-autocomplete="list" aria-controls="hub-results" aria-expanded="true" placeholder="Search people, places, builds…" autocomplete="off" spellcheck="false" maxlength="120"></div>
-    <p class="hub-hint" id="hub-hint" hidden></p><div class="hub-rate-controls" hidden></div><div class="hub-results ui-scroll" id="hub-results" role="listbox" aria-label="Results"></div>
+    <p class="hub-hint" id="hub-hint" hidden></p><div class="hub-rate-controls" hidden></div><div class="hub-results ui-scroll" id="hub-results" role="listbox" aria-label="Results" tabindex="-1"></div>
     <pre class="hub-preview ui-scroll" hidden></pre><div class="hub-view" hidden></div><p class="hub-status" role="status" hidden></p>
     <footer class="hub-footer"><button class="hub-primary ui-button" data-variant="primary"></button><span class="hub-count"></span><button class="hub-actions ui-button" data-variant="quiet">Actions</button></footer>
     <button class="ui-window-resize hub-resize" aria-label="Resize Hub" title="Drag to resize, or use arrow keys" hidden></button>
@@ -43,7 +43,6 @@ export function createHub(parent: HTMLElement) {
   const input = required<HTMLInputElement>('input');
   const search = required<HTMLElement>('.hub-search');
   const list = required<HTMLElement>('.hub-results');
-  const disposeSearchEditing = installSearchEditing(list, input);
   const content = required<HTMLElement>('.hub-view');
   const backButton = required<HTMLButtonElement>('[aria-label="Back"]');
   const caption = required<HTMLElement>('.hub-caption');
@@ -73,10 +72,8 @@ export function createHub(parent: HTMLElement) {
   let restoringFocus: MutationObserver | null = null;
   const focusPlace = (): FocusPlace => {
     const active = document.activeElement;
-    const row = active instanceof Element ? active.closest<HTMLElement>('.hub-row') : null;
     let selector = '.hub-search input';
-    if (row?.dataset.id) selector = `.hub-row[data-id="${CSS.escape(row.dataset.id)}"]`;
-    else if (active instanceof HTMLElement && root.contains(active)) {
+    if (active instanceof HTMLElement && root.contains(active) && active !== input) {
       for (const attribute of ['id', 'data-character-key', 'data-section', 'aria-label']) {
         const value = active.getAttribute(attribute);
         if (value) { selector = `[${attribute}="${CSS.escape(value)}"]`; break; }
@@ -87,7 +84,8 @@ export function createHub(parent: HTMLElement) {
     return { selector, ...(active instanceof HTMLInputElement && active.selectionStart !== null
       ? { range: [active.selectionStart, active.selectionEnd ?? active.selectionStart] as const } : {}) };
   };
-  const focusResult = () => (list.querySelector<HTMLElement>('[aria-selected="true"]') ?? input).focus({ preventScroll: true });
+  // List stages keep DOM focus in search; the selection moves by aria-activedescendant (D-2).
+  const focusResult = () => input.focus({ preventScroll: true });
   function restoreFocus(place: FocusPlace) {
     restoringFocus?.disconnect();
     const attempt = () => {
@@ -368,7 +366,6 @@ export function createHub(parent: HTMLElement) {
         && row.detail === previous.detail && row.group === previous.group
         && row.action === previous.action && row.unavailable === previous.unavailable && row.preview === previous.preview && row.folder === previous.folder && row.attributeStatus === previous.attributeStatus && JSON.stringify([row.skills, row.attributes, row.professions]) === JSON.stringify([previous.skills, previous.attributes, previous.professions]);
     })) { select(selected); return; }
-    const hadRowFocus = list.contains(document.activeElement);
     list.replaceChildren();
     let group = '';
     rows.forEach((row, index) => {
@@ -378,7 +375,7 @@ export function createHub(parent: HTMLElement) {
         heading.className = 'hub-group'; heading.setAttribute('role', 'presentation'); heading.textContent = group;
         list.append(heading);
       }
-      const option = document.createElement('div'); option.tabIndex = -1;
+      const option = document.createElement('div');
       option.id = `hub-result-${index}`; option.dataset.id = row.id; option.className = 'hub-row';
       option.setAttribute('role', 'option'); option.setAttribute('aria-disabled', String(!!row.unavailable));
       const title = document.createElement('span'); title.className = 'hub-title'; title.textContent = row.title;
@@ -409,7 +406,7 @@ export function createHub(parent: HTMLElement) {
         }
       }
       option.addEventListener('pointermove', event => { if (event.movementX || event.movementY) select(row.id); });
-      option.addEventListener('click', () => { select(row.id); option.focus({ preventScroll: true }); void run(); });
+      option.addEventListener('click', () => { select(row.id); focusResult(); void run(); });
       list.append(option);
     });
     count.textContent = `${rows.length} result${rows.length === 1 ? '' : 's'}`;
@@ -419,7 +416,6 @@ export function createHub(parent: HTMLElement) {
     const revised = prior && rows.find(row => row.id === selected)?.preview !== prior.preview;
     const initial = !input.value.trim() ? rows.find(row => row.preferred && !row.unavailable) ?? rows.find(row => !row.unavailable) ?? rows[0] : rows[0];
     select((prior?.id === 'quote-state' || prior?.id === 'market-state') && !!rows[0]?.conversion ? rows[0].id : reset ? exactCount > 1 ? null : initial?.id ?? null : !revised && rows.some(row => row.id === selected) ? selected : null);
-    if (hadRowFocus) (list.querySelector<HTMLElement>('[aria-selected="true"]') ?? input).focus();
     if (!rows.length) {
       const empty = document.createElement('p'); empty.className = 'hub-empty'; empty.textContent = 'No matches'; list.append(empty);
     }
@@ -485,19 +481,34 @@ export function createHub(parent: HTMLElement) {
     if (resume) restorePage(resume); else home();
   }
   input.addEventListener('input', () => { report(''); refresh(true); });
+  /** The one list move: ↑ ↓ ⌃P ⌃N step, PgUp PgDn page, Home End jump; no wrap. */
+  function listStep(event: KeyboardEvent): number | null {
+    if (event.altKey || event.metaKey || event.shiftKey) return null;
+    const key = event.ctrlKey ? ({ n: 'ArrowDown', p: 'ArrowUp' } as Record<string, string>)[event.key.toLowerCase()] : event.key;
+    const page = Math.max(1, Math.floor(list.clientHeight / (list.querySelector<HTMLElement>('.hub-row')?.offsetHeight || 40)) - 1);
+    return ({ ArrowDown: 1, ArrowUp: -1, PageDown: page, PageUp: -page, End: Infinity, Home: -Infinity } as Record<string, number>)[key ?? ''] ?? null;
+  }
   input.addEventListener('keydown', event => {
     if (event.isComposing) return;
-    if (event.key === 'ArrowDown') {
+    const step = listStep(event);
+    if (step !== null && rows.length) {
       event.preventDefault();
-      const id = selected ?? rows[0]?.id ?? null; select(id, true);
-      list.querySelector<HTMLElement>('[aria-selected="true"]')?.focus();
-    } else if (event.key === 'ArrowUp') {
-      event.preventDefault(); (backButton.hidden ? required<HTMLButtonElement>('.hub-lock') : backButton).focus();
+      const index = rows.findIndex(row => row.id === selected);
+      // The first press from no selection lands on the first result.
+      const next = index < 0 ? (step < 0 ? -1 : 0) : Math.max(0, Math.min(rows.length - 1, index + step));
+      if (next >= 0) select(rows[next]!.id, true);
+    } else if (event.key === 'ArrowRight' && !event.repeat && input.selectionStart === input.value.length && input.selectionEnd === input.value.length) {
+      const row = rows.find(row => row.id === selected);
+      if (row?.navigate) { event.preventDefault(); row.navigate(); }
     } else if (event.key === 'Enter') { event.preventDefault(); if (!event.repeat) void run(); }
   });
+  // A press on a result keeps the keyboard in search.
+  list.addEventListener('mousedown', event => event.preventDefault());
   root.addEventListener('keydown', event => {
     restoringFocus?.disconnect(); restoringFocus = null;
-    if (!event.defaultPrevented && event.target instanceof Element && event.target.closest('.hub-row') && resumeSearchInput(event, input)) return;
+    // Typing on a list-stage button returns to search; Space still presses the button.
+    if (!event.defaultPrevented && !search.hidden && event.target instanceof HTMLElement && event.target !== input && !content.contains(event.target)
+      && !event.target.matches('input,textarea,select') && !(event.key === ' ' && event.target.matches('button')) && resumeSearchInput(event, input)) return;
     if (event.defaultPrevented || event.isComposing || event.metaKey || event.ctrlKey || event.altKey) return;
     if (event.key === 'Enter' && event.repeat) { event.preventDefault(); return; }
     // Hub owns Esc before the native cancel: one step per physical press.
@@ -509,23 +520,9 @@ export function createHub(parent: HTMLElement) {
       if (history.length) { event.preventDefault(); event.stopPropagation(); back(); }
       return;
     }
-    const row = target.closest<HTMLElement>('.hub-row');
-    if (row && ['ArrowUp', 'ArrowDown', 'ArrowRight', 'Enter'].includes(event.key)) {
-      event.preventDefault();
-      const index = rows.findIndex(item => item.id === row.dataset.id);
-      if (event.key === 'ArrowRight') { if (!event.repeat) rows[index]?.navigate?.(); }
-      else if (event.key === 'Enter') { if (!event.repeat) void run(); }
-      else if (event.key === 'ArrowUp' && index <= 0) input.focus();
-      else if (event.key === 'ArrowDown' && index === rows.length - 1) primary.focus();
-      else {
-        const next = Math.max(0, Math.min(rows.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)));
-        select(rows[next]?.id ?? null, true); list.querySelector<HTMLElement>('[aria-selected="true"]')?.focus();
-      }
-      return;
-    }
     if (target.closest('.hub-footer')) {
       const controls = [primary, required<HTMLButtonElement>('.hub-actions')].filter(button => !button.hidden && !button.disabled);
-      if (event.key === 'ArrowUp') { event.preventDefault(); list.querySelector<HTMLElement>('[aria-selected="true"]')?.focus(); }
+      if (event.key === 'ArrowUp') { event.preventDefault(); input.focus(); }
       else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); controls[Math.max(0, Math.min(controls.length - 1, controls.indexOf(target as HTMLButtonElement) + (event.key === 'ArrowRight' ? 1 : -1)))]?.focus(); }
       return;
     }
@@ -642,7 +639,7 @@ export function createHub(parent: HTMLElement) {
     notify,
     browseBuilds() { const row = lookup('builds'); if (row && !row.unavailable) void row.run(); else report('Build Library is loading. Try again.'); },
     resetPosition: hubWindow.reset,
-    dispose() { close(); disposeSearchEditing(); clearTimeout(receiptTimer); receipt.remove(); hubWindow.dispose(); disposeFrame(); for (const unsubscribe of sources.values()) unsubscribe(); sources.clear(); modal.dispose(); root.remove(); window.removeEventListener('blur', onBlur); window.removeEventListener('gw:tools-settings', onSettings); },
+    dispose() { close(); clearTimeout(receiptTimer); receipt.remove(); hubWindow.dispose(); disposeFrame(); for (const unsubscribe of sources.values()) unsubscribe(); sources.clear(); modal.dispose(); root.remove(); window.removeEventListener('blur', onBlur); window.removeEventListener('gw:tools-settings', onSettings); },
   };
   presenter.attach(createHubAccounts(presenter, { get: () => window.gwNative.accounts.get(), open: request => window.gwNative.accounts.open(request), manage: () => window.gwNative.app.showLauncher() }));
   presenter.attach(createHubCalculator({
