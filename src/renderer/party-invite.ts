@@ -57,6 +57,8 @@ export function createPartyInvite(input: PartyInviteInput) {
    * Resolves on a settled, ready PvE outpost of `mapId` for the same character.
    * The first outpost after login can publish no character key yet: an unknown
    * key adopts the first known one, and only two different known keys refuse.
+   * Once a key is known only that key arrives, and leaving the game (character
+   * selection) refuses, so a relogged character never sends the invite.
    */
   function arrival(mapId: number, characterKey: string | null) {
     let cancel = () => {};
@@ -70,14 +72,16 @@ export function createPartyInvite(input: PartyInviteInput) {
       cancel = () => finish(new Error('Travel and invite stopped. The invite was not sent.'));
       const check = () => {
         const region = input.region();
-        if (region.status === 'ready' && region.characterKey !== null) {
-          if (known !== null && region.characterKey !== known) { finish(new Error('The character changed. The invite was not sent.')); return; }
-          known = region.characterKey;
+        const left = region.status === 'waiting' && region.reason === 'game';
+        if (left || region.status === 'ready' && known !== null && region.characterKey !== null && region.characterKey !== known) {
+          finish(new Error('The character changed. The invite was not sent.')); return;
         }
+        if (region.status === 'ready') known ??= region.characterKey;
         if (region.status === 'ready' && region.mapId === mapId && !inOutpost(region)) {
           finish(new Error(`${NEEDS_PVE}. The invite was not sent.`)); return;
         }
-        const arrived = region.status === 'ready' && region.mapId === mapId && input.chatReady();
+        const arrived = region.status === 'ready' && region.mapId === mapId && region.characterKey === known
+          && input.chatReady();
         if (arrived && !settle) settle = setTimeout(() => finish(), settleMs);
         else if (!arrived && settle) { clearTimeout(settle); settle = null; }
       };

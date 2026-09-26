@@ -280,8 +280,8 @@ Use fresh live location authority, not retained whisper contacts, before travell
 mailbox, only from a PvE outpost and only to an exact name. A friend in another
 map is unavailable with their location. **Travel and invite** travels to the
 friend's PvE outpost (Any district), waits for a settled arrival of the same
-character, and then sends one invite. A refused trip, a character change, a
-non-PvE arrival, or no arrival within 60 seconds sends nothing. Guild Wars reports the invite result in chat; Hub
+character, and then sends one invite. A refused trip, a character change or a
+return to character selection, a non-PvE arrival, or no arrival within 60 seconds sends nothing. Guild Wars reports the invite result in chat; Hub
 claims only that Guild Wars took the command.
 
 Maps and display features retain their settings owners. Quick Item Move retains
