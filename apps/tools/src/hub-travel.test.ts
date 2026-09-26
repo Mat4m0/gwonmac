@@ -20,7 +20,7 @@ describe('Hub travel recents', () => {
     } finally { travel.dispose(); }
   });
 
-  it('marks places consequential and flags leaving an explorable area', () => {
+  it('marks places consequential, flags leaving an explorable area and names the game state', () => {
     const host = createDemoTravelHost();
     const hub = { showView: vi.fn(), showRows: vi.fn(), attach: vi.fn(), close: vi.fn() };
     const travel = createHubTravel(host, hub);
@@ -30,10 +30,17 @@ describe('Hub travel recents', () => {
       const places = () => travel.source.search('').filter(row => row.id.startsWith('place:'));
       expect(places().every(row => row.consequential && !row.leavesArea)).toBe(true);
       expect(travel.source.search('').find(row => row.id === 'travel')?.consequential).toBeUndefined();
+      expect(travel.source.context?.()).toBe("Lion's Arch");
+      expect(travel.source.lifecycle?.()).toBeNull();
       // North Kryta Province is no Travel destination: an explorable area.
       host.state.value = { ...state, mapId: 58 };
       expect(places().length).toBeGreaterThan(0);
       expect(places().every(row => row.leavesArea)).toBe(true);
+      expect(travel.source.context?.()).toBe('Explorable area');
+      expect(travel.source.lifecycle?.()).toBe('Explorable area — Travel leaves this area');
+      host.state.value = { status: 'waiting', reason: 'loading' };
+      expect(travel.source.context?.()).toBe('Map loading');
+      expect(travel.source.lifecycle?.()).toBe('Map loading — Travel returns when the map has loaded');
     } finally { travel.dispose(); }
   });
 });

@@ -51,7 +51,16 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
   }
   const source: HubSource = {
     feature: 'travelPalette',
-    context: () => host.state.value.status === 'ready' ? travelDestination(host.state.value.mapId)?.name ?? null : null,
+    context() {
+      const state = host.state.value;
+      if (state.status !== 'ready') return state.reason === 'loading' ? 'Map loading' : null;
+      return travelDestination(state.mapId)?.name ?? 'Explorable area';
+    },
+    lifecycle() {
+      const state = host.state.value;
+      if (state.status !== 'ready') return state.reason === 'loading' ? 'Map loading — Travel returns when the map has loaded' : 'Waiting for Guild Wars — Travel returns in game';
+      return explorable() ? 'Explorable area — Travel leaves this area' : null;
+    },
     lookup(id) { const place = travelDestination(Number(id.replace('place:', ''))); return place ? source.search(place.name).find(row => row.id === id) : undefined; },
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
     setVisible(next) { if (next && !visible) void load(); visible = next; },

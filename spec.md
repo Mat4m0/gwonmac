@@ -89,7 +89,10 @@ content inside it. Respect reduced motion and text scaling.
 Home contains a focused search field, a short Pinned section, existing relevant
 recents, and enabled sections. Do not show dangerous actions in empty-query recents.
 In an explorable area a fresh Home never starts on a place, because Enter would
-leave the area; it starts on the first pin, else **Travel**.
+leave the area; it starts on the first pin, else **Travel**. The header names the
+character and area, and one quiet lifecycle line under the results says what the
+game state holds back, for example "Map loading — Travel returns when the map has
+loaded". A task report in the status line takes its place.
 Use the placeholder **Search people, places, builds…**. Use Guild Wars names for
 objects: Xunlai Storage, Guild Hall, outpost, hero, profession, skill template,
 Globs of Ectoplasm, and platinum. Prefer clear action verbs over invented lore.

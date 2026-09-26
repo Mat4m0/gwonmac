@@ -42,6 +42,8 @@ export type HubSource = Readonly<{
   search(query: string): readonly HubRow[];
   /** Read-only current context for Home; never an executable result. */
   context?(): string | null;
+  /** One quiet line on what the game state holds back, e.g. "Map loading — …" (D-26); never an executable result. */
+  lifecycle?(): string | null;
   shortcuts?: Readonly<{ get(): readonly HubShortcut[]; save(value: readonly HubShortcut[]): Promise<void> }>;
   lookup?(id: string): HubRow | undefined;
   setVisible(visible: boolean): void;

@@ -26,7 +26,7 @@ export function createHub(parent: HTMLElement) {
     <section class="hub-summary" aria-label="Build to apply" hidden></section>
     <div class="hub-search"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 8 10-8 10L4 12 12 2Zm0 5v10M8 12h8"/></svg><span class="hub-scope" hidden></span><input type="text" role="combobox" aria-label="Search people, places, builds" aria-autocomplete="list" aria-controls="hub-results" aria-expanded="true" placeholder="Search people, places, builds…" autocomplete="off" spellcheck="false" maxlength="120"></div>
     <p class="hub-hint" id="hub-hint" hidden></p><div class="hub-rate-controls" hidden></div><div class="hub-results ui-scroll" id="hub-results" role="listbox" aria-label="Results" tabindex="-1"></div>
-    <pre class="hub-preview ui-scroll" hidden></pre><div class="hub-view" hidden></div><p class="hub-status" role="status" hidden></p>
+    <pre class="hub-preview ui-scroll" hidden></pre><div class="hub-view" hidden></div><p class="hub-status" role="status" hidden></p><p class="hub-lifecycle" hidden></p>
     <footer class="hub-footer"><button class="hub-primary ui-button" data-variant="primary"></button><span class="hub-count"></span><button class="hub-actions ui-button" data-variant="quiet">Actions</button></footer>
     <button class="ui-window-resize hub-resize" aria-label="Resize Hub" title="Drag to resize, or use arrow keys" hidden></button>
   </section>`;
@@ -51,6 +51,7 @@ export function createHub(parent: HTMLElement) {
   const footer = required<HTMLElement>('footer');
   const primary = required<HTMLButtonElement>('.hub-primary');
   const count = required<HTMLElement>('.hub-count');
+  const lifecycle = required<HTMLElement>('.hub-lifecycle');
   let rows: readonly HubRow[] = [];
   let shortcutRevision = '';
   let navigationRevision = '';
@@ -298,6 +299,9 @@ export function createHub(parent: HTMLElement) {
     const context = !scope && !disposeView && !input.value.trim()
       ? [...sources.keys()].filter(sourceEnabled).flatMap(source => source.context?.() ?? []) : [];
     required<HTMLElement>('.hub-context').textContent = context.join(' · ');
+    // One quiet lifecycle line on list stages; a report in the status line takes its place.
+    lifecycle.textContent = disposeView ? '' : [...sources.keys()].filter(sourceEnabled).map(source => source.lifecycle?.()).find(Boolean) ?? '';
+    lifecycle.hidden = !lifecycle.textContent;
     const trail = history.map((page, index) => ({ title: page.view?.title ?? page.scope?.title ?? 'Home', index }));
     const nextNavigation = JSON.stringify([trail, currentTitle]);
     if (navigationRevision !== nextNavigation) {

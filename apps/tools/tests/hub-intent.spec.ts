@@ -180,7 +180,7 @@ test('a bare travel scope in an explorable area selects Browse travel, so Enter 
   await expect(page.getByLabel('Lifecycle state', { exact: true })).toHaveValue('pve-explorable');
 });
 
-test('a fresh Home in an explorable area starts on Travel, and Enter never leaves the area', async ({ page }) => {
+test('a fresh Home in an explorable area starts on Travel, says why, and Enter never leaves the area', async ({ page }) => {
   await page.goto('/?hub&lifecycle=pve-explorable');
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
   const search = page.getByRole('combobox', { name: searchName });
@@ -188,6 +188,9 @@ test('a fresh Home in an explorable area starts on Travel, and Enter never leave
   await expect(page.locator('.hub-row[data-id^="place:"]').first()).toBeVisible();
   await expect(page.locator('.hub-row[aria-selected="true"]')).toHaveAttribute('data-id', 'travel');
   await expect(page.locator('.hub-primary')).toHaveText(/^Browse travel/);
+  // D-26: the header names the area and one quiet line names what it holds back.
+  await expect(page.locator('.hub-context')).toHaveText('Fixture Monk · Explorable area');
+  await expect(page.locator('.hub-lifecycle')).toHaveText('Explorable area — Travel leaves this area');
   await search.press('Enter');
   await expect(page.locator('.hub-caption')).toHaveText('Travel');
   await page.waitForTimeout(700);
@@ -197,8 +200,16 @@ test('a fresh Home in an explorable area starts on Travel, and Enter never leave
   const lifecycle = page.getByLabel('Lifecycle state', { exact: true });
   await lifecycle.selectOption('outpost');
   await expect(page.locator('.hub-row[aria-selected="true"]')).toHaveAttribute('data-id', /^place:/);
+  await expect(page.locator('.hub-lifecycle')).toBeHidden();
   await lifecycle.selectOption('pve-explorable');
   await expect(page.locator('.hub-row[aria-selected="true"]')).toHaveAttribute('data-id', 'travel');
+  await lifecycle.selectOption('map-loading');
+  await expect(page.locator('.hub-context')).toHaveText('Map loading');
+  await expect(page.locator('.hub-lifecycle')).toHaveText('Map loading — Travel returns when the map has loaded');
+  // A task report takes the one status line while it shows.
+  await search.fill('invite romi'); await search.press('Enter');
+  await expect(page.locator('.hub-status')).toBeVisible();
+  await expect(page.locator('.hub-lifecycle')).toBeHidden();
 });
 
 test('bare whisper and trade scopes start on their first row; nothing consequential starts selected', async ({ page }) => {
