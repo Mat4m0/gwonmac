@@ -27,7 +27,8 @@ The fixture controls are:
 - **Injected party**: the production party invite with the chat names Mo Kaiser
   and Kai Mo Bearer, four online friends named Zed (Kamadan, Ascalon City, Lion's
   Arch, Kaineng Center) and Arena Ace in Random Arenas. Romi Ranger is always a
-  friend in Kamadan.
+  friend in Lion's Arch, so `invite Romi` is ready to send from the starting
+  outpost; Zed Alpha in Kamadan covers Travel and invite.
 - **Canvas input** counts every key and pointer event that reached the synthetic
   game canvas, which fills the window as in production. The events themselves are in
   `window.gwFixtureCanvas.events`.
@@ -42,11 +43,11 @@ process does, including repeats and key-ups, and delivers them as renderer comma
 through `commands.ts`. Command-Q opens a model of the native Quit-or-Reload sheet;
 its Quit closes the synthetic game window, as does the Hub's `requestQuit`. The app
 element records each sent invite in `data-invites` and the last action in
-`data-action`, such as `PARTY.INVITE Mo Kai`, `PARTY.TRAVEL Romi Ranger`,
+`data-action`, such as `PARTY.INVITE Mo Kai`, `PARTY.TRAVEL Zed Alpha`,
 `Character toefte` or `Game quit`.
 
 Try `team gom afk`, `build smiter`, `10 ecto in p`, `trade ecto`, `char war`,
-and `invite Mo Kai`.
+`invite Romi` and `invite Mo Kai`.
 Build and team previews use the existing planner and observed execution runner.
 
 ## Verified behavior

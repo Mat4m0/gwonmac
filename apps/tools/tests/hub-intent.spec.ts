@@ -173,20 +173,32 @@ test.describe('party invite', () => {
   test('the fixture wires PartyInvite, and the explorable reason shows before Enter', async ({ page }) => {
     const search = page.getByRole('combobox', { name: searchName });
     const primary = page.locator('.hub-primary');
+    const selected = page.locator('.hub-row[aria-selected="true"]');
+    // Romi waits in the player's outpost: the shipped example is ready to send.
     await search.fill('invite Romi');
-    await expect(page.locator('.hub-row').first()).toContainText('Romi');
+    await expect(selected).toContainText('Romi');
+    await expect(selected).not.toHaveAttribute('aria-disabled', 'true');
     await expect(page.locator('#hub')).not.toContainText('No matches');
     await expect(primary).toHaveText(/^Invite Romi Ranger/);
+    await expect(primary).toBeEnabled();
     await search.fill('invite Zed Delta');
     await expect(primary).toHaveText(/^Invite Zed Delta/);
     await expect(primary).toBeEnabled();
     await page.getByLabel('Lifecycle state', { exact: true }).selectOption('pve-explorable');
-    await search.fill('invite Zed Delta');
-    await expect(page.locator('.hub-row[aria-selected="true"]')).toContainText('Invite players from an outpost');
-    await expect(primary).toBeDisabled();
-    await search.press('Enter');
-    expect(await invites(page)).toBeNull();
-    await expect(page.locator('#app')).not.toHaveAttribute('data-action', /INVITE/);
+    for (const query of ['invite Zed Delta', 'invite Romi']) {
+      await search.fill(query);
+      await expect(selected).toContainText('Invite players from an outpost');
+      await expect(selected).toHaveAttribute('aria-disabled', 'true');
+      await expect(primary).toBeDisabled();
+      await search.press('Enter');
+      expect(await invites(page)).toBeNull();
+      await expect(page.locator('#app')).not.toHaveAttribute('data-action', /INVITE/);
+    }
+    // Back in the outpost the same Enter sends exactly one invite.
+    await page.getByLabel('Lifecycle state', { exact: true }).selectOption('outpost');
+    await search.fill('invite Romi'); await search.press('Enter');
+    await expect(page.locator('#app')).toHaveAttribute('data-invites', 'Romi Ranger');
+    await expect(page.locator('.hub-receipt')).toHaveText('Sent /invite Romi Ranger. Guild Wars answers in chat.');
   });
 
   test('the invite scope invites only an exact name and names it before Enter', async ({ page }) => {
@@ -232,26 +244,28 @@ test.describe('party invite', () => {
 
   test('Invite to a friend in another map says why before Enter and sends nothing', async ({ page }) => {
     const search = page.getByRole('combobox', { name: searchName });
-    await search.fill('romi'); await search.press('Enter');
+    await search.fill('zed alpha'); await search.press('Enter');
+    await expect(page.locator('.hub-caption')).toHaveText('Zed Alpha');
     await page.keyboard.press('ArrowDown'); await page.keyboard.press('ArrowDown');
     const row = page.locator('.hub-row[aria-selected="true"]');
     await expect(row).toContainText('Invite to party');
-    await expect(row).toContainText('Romi Ranger is in Kamadan, Jewel of Istan. Use Travel and invite.');
+    await expect(row).toContainText('Zed Alpha is in Kamadan, Jewel of Istan. Use Travel and invite.');
     await expect(page.locator('.hub-primary')).toBeDisabled();
-    await expect(page.locator('.hub-primary')).toHaveText(/^Invite Romi Ranger/);
+    await expect(page.locator('.hub-primary')).toHaveText(/^Invite Zed Alpha/);
     await page.keyboard.press('Enter');
     expect(await invites(page)).toBeNull();
   });
 
   test('Travel and invite travels, then sends one invite on arrival', async ({ page }) => {
     const search = page.getByRole('combobox', { name: searchName });
-    await search.fill('romi'); await search.press('Enter');
+    await search.fill('zed alpha'); await search.press('Enter');
+    await expect(page.locator('.hub-caption')).toHaveText('Zed Alpha');
     for (let step = 0; step < 3; step++) await page.keyboard.press('ArrowDown');
-    await expect(page.locator('.hub-primary')).toHaveText(/^Travel and invite Romi Ranger/);
+    await expect(page.locator('.hub-primary')).toHaveText(/^Travel and invite Zed Alpha/);
     await page.keyboard.press('Enter');
-    await expect(page.locator('.hub-receipt')).toHaveText('Travelling to Kamadan, Jewel of Istan. Hub sends /invite Romi Ranger on arrival.');
-    await expect(page.locator('#app')).toHaveAttribute('data-invites', 'Romi Ranger');
-    await expect(page.locator('.hub-receipt')).toHaveText('Sent /invite Romi Ranger. Guild Wars answers in chat.');
+    await expect(page.locator('.hub-receipt')).toHaveText('Travelling to Kamadan, Jewel of Istan. Hub sends /invite Zed Alpha on arrival.');
+    await expect(page.locator('#app')).toHaveAttribute('data-invites', 'Zed Alpha');
+    await expect(page.locator('.hub-receipt')).toHaveText('Sent /invite Zed Alpha. Guild Wars answers in chat.');
   });
 
   test('a PvP outpost and an explorable area refuse invites before Enter', async ({ page }) => {

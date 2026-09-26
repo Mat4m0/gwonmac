@@ -192,9 +192,10 @@ export function mountHubFixture(target: HTMLElement) {
   const people = createHubPeople(hub, session, { unavailable: () => null,
     run: async friend => { await travel.travel(friend.mapId); record(`FRIEND.TRAVEL ${friend.character}`); } }, partyInvite);
   people.setEnabled(true);
+  // Romi waits in the player's starting outpost, so `invite Romi` is ready to send there.
   // The injected party (`?party`): chat participants, four online Zed friends and a friend in a PvP outpost.
   const friendsFor = (injected: boolean) => ({ status: 'ready' as const, sequence: 1, generation: 1, friends: [
-    { key: 'romi', alias: 'Romi', character: 'Romi Ranger', status: 'online' as const, mapId: 449 },
+    { key: 'romi', alias: 'Romi', character: 'Romi Ranger', status: 'online' as const, mapId: 55 },
     { key: 'offline', alias: 'Offline Friend', character: '', status: 'offline' as const, mapId: 55 },
     // Four online friends whose person pages offer Travel, Invite and Travel and invite on rows 1-3.
     ...(injected ? ([['alpha', 449], ['beta', 81], ['delta', 55], ['gamma', 194]] as const).map(([key, mapId]) => {
