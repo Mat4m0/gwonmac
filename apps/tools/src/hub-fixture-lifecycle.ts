@@ -2,7 +2,8 @@
  * Synthetic game lifecycle for the Hub fixture. The demo Travel host's game
  * state is the one source: the play region, the pre-game screen and the
  * character-switch context derive from it the way the certified runtime
- * derives them, so Travel, Characters, invites and builds always agree.
+ * derives them, so Travel, Characters, invites and builds always agree. A zone
+ * change first reads as the game's unavailable state for a moment, as it can live.
  */
 import { watch } from 'vue';
 import { isPvpTravelDestination } from '../../../src/shared/travel';
@@ -50,13 +51,20 @@ export function createFixtureLifecycle(host: Pick<TravelHost, 'state' | 'updateG
   let outpost = known && fixtureLifecycleOf(known) === 'outpost' ? known.mapId : DEFAULT_OUTPOST;
   let sequence = 1;
   const listeners = new Set<() => void>();
-  const stop = watch(host.state, state => {
+  const publish = () => { for (const listener of [...listeners]) listener(); };
+  // The live kernel can read a zone change as its unavailable game state for a moment before the map loads.
+  let zoneChange = false;
+  const stop = watch(host.state, (state, previous) => {
     sequence++;
     if (state.status === 'ready') {
       known = state;
       if (fixtureLifecycleOf(state) === 'outpost') outpost = state.mapId;
     }
-    for (const listener of [...listeners]) listener();
+    if (previous.status === 'ready' && state.status === 'waiting' && state.reason === 'loading') {
+      zoneChange = true;
+      try { publish(); } finally { zoneChange = false; }
+    }
+    publish();
   }, { flush: 'sync' });
   const ready = (mapId: number, place: 'outpost' | 'explorable' | 'guild-hall' = 'outpost'): TravelGameState => ({
     status: 'ready', mapId, travelContext: known?.travelContext ?? 'world', characterKey: known?.characterKey ?? null,
@@ -66,7 +74,7 @@ export function createFixtureLifecycle(host: Pick<TravelHost, 'state' | 'updateG
   /** The certified play-region fact: an outpost is instance 0, an explorable area instance 1. */
   const region = (): CompanionPlayRegionState => {
     const state = host.state.value;
-    if (state.status !== 'ready') return { status: 'waiting', reason: state.reason === 'loading' ? 'loading' : 'game' };
+    if (state.status !== 'ready') return { status: 'waiting', reason: state.reason === 'loading' && !zoneChange ? 'loading' : 'game' };
     return { status: 'ready', sequence, mapId: state.mapId, instanceType: state.explorable ? 1 : 0,
       playRegion: isPvpTravelDestination(state.mapId) ? 'pvp' : 'pve', travelContext: state.travelContext,
       characterKey: state.characterKey, unlockedMapWords: state.unlockedMapWords ? [...state.unlockedMapWords] : null,

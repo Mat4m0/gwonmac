@@ -44,4 +44,19 @@ describe('Hub fixture lifecycle', () => {
       expect(listener).toHaveBeenCalled();
     } finally { lifecycle.dispose(); vi.useRealTimers(); }
   });
+
+  it('reads a zone change as the unavailable game state for a moment before the map loads', async () => {
+    vi.useFakeTimers();
+    const host = createDemoTravelHost();
+    const lifecycle = createFixtureLifecycle(host);
+    const seen: string[] = [];
+    lifecycle.subscribe(() => { const region = lifecycle.region(); seen.push(region.status === 'ready' ? String(region.mapId) : region.reason); });
+    try {
+      await host.travel({ mapId: 449 });
+      expect(lifecycle.region()).toEqual({ status: 'waiting', reason: 'loading' });
+      vi.advanceTimersByTime(600);
+      lifecycle.set('character-select');
+      expect(seen).toEqual(['game', 'loading', '449', 'game']);
+    } finally { lifecycle.dispose(); vi.useRealTimers(); }
+  });
 });
