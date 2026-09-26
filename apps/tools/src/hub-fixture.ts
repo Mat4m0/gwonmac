@@ -5,7 +5,7 @@ import { resolveShortcuts, shortcutConflict, shortcutFromInput, shortcutReserved
 /** Disposable Hub workbench: synthetic state, no native IPC or game commands. */
 // Offline fixture exercises the production Hub mounting owner.
 // eslint-disable-next-line no-restricted-imports
-import { toggleHubWhispers } from '../../../src/renderer/hub-whisper';
+import { createWhisperSurface } from '../../../src/renderer/whisper-surface';
 // eslint-disable-next-line no-restricted-imports
 import type {} from '../../../src/renderer/gw-native';
 // eslint-disable-next-line no-restricted-imports
@@ -109,14 +109,7 @@ export function mountHubFixture(target: HTMLElement) {
     session.observe([{ id: ++id, sender: recipient, message, direction: 'outgoing' }]);
     record('Whisper');
   });
-  const messenger = document.createElement('div');
-  messenger.className = 'whisper-popout-host';
-  messenger.style.cssText = 'position:fixed;inset:0;pointer-events:none';
-  document.body.append(messenger);
-  const whisperSurface = window.gwSurfaces.register({ root: messenger, priority: 4, dismiss: () => session.setVisible(false) });
-  session.subscribe(state => whisperSurface.setOpen(state.visible));
-  messenger.addEventListener('pointerdown', () => whisperSurface.raise(), true);
-  mountWhispers(messenger, { session });
+  createWhisperSurface(document.body, session, async () => mountWhispers);
   window.addEventListener('hub-fixture-failure', () => { failSend = true; });
   window.addEventListener('hub-fixture-reset', () => session.reset());
   window.addEventListener('hub-fixture-incoming', () => session.observe([{ id: ++id, sender: 'Romi Ranger', message: 'Ready for another mission?', direction: 'incoming' }]));
@@ -131,11 +124,6 @@ export function mountHubFixture(target: HTMLElement) {
   session.updateFriends(fixtureFriends); people.updateFriends(fixtureFriends);
   window.addEventListener('hub-fixture-withdraw', () => people.updateFriends({ status: 'waiting', reason: 'unavailable' }));
   window.addEventListener('gw:travel-toggle', event => { event.preventDefault(); travel.open(); });
-  window.addEventListener('gw:whispers-toggle', event => {
-    event.preventDefault();
-    toggleHubWhispers(event, hub, messenger, session);
-    if (session.state.visible) whisperSurface.raise();
-  });
   window.addEventListener('hub-fixture-settings', event => { if (event instanceof CustomEvent) {
     settings = { ...settings, ...event.detail }; for (const listener of settingsListeners) listener(settings);
     foundation.setAvailable({ builds: settings.gwonmacTools && settings.buildLibrary, trade: settings.gwonmacTools && settings.tradeChat });
