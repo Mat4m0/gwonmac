@@ -54,20 +54,10 @@ test('explicit scopes never reinterpret the remaining words as another action', 
   assert.deepEqual(parseHubQuery('Whisper  Mo Kai'), { scope: 'whisper', term: 'mo kai', text: 'Mo Kai' }, 'names keep their capitalisation');
 });
 
-test('saved phrases reject grammar conflicts and private references in global settings', async () => {
+test('saved phrases reject duplicates and private references in global settings', async () => {
   const { isHubShortcuts } = await import('../../src/shared/hub-preferences.ts');
   const { parseRendererSettingsPatch } = await import('../../src/main/core/settings.ts');
-  assert.equal(isHubShortcuts([{ id: 'travel', phrase: 'travel home', pinned: false }]), false);
-  assert.equal(isHubShortcuts([{ id: 'travel', phrase: 'ecto', pinned: false }]), false);
   assert.equal(isHubShortcuts([{ id: 'travel', phrase: 'home', pinned: false }, { id: 'trade', phrase: 'HOME', pinned: false }]), false);
   assert.throws(() => parseRendererSettingsPatch({ hubShortcuts: [{ id: 'build:private', phrase: 'my build', pinned: true }] }), /Invalid Hub/);
 });
 
-
-test('search phrases reject command scopes and calculator expressions', async () => {
-  const { isHubShortcuts } = await import('../../src/shared/hub-preferences.js');
-  for (const phrase of ['acc second', 'team gom afk', '1p in a', '1 p in g', '10e in p', '2+2']) {
-    assert.equal(isHubShortcuts([{ id: 'travel', phrase, pinned: false }]), false, phrase);
-  }
-  assert.equal(isHubShortcuts([{ id: 'travel', phrase: 'my route', pinned: false }]), true);
-});

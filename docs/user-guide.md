@@ -260,7 +260,10 @@ selector. Material names and common aliases such as iron, feathers, dust and
 obby shards use Trade's catalogue and its quoted batch quantities. Fractional
 item results are labelled Equivalent value.
 
-Use Actions to pin a result or give it an exact search phrase. Search **Hub
+Use Actions to pin a result or give it an exact search phrase. A new phrase cannot
+start with a command word such as `team` or `invite`, or read as a calculation. A
+phrase saved before its first word became a command word keeps its pin but no
+longer matches. Search **Hub
 preferences** to reorder pins, remove saved actions, or reset aliases. Search `resign` for its existing
 confirmation, or `reload` for the account's Quit or Reload dialog.
 
