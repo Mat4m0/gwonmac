@@ -413,8 +413,7 @@ export function createHub(parent: HTMLElement) {
       list.append(option);
     });
     count.textContent = `${rows.length} result${rows.length === 1 ? '' : 's'}`;
-    // Home lists pins without a term; only a typed term can make exact hits ambiguous.
-    const exactCount = !parsed.term ? 0 : rows.filter(row => normaliseHubQuery(row.title) === parsed.term || savedRows.some(saved => saved.id === row.id)).length;
+    const exactCount = rows.filter(row => normaliseHubQuery(row.title) === parsed.term || savedRows.some(saved => saved.id === row.id)).length;
     const prior = previousRows.find(row => row.id === selected);
     const revised = prior && rows.find(row => row.id === selected)?.preview !== prior.preview;
     const initial = !input.value.trim() ? rows.find(row => row.preferred && !row.unavailable) ?? rows.find(row => !row.unavailable) ?? rows[0] : rows[0];
