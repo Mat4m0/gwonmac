@@ -224,3 +224,28 @@ test('recent-use bookkeeping preserves the next meaningful Undo and bounds targe
   expect(controller!.library.value!.builds.find(item => item.id === build.id)?.name).toBe(build.name);
   app.unmount();
 });
+
+test('a scale library grows to the requested size and never overwrites saved fixture data', async () => {
+  localStorage.removeItem('hub-fixture-library');
+  const { host, librarySize } = createHubGameFixture(() => {}, { librarySize: 1000 });
+  const { library } = await host.loadLibrary();
+  expect(librarySize).toBe(1000);
+  expect(library.builds).toHaveLength(1000);
+  expect(new Set(library.builds.map(build => build.id)).size).toBe(1000);
+  expect(new Set(library.builds.map(build => build.name)).size).toBe(1000);
+  expect(library.teams.length).toBeGreaterThanOrEqual(50);
+  await host.saveLibrary(library);
+  expect(localStorage.getItem('hub-fixture-library')).toBeNull();
+});
+
+test('the party is observed only in a loaded map, and an explorable area is no outpost', () => {
+  const { host, setPlayRegion } = createHubGameFixture(() => {});
+  const ready = { status: 'ready', sequence: 2, mapId: 58, instanceType: 1, playRegion: 'pve', travelContext: 'world',
+    characterKey: null, unlockedMapWords: null, guildHall: false, hasGuildHall: false } as const;
+  setPlayRegion(ready);
+  expect([host.party.value.status, host.party.value.inOutpost, host.party.value.playRegion]).toEqual(['ready', false, 'pve']);
+  setPlayRegion({ ...ready, mapId: 188, instanceType: 0, playRegion: 'pvp' });
+  expect([host.party.value.status, host.party.value.inOutpost, host.party.value.playRegion]).toEqual(['ready', true, 'pvp']);
+  setPlayRegion({ status: 'waiting', reason: 'loading' });
+  expect([host.party.value.status, host.party.value.inOutpost, host.party.value.playRegion]).toEqual(['unavailable', null, 'unknown']);
+});

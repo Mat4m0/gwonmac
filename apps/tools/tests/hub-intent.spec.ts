@@ -167,8 +167,26 @@ test('the phrase editor refuses a new phrase that starts with a scope word', asy
 test.describe('party invite', () => {
   const invites = (page: import('@playwright/test').Page) => page.locator('#app').getAttribute('data-invites');
   test.beforeEach(async ({ page }) => {
-    await page.goto('/?hub');
-    await page.getByLabel('Fixture scenario', { exact: true }).selectOption('party');
+    await page.goto('/?hub&party');
+  });
+
+  test('the fixture wires PartyInvite, and the explorable reason shows before Enter', async ({ page }) => {
+    const search = page.getByRole('combobox', { name: searchName });
+    const primary = page.locator('.hub-primary');
+    await search.fill('invite Romi');
+    await expect(page.locator('.hub-row').first()).toContainText('Romi');
+    await expect(page.locator('#hub')).not.toContainText('No matches');
+    await expect(primary).toHaveText(/^Invite Romi Ranger/);
+    await search.fill('invite Zed Delta');
+    await expect(primary).toHaveText(/^Invite Zed Delta/);
+    await expect(primary).toBeEnabled();
+    await page.getByLabel('Lifecycle state', { exact: true }).selectOption('pve-explorable');
+    await search.fill('invite Zed Delta');
+    await expect(page.locator('.hub-row[aria-selected="true"]')).toContainText('Invite players from an outpost');
+    await expect(primary).toBeDisabled();
+    await search.press('Enter');
+    expect(await invites(page)).toBeNull();
+    await expect(page.locator('#app')).not.toHaveAttribute('data-action', /INVITE/);
   });
 
   test('the invite scope invites only an exact name and names it before Enter', async ({ page }) => {
@@ -240,7 +258,7 @@ test.describe('party invite', () => {
     const search = page.getByRole('combobox', { name: searchName });
     await search.fill('arena ace'); await search.press('Enter');
     await expect(page.locator('.hub-row[data-id="person:travel-invite"]')).toContainText('Invites from Hub need a PvE outpost');
-    await page.getByLabel('Fixture scenario', { exact: true }).selectOption('explorable');
+    await page.getByLabel('Lifecycle state', { exact: true }).selectOption('pve-explorable');
     await search.fill('invite romi');
     await expect(page.locator('.hub-row').first()).toContainText('Invite players from an outpost');
     await expect(page.locator('.hub-primary')).toBeDisabled();

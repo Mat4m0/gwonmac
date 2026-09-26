@@ -158,12 +158,13 @@ test('exact build has a visible target and does not apply while typing', async (
 test('team preflight is inline and an interruption is not reported as success', async ({ page }) => {
   await page.goto('/?hub');
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
-  await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-scenario', { detail: 'explorable' })));
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-lifecycle', { detail: 'pve-explorable' })));
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
   await search.fill('team gom afk');
   await expect(page.getByRole('button', { name: 'Apply team GOM AFK ↵' })).toBeDisabled();
   await expect(page.locator('#hub').getByRole('option')).toContainText('outpost');
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-lifecycle', { detail: 'outpost' })));
   await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-scenario', { detail: 'partial' })));
   await expect(page.getByRole('button', { name: 'Apply team GOM AFK ↵' })).toBeEnabled();
   await search.press('Enter');
