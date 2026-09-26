@@ -21,7 +21,7 @@
 .hub-group { padding:12px 10px 6px; color:var(--ui-accent); font:var(--ui-type-body-size)/var(--ui-type-body-line) var(--ui-font-display); }
 .hub-group:first-child { padding-top:4px; }
 .hub-row { position:relative; display:grid; grid-template-columns:30px auto minmax(0,1fr) auto; align-items:center; column-gap:12px; padding:8px 10px; min-height:46px; border-radius:var(--ui-radius-sm); cursor:pointer; }
-.hub-row:hover { background:var(--ui-hover); }
+.hub-row:hover { background:var(--ui-row-hover); }
 .hub-icon { width:28px; height:28px; display:grid; place-items:center; border-radius:var(--ui-radius-sm); color:var(--ui-accent); background:var(--ui-well-fill); box-shadow:var(--ui-shadow-inset); }
 .hub-icon svg { width:20px; height:20px; }
 .hub-icon img { width:28px; height:28px; object-fit:contain; }
@@ -124,7 +124,7 @@
 .hub-view .travel-favorite-grid .travel-favorite span { text-align:left; font-size:15px; font-weight:500; }
 .hub-view .travel-favorite-grid .travel-favorite b { font-size:12px; font-weight:400; color:var(--ui-text-muted); border:1px solid var(--ui-line-soft); border-radius:var(--ui-radius-sm); min-width:23px; text-align:center; }
 .hub-view .travel-recent[data-active],.hub-view .travel-favorite-grid .travel-favorite[data-active],.hub-view .travel-result[aria-selected=true] { background:var(--ui-selection-fill); box-shadow:inset 0 0 0 1px var(--ui-line-soft); }
-.hub-view .travel-recent:hover:not(:disabled),.hub-view .travel-favorite:hover:not(:disabled) { background:var(--ui-hover); }
+.hub-view .travel-recent:hover:not(:disabled),.hub-view .travel-favorite:hover:not(:disabled) { background:var(--ui-row-hover); }
 .hub-view .travel-footer { flex-shrink:0; min-height:48px; padding:8px; background:var(--ui-well-fill); border-top:1px solid var(--ui-line-soft); font:13px/1.4 var(--ui-font-interface); }
 @media(max-width:540px) {
   .hub-view .travel-search input { font-size:18px; }
