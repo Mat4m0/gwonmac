@@ -51,6 +51,29 @@ test('Backspace and breadcrumb ancestors restore history without deleting typed 
   await expect(page.locator('.hub-back')).toBeHidden();
 });
 
+test('Command-Backspace goes back one level from any focus and never deletes text', async ({ page }) => {
+  await page.goto('/?hub');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  await search.fill('kam'); await search.press('Meta+Backspace');
+  await expect(search).toHaveValue('kam');
+  await expect(page.locator('#hub')).toBeVisible();
+  await search.fill('settings'); await search.press('Enter');
+  await page.getByRole('button', { name: 'Appearance', exact: true }).click();
+  const style = page.getByLabel('Panel style', { exact: true });
+  await style.focus(); await page.keyboard.press('Meta+Backspace');
+  await expect(page.locator('.hub-caption')).toHaveText('Home');
+  await expect(search).toHaveValue('settings');
+  await expect(search).toBeFocused();
+  await search.fill('accounts'); await search.press('Enter');
+  await search.fill('second'); await search.press('Enter');
+  await search.fill('keep');
+  // A held press pops one level; its auto-repeat is ignored and the child query stays untouched until then.
+  await page.keyboard.down('Meta'); await page.keyboard.down('Backspace'); await page.keyboard.down('Backspace');
+  await page.keyboard.up('Backspace'); await page.keyboard.up('Meta');
+  await expect(page.locator('.hub-caption')).toHaveText('Accounts');
+  await expect(search).toHaveValue('second');
+});
+
 test('arrows connect Hub results, character carousel, search and Back', async ({ page }, info) => {
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
