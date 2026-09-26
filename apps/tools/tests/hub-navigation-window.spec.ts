@@ -32,7 +32,7 @@ test('Hub has a locked frame, invisible corner hit area and bounded movable geom
   await page.screenshot({ path: info.outputPath('hub-maps-breadcrumb.png') });
 });
 
-test('Backspace and breadcrumb ancestors restore history without deleting typed text', async ({ page }) => {
+test('Backspace only edits text; Command-Backspace and breadcrumb ancestors restore history', async ({ page }) => {
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
   await search.fill('accounts'); await search.press('Enter');
@@ -41,7 +41,11 @@ test('Backspace and breadcrumb ancestors restore history without deleting typed 
   await search.fill('keep'); await search.press('Backspace');
   await expect(search).toHaveValue('kee');
   await expect(page.locator('.hub-caption')).toHaveText('Second');
-  await search.fill(''); await search.press('Backspace');
+  // A held ⌫ on an empty query never leaves the view.
+  await search.fill('');
+  for (let press = 0; press < 3; press += 1) await search.press('Backspace');
+  await expect(page.locator('.hub-caption')).toHaveText('Second');
+  await search.press('Meta+Backspace');
   await expect(search).toHaveValue('second');
   await expect(page.locator('.hub-caption')).toHaveText('Accounts');
   await search.press('Enter');
@@ -74,12 +78,49 @@ test('Command-Backspace goes back one level from any focus and never deletes tex
   await expect(search).toHaveValue('second');
 });
 
+test('list keys move one selection without wrapping while focus and typing stay in search', async ({ page }) => {
+  await page.goto('/?hub');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  await search.fill('k');
+  const options = page.locator('#hub [role=option]');
+  const last = await options.count() - 1;
+  expect(last).toBeGreaterThan(3);
+  const at = (index: number) => expect(options.nth(index)).toHaveAttribute('aria-selected', 'true');
+  await at(0);
+  // ↑ at the top stays put: no wrap, and focus never hops to the header.
+  await search.press('ArrowUp'); await at(0);
+  await expect(search).toBeFocused();
+  // The first ↓ moves the selection.
+  await search.press('ArrowDown'); await at(1);
+  await search.press('Control+n'); await at(2);
+  await search.press('Control+p'); await at(1);
+  await search.press('End'); await at(last);
+  // ↓ past the end stays on the last result; it never tabs to the footer.
+  await search.press('ArrowDown'); await at(last);
+  await expect(search).toBeFocused();
+  await expect(search).toHaveAttribute('aria-activedescendant', (await options.nth(last).getAttribute('id'))!);
+  await expect(options.nth(last)).toBeInViewport();
+  await search.press('Home'); await at(0);
+  await search.press('PageDown');
+  expect(await options.evaluateAll(rows => rows.findIndex(row => row.getAttribute('aria-selected') === 'true'))).toBeGreaterThan(1);
+  await search.press('PageUp'); await at(0);
+  await expect(page.locator('#hub [role=option][aria-selected=true]')).toHaveCount(1);
+  // Typing continues at the caret; Home and End never moved it.
+  await page.keyboard.type('a');
+  await expect(search).toHaveValue('ka');
+  // A click selects without taking focus from search.
+  await options.nth(1).dispatchEvent('mousedown');
+  await expect(search).toBeFocused();
+});
+
 test('arrows connect Hub results, character carousel, search and Back', async ({ page }, info) => {
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  // Results keep focus in search; arrows move only the selection (D-2).
   await search.fill('switch character'); await search.press('ArrowDown');
-  await expect(page.locator('.hub-row[aria-selected=true]')).toBeFocused();
+  await expect(search).toBeFocused();
   await page.keyboard.press('ArrowUp'); await expect(search).toBeFocused();
+  await expect(page.locator('.hub-row[aria-selected=true]')).toHaveAttribute('data-id', 'character');
   await search.press('Enter');
   const selected = page.locator('.character-switch-row[data-selected=true]');
   await expect(selected).toBeFocused();
@@ -94,7 +135,11 @@ test('arrows connect Hub results, character carousel, search and Back', async ({
   await expect(back).toBeFocused();
   await page.keyboard.press('ArrowDown'); await expect(picker).toBeFocused();
   await page.keyboard.press('ArrowDown'); await expect(selected).toBeFocused();
+  // ⌫ on a card edits the character search and never leaves; ⌘⌫ goes back.
   await page.keyboard.press('Backspace');
+  await expect(picker).toBeFocused();
+  await expect(page.locator('.character-switch-row')).not.toHaveCount(0);
+  await page.keyboard.press('Meta+Backspace');
   await expect(search).toHaveValue('switch character');
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', /Character/);
 });

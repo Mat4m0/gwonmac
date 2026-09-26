@@ -198,10 +198,11 @@ styles. Deleting a custom style requires confirmation.
 
 ## Hub command palette
 
-Press **Command-R** to search people, outposts, tools, and commands. Type a name, use Up and Down,
-and press Enter for the action shown in the footer. The **Actions** button opens secondary actions. **Command-K** opens Trade. Escape goes back or
+Press **Command-R** to search people, outposts, tools, and commands. Type a name, use Up and Down
+(or Home, End, Page Up and Page Down), and press Enter for the action shown in the footer. Typing
+always stays in the search field, and Right at the end of your text opens a result's choices. The **Actions** button opens secondary actions. **Command-K** opens Trade. Escape goes back or
 closes the palette. **Command-Delete** (⌘⌫) goes back one level from anywhere in Hub, text fields included;
-it never deletes text and does nothing on Home. The game keeps running while Hub is open and stays fully
+it never deletes text and does nothing on Home. Delete (⌫) only edits text and never leaves a page. The game keeps running while Hub is open and stays fully
 visible around it; panel opacity is the only setting that changes how much of
 the game shows through. At low opacity, Hub holds back only the brightest parts
 of the scene behind its panel, so titles, grey detail and gold headings keep

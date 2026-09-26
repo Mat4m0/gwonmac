@@ -298,7 +298,7 @@ and meta stay inside it. In the 340 × 380 Hub at the same sizes, the footer
 keeps one height while arrowing, the count gives way before the primary label,
 the label keeps its whole verb up to 150 % and its full action as tooltip. A
 live theme, font and opacity change keeps the query, caret, selection, focus
-(in search with a pointer-selected result, or on an arrowed row) and the list's
+(in search, whether the result was selected by arrows or the pointer) and the list's
 scroll offset (clamped only when a taller Modern list has less
 to scroll), never focuses `<body>` and never paints a second selection. At 65 %
 over the checkerboard, title, detail, keycap, count, placeholder and gold
@@ -488,9 +488,11 @@ behavior. Trade, Builds and Whispers always use their existing floating windows.
 Hub launches and focuses them; build reviews stay in the floating Library. Drafts,
 unsaved-edit guards, native target validation and input isolation remain covered.
 
-Hub now restores its page history with Backspace outside text editing or from an
-empty input. Breadcrumb ancestors restore the matching query and selection. Arrow
-keys connect result rows, search, header controls and footer actions. Characters
+Hub restores its page history with Command-Backspace; plain Backspace only
+edits text and never leaves a page. Breadcrumb ancestors restore the matching
+query and selection. Result lists keep focus in search while Up/Down,
+Control-N/P, Home/End and Page Up/Down move one selection without wrapping;
+typing after any of them continues the query at its caret. Characters
 retain Left/Right selection; Up reaches search, then Back. Opening a standalone
 shortcut does not invent a previously visited page.
 

@@ -14,6 +14,7 @@ import { editHubShortcut, manageHubShortcuts } from './hub-preferences.js';
 import { isHubShortcuts, type HubShortcut } from '../shared/hub-preferences.js';
 import { createHubCalculator } from './hub-calculator.js';
 import { matchHubRows, parseHubQuery, normaliseHubQuery, type HubRow, type HubSource, type HubSummary } from '../shared/hub.js';
+import { listSelectionIndex } from '../shared/list-selection.js';
 export function createHub(parent: HTMLElement) {
   const document = parent.ownerDocument;
   const root = document.createElement('dialog');
@@ -73,10 +74,8 @@ export function createHub(parent: HTMLElement) {
   let restoringFocus: MutationObserver | null = null;
   const focusPlace = (): FocusPlace => {
     const active = document.activeElement;
-    const row = active instanceof Element ? active.closest<HTMLElement>('.hub-row') : null;
     let selector = '.hub-search input';
-    if (row?.dataset.id) selector = `.hub-row[data-id="${CSS.escape(row.dataset.id)}"]`;
-    else if (active instanceof HTMLElement && root.contains(active)) {
+    if (active instanceof HTMLElement && root.contains(active) && active !== list) {
       for (const attribute of ['id', 'data-character-key', 'data-section', 'aria-label']) {
         const value = active.getAttribute(attribute);
         if (value) { selector = `[${attribute}="${CSS.escape(value)}"]`; break; }
@@ -87,7 +86,9 @@ export function createHub(parent: HTMLElement) {
     return { selector, ...(active instanceof HTMLInputElement && active.selectionStart !== null
       ? { range: [active.selectionStart, active.selectionEnd ?? active.selectionStart] as const } : {}) };
   };
-  const focusResult = () => (list.querySelector<HTMLElement>('[aria-selected="true"]') ?? input).focus({ preventScroll: true });
+  // The listbox never holds focus: pointer and keyboard selection keep typing in search (D-2).
+  list.tabIndex = -1;
+  list.addEventListener('focus', () => input.focus({ preventScroll: true }));
   function restoreFocus(place: FocusPlace) {
     restoringFocus?.disconnect();
     const attempt = () => {
@@ -100,7 +101,7 @@ export function createHub(parent: HTMLElement) {
     };
     if (!attempt()) {
       if (!content.hidden) (content.querySelector<HTMLElement>('input,button,select,[tabindex="0"]') ?? backButton).focus();
-      else focusResult();
+      else input.focus({ preventScroll: true });
       restoringFocus = new MutationObserver(attempt);
       restoringFocus.observe(content, { childList: true, subtree: true });
     }
@@ -368,7 +369,6 @@ export function createHub(parent: HTMLElement) {
         && row.detail === previous.detail && row.group === previous.group
         && row.action === previous.action && row.unavailable === previous.unavailable && row.preview === previous.preview && row.folder === previous.folder && row.attributeStatus === previous.attributeStatus && JSON.stringify([row.skills, row.attributes, row.professions]) === JSON.stringify([previous.skills, previous.attributes, previous.professions]);
     })) { select(selected); return; }
-    const hadRowFocus = list.contains(document.activeElement);
     list.replaceChildren();
     let group = '';
     rows.forEach((row, index) => {
@@ -378,7 +378,7 @@ export function createHub(parent: HTMLElement) {
         heading.className = 'hub-group'; heading.setAttribute('role', 'presentation'); heading.textContent = group;
         list.append(heading);
       }
-      const option = document.createElement('div'); option.tabIndex = -1;
+      const option = document.createElement('div');
       option.id = `hub-result-${index}`; option.dataset.id = row.id; option.className = 'hub-row';
       option.setAttribute('role', 'option'); option.setAttribute('aria-disabled', String(!!row.unavailable));
       const title = document.createElement('span'); title.className = 'hub-title'; title.textContent = row.title;
@@ -409,7 +409,8 @@ export function createHub(parent: HTMLElement) {
         }
       }
       option.addEventListener('pointermove', event => { if (event.movementX || event.movementY) select(row.id); });
-      option.addEventListener('click', () => { select(row.id); option.focus({ preventScroll: true }); void run(); });
+      option.addEventListener('mousedown', event => event.preventDefault());
+      option.addEventListener('click', () => { select(row.id); input.focus({ preventScroll: true }); void run(); });
       list.append(option);
     });
     count.textContent = `${rows.length} result${rows.length === 1 ? '' : 's'}`;
@@ -418,7 +419,6 @@ export function createHub(parent: HTMLElement) {
     const revised = prior && rows.find(row => row.id === selected)?.preview !== prior.preview;
     const initial = !input.value.trim() ? rows.find(row => row.preferred && !row.unavailable) ?? rows.find(row => !row.unavailable) ?? rows[0] : rows[0];
     select((prior?.id === 'quote-state' || prior?.id === 'market-state') && !!rows[0]?.conversion ? rows[0].id : reset ? exactCount > 1 ? null : initial?.id ?? null : !revised && rows.some(row => row.id === selected) ? selected : null);
-    if (hadRowFocus) (list.querySelector<HTMLElement>('[aria-selected="true"]') ?? input).focus();
     if (!rows.length) {
       const empty = document.createElement('p'); empty.className = 'hub-empty'; empty.textContent = 'No matches'; list.append(empty);
     }
@@ -477,14 +477,16 @@ export function createHub(parent: HTMLElement) {
     if (resume) restorePage(resume); else home();
   }
   input.addEventListener('input', () => { report(''); refresh(true); });
+  // List stages keep DOM focus here and move only the active descendant (D-2).
   input.addEventListener('keydown', event => {
     if (event.isComposing) return;
-    if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      const id = selected ?? rows[0]?.id ?? null; select(id, true);
-      list.querySelector<HTMLElement>('[aria-selected="true"]')?.focus();
-    } else if (event.key === 'ArrowUp') {
-      event.preventDefault(); (backButton.hidden ? required<HTMLButtonElement>('.hub-lock') : backButton).focus();
+    const page = Math.max(1, Math.floor(list.clientHeight / 40) - 1);
+    const next = listSelectionIndex(event, rows.findIndex(row => row.id === selected), rows.length, page);
+    if (next !== null) { event.preventDefault(); if (rows[next]) select(rows[next].id, true); return; }
+    const row = rows.find(item => item.id === selected);
+    const atEnd = input.selectionStart === input.value.length && input.selectionEnd === input.value.length;
+    if (event.key === 'ArrowRight' && row?.navigate && atEnd && !event.shiftKey && !event.metaKey && !event.ctrlKey && !event.altKey) {
+      event.preventDefault(); if (!event.repeat) row.navigate();
     } else if (event.key === 'Enter') { event.preventDefault(); if (!event.repeat) void run(); }
   });
   root.addEventListener('keydown', event => {
@@ -495,33 +497,16 @@ export function createHub(parent: HTMLElement) {
       if (!event.repeat && history.length) back();
       return;
     }
-    if (!event.defaultPrevented && event.target instanceof Element && event.target.closest('.hub-row') && resumeSearchInput(event, input)) return;
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    // Typing and ⌫ on a Hub control of a list stage edit the search; ⌫ never navigates.
+    if (!event.defaultPrevented && target && !search.hidden && !target.matches('input,textarea,select,[contenteditable="true"]')
+      && !(event.key === ' ' && target.closest('button')) && resumeSearchInput(event, input)) return;
     if (event.defaultPrevented || event.isComposing || event.metaKey || event.ctrlKey || event.altKey) return;
     if (event.key === 'Enter' && event.repeat) { event.preventDefault(); return; }
-    const target = event.target instanceof HTMLElement ? event.target : null;
     if (!target || target === required<HTMLElement>('.hub-resize')) return;
-    const editing = target.matches('input,textarea,select,[contenteditable="true"]');
-    if (event.key === 'Backspace' && (!editing || target instanceof HTMLInputElement && (target === input || target.getAttribute('role') === 'combobox') && !target.value)) {
-      if (history.length) { event.preventDefault(); event.stopPropagation(); back(); }
-      return;
-    }
-    const row = target.closest<HTMLElement>('.hub-row');
-    if (row && ['ArrowUp', 'ArrowDown', 'ArrowRight', 'Enter'].includes(event.key)) {
-      event.preventDefault();
-      const index = rows.findIndex(item => item.id === row.dataset.id);
-      if (event.key === 'ArrowRight') { if (!event.repeat) rows[index]?.navigate?.(); }
-      else if (event.key === 'Enter') { if (!event.repeat) void run(); }
-      else if (event.key === 'ArrowUp' && index <= 0) input.focus();
-      else if (event.key === 'ArrowDown' && index === rows.length - 1) primary.focus();
-      else {
-        const next = Math.max(0, Math.min(rows.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)));
-        select(rows[next]?.id ?? null, true); list.querySelector<HTMLElement>('[aria-selected="true"]')?.focus();
-      }
-      return;
-    }
     if (target.closest('.hub-footer')) {
       const controls = [primary, required<HTMLButtonElement>('.hub-actions')].filter(button => !button.hidden && !button.disabled);
-      if (event.key === 'ArrowUp') { event.preventDefault(); list.querySelector<HTMLElement>('[aria-selected="true"]')?.focus(); }
+      if (event.key === 'ArrowUp') { event.preventDefault(); input.focus(); }
       else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); controls[Math.max(0, Math.min(controls.length - 1, controls.indexOf(target as HTMLButtonElement) + (event.key === 'ArrowRight' ? 1 : -1)))]?.focus(); }
       return;
     }
@@ -617,7 +602,7 @@ export function createHub(parent: HTMLElement) {
       if (!fromOpenHub) { suspended = null; show(); }
       if (!scope) restoreQuery = input.value;
       if (fromOpenHub && !restoring) remember(); resetView(); scope = { title, rows: getRows, ...(summary ? { summary } : {}) }; root.dataset.page = 'section'; caption.textContent = title;
-      backButton.hidden = history.length === 0; input.placeholder = 'Search actions…'; input.value = ''; report(''); refresh(true); focusResult();
+      backButton.hidden = history.length === 0; input.placeholder = 'Search actions…'; input.value = ''; report(''); refresh(true); input.focus({ preventScroll: true });
     },
     showView(title: string, mount: (target: HTMLElement, back: () => void) => () => void, available?: () => boolean) {
       const fromOpenHub = root.open;

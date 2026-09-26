@@ -77,15 +77,18 @@ test('saved font and custom title material apply to the real Hub without losing 
 });
 
 
-// Focus rests either in search (a pointer-selected result) or on an arrowed row.
-for (const focusHome of ['search', 'row'] as const) test(`a live appearance change keeps query, caret, selection, list scroll and focus in the ${focusHome}`, async ({ page }) => {
+// The selection comes from the keyboard (↓ five times) or the pointer; focus stays in search either way (D-2).
+for (const selectBy of ['keys', 'pointer'] as const) test(`a live appearance change keeps query, caret, selection, list scroll and focus after ${selectBy} selection`, async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
   await expect(search).toBeFocused();
   await search.fill('k');
-  if (focusHome === 'row') for (let step = 0; step < 5; step += 1) await page.keyboard.press('ArrowDown');
-  else {
+  if (selectBy === 'keys') {
+    for (let step = 0; step < 5; step += 1) await page.keyboard.press('ArrowDown');
+    await expect(page.locator('#hub .hub-row').nth(5)).toHaveAttribute('aria-selected', 'true');
+    await expect(search).toBeFocused();
+  } else {
     const row = (await page.locator('#hub .hub-row').nth(5).boundingBox())!;
     await page.mouse.move(row.x + 40, row.y + row.height / 2);
     await page.mouse.move(row.x + 60, row.y + row.height / 2);
@@ -132,7 +135,7 @@ for (const focusHome of ['search', 'row'] as const) test(`a live appearance chan
   expect(clamped.scrollTop).toBe(Math.min(bottom, clamped.scrollMax));
   expect(clamped.state).toEqual(kept.state);
   expect(await page.evaluate(() => (window as unknown as { appearanceTrace: object }).appearanceTrace)).toEqual({ body: false, focusMoves: 0, doubleSelection: false });
-  if (focusHome === 'search') await expect(search).toBeFocused();
+  await expect(search).toBeFocused();
   await page.keyboard.type('a');
   await expect(search).toHaveValue('ka');
 });
@@ -211,7 +214,7 @@ for (const [uiStyle, uiPanelOpacity] of [['obsidian', 65], ['guild-wars', 94], [
     measured.push(...await textContrast(page, TEXT_ROLES));
     await search.fill('kam'); measured.push(...await textContrast(page, TEXT_ROLES));
     await search.fill('build a'); measured.push(...await textContrast(page, TEXT_ROLES));
-    await search.fill('build monk'); await search.press('ArrowDown'); await page.keyboard.press('ArrowRight');
+    await search.fill('build monk'); await search.press('ArrowRight');
     await expect(page.locator('.hub-summary-label')).toBeVisible();
     measured.push(...await textContrast(page, TEXT_ROLES));
     await page.getByRole('button', { name: 'Back', exact: true }).click();
@@ -434,14 +437,14 @@ test('Hub text size scales every type role inside the fixed frame, keeps the tas
   const task = () => page.evaluate(() => {
     const input = document.querySelector<HTMLInputElement>('#hub .hub-search input')!;
     const focused = document.activeElement;
-    return { query: input.value, caret: [input.selectionStart, input.selectionEnd], selected: document.querySelector('#hub .hub-row[aria-selected=true]')?.getAttribute('data-id'), active: input.getAttribute('aria-activedescendant'), focus: focused?.id || focused?.className };
+    return { query: input.value, caret: [input.selectionStart, input.selectionEnd], selected: document.querySelector('#hub .hub-row[aria-selected=true]')?.getAttribute('data-id'), active: input.getAttribute('aria-activedescendant'), focus: focused === input ? 'search' : focused?.id || focused?.className };
   });
   const kept = await task();
   // A live size change is presentation only: the task and focus stay put.
   await page.evaluate(() => window.gwApplyFixtureAppearance?.({ uiStyle: 'guild-wars', uiPanelOpacity: 94, hubTextSize: 150 }));
   await expect.poll(() => page.locator('.hub-title').first().evaluate(element => getComputedStyle(element).fontSize)).toBe('21px');
   expect(await task()).toEqual(kept);
-  expect(kept.focus).not.toBe('');
+  expect(kept.focus).toBe('search');
   expect(await game()).toEqual(before);
 
   await search.fill('settings'); await search.press('Enter');

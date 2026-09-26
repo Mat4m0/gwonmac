@@ -301,17 +301,21 @@ places with their reason. User pins keep their existing order and availability.
 Tool rows show meaningful descriptions and resolved shortcut keycaps.
 
 The top bar shows clickable ancestor breadcrumbs and an understated Back arrow.
-Backspace returns to the previous page when no text is being edited; an empty
-search can also go Back. Command-Backspace goes Back one level from any focus,
+Backspace only edits text: it never navigates, and on a Hub button or card it
+edits the search. Command-Backspace goes Back one level from any focus,
 search and form fields included; it ignores auto-repeat, never deletes text and
 is a no-op at Home. History restores query, selection, scroll and the actual
-focused row/control. First entry and restoration are separate: character cards,
+focused control. First entry and restoration are separate: character cards,
 account choices and action lists start on their useful item; search stays optional.
 Fresh Home starts in search. Temporary app blur and popout handoffs retain the
 session task; explicit closure starts a fresh task next time. Resume refreshes
 current facts before execution. Account replacement invalidates prior targets.
-Arrow keys connect results, search, navigation and actions. Character cards use
-Left/Right; Up returns to search, then to Back. Native text editing, range and
+Result lists keep DOM focus in search and move only `aria-activedescendant`
+(D-2). Up/Down, Control-N/P, Home/End and Page Up/Down move the one selection
+through one no-wrap helper (`src/shared/list-selection.ts`): Up on the first
+result and Down on the last stay put, and a click selects without taking focus
+from search. Right at the end of the query opens the selected result's
+choices. Character cards use Left/Right; Up returns to search, then to Back. Native text editing, range and
 select controls retain their own keys. Actions only opens contextual actions. Known query scopes stay visible, and typing a command name offers one
 relevant example. Neither examples nor typing execute an action.
 
@@ -401,10 +405,10 @@ typing. Unknown folders return no results. Imported build provenance is not a
 current template folder. File identities and the reread-before-apply guard stay
 unchanged; folder searches never apply a build automatically.
 
-Typing a printable character while a Hub result has keyboard focus resumes the
-search at its saved caret or selection. This also applies on target-selection
-pages. Arrows still navigate results; Enter activates the selected result;
-Backspace from a result still goes back in Hub history.
+Result rows never take keyboard focus, so typing stays in search on every list
+page, target-selection pages included. Typing or Backspace on another Hub
+control of a list page returns to the search at its saved caret or selection.
+Arrows move the selection; Enter activates the selected result.
 
 ### Build continuity and completion
 
