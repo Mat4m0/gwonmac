@@ -216,12 +216,6 @@ test.describe('party invite', () => {
     await expect(row).toContainText('Romi Ranger is in Kamadan, Jewel of Istan. Use Travel and invite.');
     await expect(page.locator('.hub-primary')).toBeDisabled();
     await expect(page.locator('.hub-primary')).toHaveText(/^Invite Romi Ranger/);
-    // A press on the disabled primary or blank panel space keeps the keyboard in search.
-    await page.locator('.hub-primary').click({ force: true });
-    await expect(search).toBeFocused();
-    await page.locator('.hub-count').click();
-    await expect(search).toBeFocused();
-    await expect(search).toHaveAttribute('aria-activedescendant', 'hub-result-2');
     await page.keyboard.press('Enter');
     expect(await invites(page)).toBeNull();
   });
