@@ -9,7 +9,7 @@
  * client renders, what it sends, or what it is permitted to do.
  */
 import type { AppSettings } from "../shared/contracts.js";
-import { defaultCustomUiTheme, type CustomUiTheme, type UiThemeColor } from "../shared/ui-theme.js";
+import { defaultCustomUiTheme, type UiThemeColor } from "../shared/ui-theme.js";
 import { parseRgb, compositeColor, accessibleForeground, readableForeground } from "../shared/ui-color.js";
 
 const fontChoices = new WeakMap<HTMLElement, AppSettings["uiFont"]>();
@@ -50,10 +50,11 @@ export const ensureGuildWarsFont = (): Promise<boolean> =>
 /* What tokens.css paints for each material where a palette role is left at
  * its default. The model must measure painted colours, not the custom-palette
  * seeds, or it re-inks text that is already readable. Faint is not a palette
- * role, so a custom muted colour stands in for it. */
+ * role, so a custom muted colour stands in for it, and a custom text colour
+ * also paints the bright role. */
 const PAINTED = {
-  classic: { window: "#080807", text: "#EBE5D3", mutedText: "#B2AC9D", faintText: "#948E7E", accent: "#E6C882" },
-  modern: { window: "#0F0D0A", text: "#ECE7DF", mutedText: "#B5B0A7", faintText: "#908C84", accent: "#DBB568" },
+  classic: { window: "#080807", text: "#EBE5D3", bright: "#F5F0E2", mutedText: "#B2AC9D", faintText: "#948E7E", accent: "#E6C882" },
+  modern: { window: "#0F0D0A", text: "#ECE7DF", bright: "#F8F5EE", mutedText: "#B5B0A7", faintText: "#908C84", accent: "#DBB568" },
 } as const;
 
 /* Rendering rounds every composited channel to 8 bits. A little headroom keeps
@@ -68,6 +69,15 @@ reducedTransparency?.addEventListener("change", () => {
   for (const [root, settings] of appliedSettings) applyAppearance(settings, root);
 });
 
+type InkRole = "text" | "bright" | "mutedText" | "faintText" | "accent";
+const INK_VARIABLES: Readonly<Record<InkRole, readonly string[]>> = {
+  text: ["--ui-text"],
+  bright: ["--ui-text-bright", "--ui-display-text"],
+  mutedText: ["--ui-text-muted"],
+  faintText: ["--ui-text-faint"],
+  accent: ["--ui-accent-text"],
+};
+
 export const appearanceVariables = (
   settings: AppSettings,
   options: { readonly reducedTransparency?: boolean } = {},
@@ -79,8 +89,16 @@ export const appearanceVariables = (
     ? settings.uiCustomTheme
     : defaultCustomUiTheme(settings.uiStyle === "obsidian" ? "modern" : "classic");
   const baseline = defaultCustomUiTheme(theme.material);
-  const painted = (field: keyof typeof PAINTED.classic & keyof CustomUiTheme): UiThemeColor =>
-    theme[field] !== baseline[field] ? theme[field] : PAINTED[theme.material][field];
+  const material = PAINTED[theme.material];
+  const painted = (field: "window" | "text" | "mutedText" | "accent"): UiThemeColor =>
+    theme[field] !== baseline[field] ? theme[field] : material[field];
+  const roles: Readonly<Record<InkRole, UiThemeColor>> = {
+    text: painted("text"),
+    bright: theme.text !== baseline.text ? theme.text : material.bright,
+    mutedText: painted("mutedText"),
+    faintText: theme.mutedText !== baseline.mutedText ? theme.mutedText : material.faintText,
+    accent: painted("accent"),
+  };
 
   /* One worst-case legibility model for every text role. Panels never dim
    * the game around them (tokens.css `--ui-scrim`), so at low opacity the
@@ -89,40 +107,44 @@ export const appearanceVariables = (
    * effective opacity of 1 and keeps the designed hierarchy. The Classic art
    * strip is not modelled: its text uses the brightest ink (tokens.css). */
   const opacity = options.reducedTransparency ? 1 : settings.uiPanelOpacity / 100;
-  const overSnow = compositeColor(painted("window"), "#FFFFFF", opacity);
-  const textBackgrounds = [
-    overSnow,
+  const overScene = (scene: UiThemeColor): UiThemeColor[] => {
+    const panel = compositeColor(painted("window"), scene, opacity);
     /* Hovered rows and settings rows add the accent-tinted hover layer. */
-    compositeColor(PAINTED[theme.material].accent, overSnow, 0.1),
+    return [panel, compositeColor(material.accent, panel, 0.1)];
+  };
+  const backgroundsUnder = (scene: UiThemeColor): UiThemeColor[] => [
+    ...overScene(scene),
     compositeColor(painted("window"), "#000000", opacity),
     /* Opaque surfaces only move when a player recolours them. */
     ...(["titlebar", "surface", "recessed"] as const)
       .filter((field) => theme[field] !== baseline[field])
       .map((field) => theme[field]),
   ];
-  const ink = (preferred: UiThemeColor) =>
-    accessibleForeground(preferred, textBackgrounds, TEXT_CONTRAST);
-  const text = painted("text");
-  const mutedText = painted("mutedText");
-  const faintText = theme.mutedText === baseline.mutedText
-    ? PAINTED[theme.material].faintText
-    : theme.mutedText;
-  const accent = painted("accent");
-  const safeText = ink(text);
-  const safeMutedText = ink(mutedText);
-  const safeFaintText = ink(faintText);
-  const safeAccentText = ink(accent);
+  const inksUnder = (scene: UiThemeColor) => {
+    const backgrounds = backgroundsUnder(scene);
+    return Object.fromEntries(Object.entries(roles).map(([role, color]) =>
+      [role, accessibleForeground(color, backgrounds, TEXT_CONTRAST)])) as Record<InkRole, UiThemeColor>;
+  };
+
+  const shared = inksUnder("#FFFFFF");
 
   /* Each role moves only as far as it must, so one opacity step never
    * re-inks a whole role at once and faint stays distinct from muted wherever
-   * both are readable. Hierarchy also comes from type role and size: row
-   * detail keeps the smaller Reading role. */
-  if (safeText !== text) variables["--ui-text"] = safeText;
-  if (safeMutedText !== mutedText) variables["--ui-text-muted"] = safeMutedText;
-  if (safeFaintText !== faintText) variables["--ui-text-faint"] = safeFaintText;
-  /* The accent keeps its exact colour for fills, rails and icons. Only its
-   * text role is re-inked. */
-  if (safeAccentText !== accent) variables["--ui-accent-text"] = safeAccentText;
+   * both are readable. A recoloured role is always published, and the bright
+   * role follows text wherever the guard moves it. The accent keeps its exact
+   * colour for fills, rails and icons; only its text role is re-inked. */
+  const recoloured: Readonly<Record<InkRole, boolean>> = {
+    text: theme.text !== baseline.text,
+    bright: theme.text !== baseline.text,
+    mutedText: theme.mutedText !== baseline.mutedText,
+    faintText: theme.mutedText !== baseline.mutedText,
+    accent: theme.accent !== baseline.accent,
+  };
+  for (const role of Object.keys(roles) as InkRole[]) {
+    if (recoloured[role] || shared[role] !== roles[role]) {
+      for (const name of INK_VARIABLES[role]) variables[name] = shared[role];
+    }
+  }
   if (settings.uiStyle !== "custom") return variables;
 
   if (theme.window !== baseline.window) {
@@ -151,7 +173,7 @@ export const appearanceVariables = (
   }
   if (theme.selected !== baseline.selected) {
     variables["--ui-selection-fill"] = `linear-gradient(color-mix(in srgb, ${theme.selected} 84%, transparent), color-mix(in srgb, ${theme.selected} 70%, ${theme.recessed}))`;
-    variables["--ui-selection-hover-fill"] = `linear-gradient(color-mix(in srgb, ${theme.selected} 88%, ${safeText}), color-mix(in srgb, ${theme.selected} 82%, ${theme.recessed}))`;
+    variables["--ui-selection-hover-fill"] = `linear-gradient(color-mix(in srgb, ${theme.selected} 88%, ${shared.text}), color-mix(in srgb, ${theme.selected} 82%, ${theme.recessed}))`;
     variables["--ui-selection-ink"] = readableForeground(theme.selected);
     variables["--ui-scroll-thumb-color"] = `color-mix(in srgb, ${theme.selected} 76%, ${theme.border})`;
     variables["--ui-scroll-thumb"] = "var(--ui-scroll-thumb-color)";
@@ -160,8 +182,7 @@ export const appearanceVariables = (
   if (theme.accent !== baseline.accent) {
     const accentInk = readableForeground(theme.accent);
     variables["--ui-accent"] = theme.accent;
-    variables["--ui-accent-text"] = safeAccentText;
-    variables["--ui-accent-hover"] = `color-mix(in srgb, ${theme.accent} 82%, ${safeText})`;
+    variables["--ui-accent-hover"] = `color-mix(in srgb, ${theme.accent} 82%, ${shared.text})`;
     variables["--ui-accent-strong"] = `color-mix(in srgb, ${theme.accent} 70%, ${theme.window})`;
     variables["--ui-accent-ink"] = accentInk;
     variables["--ui-primary-fill"] = `linear-gradient(${theme.accent}, ${theme.accent})`;
@@ -169,15 +190,6 @@ export const appearanceVariables = (
     variables["--ui-focus"] = theme.accent;
     variables["--ui-selection-marker"] = theme.accent;
     variables["--ui-ring-gold"] = `linear-gradient(${theme.accent}, ${theme.accent})`;
-  }
-  if (theme.text !== baseline.text) {
-    variables["--ui-text"] = safeText;
-    variables["--ui-text-bright"] = safeText;
-    variables["--ui-display-text"] = safeText;
-  }
-  if (theme.mutedText !== baseline.mutedText) {
-    variables["--ui-text-muted"] = safeMutedText;
-    variables["--ui-text-faint"] = safeFaintText;
   }
   if (theme.border !== baseline.border) {
     variables["--ui-control-mark"] = theme.border;

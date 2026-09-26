@@ -54,6 +54,23 @@ describe("appearance settings", () => {
     }
   });
 
+  it("keeps bright and display ink readable on recoloured light surfaces", () => {
+    for (const recolour of [{ titlebar: "#E0E0E0" }, { surface: "#D8D8D8" }] as const) {
+      for (const material of ["classic", "modern"] as const) {
+        const theme = { ...defaultCustomUiTheme(material), ...recolour };
+        const variables = appearanceVariables({ ...DEFAULT_SETTINGS, uiStyle: "custom", uiCustomTheme: theme });
+        const light = Object.values(recolour)[0] as UiThemeColor;
+        const text = variables["--ui-text"] as UiThemeColor;
+        assert.ok(text, `${material} ${light} moves text`);
+        for (const name of ["--ui-text-bright", "--ui-display-text"]) {
+          const ink = variables[name] as UiThemeColor | undefined;
+          assert.ok(ink, `${material} ${light} publishes ${name}`);
+          assert.ok(contrastRatio(ink!, light) >= contrastRatio(text, light) - 0.05, `${material} ${name} ${ink} on ${light}`);
+        }
+      }
+    }
+  });
+
   it("re-inks the accent only as text and keeps gold where it already reads", () => {
     for (const opacity of [65, 70]) {
       const variables = appearanceVariables({ ...DEFAULT_SETTINGS, uiStyle: "obsidian", uiPanelOpacity: opacity });
