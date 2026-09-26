@@ -325,6 +325,8 @@ export function createHub(parent: HTMLElement) {
     title.append(' ', label);
   }
   let renderedSummary: HubSummary | undefined;
+  /** The row the current click run selected; only its own double-click runs it (D-24). */
+  let pressed: string | null = null;
   function paintNavigation() {
     const summary = disposeView ? undefined : scope?.summary;
     const summaryPanel = required<HTMLElement>('.hub-summary');
@@ -459,7 +461,13 @@ export function createHub(parent: HTMLElement) {
         }
       }
       option.addEventListener('pointermove', event => { if (event.movementX || event.movementY) select(row.id); });
-      option.addEventListener('click', () => { select(row.id); focusResult(); void run(); });
+      // A click opens a navigational row but only selects one that changes the game or the
+      // account; the footer primary or a double-click that started on this row runs it (D-24).
+      // A page change between the clicks cancels the run in the surface controller (HUB-242).
+      option.addEventListener('click', event => {
+        if (event.detail <= 1) { pressed = row.id; select(row.id); focusResult(); if (!row.consequential) void run(); }
+        else if (event.detail === 2 && row.consequential && pressed === row.id) void run();
+      });
       list.append(option);
     });
     count.textContent = `${rows.length} result${rows.length === 1 ? '' : 's'}`;
@@ -490,7 +498,7 @@ export function createHub(parent: HTMLElement) {
     finally { pending = false; select(selected); }
   }
   function resetView() {
-    restoringFocus?.disconnect(); restoringFocus = null; keepDrafts(); modal.pageChanged();
+    restoringFocus?.disconnect(); restoringFocus = null; keepDrafts(); pressed = null; modal.pageChanged();
     disposeView?.(); disposeView = null; activeView = null; viewAvailable = null; returnFromView = null; content.replaceChildren(); content.hidden = true;
     search.hidden = false; list.hidden = false; footer.hidden = false;
   }

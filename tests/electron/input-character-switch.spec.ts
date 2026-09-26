@@ -354,7 +354,8 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
     await page.evaluate(() => window.dispatchEvent(
       new CustomEvent("gw:character-toggle", { cancelable: true }),
     ));
-    await dialog.getByRole("option", { name: /Switch to Private Beta/u }).click();
+    // A click selects a card; its own double-click (or Enter) switches (D-24).
+    await dialog.getByRole("option", { name: /Switch to Private Beta/u }).dblclick();
     await expect(page.getByRole("heading", { name: "Leave this area?" })).toBeVisible();
     await expect(page.locator("#character-switch-root")).toHaveAttribute(
       "aria-describedby",
@@ -365,12 +366,12 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
     await expect(page.getByRole("heading", { name: "Switch Character" })).toBeVisible();
     await expect(page.locator("body")).not.toHaveAttribute("data-character-switch-request", /.*/u);
 
-    await dialog.getByRole("option", { name: /Switch to Private Beta/u }).click();
+    await dialog.getByRole("option", { name: /Switch to Private Beta/u }).dblclick();
     await page.getByRole("button", { name: "Stay here" }).click();
     await expect(dialog).toBeVisible();
     await expect(page.locator("body")).not.toHaveAttribute("data-character-switch-request", /.*/u);
 
-    await dialog.getByRole("option", { name: /Switch to Private Beta/u }).click();
+    await dialog.getByRole("option", { name: /Switch to Private Beta/u }).dblclick();
     await page.evaluate(() => {
       const target = window as typeof window & {
         __characterSwitchTestRefreshCharacters(): void;
@@ -391,7 +392,7 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
       window.dispatchEvent(new CustomEvent("gw:character-toggle", { cancelable: true }));
     });
     await expect(dialog).toBeVisible();
-    await dialog.getByRole("option", { name: /Switch to Private Alpha/u }).click();
+    await dialog.getByRole("option", { name: /Switch to Private Alpha/u }).dblclick();
     await expect(dialog).toBeHidden();
     await expect(page.locator("body")).toHaveAttribute(
       "data-character-switch-request",
@@ -410,7 +411,7 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
       window.gwHub?.show();
     });
     await hubSearch.fill("char Private Beta");
-    await hub.locator('[data-id="character:0000000000000002"]').click();
+    await hub.locator('[data-id="character:0000000000000002"]').dblclick();
     await expect(page.locator("body")).toHaveAttribute(
       "data-character-switch-request",
       "0000000000000002",
@@ -428,7 +429,7 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
       window.gwHub?.show();
     });
     await hubSearch.fill("char Private Beta");
-    await hub.locator('[data-id="character:0000000000000002"]').click();
+    await hub.locator('[data-id="character:0000000000000002"]').dblclick();
     await expect(hub.locator(".hub-status")).toContainText("Automatic switching stopped.");
     await expect(dialog).toBeHidden();
     await expect(page.locator("body")).not.toHaveAttribute("data-character-switch-request", /.*/u);
@@ -444,7 +445,7 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
       window.gwHub?.show();
     });
     await hubSearch.fill("char Private Beta");
-    await hub.locator('[data-id="character:0000000000000002"]').click();
+    await hub.locator('[data-id="character:0000000000000002"]').dblclick();
     await expect(page.getByRole("heading", { name: "Leave this area?" })).toBeVisible();
     await page.getByRole("button", { name: "Leave and switch" }).click();
     await expect(hub).toBeHidden();

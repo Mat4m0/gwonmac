@@ -199,7 +199,12 @@ styles. Deleting a custom style requires confirmation.
 ## Hub command palette
 
 Press **Command-R** to search people, outposts, tools, and commands. Type a name, use Up and Down,
-and press Enter for the action shown in the footer. The **Actions** button opens secondary actions. **Command-K** opens Trade. Escape clears typed text first, then goes back, then
+and press Enter for the action shown in the footer. A click opens a tool or
+page at once. A click on a result that changes the game or your account (travel,
+apply a build, switch character, invite, open an account) only selects it: press
+Enter, click the footer action, or double-click that result. A double-click never
+runs anything on the page its first click opened, and it never reaches the game
+after Hub closes. The **Actions** button opens secondary actions. **Command-K** opens Trade. Escape clears typed text first, then goes back, then
 closes the palette. **Command-Backspace** goes back one level from anywhere in
 Hub, including a text field, and never closes it; the Back arrow and the mouse
 back button do the same. Inside a page it first leaves that page's own level:
@@ -216,7 +221,9 @@ never leaves the area by accident, and a quiet line explains that Travel leaves
 the area. While a map loads, the same line says when Travel returns.
 
 With Travel enabled, search an outpost or your custom Travel phrase. Travel,
-favourites, recent places, and Guild Hall stay in the same window. Command-T
+favourites, recent places, and Guild Hall stay in the same window. A click on a
+destination selects it; press Enter, click **Travel to …** in the footer, or
+double-click the destination to travel. Command-T
 and `/tp` also open Travel inside Hub.
 
 Search a friend's alias or character name and press Enter to choose an action.
@@ -302,7 +309,8 @@ The search bar is shown for every account size. Initial focus remains on the
 current character. Press Left or Up for the previous character. Press Right or
 Down for the next character. Start typing a character name or primary profession
 to move focus to search. Secondary professions are not searched. The number keys
-1–9 and 0 switch to the first ten characters. Use **View → Reload Guild Wars**
+1–9 and 0 switch to the first ten characters. A click on a card selects it; press
+Enter, click **Switch to …** in the footer, or double-click the card to switch. Use **View → Reload Guild Wars**
 to reload.
 
 Enable **Resign** in **Settings → Tools**. It is off by default and requires

@@ -1,0 +1,327 @@
+import { expect, test, type Locator, type Page } from '@playwright/test';
+
+/**
+ * The pointer contract (HUB-242, HUB-244, HUB-248, D-24). Every double-click is
+ * a human one: two presses at one point, click count 1 then 2, with a gap. A
+ * row that changes the game or the account selects on a click and runs on the
+ * footer primary or its own double-click; a navigational row opens at once and
+ * the rest of the click run dies with the page it started on. Trailing clicks
+ * of a run that closed the Hub never reach the game canvas.
+ */
+const searchName = 'Search people, places, builds';
+const GAPS = [0, 120, 450] as const;
+
+async function open(page: Page, query = '') {
+  await page.goto(`/?hub${query}`);
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  // Every game action in order, including repeats of the same action.
+  await page.evaluate(() => {
+    const app = document.getElementById('app')!;
+    const ledger: string[] = [];
+    Object.assign(window, { ledger });
+    new MutationObserver(records => {
+      records.forEach((record, index) => {
+        const value = index + 1 < records.length ? records[index + 1]!.oldValue : app.dataset.action;
+        if (value) ledger.push(value);
+      });
+    }).observe(app, { attributes: true, attributeFilter: ['data-action'], attributeOldValue: true });
+    window.gwFixtureCanvas?.clear();
+  });
+}
+const ledger = (page: Page) => page.evaluate(() => (window as unknown as { ledger: string[] }).ledger);
+const canvas = (page: Page) => page.evaluate(() => window.gwFixtureCanvas?.events.filter(event => event.type !== 'keyup' || event.code).map(event => `${event.type}:${event.code ?? event.detail}`) ?? []);
+const search = (page: Page) => page.getByRole('combobox', { name: searchName });
+const row = (page: Page, text: string | RegExp) => page.locator('#hub .hub-row', { hasText: text }).first();
+const primary = (page: Page) => page.locator('.hub-primary');
+const caption = (page: Page) => page.locator('.hub-caption');
+async function enter(page: Page, query: string) { await search(page).fill(query); await search(page).press('Enter'); }
+
+/** Presses one point `count` times with the click counts macOS reports, like a person. */
+async function clicks(page: Page, target: Locator, count: number, gap = 120, at?: { x: number; y: number }) {
+  await target.scrollIntoViewIfNeeded();
+  const box = (await target.boundingBox())!;
+  await page.mouse.move(box.x + (at?.x ?? box.width / 2), box.y + (at?.y ?? box.height / 2));
+  for (let clickCount = 1; clickCount <= count; clickCount++) {
+    await page.mouse.down({ clickCount }); await page.mouse.up({ clickCount });
+    if (clickCount < count && gap) await page.waitForTimeout(gap);
+  }
+  await page.waitForTimeout(600);
+}
+
+/** Rows whose primary changes the game or the account (D-24), opened on their own page. */
+const consequential: Record<string, { query?: string; open(page: Page): Promise<Locator>; footer: RegExp; ran: string[] }> = {
+  'Continue Eye of the North': { open: async page => row(page, 'Eye of the North'), footer: /^Travel to Eye of the North/, ran: ['TRAVEL Eye of the North'] },
+  'Apply to me': { open: async page => { await enter(page, 'build smiter'); return page.getByRole('option', { name: /Apply to me/ }); }, footer: /^Apply to me/, ran: ['apply-build', 'command:1', 'command:2'] },
+  'Close Main and open Second': { open: async page => { await enter(page, 'acc s'); return row(page, 'Close Main and open Second'); }, footer: /^Switch account/, ran: ['Account Second replace'] },
+  'character card': { open: async page => { await page.keyboard.press('Meta+e'); return page.locator('button[data-character-key="mesmer"]'); }, footer: /^Switch to Fixture Mesmer/, ran: ['Character mesmer'] },
+  'Invite to party': { query: '&party', open: async page => { await enter(page, 'zed delta'); await expect(caption(page)).toHaveText('Zed Delta'); return row(page, 'Invite to party'); }, footer: /^Invite Zed Delta/, ran: ['PARTY.INVITE Zed Delta'] },
+};
+
+test.describe('a row that changes the game', () => {
+  for (const [name, subject] of Object.entries(consequential)) {
+    test(`${name}: a click selects and names the primary; it runs nothing`, async ({ page }) => {
+      await open(page, subject.query);
+      const target = await subject.open(page);
+      await page.waitForTimeout(600);
+      await clicks(page, target, 1);
+      await expect(target).toHaveAttribute('aria-selected', 'true');
+      await expect(name === 'character card' ? page.locator('.character-switch-action') : primary(page)).toHaveText(subject.footer);
+      expect(await ledger(page)).toEqual([]);
+      await expect(page.locator('#hub')).toBeVisible();
+    });
+    for (const gap of GAPS) {
+      test(`${name}: a double-click (${gap} ms) runs it exactly once`, async ({ page }) => {
+        await open(page, subject.query);
+        const target = await subject.open(page);
+        await page.waitForTimeout(600);
+        await clicks(page, target, 2, gap);
+        await expect.poll(() => ledger(page)).toEqual(subject.ran);
+        expect(await canvas(page)).toEqual([]);
+      });
+    }
+  }
+
+  test('a triple-click on Apply to me applies once and nothing runs after it', async ({ page }) => {
+    await open(page);
+    await enter(page, 'build smiter');
+    await clicks(page, page.getByRole('option', { name: /Apply to me/ }), 3);
+    await expect.poll(() => ledger(page)).toEqual(['apply-build', 'command:1', 'command:2']);
+    expect((await canvas(page)).filter(event => !/:(0|1)$/u.test(event))).toEqual([]);
+  });
+
+  test('a triple-click on a Travel recent travels once and runs no Home row after it', async ({ page }) => {
+    await open(page);
+    await search(page).press('ArrowDown');
+    await row(page, /^Travel/).and(page.locator('[data-id="travel"]')).waitFor();
+    while (await page.locator('.hub-row[aria-selected="true"]').getAttribute('data-id') !== 'travel') await search(page).press('ArrowDown');
+    await search(page).press('Enter');
+    await expect(caption(page)).toHaveText('Travel');
+    await clicks(page, page.locator('.travel-recent').first(), 3);
+    await expect.poll(() => ledger(page)).toEqual(['TRAVEL Kamadan, Jewel of Istan']);
+    await expect(caption(page)).not.toHaveText(/Characters|Trade/);
+    expect((await canvas(page)).filter(event => !/:(0|1)$/u.test(event))).toEqual([]);
+  });
+
+  test('a double-click whose second press lands on another row runs nothing', async ({ page }) => {
+    await open(page);
+    const kamadan = row(page, 'Kamadan');
+    const kaineng = row(page, 'Kaineng Center');
+    await clicks(page, kamadan, 1, 0);
+    const box = (await kaineng.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 3 });
+    await page.mouse.down({ clickCount: 2 }); await page.mouse.up({ clickCount: 2 });
+    await page.waitForTimeout(600);
+    expect(await ledger(page)).toEqual([]);
+    await expect(page.locator('#hub')).toBeVisible();
+    const named = (await primary(page).textContent())!;
+    const selected = (await page.locator('.hub-row[aria-selected="true"] .hub-title').textContent())!;
+    expect(named).toContain(selected.split(',')[0]!);
+  });
+
+  test('pressing on one row and releasing on another activates neither', async ({ page }) => {
+    await open(page);
+    for (const [from, to] of [['Kamadan', 'Kaineng Center'], ['Settings', 'Show Launcher']] as const) {
+      const start = row(page, from); await start.scrollIntoViewIfNeeded();
+      const a = (await start.boundingBox())!;
+      const b = (await row(page, to).boundingBox())!;
+      await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 5 });
+      await page.mouse.up();
+      await page.waitForTimeout(300);
+      expect(await ledger(page)).toEqual([]);
+      await expect(caption(page)).toHaveText('Home');
+      await expect(search(page)).toBeFocused();
+    }
+  });
+});
+
+test.describe('a navigational row', () => {
+  const navigational: Record<string, { query?: string; open(page: Page): Promise<Locator>; lands: string }> = {
+    'Build Library': { open: async page => row(page, 'Build Library'), lands: 'Build Library' },
+    'Settings': { open: async page => page.locator('.hub-row[data-id="settings"]'), lands: 'Settings' },
+    'Commands': { open: async page => page.locator('.hub-row[data-id="commands"]'), lands: 'Commands' },
+    'Travel': { open: async page => page.locator('.hub-row[data-id="travel"]'), lands: 'Travel' },
+    'Smiter': { open: async page => { await search(page).fill('build mo'); return row(page, 'Smiter'); }, lands: 'Smiter' },
+    'Second': { open: async page => { await search(page).fill('acc s'); return row(page, 'Second'); }, lands: 'Second' },
+    'Zed Beta': { query: '&party', open: async page => { await search(page).fill('zed'); return row(page, 'Zed Beta'); }, lands: 'Zed Beta' },
+    'Switch Character': { open: async page => { await search(page).fill('char'); return row(page, 'Switch Character'); }, lands: 'Characters' },
+    'Apply to hero': { open: async page => { await enter(page, 'build smiter'); return row(page, 'Apply to hero'); }, lands: 'Heroes' },
+  };
+  for (const [name, subject] of Object.entries(navigational)) {
+    for (const gap of [0, 120, 450]) {
+      test(`${name}: a double-click (${gap} ms) opens exactly one level`, async ({ page }) => {
+        await open(page, subject.query);
+        const target = await subject.open(page);
+        const crumbs = await page.locator('.hub-crumb').count();
+        await clicks(page, target, 2, gap);
+        await expect(caption(page)).toHaveText(subject.lands);
+        await expect(page.locator('.hub-crumb')).toHaveCount(crumbs + 1);
+        expect(await ledger(page)).toEqual([]);
+        await expect(page.locator('#hub')).toBeVisible();
+        const focus = await page.evaluate(() => document.activeElement?.tagName);
+        expect(['BODY', 'DIALOG']).not.toContain(focus);
+      });
+    }
+  }
+
+  test('a single click opens a navigational row at once, with one level', async ({ page }) => {
+    await open(page);
+    await clicks(page, page.locator('.hub-row[data-id="settings"]'), 1);
+    await expect(caption(page)).toHaveText('Settings');
+    await expect(page.locator('.hub-crumb')).toHaveCount(1);
+  });
+
+  test('a double-click that opens Settings never toggles a setting', async ({ page }) => {
+    await open(page);
+    const settings = () => page.evaluate(() => JSON.stringify(window.gwToolsSettings?.()));
+    const before = await settings();
+    const target = page.locator('.hub-row[data-id="settings"]');
+    for (const fraction of [0.25, 0.5, 0.9]) {
+      await target.scrollIntoViewIfNeeded();
+      const box = (await target.boundingBox())!;
+      await clicks(page, target, 2, 120, { x: box.width * fraction, y: box.height / 2 });
+      await expect(caption(page)).toHaveText('Settings');
+      expect(await settings()).toBe(before);
+      await page.getByRole('button', { name: 'Home', exact: true }).click();
+    }
+    await search(page).fill('settings');
+    await clicks(page, page.locator('.hub-row').first(), 2);
+    await expect(caption(page)).toHaveText('Settings');
+    expect(await settings()).toBe(before);
+    // A deliberate single click still toggles exactly once.
+    await page.getByText('Whispers', { exact: true }).first().click();
+    await expect.poll(settings).not.toBe(before);
+  });
+
+  test('a double-click on the footer primary never runs the next page\'s primary', async ({ page }) => {
+    await open(page);
+    await search(page).fill('build smiter');
+    await expect(primary(page)).toHaveText(/^Choose target/);
+    await clicks(page, primary(page), 2);
+    await expect(caption(page)).toHaveText('Smiter');
+    await expect(primary(page)).toHaveText(/^Apply to me/);
+    await expect(primary(page)).toBeEnabled();
+    await search(page).press('Meta+Backspace');
+    await search(page).fill('team gom');
+    await expect(primary(page)).toHaveText(/^Review/);
+    await clicks(page, primary(page), 2);
+    await expect(caption(page)).toHaveText('GOM AFK');
+    await clicks(page, page.getByRole('button', { name: /^Apply team GOM AFK/ }), 3);
+    await expect.poll(() => ledger(page)).toEqual(expect.arrayContaining(['apply-team']));
+    expect((await ledger(page)).filter(entry => entry === 'apply-team')).toHaveLength(1);
+  });
+});
+
+test.describe('trailing clicks never reach the game', () => {
+  const closing: Record<string, { query?: string; open(page: Page): Promise<Locator> }> = {
+    'Continue row': { open: async page => row(page, 'Eye of the North') },
+    'Close button': { open: async page => page.getByRole('button', { name: 'Close Hub', exact: true }) },
+    'backdrop': { open: async page => page.locator('#hub') },
+    'Xunlai Storage': { open: async page => { await search(page).fill('storage'); return row(page, 'Xunlai Storage'); } },
+    'character card': { open: async page => { await page.keyboard.press('Meta+e'); return page.locator('button[data-character-key="mesmer"]'); } },
+  };
+  for (const [name, subject] of Object.entries(closing)) {
+    test(`${name}: a closing double-click and triple-click leave the canvas untouched`, async ({ page }) => {
+      await open(page, subject.query);
+      const target = await subject.open(page);
+      if (name === 'backdrop') {
+        await page.mouse.move(20, 20);
+        await page.mouse.down({ clickCount: 1 }); await page.mouse.up({ clickCount: 1 });
+        await page.waitForTimeout(120);
+        await page.mouse.down({ clickCount: 2 }); await page.mouse.up({ clickCount: 2 });
+        await page.waitForTimeout(600);
+      } else await clicks(page, target, name === 'Close button' ? 3 : 2);
+      await expect(page.locator('#hub')).toBeHidden();
+      expect(await canvas(page)).toEqual([]);
+      // A fresh click a moment later reaches the game as one press.
+      await page.waitForTimeout(400);
+      await page.mouse.move(30, 300);
+      await page.mouse.down({ clickCount: 1 }); await page.mouse.up({ clickCount: 1 });
+      await expect.poll(() => canvas(page)).toEqual(['pointerdown:0', 'mousedown:1', 'mouseup:1', 'click:1']);
+    });
+  }
+
+  for (const [name, query, pick, destination] of [
+    ['whisper romi', 'whisper romi', '', '#whisper-window'],
+    ['Whispers tool', '', 'whispers', '#whisper-window'],
+    ['trade arms', 'trade arms', '', '#toolbox-trade'],
+    ['Trade Chat tool', '', 'trade', '#toolbox-trade'],
+  ] as const) {
+    test(`a double-clicked ${name} handoff keeps typing in its destination`, async ({ page }) => {
+      await open(page);
+      await search(page).fill(query);
+      await clicks(page, pick ? page.locator(`#hub .hub-row[data-id="${pick}"]`) : page.locator('#hub .hub-row').first(), 2);
+      await page.keyboard.type('w1 hi');
+      const focused = await page.evaluate(selector => { const active = document.activeElement as HTMLInputElement | null; return { value: active?.value, inside: !!active?.closest(selector) }; }, destination);
+      expect(focused).toEqual({ value: expect.stringContaining('w1 hi'), inside: true });
+      expect(await canvas(page)).toEqual([]);
+    });
+  }
+});
+
+test('Travel: a click selects a destination and the footer travels once', async ({ page }) => {
+  await open(page);
+  await page.keyboard.press('Meta+t');
+  const kaineng = page.locator('.travel-recent', { hasText: 'Kaineng Center' });
+  await clicks(page, kaineng, 1);
+  await page.waitForTimeout(400);
+  await expect(kaineng).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('.travel-primary')).toHaveText('Travel to Kaineng Center · Any district↵');
+  await expect(page.locator('#travel-search-input')).toBeFocused();
+  expect(await ledger(page)).toEqual([]);
+  await page.locator('.travel-primary').click();
+  await expect.poll(() => ledger(page)).toEqual(['TRAVEL Kaineng Center']);
+});
+
+test('Characters: rapid clicks on an unchanged page still count', async ({ page }) => {
+  await open(page);
+  await page.keyboard.press('Meta+e');
+  await expect(page.locator('button[data-character-key="monk"]')).toHaveAttribute('aria-selected', 'true');
+  await clicks(page, page.getByRole('button', { name: 'Next character' }), 2);
+  await expect(page.locator('button[data-character-key="mesmer"]')).toHaveAttribute('aria-selected', 'true');
+  expect(await ledger(page)).toEqual([]);
+});
+
+test('a double-click on the calculator card copies once', async ({ page }) => {
+  await open(page);
+  await search(page).fill('10 ecto in p');
+  const card = page.locator('#hub .hub-conversion').first();
+  await expect(card).toBeVisible();
+  await clicks(page, card, 2);
+  await expect.poll(async () => (await ledger(page)).filter(entry => entry.startsWith('Copied'))).toHaveLength(1);
+  if (await page.locator('#hub').isHidden()) await page.getByRole('button', { name: 'Open Hub', exact: true }).click();
+  await search(page).fill('10 ecto in p');
+  await clicks(page, page.locator('#hub .hub-conversion').first(), 3);
+  expect((await ledger(page)).filter(entry => entry.startsWith('Copied'))).toHaveLength(2);
+  expect((await canvas(page)).filter(event => !/:(0|1)$/u.test(event))).toEqual([]);
+});
+
+test('a person page\'s world actions only select on a click', async ({ page }) => {
+  await open(page, '&party');
+  await enter(page, 'zed delta');
+  await expect(caption(page)).toHaveText('Zed Delta');
+  await page.waitForTimeout(600);
+  for (const [title, footer] of [['Invite to party', /^Invite Zed Delta/], ['Travel and invite', /^Travel and invite Zed Delta/], ['Travel to outpost', /^Travel/]] as const) {
+    const target = row(page, title);
+    if (!await target.count()) continue;
+    await clicks(page, target, 1);
+    await expect(target).toHaveAttribute('aria-selected', 'true');
+    await expect(primary(page)).toHaveText(footer);
+  }
+  expect(await ledger(page)).toEqual([]);
+  await expect(page.locator('#hub')).toBeVisible();
+});
+
+test('a double-click on a recently applied build opens its target page and applies nothing', async ({ page }) => {
+  await open(page);
+  await enter(page, 'build smiter');
+  await page.keyboard.press('Enter');
+  await expect.poll(() => ledger(page)).toContain('apply-build');
+  await page.getByRole('button', { name: 'Open Hub', exact: true }).click();
+  const before = (await ledger(page)).length;
+  await clicks(page, row(page, 'Recently applied'), 2);
+  await expect(caption(page)).not.toHaveText('Home');
+  await expect(page.locator('#hub')).toBeVisible();
+  expect((await ledger(page)).length).toBe(before);
+});

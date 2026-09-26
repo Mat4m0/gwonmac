@@ -454,4 +454,26 @@ test.describe('party invite', () => {
     await expect(page.locator('#hub')).toBeVisible();
     expect(await invites(page)).toBeNull();
   });
+
+  // D-24: a row that changes the game only selects on a click.
+  test('a click only selects an invite; the footer or a double-click on it sends one', async ({ page }) => {
+    const search = page.getByRole('combobox', { name: searchName });
+    await search.fill('invite Mo Kai');
+    const typed = page.locator('.hub-row').first();
+    await expect(typed).toContainText('Character name');
+    await search.press('ArrowDown');
+    await typed.click();
+    await expect(typed).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('.hub-primary')).toHaveText(/^Invite Mo Kai/);
+    await expect(search).toBeFocused();
+    await page.waitForTimeout(600);
+    expect(await invites(page)).toBeNull();
+    await typed.dblclick();
+    await expect(page.locator('#app')).toHaveAttribute('data-invites', 'Mo Kai');
+    await page.getByRole('button', { name: 'Open Hub', exact: true }).click();
+    await search.fill('invite Mo Kai');
+    await page.locator('.hub-row').first().click();
+    await page.locator('.hub-primary').click();
+    await expect(page.locator('#app')).toHaveAttribute('data-invites', 'Mo Kai|Mo Kai');
+  });
 });
