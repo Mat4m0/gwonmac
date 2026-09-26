@@ -342,6 +342,13 @@ view. Shared code should emerge only for shared responsibilities, not visual sim
 | Geometry and appearance | Lock scope, reset, restart persistence, viewport recovery, Classic/Modern/Custom readability |
 | Optional Tools unavailable | Core game stays usable; host authoring remains available under existing rules |
 
+The keyboard contract is a golden matrix
+(`apps/tools/tests/hub-keyboard-contract.spec.ts`): every key in every view of the
+browser fixture, each cell in a fresh browser context, compared with
+`apps/tools/tests/keyboard-contract.golden.json`. The table records current
+behaviour, including known defects. A change that alters keyboard behaviour
+regenerates it with `KEYBOARD_GOLDEN=update` and commits the reviewed table diff.
+
 Extend existing fixtures with realistic mixed professions, missing observations,
 long names, empty/large folders, and account state changes. Measure large-list typing
 and observation refresh locally if profiling identifies a delay; do not preemptively
