@@ -403,10 +403,10 @@ test('Travel uses Hub typography and supports empty-query arrows, favorites and 
   await expect(page.locator('#travel-recent-449')).toHaveAttribute('aria-selected','true');
   await search.press('ArrowDown');
   await expect(page.locator('.travel-history [aria-selected=true]')).toContainText('Kaineng Center');
+  // Up on the first destination stays put and keeps focus in search (D-2).
   await search.press('ArrowUp');await search.press('ArrowUp');
-  await expect(page.getByRole('button', {name:'Back',exact:true})).toBeFocused();
-  await page.keyboard.press('ArrowDown');
   await expect(search).toBeFocused();
+  await expect(page.locator('#travel-recent-449')).toHaveAttribute('aria-selected','true');
   await search.press('Tab');
   await expect(page.getByRole('button',{name:'Customize Travel'})).toBeFocused();
   await page.keyboard.press('Enter');
