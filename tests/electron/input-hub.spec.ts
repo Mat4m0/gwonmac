@@ -25,6 +25,7 @@ test('Command-R opens Core Hub, keeps editing local and restores game focus', as
       if (!(element instanceof HTMLCanvasElement) || !element.width) return 0;
       return element.getContext('2d')?.getImageData(element.width / 2, 20 * devicePixelRatio, 1, 1).data[3] ?? 0;
     })).toBeGreaterThan(0);
+    // List keys move only the selection; typing always reaches search (D-2).
     await search.press('ArrowDown'); await page.keyboard.type('1250 gold in p');
     await expect(search).toBeFocused();
     await expect(search).toHaveValue('1250 gold in p');
@@ -42,9 +43,10 @@ test('Command-R opens Core Hub, keeps editing local and restores game focus', as
     }, page.url());
     await expect(hub.locator('.hub-caption')).toHaveText('Build Library');
     await expect(page.locator('#toolbox-builds .tools-window')).toBeHidden();
-    await expect(hub.getByRole('option', { name: /Guild Wars templates/ })).toBeVisible();
-    await search.press('ArrowDown'); await page.keyboard.press('ArrowRight');
+    await expect(hub.getByRole('option', { name: /Guild Wars templates/ })).toHaveAttribute('aria-selected', 'true');
+    await search.press('ArrowRight');
     await expect(hub.locator('.hub-caption')).toHaveText('Guild Wars templates');
+    await expect(search).toBeFocused();
     await hub.getByRole('button', { name: 'Back', exact: true }).click();
     await hub.getByRole('button', { name: 'Back', exact: true }).click();
     await search.fill('1250 gold in p');
@@ -63,12 +65,15 @@ test('Command-R opens Core Hub, keeps editing local and restores game focus', as
       return (await win.webContents.capturePage()).toPNG().toString('base64');
     }, page.url());
     await writeFile(test.info().outputPath('hub-200-percent.png'), Buffer.from(png, 'base64'));
+    // Esc clears the query first, then closes Home (D-4).
+    await search.press('Escape'); await expect(search).toHaveValue('');
+    await expect(hub).toBeVisible();
     await search.press('Escape'); await expect(hub).toBeHidden();
     await expect.poll(() => isDomActiveElement(page.locator('#canvas'))).toBe(true);
   } finally { await closeOffline(fixture); }
 });
 
-test('Hub browse focus preserves native editing shortcuts, Unicode and composition', async () => {
+test('Hub search keeps focus while list keys move the selection, with native editing, Unicode and composition', async () => {
   const fixture = await launchPlayableClient('gw-hub-editing-e2e-');
   const { app, page } = fixture;
   const clipboardBefore = await app.evaluate(({ clipboard }) => clipboard.availableFormats().map(format => ({
@@ -103,7 +108,10 @@ test('Hub browse focus preserves native editing shortcuts, Unicode and compositi
     await search.press('ArrowDown'); await page.keyboard.press('Delete');
     await expect(search).toHaveValue('ravel');
     await search.fill('sw'); await search.press('ArrowDown');
-    await expect(row).toBeFocused();
+    await expect(search).toBeFocused();
+    const active = await row.getAttribute('id');
+    expect(active).toMatch(/^hub-result-/);
+    await expect(search).toHaveAttribute('aria-activedescendant', active!);
     // Chromium owns the composed edit; this checks the host path, not an OS input-source UI.
     const cdp = await page.context().newCDPSession(page);
     try {
@@ -122,6 +130,10 @@ test('Hub browse focus preserves native editing shortcuts, Unicode and compositi
       await expect(search).toHaveValue('sw日本');
     } finally { await cdp.detach(); }
     await expect(page.locator('.hub-caption')).toHaveText('Home');
+    // Esc clears the composed query first, then closes Home (D-4).
+    await search.press('Escape');
+    await expect(search).toHaveValue('');
+    await expect(search).toBeFocused();
     await search.press('Escape');
     await expect.poll(() => isDomActiveElement(page.locator('#canvas'))).toBe(true);
   } finally {
