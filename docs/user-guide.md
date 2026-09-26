@@ -210,10 +210,10 @@ footer button it deletes from the search and returns you there. The game keeps
 running while Hub is open. The footer's left side lists the keys that work in
 the current view.
 
-The header shows your character and where you are. In an explorable area, Hub
-opens on **Travel** instead of a recent place, so Enter never leaves the area by
-accident, and a quiet line explains that Travel leaves the area. While a map
-loads, the same line says when Travel returns.
+The header shows your character and where you are, including a Guild Hall. In
+an explorable area, Hub opens on **Travel** instead of a recent place, so Enter
+never leaves the area by accident, and a quiet line explains that Travel leaves
+the area. While a map loads, the same line says when Travel returns.
 
 With Travel enabled, search an outpost or your custom Travel phrase. Travel,
 favourites, recent places, and Guild Hall stay in the same window. Command-T

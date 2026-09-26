@@ -5,7 +5,7 @@
  * derives them, so Travel, Characters, invites and builds always agree.
  */
 import { watch } from 'vue';
-import { isPvpTravelDestination, travelDestination } from '../../../src/shared/travel';
+import { isPvpTravelDestination } from '../../../src/shared/travel';
 import type { TravelGameState } from '../../../src/shared/travel-command';
 // eslint-disable-next-line no-restricted-imports
 import { characterSwitchContext, type CharacterSwitchContext } from '../../../src/renderer/character-switch-model';
@@ -17,6 +17,7 @@ export const FIXTURE_LIFECYCLES = [
   ['outpost', 'Ready in outpost'],
   ['pve-explorable', 'PvE explorable area'],
   ['pvp-outpost', 'PvP outpost'],
+  ['guild-hall', 'Guild Hall'],
   ['map-loading', 'Map loading'],
   ['character-select', 'Character select'],
 ] as const;
@@ -26,16 +27,19 @@ export type FixtureLifecycle = (typeof FIXTURE_LIFECYCLES)[number][0];
 const EXPLORABLE_MAP = 58;
 /** Random Arenas is a PvP outpost. */
 const PVP_OUTPOST = 188;
+/** Warrior's Isle is a Guild Hall: an outpost (instance 0) that is no Travel destination. */
+const GUILD_HALL_MAP = 4;
 const DEFAULT_OUTPOST = 55;
 
 export function isFixtureLifecycle(value: unknown): value is FixtureLifecycle {
   return FIXTURE_LIFECYCLES.some(([id]) => id === value);
 }
 
-/** Where a Travel game state puts the player. Maps that are no Travel destination are explorable. */
+/** Where a Travel game state puts the player, read from its instance type the way the runtime reads it. */
 export function fixtureLifecycleOf(state: TravelGameState): FixtureLifecycle {
   if (state.status !== 'ready') return state.reason === 'loading' ? 'map-loading' : 'character-select';
-  if (!travelDestination(state.mapId)) return 'pve-explorable';
+  if (state.explorable) return 'pve-explorable';
+  if (state.guildHall) return 'guild-hall';
   return isPvpTravelDestination(state.mapId) ? 'pvp-outpost' : 'outpost';
 }
 
@@ -54,15 +58,16 @@ export function createFixtureLifecycle(host: Pick<TravelHost, 'state' | 'updateG
     }
     for (const listener of [...listeners]) listener();
   }, { flush: 'sync' });
-  const ready = (mapId: number): TravelGameState => ({
+  const ready = (mapId: number, place: 'outpost' | 'explorable' | 'guild-hall' = 'outpost'): TravelGameState => ({
     status: 'ready', mapId, travelContext: known?.travelContext ?? 'world', characterKey: known?.characterKey ?? null,
-    unlockedMapWords: known?.unlockedMapWords ?? null, guildHall: false, hasGuildHall: known?.hasGuildHall ?? false,
+    unlockedMapWords: known?.unlockedMapWords ?? null, guildHall: place === 'guild-hall',
+    hasGuildHall: place === 'guild-hall' || (known?.hasGuildHall ?? false), explorable: place === 'explorable',
   });
   /** The certified play-region fact: an outpost is instance 0, an explorable area instance 1. */
   const region = (): CompanionPlayRegionState => {
     const state = host.state.value;
     if (state.status !== 'ready') return { status: 'waiting', reason: state.reason === 'loading' ? 'loading' : 'game' };
-    return { status: 'ready', sequence, mapId: state.mapId, instanceType: travelDestination(state.mapId) ? 0 : 1,
+    return { status: 'ready', sequence, mapId: state.mapId, instanceType: state.explorable ? 1 : 0,
       playRegion: isPvpTravelDestination(state.mapId) ? 'pvp' : 'pve', travelContext: state.travelContext,
       characterKey: state.characterKey, unlockedMapWords: state.unlockedMapWords ? [...state.unlockedMapWords] : null,
       guildHall: state.guildHall, hasGuildHall: state.hasGuildHall };
@@ -79,7 +84,8 @@ export function createFixtureLifecycle(host: Pick<TravelHost, 'state' | 'updateG
     set(phase: FixtureLifecycle) {
       host.updateGameState(phase === 'map-loading' ? { status: 'waiting', reason: 'loading' }
         : phase === 'character-select' ? { status: 'waiting', reason: 'game' }
-          : ready(phase === 'pve-explorable' ? EXPLORABLE_MAP : phase === 'pvp-outpost' ? PVP_OUTPOST : outpost));
+          : phase === 'pve-explorable' ? ready(EXPLORABLE_MAP, 'explorable') : phase === 'guild-hall' ? ready(GUILD_HALL_MAP, 'guild-hall')
+            : ready(phase === 'pvp-outpost' ? PVP_OUTPOST : outpost));
     },
     subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; },
     dispose() { stop(); listeners.clear(); },

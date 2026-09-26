@@ -33,8 +33,8 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
       return () => { active = false; app.unmount(); };
     }, () => !!window.gwToolsSettings?.().gwonmacTools && !!window.gwToolsSettings?.().travelPalette);
   }
-  /** Every ready map that is no Travel destination is an explorable area. */
-  const explorable = () => host.state.value.status === 'ready' && !travelDestination(host.state.value.mapId);
+  /** The certified instance type, never the catalogue: a Guild Hall or an uncatalogued outpost is no explorable area. */
+  const explorable = () => host.state.value.status === 'ready' && host.state.value.explorable;
   function refusal(mapId: number) {
     const availability = travelDestinationAvailability(host.state.value, mapId);
     return host.unavailable ?? travelContextRefusal(host.state.value, mapId)
@@ -54,7 +54,8 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
     context() {
       const state = host.state.value;
       if (state.status !== 'ready') return state.reason === 'loading' ? 'Map loading' : null;
-      return travelDestination(state.mapId)?.name ?? 'Explorable area';
+      if (state.guildHall) return 'Guild Hall';
+      return travelDestination(state.mapId)?.name ?? (state.explorable ? 'Explorable area' : null);
     },
     lifecycle() {
       const state = host.state.value;

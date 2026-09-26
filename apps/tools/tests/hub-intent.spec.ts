@@ -251,6 +251,17 @@ test('a fresh Home in an explorable area starts on Travel, says why, and Enter n
   await expect(page.locator('.hub-lifecycle')).toBeHidden();
 });
 
+test('a Guild Hall is an outpost: no explorable label, no leaving line, and a fresh Home keeps Continue', async ({ page }) => {
+  // The fixture reads the instance type as the runtime does; a Guild Hall is no Travel destination.
+  await page.goto('/?hub&lifecycle=guild-hall');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  await expect(page.locator('.hub-context')).toHaveText('Fixture Monk · Guild Hall');
+  await expect(page.locator('.hub-lifecycle')).toBeHidden();
+  await expect(page.locator('.hub-row[aria-selected="true"]')).toHaveAttribute('data-id', /^place:/);
+  await page.getByRole('combobox', { name: searchName }).fill('kamadan');
+  await expect(page.locator('.hub-primary')).toHaveText(/^Travel to Kamadan/);
+});
+
 test('bare whisper and trade scopes start on their first row; nothing consequential starts selected', async ({ page }) => {
   await page.goto('/?hub&party');
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');

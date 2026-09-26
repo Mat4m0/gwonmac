@@ -19,7 +19,8 @@ The fixture controls are:
 - **Fixture scenario** for build data: standard builds, interrupted application,
   duplicate names, nested template folders and mixed hero professions.
 - **Lifecycle state**: `outpost` (Lion's Arch), `pve-explorable` (North Kryta
-  Province), `pvp-outpost` (Random Arenas), `map-loading` and `character-select`.
+  Province), `pvp-outpost` (Random Arenas), `guild-hall` (Warrior's Isle, an
+  outpost outside the Travel catalogue), `map-loading` and `character-select`.
   One synthetic Travel game state feeds the play region, the party, Travel and the
   character-switch context, the way the game does. A Travel arrival moves it to
   the destination outpost. Characters asks "Leave this area?" in an explorable area

@@ -15,7 +15,7 @@ import {
   travelDestination,
   travelShortcutsFromStored,
 } from "../../src/shared/travel.js";
-import { travelDestinationAvailability } from "../../src/shared/travel-command.js";
+import { travelDestinationAvailability, travelGameState } from "../../src/shared/travel-command.js";
 
 describe("Travel", () => {
   it("contains the complete reviewed direct-travel catalogue", () => {
@@ -144,6 +144,7 @@ describe("Travel", () => {
       unlockedMapWords,
       guildHall: false,
       hasGuildHall: false,
+      explorable: false,
     };
     const world = { ...preSearing, mapId: 81, travelContext: "world" as const };
 
@@ -156,6 +157,15 @@ describe("Travel", () => {
       ...preSearing,
       unlockedMapWords: null,
     }, 164), "unknown");
+  });
+
+  it("reads an explorable area from the certified instance type, never from the catalogue", () => {
+    const region = { status: "ready", mapId: 4, travelContext: "world", guildHall: true, hasGuildHall: true, instanceType: 0 };
+    const explorable = (value: unknown) => { const state = travelGameState(value); return state.status === "ready" && state.explorable; };
+    // A Guild Hall is an outpost that is no Travel destination.
+    assert.equal(explorable(region), false);
+    assert.equal(explorable({ ...region, mapId: 58, guildHall: false, instanceType: 1 }), true);
+    assert.equal(explorable({ ...region, instanceType: undefined }), false);
   });
 
   it("rejects one request that would write both preference files", () => {

@@ -32,8 +32,17 @@ describe('Hub travel recents', () => {
       expect(travel.source.search('').find(row => row.id === 'travel')?.consequential).toBeUndefined();
       expect(travel.source.context?.()).toBe("Lion's Arch");
       expect(travel.source.lifecycle?.()).toBeNull();
-      // North Kryta Province is no Travel destination: an explorable area.
-      host.state.value = { ...state, mapId: 58 };
+      // The certified instance type decides, not the catalogue: a Guild Hall is no Travel
+      // destination and still no explorable area.
+      host.state.value = { ...state, mapId: 4, guildHall: true };
+      expect(places().every(row => !row.leavesArea)).toBe(true);
+      expect(travel.source.context?.()).toBe('Guild Hall');
+      expect(travel.source.lifecycle?.()).toBeNull();
+      host.state.value = { ...state, mapId: 4 };
+      expect(travel.source.context?.()).toBeNull();
+      expect(places().every(row => !row.leavesArea)).toBe(true);
+      // North Kryta Province is an explorable area (instance type 1).
+      host.state.value = { ...state, mapId: 58, explorable: true };
       expect(places().length).toBeGreaterThan(0);
       expect(places().every(row => row.leavesArea)).toBe(true);
       expect(travel.source.context?.()).toBe('Explorable area');
