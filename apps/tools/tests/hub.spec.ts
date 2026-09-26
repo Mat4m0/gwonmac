@@ -549,6 +549,16 @@ test('floating chat keeps its draft and appearance when reopened', async ({ page
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', 'Whisper');
 });
 
+test('closing Whispers opened from Hub returns the keyboard to the game', async ({ page }) => {
+  await page.goto('/?hub');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  await search.fill('whispers'); await search.press('Enter');
+  await expect(page.locator('#whisper-window')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#whisper-window')).toBeHidden();
+  await expect(page.locator('#canvas')).toBeFocused();
+});
+
 test('floating icon and shortcut toggle the same chat window', async ({ page }) => {
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });

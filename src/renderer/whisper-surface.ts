@@ -1,6 +1,7 @@
 /**
  * Owns input isolation and Vue lifetime for the optional whisper surface.
  * Temporary region withdrawal hides the view without losing its placement.
+ * The offline Hub fixture injects its own mount so it exercises this owner too.
  */
 import { toggleHubWhispers } from './hub-whisper.js';
 import type { WhisperSession } from "../shared/whisper-session.js";
@@ -8,7 +9,16 @@ import type { EmbeddedToolsBundle } from "../shared/tools-bundle-contracts.js";
 import { createNonActivatingSurface } from "./non-activating-surface.js";
 import { ensureToolsStylesheet } from "./tools-stylesheet.js";
 
-export function createWhisperSurface(parent: HTMLElement, session: WhisperSession) {
+type MountWhispers = EmbeddedToolsBundle<HTMLElement>["mountWhispers"];
+
+async function mountBundledWhispers(document: Document): Promise<MountWhispers> {
+  ensureToolsStylesheet(document);
+  const specifier = "./tools/tools-app.js";
+  const bundle = await import(/* @vite-ignore */ specifier) as EmbeddedToolsBundle<HTMLElement>;
+  return bundle.mountWhispers;
+}
+
+export function createWhisperSurface(parent: HTMLElement, session: WhisperSession, loadMount: (document: Document) => Promise<MountWhispers> = mountBundledWhispers) {
   const document = parent.ownerDocument;
   const canvas = document.getElementById("canvas");
   if (!(canvas instanceof HTMLCanvasElement)) throw new Error("Whispers game canvas is missing");
@@ -53,10 +63,8 @@ export function createWhisperSurface(parent: HTMLElement, session: WhisperSessio
   for (const name of ["keydown", "keyup", "pointerdown", "pointerup", "pointermove",
     "mousedown", "mouseup", "mousemove", "click", "contextmenu"]) root.addEventListener(name, stop);
   root.addEventListener("wheel", stop, { passive: true });
-  ensureToolsStylesheet(document);
-  const specifier = "./tools/tools-app.js";
-  void import(specifier).then((bundle: EmbeddedToolsBundle<HTMLElement>) => {
-    if (!disposed) app = bundle.mountWhispers(root, { session });
+  void loadMount(document).then(mount => {
+    if (!disposed) app = mount(root, { session });
   }).catch(() => {
     if (disposed) return;
     root.textContent = "Whispers could not load. Use original chat and restart to try again.";
