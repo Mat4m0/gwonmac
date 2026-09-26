@@ -33,6 +33,8 @@ export function createHub(parent: HTMLElement) {
   parent.append(root);
   const receipt = document.createElement('output'); receipt.className = 'hub-receipt ui-well'; receipt.setAttribute('role', 'status'); receipt.hidden = true; parent.append(receipt);
   let receiptTimer: ReturnType<typeof setTimeout> | undefined;
+  // Where the Hub frame last stood: a receipt after closing appears in its footprint, not as a window toast.
+  let frame: DOMRect | null = null;
   const required = <T extends Element>(selector: string) => {
     const element = root.querySelector<T>(selector);
     if (!element) throw new Error(`Hub control missing: ${selector}`);
@@ -486,16 +488,26 @@ export function createHub(parent: HTMLElement) {
     if (history.length) back(); else close();
   }
   function close(message?: string) {
+    if (root.open) frame = required<HTMLElement>('.hub-panel').getBoundingClientRect();
     suspended = null; epoch++; history.length = 0; resetView(); modal.close(); for (const source of sources.keys()) source.setVisible(false); scope = null;
     input.value = ''; restoreQuery = ''; report(''); selected = null;
     if (typeof message === 'string' && message) notify(message);
   }
-  /** Shows a short outcome receipt without changing what Hub shows. */
+  /**
+   * A named outcome. An open Hub reports it in its status line; after the Hub closed
+   * it shows briefly where the frame's footer stood, and never outlives the next opening.
+   */
   function notify(message: string) {
+    if (root.open) { report(message); return; }
     clearTimeout(receiptTimer); receipt.textContent = message; receipt.hidden = false; receiptTimer = setTimeout(() => { receipt.hidden = true; }, 8000);
+    if (frame?.width) {
+      receipt.style.left = `${frame.left + frame.width / 2}px`; receipt.style.bottom = `${Math.max(8, window.innerHeight - frame.bottom + 12)}px`;
+      receipt.style.maxWidth = `${Math.max(0, frame.width - 24)}px`;
+    }
   }
   function suspend() {
     if (!root.open) return;
+    frame = required<HTMLElement>('.hub-panel').getBoundingClientRect();
     suspended = capture(); epoch++; modal.close();
     for (const source of sources.keys()) source.setVisible(false);
   }
@@ -508,6 +520,7 @@ export function createHub(parent: HTMLElement) {
   function show() {
     if (root.open) { home(); return; }
     previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    clearTimeout(receiptTimer); receipt.hidden = true;
     window.dispatchEvent(new Event('gw:input-reset'));
     modal.show(); window.dispatchEvent(new Event('gw:hub-visible'));
     const resume = suspended; suspended = null;

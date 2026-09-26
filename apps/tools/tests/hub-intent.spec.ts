@@ -326,6 +326,18 @@ test.describe('party invite', () => {
     await search.fill('invite Mo Kai'); await search.press('Enter');
     await expect(page.locator('#app')).toHaveAttribute('data-invites', /(^|\|)Mo Kai$/);
     await expect(page.locator('.hub-receipt')).toHaveText('Sent /invite Mo Kai. Guild Wars answers in chat.');
+    // The receipt stands in the closed Hub's footprint, not over the window, and ends when the Hub opens again.
+    const receipt = (await page.locator('.hub-receipt').boundingBox())!;
+    await page.keyboard.press('Meta+r');
+    const panel = (await page.locator('.hub-panel').boundingBox())!;
+    expect(receipt.x).toBeGreaterThanOrEqual(panel.x);
+    expect(receipt.x + receipt.width).toBeLessThanOrEqual(panel.x + panel.width);
+    expect(receipt.y + receipt.height).toBeLessThanOrEqual(panel.y + panel.height);
+    await expect(page.locator('.hub-receipt')).toBeHidden();
+    await search.fill('zed alpha'); await search.press('Enter');
+    await expect(page.locator('.hub-caption')).toHaveText('Zed Alpha');
+    await expect(page.locator('#hub')).not.toContainText('Sent /invite');
+    await expect(page.locator('.hub-receipt')).toBeHidden();
   });
 
   test('a bare invite scope lists online friends, the ones invitable here first, and invites only a chosen one', async ({ page }) => {

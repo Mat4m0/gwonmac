@@ -371,6 +371,9 @@ build's Details can open its canonical record in the authoring workspace.
 
 Apply shows progress and explicit partial failures through the existing runner.
 Confirmed completion closes Hub with a brief receipt naming the build and target.
+The receipt stands where the Hub's footer was, not as a window toast, and ends
+when Hub opens again. An outcome that arrives while Hub is open, such as the
+invite after Travel and invite, goes to the status line instead.
 The library controller retains up to three recent build/hero references for this
 renderer session; Continue reopens the named target for review. Native files and
 live targets are revalidated before applying again. Saved build usage updates the
