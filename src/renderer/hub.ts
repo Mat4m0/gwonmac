@@ -490,7 +490,7 @@ export function createHub(parent: HTMLElement) {
     finally { pending = false; select(selected); }
   }
   function resetView() {
-    restoringFocus?.disconnect(); restoringFocus = null; keepDrafts();
+    restoringFocus?.disconnect(); restoringFocus = null; keepDrafts(); modal.pageChanged();
     disposeView?.(); disposeView = null; activeView = null; viewAvailable = null; returnFromView = null; content.replaceChildren(); content.hidden = true;
     search.hidden = false; list.hidden = false; footer.hidden = false;
   }
@@ -678,7 +678,8 @@ export function createHub(parent: HTMLElement) {
   };
   required<HTMLButtonElement>('.hub-actions').onclick = actions;
   required<HTMLButtonElement>('.hub-close').onclick = () => close();
-  backButton.onclick = backOneLevel; primary.onclick = () => { void run(); };
+  // The primary acts once per click run, so a double-click on it runs its action once.
+  backButton.onclick = backOneLevel; primary.onclick = event => { if (event.detail <= 1) void run(); };
   root.addEventListener('pointerdown', () => { restoringFocus?.disconnect(); restoringFocus = null; });
   // A press on blank panel space or a disabled control parks focus on the dialog
   // itself; return it to the last control so the keyboard keeps its place.
@@ -702,6 +703,8 @@ export function createHub(parent: HTMLElement) {
   window.addEventListener('blur', onBlur); window.addEventListener('gw:tools-settings', onSettings);
   const presenter = {
     show, close, suspend, openSettings, toggle: () => root.open ? close() : show(), actions,
+    /** A mounted view replaced its own page (a confirmation): a click run from before it is cancelled. */
+    pageChanged: () => modal.pageChanged(),
     get visible() { return root.open; },
     attach(next: HubSource) {
       if (sourceEnabled(next)) enabledSources.add(next);

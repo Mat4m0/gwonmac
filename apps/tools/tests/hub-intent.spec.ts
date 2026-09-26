@@ -436,17 +436,22 @@ test.describe('party invite', () => {
     await expect(page.locator('.hub-primary')).toBeDisabled();
   });
 
-  // HUB-242: a double-click runs the action that its first click revealed. The pointer
-  // owner fixes it for every page; until then this documents the open P0.
+  // HUB-242: a double-click never runs the action that its first click revealed.
   test('double-clicking a friend opens the person page and runs nothing', async ({ page }) => {
-    test.fail(true, 'HUB-242: the shared pointer owner has not landed');
     const search = page.getByRole('combobox', { name: searchName });
     for (const [index, name] of ['Zed Beta', 'Zed Delta', 'Zed Gamma'].entries()) {
       await search.fill('zed');
       await page.locator('.hub-row').nth(index + 1).dblclick();
       await expect(page.locator('.hub-caption')).toHaveText(name, { timeout: 2_000 });
       await expect(page.locator('#app')).not.toHaveAttribute('data-action', /TRAVEL|INVITE/);
+      await expect(search).toBeFocused();
       await page.getByRole('button', { name: 'Home', exact: true }).click();
     }
+    // The Seen in chat prefix row in the invite scope: the second click lands on Invite to party.
+    await search.fill('invite Mo Kai');
+    await page.locator('.hub-row', { hasText: 'Seen in chat' }).first().dblclick();
+    await expect(page.locator('.hub-caption')).toHaveText('Mo Kaiser');
+    await expect(page.locator('#hub')).toBeVisible();
+    expect(await invites(page)).toBeNull();
   });
 });

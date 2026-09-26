@@ -8,6 +8,13 @@
  * modal behavior, with one shared backdrop, dismissal, and focus lifecycle.
  * A press that starts on a surface owns its repeats and release, so a key that
  * closes a surface never continues into the game.
+ *
+ * The pointer has the same rule for a click run (HUB-242, HUB-244). Chromium
+ * counts the clicks of one run in `detail`; a run belongs to the surface page
+ * its first press landed on. When that page changes or the surface closes
+ * before a later press of the run, the rest of the run is swallowed wherever
+ * it lands, the game canvas included, so a double-click never runs what its
+ * first click revealed and never reaches Guild Wars as a world click.
  */
 
 type Surface = Readonly<{
@@ -37,6 +44,9 @@ const FOCUSABLE = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(",");
 
+/** A pointerdown belongs to the previous press of a cancelled run only this soon and this close. */
+const CLICK_RUN_MS = 500;
+const CLICK_RUN_SLOP = 8;
 function focusableElements(root: HTMLElement): HTMLElement[] {
   return [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((element) =>
     !element.hidden
@@ -50,6 +60,9 @@ export function installSurfaceController(
   document: Document,
 ): GwonmacSurfaceController {
   const surfaces = new Map<symbol, OpenSurface>();
+  // Each registered root's page generation. It advances when the surface
+  // opens, closes or reports a page change.
+  const pages = new WeakMap<Element, { generation: number }>();
   const suppressedKeyUps = new Set<string>();
   // Physical keys whose press began on a surface (HUB-003). The game never saw
   // the key-down, so a repeat or release that lands off the surface after it
@@ -158,6 +171,79 @@ export function installSurfaceController(
     if (document.visibilityState === "hidden") clearPresses();
   });
 
+  // The one click-run owner. It listens first on the window capture phase,
+  // before `input.ts`, the native double-click flag and any surface, so a
+  // swallowed press never reaches the game's held-button ledger, never counts
+  // as input that cancels a pending focus, and never moves focus.
+  type ClickRun = {
+    page: { generation: number } | null;
+    generation: number;
+    x: number;
+    y: number;
+    at: number;
+    cancelled: boolean;
+  };
+  let run: ClickRun | null = null;
+  // The current press continues a cancelled run: its remaining events are swallowed.
+  let swallowingPress = false;
+  const pageOf = (target: EventTarget | null) => {
+    const root = target instanceof Element ? target.closest("[data-gwonmac-surface]") : null;
+    return root ? pages.get(root) ?? null : null;
+  };
+  const stale = (current: ClickRun) => {
+    if (!current.cancelled && current.page !== null && current.page.generation !== current.generation) {
+      current.cancelled = true;
+    }
+    return current.cancelled;
+  };
+  const swallow = (event: Event) => {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  };
+  const primary = (event: MouseEvent) => event.isTrusted && event.button === 0;
+  window.addEventListener("pointerdown", (event) => {
+    if (!primary(event)) return;
+    swallowingPress = false;
+    // A pointerdown carries no click count, so it is paired with a stale run by
+    // time and place and kept from every later listener. It is not cancelled:
+    // that would also drop the mousedown of a fresh press, which alone says
+    // whether this press continues the run.
+    if (run !== null && (stale(run) || (run.page !== null && pageOf(event.target) !== run.page))
+      && event.timeStamp - run.at <= CLICK_RUN_MS
+      && Math.hypot(event.clientX - run.x, event.clientY - run.y) <= CLICK_RUN_SLOP) {
+      event.stopImmediatePropagation();
+    }
+  }, true);
+  window.addEventListener("mousedown", (event) => {
+    if (!primary(event)) return;
+    if (event.detail <= 1) {
+      const page = pageOf(event.target);
+      run = { page, generation: page?.generation ?? 0, x: event.clientX, y: event.clientY, at: event.timeStamp, cancelled: false };
+      return;
+    }
+    if (run === null) return;
+    run.at = event.timeStamp;
+    // A run that began on a surface never continues somewhere else, the game included.
+    if (run.page !== null && pageOf(event.target) !== run.page) run.cancelled = true;
+    if (!stale(run)) return;
+    swallowingPress = true;
+    swallow(event);
+  }, true);
+  for (const type of ["pointerup", "mouseup"] as const) {
+    window.addEventListener(type, (event) => {
+      if (!primary(event)) return;
+      if (run) run.at = event.timeStamp;
+      if (swallowingPress) swallow(event);
+    }, true);
+  }
+  for (const type of ["click", "dblclick"] as const) {
+    window.addEventListener(type, (event) => {
+      // A keyboard activation (detail 0) is never part of a click run.
+      if (!primary(event) || event.detail === 0) return;
+      if (swallowingPress || (event.detail > 1 && run !== null && stale(run))) swallow(event);
+    }, true);
+  }
+
   const register = (surface: Surface): GwonmacSurfaceHandle => {
     const id = Symbol("surface");
     let open = false;
@@ -165,16 +251,22 @@ export function installSurfaceController(
     // marker carries no UI text or selector, and lets a player distinguish
     // "Guild Wars received the click" from "a GWonMac surface owned it".
     surface.root.dataset.gwonmacSurface = "";
+    const page = { generation: 0 };
+    pages.set(surface.root, page);
     return Object.freeze({
       setOpen(next: boolean) {
         if (next === open) return;
         open = next;
+        page.generation++;
         if (next) {
           if (surface.transient) dismissTransient(id);
           surfaces.set(id, { ...surface, order: order++ });
           if (!(surface.root instanceof HTMLDialogElement)) surface.root.style.zIndex = String(100 + order);
         }
         else surfaces.delete(id);
+      },
+      pageChanged() {
+        page.generation++;
       },
       raise() {
         const current = surfaces.get(id);
@@ -184,7 +276,9 @@ export function installSurfaceController(
       },
       dispose() {
         open = false;
+        page.generation++;
         surfaces.delete(id);
+        pages.delete(surface.root);
         delete surface.root.dataset.gwonmacSurface;
       },
     });
@@ -265,6 +359,7 @@ export function installSurfaceController(
           // now so a same-turn reopen receives a fresh modal claim.
           surface.setOpen(false);
         },
+        pageChanged: surface.pageChanged,
         dispose() {
           if (disposed) return;
           disposed = true;

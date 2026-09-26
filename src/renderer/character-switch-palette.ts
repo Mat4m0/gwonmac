@@ -201,6 +201,7 @@ export function createCharacterSwitchPalette(
       return () => { hubBack = undefined; root.open = false; parent.append(root); if (view.kind === 'confirming') source.cancelConfirmation(); view = { kind: 'closed' }; };
     }, () => !!window.gwToolsSettings?.().characterSwitchEnabled); },
     close() { hub.close(); },
+    pageChanged() { hub.pageChanged(); },
     dispose() { if (root.open) hub.close(); },
   } : window.gwSurfaces.registerDialog({ root, priority: 7, transient: true,
     dismiss: () => closePalette(true), restoreFocus: () => canvas });
@@ -224,7 +225,14 @@ export function createCharacterSwitchPalette(
     list.querySelector<HTMLButtonElement>(`button[data-row="${selected}"]`)
       ?.scrollIntoView({ block: "nearest" });
   };
+  let renderedView: ViewState["kind"] = "closed";
   const render = (preserveCharacterFocus = true) => {
+    if (view.kind !== renderedView) {
+      // A new inner page (the cards, a confirmation, the settings) cancels a
+      // click run that began before it (HUB-242).
+      renderedView = view.kind;
+      modal.pageChanged();
+    }
     if (!enabled) {
       closePalette(true);
       return;

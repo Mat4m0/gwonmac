@@ -134,3 +134,64 @@ test('Hub list navigation preserves native editing shortcuts, Unicode and compos
     await closeOffline(fixture);
   }
 });
+
+// HUB-244: the trailing clicks of a double-click or triple-click that closed the
+// Hub never reach the game, so the client never sees an even press (its
+// FLAG_DBL_CLICK) from them; the next deliberate click is one ordinary press.
+test('the trailing clicks of a closing double-click never reach the game', async () => {
+  const fixture = await launchPlayableClient('gw-hub-pointer-e2e-', {}, userData =>
+    writeFile(path.join(userData, 'settings.json'), JSON.stringify({ gwonmacTools: true, buildLibrary: true })),
+  );
+  try {
+    const { app, page } = fixture;
+    await startGameInput(page);
+    await page.evaluate(() => {
+      document.getElementById('loading')?.classList.add('gone');
+      const canvas = document.getElementById('canvas');
+      if (!(canvas instanceof HTMLCanvasElement)) throw new Error('#canvas is missing');
+      const presses: string[] = [];
+      Object.assign(window, { __hubPointerPresses: presses });
+      for (const type of ['pointerdown', 'mousedown', 'mouseup', 'click', 'dblclick']) {
+        canvas.addEventListener(type, event => { presses.push(`${type}:${(event as MouseEvent).detail}`); }, true);
+      }
+      canvas.focus();
+    });
+    type Recording = typeof window & { __hubPointerPresses: string[] };
+    const presses = () => page.evaluate(() => [...(window as Recording).__hubPointerPresses]);
+    const clearPresses = () => page.evaluate(() => { (window as Recording).__hubPointerPresses.length = 0; });
+    const hub = page.getByRole('dialog', { name: 'Hub', exact: true });
+    const openHub = async () => {
+      await app.evaluate(({ BrowserWindow }, url) => {
+        const contents = BrowserWindow.getAllWindows().find(win => win.webContents.getURL() === url)?.webContents;
+        contents?.sendInputEvent({ type: 'keyDown', keyCode: 'R', modifiers: ['meta'] });
+        contents?.sendInputEvent({ type: 'keyUp', keyCode: 'R', modifiers: ['meta'] });
+      }, page.url());
+      await expect(hub).toBeVisible();
+    };
+    /** One point pressed `count` times with the click counts macOS reports. */
+    const clickRun = async (x: number, y: number, count: number) => {
+      await page.mouse.move(x, y);
+      for (let clickCount = 1; clickCount <= count; clickCount++) {
+        await page.mouse.down({ clickCount }); await page.mouse.up({ clickCount });
+        if (clickCount < count) await page.waitForTimeout(120);
+      }
+      await expect(hub).toBeHidden();
+      await page.waitForTimeout(600);
+    };
+    const close = hub.getByRole('button', { name: 'Close Hub', exact: true });
+    for (const count of [2, 3]) {
+      await openHub();
+      const box = (await close.boundingBox())!;
+      await clearPresses();
+      await clickRun(box.x + box.width / 2, box.y + box.height / 2, count);
+      expect(await presses()).toEqual([]);
+    }
+    await openHub();
+    await clearPresses();
+    await clickRun(8, 8, 2);
+    expect(await presses()).toEqual([]);
+    const canvas = (await page.locator('#canvas').boundingBox())!;
+    await page.mouse.click(canvas.x + canvas.width / 2, canvas.y + canvas.height - 40);
+    await expect.poll(presses).toEqual(['pointerdown:0', 'mousedown:1', 'mouseup:1', 'click:1']);
+  } finally { await closeOffline(fixture); }
+});

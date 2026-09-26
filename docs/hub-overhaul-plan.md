@@ -126,7 +126,12 @@ do not focus a decorative heading or disabled primary action.
 - Right on a navigational result opens its child. Use a quiet child cue where
   needed. Right must never execute a world-changing command.
 - Enter executes the displayed primary action. A click does the same for the
-  clicked row. A separate details affordance may inspect without executing.
+  clicked row. A double-click never runs what its first click revealed: one
+  window-capture owner in `surface-controller.ts` ties a click run to the
+  surface page its first press landed on, and any page change, closed surface
+  or move to another surface swallows the rest of the run wherever it lands, the
+  game canvas included (HUB-242, HUB-244). Rapid clicks on an unchanged page
+  still count. A separate details affordance may inspect without executing.
 - Backspace deletes while editing nonempty text. Outside editing, or in empty
   search, it returns one stage. No navigation during composition. Empty textareas
   and ordinary form fields retain native editing rather than becoming Back controls.
@@ -336,6 +341,7 @@ view. Shared code should emerge only for shared responsibilities, not visual sim
 | Direct `char`/`acc`/team intent | No fake parent or redundant picker; explicit visible action |
 | Native text after browsing | First character, paste, Option/dead keys, IME, selection, undo/delete work in Electron |
 | Mouse + keyboard + held keys | Hover cannot undo restored focus; key repeat cannot execute the next page |
+| Pointer: a click run that closes the Hub, with the canvas at full size | No trailing `pointerdown`, `mousedown`, `mouseup`, `click` or `dblclick` reaches the canvas; focus and typing stay in a handoff's destination |
 | Async removal/reordering | Selected identity remains stable; vanished target cannot become another executable choice |
 | Blur/resume and account change | Read-only place resumes; live targets refresh; another account never inherits them |
 | Nested/duplicate/invalid templates | Hierarchical browsing, consistent syntax, source distinction, and recoverable failure |
@@ -359,6 +365,9 @@ main claims Command-R, Command-B, Command-T, Command-D and Command-Q before the 
 their releases stay out of the game after focus returns to the canvas, direct
 scopes open in the open Hub, and the Quit or Reload sheet takes priority over it.
 Cases that document a current leak are marked `fixme` until their fix lands.
+The click-run gate's unit test is `apps/tools/src/surface-click-runs.test.ts`;
+`tests/electron/input-hub.spec.ts` checks that a closing double-click or
+triple-click never reaches the game canvas.
 
 Extend existing fixtures with realistic mixed professions, missing observations,
 long names, empty/large folders, and account state changes. Measure large-list typing
