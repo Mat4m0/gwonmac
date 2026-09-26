@@ -590,14 +590,6 @@ export function createHub(parent: HTMLElement) {
   required<HTMLButtonElement>('.hub-close').onclick = () => close();
   backButton.onclick = back; primary.onclick = () => { void run(); };
   root.addEventListener('pointerdown', () => { restoringFocus?.disconnect(); restoringFocus = null; });
-  // A press on blank panel space or a disabled control parks focus on the dialog
-  // itself; return it to the last control so the keyboard keeps its place.
-  let lastFocus: HTMLElement | null = null;
-  root.addEventListener('focusin', event => { if (event.target !== root && event.target instanceof HTMLElement) lastFocus = event.target; });
-  root.addEventListener('focus', () => {
-    const usable = lastFocus?.isConnected && root.contains(lastFocus) && lastFocus.getClientRects().length > 0 && !lastFocus.matches(':disabled');
-    (usable ? lastFocus! : search.hidden ? content.querySelector<HTMLElement>('input,select,button,[tabindex="0"]') ?? backButton : input).focus({ preventScroll: true });
-  });
   root.addEventListener('click', event => { if (event.target === root) { event.stopImmediatePropagation(); close(); } }, true);
   root.addEventListener('close', () => { if (!root.open && !suspended) close(); });
   const onBlur = () => suspend();
