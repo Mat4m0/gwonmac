@@ -229,7 +229,7 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
     });
   }
   async function openTemplates() { try { await readTemplates(); } catch { templateProblem = 'Could not read templates.'; } browseTemplates(); }
-  const libraryRow = (): HubRow => ({ id: 'builds', title: 'Build Library', detail: 'Browse saved builds and Guild Wars template folders', keywords: 'templates skills folders builds', group: 'Tools', action: 'Browse builds', navigate() { void libraryRow().run(); }, run() {
+  const libraryRow = (): HubRow => ({ id: 'builds', title: 'Build Library', detail: 'Browse saved builds and Guild Wars template folders', keywords: 'teams templates skills folders builds', group: 'Tools', action: 'Browse builds', navigate() { void libraryRow().run(); }, run() {
     hub.showRows('Build Library', () => [
       { id: 'game-templates', title: 'Guild Wars templates', detail: 'Your existing skill template files and folders', group: 'Builds', action: 'Browse templates', navigate: openTemplates, run: openTemplates },
       ...all().filter((item): item is Item & { kind: 'build' } => item.kind === 'build' && !String(item.value.id).startsWith('template:')).map(buildRow),
