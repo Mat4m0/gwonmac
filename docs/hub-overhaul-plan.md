@@ -32,8 +32,7 @@ resolve ambiguity, or understand a materially different operation.
 
 1. Press the resolved Hub shortcut (default `⌘R`). A fresh Hub opens with search focused.
 2. Type `sw`. Switch Character appears before Switch Account in ordinary tool ordering.
-3. Switch Character is the selected result; Enter opens it. Search keeps focus
-   and Down moves the selection (D-2).
+3. Press Down to focus the selected Switch Character result; Enter opens it.
 4. The current character card owns focus immediately. Left/Right moves through
    this account's characters. There is no extra Down or Tab just to start browsing.
 5. Enter on another available character performs the visibly named switch action.
@@ -41,8 +40,8 @@ resolve ambiguity, or understand a materially different operation.
 6. Up from the cards focuses optional character search. Up from that search
    reaches Back. Down returns to the remembered card. Normal typing from a card
    starts/refines character search without losing the first character.
-7. Back restores the parent query `sw`, the selected Switch Character row, and
-   the previous scroll position, with focus in search.
+7. Back restores the parent query `sw`, the Switch Character row, its keyboard
+   focus, and the previous scroll position. It does not put focus in search.
 
 The direct Characters shortcut (default `⌘E`) opens the same card-first view,
 without a fabricated Home history entry. Explicit `char <name>` searches may
@@ -62,7 +61,8 @@ Switch Account already exists in `src/renderer/hub-accounts.ts`; extend that own
    Do not introduce another confirmation over the existing explicit action choice.
 5. Back from actions returns to the same account row in the account picker.
 6. Back again returns to the Switch Account command in the original Hub results,
-   preserving query, scroll, and selection. Focus stays in search throughout.
+   preserving query, scroll, and row focus. Up moves through those results to
+   search; when the command is the first/only result, one Up reaches search.
 
 An exact `acc <name>` can continue exposing that account's named actions directly.
 Do not manufacture intermediate pages when the player already supplied the target.
@@ -117,11 +117,8 @@ do not focus a decorative heading or disabled primary action.
 
 - Up/Down follows each view's meaningful vertical order; Left/Right remains
   spatial for characters and native for text, sliders, and selects.
-- Hub lists keep DOM focus in the search combobox and move
-  `aria-activedescendant` (D-2). Up, Down, Control-P, Control-N, Page Up, Page
-  Down, Home and End move the one selection without wrapping; Up at the top is a
-  no-op. Characters stay card-first and forms stay form-first. For carousels, Up at
-  the top reaches search; Up from search reaches Back. Travel may retain search focus while moving active destinations, but must
+- For list/carousel browsing, Up at the top reaches search; Up from search reaches
+  Back. Travel may retain search focus while moving active destinations, but must
   provide that upward escape at the first destination instead of wrapping forever.
 - Right on a navigational result opens its child. Use a quiet child cue where
   needed. Right must never execute a world-changing command.
@@ -175,7 +172,7 @@ global store. Do not retain detached DOM nodes as durable navigation identity.
 
 ### Dismissal and lifetime
 
-- Back restores the exact prior stage, including the selected row.
+- Back restores the exact prior stage, including row focus.
 - Temporary app blur hides Hub and releases game input, but retains session context.
   Reopening after that temporary hide resumes the stage and revalidates live facts.
 - Explicit X, closing from Home, or toggling Hub closed ends that Hub navigation
