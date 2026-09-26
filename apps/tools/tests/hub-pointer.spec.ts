@@ -292,7 +292,7 @@ test('Travel: a click selects a destination and the footer travels once', async 
 test('Travel: a view that opens under a resting pointer keeps its selection (HUB-012)', async ({ page }) => {
   await open(page);
   await page.keyboard.press('Meta+t');
-  const favourite = page.locator('#travel-favorite-1');
+  const favourite = page.locator('#travel-favorite-0');
   const box = (await favourite.boundingBox())!;
   await page.keyboard.press('Meta+Backspace');
   await expect(caption(page)).toHaveText('Home');
@@ -309,6 +309,14 @@ test('Travel: a view that opens under a resting pointer keeps its selection (HUB
   await expect(page.locator('#travel-recent-449')).toHaveAttribute('aria-selected', 'true');
   await page.mouse.move(box.x + box.width / 2 + 3, box.y + box.height / 2);
   await expect(favourite).toHaveAttribute('aria-selected', 'true');
+  // The outpost the player stands in (Lion's Arch) is no trip: hover, its digit and Enter pass it by.
+  const current = page.locator('#travel-favorite-1');
+  await expect(current).toBeDisabled();
+  const here = (await current.boundingBox())!;
+  await page.mouse.move(here.x + here.width / 2, here.y + here.height / 2, { steps: 3 });
+  await expect(current).toHaveAttribute('aria-selected', 'false');
+  await page.keyboard.press('2');
+  await expect(page.locator('#hub .travel-palette')).toContainText('You are already in Lion\'s Arch.');
   expect(await ledger(page)).toEqual([]);
 });
 

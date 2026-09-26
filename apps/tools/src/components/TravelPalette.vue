@@ -359,8 +359,9 @@ function searchResultDisabled(result: SearchResult): boolean {
   return result.disabledReason !== null || travelPending.value || props.host.unavailable !== null;
 }
 
+/** A place the player already stands in is never a trip: its favourite shows it and refuses it, like the catalogue. */
 function selectable(entry: TravelDestination | SearchResult): boolean {
-  return !("resultKey" in entry) || entry.disabledReason === null;
+  return "resultKey" in entry ? entry.disabledReason === null : entry.mapId !== currentMapId.value;
 }
 
 function resultDestination(entry: TravelDestination | SearchResult): TravelDestination | null {
@@ -655,7 +656,7 @@ const canRunActive = computed(() => activeDestination.value !== null
 const primaryLabel = computed(() => {
   const entry = activeDestination.value;
   if (entry === null) return "Choose a destination";
-  if (!("resultKey" in entry)) return `Travel to ${entry.name} · Any district`;
+  if (!("resultKey" in entry)) return entry.mapId === currentMapId.value ? `Already in ${entry.name}` : `Travel to ${entry.name} · Any district`;
   if (entry.kind === "guild-hall") return props.host.state.value.status === "ready" && props.host.state.value.guildHall ? "Leave Guild Hall" : "Travel to Guild Hall";
   return `Travel to ${entry.kind === "friend" ? entry.destination?.name ?? entry.location : entry.destination.name} · Any district`;
 });
@@ -699,6 +700,8 @@ function keepSearchFocus(event: MouseEvent): void {
  * selection that the footer names (HUB-012).
  */
 function moved(event: PointerEvent): boolean {
+  // Like the arrow keys, hover passes over a destination that cannot be chosen.
+  if (event.currentTarget instanceof HTMLButtonElement && event.currentTarget.disabled) return false;
   return event.movementX !== 0 || event.movementY !== 0;
 }
 
@@ -765,7 +768,8 @@ function onKeydown(event: KeyboardEvent): void {
     if (event.repeat) return;
     const slot = Number(event.code.slice(5)) - 1;
     const shortcut = shortcuts.value[slot];
-    if (shortcut && isAvailable(shortcut.mapId)) void travel(shortcut);
+    if (shortcut && shortcut.mapId === currentMapId.value) setFeedback(`You are already in ${travelDestination(shortcut.mapId)?.name ?? "this place"}.`, "warning");
+    else if (shortcut && isAvailable(shortcut.mapId)) void travel(shortcut);
     else if (shortcut && availability(shortcut.mapId) === "outside-context") {
       const message = travelContextRefusal(props.host.state.value, shortcut.mapId);
       if (message !== null) setFeedback(message, "warning");
@@ -817,7 +821,7 @@ function onKeydown(event: KeyboardEvent): void {
       <section v-if="!showingSmallCatalogue" class="travel-section travel-favorites" aria-labelledby="travel-favorites-title">
         <header class="travel-section-head"><h2 id="travel-favorites-title">Favorites</h2><span>Press 1–9</span></header>
         <div v-if="assignedShortcuts.length" class="travel-favorite-grid">
-          <button v-for="(row, index) in assignedShortcuts" :id="`travel-favorite-${row.index}`" :key="row.index" :tabindex="inset ? -1 : undefined" :data-active="active === recentDestinations.length + index || undefined" :role="inset ? 'option' : undefined" :aria-selected="inset ? active === recentDestinations.length + index : undefined" @pointermove="moved($event) && (active = recentDestinations.length + index)" type="button" class="travel-favorite ui-raised" :title="row.destination?.name" :disabled="travelPending || host.unavailable !== null" :aria-label="`Travel to ${row.destination?.name}, shortcut ${row.index + 1}`" @mousedown="keepSearchFocus" @click="pick($event, recentDestinations.length + index)"><svg v-if="inset" class="travel-place-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 8 8-8 10-8-10 8-8Z"/><circle cx="12" cy="10" r="2.5"/></svg><template v-if="inset"><span>{{ row.destination && favoriteLabel(row.destination) }}</span><b>{{ row.index + 1 }}</b></template><template v-else><b>{{ row.index + 1 }}</b><span>{{ row.destination && favoriteLabel(row.destination) }}</span></template></button>
+          <button v-for="(row, index) in assignedShortcuts" :id="`travel-favorite-${row.index}`" :key="row.index" :tabindex="inset ? -1 : undefined" :data-active="active === recentDestinations.length + index || undefined" :role="inset ? 'option' : undefined" :aria-selected="inset ? active === recentDestinations.length + index : undefined" @pointermove="moved($event) && (active = recentDestinations.length + index)" type="button" class="travel-favorite ui-raised" :title="row.destination?.mapId === currentMapId ? `${row.destination?.name} · Current location` : row.destination?.name" :data-current="row.destination?.mapId === currentMapId || undefined" :disabled="travelPending || host.unavailable !== null || row.destination?.mapId === currentMapId" :aria-label="row.destination?.mapId === currentMapId ? `${row.destination?.name}, current location, shortcut ${row.index + 1}` : `Travel to ${row.destination?.name}, shortcut ${row.index + 1}`" @mousedown="keepSearchFocus" @click="pick($event, recentDestinations.length + index)"><svg v-if="inset" class="travel-place-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 8 8-8 10-8-10 8-8Z"/><circle cx="12" cy="10" r="2.5"/></svg><template v-if="inset"><span>{{ row.destination && favoriteLabel(row.destination) }}</span><b>{{ row.index + 1 }}</b></template><template v-else><b>{{ row.index + 1 }}</b><span>{{ row.destination && favoriteLabel(row.destination) }}</span></template></button>
         </div>
         <div v-else class="ui-empty"><strong>No favorites yet</strong><p>Use the cog button to assign destinations to number keys.</p></div>
       </section>
@@ -840,7 +844,7 @@ function onKeydown(event: KeyboardEvent): void {
         <p v-if="phraseError" id="travel-phrase-error" class="ui-field-error travel-phrase-error">{{ phraseError }}</p>
       </section>
     </section>
-    <footer class="travel-footer"><span v-if="statusText && !urgentNoticeVisible" :data-level="statusLevel" aria-hidden="true">{{ statusText }}</span><span v-if="hasQuery && hasSelectableDestination" class="travel-key-hints"><kbd class="ui-kbd">↑↓</kbd> choose <kbd class="ui-kbd">↵</kbd> travel <kbd class="ui-kbd">⌘1–9</kbd> save</span><span v-else-if="showingSmallCatalogue" class="travel-key-hints"><kbd class="ui-kbd">←→ ↑↓</kbd> choose <kbd class="ui-kbd">↵</kbd> travel <kbd class="ui-kbd">⌘1–9</kbd> save</span><span v-else-if="mode === 'travel' && !hasQuery" class="travel-key-hints"><kbd class="ui-kbd">←→ ↑↓</kbd> choose <kbd class="ui-kbd">↵</kbd> travel <kbd class="ui-kbd">Esc</kbd> back</span><span v-else-if="mode === 'customize'" class="travel-key-hints"><kbd class="ui-kbd">esc</kbd> back</span><button v-if="mode === 'travel'" type="button" class="ui-button travel-primary" data-variant="primary" tabindex="-1" :disabled="!canRunActive" @mousedown="keepSearchFocus" @click="pickPrimary">{{ primaryLabel }}<kbd v-if="activeDestination !== null" aria-hidden="true">↵</kbd></button></footer>
+    <footer class="travel-footer"><span v-if="statusText && !urgentNoticeVisible" :data-level="statusLevel" aria-hidden="true">{{ statusText }}</span><span v-if="hasQuery && hasSelectableDestination" class="travel-key-hints"><kbd class="ui-kbd">↑↓</kbd> choose <kbd class="ui-kbd">↵</kbd> travel <kbd class="ui-kbd">⌘1–9</kbd> save</span><span v-else-if="showingSmallCatalogue" class="travel-key-hints"><kbd class="ui-kbd">←→ ↑↓</kbd> choose <kbd class="ui-kbd">↵</kbd> travel <kbd class="ui-kbd">⌘1–9</kbd> save</span><span v-else-if="mode === 'travel' && !hasQuery" class="travel-key-hints"><kbd class="ui-kbd">←→ ↑↓</kbd> choose <kbd class="ui-kbd">↵</kbd> travel <kbd class="ui-kbd">Esc</kbd> back</span><span v-else-if="mode === 'customize'" class="travel-key-hints"><kbd class="ui-kbd">esc</kbd> back</span><button v-if="mode === 'travel'" type="button" class="ui-button travel-primary" data-variant="primary" tabindex="-1" :disabled="!canRunActive" @mousedown="keepSearchFocus" @click="pickPrimary">{{ primaryLabel }}<kbd v-if="canRunActive" aria-hidden="true">↵</kbd></button></footer>
     <div class="travel-header-actions">
       <button ref="settingsButton" type="button" class="ui-button travel-close" data-icon aria-label="Customize Travel" title="Customize Travel" :aria-pressed="mode === 'customize'" aria-controls="travel-customize-panel" :disabled="preferenceControlsDisabled" @click="toggleCustomize"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z" /><circle cx="12" cy="12" r="3" /></svg></button>
       <button v-if="!inset" type="button" class="ui-button travel-close" data-icon aria-label="Close Quick Travel" @click="emit('close')"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 3 10 10M13 3 3 13" /></svg></button>
