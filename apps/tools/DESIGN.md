@@ -315,7 +315,10 @@ Result lists keep DOM focus in search and move only `aria-activedescendant`
 through one no-wrap helper (`src/shared/list-selection.ts`): Up on the first
 result and Down on the last stay put, and a click selects without taking focus
 from search. Right at the end of the query opens the selected result's
-choices. Character cards use Left/Right; Up returns to search, then to Back. Native text editing, range and
+choices. Character cards use Left/Right; Up returns to search, then to Back.
+Escape closes an open disclosure, then clears a non-empty query, then goes Back
+one level, then closes Hub (D-4). Hub handles the key itself rather than the
+dialog's cancel request, which the browser stops honouring after repeated use. Native text editing, range and
 select controls retain their own keys. Actions only opens contextual actions. Known query scopes stay visible, and typing a command name offers one
 relevant example. Neither examples nor typing execute an action.
 

@@ -113,6 +113,26 @@ test('list keys move one selection without wrapping while focus and typing stay 
   await expect(search).toBeFocused();
 });
 
+test('Esc clears the query, then goes back one level, then closes, on every visit', async ({ page }) => {
+  await page.goto('/?hub');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  // Repeated visits once tripped the browser's close-request guard on the third Esc.
+  for (let visit = 0; visit < 4; visit += 1) {
+    await search.fill('settings'); await search.press('Enter');
+    await expect(page.locator('.hub-caption')).toHaveText('Settings');
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.hub-caption')).toHaveText('Home');
+    await expect(search).toHaveValue('settings');
+    await expect(search).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(search).toHaveValue('');
+    await expect(page.locator('#hub')).toBeVisible();
+  }
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#hub')).toBeHidden();
+  await expect(page.locator('#canvas')).toBeFocused();
+});
+
 test('arrows connect Hub results, character carousel, search and Back', async ({ page }, info) => {
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });

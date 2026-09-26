@@ -40,8 +40,13 @@ test('no results, editing shortcuts, dismissal and narrow layout', async ({ page
   expect(panel).not.toBeNull();
   expect(panel!.x).toBeGreaterThanOrEqual(0);
   expect(panel!.x + panel!.width).toBeLessThanOrEqual(390);
+  // Esc clears a non-empty query first, then closes (D-4); focus returns to the game.
+  await search.press('Escape');
+  await expect(search).toHaveValue('');
+  await expect(search).toBeFocused();
   await search.press('Escape');
   await expect(page.getByRole('dialog', { name: 'Hub', exact: true })).not.toBeVisible();
+  await expect(page.locator('#canvas')).toBeFocused();
   await page.getByRole('button', { name: 'Open Hub', exact: true }).click();
   await expect(search).toHaveValue('');
   await expect(search).toBeFocused();

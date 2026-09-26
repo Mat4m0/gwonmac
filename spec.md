@@ -101,7 +101,9 @@ The footer names what Enter will do. Do not rely on colour or icons alone.
   opens the selected result's choices. Enter performs the displayed action.
 - Backspace only edits text and never navigates; on a Hub button it edits the
   search. Command-Backspace goes back one level.
-- Escape closes an action menu, then goes back one level, then dismisses Hub.
+- Escape closes an action menu or open disclosure, then clears a non-empty query,
+  then goes back one level, then dismisses Hub and returns focus to the game.
+  Hub handles the key itself, so every visit follows the same order.
 - A direct shortcut has no artificial Home step when Escape closes its section.
 - A visible Actions button exposes secondary actions. Tab reaches it; its menu
   supports normal arrow navigation. Do not consume text-editing arrow keys.

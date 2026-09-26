@@ -449,6 +449,13 @@ export function createHub(parent: HTMLElement) {
     if (returnFromView) returnFromView();
     else restoreParent();
   }
+  /** Esc (D-4): close an open disclosure, then clear a non-empty query, then go back one level, then close. */
+  function escape(target: EventTarget | null) {
+    const disclosure = target instanceof Element ? target.closest<HTMLDetailsElement>('details[open]') : null;
+    if (disclosure && root.contains(disclosure)) { disclosure.open = false; disclosure.querySelector('summary')?.focus(); return; }
+    if (!search.hidden && input.value) { input.value = ''; report(''); refresh(true); input.focus(); return; }
+    if (history.length) back(); else close();
+  }
   function close(message?: string) {
     suspended = null; epoch++; history.length = 0; resetView(); modal.close(); for (const source of sources.keys()) source.setVisible(false); scope = null;
     input.value = ''; restoreQuery = ''; report(''); selected = null;
@@ -465,7 +472,7 @@ export function createHub(parent: HTMLElement) {
   }
   const modal = window.gwSurfaces.registerDialog({ root, priority: 6, transient: true,
     dismiss: () => history.length ? back() : close(),
-    restoreFocus: () => previousFocus?.isConnected && previousFocus.getClientRects().length > 0 ? previousFocus : document.getElementById('canvas'),
+    restoreFocus: () => previousFocus?.isConnected && previousFocus !== document.body && previousFocus.getClientRects().length > 0 ? previousFocus : document.getElementById('canvas'),
   });
   function show() {
     if (root.open) { home(); return; }
@@ -496,6 +503,10 @@ export function createHub(parent: HTMLElement) {
       event.preventDefault(); event.stopPropagation();
       if (!event.repeat && history.length) back();
       return;
+    }
+    if (event.key === 'Escape' && !event.defaultPrevented && !event.isComposing) {
+      // Handled here, not by the dialog's cancel event, so repeated presses never trip Chromium's close-request guard.
+      event.preventDefault(); event.stopPropagation(); if (!event.repeat) escape(event.target); return;
     }
     const target = event.target instanceof HTMLElement ? event.target : null;
     // Typing and ⌫ on a Hub control of a list stage edit the search; ⌫ never navigates.
