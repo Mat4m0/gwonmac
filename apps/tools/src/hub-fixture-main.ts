@@ -53,8 +53,10 @@ export function installFixtureMain(options: FixtureMainOptions) {
   const claim = (event: KeyboardEvent) => { event.preventDefault(); event.stopImmediatePropagation(); claimed.add(event.code); };
   const onKeyDown = (event: KeyboardEvent) => {
     if (options.capturing() || sheet.open) return;
-    // A claimed press owns its repeats until its key-up, like `#claimedCodes`.
-    if (claimed.has(event.code)) { event.preventDefault(); event.stopImmediatePropagation(); return; }
+    // A claimed press owns its repeats until its key-up, like `#claimedCodes`;
+    // a fresh press of the same key is decided again, as main does when Chromium drops the key-up.
+    if (claimed.has(event.code) && event.repeat) { event.preventDefault(); event.stopImmediatePropagation(); return; }
+    claimed.delete(event.code);
     const input = { code: event.code, meta: event.metaKey, control: event.ctrlKey, shift: event.shiftKey, alt: event.altKey };
     const settings = options.settings();
     if (input.meta && !input.control && !input.shift && !input.alt && input.code === 'KeyQ') {
