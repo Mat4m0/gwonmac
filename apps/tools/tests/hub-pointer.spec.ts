@@ -365,6 +365,29 @@ test('a double-click on the calculator card copies once', async ({ page }) => {
   expect((await canvas(page)).filter(event => !/:(0|1)$/u.test(event))).toEqual([]);
 });
 
+test('a click on blank space keeps the keyboard where it was (HUB-246)', async ({ page }) => {
+  await open(page);
+  const typedInto = async (click: () => Promise<void>) => {
+    await click();
+    await page.keyboard.type('mo');
+    return page.evaluate(() => {
+      const active = document.activeElement as HTMLInputElement | null;
+      return `${active?.tagName}:${active?.value ?? ''}`;
+    });
+  };
+  await search(page).fill('acc second');
+  expect(await typedInto(() => page.locator('.hub-results').click({ position: { x: 300, y: 250 } }))).toBe('INPUT:acc secondmo');
+  await search(page).fill('');
+  expect(await typedInto(() => page.locator('.hub-group').first().click())).toBe('INPUT:mo');
+  await page.keyboard.press('Meta+t');
+  expect(await typedInto(() => page.locator('#travel-panel').click({ position: { x: 300, y: 330 } }))).toBe('INPUT:mo');
+  await page.keyboard.press('Meta+e');
+  await expect(page.locator('button[data-character-key="monk"]')).toBeFocused();
+  // Characters is card-first: typing from the card it returns to moves to its search.
+  expect(await typedInto(() => page.locator('.character-switch-panel').click({ position: { x: 300, y: 300 } }))).toBe('INPUT:mo');
+  await expect(page.locator('#character-switch-query')).toBeFocused();
+});
+
 test('a person page\'s world actions only select on a click', async ({ page }) => {
   await open(page, '&party');
   await enter(page, 'zed delta');
