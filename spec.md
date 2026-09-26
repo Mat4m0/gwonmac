@@ -103,6 +103,8 @@ The footer names what Enter will do. Do not rely on colour or icons alone.
 - A visible Actions button exposes secondary actions. Tab reaches it; its menu
   supports normal arrow navigation. Do not consume text-editing arrow keys.
 - Back restores query, caret, selection, scroll, and the launching control.
+  Command-Backspace or the mouse back button goes back one level; Backspace only
+  edits text.
 - A fresh invocation focuses global search. Temporary app blur and popout handoffs
   retain the current task; explicit closure ends it. Tool state and drafts have
   their own existing lifetimes.
@@ -435,7 +437,8 @@ saved Command bindings retain their meaning. Capture accepts combinations using
 Command, Control or Option, optionally Shift, and standalone F1–F24. Letters,
 digits, punctuation, arrows, navigation, editing and numpad keys are supported.
 Plain typing/Shift-only typing remains available to the game. Bare Escape cancels
-recording; bare Delete/Backspace clears. Modified editing keys can be recorded.
+recording; bare Delete/Backspace clears. Modified editing keys can be recorded,
+except Command-Backspace, which Hub reserves for Back.
 Reserved system combinations and conflicts remain checked. Fn/media hardware
 keys are outside this capture contract. Disabled tools retain visible read-only
 shortcut rows. Recording consumes the key without activating its existing tool.

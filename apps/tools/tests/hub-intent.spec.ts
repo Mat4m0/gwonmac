@@ -29,9 +29,9 @@ test('account actions restore each visited account and command row', async ({ pa
   const identity = await account.getAttribute('data-id');
   await page.keyboard.press('Enter');
   await expect(page.locator('.hub-row[aria-selected="true"]')).toContainText('Close');
-  await page.keyboard.press('Backspace');
+  await page.keyboard.press('Meta+Backspace');
   await expect(page.locator(`.hub-row[data-id="${identity}"]`)).toHaveAttribute('aria-selected', 'true');
-  await page.keyboard.press('Backspace');
+  await page.keyboard.press('Meta+Backspace');
   await expect(page.locator('.hub-row[data-id="accounts"]')).toHaveAttribute('aria-selected', 'true');
   await expect(search).toHaveValue('switch account'); await expect(search).toBeFocused();
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', /Account/);
@@ -48,7 +48,7 @@ test('temporary blur resumes the stage and focus while explicit close starts fre
   await expect(page.locator('.hub-summary')).toContainText('Protection');
   await expect(page.locator(`.hub-row[data-id="${selected}"]`)).toHaveAttribute('aria-selected', 'true');
   await expect(search).toBeFocused();
-  await page.keyboard.press('Backspace');
+  await page.keyboard.press('Meta+Backspace');
   await expect(search).toHaveValue('build monk');
   await expect(page.locator('.hub-row[aria-selected="true"]')).toContainText('Protection');
   await page.getByRole('button', { name: 'Close Hub', exact: true }).click();
