@@ -77,13 +77,21 @@ test('saved font and custom title material apply to the real Hub without losing 
 });
 
 
-test('a live appearance change keeps query, caret, selection, list scroll and focus', async ({ page }) => {
+// Focus rests either in search (a pointer-selected result) or on an arrowed row.
+for (const focusHome of ['search', 'row'] as const) test(`a live appearance change keeps query, caret, selection, list scroll and focus in the ${focusHome}`, async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
   await expect(search).toBeFocused();
   await search.fill('k');
-  for (let step = 0; step < 5; step += 1) await page.keyboard.press('ArrowDown');
+  if (focusHome === 'row') for (let step = 0; step < 5; step += 1) await page.keyboard.press('ArrowDown');
+  else {
+    const row = (await page.locator('#hub .hub-row').nth(5).boundingBox())!;
+    await page.mouse.move(row.x + 40, row.y + row.height / 2);
+    await page.mouse.move(row.x + 60, row.y + row.height / 2);
+    await expect(page.locator('#hub .hub-row').nth(5)).toHaveAttribute('aria-selected', 'true');
+    await expect(search).toBeFocused();
+  }
   // From here on nothing may move focus, reach <body> or paint a second selection.
   await page.evaluate(() => {
     const trace = { body: false, focusMoves: 0, doubleSelection: false };
@@ -124,6 +132,7 @@ test('a live appearance change keeps query, caret, selection, list scroll and fo
   expect(clamped.scrollTop).toBe(Math.min(bottom, clamped.scrollMax));
   expect(clamped.state).toEqual(kept.state);
   expect(await page.evaluate(() => (window as unknown as { appearanceTrace: object }).appearanceTrace)).toEqual({ body: false, focusMoves: 0, doubleSelection: false });
+  if (focusHome === 'search') await expect(search).toBeFocused();
   await page.keyboard.type('a');
   await expect(search).toHaveValue('ka');
 });

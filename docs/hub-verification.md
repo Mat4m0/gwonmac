@@ -296,7 +296,8 @@ and meta stay inside it. In the 340 × 380 Hub at the same sizes, the footer
 keeps one height while arrowing, the count gives way before the primary label,
 the label keeps its whole verb up to 150 % and its full action as tooltip. A
 live theme, font and opacity change keeps the query, caret, selection, focus
-and the list's scroll offset (clamped only when a taller Modern list has less
+(in search with a pointer-selected result, or on an arrowed row) and the list's
+scroll offset (clamped only when a taller Modern list has less
 to scroll), never focuses `<body>` and never paints a second selection. At 65 %
 over the checkerboard, title, detail, keycap, count, placeholder and gold
 heading inks stay apart in both styles; the header's caption, game context
