@@ -118,7 +118,7 @@
     "a": "Characters | focus search | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Enter": "Characters | focus card:monk | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Escape": "Home | focus search | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
-    "Backspace": "Characters | focus card:monk | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
+    "Backspace": "Characters | focus search | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Meta+Backspace": "Home | focus search | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "ArrowDown": "Characters | focus card:ranger | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "ArrowUp": "Characters | focus search | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",

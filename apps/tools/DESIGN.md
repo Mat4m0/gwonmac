@@ -257,7 +257,8 @@ physical press; a page opened directly by its shortcut returns to Home, and Home
 ignores it. The press bubbles to Hub, so a mounted view with its own inner level
 (a confirmation, Character Switch settings, Travel Customize) steps out of it first,
 the way Esc does, and marks the press handled. Backspace only edits text and never
-navigates. History restores query, selection, scroll and the focused control. Form fields keep their draft for
+navigates; on a list-stage button it edits the search like typing. History restores
+query, selection, scroll and the focused control. Form fields keep their draft for
 the session by page path and field name, unless the stored value they started from
 changed meanwhile. Hub lists keep focus in search and move the active descendant. First entry and restoration are separate: character cards,
 account choices and action lists start on their useful item; search stays optional.
@@ -355,8 +356,8 @@ typing. Unknown folders return no results. Imported build provenance is not a
 current template folder. File identities and the reread-before-apply guard stay
 unchanged; folder searches never apply a build automatically.
 
-Typing a printable character while a Hub result has keyboard focus resumes the
-search at its saved caret or selection. This also applies on target-selection
+Typing a printable character or Backspace while a Hub result has keyboard focus
+resumes the search at its saved caret or selection. This also applies on target-selection
 pages. Arrows still navigate results; Enter activates the selected result;
 Command-Backspace from a result goes back in Hub history.
 

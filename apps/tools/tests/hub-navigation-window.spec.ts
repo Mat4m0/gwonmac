@@ -264,6 +264,17 @@ test('Command-Backspace steps out of a view\'s own inner level before it leaves 
   await expect(caption).toHaveText('Home');
 });
 
+test('Backspace on a focused footer button edits the search and returns focus to it', async ({ page }) => {
+  await page.goto('/?hub');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  await search.fill('kam'); await page.keyboard.press('Tab');
+  await expect(page.locator('.hub-primary')).toBeFocused();
+  await page.keyboard.press('Backspace');
+  await expect(search).toBeFocused();
+  await expect(search).toHaveValue('ka');
+  await expect(page.locator('.hub-caption')).toHaveText('Home');
+});
+
 test('the mouse back button goes back one level and never closes the Hub', async ({ page }) => {
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
