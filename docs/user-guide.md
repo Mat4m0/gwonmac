@@ -313,7 +313,9 @@ in Hub and select it to switch directly. On the character-selection screen,
 every character can be selected, and the switch enters it without a logout.
 The search bar is shown for every account size. Initial focus remains on the
 current character. Press Left or Up for the previous character. Press Right or
-Down for the next character. Start typing a character name or primary profession
+Down for the next character. Control-N and Control-P step too, Page Up and Page
+Down move by the visible cards, and Home and End jump to the first and last
+character; the carousel stops at both ends instead of wrapping. Start typing a character name or primary profession
 to move focus to search. Secondary professions are not searched. The number keys
 1–9 and 0 switch to the first ten characters. A click on a card selects it; press
 Enter, click **Switch to …** in the footer, or double-click the card to switch.

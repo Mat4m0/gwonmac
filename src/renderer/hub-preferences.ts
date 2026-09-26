@@ -5,6 +5,7 @@
 import { isHubShortcuts, type HubShortcut } from '../shared/hub-preferences.js';
 import { HUB_SCOPES, normaliseHubQuery, type HubPresenter, type HubRow } from '../shared/hub.js';
 import { calculate, parseConversion } from '../shared/hub-calculator.js';
+import { listIndexAfter, listKeyStep } from './list-keys.js';
 
 /** First words that Hub's query grammar owns. */
 export const HUB_RESERVED_WORDS: readonly string[] = [...HUB_SCOPES, 'settings', 'hub', 'commands', 'help', 'titles', 'rates', 'launcher'];
@@ -137,12 +138,11 @@ export function manageHubShortcuts(hub: HubPresenter<HTMLElement>, get: () => re
       if (event.altKey && event.metaKey && !event.ctrlKey && !event.shiftKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
         event.preventDefault(); move(event.key === 'ArrowUp' ? -1 : 1); return;
       }
-      if (event.target !== list || event.altKey || event.metaKey || event.ctrlKey || event.shiftKey) return;
-      const visible = entries(); const index = visible.findIndex(entry => entry.id === chosen);
-      const next = ({ ArrowUp: index - 1, ArrowDown: index + 1, Home: 0, End: visible.length - 1 } as Record<string, number>)[event.key];
-      if (next === undefined) return;
+      const step = event.target === list ? listKeyStep(event, 5) : null;
+      if (step === null) return;
       event.preventDefault();
-      const target = visible[Math.max(0, Math.min(visible.length - 1, next))];
+      const visible = entries();
+      const target = visible[listIndexAfter(visible.findIndex(entry => entry.id === chosen), visible.length, step)];
       if (target) { chosen = target.id; paint(); }
     });
     reset.onclick = () => {

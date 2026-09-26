@@ -14,6 +14,7 @@ import { editHubShortcut, hubPhraseReserved, manageHubShortcuts } from './hub-pr
 import { isHubShortcuts, type HubShortcut } from '../shared/hub-preferences.js';
 import { createHubCalculator } from './hub-calculator.js';
 import { armConfirmation } from './surface-controller.js';
+import { listIndexAfter, listKeyStep } from './list-keys.js';
 import { matchHubRows, parseHubQuery, normaliseHubQuery, type HubRow, type HubSource, type HubSummary, type HubViewAction, type HubViewFooter, type HubViewMount } from '../shared/hub.js';
 export function createHub(parent: HTMLElement) {
   const document = parent.ownerDocument;
@@ -610,24 +611,14 @@ export function createHub(parent: HTMLElement) {
     if (resume) restorePage(resume); else home();
   }
   input.addEventListener('input', () => { report(''); refresh(true); });
-  /** The one list move: ↑ ↓ ⌃P ⌃N step, PgUp PgDn page, Home End jump; no wrap. */
-  function listStep(event: KeyboardEvent): number | null {
-    if (event.altKey || event.metaKey || event.shiftKey) return null;
-    const key = event.ctrlKey ? ({ n: 'ArrowDown', p: 'ArrowUp' } as Record<string, string>)[event.key.toLowerCase()] : event.key;
-    const page = Math.max(1, Math.floor(list.clientHeight / (list.querySelector<HTMLElement>('.hub-row')?.offsetHeight || 40)) - 1);
-    return ({ ArrowDown: 1, ArrowUp: -1, PageDown: page, PageUp: -page, End: Infinity, Home: -Infinity } as Record<string, number>)[key ?? ''] ?? null;
-  }
   input.addEventListener('keydown', event => {
     if (event.isComposing) return;
-    const step = listStep(event);
+    const step = listKeyStep(event, Math.max(1, Math.floor(list.clientHeight / (list.querySelector<HTMLElement>('.hub-row')?.offsetHeight || 40)) - 1));
     if (step !== null) {
       // The list owns these keys even without results, so they never move the caret or drop a text selection.
       event.preventDefault();
       if (!rows.length) return;
-      const index = rows.findIndex(row => row.id === selected);
-      // From no selection, End lands on the last result and every other move on the first.
-      const next = index < 0 ? (step === Infinity ? rows.length - 1 : 0) : Math.max(0, Math.min(rows.length - 1, index + step));
-      select(rows[next]!.id, true);
+      select(rows[listIndexAfter(rows.findIndex(row => row.id === selected), rows.length, step)]!.id, true);
     } else if (event.key === 'ArrowRight' && !event.repeat && input.selectionStart === input.value.length && input.selectionEnd === input.value.length) {
       const row = rows.find(row => row.id === selected);
       if (row?.navigate) { event.preventDefault(); row.navigate(); }

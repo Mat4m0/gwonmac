@@ -16,6 +16,7 @@ import type {
 } from "./character-switch-model.js";
 import { currentCharacterIndex } from "./character-switch-model.js";
 import { armConfirmation } from "./surface-controller.js";
+import { listIndexAfter, listKeyStep } from "./list-keys.js";
 
 const failureMessage = (code: CharacterSwitchFailureCode): string => {
   switch (code) {
@@ -84,21 +85,6 @@ export function numberedCharacterPosition(key: string, count: number): number | 
   if (!/^[0-9]$/u.test(key)) return null;
   const position = key === "0" ? 9 : Number(key) - 1;
   return position < count ? position : null;
-}
-
-export function moveCharacterSelection(
-  current: number,
-  count: number,
-  direction: -1 | 1,
-  disabled = -1,
-): number {
-  if (count <= 1) return current;
-  let next = current;
-  for (let attempts = 0; attempts < count; attempts += 1) {
-    next = (next + direction + count) % count;
-    if (next !== disabled) return next;
-  }
-  return current;
 }
 
 export function characterCarouselRows(
@@ -234,6 +220,9 @@ export function createCharacterSwitchPalette(
       primaryButton.append(" ", key);
     }
     primaryButton.disabled = !row || current || busy();
+    // The ends hold, so the arrow that cannot move is disabled.
+    previousButton.disabled = busy() || selected <= 0;
+    nextButton.disabled = busy() || selected >= rows.length - 1;
   };
   const focusSelected = () => {
     list.querySelector<HTMLButtonElement>(`button[data-row="${selected}"]`)?.focus({ preventScroll: true });
@@ -412,8 +401,6 @@ export function createCharacterSwitchPalette(
     carousel.hidden = settingsMode || confirming;
     previousButton.hidden = !horizontal || settingsMode || confirming;
     nextButton.hidden = !horizontal || settingsMode || confirming;
-    previousButton.disabled = busy() || rows.length < 2;
-    nextButton.disabled = busy() || rows.length < 2;
     search.hidden = !searchEnabled || settingsMode || confirming || busy();
     settingsPanel.hidden = !settingsMode;
     confirmPanel.hidden = !confirming;
@@ -579,13 +566,12 @@ export function createCharacterSwitchPalette(
     if (hub && event.key === 'ArrowUp' && searchEnabled) {
       event.preventDefault(); event.stopPropagation(); queryInput.focus({ preventScroll: true }); return;
     }
-    const arrowMove = event.key === "ArrowLeft" || event.key === "ArrowRight"
-      || event.key === "ArrowUp" || event.key === "ArrowDown";
-    if (arrowMove) {
+    // The shared list move: arrows, ⌃N/⌃P, PgUp/PgDn by a visible page, Home/End; the carousel never wraps.
+    const step = listKeyStep(event, Math.max(1, list.querySelectorAll("button[data-row]").length - 1), true);
+    if (step !== null) {
       event.preventDefault();
       event.stopPropagation();
-      const backwards = event.key === "ArrowLeft" || event.key === "ArrowUp";
-      selected = moveCharacterSelection(selected, rows.length, backwards ? -1 : 1);
+      selected = listIndexAfter(selected, rows.length, step);
       render(false);
       focusSelected();
       revealSelected();
@@ -619,12 +605,12 @@ export function createCharacterSwitchPalette(
     if (event.detail <= 1 && view.kind === "characters") requestSelected();
   });
   previousButton.addEventListener("click", () => {
-    selected = moveCharacterSelection(selected, rows.length, -1);
+    selected = listIndexAfter(selected, rows.length, -1);
     render();
     focusSelected();
   });
   nextButton.addEventListener("click", () => {
-    selected = moveCharacterSelection(selected, rows.length, 1);
+    selected = listIndexAfter(selected, rows.length, 1);
     render();
     focusSelected();
   });

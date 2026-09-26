@@ -106,10 +106,13 @@ test("a 27-character account uses the Hub carousel and preserves search, identit
     expect(firstCardOffset).toBeLessThanOrEqual(1);
     await page.evaluate(() => window.dispatchEvent(new Event("test-character-all")));
     await expect(list.getByRole("option")).toHaveCount(carouselCapacity);
+    // The carousel stops at its ends; End and Home jump there.
     await page.keyboard.press("ArrowLeft");
+    await expect(selected).toContainText("Character 01");
+    await page.keyboard.press("End");
     await expect(selected).toContainText("Rudolph Prime");
     await expect(list.locator(".character-switch-slot")).toHaveCount(0);
-    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("Home");
     await expect(selected).toContainText("Character 01");
     await page.keyboard.press("ArrowRight");
     await expect(selected).toContainText("Character 02");

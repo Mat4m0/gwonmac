@@ -325,7 +325,7 @@ test('Characters: a double-click that raises Leave this area? never confirms it'
   for (const count of [2, 3]) {
     await open(page, '&lifecycle=pve-explorable');
     await page.keyboard.press('Meta+e');
-    await page.keyboard.press('ArrowLeft');
+    await page.keyboard.press('End');
     await clicks(page, page.locator('button[data-character-key="toefte"]'), count, 120, { x: 60, y: 12 });
     await expect(page.locator('#character-switch-title')).toHaveText('Leave this area?');
     const leave = page.getByRole('button', { name: 'Leave and switch', exact: true });
