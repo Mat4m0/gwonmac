@@ -597,7 +597,7 @@ describe("chunk-store", () => {
         }),
     });
     const background = hashes.map((_hash, index) =>
-      store.ensureChunk(index, "prefetch"),
+      store.ensureChunk(index, "prefetch", true),
     );
     const settledBackground = Promise.allSettled(background);
     await scheduling.waitFor(() => started.length === 8 && queuedPrefetch === 1);
@@ -618,5 +618,76 @@ describe("chunk-store", () => {
     await demand;
     const results = await settledBackground;
     assert.equal(results[stoppedIndex]!.status, "rejected");
+  });
+  it("keeps serving the game's own prefetch after the background download stops", async () => {
+    const root = await freshDir();
+    const payloads = [Buffer.alloc(CHUNK, 50), Buffer.alloc(CHUNK, 51)];
+    const hashes = payloads.map(hashOf);
+    const store = new ChunkStore({
+      chunksDir: root,
+      size: CHUNK * payloads.length,
+      chunkSize: CHUNK,
+      chunkHashes: hashes,
+      fetch: async (hash) => new Uint8Array(payloads[hashes.indexOf(hash)]!),
+    });
+    store.stop();
+    await assert.rejects(
+      store.ensureChunk(0, "prefetch", true),
+      (error: unknown) =>
+        error instanceof AppError && error.code === "download_stopped",
+    );
+    const read = await store.readRange(CHUNK, 100, "prefetch");
+    assert.deepEqual(read, new Uint8Array(payloads[1]!.subarray(0, 100)));
+  });
+
+  it("keeps a game prefetch that joined queued background work across a stop", async () => {
+    const root = await freshDir();
+    const payloads = Array.from({ length: 9 }, (_, index) =>
+      Buffer.alloc(CHUNK, index + 60),
+    );
+    const hashes = payloads.map(hashOf);
+    const started: string[] = [];
+    const releases = new Map<string, () => void>();
+    const scheduling = conditionSignals();
+    let queuedPrefetch = 0;
+    const store = new ChunkStore({
+      chunksDir: root,
+      size: CHUNK * payloads.length,
+      chunkSize: CHUNK,
+      chunkHashes: hashes,
+      metrics: {
+        count: () => undefined,
+        observe: () => undefined,
+        gauge: (name, value) => {
+          if (name === "snapshot.native.queuedPrefetch") {
+            queuedPrefetch = value;
+          }
+          scheduling.changed();
+        },
+      },
+      fetch: (hash) =>
+        new Promise((resolve) => {
+          started.push(hash);
+          scheduling.changed();
+          releases.set(hash, () =>
+            resolve(new Uint8Array(payloads[hashes.indexOf(hash)]!)),
+          );
+        }),
+    });
+    const background = Promise.allSettled(
+      hashes.map((_hash, index) => store.ensureChunk(index, "prefetch", true)),
+    );
+    await scheduling.waitFor(() => started.length === 8 && queuedPrefetch === 1);
+    const queuedIndex = hashes.findIndex((hash) => !started.includes(hash));
+    assert.notEqual(queuedIndex, -1);
+    const game = store.ensureChunk(queuedIndex, "prefetch");
+    store.stop();
+    assert.equal(queuedPrefetch, 1);
+    for (const release of [...releases.values()]) release();
+    await scheduling.waitFor(() => started.includes(hashes[queuedIndex]!));
+    releases.get(hashes[queuedIndex]!)!();
+    assert.deepEqual(await game, new Uint8Array(payloads[queuedIndex]!));
+    const results = await background;
+    assert.equal(results[queuedIndex]!.status, "fulfilled");
   });
 });

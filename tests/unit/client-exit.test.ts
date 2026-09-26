@@ -50,6 +50,7 @@ function fixture() {
   const delegated: number[][] = [];
   const failures: unknown[] = [];
   let exits = 0;
+  let aborted = false;
   let mainLoop: Callback = () => undefined;
   const table = new WebAssembly.Table({
     element: "anyfunc",
@@ -86,6 +87,7 @@ function fixture() {
       exits += 1;
     },
     onFailure: (error) => failures.push(error),
+    aborted: () => aborted,
     log: () => undefined,
     requestFrame: (callback) => {
       frames.push(callback);
@@ -98,6 +100,9 @@ function fixture() {
     failures,
     frames,
     imports,
+    abort() {
+      aborted = true;
+    },
     setMainLoop(callback: Callback) {
       mainLoop = callback;
       instance.exports.EmscriptenExeThreadMainLoop = callback;
@@ -133,6 +138,7 @@ describe("client clean-exit adapter", () => {
       onFailure: (error) => {
         assert.fail(error instanceof Error ? error : String(error));
       },
+      aborted: () => false,
       log: () => undefined,
       requestFrame: (callback) => {
         frames.push(callback);
@@ -202,6 +208,29 @@ describe("client clean-exit adapter", () => {
     value.imports.env!.emscripten_async_call!(1, 0, -1);
     await runFrame(value);
     assert.deepEqual(value.failures, [failure]);
+    assert.equal(value.exits, 0);
+  });
+
+  it("stops driving the main loop once the runtime has aborted", async () => {
+    const value = fixture();
+    let ticks = 0;
+    value.setMainLoop(() => {
+      ticks += 1;
+      value.imports.env!.emscripten_async_call!(1, 0, -1);
+    });
+
+    value.imports.env!.emscripten_async_call!(1, 0, -1);
+    await runFrame(value);
+    assert.equal(ticks, 1);
+
+    // An abort from a timer or promise callback: Emscripten now drops every
+    // other client callback, so the loop must not keep a half-dead client
+    // rendering.
+    value.abort();
+    await runFrame(value);
+    assert.equal(ticks, 1);
+    value.imports.env!.emscripten_async_call!(1, 0, -1);
+    assert.equal(value.frames.length, 0);
     assert.equal(value.exits, 0);
   });
 });

@@ -7,7 +7,9 @@ import {
   parseIndexVector, sectionById, sleb, splitSections, uleb, vectorPayload, WASM_HEADER,
 } from "../core/wasm-binary.js";
 import { encodeName } from "./cartography-transform-internals.js";
+import { NATIVE_RENDER_REFERENCE_FUNCTIONS, nativeGraphicsBusy, nativeModelBusy } from "./native-render-reference.js";
 import { functionBodySha256, wasmEvidence } from "./wasm-evidence.js";
+import { NATIVE_PUBLISH_BUSY } from "../../shared/native-publish.js";
 import {
   NATIVE_COMPASS_CLIP_RADIUS, NATIVE_COMPASS_TERRAIN_HEADER_BYTES,
   NATIVE_COMPASS_TERRAIN_MAGIC, NATIVE_COMPASS_TERRAIN_MAX_SIZE,
@@ -31,13 +33,13 @@ const CHECKED = [
   [1565, "c7e2cc16116757011dfecf14eff0220469221cb200b109b650461eb5c750ceba"],
   [1530, "e890ea8a31e26749317404120c8d07354743fcd31a603921416875723683e783"],
   [1569, "46b25139552a8d66a0b519d735755346f9be5d37ab2d1e9b02bca1d79bee20fc"],
-  [1532, "f77af25d4e59724cd0ed6103fb9fcbe92b035e09ee24456f00fafdc44bfc286a"],
   [1579, "c46a846084eb5292db3d41d901724d9e2330cf1bb9f7fb1dec371fa642e4cc48"],
   [3137, "3f4d7e18ad91c20147e2053ee1e42f8eb60c97937fefba142d37c93f2d672e36"],
   [2249, "149d95966e67f554da12f46c064ee366a9d531b167842e6ea0a201ca730b474e"],
   [2187, "fe75a199add4d8ffb71a03e694144b903e3e82a7c165558b7593a8e5f9495415"],
   [748, "150d8921520d98fbfa28dc4faf5e2fe488a65c69832b13d7dcf489b2f07d7b60"],
   [6827, "f8adede1f8a366bdce292461977643bb760e8e846bc30689312781dcab0630c7"],
+  ...NATIVE_RENDER_REFERENCE_FUNCTIONS,
 ] as const;
 const SEGMENTS = 64;
 const op = (...bytes: number[]) => Uint8Array.of(...bytes);
@@ -167,7 +169,12 @@ function appendCompassSurface(input: Uint8Array, screenSpace: boolean): Uint8Arr
   // A copied bitmap is the only write capability. Validate its complete region
   // before reading pixels; GrTex copies the input with flags & 1 == 0.
   const memoryEnd = (bytes: Uint8Array) => concat(l(0), op(0xad), bytes, op(0xad, 0x7c), op(0x3f, 0, 0xad), op(0x42), sleb(65536), op(0x7e, 0x58));
-  const publish = concat(op(1, 5, 0x7f), call(hideIndex),
+  // The texture swap below asserts while the renderer holds the model; this
+  // runs from the host's frame, so report busy before hiding or allocating.
+  const publish = concat(op(1, 6, 0x7f),
+    nativeGraphicsBusy(7), op(0x04, 0x40), i(NATIVE_PUBLISH_BUSY), op(0x0f, 0x0b),
+    g(2), op(0x04, 0x40), nativeModelBusy(g(2), 7), op(0x04, 0x40), i(NATIVE_PUBLISH_BUSY), op(0x0f, 0x0b, 0x0b),
+    call(hideIndex),
     l(0), i(0), op(0x4b), l(0), i(3), op(0x71, 0x45, 0x71),
     l(1), i(NATIVE_COMPASS_TERRAIN_HEADER_BYTES), op(0x4f, 0x71), memoryEnd(i(NATIVE_COMPASS_TERRAIN_HEADER_BYTES)), op(0x71),
     op(0x45, 0x04, 0x40), i(0), op(0x0f, 0x0b),

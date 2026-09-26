@@ -195,8 +195,16 @@ can be measured without weakening this check. A durable "already verified"
 flag is intentionally not used: another process or disk fault can change a
 same-named file after such a flag is written.
 
-Pausing stops speculative work for the current session. It does not remove
-verified chunks. A later launch resumes automatically from verified residency.
+Pausing stops the background download for the current session. It does not
+remove verified chunks. A later launch resumes automatically from verified
+residency.
+
+Pausing never refuses the game client's own reads. The client prefetches the
+files of each area it enters, and it does not retry a refused prefetch; that
+file's icon or sound would stay missing for the rest of the instance. A client
+prefetch therefore runs while the download is paused, including one that joined
+a queued background request for the same chunk. A failed prefetch records
+`snapshot.cacheFailed` in diagnostics.
 
 ## Offline behavior
 

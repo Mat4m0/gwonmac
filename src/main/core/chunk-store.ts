@@ -9,6 +9,11 @@
  * the combined concurrency ceiling is ArenaNet's; do not raise it to make a
  * download feel faster.
  *
+ * Stopping the background download stops only the full download's own work.
+ * The game client prefetches area files through the same store, and a refused
+ * prefetch is one it never retries: the icon or sound stays missing for the
+ * whole instance.
+ *
  * Local write failures that no retry can fix are separated from transport
  * faults here, because a full disk and an unreachable host need different
  * things from the player.
@@ -61,6 +66,8 @@ interface FetchTask {
   hash: string;
   expectedLength: number;
   priority: ChunkPriority;
+  /** Queued by the full download alone; the only work `stop()` may refuse. */
+  background: boolean;
   queuedAt: number;
   resolve: (data: Uint8Array) => void;
   reject: (error: unknown) => void;
@@ -115,7 +122,9 @@ export class ChunkStore {
   private readonly demandQueue: FetchTask[] = [];
   private readonly prefetchQueue: FetchTask[] = [];
   private readonly demandedHashes = new Set<string>();
-  private readonly stoppedPrefetchHashes = new Set<string>();
+  /** In-flight hashes the game client is waiting on, at either priority. */
+  private readonly clientHashes = new Set<string>();
+  private readonly stoppedBackgroundHashes = new Set<string>();
   private activeDemand = 0;
   private activePrefetch = 0;
   private activeNetworkBytes = 0;
@@ -223,7 +232,11 @@ export class ChunkStore {
     this.stopFlag = true;
     const stopped = new AppError("download_stopped", "background download stopped");
     for (const task of this.prefetchQueue.splice(0)) {
-      this.stoppedPrefetchHashes.add(task.hash);
+      if (!this.isStoppable(task)) {
+        this.prefetchQueue.push(task);
+        continue;
+      }
+      this.stoppedBackgroundHashes.add(task.hash);
       task.reject(stopped);
     }
     this.updateQueueMetrics();
@@ -237,17 +250,23 @@ export class ChunkStore {
     return this.stopFlag;
   }
 
+  private isStoppable(task: FetchTask): boolean {
+    return task.background && !this.clientHashes.has(task.hash);
+  }
+
   /** One shared promise per content hash; rejected promises are dropped so retries work. */
   ensureHash(
     hash: string,
     expectedLength?: number,
     priority: ChunkPriority = "demand",
+    background = false,
   ): Promise<Uint8Array> {
     if (priority === "demand") this.demandedHashes.add(hash);
+    if (!background) this.clientHashes.add(hash);
     const existing = this.inflight.get(hash);
     if (
-      priority === "demand" &&
-      this.stoppedPrefetchHashes.delete(hash) &&
+      !background &&
+      this.stoppedBackgroundHashes.delete(hash) &&
       existing
     ) {
       this.inflight.delete(hash);
@@ -259,11 +278,17 @@ export class ChunkStore {
       return existing;
     }
 
-    const work = this.ensureHashInner(hash, expectedLength, priority).finally(
+    const work = this.ensureHashInner(
+      hash,
+      expectedLength,
+      priority,
+      background,
+    ).finally(
       () => {
         if (this.inflight.get(hash) === work) {
           this.inflight.delete(hash);
           this.demandedHashes.delete(hash);
+          this.clientHashes.delete(hash);
         }
       },
     );
@@ -275,6 +300,7 @@ export class ChunkStore {
     hash: string,
     expectedLength: number | undefined,
     priority: ChunkPriority,
+    background: boolean,
   ): Promise<Uint8Array> {
     const path = this.chunkPath(hash);
     try {
@@ -325,6 +351,7 @@ export class ChunkStore {
       hash,
       expectedLength ?? 0,
       scheduledPriority,
+      background,
     );
     this.metrics?.count("cache.networkFetches");
     this.metrics?.count("cache.networkBytes", raw.byteLength);
@@ -349,10 +376,16 @@ export class ChunkStore {
   ensureChunk(
     index: number,
     priority: ChunkPriority = "demand",
+    background = false,
   ): Promise<Uint8Array> {
     const hash = this.hashes[index];
     if (!hash) throw new AppError("chunk_index", `chunk index ${index} out of range`);
-    return this.ensureHash(hash, this.chunkByteLength(index), priority);
+    return this.ensureHash(
+      hash,
+      this.chunkByteLength(index),
+      priority,
+      background,
+    );
   }
 
   async readRange(
@@ -422,12 +455,14 @@ export class ChunkStore {
     hash: string,
     expectedLength: number,
     priority: ChunkPriority,
+    background: boolean,
   ): Promise<Uint8Array> {
     return new Promise((resolve, reject) => {
       const task: FetchTask = {
         hash,
         expectedLength,
         priority,
+        background,
         queuedAt: performance.now(),
         resolve,
         reject,
@@ -452,7 +487,7 @@ export class ChunkStore {
     while (this.activeDemand + this.activePrefetch < ARENANET_REQUEST_CEILING) {
       const task = this.demandQueue.shift() ?? this.prefetchQueue.shift();
       if (!task) break;
-      if (task.priority === "prefetch" && this.stopFlag) {
+      if (this.stopFlag && this.isStoppable(task)) {
         task.reject(new AppError("download_stopped", "background download stopped"));
         continue;
       }
@@ -567,7 +602,7 @@ export class ChunkStore {
       async (i) => {
         const size = this.chunkByteLength(i);
         try {
-          await this.ensureChunk(i, "prefetch");
+          await this.ensureChunk(i, "prefetch", true);
         } catch (error) {
           firstFailure ??= error;
           const code = FATAL_LOCAL_WRITE[errorCode(error)];

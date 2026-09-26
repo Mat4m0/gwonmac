@@ -3,6 +3,7 @@
  * Native camera motion changes UVs; map, tile, style and scale changes repaint.
  */
 import type { CartographyWalkabilityStyle } from "../../shared/cartography-overlay.js";
+import { NATIVE_PUBLISH_BUSY } from "../../shared/native-publish.js";
 import {
   NATIVE_COMPASS_TERRAIN_HEADER_BYTES, NATIVE_COMPASS_TERRAIN_MAGIC,
   NATIVE_COMPASS_TERRAIN_MAX_SIZE, NATIVE_COMPASS_TERRAIN_WORLD_SPAN,
@@ -160,7 +161,10 @@ export function createNativeCompassTerrainLayer(exports: WebAssembly.Exports, do
           target[at] = pixels[at + 2]!; target[at + 1] = pixels[at + 1]!;
           target[at + 2] = pixels[at]!; target[at + 3] = pixels[at + 3]!;
         }
-        if (publish(region, bytes) !== 1) { hide(); outcome = "unavailable"; return; }
+        const result = publish(region, bytes);
+        // Busy: the native renderer still holds the texture. Keep it and retry.
+        if (result === NATIVE_PUBLISH_BUSY) return;
+        if (result !== 1) { hide(); outcome = "unavailable"; return; }
         version = key; outcome = "ready";
       } finally {
         free(region);

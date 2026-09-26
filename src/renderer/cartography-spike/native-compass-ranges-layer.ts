@@ -5,6 +5,7 @@
 import { NATIVE_COMPASS_TERRAIN_HEADER_BYTES, NATIVE_COMPASS_TERRAIN_MAGIC,
   NATIVE_COMPASS_TERRAIN_MAX_SIZE, NATIVE_COMPASS_TERRAIN_WORLD_SPAN } from "../../shared/native-compass-terrain.js";
 import type { MapPainterImage } from "./native-map-graphics-layer.js";
+import { NATIVE_PUBLISH_BUSY } from "../../shared/native-publish.js";
 
 export function createNativeCompassRangesLayer(exports: WebAssembly.Exports, document: Document) {
   const memory = exports.memory; const malloc = exports.malloc; const free = exports.free;
@@ -31,7 +32,8 @@ export function createNativeCompassRangesLayer(exports: WebAssembly.Exports, doc
       const size = Math.min(NATIVE_COMPASS_TERRAIN_MAX_SIZE, Math.max(64, 2 ** Math.ceil(Math.log2(Math.max(image.canvas.width, image.canvas.height)))));
       if (canvas.width !== size) canvas.width = size;
       if (canvas.height !== size) canvas.height = size;
-      const context = canvas.getContext("2d");
+      // A scratch canvas that is only read back into the native texture.
+      const context = canvas.getContext("2d", {willReadFrequently: true});
       if (!context) { withdraw(); return; }
       context.clearRect(0, 0, size, size); context.drawImage(image.canvas, 0, 0, size, size);
       const pixels = context.getImageData(0, 0, size, size).data;
@@ -53,7 +55,9 @@ export function createNativeCompassRangesLayer(exports: WebAssembly.Exports, doc
           output[at] = pixels[at + 2]!; output[at + 1] = pixels[at + 1]!;
           output[at + 2] = pixels[at]!; output[at + 3] = pixels[at + 3]!;
         }
-        if (publish(region, bytes) === 1) version = key; else withdraw();
+        // Busy: the native renderer still holds the texture. Keep it and retry.
+        const result = publish(region, bytes);
+        if (result === 1) version = key; else if (result !== NATIVE_PUBLISH_BUSY) withdraw();
       } finally { free(region); }
     },
     dispose() {

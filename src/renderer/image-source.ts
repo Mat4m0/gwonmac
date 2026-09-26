@@ -90,9 +90,13 @@ type ImageDiagnostics = {
   ): void;
   /**
    * A demand read the client was awaiting rejected. Black textures are this
-   * failure's visible face; the event is what ties a capture to it.
+   * failure's visible face; the event is what ties a capture to it. A rejected
+   * prefetch is the quieter one: a missing icon or sound for the instance.
    */
-  event?(name: 'snapshot.readFailed', value?: unknown): void;
+  event?(
+    name: 'snapshot.readFailed' | 'snapshot.cacheFailed',
+    value?: unknown,
+  ): void;
 };
 
 export type ImageSource = {
@@ -470,9 +474,14 @@ export function createImageSource({
 
     async cacheAsync(handle, offset, size, progress) {
       const [first, last] = chunkRange(offset, size);
-      await fetchPrefetchChunks(first, last, (n) => {
-        try { progress(n); } catch (e) { log('[cache progress]', e); }
-      });
+      try {
+        await fetchPrefetchChunks(first, last, (n) => {
+          try { progress(n); } catch (e) { log('[cache progress]', e); }
+        });
+      } catch (error) {
+        diagnostics?.event?.('snapshot.cacheFailed', error);
+        throw error;
+      }
     },
   };
 

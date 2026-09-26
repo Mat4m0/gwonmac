@@ -376,6 +376,14 @@ export const PROTOCOL_AND_RENDERER_EVENT_SCHEMA = {
     level: "error",
     fields: { fingerprint: rendererFingerprintOrNull },
   },
+  // A client prefetch rejected. The client never retries it, so the file's
+  // icon or sound stays missing for the rest of the instance.
+  "snapshot.cacheFailed": {
+    scope: "owner",
+    subsystem: "snapshot",
+    level: "error",
+    fields: { fingerprint: rendererFingerprintOrNull },
+  },
   // The 1024-program ceiling was reached; later programs degrade to
   // pass-through polling. Its absence in a capture rules the cache out of a
   // rendering-artifact investigation.

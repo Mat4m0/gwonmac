@@ -86,6 +86,9 @@ function fakeDiagnostics() {
       snapshot: (durationUs: number, bytes: number, source: "memory" | "native") => {
         events.push(`snapshot:${source}:${bytes}`);
       },
+      event: (name: "snapshot.readFailed" | "snapshot.cacheFailed") => {
+        events.push(`event:${name}`);
+      },
     },
     count: (name: string) => events.filter((event) => event === name).length,
   };
@@ -394,6 +397,21 @@ describe("renderer image source", () => {
     transport.serve(1);
     await retry;
     assert.deepEqual(heap.subarray(0, 16), snapshotBytes(0, 16));
+    source.stop();
+  });
+
+  it("reports a rejected client prefetch, which the client never retries", async () => {
+    const { image, source, transport, diagnostics, handle } = makeSource({
+      size: 128,
+      chunkSize: 64,
+    });
+
+    const caching = image.cacheAsync(handle, 0, 16, () => undefined);
+    await turn();
+    transport.fail(0, "ArenaNet is unavailable.", "network");
+    await assert.rejects(caching, /unavailable/);
+    assert.equal(diagnostics.count("event:snapshot.cacheFailed"), 1);
+    assert.equal(diagnostics.count("event:snapshot.readFailed"), 0);
     source.stop();
   });
 

@@ -10,6 +10,11 @@
  * identity Emscripten's JSPI glue uses before wrapping the callback with
  * `WebAssembly.promising`. If a future client changes that contract, this
  * adapter delegates unchanged instead of guessing.
+ *
+ * Emscripten's own loop stops once the runtime aborts, and every other client
+ * callback is dropped from then on. Driving the loop past an abort left a
+ * client that rendered and stayed connected while its timers never ran:
+ * icons stayed blank and sounds were skipped with no visible failure.
  */
 
 type WasmCallback = (...args: number[]) => unknown;
@@ -31,6 +36,8 @@ interface ClientExitOptions {
   readonly instance: () => ClientInstance | null;
   readonly onExit: () => void | Promise<void>;
   readonly onFailure: (error: unknown) => void;
+  /** True once the runtime has aborted; the loop is not driven past it. */
+  readonly aborted: () => boolean;
   readonly log: (...values: unknown[]) => void;
   readonly requestFrame?: (callback: FrameRequestCallback) => number;
   readonly promising?: (callback: WasmCallback) => PromisingCallback;
@@ -91,6 +98,10 @@ export function installClientExit(options: ClientExitOptions): void {
 
     const generation = ++scheduleGeneration;
     requestFrame(() => {
+      if (options.aborted()) {
+        settled = true;
+        return;
+      }
       const run = promisingMainLoop;
       if (!run) {
         fail(new Error("clean client exit lost the main-loop callback"));
