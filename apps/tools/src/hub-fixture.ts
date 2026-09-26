@@ -17,6 +17,12 @@ import '../../../src/renderer/hub.css';
 // eslint-disable-next-line no-restricted-imports
 import { createHubPeople } from '../../../src/renderer/hub-people';
 // eslint-disable-next-line no-restricted-imports
+import { createPartyInvite } from '../../../src/renderer/party-invite';
+// eslint-disable-next-line no-restricted-imports
+import type { CompanionPlayRegionState } from '../../../src/renderer/companion-play-region-snapshot';
+import { isPvpTravelDestination } from '../../../src/shared/travel';
+import { watch } from 'vue';
+// eslint-disable-next-line no-restricted-imports
 import { installCharacterSwitchHost } from '../../../src/renderer/character-switch-host';
 // eslint-disable-next-line no-restricted-imports
 import '../../../src/renderer/character-switch.css';
@@ -97,8 +103,8 @@ export function mountHubFixture(target: HTMLElement) {
       return { setVisible: visible => visible ? app.show() : app.hide(), setActive: app.setActive, requestClose: app.hide, search: app.search, update() {}, dispose: app.dispose };
     },
   });
-  window.addEventListener('hub-fixture-scenario', event => { if (event instanceof CustomEvent) game.setScenario(String(event.detail)); });
-  const travel = createHubTravel(createDemoTravelHost(), hub);
+  const travelHost = createDemoTravelHost();
+  const travel = createHubTravel(travelHost, hub);
   hub.attach(travel.source);
   let id = 0;
   let failSend = false;
@@ -122,13 +128,45 @@ export function mountHubFixture(target: HTMLElement) {
   window.addEventListener('hub-fixture-incoming', () => session.observe([{ id: ++id, sender: 'Romi Ranger', message: 'Ready for another mission?', direction: 'incoming' }]));
   window.addEventListener('hub-fixture-unavailable', () => session.setAvailable(false));
   session.setAvailable(true);
-  const people = createHubPeople(hub, session, { unavailable: () => null, run: friend => travel.travel(friend.mapId) });
+  // The synthetic play region follows the demo Travel host; the scenario select adds an explorable area.
+  let explorable = false;
+  const regionListeners = new Set<() => void>();
+  const region = (): CompanionPlayRegionState => {
+    const state = travelHost.state.value;
+    return state.status !== 'ready' ? { status: 'waiting', reason: 'stale' } : { status: 'ready', sequence: 1, mapId: state.mapId,
+      instanceType: explorable ? 1 : 0, playRegion: isPvpTravelDestination(state.mapId) ? 'pvp' : 'pve', travelContext: state.travelContext,
+      characterKey: state.characterKey, unlockedMapWords: null, guildHall: state.guildHall, hasGuildHall: state.hasGuildHall };
+  };
+  watch(travelHost.state, () => { for (const listener of [...regionListeners]) listener(); }, { flush: 'sync' });
+  const invites: string[] = [];
+  const party = createPartyInvite({ region, chatReady: () => session.state.available, settleMs: 400,
+    subscribeRegion: listener => { regionListeners.add(listener); return () => { regionListeners.delete(listener); }; },
+    invite: async name => { invites.push(name); target.dataset.invites = invites.join('|'); record(`PARTY.INVITE ${name}`); },
+    travel: async friend => { await travel.travel(friend.mapId); record(`PARTY.TRAVEL ${friend.character}`); },
+  });
+  const people = createHubPeople(hub, session, { unavailable: () => null,
+    run: async friend => { await travel.travel(friend.mapId); record(`FRIEND.TRAVEL ${friend.character}`); } }, party);
   people.setEnabled(true);
-  const fixtureFriends = { status: 'ready' as const, sequence: 1, generation: 1, friends: [
+  const friendsFor = (invitable: boolean) => ({ status: 'ready' as const, sequence: 1, generation: 1, friends: [
     { key: 'romi', alias: 'Romi', character: 'Romi Ranger', status: 'online' as const, mapId: 449 },
     { key: 'offline', alias: 'Offline Friend', character: '', status: 'offline' as const, mapId: 55 },
-  ] };
-  session.updateFriends(fixtureFriends); people.updateFriends(fixtureFriends);
+    // Four online friends whose person pages offer Travel, Invite and Travel and invite on rows 1-3.
+    ...(invitable ? ([['alpha', 449], ['beta', 81], ['delta', 55], ['gamma', 194]] as const).map(([key, mapId]) => {
+      const name = `Zed ${key[0]!.toUpperCase()}${key.slice(1)}`;
+      return { key, alias: name, character: name, status: 'online' as const, mapId };
+    }) : []),
+    ...(invitable ? [{ key: 'arena', alias: 'Arena Ace', character: 'Arena Ace', status: 'online' as const, mapId: 188 }] : []),
+  ] });
+  const updateFriends = (invitable: boolean) => { const friends = friendsFor(invitable); session.updateFriends(friends); people.updateFriends(friends); };
+  updateFriends(false);
+  const setScenario = (value: string) => {
+    game.setScenario(value);
+    explorable = value === 'explorable';
+    updateFriends(value === 'party');
+    if (value === 'party') session.observe([{ id: ++id, sender: 'Mo Kaiser', direction: 'participant' }, { id: ++id, sender: 'Kai Mo Bearer', direction: 'participant' }]);
+    for (const listener of [...regionListeners]) listener();
+  };
+  window.addEventListener('hub-fixture-scenario', event => { if (event instanceof CustomEvent) setScenario(String(event.detail)); });
   window.addEventListener('hub-fixture-withdraw', () => people.updateFriends({ status: 'waiting', reason: 'unavailable' }));
   window.addEventListener('gw:travel-toggle', event => { event.preventDefault(); travel.open(); });
   window.addEventListener('gw:whispers-toggle', event => {
@@ -148,10 +186,10 @@ export function mountHubFixture(target: HTMLElement) {
   let modern = false;
   theme.onclick = () => { modern = !modern; window.gwApplyFixtureAppearance?.({ uiStyle: modern ? 'obsidian' : 'guild-wars', uiPanelOpacity: 100 }); };
   const scenario = document.createElement('select'); scenario.className = 'ui-select'; scenario.setAttribute('aria-label', 'Fixture scenario');
-  for (const [value, label] of [['ready', 'Ready in outpost'], ['explorable', 'Explorable area'], ['partial', 'Interrupted apply'], ['duplicate', 'Duplicate build names'], ['folders', 'Nested build folders'], ['mixed-professions', 'Mixed hero professions']] as const) {
+  for (const [value, label] of [['ready', 'Ready in outpost'], ['explorable', 'Explorable area'], ['partial', 'Interrupted apply'], ['duplicate', 'Duplicate build names'], ['folders', 'Nested build folders'], ['mixed-professions', 'Mixed hero professions'], ['party', 'People to invite']] as const) {
     const option = document.createElement('option'); option.value = value; option.textContent = label; scenario.append(option);
   }
-  scenario.onchange = () => { game.setScenario(scenario.value); hub.show(); };
+  scenario.onchange = () => { setScenario(scenario.value); hub.show(); };
   const reset = document.createElement('button'); reset.className = 'ui-button'; reset.textContent = 'Reset fixture'; reset.onclick = () => { localStorage.removeItem('hub-fixture-shortcuts'); localStorage.removeItem('hub-fixture-library'); location.reload(); };
   const label = document.createElement('span'); label.textContent = 'Synthetic game · sample prices';
   controls.style.flexWrap = 'wrap'; controls.append(theme, scenario, reset, label); target.append(controls);
