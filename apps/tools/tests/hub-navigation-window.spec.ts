@@ -165,3 +165,15 @@ test('list keys without results keep the caret and the text selection in search'
   await page.keyboard.press('Delete');
   await expect(search).toHaveValue('qzzz');
 });
+
+test('a view whose first buttons are disabled still takes focus', async ({ page }) => {
+  await page.goto('/?hub');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  await search.fill('hub preferences'); await page.keyboard.down('Enter');
+  await expect(page.locator('.hub-caption')).toHaveText('Hub preferences');
+  // Nothing is pinned, so Reset aliases is disabled; focus goes to the first usable control.
+  await expect(page.getByRole('button', { name: 'Reset aliases', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Reset Hub position', exact: true })).toBeFocused();
+  await page.keyboard.up('Enter');
+  expect(await page.evaluate(() => document.activeElement === document.body)).toBe(false);
+});

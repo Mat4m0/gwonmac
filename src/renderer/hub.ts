@@ -88,6 +88,9 @@ export function createHub(parent: HTMLElement) {
   };
   // List stages keep DOM focus in search; the selection moves by aria-activedescendant (D-2).
   const focusResult = () => input.focus({ preventScroll: true });
+  /** A view's first usable control, else Back, so focus never falls to <body> (a disabled button refuses it). */
+  const firstControl = () => [...content.querySelectorAll<HTMLElement>('input,select,textarea,button,[tabindex="0"]')]
+    .find(control => control.getClientRects().length > 0 && !control.matches(':disabled')) ?? backButton;
   function restoreFocus(place: FocusPlace) {
     restoringFocus?.disconnect();
     const attempt = () => {
@@ -99,7 +102,7 @@ export function createHub(parent: HTMLElement) {
       return true;
     };
     if (!attempt()) {
-      if (!content.hidden) (content.querySelector<HTMLElement>('input,button,select,[tabindex="0"]') ?? backButton).focus();
+      if (!content.hidden) firstControl().focus();
       else focusResult();
       restoringFocus = new MutationObserver(attempt);
       restoringFocus.observe(content, { childList: true, subtree: true });
@@ -555,7 +558,7 @@ export function createHub(parent: HTMLElement) {
     if (target.closest('.hub-heading')) {
       const controls = [...required<HTMLElement>('.hub-heading').querySelectorAll<HTMLButtonElement>('button')].filter(button => !button.hidden && button.getClientRects().length);
       const index = controls.indexOf(target as HTMLButtonElement);
-      if (event.key === 'ArrowDown') { event.preventDefault(); (search.hidden ? content.querySelector<HTMLElement>('input[type=search],input[type=text]') ?? content.querySelector<HTMLElement>('input,select,button,[tabindex="0"]') : input)?.focus(); }
+      if (event.key === 'ArrowDown') { event.preventDefault(); (search.hidden ? content.querySelector<HTMLElement>('input[type=search],input[type=text]') ?? firstControl() : input).focus(); }
       else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); controls[Math.max(0, Math.min(controls.length - 1, index + (event.key === 'ArrowRight' ? 1 : -1)))]?.focus(); }
       return;
     }
@@ -622,7 +625,7 @@ export function createHub(parent: HTMLElement) {
   root.addEventListener('focusin', event => { if (event.target !== root && event.target instanceof HTMLElement) lastFocus = event.target; });
   root.addEventListener('focus', () => {
     const usable = lastFocus?.isConnected && root.contains(lastFocus) && lastFocus.getClientRects().length > 0 && !lastFocus.matches(':disabled');
-    (usable ? lastFocus! : search.hidden ? content.querySelector<HTMLElement>('input,select,button,[tabindex="0"]') ?? backButton : input).focus({ preventScroll: true });
+    (usable ? lastFocus! : search.hidden ? firstControl() : input).focus({ preventScroll: true });
   });
   root.addEventListener('click', event => { if (event.target === root) { event.stopImmediatePropagation(); close(); } }, true);
   root.addEventListener('close', () => { if (!root.open && !suspended) close(); });
@@ -668,7 +671,7 @@ export function createHub(parent: HTMLElement) {
       viewAvailable = available ?? null;
       disposeView = mount(content, back);
       paintNavigation();
-      if (!content.contains(document.activeElement)) content.querySelector<HTMLElement>('input,select,button,[tabindex="0"]')?.focus();
+      if (!content.contains(document.activeElement)) firstControl().focus();
     },
     notify,
     browseBuilds() { const row = lookup('builds'); if (row && !row.unavailable) void row.run(); else report('Build Library is loading. Try again.'); },
