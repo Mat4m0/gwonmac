@@ -541,7 +541,7 @@ export function createHub(parent: HTMLElement) {
     presenter.showView('Build details', target => {
       const view = document.createElement('section'); view.className = 'hub-build-details ui-scroll';
       for (const build of [...(incoming ? [incoming] : []), row]) {
-        const heading = document.createElement('h2'); heading.textContent = 'label' in build ? `${build.label}: ${build.title}` : `${build.title} · ${build.detail}`; view.append(heading);
+        const heading = document.createElement('h2'); heading.textContent = 'label' in build ? `${build.label}: ${build.title}` : [build.title, build.detail].filter(Boolean).join(' · '); view.append(heading);
         if (build.workspace) { const open = document.createElement('button'); open.className = 'ui-button'; open.textContent = 'Open in Build Library'; open.onclick = build.workspace; view.append(open); }
         if (build.skills) {
           view.append(renderBuildInfo(build));
