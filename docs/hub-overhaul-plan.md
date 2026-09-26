@@ -136,7 +136,10 @@ do not focus a decorative heading or disabled primary action.
   change, closed surface or move to another surface swallows the rest of the run
   wherever it lands, the game canvas included (HUB-242, HUB-244). Rapid clicks on
   an unchanged page still count. Footer slots disable instead of hiding, so
-  nothing slides under a resting pointer. Right-click on a row selects it and
+  nothing slides under a resting pointer. Hover selects only on real pointer
+  movement: a view that appears under a resting pointer, a wheel scroll or the
+  trailing click of a double-click never moves the selection the footer names,
+  in Hub lists and Travel alike (HUB-012). Right-click on a row selects it and
   opens its Actions. A separate details affordance may inspect without executing.
 - Destructive confirmations (Resign, "Leave and switch", closing the running
   account) share one arming helper: they accept nothing until ~400 ms after they

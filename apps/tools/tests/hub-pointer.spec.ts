@@ -280,6 +280,29 @@ test('Travel: a click selects a destination and the footer travels once', async 
   await expect.poll(() => ledger(page)).toEqual(['TRAVEL Kaineng Center']);
 });
 
+test('Travel: a view that opens under a resting pointer keeps its selection (HUB-012)', async ({ page }) => {
+  await open(page);
+  await page.keyboard.press('Meta+t');
+  const favourite = page.locator('#travel-favorite-1');
+  const box = (await favourite.boundingBox())!;
+  await page.keyboard.press('Meta+Backspace');
+  await expect(caption(page)).toHaveText('Home');
+  // The pointer rests where the favourite will appear; Travel opens under it by keyboard and by a click.
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.keyboard.press('Meta+t');
+  await page.waitForTimeout(400);
+  await expect(page.locator('#travel-recent-449')).toHaveAttribute('aria-selected', 'true');
+  await expect(favourite).toHaveAttribute('aria-selected', 'false');
+  await expect(page.locator('.travel-primary')).toHaveText(/^Travel to Kamadan/);
+  // A wheel under the still pointer leaves it too; only a real move selects.
+  await page.mouse.wheel(0, 30);
+  await page.waitForTimeout(200);
+  await expect(page.locator('#travel-recent-449')).toHaveAttribute('aria-selected', 'true');
+  await page.mouse.move(box.x + box.width / 2 + 3, box.y + box.height / 2);
+  await expect(favourite).toHaveAttribute('aria-selected', 'true');
+  expect(await ledger(page)).toEqual([]);
+});
+
 test('Characters: rapid clicks on an unchanged page still count', async ({ page }) => {
   await open(page);
   await page.keyboard.press('Meta+e');
