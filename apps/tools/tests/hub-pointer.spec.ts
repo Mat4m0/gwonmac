@@ -326,6 +326,31 @@ test('Accounts: a replace needs one deliberate armed confirmation', async ({ pag
   expect(await ledger(page)).toEqual(['Account Second replace']);
 });
 
+test('right-click selects a row and opens its Actions', async ({ page }) => {
+  await open(page);
+  await row(page, 'Eye of the North').click({ button: 'right' });
+  await expect(caption(page)).toHaveText('Eye of the North');
+  await expect(page.locator('#hub')).toContainText('Pin to Hub');
+  await expect(page.locator('#hub')).toContainText('Set search phrase');
+  await search(page).press('Escape');
+  await expect(row(page, 'Eye of the North')).toHaveAttribute('aria-selected', 'true');
+  expect(await ledger(page)).toEqual([]);
+});
+
+test('the footer slots keep their place from page to page', async ({ page }) => {
+  await open(page);
+  const slot = async () => {
+    const actions = page.locator('.hub-actions');
+    await expect(actions).toBeVisible();
+    const box = (await actions.boundingBox())!;
+    return [Math.round(box.x), Math.round(box.width), Math.round((await primary(page).boundingBox())!.x + (await primary(page).boundingBox())!.width)];
+  };
+  const home = await slot();
+  await enter(page, 'build smiter');
+  await expect(page.locator('.hub-actions')).toHaveText('Details');
+  expect(await slot()).toEqual(home);
+});
+
 test('a double-click on the calculator card copies once', async ({ page }) => {
   await open(page);
   await search(page).fill('10 ecto in p');

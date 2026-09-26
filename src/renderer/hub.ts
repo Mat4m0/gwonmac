@@ -468,6 +468,8 @@ export function createHub(parent: HTMLElement) {
         if (event.detail <= 1) { pressed = row.id; select(row.id); focusResult(); if (!row.consequential) void run(); }
         else if (event.detail === 2 && row.consequential && pressed === row.id) void run();
       });
+      // Right-click selects the row and opens its Actions (HUB-248).
+      option.addEventListener('contextmenu', event => { event.preventDefault(); select(row.id); focusResult(); actions(); });
       list.append(option);
     });
     count.textContent = `${rows.length} result${rows.length === 1 ? '' : 's'}`;

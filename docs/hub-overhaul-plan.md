@@ -136,7 +136,8 @@ do not focus a decorative heading or disabled primary action.
   change, closed surface or move to another surface swallows the rest of the run
   wherever it lands, the game canvas included (HUB-242, HUB-244). Rapid clicks on
   an unchanged page still count. Footer slots disable instead of hiding, so
-  nothing slides under a resting pointer. A separate details affordance may inspect without executing.
+  nothing slides under a resting pointer. Right-click on a row selects it and
+  opens its Actions. A separate details affordance may inspect without executing.
 - Destructive confirmations (Resign, "Leave and switch", closing the running
   account) share one arming helper: they accept nothing until ~400 ms after they
   appear, never the later click of a multi-click, and mark `data-armed` once
@@ -351,7 +352,7 @@ view. Shared code should emerge only for shared responsibilities, not visual sim
 | Native text after browsing | First character, paste, Option/dead keys, IME, selection, undo/delete work in Electron |
 | Mouse + keyboard + held keys | Hover cannot undo restored focus; key repeat cannot execute the next page |
 | Pointer: single, double and triple click at 0/120/450 ms | A consequential row selects on a click and runs once on its own double-click; a navigational row opens exactly one level; nothing on the next page runs, toggles or selects |
-| Pointer: press moved to another row, or a second press on another row | Nothing activates |
+| Pointer: press moved to another row, second press on another row, right-click | Nothing activates; right-click selects and opens Actions |
 | Pointer: a click run that closes the Hub, with the canvas at full size | No trailing `pointerdown`, `mousedown`, `mouseup`, `click` or `dblclick` reaches the canvas; focus and typing stay in a handoff's destination |
 | Async removal/reordering | Selected identity remains stable; vanished target cannot become another executable choice |
 | Blur/resume and account change | Read-only place resumes; live targets refresh; another account never inherits them |

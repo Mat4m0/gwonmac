@@ -34,6 +34,8 @@
 .hub-row[aria-disabled=true] .hub-title { color:var(--ui-text-muted); }
 .hub-footer { display:flex; align-items:center; justify-content:flex-end; gap:8px; padding:8px; min-height:48px; flex-shrink:0; border-top:1px solid var(--ui-line-soft); }
 .hub-primary { display:flex; align-items:center; gap:10px; }
+/* Actions and Details share one width, so the primary beside it never shifts under a resting pointer. */
+.hub-actions { min-width:5.75em; justify-content:center; }
 .hub-legend { display:flex; flex-wrap:wrap; gap:4px 12px; min-width:0; color:var(--ui-text-muted); font:var(--ui-type-caption-size)/var(--ui-type-caption-line) var(--ui-font-reading); }
 .hub-legend .ui-kbd { min-width:20px; margin-right:2px; padding:0 4px; }
 .hub-count { margin-right:auto; color:var(--ui-text-muted); font:var(--ui-type-caption-size)/var(--ui-type-caption-line) var(--ui-font-reading); white-space:nowrap; }
