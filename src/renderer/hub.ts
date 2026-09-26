@@ -317,7 +317,8 @@ export function createHub(parent: HTMLElement) {
     const destination = parent?.view?.title ?? parent?.scope?.title ?? 'Home';
     backButton.hidden = !parent;
     backButton.textContent = '←';
-    backButton.title = `Back to ${destination}`;
+    backButton.title = `Back to ${destination} (⌘⌫)`;
+    backButton.setAttribute('aria-keyshortcuts', 'Meta+Backspace');
     backButton.setAttribute('aria-description', `Return to ${destination}`);
     const actionsButton = required<HTMLButtonElement>('.hub-actions');
     actionsButton.hidden = !!scope && !scope.summary?.skills && !rows.find(row => row.id === selected)?.skills;
@@ -484,6 +485,12 @@ export function createHub(parent: HTMLElement) {
   });
   root.addEventListener('keydown', event => {
     restoringFocus?.disconnect(); restoringFocus = null;
+    // ⌘⌫ is Back from any focus, form fields included: one level per physical press, never text deletion, no-op at Home.
+    if (event.key === 'Backspace' && event.metaKey && !event.ctrlKey && !event.altKey && !event.isComposing) {
+      event.preventDefault(); event.stopPropagation();
+      if (!event.repeat && history.length) back();
+      return;
+    }
     if (!event.defaultPrevented && event.target instanceof Element && event.target.closest('.hub-row') && resumeSearchInput(event, input)) return;
     if (event.defaultPrevented || event.isComposing || event.metaKey || event.ctrlKey || event.altKey) return;
     if (event.key === 'Enter' && event.repeat) { event.preventDefault(); return; }

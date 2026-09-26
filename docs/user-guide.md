@@ -200,7 +200,8 @@ styles. Deleting a custom style requires confirmation.
 
 Press **Command-R** to search people, outposts, tools, and commands. Type a name, use Up and Down,
 and press Enter for the action shown in the footer. The **Actions** button opens secondary actions. **Command-K** opens Trade. Escape goes back or
-closes the palette. The game keeps running while Hub is open.
+closes the palette. **Command-Delete** (⌘⌫) goes back one level from anywhere in Hub, text fields included;
+it never deletes text and does nothing on Home. The game keeps running while Hub is open.
 
 With Travel enabled, search an outpost or your custom Travel phrase. Travel,
 favourites, recent places, and Guild Hall stay in the same window. Command-T
