@@ -348,6 +348,9 @@ browser fixture, each cell in a fresh browser context, compared with
 `apps/tools/tests/keyboard-contract.golden.json`. The table records current
 behaviour, including known defects. A change that alters keyboard behaviour
 regenerates it with `KEYBOARD_GOLDEN=update` and commits the reviewed table diff.
+The Electron `tests/electron/hub-input-contract.spec.ts` records which physical keys
+reach the game canvas through the main process; cases that document a current leak
+are marked `fixme` until their fix lands.
 
 Extend existing fixtures with realistic mixed professions, missing observations,
 long names, empty/large folders, and account state changes. Measure large-list typing
