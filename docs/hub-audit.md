@@ -20,7 +20,7 @@ findings now have implemented fixes; this is a closure record, not a new score.
 | H07 | Build/team reviews show actual eight-skill bars, targets and compact attribute disclosure. |
 | H08 | Embedded controls and Maps/settings surfaces share Hub styling. Desktop/narrow visual checks completed. |
 | H09 | Discoverable command examples fill the query without executing actions; disabled tools are omitted. |
-| H10 | Alias validation rejects reserved grammar and calculator expressions; focused unit checks pass. |
+| H10 | The phrase editor rejects reserved grammar and calculator expressions; stored phrases are checked for structure only, so a later command word never quarantines saved data. Focused unit checks pass. |
 | H11 | Character hints use the canonical resolved shortcut, including custom modifiers and cleared bindings. |
 | H12 | Account actions refresh identity/state before execution; changed accounts require a fresh selection. Unit check confirms no stale action. |
 | H13 | Trade offers open an addressed composer when Whispers is enabled; Back restores the offer and filter. |

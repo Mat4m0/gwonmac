@@ -167,6 +167,7 @@ test("native outgoing echo completes submission, clears the draft, and adds one 
       k.view.setUint32(ADDRESSES.whispers + COMPANION_ABI.whispers.snapshotBytes + WHISPER_MAILBOX.status, 2, true);
       return 1;
     },
+    enhancement_send_party_invite: () => 0,
   }, true);
   adapter.allocate(() => ADDRESSES.whispers);
   adapter.initialize(k.memory);
@@ -188,4 +189,42 @@ test("native outgoing echo completes submission, clears the draft, and adds one 
     adapter.poll();
     assert.equal(session.state.conversations[0]?.messages.length, 1);
   } finally { adapter.dispose(() => {}); session.dispose(); }
+});
+
+
+test("a party invite resolves on the drained mailbox, reports refusal, and blocks a second chat command", async () => {
+  const k = await fixture();
+  const status = ADDRESSES.whispers + COMPANION_ABI.whispers.snapshotBytes + WHISPER_MAILBOX.status;
+  const lines: string[] = [];
+  let accept = true;
+  const adapter = createWhisperInstallation({
+    enhancement_configure_whispers: () => 1,
+    enhancement_send_whisper: () => 1,
+    enhancement_send_party_invite: () => {
+      const mailbox = ADDRESSES.whispers + COMPANION_ABI.whispers.snapshotBytes;
+      const length = k.view.getUint32(mailbox + WHISPER_MAILBOX.length, true);
+      lines.push(String.fromCharCode(...Array.from({ length }, (_, i) => k.view.getUint16(mailbox + WHISPER_MAILBOX.source + i * 2, true))));
+      k.view.setUint32(status, 1, true);
+      return accept ? 1 : 0;
+    },
+  }, true);
+  adapter.allocate(() => ADDRESSES.whispers);
+  adapter.initialize(k.memory);
+  await assert.rejects(adapter.invite("Mo Kai"), /need Whispers enabled/);
+  adapter.setEnabled(true);
+  try {
+    await assert.rejects(adapter.invite("Mo,Kai"), /valid character name/);
+    const invited = adapter.invite("Mo Kai");
+    await assert.rejects(adapter.send("Mo Kai", "Hi"), /still taking the last chat command/);
+    k.view.setUint32(status, 2, true);
+    adapter.poll();
+    await invited;
+    assert.deepEqual(lines, ["/invite Mo Kai"]);
+    const withdrawn = adapter.invite("Mo Kai");
+    k.view.setUint32(status, 3, true);
+    adapter.poll();
+    await assert.rejects(withdrawn, /The invite was not sent/);
+    accept = false;
+    await assert.rejects(adapter.invite("Mo Kai"), /busy or the session changed/);
+  } finally { adapter.dispose(() => {}); }
 });

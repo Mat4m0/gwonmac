@@ -23,7 +23,9 @@ Current integrated features are:
   imports no optional Tools implementation. Travel contributes its existing
   command host and detailed view; people search consumes the same friend feed
   as Travel and Whispers. Quick replies use the existing `WhisperSession` and
-  named sender. No new native command, chat persistence, or observer is added.
+  named sender. Party invites use the named invite export on the same certified
+  chat mailbox; see [Whispers](whispers.md#party-invite). No chat persistence or
+  observer is added.
   Command-K belongs to Scry while it is open and falls back to its configured
   action outside the palette. A saved Command-R override takes priority; Scry
   remains available from View. Its default is not serialized as a new shortcut

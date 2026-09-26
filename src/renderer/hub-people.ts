@@ -7,18 +7,21 @@ import { travelDestination } from '../shared/travel.js';
 import { parseHubQuery, type HubRow, type HubSource } from '../shared/hub.js';
 import { normaliseCharacterName } from '../shared/player-text.js';
 import { findPeople, whisperPersonKey, whisperUnread, type Person, type WhisperSession } from '../shared/whisper-session.js';
-import { isCharacterName } from '../shared/whispers.js';
+import { isCharacterName, isFullCharacterName } from '../shared/whispers.js';
 import type { Hub } from './hub.js';
+import type { PartyInvite } from './party-invite.js';
 
 const toolEnabled = (setting: 'whispersEnabled' | 'travelPalette') =>
   !!window.gwToolsSettings?.().gwonmacTools && !!window.gwToolsSettings?.()[setting];
 const MAX_PEOPLE = 8;
+const PARTIAL_NAME = 'Type the full character name';
 
 type FriendTravel = Readonly<{
   unavailable(): string | null;
   run(friend: TravelFriend, generation: number): Promise<void>;
 }>;
-export function createHubPeople(hub: Pick<Hub, 'attach' | 'showRows'>, session: WhisperSession, travel: FriendTravel | null) {
+export function createHubPeople(hub: Pick<Hub, 'attach' | 'showRows' | 'close' | 'notify'>, session: WhisperSession,
+  travel: FriendTravel | null, party: PartyInvite | null = null) {
   let friends: TravelFriends = { status: 'waiting', reason: 'unavailable' };
   let enabled = false;
   let detach: (() => void) | null = null;
@@ -56,6 +59,27 @@ export function createHubPeople(hub: Pick<Hub, 'attach' | 'showRows'>, session: 
           if (!selectedFriend || selectedFeed.status !== 'ready' || !travel) throw new Error('Friend travel is unavailable');
           await travel.run(selectedFriend, selectedFeed.generation);
         } });
+      if (party && toolEnabled('whispersEnabled')) {
+        // Invites address a character; an offline friend has only an account alias.
+        const target = friendKey ? friend?.character ?? '' : name;
+        const offline = !!friendKey && (!friend || friend.status === 'offline' || !friend.character);
+        const inviteReason = changed ? 'This friend changed or is unavailable. Select them again.'
+          : offline ? 'This friend is offline' : !friendKey && !isFullCharacterName(name) ? PARTIAL_NAME : party.unavailable(friend);
+        rows.push({ id: 'person:invite', title: 'Invite to party', detail: `Add ${target || name} to your party`, group: 'Actions', action: `Invite ${target || name}`,
+          ...(inviteReason ? { unavailable: inviteReason } : {}), run: () => inviteNow(party, target, friend) });
+        if (friendKey && friend && travel && toolEnabled('travelPalette')) {
+          const place = destination?.name ?? 'the outpost';
+          const travelInviteReason = reason ?? (offline ? 'This friend is offline' : party.travelUnavailable(friend));
+          rows.push({ id: 'person:travel-invite', title: 'Travel and invite', detail: `${place} · Any district, then invite ${target}`, group: 'Actions', action: `Travel and invite ${target}`,
+            ...(travelInviteReason ? { unavailable: travelInviteReason } : {}), run: async () => {
+              if (!selectedFriend || selectedFeed.status !== 'ready') throw new Error('Friend travel is unavailable');
+              const { invited } = await party.travelAndInvite(selectedFriend, selectedFeed.generation);
+              hub.close(`Travelling to ${place}. Hub sends /invite ${target} on arrival.`);
+              invited.then(() => hub.notify(`Sent /invite ${target}. Guild Wars answers in chat.`),
+                error => hub.notify(error instanceof Error ? error.message : 'The invite was not sent.'));
+            } });
+        }
+      }
       return rows;
     });
   }
@@ -65,8 +89,9 @@ export function createHubPeople(hub: Pick<Hub, 'attach' | 'showRows'>, session: 
     search(query) {
       const whispersEnabled = toolEnabled('whispersEnabled');
       const parsed = parseHubQuery(query);
-      if (parsed.scope === 'whisper' && !whispersEnabled) return [];
-      if (parsed.scope && parsed.scope !== 'whisper') return [];
+      // `whisper` and `invite` address one person; both need the Whispers chat mailbox.
+      const addressed = parsed.scope === 'whisper' || (parsed.scope === 'invite' && !!party);
+      if (parsed.scope && (!addressed || !whispersEnabled)) return [];
       if (!parsed.term) {
         // Home lists only conversations that still need the player.
         return whispersEnabled ? session.state.conversations.filter(conversation => whisperUnread(conversation) || conversation.draft)
@@ -75,19 +100,39 @@ export function createHubPeople(hub: Pick<Hub, 'attach' | 'showRows'>, session: 
       const people = findPeople(session.state, parsed.text, friends)
         .filter(person => whispersEnabled || person.source === 'friend').slice(0, MAX_PEOPLE);
       const rows = people.map(row);
-      // An addressed name stays reachable beside similar known names. It comes last,
-      // so Enter on a partial name still chooses the known person. Unscoped search
+      // An addressed name stays reachable beside similar known names. Unscoped search
       // offers only known people: any phrase could otherwise pose as a name.
       const typed = normaliseCharacterName(parsed.text);
-      if (parsed.scope === 'whisper' && session.state.available && isCharacterName(typed) && !people.some(person => person.exact)) {
-        rows.push({ id: `person:typed:${whisperPersonKey(typed)}`, title: typed, detail: 'Character name', group: 'People',
-          action: 'View actions', actions: () => person(typed), run: () => person(typed) });
+      const typedRow: HubRow | null = addressed && session.state.available && isCharacterName(typed) && !people.some(person => person.exact)
+        ? { id: `person:typed:${whisperPersonKey(typed)}`, title: typed, detail: 'Character name', group: 'People',
+          action: 'View actions', actions: () => person(typed), run: () => person(typed) } : null;
+      if (parsed.scope === 'invite' && party) {
+        // Only an exact name invites, and it comes first. A prefix or chat match
+        // opens the person page instead, so Enter never invites a similar name.
+        // A single word is part of a name: it stays last and says why it cannot invite.
+        const invites = rows.map((entry, index) => people[index]!.exact ? inviteRow(party, entry, people[index]!.friend) : entry);
+        if (!typedRow) return invites;
+        return isFullCharacterName(typed) ? [inviteRow(party, typedRow), ...invites]
+          : [...invites, { ...inviteRow(party, typedRow), unavailable: PARTIAL_NAME }];
       }
+      // A whisper only opens a draft, so Enter on a partial name keeps the known person first.
+      if (typedRow) rows.push(typedRow);
       return parsed.scope === 'whisper'
         ? rows.map(entry => ({ ...entry, action: 'Write whisper', run: () => whisper(entry.keywords || entry.title) }))
         : rows;
     },
   };
+  function inviteRow(party: PartyInvite, entry: HubRow, friend?: TravelFriend): HubRow {
+    // Invites address a character; an offline friend has only an account alias.
+    const target = friend ? friend.character : entry.title;
+    const reason = friend && (friend.status === 'offline' || !friend.character) ? 'This friend is offline' : party.unavailable(friend);
+    return { ...entry, action: `Invite ${target || entry.title}`, ...(reason ? { unavailable: reason } : {}), run: () => inviteNow(party, target, friend) };
+  }
+  /** Guild Wars answers the invite in chat; Hub claims only that the command was sent. */
+  async function inviteNow(party: PartyInvite, target: string, friend?: TravelFriend) {
+    await party.invite(target, friend);
+    hub.close(`Sent /invite ${target}. Guild Wars answers in chat.`);
+  }
   function row(entry: Person): HubRow {
     const { friend, conversation } = entry;
     if (friend) {

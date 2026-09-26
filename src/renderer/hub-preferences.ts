@@ -3,7 +3,23 @@
  * Keeps presentation separate from canonical game and storage owners.
  */
 import { isHubShortcuts, type HubShortcut } from '../shared/hub-preferences.js';
-import type { HubPresenter, HubRow } from '../shared/hub.js';
+import { HUB_SCOPES, normaliseHubQuery, type HubPresenter, type HubRow } from '../shared/hub.js';
+import { calculate, parseConversion } from '../shared/hub-calculator.js';
+
+/** First words that Hub's query grammar owns. */
+export const HUB_RESERVED_WORDS: readonly string[] = [...HUB_SCOPES, 'settings', 'hub', 'commands', 'help', 'titles', 'rates', 'launcher'];
+/** Whole phrases that the calculator reads as a unit. */
+export const HUB_CALCULATOR_UNITS: readonly string[] = ['g', 'gold', 'p', 'plat', 'platinum', 'e', 'ecto', 'ectos', 'ectoplasm'];
+/**
+ * Refuses a new phrase that the query grammar would read first. Only the editor asks:
+ * a stored phrase stays valid when a later release adds a word and simply stops matching.
+ */
+export function hubPhraseReserved(phrase: string): boolean {
+  const term = normaliseHubQuery(phrase);
+  if (!term) return false;
+  if (HUB_RESERVED_WORDS.includes(term.split(' ')[0]!) || HUB_CALCULATOR_UNITS.includes(term)) return true;
+  try { return !!parseConversion(term) || !!calculate(term); } catch { return /^\d/u.test(term); }
+}
 export function editHubShortcut(hub: HubPresenter<HTMLElement>, row: HubRow, get: () => readonly HubShortcut[], save: (value: readonly HubShortcut[]) => Promise<void>) {
   hub.showView('Search phrase', target => {
     const doc = target.ownerDocument;
@@ -20,9 +36,9 @@ export function editHubShortcut(hub: HubPresenter<HTMLElement>, row: HubRow, get
     form.onsubmit = event => {
       event.preventDefault();
       const current = get(); const old = current.find(entry => entry.id === row.id);
-      const phrase = input.value.toLowerCase().trim().replace(/\s+/gu, ' ');
+      const phrase = normaliseHubQuery(input.value);
       const next = [...current.filter(entry => entry.id !== row.id), ...(phrase || old?.pinned ? [{ id: row.id, phrase, pinned: old?.pinned ?? false }] : [])];
-      if (!isHubShortcuts(next)) { status.textContent = 'Choose a unique phrase. Command words are reserved.'; return; }
+      if (hubPhraseReserved(phrase) || !isHubShortcuts(next)) { status.textContent = 'Choose a unique phrase. Command words are reserved.'; return; }
       button.disabled = true;
       void save(next).then(() => { status.textContent = 'Saved'; }).catch(() => { status.textContent = 'Could not save. Try again.'; }).finally(() => { button.disabled = false; });
     };

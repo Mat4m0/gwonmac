@@ -2,10 +2,14 @@
  * Bounded search phrases and pins. Entries reference canonical objects, never executable text.
  * Keeps presentation separate from canonical game and storage owners.
  */
-import { HUB_SCOPES } from './hub.js';
-import { parseConversion, calculate } from './hub-calculator.js';
+import { normaliseHubQuery } from './hub.js';
 export type HubShortcut = Readonly<{ id: string; phrase: string; pinned: boolean }>;
 export const HUB_SHORTCUT_LIMIT = 64;
+/**
+ * Structural validation for stored pins and phrases: shape, id, length and uniqueness.
+ * Grammar words are refused only when a phrase is edited, so a phrase saved before a
+ * new scope word or calculator unit keeps loading and simply stops matching.
+ */
 export function isHubShortcuts(value: unknown): value is readonly HubShortcut[] {
   if (!Array.isArray(value) || value.length > HUB_SHORTCUT_LIMIT) return false;
   const ids = new Set<string>(); const phrases = new Set<string>();
@@ -15,12 +19,8 @@ export function isHubShortcuts(value: unknown): value is readonly HubShortcut[] 
     const { id, phrase, pinned }: { id: unknown; phrase: unknown; pinned: unknown } = entry;
     if (typeof id !== 'string' || id.length > 240 || !/^(travel|builds|trade|whispers|character|storage|maps|place:\d+|team:.+|build:.+)$/u.test(id)
       || typeof phrase !== 'string' || phrase.length > 64 || /[\p{C}]/u.test(phrase) || typeof pinned !== 'boolean') return false;
-    const term = phrase.toLowerCase().trim().replace(/\s+/gu, ' ');
-    if (ids.has(id) || (term && (phrases.has(term) || HUB_SCOPES.some(scope => term === scope || term.startsWith(`${scope} `)) || isCalculation(term) || /^(?:(team|build|travel|char|whisper|trade|settings|hub|commands|help|titles|rates|launcher)(?: |$)|g$|gold$|p$|plat$|platinum$|e$|ecto$|ectos$|ectoplasm$)/u.test(term)))) return false;
+    const term = normaliseHubQuery(phrase);
+    if (ids.has(id) || (term && phrases.has(term))) return false;
     ids.add(id); if (term) phrases.add(term); return true;
   });
-}
-
-function isCalculation(term: string): boolean {
-  try { return !!parseConversion(term) || !!calculate(term); } catch { return /^\d/u.test(term); }
 }

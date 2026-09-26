@@ -3,7 +3,7 @@
  * Generic WASM section assembly remains outside this module.
  */
 import { concat } from "../core/wasm-binary.js";
-import { whisperConfigure, whisperEnqueue, whisperDrain } from "./enhancement-whisper-transform.js";
+import { partyInviteEnqueue, whisperConfigure, whisperEnqueue, whisperDrain } from "./enhancement-whisper-transform.js";
 import { resignConfigure, resignEnqueue, resignExecute, resignDrain } from "./enhancement-resign-transform.js";
 import {
   professionTraceReader,
@@ -91,7 +91,9 @@ export function featureExportNames(
           ...(travelAction.guildHall ? [travelAction.guildHall.enqueueExport] : []),
         ]
       : []),
-    ...(capabilities.whisperChat ? ["enhancement_configure_whispers", "enhancement_send_whisper"] : []),
+    ...(capabilities.whisperChat
+      ? ["enhancement_configure_whispers", "enhancement_send_whisper", "enhancement_send_party_invite"]
+      : []),
     ...(capabilities.resignAction ? ["enhancement_configure_resign", "enhancement_resign"] : []),
     ...(capabilities.chatAliases
       ? ["enhancement_configure_trade_toggle", "enhancement_take_trade_toggle"]
@@ -308,6 +310,11 @@ export function applyFeatureContributions(
       { name: "enhancement_send_whisper", index: appendFunction(
         required(typeIndices.whisperEnqueue, "Whisper enqueue type"),
         whisperEnqueue(globalIndices.commandPending, globalIndices.whisperPointer, globalIndices.whisperEnabled,
+          { hookGlobal: globalIndices.whisperHook, dispatchType: typeIndices.whisperDispatch })) },
+      // Party invite shares the whisper mailbox, policy gate and drain.
+      { name: "enhancement_send_party_invite", index: appendFunction(
+        required(typeIndices.whisperEnqueue, "Party invite enqueue type"),
+        partyInviteEnqueue(globalIndices.commandPending, globalIndices.whisperPointer, globalIndices.whisperEnabled,
           { hookGlobal: globalIndices.whisperHook, dispatchType: typeIndices.whisperDispatch })) },
     );
   }

@@ -1,9 +1,12 @@
 /**
- * Owns one bounded whisper mailbox on the existing game-thread command queue.
- * Enqueue snapshots the line; execution consumes it once and calls native chat.
+ * Owns one bounded chat mailbox on the existing game-thread command queue.
+ * Enqueue snapshots a whisper or party-invite line; execution consumes it once
+ * and calls native chat. Each enqueue accepts only its own exact line shape.
  */
 import { concat, sleb, uleb } from "../core/wasm-binary.js";
-import { WHISPER_MAILBOX as M, WHISPER_LINE_UNITS, WHISPER_NAME_UNITS, WHISPER_MESSAGE_UNITS } from "../../shared/whispers.js";
+import {
+  PARTY_INVITE_PREFIX, WHISPER_MAILBOX as M, WHISPER_LINE_UNITS, WHISPER_NAME_UNITS, WHISPER_MESSAGE_UNITS,
+} from "../../shared/whispers.js";
 
 const COMMAND = -7;
 const op = (...bytes: number[]) => Uint8Array.of(...bytes);
@@ -67,6 +70,37 @@ export function whisperEnqueue(pending: number, pointer: number, enabled: number
     l(3), c(2), op(0x49), l(3), c(WHISPER_NAME_UNITS + 1), op(0x4b, 0x72), refuse,
     l(0), l(3), op(0x6b), c(1), op(0x6b), sl(2),
     l(2), op(0x45), l(2), c(WHISPER_MESSAGE_UNITS), op(0x4b, 0x72), refuse,
+    g(pointer), c(M.queued), op(0x6a), g(pointer), c(M.source), op(0x6a),
+    l(0), c(2), op(0x6c, 0xfc, 10, 0, 0),
+    g(pointer), l(0), c(2), op(0x6c, 0x6a), c(0), op(0x3b, 1), uleb(M.queued),
+    g(pointer), c(1), store(M.status),
+    c(COMMAND), sg(pending), c(1), op(0x0b));
+}
+
+/** Accepts only `/invite <name>`: one to twenty name units, no delimiter, control or surrogate. */
+export function partyInviteEnqueue(pending: number, pointer: number, enabled: number, gate: WhisperGate): Uint8Array {
+  const unit = (offset: number) => concat(op(0x2f, 1), uleb(M.source + offset));
+  const prefix = [...PARTY_INVITE_PREFIX].map((character, index) =>
+    concat(g(pointer), unit(index * 2), c(character.charCodeAt(0)), op(0x47), refuse));
+  // locals: length, index, unit.
+  return concat(uleb(1), uleb(3), op(0x7f),
+    g(enabled), op(0x45), refuse, g(pending), refuse,
+    authorize(pointer, gate, 0), g(pointer), load(M.status), c(4), op(0x47), refuse,
+    g(pointer), load(M.length), sl(0),
+    l(0), c(PARTY_INVITE_PREFIX.length + 1), op(0x49),
+    l(0), c(PARTY_INVITE_PREFIX.length + WHISPER_NAME_UNITS), op(0x4b, 0x72), refuse,
+    ...prefix,
+    c(PARTY_INVITE_PREFIX.length), sl(1),
+    op(0x02, 0x40, 0x03, 0x40),
+      l(1), l(0), op(0x4f, 0x0d, 1),
+      g(pointer), l(1), c(2), op(0x6c, 0x6a), unit(0), sl(2),
+      l(2), c(32), op(0x49), l(2), c(127), op(0x46, 0x72), refuse,
+      l(2), c(34), op(0x46), l(2), c(44), op(0x46, 0x72), refuse,
+      l(2), c(0xf800), op(0x71), c(0xd800), op(0x46), refuse,
+      l(1), c(1), op(0x6a), sl(1), op(0x0c, 0, 0x0b, 0x0b),
+    // Guild Wars trims names; a padded name would address someone else.
+    g(pointer), unit(PARTY_INVITE_PREFIX.length * 2), c(32), op(0x46), refuse,
+    g(pointer), l(0), c(2), op(0x6c, 0x6a), unit(-2), c(32), op(0x46), refuse,
     g(pointer), c(M.queued), op(0x6a), g(pointer), c(M.source), op(0x6a),
     l(0), c(2), op(0x6c, 0xfc, 10, 0, 0),
     g(pointer), l(0), c(2), op(0x6c, 0x6a), c(0), op(0x3b, 1), uleb(M.queued),
