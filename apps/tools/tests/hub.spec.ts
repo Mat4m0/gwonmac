@@ -427,6 +427,28 @@ test('Travel carousel arrows browse without executing and preserve query caret e
   await expect(page.locator('#hub .hub-view')).toBeHidden();
 });
 
+test('Travel carousel arrows keep the selected recent card fully in view', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/?hub');
+  const root = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  await root.fill('travel'); await root.press('Enter');
+  const search = page.getByRole('combobox', { name: 'Destination, phrase, or friend' });
+  await expect(search).toBeFocused();
+  const cards = await page.locator('.travel-history .travel-recent').count();
+  expect(cards).toBeGreaterThan(4);
+  const placement = () => page.locator('.travel-history .travel-recent-grid').evaluate(grid => {
+    const frame = grid.getBoundingClientRect(); const card = grid.querySelector('[aria-selected=true]')!.getBoundingClientRect();
+    return { name: grid.querySelector('[aria-selected=true] strong')!.textContent, inside: card.left >= frame.left - 1 && card.right <= frame.right + 1 };
+  });
+  for (let step = 1; step < cards; step += 1) {
+    await search.press('ArrowRight');
+    // Let any smooth or snap scrolling settle before judging the final place.
+    await page.waitForTimeout(250);
+    const now = await placement();
+    expect(now.inside, `${now.name} after ${step} × →`).toBe(true);
+  }
+});
+
 test('profession build search previews eight skills and reviews without applying', async ({ page }) => {
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
