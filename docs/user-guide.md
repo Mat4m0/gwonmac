@@ -223,7 +223,7 @@ the area. While a map loads, the same line says when Travel returns.
 With Travel enabled, search an outpost or your custom Travel phrase. Travel,
 favourites, recent places, and Guild Hall stay in the same window. A click on a
 destination selects it; press Enter, click **Travel to …** in the footer, or
-double-click the destination to travel. Command-T
+double-click the destination to travel. A trip closes Hub. Command-T
 and `/tp` also open Travel inside Hub.
 
 Search a friend's alias or character name and press Enter to choose an action.

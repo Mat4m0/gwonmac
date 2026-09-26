@@ -35,7 +35,8 @@ const props = defineProps<{
     editingSlot: number | null; addingPhrase: boolean; phrase: string; mapId: number | null; scroll: number;
   };
 }>();
-const emit = defineEmits<{ close: []; remember: [state: NonNullable<typeof props.resume>] }>();
+/** `close` leaves Travel (Esc, Back); `travelled` ends the task after a trip started, so a host closes rather than steps back. */
+const emit = defineEmits<{ close: []; travelled: []; remember: [state: NonNullable<typeof props.resume>] }>();
 type PaletteMode = "travel" | "customize";
 const SMALL_TRAVEL_CATALOGUE_LIMIT = 10;
 const GUILD_HALL_SEARCH_TERMS = Object.freeze(["guild hall", "guild", "hall", "gh"]);
@@ -475,7 +476,7 @@ async function travel(request: TravelRequest): Promise<void> {
   feedback.value = "";
   try {
     await props.host.travel(request);
-    emit("close");
+    emit("travelled");
   } catch { /* The host owns the refusal notice and resets its transaction. */ }
 }
 
@@ -484,7 +485,7 @@ async function travelToResult(result: SearchResult): Promise<void> {
     if (result.disabledReason === null) {
       try {
         await props.host.guildHall();
-        emit("close");
+        emit("travelled");
       } catch { /* The host owns the refusal notice. */ }
     }
     return;

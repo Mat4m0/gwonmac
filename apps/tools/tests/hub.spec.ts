@@ -428,6 +428,17 @@ test('Travel Enter from an empty search uses the selected recent destination',as
   const search=page.getByRole('combobox',{name:'Destination, phrase, or friend'});
   await search.press('ArrowDown');await search.press('Enter');
   await expect(page.locator('#hub .hub-view')).toBeHidden();
+  // A trip ends the task: the Hub closes, whether Travel opened from Home or by Command-T in an open Hub (HUB-017).
+  await expect(page.locator('#app')).toHaveAttribute('data-action','TRAVEL Kaineng Center');
+  await expect(page.locator('#hub')).toBeHidden();
+  await page.getByRole('button',{name:'Open Hub',exact:true}).click();
+  await expect(hubSearch).toBeFocused();
+  await page.keyboard.press('Meta+t');
+  await expect(search).toBeFocused();
+  await expect(page.locator('.travel-primary')).toBeEnabled();
+  await search.press('Enter');
+  await expect(page.locator('#app')).toHaveAttribute('data-action',/^TRAVEL (?!Kaineng Center)/);
+  await expect(page.locator('#hub')).toBeHidden();
 });
 
 test('Travel carousel arrows browse without executing and preserve query caret editing',async({page})=>{

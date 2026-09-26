@@ -189,7 +189,7 @@ describe("TravelPalette", () => {
     wrapper.unmount();
   });
 
-  it("closes after submitting a destination", async () => {
+  it("ends the task after submitting a destination", async () => {
     const { wrapper } = fixture({ synonyms: [{ term: "daily run", mapId: 480 }] });
     await flushPromises();
 
@@ -197,7 +197,8 @@ describe("TravelPalette", () => {
     await wrapper.get('[role="option"]').trigger("click");
     await flushPromises();
 
-    expect(wrapper.emitted("close")).toHaveLength(1);
+    expect(wrapper.emitted("travelled")).toHaveLength(1);
+    expect(wrapper.emitted("close")).toBeUndefined();
     wrapper.unmount();
   });
 
@@ -211,6 +212,7 @@ describe("TravelPalette", () => {
     await flushPromises();
 
     expect(test.wrapper.emitted("close")).toBeUndefined();
+    expect(test.wrapper.emitted("travelled")).toBeUndefined();
     test.wrapper.unmount();
   });
 
