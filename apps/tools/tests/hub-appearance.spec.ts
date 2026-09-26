@@ -77,6 +77,57 @@ test('saved font and custom title material apply to the real Hub without losing 
 });
 
 
+test('a live appearance change keeps query, caret, selection, list scroll and focus', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/?hub');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  await expect(search).toBeFocused();
+  await search.fill('k');
+  for (let step = 0; step < 5; step += 1) await page.keyboard.press('ArrowDown');
+  // From here on nothing may move focus, reach <body> or paint a second selection.
+  await page.evaluate(() => {
+    const trace = { body: false, focusMoves: 0, doubleSelection: false };
+    Object.assign(window, { appearanceTrace: trace });
+    document.addEventListener('focusin', () => { trace.focusMoves += 1; }, true);
+    const sample = () => {
+      if (document.activeElement === document.body) trace.body = true;
+      if (document.querySelectorAll('#hub .hub-row[aria-selected=true]').length > 1) trace.doubleSelection = true;
+      requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+  });
+  const task = () => page.evaluate(() => {
+    const input = document.querySelector<HTMLInputElement>('#hub .hub-search input')!;
+    const list = document.querySelector('#hub .hub-results')!;
+    return {
+      state: { query: input.value, caret: [input.selectionStart, input.selectionEnd], selected: document.querySelector('#hub .hub-row[aria-selected=true]')?.getAttribute('data-id'), active: input.getAttribute('aria-activedescendant'), focus: document.activeElement?.id || document.activeElement?.className },
+      scrollTop: list.scrollTop, scrollMax: list.scrollHeight - list.clientHeight,
+    };
+  });
+  const scrollTo = (top: number) => page.locator('#hub .hub-results').evaluate((list, top) => { list.scrollTop = top; return list.scrollTop; }, top);
+  // Mid-list, every change keeps the exact scroll offset: rows have fixed
+  // heights and the list opts out of the browser's baseline-driven anchoring.
+  expect(await scrollTo(15)).toBe(15);
+  const kept = await task();
+  for (const appearance of [{ uiStyle: 'obsidian' }, { uiStyle: 'obsidian', uiFont: 'inter' }, { uiStyle: 'obsidian', uiFont: 'inter', uiPanelOpacity: 65 }]) {
+    await page.evaluate(appearance => window.gwApplyFixtureAppearance?.({ uiPanelOpacity: 100, ...appearance }), appearance);
+    await page.evaluate(() => new Promise(requestAnimationFrame));
+    const now = await task();
+    expect(now.state, JSON.stringify(appearance)).toEqual(kept.state);
+    expect(now.scrollTop, JSON.stringify(appearance)).toBe(kept.scrollTop);
+  }
+  // At the very bottom a taller list viewport can only clamp to its new end.
+  await page.evaluate(() => window.gwApplyFixtureAppearance?.({ uiStyle: 'guild-wars', uiPanelOpacity: 94 }));
+  const bottom = await scrollTo(10_000);
+  await page.evaluate(() => window.gwApplyFixtureAppearance?.({ uiStyle: 'obsidian', uiPanelOpacity: 94 }));
+  const clamped = await task();
+  expect(clamped.scrollTop).toBe(Math.min(bottom, clamped.scrollMax));
+  expect(clamped.state).toEqual(kept.state);
+  expect(await page.evaluate(() => (window as unknown as { appearanceTrace: object }).appearanceTrace)).toEqual({ body: false, focusMoves: 0, doubleSelection: false });
+  await page.keyboard.type('a');
+  await expect(search).toHaveValue('ka');
+});
+
 const CHECKERBOARD = 'body { background: repeating-conic-gradient(#fff 0% 25%, #ddd 0% 50%) 0 / 32px 32px !important; } .hub-fixture-controls { visibility:hidden; }';
 
 /** Composed contrast of visible text: the ink comes from the computed colour,

@@ -29,7 +29,9 @@
 .hub-search input { width:100%; min-width:0; background:transparent; border:0; color:var(--ui-text-bright); font:var(--ui-type-window-size)/var(--ui-type-window-line) var(--ui-font-interface); padding:0; outline:none; box-shadow:none; }
 .hub-search input::placeholder { color:var(--ui-text-faint); opacity:1; }
 .hub-panel .hub-search input:focus-visible { outline:none; box-shadow:none; }
-.hub-results { min-height:0; flex:1; overflow:auto; padding:0 8px 8px; overscroll-behavior:contain; }
+/* The Hub keeps the selection in view itself. Without browser scroll anchoring
+ * a live font or theme change cannot nudge the list by a glyph's baseline. */
+.hub-results { min-height:0; flex:1; overflow:auto; overflow-anchor:none; padding:0 8px 8px; overscroll-behavior:contain; }
 .hub-group { padding:12px 10px 6px; color:var(--ui-accent-text); font:var(--ui-type-body-size)/var(--ui-type-body-line) var(--ui-font-display); }
 .hub-group:first-child { padding-top:4px; }
 .hub-row { position:relative; display:grid; grid-template-columns:30px auto minmax(0,1fr) auto; align-items:center; column-gap:12px; padding:6px 10px; min-height:40px; border-radius:var(--ui-radius-sm); cursor:pointer; }

@@ -290,7 +290,10 @@ text size at 150 % and 200 % scales titles, detail, headings, search and count
 by one factor, keeps the 780 × 590 frame and the task (query, caret, selection,
 focus), survives a reload, never changes the canvas box, device pixel ratio or
 text outside the Hub, and leaves no horizontal overflow in Home, Settings,
-Travel, `team` and the calculator. At 65 %
+Travel, `team` and the calculator. A
+live theme, font and opacity change keeps the query, caret, selection, focus
+and the list's scroll offset (clamped only when a taller Modern list has less
+to scroll), never focuses `<body>` and never paints a second selection. At 65 %
 over the checkerboard, title, detail, keycap, count, placeholder and gold
 heading inks stay apart in both styles, and a dark scene behind the panel
 composes exactly as it would without the Hub's highlight cap. The custom
