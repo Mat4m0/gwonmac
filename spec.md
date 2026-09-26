@@ -96,7 +96,9 @@ Every row has a stable identity, full name, type, and an explicit primary action
 The footer names what Enter will do. Do not rely on colour or icons alone.
 
 - Up/Down selects rows. Enter performs the displayed action.
-- Escape closes an action menu, then goes back one level, then dismisses Hub.
+- Escape closes an action menu, then clears a non-empty query, then goes back
+  one level, then dismisses Hub. Focus then returns to the previous control or
+  the game, never to the page body.
 - A direct shortcut has no artificial Home step when Escape closes its section.
 - A visible Actions button exposes secondary actions. Tab reaches it; its menu
   supports normal arrow navigation. Do not consume text-editing arrow keys.

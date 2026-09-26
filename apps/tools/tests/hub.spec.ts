@@ -40,11 +40,34 @@ test('no results, editing shortcuts, dismissal and narrow layout', async ({ page
   expect(panel).not.toBeNull();
   expect(panel!.x).toBeGreaterThanOrEqual(0);
   expect(panel!.x + panel!.width).toBeLessThanOrEqual(390);
+  // D-4: the first Esc clears the typed query, the next one closes.
+  await search.press('Escape');
+  await expect(search).toHaveValue(''); await expect(search).toBeFocused();
   await search.press('Escape');
   await expect(page.getByRole('dialog', { name: 'Hub', exact: true })).not.toBeVisible();
   await page.getByRole('button', { name: 'Open Hub', exact: true }).click();
   await expect(search).toHaveValue('');
   await expect(search).toBeFocused();
+});
+
+test('Esc clears the query, then goes back, then closes onto the game, never <body>', async ({ page }) => {
+  await page.goto('/?hub');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const dialog = page.getByRole('dialog', { name: 'Hub', exact: true });
+  for (const query of ['invite mo', 'travel kam', 'kamadan', 'invite ']) {
+    await search.fill(query); await search.press('Escape');
+    await expect(dialog).toBeVisible(); await expect(search).toHaveValue(''); await expect(search).toBeFocused();
+  }
+  await search.fill('settings');
+  await page.getByRole('button', { name: 'Actions' }).click();
+  await search.fill('pin'); await search.press('Escape');
+  await expect(search).toHaveValue(''); await expect(page.locator('.hub-caption')).toHaveText('Settings');
+  await search.press('Escape');
+  await expect(page.locator('.hub-caption')).toHaveText('Home'); await expect(search).toHaveValue('settings');
+  await search.press('Escape'); await search.press('Escape');
+  await expect(dialog).not.toBeVisible();
+  // The fixture opens Hub on load, so no opener was focused: focus returns to the game canvas.
+  await expect(page.locator('#canvas')).toBeFocused();
 });
 
 test('outpost travel closes Hub quietly after acceptance', async ({ page }) => {
