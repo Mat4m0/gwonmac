@@ -64,3 +64,12 @@ test("the single-weight Guild Wars face is never synthetically emboldened", () =
   assert.match(root, /--ui-font-weight-bold:\s*400;/u);
   assert.doesNotMatch(css, /font-synthesis-weight:\s*auto;/u);
 });
+
+test("surface Escape and Hub Back close an open disclosure through one helper", () => {
+  const owner = path.join("src", "renderer", "surface-controller.ts");
+  const offenders = [...walk("src"), ...walk("apps/tools/src")]
+    .filter((file) => /\.(?:ts|vue)$/u.test(file) && !file.endsWith(".test.ts") && file !== owner)
+    .filter((file) => /closest<HTMLDetailsElement>|details\[open\]/u.test(readFileSync(file, "utf8")));
+  assert.deepEqual(offenders, []);
+  assert.match(readFileSync("src/renderer/hub.ts", "utf8"), /import \{ closeDisclosure \} from '\.\/surface-controller\.js'/u);
+});

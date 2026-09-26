@@ -44,6 +44,18 @@ function focusableElements(root: HTMLElement): HTMLElement[] {
   );
 }
 
+/**
+ * Closes the open disclosure around a target inside `within` and keeps focus
+ * on its summary. Surface Escape and Hub Escape and Back share this one step.
+ */
+export function closeDisclosure(target: EventTarget | null, within: Element): boolean {
+  const disclosure = target instanceof Element ? target.closest<HTMLDetailsElement>("details[open]") : null;
+  if (!disclosure || !within.contains(disclosure)) return false;
+  disclosure.open = false;
+  disclosure.querySelector("summary")?.focus();
+  return true;
+}
+
 export function installSurfaceController(
   document: Document,
 ): GwonmacSurfaceController {
@@ -82,11 +94,7 @@ export function installSurfaceController(
     if (event.key === "Escape") {
       if (nativeModal !== null) return; // The native cancel event owns dismissal.
       claim(event);
-      const expanded = (event.target instanceof Element ? event.target.closest<HTMLDetailsElement>('details[open]') : null);
-      if (expanded && surface.root.contains(expanded)) {
-        expanded.open = false; expanded.querySelector('summary')?.focus(); return;
-      }
-      surface.dismiss();
+      if (!closeDisclosure(event.target, surface.root)) surface.dismiss();
       return;
     }
     if (

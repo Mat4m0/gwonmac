@@ -15,6 +15,7 @@ import { isHubShortcuts, type HubShortcut } from '../shared/hub-preferences.js';
 import { createHubCalculator } from './hub-calculator.js';
 import { matchHubRows, parseHubQuery, normaliseHubQuery, type HubRow, type HubSource, type HubSummary } from '../shared/hub.js';
 import { listSelectionIndex } from '../shared/list-selection.js';
+import { closeDisclosure } from './surface-controller.js';
 export function createHub(parent: HTMLElement) {
   const document = parent.ownerDocument;
   const root = document.createElement('dialog');
@@ -455,15 +456,9 @@ export function createHub(parent: HTMLElement) {
     if (returnFromView) returnFromView();
     else restoreParent();
   }
-  /** Closes the open disclosure around a target, if any, and keeps focus on its summary. */
-  function closeDisclosure(target: EventTarget | null) {
-    const disclosure = target instanceof Element ? target.closest<HTMLDetailsElement>('details[open]') : null;
-    if (!disclosure || !root.contains(disclosure)) return false;
-    disclosure.open = false; disclosure.querySelector('summary')?.focus(); return true;
-  }
   /** Esc (D-4): close an open disclosure, then clear a non-empty query, then go back one level, then close. */
   function escape(target: EventTarget | null) {
-    if (closeDisclosure(target)) return;
+    if (closeDisclosure(target, root)) return;
     if (!search.hidden && input.value) { input.value = ''; report(''); refresh(true); input.focus(); return; }
     if (history.length) back(); else close();
   }
@@ -474,7 +469,7 @@ export function createHub(parent: HTMLElement) {
    * A view owns its inner levels by cancelling the `gw:hub-back` event.
    */
   function requestBack(target: EventTarget | null) {
-    if (closeDisclosure(target)) return;
+    if (closeDisclosure(target, root)) return;
     const focused = document.activeElement;
     const owner = focused instanceof HTMLElement && root.contains(focused) ? focused : input;
     if (!owner.dispatchEvent(new CustomEvent('gw:hub-back', { bubbles: true, cancelable: true }))) return;
