@@ -432,7 +432,8 @@ saved Command bindings retain their meaning. Capture accepts combinations using
 Command, Control or Option, optionally Shift, and standalone F1–F24. Letters,
 digits, punctuation, arrows, navigation, editing and numpad keys are supported.
 Plain typing/Shift-only typing remains available to the game. Bare Escape cancels
-recording; bare Delete/Backspace clears. Modified editing keys can be recorded.
+recording; bare Delete/Backspace clears. Modified editing keys can be recorded,
+except Command-Backspace, which Hub reserves for Back.
 Reserved system combinations and conflicts remain checked. Fn/media hardware
 keys are outside this capture contract. Disabled tools retain visible read-only
 shortcut rows. Recording consumes the key without activating its existing tool.

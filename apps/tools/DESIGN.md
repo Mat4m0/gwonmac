@@ -302,7 +302,9 @@ Tool rows show meaningful descriptions and resolved shortcut keycaps.
 
 The top bar shows clickable ancestor breadcrumbs and an understated Back arrow.
 Backspace returns to the previous page when no text is being edited; an empty
-search can also go Back. History restores query, selection, scroll and the actual
+search can also go Back. Command-Backspace goes Back one level from any focus,
+search and form fields included; it ignores auto-repeat, never deletes text and
+is a no-op at Home. History restores query, selection, scroll and the actual
 focused row/control. First entry and restoration are separate: character cards,
 account choices and action lists start on their useful item; search stays optional.
 Fresh Home starts in search. Temporary app blur and popout handoffs retain the
