@@ -125,14 +125,8 @@ do not focus a decorative heading or disabled primary action.
   provide that upward escape at the first destination instead of wrapping forever.
 - Right on a navigational result opens its child. Use a quiet child cue where
   needed. Right must never execute a world-changing command.
-- Enter executes the displayed primary action. A click does the same for a
-  navigational row. A row whose action changes the game or the account
-  (`consequential`, such as Travel and invites on a person page) is only
-  selected by a click; the footer primary or a double-click that started on
-  that row runs it (D-24). A double-click never runs what its first click
-  revealed: any page change cancels the rest of that click run, and footer and
-  Back buttons act once per click run (HUB-242). A separate details affordance
-  may inspect without executing.
+- Enter executes the displayed primary action. A click does the same for the
+  clicked row. A separate details affordance may inspect without executing.
 - Backspace only edits text and never navigates; on an empty query it is a
   no-op, and on a focused row, card or button it edits the search.
   Command-Backspace is Back: one level per physical press from any focus in Hub,

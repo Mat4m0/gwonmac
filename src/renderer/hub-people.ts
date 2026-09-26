@@ -54,8 +54,7 @@ export function createHubPeople(hub: Pick<Hub, 'attach' | 'showRows' | 'close' |
       const rows: HubRow[] = toolEnabled('whispersEnabled') ? [{ id: 'person:whisper', title: 'Whisper', detail: `Message ${currentName}`, group: 'Actions', action: 'Write whisper',
         ...(changed ? { unavailable: 'This friend changed or is unavailable. Select them again.' } : !session.state.available ? { unavailable: 'Whispers is unavailable. Enable it in Settings or wait for Guild Wars.' } : {}),
         run: () => whisper(currentName) }] : [];
-      // Travel and invites change the game: a click only selects them (D-24).
-      if (friendKey && toolEnabled('travelPalette')) rows.push({ id: 'person:travel', title: 'Travel to outpost', detail: `${destination?.name ?? 'Location unavailable'} · Any district`, group: 'Actions', action: 'Travel', consequential: true,
+      if (friendKey && toolEnabled('travelPalette')) rows.push({ id: 'person:travel', title: 'Travel to outpost', detail: `${destination?.name ?? 'Location unavailable'} · Any district`, group: 'Actions', action: 'Travel',
         ...(reason ? { unavailable: reason } : {}), run: async () => {
           if (!selectedFriend || selectedFeed.status !== 'ready' || !travel) throw new Error('Friend travel is unavailable');
           await travel.run(selectedFriend, selectedFeed.generation);
@@ -66,12 +65,12 @@ export function createHubPeople(hub: Pick<Hub, 'attach' | 'showRows' | 'close' |
         const offline = !!friendKey && (!friend || friend.status === 'offline' || !friend.character);
         const inviteReason = changed ? 'This friend changed or is unavailable. Select them again.'
           : offline ? 'This friend is offline' : !friendKey && !isFullCharacterName(name) ? PARTIAL_NAME : party.unavailable(friend);
-        rows.push({ id: 'person:invite', title: 'Invite to party', detail: `Add ${target || name} to your party`, group: 'Actions', action: `Invite ${target || name}`, consequential: true,
+        rows.push({ id: 'person:invite', title: 'Invite to party', detail: `Add ${target || name} to your party`, group: 'Actions', action: `Invite ${target || name}`,
           ...(inviteReason ? { unavailable: inviteReason } : {}), run: () => inviteNow(party, target, friend) });
         if (friendKey && friend && travel && toolEnabled('travelPalette')) {
           const place = destination?.name ?? 'the outpost';
           const travelInviteReason = reason ?? (offline ? 'This friend is offline' : party.travelUnavailable(friend));
-          rows.push({ id: 'person:travel-invite', title: 'Travel and invite', detail: `${place} · Any district, then invite ${target}`, group: 'Actions', action: `Travel and invite ${target}`, consequential: true,
+          rows.push({ id: 'person:travel-invite', title: 'Travel and invite', detail: `${place} · Any district, then invite ${target}`, group: 'Actions', action: `Travel and invite ${target}`,
             ...(travelInviteReason ? { unavailable: travelInviteReason } : {}), run: async () => {
               if (!selectedFriend || selectedFeed.status !== 'ready') throw new Error('Friend travel is unavailable');
               const { invited } = await party.travelAndInvite(selectedFriend, selectedFeed.generation);
@@ -127,7 +126,7 @@ export function createHubPeople(hub: Pick<Hub, 'attach' | 'showRows' | 'close' |
     // Invites address a character; an offline friend has only an account alias.
     const target = friend ? friend.character : entry.title;
     const reason = friend && (friend.status === 'offline' || !friend.character) ? 'This friend is offline' : party.unavailable(friend);
-    return { ...entry, action: `Invite ${target || entry.title}`, consequential: true, ...(reason ? { unavailable: reason } : {}), run: () => inviteNow(party, target, friend) };
+    return { ...entry, action: `Invite ${target || entry.title}`, ...(reason ? { unavailable: reason } : {}), run: () => inviteNow(party, target, friend) };
   }
   /** Guild Wars answers the invite in chat; Hub claims only that the command was sent. */
   async function inviteNow(party: PartyInvite, target: string, friend?: TravelFriend) {
