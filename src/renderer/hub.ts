@@ -10,7 +10,7 @@ import { openHubSettings } from "./hub-settings.js";
 import { createHubAccounts } from './hub-accounts.js';
 import { hubIcon } from "./hub-icons.js";
 import { openHubMaps } from './hub-maps.js';
-import { editHubShortcut, manageHubShortcuts } from './hub-preferences.js';
+import { editHubShortcut, hubPhraseReserved, manageHubShortcuts } from './hub-preferences.js';
 import { isHubShortcuts, type HubShortcut } from '../shared/hub-preferences.js';
 import { createHubCalculator } from './hub-calculator.js';
 import { matchHubRows, parseHubQuery, normaliseHubQuery, type HubRow, type HubSource, type HubSummary } from '../shared/hub.js';
@@ -341,7 +341,8 @@ export function createHub(parent: HTMLElement) {
       ? [{ id: "trade-query", title: `Search Trade for ${tradeQuery.term}`, detail: "Kamadan listings", group: "Tools", action: "Search Trade", run: () => dispatch("gw:trade-toggle", { query: tradeQuery.term }) }] : [];
     const extra = scope ? scope.rows() : [...sources.keys()].filter(sourceEnabled).flatMap(source => source.search(input.value)).concat(tradeRows);
     const parsed = parseHubQuery(input.value);
-    const saved = shortcuts().filter(entry => !parsed.term ? entry.pinned : entry.phrase === parsed.term)
+    // A phrase saved before its words joined the grammar stays stored but no longer matches.
+    const saved = shortcuts().filter(entry => !parsed.term ? entry.pinned : entry.phrase === parsed.term && !hubPhraseReserved(entry.phrase))
       .filter(entry => !parsed.scope || entry.id.startsWith(`${parsed.scope}:`));
     const savedRows = saved.flatMap(entry => { const row = lookup(entry.id); return row ? [{ ...row, group: parsed.term ? row.group : 'Pinned' }] : []; });
     const ids = new Set([...extra, ...savedRows].map(row => row.id));
