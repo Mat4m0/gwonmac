@@ -214,7 +214,15 @@ test.describe('a navigational row', () => {
     await expect(primary(page)).toHaveText(/^Review GOM AFK/);
     await clicks(page, primary(page), 2);
     await expect(caption(page)).toHaveText('GOM AFK');
-    await clicks(page, page.getByRole('button', { name: /^Apply team GOM AFK/ }), 3);
+    // The review keeps the Hub footer: its named primary is Apply, enabled and not run. It opens
+    // at its top with the page itself focused, not the Apply control (HUB-084).
+    await expect(primary(page)).toHaveText('Apply team GOM AFK↵');
+    await expect(primary(page)).toBeEnabled();
+    await expect(page.locator('.hub-build-review')).toBeFocused();
+    await expect(page.getByRole('heading', { name: 'GOM AFK', exact: true })).toBeInViewport();
+    expect(await page.locator('.hub-view').evaluate(view => view.scrollTop)).toBe(0);
+    expect(await ledger(page)).toEqual([]);
+    await clicks(page, primary(page), 3);
     await expect.poll(() => ledger(page)).toEqual(expect.arrayContaining(['apply-team']));
     expect((await ledger(page)).filter(entry => entry === 'apply-team')).toHaveLength(1);
   });
@@ -342,8 +350,13 @@ test('Accounts: keeping the running game open is the default; a replace needs on
   await expect(primary(page)).toHaveAttribute('data-variant', 'danger');
   await search(page).press('Enter');
   await expect(caption(page)).toHaveText('Close Main?');
-  const confirm = page.getByRole('button', { name: /^Close Main and open Second/ });
-  await expect(confirm).toBeFocused();
+  // The confirmation keeps the Hub footer: the armed destructive primary names it, Keep Main is the secondary.
+  const confirm = primary(page);
+  await expect(confirm).toHaveText(/^Close Main and open Second/);
+  await expect(confirm).toHaveAttribute('data-variant', 'danger');
+  await expect(page.locator('.hub-actions')).toHaveText('Keep Main');
+  await expect(page.locator('.hub-legend')).toContainText('Back');
+  await expect(page.locator('.hub-confirm')).toBeFocused();
   // An Enter or a multi-click before it arms confirms nothing.
   await page.keyboard.press('Enter');
   expect(await ledger(page)).toEqual([]);
@@ -370,6 +383,23 @@ test('Accounts: a double-click on an account opens its page on Open Second and r
     expect(await ledger(page)).toEqual([]);
     expect(await canvas(page)).toEqual([]);
   }
+});
+
+test('every Hub view keeps the footer with a key legend and a named primary', async ({ page }) => {
+  await open(page);
+  for (const [query, title, named] of [['settings', 'Settings', /^Done$/], ['hub preferences', 'Hub preferences', /^Done$/], ['team gom', 'GOM AFK', /^Apply team GOM AFK↵$/]] as const) {
+    await enter(page, query);
+    await expect(caption(page)).toHaveText(title);
+    await expect(page.locator('.hub-footer')).toBeVisible();
+    await expect(page.locator('.hub-legend')).toContainText('Back');
+    await expect(primary(page)).toHaveText(named);
+    await page.keyboard.press('Meta+Backspace');
+    await expect(caption(page)).toHaveText('Home');
+  }
+  // Done steps back one level.
+  await enter(page, 'settings');
+  await primary(page).click();
+  await expect(caption(page)).toHaveText('Home');
 });
 
 test('right-click selects a row and opens its Actions', async ({ page }) => {

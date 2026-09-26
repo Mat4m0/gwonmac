@@ -24,7 +24,9 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
   };
   function open() {
     let resume: InstanceType<typeof TravelPalette>['$props']['resume'];
-    hub.showView('Travel', (target, back) => {
+    hub.showView('Travel', (target, back, footer) => {
+      // Travel names its trip in its own footer.
+      footer.own();
       active = true;
       const app = createApp({ setup: () => () => h(TravelPalette, {
         host, preferences, ...(resume ? { resume } : {}), onRemember: state => { resume = state; }, inset: true, visible: true, nativeDialog: true, onClose: back,

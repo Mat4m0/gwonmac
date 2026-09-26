@@ -56,10 +56,11 @@ Switch Account already exists in `src/renderer/hub-accounts.ts`; extend that own
 1. Select Switch Account from Hub results and press Enter.
 2. Focus an eligible account row immediately. Show the current account clearly;
    it must not be the default executable choice for switching to itself.
-3. Enter on an account opens its actions, with the default Switch Account action
-   focused. Label both the target account and the current account affected.
-4. Keep Show/Open separately available for keeping the current game running.
-   Do not introduce another confirmation over the existing explicit action choice.
+3. Enter on an account opens its actions with "Open <name> · Keep <current>
+   running" first and selected (D-23). Label both the target account and the
+   current account affected; the footer names the selected row's consequence.
+4. The replace ("Close <current> and open <name>") comes second, reads as
+   destructive, and opens an armed "Close <current>?" confirmation first.
 5. Back from actions returns to the same account row in the account picker.
 6. Back again returns to the Switch Account command in the original Hub results,
    preserving query, scroll, and selection. Focus stays in search throughout.
@@ -162,6 +163,13 @@ do not focus a decorative heading or disabled primary action.
   a stationary pointer must not immediately overwrite the restored selection.
 - Background updates preserve stable identities. Held keys cannot chain an Enter
   into a newly opened destructive/action stage or leak movement into the game.
+- The Hub footer stays in every view with its key legend. A view names its
+  primary and secondary through the presenter (`HubViewFooter`): the team
+  review's "Apply team GOM AFK", a confirmation's armed destructive primary and
+  its "Keep …" secondary, and "Save phrase". Enter
+  outside a control that Enter activates itself runs the named primary. A form
+  that saves as it changes (Settings, Maps) shows "Done", which steps back.
+  Travel and Characters name their primary in their own footer.
 
 ## 4. History stores the player's place
 

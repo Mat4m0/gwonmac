@@ -531,7 +531,7 @@ test('account search offers explicit keep-open and replacement choices', async (
   // Replacing closes the running game: Enter opens an armed confirmation, and only its Enter replaces.
   await search.fill('acc second'); await search.press('ArrowDown'); await search.press('Enter');
   const replace = page.getByRole('button', { name: /^Close Main and open Second/ });
-  await expect(replace).toBeFocused();
+  await expect(page.locator('.hub-confirm')).toBeFocused();
   await expect(page.locator('#app')).toHaveAttribute('data-action', 'Account Second open');
   await expect(replace).toHaveAttribute('data-armed', '');
   await page.keyboard.press('Enter');

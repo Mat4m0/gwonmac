@@ -21,7 +21,7 @@ export function hubPhraseReserved(phrase: string): boolean {
   try { return !!parseConversion(term) || !!calculate(term); } catch { return /^\d/u.test(term); }
 }
 export function editHubShortcut(hub: HubPresenter<HTMLElement>, row: HubRow, get: () => readonly HubShortcut[], save: (value: readonly HubShortcut[]) => Promise<void>) {
-  hub.showView('Search phrase', target => {
+  hub.showView('Search phrase', (target, _back, footer) => {
     const doc = target.ownerDocument;
     const form = doc.createElement('form'); form.className = 'hub-detail';
     const heading = doc.createElement('h2'); heading.textContent = row.title;
@@ -31,17 +31,17 @@ export function editHubShortcut(hub: HubPresenter<HTMLElement>, row: HubRow, get
     label.append(input);
     const hint = doc.createElement('p'); hint.textContent = 'An exact phrase opens this saved action. The original name stays visible.';
     const status = doc.createElement('p'); status.setAttribute('role', 'status');
-    const button = doc.createElement('button'); button.className = 'ui-button'; button.type = 'submit'; button.textContent = 'Save phrase';
-    form.append(heading, label, hint, status, button); target.append(form);
-    form.onsubmit = event => {
-      event.preventDefault();
+    form.append(heading, label, hint, status); target.append(form);
+    // The footer's "Save phrase" is the form's one submit; Enter in the field runs it.
+    const submit = async () => {
       const current = get(); const old = current.find(entry => entry.id === row.id);
       const phrase = normaliseHubQuery(input.value);
       const next = [...current.filter(entry => entry.id !== row.id), ...(phrase || old?.pinned ? [{ id: row.id, phrase, pinned: old?.pinned ?? false }] : [])];
       if (hubPhraseReserved(phrase) || !isHubShortcuts(next)) { status.textContent = 'Choose a unique phrase. Command words are reserved.'; return; }
-      button.disabled = true;
-      void save(next).then(() => { status.textContent = 'Saved'; }).catch(() => { status.textContent = 'Could not save. Try again.'; }).finally(() => { button.disabled = false; });
+      try { await save(next); status.textContent = 'Saved'; } catch { status.textContent = 'Could not save. Try again.'; }
     };
+    form.onsubmit = event => { event.preventDefault(); void submit(); };
+    footer.primary({ label: 'Save phrase', run: submit });
     input.focus(); return () => form.remove();
   });
 }

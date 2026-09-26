@@ -198,7 +198,9 @@ export function createCharacterSwitchPalette(
   const hub = window.gwHub;
   let hubBack: (() => void) | undefined;
   const modal = hub ? {
-    show() { hub.showView('Characters', (target, back) => {
+    show() { hub.showView('Characters', (target, back, footer) => {
+      // Characters names the switch in its own footer.
+      footer.own();
       hubBack = back;
       target.append(root); root.open = true;
       if (view.kind === "closed") { view = Object.freeze({ kind: "characters" }); render(); }

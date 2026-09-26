@@ -3,7 +3,6 @@
  * Search never opens or closes a game window; each operation is explicit, and
  * closing the running game passes an armed confirmation first.
  */
-import { armConfirmation } from './surface-controller.js';
 import { hubMatch, normaliseHubQuery, parseHubQuery, type HubPresenter, type HubRow, type HubSource } from '../shared/hub.js';
 import type { HubAccountsSnapshot, HubAccountRequest } from '../shared/accounts-contracts.js';
 export function createHubAccounts(hub: HubPresenter<HTMLElement>, api: { get(): Promise<HubAccountsSnapshot>; open(request: HubAccountRequest): Promise<void>; manage?(): Promise<void> }): HubSource {
@@ -33,31 +32,21 @@ export function createHubAccounts(hub: HubPresenter<HTMLElement>, api: { get(): 
     await verify(profile); await api.open({ id: profile.id, mode }); hub.close();
   }
   /**
-   * Replacing ends the running game, so it asks first. The confirmation arms after a moment and
+   * Replacing ends the running game, so it asks first. Its footer primary arms after a moment and
    * ignores a multi-click, so neither the double-click nor the quick second Enter that opened it can pass it.
    */
   function confirmReplace(profile: Profile, title: string, current: string) {
-    hub.showView(`Close ${current}?`, (target, back) => {
+    hub.showView(`Close ${current}?`, (target, back, footer) => {
       const doc = target.ownerDocument;
-      const view = doc.createElement('section'); view.className = 'hub-detail hub-confirm';
+      // The page itself takes focus, so Enter reaches the named primary once it has armed.
+      const view = doc.createElement('section'); view.className = 'hub-detail hub-confirm'; view.tabIndex = 0;
       const heading = doc.createElement('h2'); heading.textContent = `${title}?`;
+      view.setAttribute('aria-label', heading.textContent);
       const copy = doc.createElement('p'); copy.textContent = `${profile.name} opens first. Then ${current} saves and closes.`;
-      const status = doc.createElement('p'); status.setAttribute('role', 'status');
-      const buttons = doc.createElement('div'); buttons.className = 'hub-confirm-actions';
-      const cancel = doc.createElement('button'); cancel.type = 'button'; cancel.className = 'ui-button'; cancel.textContent = `Keep ${current}`; cancel.onclick = back;
-      const confirm = doc.createElement('button'); confirm.type = 'button'; confirm.className = 'ui-button'; confirm.dataset.variant = 'danger';
-      const key = doc.createElement('kbd'); key.textContent = '↵'; confirm.append(title, ' ', key);
-      const arming = armConfirmation(confirm);
-      confirm.onclick = event => {
-        if (!arming.accepts(event)) return;
-        confirm.disabled = true; status.textContent = '';
-        void open(profile, 'replace').catch((error: unknown) => {
-          status.textContent = error instanceof Error ? error.message : 'The account could not open. Try again.'; confirm.disabled = false;
-        });
-      };
-      buttons.append(cancel, confirm); view.append(heading, copy, status, buttons); target.append(view);
-      arming.arm(); confirm.focus();
-      return () => { arming.disarm(); view.remove(); };
+      view.append(heading, copy); target.append(view);
+      footer.primary({ label: title, destructive: true, armed: true, run: () => open(profile, 'replace') });
+      footer.secondary({ label: `Keep ${current}`, run: back });
+      return () => view.remove();
     });
   }
   /**

@@ -213,7 +213,9 @@ settings or Travel's Customize view. A form you leave keeps what you typed until
 you quit the game. Backspace alone only deletes text; on a focused result or
 footer button it deletes from the search and returns you there. The game keeps
 running while Hub is open. The footer's left side lists the keys that work in
-the current view.
+the current view, and every page keeps it: a review, a confirmation or a form
+names its action there, for example **Apply team GOM AFK** or **Save phrase**,
+and Enter runs it. Settings and Maps save as you change them; **Done** goes back.
 
 The header shows your character and where you are, including a Guild Hall. In
 an explorable area, Hub opens on **Travel** instead of a recent place, so Enter

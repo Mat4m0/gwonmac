@@ -242,9 +242,12 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
     if (item.kind === 'build') { chooseBuild(item); return; }
     operation = "";
     const expected = revision(item);
-    hub.showView(item.value.name, target => {
+    hub.showView(item.value.name, (target, _back, footer) => {
       const doc = target.ownerDocument;
-      const view = doc.createElement('section'); view.className = 'hub-detail hub-build-review';
+      // The review opens at its top and takes focus itself: its title, mode line and first
+      // member stay in view, and Enter runs the footer's named Apply (HUB-084).
+      const view = doc.createElement('section'); view.className = 'hub-detail hub-build-review'; view.tabIndex = 0;
+      view.setAttribute('aria-label', `Review ${item.value.name}`);
       const title = doc.createElement('h2'); title.textContent = item.value.name;
       const description = doc.createElement('div'); description.className = 'hub-review-roster';
       const showBuild = (build: Build, label: string) => {
@@ -261,20 +264,19 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
           const label = `${index === 0 ? playerName() : slot.hero === null ? 'Unassigned hero' : heroLabel(slot.hero)} · ${build?.name ?? 'Keep build'}${slot.behaviour ? ` · ${slot.behaviour}` : ''}`;
           if (build) showBuild(build, label); else { const text = doc.createElement('p'); text.textContent = label; description.append(text); }
         });
+      // A refusal or the running apply shows under the title, before the roster, never below the fold.
       const status = doc.createElement('p'); status.setAttribute('role', 'status');
-      const button = doc.createElement('button'); button.className = 'ui-button';
       const update = () => {
         const latest = current(item);
         const changed = !latest || revision(latest) !== expected;
         const refusal = changed ? 'This configuration changed. Go back and review it again.' : assess(item, null);
-        button.textContent = applying ? 'Applying…' : `Apply team ${item.value.name}`;
-        button.disabled = !!refusal;
+        footer.primary({ label: applying ? 'Applying…' : `Apply team ${item.value.name}`, disabled: !!refusal || applying,
+          run: () => apply(item, expected, null).catch(error => { operation = error instanceof Error ? error.message : 'Application stopped.'; update(); }) });
         status.textContent = operation || refusal || '';
+        status.hidden = !status.textContent;
       };
-      button.onclick = () => { void apply(item, expected, null).catch(error => { operation = error instanceof Error ? error.message : 'Application stopped.'; update(); }); };
-      view.append(title);
-      view.append(description, status, button); target.append(view);
-      listeners.add(update); update(); button.focus();
+      view.append(title, status, description); target.append(view);
+      listeners.add(update); update();
       return () => { listeners.delete(update); view.remove(); };
     });
   }
