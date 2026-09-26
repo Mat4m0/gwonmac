@@ -127,8 +127,8 @@ do not focus a decorative heading or disabled primary action.
 - Backspace deletes while editing nonempty text. Outside editing, or in empty
   search, it returns one stage. No navigation during composition. Empty textareas
   and ordinary form fields retain native editing rather than becoming Back controls.
-- Escape closes the top submenu/details first, then goes back a stage, then
-  dismisses Hub. X dismisses Hub directly. Direct entry has no fake parent.
+- Escape closes the top submenu/details first, then clears a non-empty query,
+  then goes back a stage, then dismisses Hub. X dismisses Hub directly. Direct entry has no fake parent.
 - Tab/Shift+Tab continues reaching controls. Arrow behavior must not trap focus.
 - Typing from browse controls returns to search, preserving query, selection range,
   and caret. An empty optional search starts with the typed character. Do not replace
