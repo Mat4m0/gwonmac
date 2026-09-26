@@ -70,7 +70,7 @@ export function createHubCalculator(options: {
         const card=(id:string,rate:(unit:Currency)=>Fraction,detail:string)=>{
           const amount=evaluateConversion(conversion,rate);const unit=conversion.to;
           const label=unit.startsWith('item:')?currencyInfo(unit).name:unit;
-          const value=`${id.startsWith('market:')?'~ ':''}${formatFraction(amount)} ${conversion.divisor>1?'stacks ':''}${label}${conversion.perItem?' each':''}${id.startsWith('market:')&&marketSnapshot?.sample?' (sample)':''}`;
+          const value=`${id.startsWith('market:')?'~ ':''}${formatFraction(amount)} ${conversion.divisor>1?'stacks ':''}${label}${conversion.perItem?' each':''}${(id.startsWith('market:')?marketSnapshot:id.startsWith('quote:')?snapshot:null)?.sample?' (sample)':''}`;
           const fractional=currencyInfo(unit).stack!==null&&amount.n%amount.d!==0n;
           const iconFrom=conversion.terms.length===1?currencyIcon(conversion.from):undefined,iconTo=currencyIcon(unit);
           const copied=id.startsWith('quote:')?`${id==='quote:buy'?'Buy from trader':'Sell to trader'}: ${value}`:id==='manual-conversion'?`Your rates: ${value}`:id.startsWith('market:')?`${value} · ${detail}`:value;

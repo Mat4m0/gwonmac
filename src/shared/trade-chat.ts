@@ -33,6 +33,8 @@ export type TraderQuote = Readonly<{
 export type TraderQuoteSnapshot = Readonly<{
   updatedAt: number;
   quotes: readonly TraderQuote[];
+  /** Synthetic quotes from an offline fixture; never set by the live service. */
+  sample?: true;
 }>;
 
 export type TraderPriceHistoryRequest = Readonly<{
