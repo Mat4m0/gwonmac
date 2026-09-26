@@ -673,6 +673,11 @@ test('shortcut recorder presents each modifier and captures without opening anot
   await record.click(); await page.keyboard.press('Escape');
   await expect(record.locator('kbd')).toHaveText(['⌃', '⌥', '⇧', 'F12']);
   await expect(page.locator('.hub-caption')).toHaveText('Settings');
+  // The recorder takes Command-Backspace instead of going Back, and refuses it by name.
+  await record.click(); await page.keyboard.press('Meta+Backspace');
+  await expect(page.locator('.hub-view').getByText('Reserved for Back', { exact: true })).toBeVisible();
+  await expect(record.locator('kbd')).toHaveText(['⌃', '⌥', '⇧', 'F12']);
+  await expect(page.locator('.hub-caption')).toHaveText('Settings');
   await page.getByRole('button', { name: 'Back', exact: true }).click();
   await search.fill('switch character');
   await expect(page.locator('.hub-row')).toContainText('⌃⌥⇧F12');

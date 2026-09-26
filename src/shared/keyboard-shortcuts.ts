@@ -194,7 +194,11 @@ function shortcutKey(code: string): string | null {
   return SPECIAL_KEYS[code]?.[0] ?? null;
 }
 
+/** The Hub's Back chord (⌘⌫); no game shortcut may take it. */
+export const HUB_BACK_SHORTCUT: ShortcutBinding = Object.freeze({ key: "backspace", shift: false, option: false });
+
 const RESERVED_SHORTCUTS: readonly ShortcutBinding[] = [
+  HUB_BACK_SHORTCUT,
   // Editing and application lifecycle shortcuts must remain dependable.
   ...["a", "c", "h", "m", "q", "v", "w", "x", "z"].map((key) => ({
     key,

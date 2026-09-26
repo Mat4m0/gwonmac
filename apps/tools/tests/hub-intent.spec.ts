@@ -29,9 +29,9 @@ test('account actions restore each visited account and command row', async ({ pa
   const identity = await account.getAttribute('data-id');
   await page.keyboard.press('Enter');
   await expect(page.locator('.hub-row[aria-selected="true"]')).toContainText('Close');
-  await page.keyboard.press('Backspace');
+  await page.keyboard.press('Meta+Backspace');
   await expect(page.locator(`.hub-row[data-id="${identity}"]`)).toHaveAttribute('aria-selected', 'true');
-  await page.keyboard.press('Backspace');
+  await page.keyboard.press('Meta+Backspace');
   await expect(page.locator('.hub-row[data-id="accounts"]')).toHaveAttribute('aria-selected', 'true');
   await expect(search).toHaveValue('switch account'); await expect(search).toBeFocused();
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', /Account/);
@@ -48,7 +48,7 @@ test('temporary blur resumes the stage and focus while explicit close starts fre
   await expect(page.locator('.hub-summary')).toContainText('Protection');
   await expect(page.locator(`.hub-row[data-id="${selected}"]`)).toHaveAttribute('aria-selected', 'true');
   await expect(search).toBeFocused();
-  await page.keyboard.press('Backspace');
+  await page.keyboard.press('Meta+Backspace');
   await expect(search).toHaveValue('build monk');
   await expect(page.locator('.hub-row[aria-selected="true"]')).toContainText('Protection');
   await page.getByRole('button', { name: 'Close Hub', exact: true }).click();
@@ -158,6 +158,10 @@ test('held Enter on footer actions and Backspace in ordinary fields keep their s
   await phrase.fill(''); await phrase.press('Backspace');
   await expect(page.locator('.hub-caption')).toHaveText('Search phrase');
   await expect(phrase).toBeFocused();
+  // Command-Backspace is Back from a form field too, and never deletes its text.
+  await phrase.fill('keep me'); await phrase.press('Meta+Backspace');
+  await expect(page.locator('.hub-caption')).toHaveText('GOM AFK');
+  await expect(page.getByRole('textbox', { name: 'Search phrase', exact: true })).toHaveCount(0);
 });
 
 test('a legacy phrase that is now a scope word keeps its pins and only stops matching', async ({ page }) => {
@@ -357,7 +361,7 @@ test.describe('party invite', () => {
     // The footer keeps both slots and a key legend; a person page has no details to show.
     await expect(page.locator('.hub-actions')).toBeVisible();
     await expect(page.locator('.hub-actions')).toBeDisabled();
-    await expect(page.locator('.hub-legend')).toHaveText('↑↓ SelectEsc Back');
+    await expect(page.locator('.hub-legend')).toHaveText('↑↓ SelectEsc Back⌘⌫ Back');
     await page.keyboard.press('ArrowDown'); await page.keyboard.press('ArrowDown');
     await expect(search).toBeFocused();
     await expect(search).toHaveAttribute('aria-activedescendant', 'hub-result-2');

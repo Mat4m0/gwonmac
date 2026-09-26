@@ -252,9 +252,10 @@ places with their reason. User pins keep their existing order and availability.
 Tool rows show meaningful descriptions and resolved shortcut keycaps.
 
 The top bar shows clickable ancestor breadcrumbs and an understated Back arrow.
-Backspace returns to the previous page when no text is being edited; an empty
-search can also go Back. History restores query, selection, scroll and the focused
-control. Hub lists keep focus in search and move the active descendant. First entry and restoration are separate: character cards,
+Command-Backspace returns to the previous page from any focus in Hub, one page per
+physical press; a page opened directly by its shortcut returns to Home, and Home
+ignores it. Backspace only edits text and never navigates. History restores query,
+selection, scroll and the focused control. Hub lists keep focus in search and move the active descendant. First entry and restoration are separate: character cards,
 account choices and action lists start on their useful item; search stays optional.
 Fresh Home starts in search. Temporary app blur and popout handoffs retain the
 session task; explicit closure starts a fresh task next time. Resume refreshes
@@ -353,7 +354,7 @@ unchanged; folder searches never apply a build automatically.
 Typing a printable character while a Hub result has keyboard focus resumes the
 search at its saved caret or selection. This also applies on target-selection
 pages. Arrows still navigate results; Enter activates the selected result;
-Backspace from a result still goes back in Hub history.
+Command-Backspace from a result goes back in Hub history.
 
 ### Build continuity and completion
 

@@ -41,7 +41,8 @@ test('Home separates current context, teaches commands, and shows resolved short
   await expect(page.locator('.hub-actions')).toBeVisible();
   await expect(page.locator('.hub-actions')).toBeDisabled();
   await expect(page.locator('.hub-legend')).toContainText('Esc Back');
-  await expect(page.getByRole('button', { name: 'Back', exact: true })).toHaveAttribute('title', 'Back to Home');
+  await expect(page.getByRole('button', { name: 'Back', exact: true })).toHaveAttribute('title', 'Back (⌘⌫)');
+  await expect(page.getByRole('button', { name: 'Back', exact: true })).toHaveAttribute('aria-description', 'Return to Home');
   await page.getByRole('button', { name: 'Back', exact: true }).click();
   await expect(search).toHaveValue('team gom afk');
 });

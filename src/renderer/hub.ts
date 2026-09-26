@@ -121,7 +121,6 @@ export function createHub(parent: HTMLElement) {
       select(rows.some(row => row.id === page.selected) ? page.selected : null); list.scrollTop = page.scroll;
       if (page.selected && selected === null) report('The previous selection is no longer available. Choose a result.');
     }
-    backButton.hidden = history.length === 0;
     restoreFocus(page.focus);
   }
   function restoreParent() {
@@ -227,6 +226,7 @@ export function createHub(parent: HTMLElement) {
     if (rows.length > 1) keys.push([['↑', '↓'], 'Select']);
     if (row?.navigate) keys.push([['→'], 'Open']);
     keys.push([['Esc'], input.value ? 'Clear' : history.length ? 'Back' : 'Close']);
+    if (!atHome()) keys.push([['⌘', '⌫'], 'Back']);
     const next = JSON.stringify(keys);
     if (legend.dataset.keys === next) return;
     legend.dataset.keys = next; legend.replaceChildren();
@@ -337,9 +337,10 @@ export function createHub(parent: HTMLElement) {
     }
     const parent = history.at(-1);
     const destination = parent?.view?.title ?? parent?.scope?.title ?? 'Home';
-    backButton.hidden = !parent;
+    backButton.hidden = atHome();
     backButton.textContent = '←';
-    backButton.title = `Back to ${destination}`;
+    backButton.title = 'Back (⌘⌫)';
+    backButton.setAttribute('aria-keyshortcuts', 'Meta+Backspace');
     backButton.setAttribute('aria-description', `Return to ${destination}`);
     const query = parseHubQuery(input.value);
     const scopeLabel = required<HTMLElement>('.hub-scope');
@@ -451,7 +452,7 @@ export function createHub(parent: HTMLElement) {
     const generation = epoch;
     pending = true; select(selected); report('');
     try {
-      if(row.searchQuery!==undefined){remember();resetView();scope=null;backButton.hidden=true;caption.textContent='Home';input.value=row.searchQuery;refresh(true);input.focus();input.select();}
+      if(row.searchQuery!==undefined){remember();resetView();scope=null;caption.textContent='Home';input.value=row.searchQuery;refresh(true);input.focus();input.select();}
       else await row.run();
     }
     catch (error) { if (generation === epoch) report(error instanceof Error ? error.message : 'The action could not complete. Try again.'); }
@@ -463,12 +464,21 @@ export function createHub(parent: HTMLElement) {
     search.hidden = false; list.hidden = false; footer.hidden = false;
   }
   function home() {
-    history.length = 0; resetView(); scope = null; input.value = restoreQuery; backButton.hidden = true;
+    history.length = 0; resetView(); scope = null; input.value = restoreQuery;
     root.dataset.page = 'home'; caption.textContent = 'Home'; input.placeholder = 'Search people, places, builds…'; report(''); refresh(true); input.focus();
   }
   function back() {
     if (returnFromView) returnFromView();
     else restoreParent();
+  }
+  function atHome() { return !scope && !activeView; }
+  /**
+   * ⌘⌫, the Back button and the mouse back button: exactly one level up, never a close.
+   * A page opened directly (⌘T, ⌘E, ⌘B) has no parent and returns to the real Home.
+   */
+  function backOneLevel() {
+    if (history.length) back();
+    else if (!atHome()) home();
   }
   /** Esc: clear a typed query, then go back one level, then close (D-4). */
   function dismiss() {
@@ -533,6 +543,16 @@ export function createHub(parent: HTMLElement) {
   });
   // A press on a result keeps the keyboard in search.
   list.addEventListener('mousedown', event => event.preventDefault());
+  // ⌘⌫ is Back from any focus inside the Hub, text fields included; ⌫ alone only edits text.
+  root.addEventListener('keydown', event => {
+    if (event.key !== 'Backspace' || !event.metaKey || event.ctrlKey || event.altKey || event.shiftKey || event.isComposing) return;
+    event.preventDefault(); event.stopPropagation();
+    if (event.repeat) return;
+    const expanded = event.target instanceof Element ? event.target.closest<HTMLDetailsElement>('details[open]') : null;
+    if (expanded && root.contains(expanded)) { expanded.open = false; expanded.querySelector('summary')?.focus(); return; }
+    backOneLevel();
+  }, true);
+  root.addEventListener('mouseup', event => { if (event.button === 3) { event.preventDefault(); backOneLevel(); } });
   root.addEventListener('keydown', event => {
     restoringFocus?.disconnect(); restoringFocus = null;
     // Typing on a list-stage button returns to search; Space still presses the button.
@@ -544,11 +564,6 @@ export function createHub(parent: HTMLElement) {
     if (event.key === 'Escape') { event.preventDefault(); if (!event.repeat) dismiss(); return; }
     const target = event.target instanceof HTMLElement ? event.target : null;
     if (!target || target === required<HTMLElement>('.hub-resize')) return;
-    const editing = target.matches('input,textarea,select,[contenteditable="true"]');
-    if (event.key === 'Backspace' && (!editing || target instanceof HTMLInputElement && (target === input || target.getAttribute('role') === 'combobox') && !target.value)) {
-      if (history.length) { event.preventDefault(); event.stopPropagation(); back(); }
-      return;
-    }
     if (target.closest('.hub-footer')) {
       const controls = [primary, required<HTMLButtonElement>('.hub-actions')].filter(button => !button.hidden && !button.disabled);
       if (event.key === 'ArrowUp') { event.preventDefault(); input.focus(); }
@@ -617,7 +632,7 @@ export function createHub(parent: HTMLElement) {
   };
   required<HTMLButtonElement>('.hub-actions').onclick = actions;
   required<HTMLButtonElement>('.hub-close').onclick = () => close();
-  backButton.onclick = back; primary.onclick = () => { void run(); };
+  backButton.onclick = backOneLevel; primary.onclick = () => { void run(); };
   root.addEventListener('pointerdown', () => { restoringFocus?.disconnect(); restoringFocus = null; });
   // A press on blank panel space or a disabled control parks focus on the dialog
   // itself; return it to the last control so the keyboard keeps its place.
@@ -655,7 +670,7 @@ export function createHub(parent: HTMLElement) {
       if (!fromOpenHub) { suspended = null; show(); }
       if (!scope) restoreQuery = input.value;
       if (fromOpenHub && !restoring) remember(); resetView(); scope = { title, rows: getRows, ...(summary ? { summary } : {}) }; root.dataset.page = 'section'; caption.textContent = title;
-      backButton.hidden = history.length === 0; input.placeholder = 'Search actions…'; input.value = ''; report(''); refresh(true); focusResult();
+      input.placeholder = 'Search actions…'; input.value = ''; report(''); refresh(true); focusResult();
     },
     showView(title: string, mount: (target: HTMLElement, back: () => void) => () => void, available?: () => boolean) {
       const fromOpenHub = root.open;
@@ -664,7 +679,7 @@ export function createHub(parent: HTMLElement) {
       if (fromOpenHub && !restoring) remember();
       resetView();
       returnFromView = restoreParent;
-      root.dataset.page = 'section'; caption.textContent = title; backButton.hidden = history.length === 0;
+      root.dataset.page = 'section'; caption.textContent = title;
       required<HTMLElement>('.hub-preview').hidden = true; required<HTMLElement>('.hub-rate-controls').hidden = true;
       search.hidden = true; list.hidden = true; footer.hidden = true; content.hidden = false;
       activeView = { title, mount, ...(available ? { available } : {}) };

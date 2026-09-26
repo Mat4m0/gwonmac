@@ -200,8 +200,11 @@ styles. Deleting a custom style requires confirmation.
 
 Press **Command-R** to search people, outposts, tools, and commands. Type a name, use Up and Down,
 and press Enter for the action shown in the footer. The **Actions** button opens secondary actions. **Command-K** opens Trade. Escape clears typed text first, then goes back, then
-closes the palette. The game keeps running while Hub is open. The footer's left
-side lists the keys that work in the current view.
+closes the palette. **Command-Backspace** goes back one page from anywhere in
+Hub, including a text field, and never closes it; the Back arrow and the mouse
+back button do the same. Backspace alone only deletes text. The game keeps
+running while Hub is open. The footer's left side lists the keys that work in
+the current view.
 
 The header shows your character and where you are. In an explorable area, Hub
 opens on **Travel** instead of a recent place, so Enter never leaves the area by

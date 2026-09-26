@@ -102,7 +102,7 @@ test('Right Arrow compares current builds without applying, and Back restores th
   await expect(page.locator('#hub').getByRole('option')).toHaveAttribute('aria-selected', 'true');
   await expect(search).toBeFocused();
   await expect(incoming.locator('.hub-skill')).toHaveCount(8);
-  await page.keyboard.press('Backspace');
+  await page.keyboard.press('Meta+Backspace');
   await expect(page.locator('.hub-caption')).toHaveText('Heroes');
   await expect(search).toHaveValue('Tahlkora');
   await expect(incoming).toContainText('Protection');

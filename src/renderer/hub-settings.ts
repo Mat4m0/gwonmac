@@ -8,7 +8,7 @@ import type { Hub } from './hub.js';
 import type { HubSettingsChange, HubSettingsPatch, HubSettingsSnapshot } from '../shared/hub-settings.js';
 import { GLOBAL_TOOLS } from '../shared/launcher-contracts.js';
 import { TOOL_PRESENTATION } from '../shared/tool-presentation.js';
-import { DEFAULT_SHORTCUTS, SHORTCUT_CAPTURE_HINT, shortcutKeycaps, SHORTCUT_ACTIONS, SHORTCUT_LABELS, shortcutConflict, type ShortcutAction, type ShortcutBinding } from '../shared/keyboard-shortcuts.js';
+import { DEFAULT_SHORTCUTS, HUB_BACK_SHORTCUT, SHORTCUT_CAPTURE_HINT, shortcutEquals, shortcutKeycaps, shortcutReserved, SHORTCUT_ACTIONS, SHORTCUT_LABELS, shortcutConflict, type ShortcutAction, type ShortcutBinding } from '../shared/keyboard-shortcuts.js';
 
 export function openHubSettings(hub: Hub) {
   let page = 'Tools';
@@ -102,7 +102,8 @@ export function openHubSettings(hub: Hub) {
           change.onclick = async () => {
             change.disabled = true; status.textContent = SHORTCUT_CAPTURE_HINT; change.dataset.capturing = 'true'; change.textContent = 'Press keys…';
             try { const result = await api.capture(action); if (disposed) return; status.textContent = '';
-              if (result.status === 'captured' || result.status === 'conflict') chooseShortcut(action, result.binding);
+              if ((result.status === 'captured' || result.status === 'conflict') && shortcutReserved(result.binding)) status.textContent = shortcutEquals(result.binding, HUB_BACK_SHORTCUT) ? 'Reserved for Back' : 'That shortcut is unavailable. Choose another combination.';
+              else if (result.status === 'captured' || result.status === 'conflict') chooseShortcut(action, result.binding);
               else if (result.status === 'cleared') chooseShortcut(action, null);
               else if (result.status === 'reserved' || result.status === 'invalid') status.textContent = 'That shortcut is unavailable. Choose another combination.';
             } catch { if (!disposed) status.textContent = 'Could not capture the shortcut. Try again.'; } finally { if (!disposed) render(); }
