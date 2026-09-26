@@ -404,6 +404,8 @@ test('a double-click on the calculator card copies once', async ({ page }) => {
   await expect(card).toBeVisible();
   await clicks(page, card, 2);
   await expect.poll(async () => (await ledger(page)).filter(entry => entry.startsWith('Copied'))).toHaveLength(1);
+  // One named receipt, in the status line of the Hub that stays open (D-8).
+  await expect(page.locator('#hub .hub-status')).toHaveText(/^Copied “.*60 platinum/);
   if (await page.locator('#hub').isHidden()) await page.getByRole('button', { name: 'Open Hub', exact: true }).click();
   await search(page).fill('10 ecto in p');
   await clicks(page, page.locator('#hub .hub-conversion').first(), 3);

@@ -207,6 +207,9 @@ test('calculator shows both observed trader rates and fixed conversions', async 
   await expect(page.locator('#hub').getByRole('option')).toContainText('1.25 platinum');
   await search.press('Enter');
   await expect(page.locator('#app')).toHaveAttribute('data-action', 'Copied 1.25 platinum');
+  // The copy names what it copied in the Hub status line (D-8).
+  await expect(page.locator('#hub .hub-status')).toHaveText('Copied “1.25 platinum”');
+  await expect(page.locator('#hub')).toBeVisible();
 });
 
 test('a saved search phrase and pin survive reload and resolve the original item', async ({ page }) => {

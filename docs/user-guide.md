@@ -275,7 +275,8 @@ your team. The footer names the build and its target before Enter, for example
 observation times. Fixed gold/platinum conversions work offline. Amounts accept attached or spaced
 units: `1p`, `1 p`, `100k`, `.5e`, `2a`, and `10zkeys`. Use `in` or `to`.
 Stacks, mixed sums and multiplication work too: `1 stack ecto in p`,
-`100k + 10e in a`, `250 * 1.5e in p`, or `14a/stk in e each`.
+`100k + 10e in a`, `250 * 1.5e in p`, or `14a/stk in e each`. Enter copies the
+result, and the Hub's status line names what it copied.
 
 Armbrace and Zaishen key conversions automatically use recent Kamadan advertisements
 when enough consistent evidence exists. Results start with `~` and explain that

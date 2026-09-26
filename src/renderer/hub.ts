@@ -763,7 +763,8 @@ export function createHub(parent: HTMLElement) {
   presenter.attach(createHubAccounts(presenter, { get: () => window.gwNative.accounts.get(), open: request => window.gwNative.accounts.open(request), manage: () => window.gwNative.app.showLauncher() }));
   presenter.attach(createHubCalculator({
     hub: presenter,
-    copy: value => window.gwNative.clipboard.writeText(value),
+    // A copy names what it put on the clipboard in the status line (D-8); it is never silent.
+    copy: async value => { await window.gwNative.clipboard.writeText(value); notify(`Copied “${value}”`); },
     marketEnabled: () => !!window.gwToolsSettings?.().gwonmacTools && !!window.gwToolsSettings?.().tradeChat,
     market: () => 'trade' in window.gwNative ? window.gwNative.trade.getMarketRates() : Promise.reject(new Error('Rate unavailable')),
     quotes: () => 'trade' in window.gwNative ? window.gwNative.trade.getTraderQuotes() : Promise.reject(new Error('Rate unavailable')),
