@@ -472,16 +472,23 @@ export function createCharacterSwitchPalette(
     if (state.status !== "ready" || !row || row.index === currentCharacterIndex(source)) return;
     beginRequest(row.character.characterKey);
   };
+  /** Leaves Settings or the leave confirmation (as Stay here) for the cards; false at the card level. */
+  const leaveInnerView = () => {
+    if (view.kind !== "confirming" && view.kind !== "settings") return false;
+    if (view.kind === "confirming") source.cancelConfirmation();
+    view = Object.freeze({ kind: "characters" });
+    render();
+    focusSelected();
+    return true;
+  };
+  // Hub Back (⌘⌫, mouse back) leaves an inner level first, so it agrees with Escape.
+  root.addEventListener("gw:hub-back", (event) => { if (leaveInnerView()) event.preventDefault(); });
   root.addEventListener("keydown", (event) => {
     if (event.isComposing || event.defaultPrevented) return;
     if (event.key === "Escape") {
       event.preventDefault();
-      if (view.kind === "confirming" || view.kind === "settings") {
-        if (view.kind === "confirming") source.cancelConfirmation();
-        view = Object.freeze({ kind: "characters" });
-        render();
-        focusSelected();
-      } else if (normaliseCharacterQuery(query) !== "") {
+      if (leaveInnerView()) return;
+      if (normaliseCharacterQuery(query) !== "") {
         query = "";
         queryInput.value = "";
         selected = 0;

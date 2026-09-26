@@ -5,7 +5,7 @@
 import type { BrowserWindow, Event, Input } from "electron";
 import type { AppSettings } from "../shared/contracts.js";
 import type { LauncherShortcutCaptureResult } from "../shared/launcher-contracts.js";
-import { resolveShortcuts, shortcutConflict, shortcutFromInput, shortcutReserved, type ShortcutAction } from "../shared/keyboard-shortcuts.js";
+import { HUB_BACK_SHORTCUT, resolveShortcuts, shortcutConflict, shortcutEquals, shortcutFromInput, shortcutReserved, type ShortcutAction } from "../shared/keyboard-shortcuts.js";
 
 const CAPTURE_TIMEOUT_MS = 30_000;
 const activeCaptures = new WeakMap<BrowserWindow, () => void>();
@@ -49,7 +49,7 @@ export function captureLauncherShortcut(
         return;
       }
       if (shortcutReserved(binding)) {
-        finish({ status: "reserved" });
+        finish(shortcutEquals(binding, HUB_BACK_SHORTCUT) ? { status: "reserved", owner: "back" } : { status: "reserved" });
         return;
       }
       const conflict = shortcutConflict(action, binding, resolveShortcuts(getSettings().shortcutOverrides));

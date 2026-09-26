@@ -1,7 +1,7 @@
 import { GLOBAL_TOOLS, GLOBAL_TOOL_FEATURES, type GlobalToolSettings } from '../../../src/shared/launcher-contracts';
 import { FEATURE_SELECTION_POLICIES } from '../../../src/shared/feature-contracts';
 import { parseHubSettingsChange, type HubSettingsApi } from '../../../src/shared/hub-settings';
-import { resolveShortcuts, shortcutConflict, shortcutFromInput, shortcutReserved, withShortcutOverride } from '../../../src/shared/keyboard-shortcuts';
+import { HUB_BACK_SHORTCUT, resolveShortcuts, shortcutConflict, shortcutEquals, shortcutFromInput, shortcutReserved, withShortcutOverride } from '../../../src/shared/keyboard-shortcuts';
 /** Disposable Hub workbench: synthetic state, no native IPC or game commands. */
 // Offline fixture exercises the production Hub mounting owner.
 // eslint-disable-next-line no-restricted-imports
@@ -74,7 +74,7 @@ export function mountHubFixture(target: HTMLElement) {
         if (event.key === 'Escape' && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) { resolve({ status: 'cancelled' }); return; }
         if ((event.key === 'Backspace' || event.key === 'Delete') && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) { resolve({ status: 'cleared' }); return; }
         const binding = shortcutFromInput({code:event.code, meta:event.metaKey, control:event.ctrlKey, shift:event.shiftKey, alt:event.altKey});
-        resolve(!binding ? {status:'invalid'} : shortcutReserved(binding) ? {status:'reserved'} : {status:'captured',binding});
+        resolve(!binding ? {status:'invalid'} : shortcutReserved(binding) ? (shortcutEquals(binding, HUB_BACK_SHORTCUT) ? {status:'reserved',owner:'back'} : {status:'reserved'}) : {status:'captured',binding});
       };
       window.addEventListener('keydown', onKey, true);
     }),
@@ -88,12 +88,19 @@ export function mountHubFixture(target: HTMLElement) {
   const game = createHubGameFixture(record);
   window.gwHub = hub;
   const characters = installCharacterSwitchHost(document.body);
+  let characterScenario = 'ready'; let confirmingCharacter = '';
+  let characterAction: { readonly status: 'idle' } | { readonly status: 'confirming' } = { status: 'idle' };
   characters.attach({ characters: { status: 'ready', sequence: 1, selectedIndex: 0, characters: [
     { name: 'Fixture Monk', characterKey: 'monk', primaryProfession: 3, secondaryProfession: 0, characterType: 'roleplaying', campaign: 1, level: 20, mapId: 449 },
     ...['Ranger', 'Mesmer', 'Ritualist', 'Elementalist'].map((name, index) => ({ name: `Fixture ${name}`, characterKey: name.toLowerCase(), primaryProfession: [2, 5, 8, 6][index]!, secondaryProfession: 0, characterType: 'roleplaying' as const, campaign: 1, level: 20, mapId: 449 })),
     { name: 'Toefte', characterKey: 'toefte', primaryProfession: 3, secondaryProfession: 5, characterType: 'roleplaying', campaign: 1, level: 20, mapId: 449 },
     { name: 'Fixture Warrior', characterKey: 'warrior', primaryProfession: 1, secondaryProfession: 0, characterType: 'roleplaying', campaign: 1, level: 20, mapId: 55 },
-  ] }, action: { status: 'idle' }, context: 'outpost', request(key) { record(`Character ${key}`); hub.close(); }, confirm() {}, cancelConfirmation() {}, reset() {},
+  ] },
+    // In the explorable scenario a switch first asks "Leave this area?", as the game host does.
+    get action() { return characterAction; }, get context() { return characterScenario === 'explorable' ? 'pve-explorable' as const : 'outpost' as const; },
+    request(key) { if (characterScenario === 'explorable') { characterAction = { status: 'confirming' }; confirmingCharacter = key; return; } record(`Character ${key}`); hub.close(); },
+    confirm() { characterAction = { status: 'idle' }; record(`Character ${confirmingCharacter}`); hub.close(); },
+    cancelConfirmation() { characterAction = { status: 'idle' }; record('Character switch cancelled'); }, reset() {},
     diagnostics: () => ({ version: 1, stage: 'unavailable', lastCode: 'play-path-unproved' }), subscribe() { return () => {}; },
   });
   const foundation = createToolboxFoundation(document.body, {
@@ -106,7 +113,7 @@ export function mountHubFixture(target: HTMLElement) {
       return { setVisible: visible => visible ? app.show() : app.hide(), setActive: app.setActive, requestClose: app.hide, search: app.search, update() {}, dispose: app.dispose };
     },
   });
-  window.addEventListener('hub-fixture-scenario', event => { if (event instanceof CustomEvent) game.setScenario(String(event.detail)); });
+  window.addEventListener('hub-fixture-scenario', event => { if (event instanceof CustomEvent) { characterScenario = String(event.detail); game.setScenario(characterScenario); } });
   const travel = createHubTravel(createDemoTravelHost(), hub);
   hub.attach(travel.source);
   let id = 0;
@@ -160,7 +167,7 @@ export function mountHubFixture(target: HTMLElement) {
   for (const [value, label] of [['ready', 'Ready in outpost'], ['explorable', 'Explorable area'], ['partial', 'Interrupted apply'], ['duplicate', 'Duplicate build names'], ['folders', 'Nested build folders'], ['mixed-professions', 'Mixed hero professions']] as const) {
     const option = document.createElement('option'); option.value = value; option.textContent = label; scenario.append(option);
   }
-  scenario.onchange = () => { game.setScenario(scenario.value); hub.show(); };
+  scenario.onchange = () => { characterScenario = scenario.value; game.setScenario(scenario.value); hub.show(); };
   const reset = document.createElement('button'); reset.className = 'ui-button'; reset.textContent = 'Reset fixture'; reset.onclick = () => { localStorage.removeItem('hub-fixture-shortcuts'); localStorage.removeItem('hub-fixture-library'); localStorage.removeItem('hub-fixture-settings'); location.reload(); };
   const label = document.createElement('span'); label.textContent = 'Synthetic game · sample prices';
   controls.style.flexWrap = 'wrap'; controls.append(theme, scenario, reset, label); target.append(controls);

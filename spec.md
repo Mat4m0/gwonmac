@@ -100,7 +100,9 @@ The footer names what Enter will do. Do not rely on colour or icons alone.
   descendant, so typing always edits the query. Right at the end of the query
   opens the selected result's choices. Enter performs the displayed action.
 - Backspace only edits text and never navigates; on a Hub button it edits the
-  search. Command-Backspace goes back one level.
+  search. Command-Backspace or the mouse back button goes back one level. Each
+  closes an open disclosure first and cancels a confirmation before it leaves a
+  view. A view opened by its shortcut returns to Home.
 - Escape closes an action menu or open disclosure, then clears a non-empty query,
   then goes back one level, then dismisses Hub and returns focus to the game.
   Hub handles the key itself, so every visit follows the same order.
@@ -440,7 +442,8 @@ Command, Control or Option, optionally Shift, and standalone F1–F24. Letters,
 digits, punctuation, arrows, navigation, editing and numpad keys are supported.
 Plain typing/Shift-only typing remains available to the game. Bare Escape cancels
 recording; bare Delete/Backspace clears. Modified editing keys can be recorded,
-except Command-Backspace, which Hub reserves for Back.
+except Command-Backspace, which Hub reserves for Back; the recorder says
+"Reserved for Back".
 Reserved system combinations and conflicts remain checked. Fn/media hardware
 keys are outside this capture contract. Disabled tools retain visible read-only
 shortcut rows. Recording consumes the key without activating its existing tool.

@@ -78,6 +78,93 @@ test('Command-Backspace goes back one level from any focus and never deletes tex
   await expect(search).toHaveValue('second');
 });
 
+test('Command-Backspace cancels a confirmation before it leaves the view, like Escape', async ({ page }) => {
+  await page.goto('/?hub');
+  await expect(page.locator('#app[data-ready=true]')).toBeAttached();
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-scenario', { detail: 'explorable' })));
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  await search.fill('switch character'); await search.press('Enter');
+  const title = page.locator('#character-switch-title');
+  for (const key of ['Meta+Backspace', 'Escape']) {
+    await page.keyboard.press('ArrowRight'); await page.keyboard.press('Enter');
+    await expect(title).toHaveText('Leave this area?');
+    await expect(page.getByRole('button', { name: 'Stay here' })).toBeFocused();
+    await page.keyboard.press(key);
+    await expect(title, key).toHaveText('Switch Character');
+    await expect(page.locator('.hub-caption'), key).toHaveText('Characters');
+    await expect(page.locator('#app')).toHaveAttribute('data-action', 'Character switch cancelled');
+    await expect(page.locator('.character-switch-row[data-selected=true]')).toBeFocused();
+  }
+  await page.keyboard.press('Meta+Backspace');
+  await expect(page.locator('.hub-caption')).toHaveText('Home');
+  await expect(search).toHaveValue('switch character');
+});
+
+test('a view opened by its shortcut goes Back to the real Home, by key, button 3 or the Back button', async ({ page }) => {
+  await page.goto('/?hub');
+  const hub = page.locator('#hub');
+  const caption = page.locator('.hub-caption');
+  const legend = page.locator('.hub-legend');
+  await expect(legend).toBeHidden();
+  const mouseBack = () => page.locator('.hub-panel').evaluate(panel => {
+    for (const type of ['mousedown', 'mouseup']) panel.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, button: 3 }));
+  });
+  for (const [shortcut, title, back] of [['Meta+t', 'Travel', 'key'], ['Meta+e', 'Characters', 'mouse'], ['Meta+t', 'Travel', 'button']] as const) {
+    await page.getByRole('button', { name: 'Close Hub', exact: true }).click();
+    await expect(hub).toBeHidden();
+    await page.keyboard.press(shortcut);
+    await expect(caption).toHaveText(title);
+    await expect(page.locator('.hub-breadcrumbs')).toHaveText(`Home›${title}`);
+    if (back === 'key') await page.keyboard.press('Meta+Backspace');
+    else if (back === 'mouse') await mouseBack();
+    else await page.getByRole('button', { name: 'Back', exact: true }).click();
+    await expect(caption, `${shortcut} ${back}`).toHaveText('Home');
+    await expect(hub).toBeVisible();
+    await expect(page.getByRole('combobox', { name: 'Search people, places, builds' })).toBeFocused();
+    // Home is the root: neither Back closes the Hub, and the legend hides.
+    await page.keyboard.press('Meta+Backspace'); await mouseBack();
+    await expect(caption).toHaveText('Home');
+    await expect(hub).toBeVisible();
+    await expect(legend).toBeHidden();
+  }
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  await search.fill('accounts'); await search.press('Enter');
+  await expect(legend).toBeVisible();
+  await expect(legend).toHaveText('⌘⌫ Back');
+});
+
+test('Command-Backspace closes an open disclosure before it goes back', async ({ page }) => {
+  await page.goto('/?hub');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  await search.fill('settings'); await search.press('Enter');
+  const summary = await page.locator('#hub .hub-view').evaluate(view => {
+    const details = document.createElement('details'); details.open = true;
+    details.innerHTML = '<summary>More</summary><button type="button">Inside</button>';
+    view.prepend(details); details.querySelector('button')!.focus();
+    return details.querySelector('summary')!.textContent;
+  });
+  expect(summary).toBe('More');
+  await page.keyboard.press('Meta+Backspace');
+  await expect(page.locator('#hub .hub-view details')).not.toHaveAttribute('open', '');
+  await expect(page.locator('#hub .hub-view summary')).toBeFocused();
+  await expect(page.locator('.hub-caption')).toHaveText('Settings');
+  await page.keyboard.press('Meta+Backspace');
+  await expect(page.locator('.hub-caption')).toHaveText('Home');
+});
+
+test('the shortcut recorder refuses Command-Backspace as reserved for Back', async ({ page }) => {
+  await page.goto('/?hub');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  await search.fill('settings'); await search.press('Enter');
+  await page.getByRole('button', { name: 'Shortcuts', exact: true }).click();
+  const record = page.getByRole('button', { name: 'Switch Character', exact: true });
+  const before = await record.locator('kbd').allTextContents();
+  await record.click(); await page.keyboard.press('Meta+Backspace');
+  await expect(page.locator('#hub .hub-view')).toContainText('Reserved for Back');
+  await expect(record.locator('kbd')).toHaveText(before);
+  await expect(page.locator('.hub-caption')).toHaveText('Settings');
+});
+
 test('a list drawn under a resting pointer keeps one visible selection until the pointer moves', async ({ page }) => {
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });

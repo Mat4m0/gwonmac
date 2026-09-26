@@ -316,7 +316,15 @@ The top bar shows clickable ancestor breadcrumbs and an understated Back arrow.
 Backspace only edits text: it never navigates, and on a Hub button or card it
 edits the search. Command-Backspace goes Back one level from any focus,
 search and form fields included; it ignores auto-repeat, never deletes text and
-is a no-op at Home. History restores query, selection, scroll and the actual
+is a no-op at Home. The mouse back button (button 3) does the same. Both first
+close an open disclosure, then let the view leave an inner level: a view owns
+such a level by cancelling the `gw:hub-back` event, so on "Leave this area?"
+Back acts as Stay here and in Character Switch or Travel settings it returns to
+the cards or destinations, as Escape does. A view that its shortcut opens while
+Hub is closed starts from a fresh Home, which is its real parent. List stages
+show a "⌘⌫ Back" footer legend only when a level exists; views show the Back
+button with the same shortcut. The shortcut recorder refuses Command-Backspace
+as "Reserved for Back". History restores query, selection, scroll and the actual
 focused control. First entry and restoration are separate: character cards,
 account choices and action lists start on their useful item; search stays optional.
 Fresh Home starts in search. Temporary app blur and popout handoffs retain the

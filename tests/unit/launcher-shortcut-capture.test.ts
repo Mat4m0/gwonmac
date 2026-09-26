@@ -34,6 +34,10 @@ test("clears, rejects reserved shortcuts, and cancels on blur without leaking li
     f.send(key, code, { meta: status === "reserved" });
     assert.deepEqual(await result, { status });
   }
+  const back = fixture();
+  const reserved = captureLauncherShortcut(back.win, "travel.open", () => DEFAULT_SETTINGS);
+  back.send("Backspace", "Backspace");
+  assert.deepEqual(await reserved, { status: "reserved", owner: "back" });
   const f = fixture();
   const first = captureLauncherShortcut(f.win, "travel.open", () => DEFAULT_SETTINGS);
   const second = captureLauncherShortcut(f.win, "cartography.grid.toggle", () => DEFAULT_SETTINGS);

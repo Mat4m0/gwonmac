@@ -50,7 +50,9 @@ async function capture() {
     else if (result.status === "conflict") {
       pending.value = { binding: result.binding, owner: result.action };
       message.value = `Already used by ${SHORTCUT_LABELS[result.action]}. Replacing it will clear that shortcut.`;
-    } else if (result.status === "reserved") message.value = "That shortcut is reserved by macOS or the application.";
+    } else if (result.status === "reserved") message.value = result.owner === "back"
+      ? "Reserved for Back in Hub. Choose another combination."
+      : "That shortcut is reserved by macOS or the application.";
     else if (result.status === "invalid") message.value = SHORTCUT_CAPTURE_HINT;
     else message.value = "Shortcut change cancelled.";
   } catch { message.value = "The shortcut could not be captured. Try again."; }

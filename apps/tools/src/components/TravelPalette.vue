@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import {
   TRAVEL_SEARCH_QUERY_LIMIT,
   TRAVEL_SHORTCUT_LIMIT,
@@ -233,7 +233,15 @@ const resultId = (index: number): string | null => {
   return "resultKey" in destination ? destination.resultKey : `map-${destination.mapId}`;
 };
 const activeResultId = computed(() => resultId(active.value));
+/** Hub Back (⌘⌫, mouse back) leaves Travel settings first, like Escape; Travel itself is a Hub level. */
+function onHubBack(event: Event): void {
+  if (mode.value !== "customize") return;
+  event.preventDefault();
+  void selectMode("travel");
+}
+onMounted(() => palette.value?.addEventListener("gw:hub-back", onHubBack));
 onBeforeUnmount(() => {
+  palette.value?.removeEventListener("gw:hub-back", onHubBack);
   visibilityLoad++;
   emit("remember", { query: query.value, selected: activeResultId.value, mode: mode.value,
     editingSlot: editingShortcutSlot.value, addingPhrase: addingPhrase.value,

@@ -105,6 +105,7 @@ export function openHubSettings(hub: Hub) {
             try { const result = await api.capture(action); if (disposed) return; status.textContent = '';
               if (result.status === 'captured' || result.status === 'conflict') chooseShortcut(action, result.binding);
               else if (result.status === 'cleared') chooseShortcut(action, null);
+              else if (result.status === 'reserved' && result.owner === 'back') status.textContent = 'Reserved for Back. Choose another combination.';
               else if (result.status === 'reserved' || result.status === 'invalid') status.textContent = 'That shortcut is unavailable. Choose another combination.';
             } catch { if (!disposed) status.textContent = 'Could not capture the shortcut. Try again.'; } finally { if (!disposed) render(); }
           };

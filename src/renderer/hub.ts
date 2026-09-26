@@ -28,7 +28,7 @@ export function createHub(parent: HTMLElement) {
     <div class="hub-search"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 8 10-8 10L4 12 12 2Zm0 5v10M8 12h8"/></svg><span class="hub-scope" hidden></span><input type="text" role="combobox" aria-label="Search people, places, builds" aria-autocomplete="list" aria-controls="hub-results" aria-expanded="true" placeholder="Search people, places, builds…" autocomplete="off" spellcheck="false" maxlength="120"></div>
     <p class="hub-hint" id="hub-hint" hidden></p><div class="hub-rate-controls" hidden></div><div class="hub-results ui-scroll" id="hub-results" role="listbox" aria-label="Results"></div>
     <pre class="hub-preview ui-scroll" hidden></pre><div class="hub-view" hidden></div><p class="hub-status" role="status" hidden></p>
-    <footer class="hub-footer"><button class="hub-primary ui-button" data-variant="primary"></button><span class="hub-count"></span><button class="hub-actions ui-button" data-variant="quiet">Actions</button></footer>
+    <footer class="hub-footer"><span class="hub-legend" aria-hidden="true" hidden><kbd class="ui-kbd">⌘⌫</kbd> Back</span><button class="hub-primary ui-button" data-variant="primary"></button><span class="hub-count"></span><button class="hub-actions ui-button" data-variant="quiet">Actions</button></footer>
     <button class="ui-window-resize hub-resize" aria-label="Resize Hub" title="Drag to resize, or use arrow keys" hidden></button>
   </section>`;
   parent.append(root);
@@ -321,6 +321,8 @@ export function createHub(parent: HTMLElement) {
     const parent = history.at(-1);
     const destination = parent?.view?.title ?? parent?.scope?.title ?? 'Home';
     backButton.hidden = !parent;
+    // The footer legend names ⌘⌫ only where it goes somewhere; it is a no-op at Home.
+    required<HTMLElement>('.hub-legend').hidden = !parent;
     backButton.textContent = '←';
     backButton.title = `Back to ${destination} (⌘⌫)`;
     backButton.setAttribute('aria-keyshortcuts', 'Meta+Backspace');
@@ -453,12 +455,30 @@ export function createHub(parent: HTMLElement) {
     if (returnFromView) returnFromView();
     else restoreParent();
   }
+  /** Closes the open disclosure around a target, if any, and keeps focus on its summary. */
+  function closeDisclosure(target: EventTarget | null) {
+    const disclosure = target instanceof Element ? target.closest<HTMLDetailsElement>('details[open]') : null;
+    if (!disclosure || !root.contains(disclosure)) return false;
+    disclosure.open = false; disclosure.querySelector('summary')?.focus(); return true;
+  }
   /** Esc (D-4): close an open disclosure, then clear a non-empty query, then go back one level, then close. */
   function escape(target: EventTarget | null) {
-    const disclosure = target instanceof Element ? target.closest<HTMLDetailsElement>('details[open]') : null;
-    if (disclosure && root.contains(disclosure)) { disclosure.open = false; disclosure.querySelector('summary')?.focus(); return; }
+    if (closeDisclosure(target)) return;
     if (!search.hidden && input.value) { input.value = ''; report(''); refresh(true); input.focus(); return; }
     if (history.length) back(); else close();
+  }
+  /**
+   * Back (⌘⌫ or the mouse back button): close an open disclosure, then leave a
+   * level inside the view (a confirmation acts as Cancel), then go back one Hub
+   * level. It keeps the child's query and never closes the Hub, so Home is a no-op.
+   * A view owns its inner levels by cancelling the `gw:hub-back` event.
+   */
+  function requestBack(target: EventTarget | null) {
+    if (closeDisclosure(target)) return;
+    const focused = document.activeElement;
+    const owner = focused instanceof HTMLElement && root.contains(focused) ? focused : input;
+    if (!owner.dispatchEvent(new CustomEvent('gw:hub-back', { bubbles: true, cancelable: true }))) return;
+    if (history.length) back();
   }
   function close(message?: string) {
     suspended = null; epoch++; history.length = 0; resetView(); modal.close(); for (const source of sources.keys()) source.setVisible(false); scope = null;
@@ -505,7 +525,7 @@ export function createHub(parent: HTMLElement) {
     // ⌘⌫ is Back from any focus, form fields included: one level per physical press, never text deletion, no-op at Home.
     if (event.key === 'Backspace' && event.metaKey && !event.ctrlKey && !event.altKey && !event.isComposing) {
       event.preventDefault(); event.stopPropagation();
-      if (!event.repeat && history.length) back();
+      if (!event.repeat) requestBack(event.target);
       return;
     }
     if (event.key === 'Escape' && !event.defaultPrevented && !event.isComposing) {
@@ -593,6 +613,9 @@ export function createHub(parent: HTMLElement) {
   required<HTMLButtonElement>('.hub-close').onclick = () => close();
   backButton.onclick = back; primary.onclick = () => { void run(); };
   root.addEventListener('pointerdown', () => { restoringFocus?.disconnect(); restoringFocus = null; });
+  // The mouse back button (button 3) is Back as well; the Hub claims its press and release.
+  root.addEventListener('mousedown', event => { if (event.button === 3) event.preventDefault(); });
+  root.addEventListener('mouseup', event => { if (event.button !== 3) return; event.preventDefault(); event.stopPropagation(); requestBack(event.target); });
   root.addEventListener('click', event => { if (event.target === root) { event.stopImmediatePropagation(); close(); } }, true);
   root.addEventListener('close', () => { if (!root.open && !suspended) close(); });
   const onBlur = () => suspend();
@@ -617,17 +640,17 @@ export function createHub(parent: HTMLElement) {
       };
     },
     showRows(title: string, getRows: () => readonly HubRow[], summary?: HubSummary) {
-      const fromOpenHub = root.open;
-      if (!fromOpenHub) { suspended = null; show(); }
+      // Opened with the Hub closed (⌘B), the page starts from a fresh Home, which becomes its parent.
+      if (!root.open) { suspended = null; show(); }
       if (!scope) restoreQuery = input.value;
-      if (fromOpenHub && !restoring) remember(); resetView(); scope = { title, rows: getRows, ...(summary ? { summary } : {}) }; root.dataset.page = 'section'; caption.textContent = title;
+      if (!restoring) remember(); resetView(); scope = { title, rows: getRows, ...(summary ? { summary } : {}) }; root.dataset.page = 'section'; caption.textContent = title;
       backButton.hidden = history.length === 0; input.placeholder = 'Search actions…'; input.value = ''; report(''); refresh(true); input.focus({ preventScroll: true });
     },
     showView(title: string, mount: (target: HTMLElement, back: () => void) => () => void, available?: () => boolean) {
-      const fromOpenHub = root.open;
-      if (!fromOpenHub) { suspended = null; show(); }
+      // Opened with the Hub closed (⌘T, ⌘E), the view starts from a fresh Home, which becomes its parent.
+      if (!root.open) { suspended = null; show(); }
       if (!scope) restoreQuery = input.value;
-      if (fromOpenHub && !restoring) remember();
+      if (!restoring) remember();
       resetView();
       returnFromView = restoreParent;
       root.dataset.page = 'section'; caption.textContent = title; backButton.hidden = history.length === 0;

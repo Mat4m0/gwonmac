@@ -256,7 +256,7 @@ export interface ShortcutReplacement {
 }
 export type LauncherShortcutCaptureResult =
   | Readonly<{ status: "captured"; binding: ShortcutBinding }>
-  | Readonly<{ status: "reserved" }>
+  | Readonly<{ status: "reserved"; owner?: "back" }>
   | Readonly<{ status: "conflict"; action: ShortcutAction; binding: ShortcutBinding }>
   | Readonly<{ status: "cleared" }>
   | Readonly<{ status: "cancelled" }>

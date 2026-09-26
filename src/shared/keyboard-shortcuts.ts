@@ -194,6 +194,9 @@ function shortcutKey(code: string): string | null {
   return SPECIAL_KEYS[code]?.[0] ?? null;
 }
 
+/** The open Hub owns Command+Backspace as Back (hub.ts); the recorder names it. */
+export const HUB_BACK_SHORTCUT: ShortcutBinding = Object.freeze({ key: "backspace", shift: false, option: false });
+
 const RESERVED_SHORTCUTS: readonly ShortcutBinding[] = [
   // Editing and application lifecycle shortcuts must remain dependable.
   ...["a", "c", "h", "m", "q", "v", "w", "x", "z"].map((key) => ({
@@ -205,8 +208,7 @@ const RESERVED_SHORTCUTS: readonly ShortcutBinding[] = [
   { key: "m", shift: true, option: false },
   { key: "h", shift: false, option: true },
   { key: "i", shift: false, option: true },
-  // The open Hub owns Command+Backspace as Back.
-  { key: "backspace", shift: false, option: false },
+  HUB_BACK_SHORTCUT,
   // Travel owns Command+1…9 for quick-destination assignment.
   ..."123456789".split("").map((key) => ({
     key,

@@ -312,8 +312,10 @@
 .hub-hint { margin:0; padding:0 16px 8px; color:var(--ui-text-muted); font:var(--ui-type-caption-size)/1.4 var(--ui-font-reading); }
 .hub-row-type .ui-kbd { min-width:20px; padding:2px 4px; }
 /* One footer line at every Hub width and text size, so arrowing never resizes
- * the list. The result count gives up its room first; the primary then
- * ellipsizes and keeps its full label as the accessible name and tooltip. */
+ * the list. The ⌘⌫ legend and the result count give up their room first; the
+ * primary then ellipsizes and keeps its full label as the accessible name and
+ * tooltip. */
+.hub-legend { order:-2; flex:0 1000 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ui-text-muted); font:var(--ui-type-caption-size)/var(--ui-type-caption-line) var(--ui-font-reading); }
 .hub-footer .hub-primary { min-width:0; flex:0 1 auto; text-align:left; }
 .hub-footer .hub-primary kbd,.hub-footer .hub-actions { flex:none; white-space:nowrap; }
 .hub-count { flex:0 1000 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
