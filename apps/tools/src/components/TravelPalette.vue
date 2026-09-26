@@ -20,6 +20,7 @@ import {
 } from "../../../../src/shared/travel-command";
 import { TRAVEL_HISTORY_VISIBLE_LIMIT } from "../../../../src/shared/travel-history";
 import { guildWarsMapName } from "../../../../src/shared/guild-wars-map-names";
+import { listSelectionStep, moveListSelection } from "../../../../src/shared/list-selection";
 import { useTravelPreferences } from "../travel-preferences";
 import TravelDestinationPicker from "./TravelDestinationPicker.vue";
 
@@ -645,15 +646,21 @@ async function removePhrase(index: number): Promise<void> {
   }
 }
 
-async function moveActive(direction: 1 | -1): Promise<void> {
+/** Moves the one selection by the shared no-wrap policy, over unavailable results. */
+async function moveActive(step: number): Promise<void> {
   const entries = selectableDestinations.value;
-  if (!entries.some(selectable)) return;
-  let next = active.value < 0 ? (direction === 1 ? entries.length - 1 : 0) : active.value;
-  do next = (next + direction + entries.length) % entries.length;
-  while (!selectable(entries[next]!));
+  const next = moveListSelection(active.value, entries.length, step, index => selectable(entries[index]!));
+  if (next < 0) return;
   active.value = next;
   await nextTick();
   palette.value?.querySelector<HTMLElement>(`#travel-${activeResultId.value}`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
+}
+
+/** Page Up/Down move by the results in view. */
+function pageSize(): number {
+  const panel = palette.value?.querySelector<HTMLElement>("#travel-results-panel");
+  const row = panel?.querySelector<HTMLElement>(".travel-result");
+  return panel && row?.offsetHeight ? Math.max(1, Math.floor(panel.clientHeight / row.offsetHeight) - 1) : 1;
 }
 
 function onKeydown(event: KeyboardEvent): void {
@@ -672,10 +679,12 @@ function onKeydown(event: KeyboardEvent): void {
     } else emit("close");
     return;
   }
-  if (mode.value === "travel" && event.target === input.value && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+  const step = mode.value === "travel" && event.target === input.value ? listSelectionStep(event, pageSize()) : null;
+  if (step !== null) {
+    // Inside Hub, Up on the first result moves on to Back instead of staying put.
     if (props.inset && event.key === "ArrowUp" && active.value === 0) return;
     event.preventDefault();
-    void moveActive(event.key === "ArrowDown" ? 1 : -1);
+    void moveActive(step);
     return;
   }
   if (mode.value === "travel" && event.target === input.value && event.key === "Enter") {

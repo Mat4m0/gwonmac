@@ -169,6 +169,15 @@ test('arrows connect Hub results, character carousel, search and Back', async ({
   await page.screenshot({ path: info.outputPath('hub-characters.png') });
   await page.keyboard.press('ArrowRight'); await expect(selected).toContainText('Fixture Ranger');
   await page.keyboard.press('ArrowLeft'); await expect(selected).toContainText('Fixture Monk');
+  // The carousel shares the list policy: no wrap at either end, Home and End jump.
+  await page.keyboard.press('ArrowLeft'); await expect(selected).toContainText('Fixture Monk');
+  await expect(page.getByRole('button', { name: 'Previous character' })).toBeDisabled();
+  await page.keyboard.press('End');
+  const last = await selected.getAttribute('data-character-key');
+  await page.keyboard.press('ArrowRight'); await expect(selected).toHaveAttribute('data-character-key', last!);
+  await expect(page.getByRole('button', { name: 'Next character' })).toBeDisabled();
+  await page.keyboard.press('Home'); await expect(selected).toContainText('Fixture Monk');
+  await expect(selected).toBeFocused();
   await page.keyboard.press('ArrowUp');
   const picker = page.locator('.character-switch-search input');
   await expect(picker).toBeFocused();

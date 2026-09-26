@@ -4,6 +4,7 @@
  */
 import { installSearchEditing, resumeSearchInput } from "./search-input.js";
 import { hubMatch, normaliseHubQuery } from "../shared/hub.js";
+import { listSelectionStep, moveListSelection } from "../shared/list-selection.js";
 import type {
   CharacterSummary,
 } from "./companion-character-list-snapshot.js";
@@ -82,21 +83,6 @@ export function numberedCharacterPosition(key: string, count: number): number | 
   if (!/^[0-9]$/u.test(key)) return null;
   const position = key === "0" ? 9 : Number(key) - 1;
   return position < count ? position : null;
-}
-
-export function moveCharacterSelection(
-  current: number,
-  count: number,
-  direction: -1 | 1,
-  disabled = -1,
-): number {
-  if (count <= 1) return current;
-  let next = current;
-  for (let attempts = 0; attempts < count; attempts += 1) {
-    next = (next + direction + count) % count;
-    if (next !== disabled) return next;
-  }
-  return current;
 }
 
 export function characterCarouselRows(
@@ -189,6 +175,12 @@ export function createCharacterSwitchPalette(
   let withdrawnForSwitch = false;
   const busy = () => source.action.status === "switching";
   const carouselRadius = () => window.gwHub ? (window.innerWidth <= 640 ? 1 : 2) : window.innerWidth <= 680 ? 1 : window.innerWidth <= 1050 ? 2 : 3;
+  /** PgUp/PgDn move by the cards in view: the carousel's slots, or the rows the vertical list shows. */
+  const pageSize = () => {
+    if (window.gwHub || layout === "horizontal") return carouselRadius() * 2 + 1;
+    const card = list.querySelector<HTMLElement>("button[data-row]");
+    return card?.offsetHeight ? Math.max(1, Math.floor(list.clientHeight / card.offsetHeight) - 1) : 1;
+  };
   const hub = window.gwHub;
   let hubBack: (() => void) | undefined;
   const modal = hub ? {
@@ -383,8 +375,9 @@ export function createCharacterSwitchPalette(
     carousel.hidden = settingsMode || confirming;
     previousButton.hidden = !horizontal || settingsMode || confirming;
     nextButton.hidden = !horizontal || settingsMode || confirming;
-    previousButton.disabled = busy() || rows.length < 2;
-    nextButton.disabled = busy() || rows.length < 2;
+    // The carousel never wraps (list-selection.ts), so an end disables its arrow.
+    previousButton.disabled = busy() || selected <= 0;
+    nextButton.disabled = busy() || selected >= rows.length - 1;
     search.hidden = !searchEnabled || settingsMode || confirming || busy();
     settingsPanel.hidden = !settingsMode;
     confirmPanel.hidden = !confirming;
@@ -541,13 +534,13 @@ export function createCharacterSwitchPalette(
     if (hub && event.key === 'ArrowUp' && searchEnabled) {
       event.preventDefault(); event.stopPropagation(); queryInput.focus({ preventScroll: true }); return;
     }
-    const arrowMove = event.key === "ArrowLeft" || event.key === "ArrowRight"
-      || event.key === "ArrowUp" || event.key === "ArrowDown";
-    if (arrowMove) {
+    const plain = !event.altKey && !event.metaKey && !event.ctrlKey && !event.shiftKey;
+    const step = plain && event.key === "ArrowLeft" ? -1 : plain && event.key === "ArrowRight" ? 1
+      : listSelectionStep(event, pageSize());
+    if (step !== null) {
       event.preventDefault();
       event.stopPropagation();
-      const backwards = event.key === "ArrowLeft" || event.key === "ArrowUp";
-      selected = moveCharacterSelection(selected, rows.length, backwards ? -1 : 1);
+      selected = moveListSelection(selected, rows.length, step);
       render(false);
       focusSelected();
       revealSelected();
@@ -572,12 +565,12 @@ export function createCharacterSwitchPalette(
     requestSelected();
   });
   previousButton.addEventListener("click", () => {
-    selected = moveCharacterSelection(selected, rows.length, -1);
+    selected = moveListSelection(selected, rows.length, -1);
     render();
     focusSelected();
   });
   nextButton.addEventListener("click", () => {
-    selected = moveCharacterSelection(selected, rows.length, 1);
+    selected = moveListSelection(selected, rows.length, 1);
     render();
     focusSelected();
   });

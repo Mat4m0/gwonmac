@@ -1,7 +1,7 @@
-/** The one Hub list selection policy: steps, ends, pages and no wrap. */
+/** The one Hub list and carousel selection policy: steps, ends, pages, skips and no wrap. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { listSelectionIndex } from '../../src/shared/list-selection.js';
+import { listSelectionIndex, moveListSelection } from '../../src/shared/list-selection.js';
 
 const key = (value: string, modifiers: Partial<Record<'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey', boolean>> = {}) =>
   ({ key: value, altKey: false, ctrlKey: false, metaKey: false, shiftKey: false, ...modifiers });
@@ -33,4 +33,17 @@ test('text editing and other keys are left to the field', () => {
   for (const event of [key('a'), key('ArrowLeft'), key('Home', { shiftKey: true }), key('End', { metaKey: true }), key('ArrowDown', { altKey: true }), key('a', { ctrlKey: true })]) {
     assert.equal(listSelectionIndex(event, 1, 5), null, JSON.stringify(event));
   }
+});
+
+test('items a list cannot select are stepped over, and the selection stays when none is left', () => {
+  const selectable = (index: number) => index !== 0 && index !== 2 && index !== 4;
+  assert.equal(moveListSelection(1, 5, 1, selectable), 3);
+  assert.equal(moveListSelection(3, 5, 1, selectable), 3);
+  assert.equal(moveListSelection(1, 5, -1, selectable), 1);
+  assert.equal(moveListSelection(-1, 5, 1, selectable), 1);
+  assert.equal(moveListSelection(-1, 5, Infinity, selectable), 3);
+  assert.equal(moveListSelection(3, 5, -Infinity, selectable), 1);
+  // A page past the last selectable item stops on the nearest one beyond the current item.
+  assert.equal(moveListSelection(1, 5, 8, selectable), 3);
+  assert.equal(moveListSelection(-1, 3, 1, () => false), -1);
 });

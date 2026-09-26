@@ -760,6 +760,38 @@ describe("TravelPalette", () => {
     wrapper.unmount();
   });
 
+  it("moves the selection with the shared list keys and never wraps", async () => {
+    const roster = [
+      { key: "0123456789abcdef", status: "online" as const, mapId: 449,
+        alias: "First Friend", character: "First Character" },
+      { key: "fedcba9876543210", status: "away" as const, mapId: 194,
+        alias: "Second Friend", character: "Second Character" },
+    ];
+    const { wrapper } = fixture({ friends: {
+      status: "ready", sequence: 2, generation: 1, friends: roster,
+    } });
+    await flushPromises();
+    const search = wrapper.get('[role="combobox"]');
+    await search.setValue("friend");
+    const selected = () => wrapper.findAll(".travel-result").findIndex(row => row.attributes("aria-selected") === "true");
+    const last = wrapper.findAll(".travel-result").length - 1;
+    expect(last).toBeGreaterThan(0);
+    expect(selected()).toBe(0);
+    await search.trigger("keydown", { key: "ArrowUp" });
+    expect(selected()).toBe(0);
+    await search.trigger("keydown", { key: "n", ctrlKey: true });
+    expect(selected()).toBe(1);
+    await search.trigger("keydown", { key: "End" });
+    expect(selected()).toBe(last);
+    await search.trigger("keydown", { key: "ArrowDown" });
+    expect(selected()).toBe(last);
+    await search.trigger("keydown", { key: "Home" });
+    expect(selected()).toBe(0);
+    await search.trigger("keydown", { key: "PageDown" });
+    expect(selected()).toBeGreaterThan(0);
+    wrapper.unmount();
+  });
+
   it("does not silently select another friend when the selected identity disappears", async () => {
     const first = { key: "0123456789abcdef", status: "online" as const, mapId: 449,
       alias: "First Friend", character: "First Character" };

@@ -324,8 +324,9 @@ session task; explicit closure starts a fresh task next time. Resume refreshes
 current facts before execution. Account replacement invalidates prior targets.
 Result lists keep DOM focus in search and move only `aria-activedescendant`
 (D-2). Up/Down, Control-N/P, Home/End and Page Up/Down move the one selection
-through one no-wrap helper (`src/shared/list-selection.ts`): Up on the first
-result and Down on the last stay put, and a click selects without taking focus
+through one no-wrap helper (`src/shared/list-selection.ts`), which the
+Characters carousel and Travel use as well: Up on the first result and Down on
+the last stay put, a carousel end disables its arrow, and a click selects without taking focus
 from search. Pointer movement over a row selects it; a resting pointer or the
 wheel does not. Result rows therefore have no separate hover tone, so a list
 drawn under a resting pointer shows only the one selection. Right at the end of the query opens the selected result's

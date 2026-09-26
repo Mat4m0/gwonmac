@@ -96,7 +96,7 @@ Every row has a stable identity, full name, type, and an explicit primary action
 The footer names what Enter will do. Do not rely on colour or icons alone.
 
 - Up/Down, Control-N/P, Home/End and Page Up/Down move the one selection without
-  wrapping. Result lists keep focus in search and move only the active
+  wrapping in every Hub list and carousel, Characters and Travel included. Result lists keep focus in search and move only the active
   descendant, so typing always edits the query. Right at the end of the query
   opens the selected result's choices. Enter performs the displayed action.
 - Backspace only edits text and never navigates; on a Hub button it edits the

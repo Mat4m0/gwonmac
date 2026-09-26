@@ -32,8 +32,10 @@ Current integrated features are:
   key because older settings readers reject unknown keys.
 - **Character Switch** (Core): Command-Shift-R opens an account-character palette
   independently of Tools. Its default horizontal layout follows Guild Wars'
-  character-selection order, opens on the current character, and wraps only
-  after navigation reaches a visible end. Its alternative vertical layout is
+  character-selection order and opens on the current character. Arrows, Home,
+  End, Page Up/Down and Control-N/P follow the shared no-wrap selection policy
+  (`src/shared/list-selection.ts`), so an end stays put and disables its
+  carousel arrow. Its alternative vertical layout is
   alphabetical. Accounts that fit inside the visible carousel are centered and
   shown in full. Bounded name and primary-profession search is shown by default
   for every account size and can be hidden. Profession search matches a
