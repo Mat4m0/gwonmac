@@ -57,8 +57,11 @@ export function createPartyInvite(input: PartyInviteInput) {
    * Resolves on a settled, ready PvE outpost of `mapId` for the same character.
    * The first outpost after login can publish no character key yet: an unknown
    * key adopts the first known one, and only two different known keys refuse.
-   * Once a key is known only that key arrives, and leaving the game (character
-   * selection) refuses, so a relogged character never sends the invite.
+   * Once a key is known only that key arrives, so a relogged character never
+   * sends the invite. While no key is known yet, leaving the game refuses: that
+   * is the only case where a relog could pass for the same character. The game
+   * state also reads unavailable for a moment during an ordinary zone change,
+   * so it never refuses once the key is known.
    */
   function arrival(mapId: number, characterKey: string | null) {
     let cancel = () => {};
@@ -72,7 +75,7 @@ export function createPartyInvite(input: PartyInviteInput) {
       cancel = () => finish(new Error('Travel and invite stopped. The invite was not sent.'));
       const check = () => {
         const region = input.region();
-        const left = region.status === 'waiting' && region.reason === 'game';
+        const left = known === null && region.status === 'waiting' && region.reason === 'game';
         if (left || region.status === 'ready' && known !== null && region.characterKey !== null && region.characterKey !== known) {
           finish(new Error('The character changed. The invite was not sent.')); return;
         }

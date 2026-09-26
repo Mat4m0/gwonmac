@@ -97,8 +97,10 @@ existing friend Travel, and invites once after a ready PvE outpost of the
 friend's map stays ready for two seconds. The first outpost after login can
 publish no character key yet; the first known key is adopted, and only two
 different known keys count as a character change. Once a key is known, only an
-arrival with that key counts, and a return to character selection counts as a
-character change, so a relogged character never sends the invite. A character
+arrival with that key counts, so a relogged character never sends the invite; a
+moment of unavailable game state during an ordinary zone change does not
+withdraw it. While no key is known yet, a return to character selection counts
+as a character change. A character
 change, a refused trip, a non-PvE arrival or 60 seconds without arrival withdraws the
 invite; a non-PvE arrival withdraws it at once. Disposing Tools withdraws a
 pending arrival. The friend feed has no district, so an arrival in another

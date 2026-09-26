@@ -124,8 +124,18 @@ test('Travel and invite never sends from a relogged character that publishes no 
   relogged.move({ status: 'waiting', reason: 'game' });
   relogged.move(outpost(449, null));
   context.mock.timers.tick(2_000);
-  await assert.rejects(invited, /character changed\. The invite was not sent/, 'character selection withdraws the invite');
+  assert.deepEqual(relogged.invited, [], 'a known key never arrives as a null key after character selection');
+  relogged.move(outpost(449, 'b'));
+  await assert.rejects(invited, /character changed\. The invite was not sent/);
   assert.equal(relogged.listeners.size, 0);
+
+  const firstLogin = harness({ start: outpost(55, null) });
+  const { invited: firstLoginInvite } = await firstLogin.party.travelAndInvite(friend, 1);
+  firstLogin.move({ status: 'waiting', reason: 'game' });
+  firstLogin.move(outpost(449, null));
+  context.mock.timers.tick(2_000);
+  await assert.rejects(firstLoginInvite, /character changed\. The invite was not sent/, 'with no key yet, character selection withdraws the invite');
+  assert.equal(firstLogin.listeners.size, 0);
 
   const unknown = harness();
   const { invited: unknownInvite } = await unknown.party.travelAndInvite(friend, 1);
@@ -135,7 +145,21 @@ test('Travel and invite never sends from a relogged character that publishes no 
   assert.deepEqual(unknown.invited, [], 'a null key after a known one is no arrival');
   unknown.move(outpost(449, 'b'));
   await assert.rejects(unknownInvite, /character changed/);
-  assert.deepEqual([...relogged.invited, ...unknown.invited], []);
+  assert.deepEqual([...relogged.invited, ...firstLogin.invited, ...unknown.invited], []);
+});
+
+test('Travel and invite with a known key survives a moment of unavailable game state during the zone change', async (context) => {
+  context.mock.timers.enable({ apis: ['setTimeout'] });
+  const h = harness();
+  const { invited } = await h.party.travelAndInvite(friend, 1);
+  h.move(loading);
+  // The kernel reads unavailable for a tick while map pointers change, not only at character selection.
+  h.move({ status: 'waiting', reason: 'game' });
+  h.move(outpost(449, 'a'));
+  context.mock.timers.tick(2_000);
+  await invited;
+  assert.deepEqual(h.invited, ['Mo Kaiser']);
+  assert.equal(h.listeners.size, 0);
 });
 
 test('Travel and invite refuses a PvP outpost up front and a non-PvE arrival at once', async (context) => {
