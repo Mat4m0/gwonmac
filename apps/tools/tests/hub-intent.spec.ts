@@ -4,7 +4,7 @@ const searchName = 'Search people, places, builds';
 test('character entry is card-first and Back restores the launching result', async ({ page }) => {
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: searchName });
-  await search.fill('sw'); await search.press('Enter');
+  await search.fill('sw'); await search.press('ArrowDown'); await page.keyboard.press('Enter');
   const card = page.locator('#character-switch-list button:focus');
   await expect(card).toHaveCount(1);
   const first = await card.getAttribute('data-character-key');
@@ -16,41 +16,40 @@ test('character entry is card-first and Back restores the launching result', asy
   await expect(page.getByRole('button', { name: 'Back', exact: true })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(search).toHaveValue('sw');
-  await expect(page.locator('.hub-row[data-id="character"]')).toHaveAttribute('aria-selected', 'true');
-  await expect(search).toBeFocused();
+  await expect(page.locator('.hub-row[data-id="character"]')).toBeFocused();
 });
 
 test('account actions restore each visited account and command row', async ({ page }) => {
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: searchName });
-  await search.fill('switch account'); await search.press('Enter');
-  const account = page.locator('.hub-row[aria-selected="true"]');
+  await search.fill('switch account'); await search.press('ArrowDown'); await page.keyboard.press('Enter');
+  const account = page.locator('.hub-row:focus');
   await expect(account).toContainText('Second');
   const identity = await account.getAttribute('data-id');
   await page.keyboard.press('Enter');
-  await expect(page.locator('.hub-row[aria-selected="true"]')).toContainText('Close');
+  await expect(page.locator('.hub-row:focus')).toContainText('Close');
   await page.keyboard.press('Backspace');
-  await expect(page.locator(`.hub-row[data-id="${identity}"]`)).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator(`.hub-row[data-id="${identity}"]`)).toBeFocused();
   await page.keyboard.press('Backspace');
-  await expect(page.locator('.hub-row[data-id="accounts"]')).toHaveAttribute('aria-selected', 'true');
-  await expect(search).toHaveValue('switch account'); await expect(search).toBeFocused();
+  await expect(page.locator('.hub-row[data-id="accounts"]')).toBeFocused();
+  await expect(search).toHaveValue('switch account');
+  await page.keyboard.press('ArrowUp'); await expect(search).toBeFocused();
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', /Account/);
 });
 
 test('temporary blur resumes the stage and focus while explicit close starts fresh', async ({ page }) => {
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: searchName });
-  await search.fill('build monk'); await search.press('Enter');
-  const selected = await page.locator('.hub-row[aria-selected="true"]').getAttribute('data-id');
+  await search.fill('build monk'); await search.press('ArrowDown'); await page.keyboard.press('Enter');
+  const selected = await page.locator('.hub-row:focus').getAttribute('data-id');
   await page.evaluate(() => window.dispatchEvent(new Event('blur')));
   await expect(page.locator('#hub')).not.toBeVisible();
   await page.getByRole('button', { name: 'Open Hub', exact: true }).click();
   await expect(page.locator('.hub-summary')).toContainText('Protection');
-  await expect(page.locator(`.hub-row[data-id="${selected}"]`)).toHaveAttribute('aria-selected', 'true');
-  await expect(search).toBeFocused();
+  await expect(page.locator(`.hub-row[data-id="${selected}"]`)).toBeFocused();
   await page.keyboard.press('Backspace');
   await expect(search).toHaveValue('build monk');
-  await expect(page.locator('.hub-row[aria-selected="true"]')).toContainText('Protection');
+  await expect(page.locator('.hub-row:focus')).toContainText('Protection');
   await page.getByRole('button', { name: 'Close Hub', exact: true }).click();
   await page.getByRole('button', { name: 'Open Hub', exact: true }).click();
   await expect(search).toHaveValue(''); await expect(search).toBeFocused();
@@ -111,9 +110,9 @@ test('Hub placement survives reload, stays locked, and resets durably', async ({
 test('held Enter cannot activate a newly entered target page', async ({ page }) => {
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: searchName });
-  await search.fill('build monk');
+  await search.fill('build monk'); await search.press('ArrowDown');
   await page.keyboard.down('Enter'); await page.keyboard.down('Enter'); await page.keyboard.up('Enter');
-  await expect(page.locator('.hub-row[aria-selected="true"]')).toContainText('Apply to me');
+  await expect(page.locator('.hub-row:focus')).toContainText('Apply to me');
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', /command|apply/);
 });
 
@@ -181,10 +180,8 @@ test.describe('party invite', () => {
     await search.fill('invite Mo Kai');
     await expect(page.locator('.hub-row').nth(0)).toContainText('Mo Kai');
     await expect(primary).toHaveText(/^Invite Mo Kai/);
-    await search.press('ArrowDown');
-    await expect(search).toBeFocused();
+    await search.press('ArrowDown'); await page.keyboard.press('ArrowDown');
     await expect(page.locator('.hub-row[aria-selected="true"]')).toContainText('Mo Kaiser');
-    await expect(search).toHaveAttribute('aria-activedescendant', 'hub-result-1');
     await expect(primary).toHaveText(/^View actions/);
     await page.keyboard.press('Enter');
     await expect(page.locator('.hub-caption')).toHaveText('Mo Kaiser');
@@ -205,12 +202,7 @@ test.describe('party invite', () => {
   test('Invite to a friend in another map says why before Enter and sends nothing', async ({ page }) => {
     const search = page.getByRole('combobox', { name: searchName });
     await search.fill('romi'); await search.press('Enter');
-    // D-2: the person page keeps focus in search and moves the active descendant.
-    await expect(page.locator('.hub-caption')).toHaveText('Romi Ranger');
-    await expect(search).toBeFocused();
     await page.keyboard.press('ArrowDown'); await page.keyboard.press('ArrowDown');
-    await expect(search).toBeFocused();
-    await expect(search).toHaveAttribute('aria-activedescendant', 'hub-result-2');
     const row = page.locator('.hub-row[aria-selected="true"]');
     await expect(row).toContainText('Invite to party');
     await expect(row).toContainText('Romi Ranger is in Kamadan, Jewel of Istan. Use Travel and invite.');

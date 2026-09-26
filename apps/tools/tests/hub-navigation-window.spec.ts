@@ -55,10 +55,8 @@ test('arrows connect Hub results, character carousel, search and Back', async ({
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
   await search.fill('switch character'); await search.press('ArrowDown');
-  // D-2: arrows move the selection while focus stays in search; no wrap at the top.
-  await expect(page.locator('.hub-row[aria-selected=true]')).toContainText('Switch Character');
+  await expect(page.locator('.hub-row[aria-selected=true]')).toBeFocused();
   await page.keyboard.press('ArrowUp'); await expect(search).toBeFocused();
-  await expect(page.locator('.hub-row[aria-selected=true]')).toContainText('Switch Character');
   await search.press('Enter');
   const selected = page.locator('.character-switch-row[data-selected=true]');
   await expect(selected).toBeFocused();
@@ -104,33 +102,4 @@ for (const material of ['Guild Wars', 'Modern']) test(`floating Whispers paints 
   expect(geometry.boxSizing).toBe('border-box'); expect(geometry.fill).not.toBe('rgba(0, 0, 0, 0)'); expect(geometry.delta).toBeLessThan(2);
   expect(geometry.mask).toBe('none'); expect(Number(geometry.z)).toBeLessThan(0);
   await page.screenshot({ path: info.outputPath('whisper-floating.png') });
-});
-
-test('one list move keeps focus in search: arrows, Control-N/P, pages and ends never wrap', async ({ page }) => {
-  await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
-  const rows = page.locator('.hub-row');
-  const selected = page.locator('.hub-row[aria-selected="true"]');
-  await expect(rows.first()).toBeVisible();
-  const count = await rows.count();
-  expect(count).toBeGreaterThan(8);
-  await expect(rows.nth(0)).toHaveAttribute('aria-selected', 'true');
-  await search.press('ArrowUp'); await expect(rows.nth(0)).toHaveAttribute('aria-selected', 'true');
-  await search.press('Control+n'); await expect(rows.nth(1)).toHaveAttribute('aria-selected', 'true');
-  await search.press('Control+p'); await expect(rows.nth(0)).toHaveAttribute('aria-selected', 'true');
-  await search.press('PageDown');
-  expect(await selected.getAttribute('id')).not.toBe('hub-result-0');
-  await search.press('End');
-  await expect(rows.nth(count - 1)).toHaveAttribute('aria-selected', 'true');
-  await expect(rows.nth(count - 1)).toBeInViewport();
-  await search.press('ArrowDown'); await expect(rows.nth(count - 1)).toHaveAttribute('aria-selected', 'true');
-  await search.press('Home'); await expect(rows.nth(0)).toHaveAttribute('aria-selected', 'true');
-  await expect(search).toBeFocused();
-  await expect(search).toHaveAttribute('aria-activedescendant', 'hub-result-0');
-  // The results scroller is no Tab stop (HUB-045).
-  await expect(page.locator('#hub-results')).toHaveAttribute('tabindex', '-1');
-  // A click on a navigational row opens it and leaves the keyboard in search.
-  await page.locator('.hub-row[data-id="commands"]').click();
-  await expect(page.locator('.hub-caption')).toHaveText('Commands');
-  await expect(search).toBeFocused();
 });

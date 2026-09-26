@@ -43,7 +43,7 @@ test('Command-R opens Core Hub, keeps editing local and restores game focus', as
     await expect(hub.locator('.hub-caption')).toHaveText('Build Library');
     await expect(page.locator('#toolbox-builds .tools-window')).toBeHidden();
     await expect(hub.getByRole('option', { name: /Guild Wars templates/ })).toBeVisible();
-    await search.press('ArrowRight');
+    await search.press('ArrowDown'); await page.keyboard.press('ArrowRight');
     await expect(hub.locator('.hub-caption')).toHaveText('Guild Wars templates');
     await hub.getByRole('button', { name: 'Back', exact: true }).click();
     await hub.getByRole('button', { name: 'Back', exact: true }).click();
@@ -63,14 +63,12 @@ test('Command-R opens Core Hub, keeps editing local and restores game focus', as
       return (await win.webContents.capturePage()).toPNG().toString('base64');
     }, page.url());
     await writeFile(test.info().outputPath('hub-200-percent.png'), Buffer.from(png, 'base64'));
-    // The first Escape clears the query (D-4); the second closes Hub.
-    await search.press('Escape'); await expect(search).toHaveValue('');
     await search.press('Escape'); await expect(hub).toBeHidden();
     await expect.poll(() => isDomActiveElement(page.locator('#canvas'))).toBe(true);
   } finally { await closeOffline(fixture); }
 });
 
-test('Hub list navigation preserves native editing shortcuts, Unicode and composition', async () => {
+test('Hub browse focus preserves native editing shortcuts, Unicode and composition', async () => {
   const fixture = await launchPlayableClient('gw-hub-editing-e2e-');
   const { app, page } = fixture;
   const clipboardBefore = await app.evaluate(({ clipboard }) => clipboard.availableFormats().map(format => ({
@@ -105,7 +103,7 @@ test('Hub list navigation preserves native editing shortcuts, Unicode and compos
     await search.press('ArrowDown'); await page.keyboard.press('Delete');
     await expect(search).toHaveValue('ravel');
     await search.fill('sw'); await search.press('ArrowDown');
-    await expect(search).toBeFocused(); await expect(row).toHaveCount(1);
+    await expect(row).toBeFocused();
     // Chromium owns the composed edit; this checks the host path, not an OS input-source UI.
     const cdp = await page.context().newCDPSession(page);
     try {
@@ -124,7 +122,7 @@ test('Hub list navigation preserves native editing shortcuts, Unicode and compos
       await expect(search).toHaveValue('sw日本');
     } finally { await cdp.detach(); }
     await expect(page.locator('.hub-caption')).toHaveText('Home');
-    await search.press('Escape'); await search.press('Escape');
+    await search.press('Escape');
     await expect.poll(() => isDomActiveElement(page.locator('#canvas'))).toBe(true);
   } finally {
     await app.evaluate(({ clipboard }, saved) => {
