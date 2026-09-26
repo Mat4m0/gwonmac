@@ -258,7 +258,9 @@ ignores it. The press bubbles to Hub, so a mounted view with its own inner level
 (a confirmation, Character Switch settings, Travel Customize) steps out of it first,
 the way Esc does, and marks the press handled. Backspace only edits text and never
 navigates; on a list-stage button it edits the search like typing. History restores
-query, selection, scroll and the focused control. Form fields keep their draft for
+query, selection, scroll and the focused control. The search field's description
+leads with the page title, so a screen reader that stays in search after Back
+hears where it landed. Form fields keep their draft for
 the session by page path and field name, unless the stored value they started from
 changed meanwhile. Hub lists keep focus in search and move the active descendant. First entry and restoration are separate: character cards,
 account choices and action lists start on their useful item; search stays optional.

@@ -60,6 +60,10 @@ test('Command-Backspace and breadcrumb ancestors restore history; Backspace only
   await page.keyboard.up('Backspace'); await page.keyboard.up('Meta');
   await expect(search).toHaveValue('second');
   await expect(page.locator('.hub-caption')).toHaveText('Accounts');
+  // Focus stays in search, so its description names the page a screen reader has returned to.
+  await expect(search).toHaveAttribute('aria-description', 'Accounts: search actions');
+  await page.keyboard.press('Meta+Backspace');
+  await expect(search).toHaveAttribute('aria-description', 'Home: search tools or use a command example');
   await search.press('Enter');
   await page.getByRole('navigation', { name: 'Hub breadcrumb' }).getByRole('button', { name: 'Home', exact: true }).click();
   await expect(search).toHaveValue('accounts');

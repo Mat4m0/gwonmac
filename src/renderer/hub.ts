@@ -376,7 +376,8 @@ export function createHub(parent: HTMLElement) {
     const scopeLabel = required<HTMLElement>('.hub-scope');
     scopeLabel.textContent = query.scope ?? '';
     scopeLabel.hidden = !!scope || !query.scope || !!disposeView;
-    input.setAttribute('aria-description', scope ? `Search actions for ${scope.title}` : query.scope ? `Search ${query.scope}` : 'Search tools or use a command example');
+    // The page title leads, so a screen reader that lands in search after Back hears where it is.
+    input.setAttribute('aria-description', `${currentTitle}: ${scope ? 'search actions' : query.scope ? `search ${query.scope}` : 'search tools or use a command example'}`);
     const hint = required<HTMLElement>('.hub-hint');
     const example = commandExamples().find(row => normaliseHubQuery(row.title).startsWith(`${normaliseHubQuery(input.value)} `));
     hint.textContent = !scope && !query.scope && input.value.trim() && example ? `Try “${example.title}” · ${example.detail}` : '';
