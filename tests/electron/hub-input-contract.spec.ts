@@ -110,6 +110,10 @@ test('Command-B and Command-T open their scope in the open Hub and never type in
     const hub = hubOf(page);
     await chord(fixture, 'R', ['meta']);
     await expect(hub).toBeVisible();
+    // The Build Library loads after launch, and until then Command-B honestly refuses with
+    // "Build Library is loading". Wait until the Hub offers it, so the race cannot decide the case.
+    await searchOf(page).fill('build library');
+    await expect(hub.locator('.hub-row[data-id="builds"]')).toHaveAttribute('aria-disabled', 'false');
     await searchOf(page).fill('kam');
     await chord(fixture, 'B', ['meta']);
     await expect(hub.locator('.hub-caption')).toHaveText('Build Library');
