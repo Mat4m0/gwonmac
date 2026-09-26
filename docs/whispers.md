@@ -89,7 +89,9 @@ Wars reports acceptance or refusal in original chat.
 
 `party-invite.ts` allows an invite only in a PvE outpost with the chat mailbox
 enabled. A friend in another map cannot receive it, so the row says where the
-friend is and points to Travel and invite before Enter. Travel and invite
+friend is before Enter. It points to Travel and invite only when the friend is
+in a PvE travel destination; an explorable area or PvP outpost gets no pointer
+to a row that cannot start. Travel and invite
 refuses a known PvP outpost up front. It captures the character, starts the
 existing friend Travel, and invites once after a ready PvE outpost of the
 friend's map stays ready for two seconds. The first outpost after login can

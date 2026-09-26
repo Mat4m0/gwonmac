@@ -38,7 +38,10 @@ export function createPartyInvite(input: PartyInviteInput) {
     if (!inOutpost(region)) return 'Invite players from an outpost';
     if (!input.chatReady()) return 'Guild Wars chat is not ready';
     if (friend && region.status === 'ready' && friend.mapId !== region.mapId) {
-      return `${friend.character || friend.alias} is in ${travelDestination(friend.mapId)?.name ?? 'another map'}.${input.travel ? ' Use Travel and invite.' : ''}`;
+      // Point to Travel and invite only where it can start: a PvE travel destination.
+      const place = travelDestination(friend.mapId);
+      const travelable = !!input.travel && !!place && !isPvpTravelDestination(friend.mapId);
+      return `${friend.character || friend.alias} is in ${place?.name ?? 'another map'}.${travelable ? ' Use Travel and invite.' : ''}`;
     }
     return null;
   }

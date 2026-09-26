@@ -90,6 +90,13 @@ test('Invite is unavailable for a friend in another map and names where they are
   assert.equal(h.party.unavailable(), null, 'a name without a known map is not refused');
 });
 
+test('Invite points to Travel and invite only where Travel and invite can start', () => {
+  const h = harness();
+  assert.equal(h.party.unavailable({ ...friend, mapId: 0 }), 'Mo Kaiser is in another map.', 'an explorable area is no travel destination');
+  assert.equal(h.party.unavailable({ ...friend, mapId: 188 }), 'Mo Kaiser is in Random Arenas.', 'Travel and invite refuses a PvP outpost');
+  assert.equal(h.party.travelUnavailable({ ...friend, mapId: 188 }), 'Invites from Hub need a PvE outpost');
+});
+
 test('Travel and invite from the first outpost after login adopts the first known character key', async (context) => {
   context.mock.timers.enable({ apis: ['setTimeout'] });
   for (const known of [false, true]) {
