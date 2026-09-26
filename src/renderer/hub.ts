@@ -521,7 +521,10 @@ export function createHub(parent: HTMLElement) {
     } else if (event.key === 'ArrowRight' && !event.repeat && input.selectionStart === input.value.length && input.selectionEnd === input.value.length) {
       const row = rows.find(row => row.id === selected);
       if (row?.navigate) { event.preventDefault(); row.navigate(); }
-    } else if (event.key === 'Enter') { event.preventDefault(); if (!event.repeat) void run(); }
+    } else if (event.key === 'Enter' && !event.metaKey && !event.ctrlKey && !event.altKey) {
+      // Only a plain Enter runs the named primary; a modified Enter is never a second route to it.
+      event.preventDefault(); if (!event.repeat) void run();
+    }
   });
   // A press on a result keeps the keyboard in search.
   list.addEventListener('mousedown', event => event.preventDefault());

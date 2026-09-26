@@ -117,6 +117,21 @@ test('held Enter cannot activate a newly entered target page', async ({ page }) 
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', /command|apply/);
 });
 
+test('a modified Enter never runs the primary; only a plain Enter does', async ({ page }) => {
+  await page.goto('/?hub');
+  const search = page.getByRole('combobox', { name: searchName });
+  await search.fill('build smiter'); await search.press('Enter');
+  await expect(page.locator('.hub-primary')).toHaveText(/^Apply to me/);
+  for (const chord of ['Meta+Enter', 'Control+Enter', 'Alt+Enter']) {
+    await search.press(chord);
+    await expect(page.locator('#hub')).toBeVisible();
+    await expect(page.locator('#app')).not.toHaveAttribute('data-action', /command|apply/);
+  }
+  await search.fill('kamadan'); await search.press('Meta+Enter');
+  await expect(page.locator('#hub')).toBeVisible();
+  await expect(page.locator('#app')).not.toHaveAttribute('data-action', /travel/i);
+});
+
 
 test('held Enter on footer actions and Backspace in ordinary fields keep their scope', async ({ page }) => {
   await page.goto('/?hub');
