@@ -277,8 +277,10 @@ favourites and its action hints reachable.
 [Appearance checks](../apps/tools/tests/hub-appearance.spec.ts) include minimum
 opacity, a bright checkerboard backdrop, reduced motion, font changes, Custom
 Classic, Modern round trips and device-pixel density. With every glyph hidden,
-composed screenshot pixels under each text role meet 4.5:1 in Modern at 65 % and
-Classic at 94 % and 65 %: row title and detail, group headings, the build summary
+composed screenshot pixels under each text role meet 4.5:1 in Modern at 65 %,
+Classic at 94 % and 65 % and the default custom palette at 65 %, whose brighter
+translucent selection lifts every label on the selected row to text ink: row
+title and detail, profession labels, group headings, the build summary
 label, the scope chip, count, keycaps, placeholder, footer labels, the header
 name, crumb, separator, caption and context, and Settings rows. The same suite
 checks that the Hub never dims the game around it in either style or under

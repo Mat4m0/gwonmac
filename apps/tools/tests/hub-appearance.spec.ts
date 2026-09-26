@@ -191,9 +191,13 @@ const TEXT_ROLES = {
   title: '.hub-title', detail: '.hub-row > .hub-detail', group: '.hub-group', count: '.hub-count', keycap: '.hub-row-type .ui-kbd',
   name: '.hub-name', caption: '.hub-caption', context: '.hub-context', crumb: '.hub-crumb', separator: '.hub-breadcrumbs > span[aria-hidden]',
   summary: '.hub-summary-label', scope: '.hub-scope:not([hidden])', primary: '.hub-primary', actions: '.hub-actions', placeholder: '',
+  profession: '.hub-profession-label',
 };
 
-for (const [uiStyle, uiPanelOpacity] of [['obsidian', 65], ['guild-wars', 94], ['guild-wars', 65]] as const) {
+// The default custom palette recolours the selection, which is translucent
+// and brighter than the panel, so its row labels are part of the worst case.
+const CUSTOM_CLASSIC = { material: 'classic', window: '#172025', titlebar: '#365063', surface: '#263948', recessed: '#10181F', selected: '#315B7A', accent: '#E6C882', text: '#F1EBDD', mutedText: '#B7B09F', border: '#D8D2BF', windowGradient: false } as const;
+for (const [uiStyle, uiPanelOpacity] of [['obsidian', 65], ['guild-wars', 94], ['guild-wars', 65], ['custom', 65]] as const) {
   test(`every Hub text role reads at 4.5:1 over a bright scene in ${uiStyle} at ${uiPanelOpacity}%`, async ({ page }) => {
     const media = await page.context().newCDPSession(page);
     await media.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-transparency', value: 'no-preference' }] });
@@ -202,7 +206,7 @@ for (const [uiStyle, uiPanelOpacity] of [['obsidian', 65], ['guild-wars', 94], [
     await page.addStyleTag({ content: CHECKERBOARD });
     const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
     await expect(search).toBeFocused();
-    await page.evaluate(appearance => window.gwApplyFixtureAppearance?.(appearance), { uiStyle, uiPanelOpacity });
+    await page.evaluate(appearance => window.gwApplyFixtureAppearance?.(appearance), { uiStyle, uiPanelOpacity, ...(uiStyle === 'custom' ? { uiCustomTheme: CUSTOM_CLASSIC } : {}) });
     const measured: Awaited<ReturnType<typeof textContrast>> = [];
     measured.push(...await textContrast(page, TEXT_ROLES));
     await search.fill('kam'); measured.push(...await textContrast(page, TEXT_ROLES));
@@ -215,7 +219,7 @@ for (const [uiStyle, uiPanelOpacity] of [['obsidian', 65], ['guild-wars', 94], [
     await page.getByRole('button', { name: 'Appearance', exact: true }).click();
     await expect(page.locator('.hub-crumb')).toBeVisible();
     measured.push(...await textContrast(page, { ...TEXT_ROLES, setting: '.hub-setting-row strong, .hub-setting-row small, .hub-settings h2' }));
-    for (const role of ['title', 'detail', 'group', 'count', 'keycap', 'name', 'caption', 'context', 'crumb', 'separator', 'summary', 'scope', 'primary', 'placeholder', 'setting']) {
+    for (const role of ['title', 'detail', 'group', 'count', 'keycap', 'name', 'caption', 'context', 'crumb', 'separator', 'summary', 'scope', 'primary', 'placeholder', 'profession', 'setting']) {
       expect(measured.some(label => label.role === role), `${role} was measured`).toBe(true);
     }
     for (const label of measured) expect(label.ratio, `${label.role} “${label.text}”`).toBeGreaterThanOrEqual(4.5);

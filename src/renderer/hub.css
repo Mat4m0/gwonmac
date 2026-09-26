@@ -260,9 +260,13 @@
 .whisper-popout-host .whisper-bubble[data-direction=outgoing] { background:var(--ui-selection-fill); }
 .whisper-popout-host .whisper-send { color:var(--ui-accent); background:transparent!important; }
 
-/* Hub utilities share the same controls and readable selected context. */
+/* Hub utilities share the same controls and readable selected context. A
+ * player's selection colour can be brighter than the panel, so every
+ * secondary label on the selected row reads in text ink, not muted. */
 .hub-row[aria-selected=true] > .hub-detail,
-.hub-row[aria-selected=true] > .hub-row-type { color:var(--ui-text); }
+.hub-row[aria-selected=true] > .hub-row-type,
+.hub-row[aria-selected=true] .hub-profession-label,
+.hub-row[aria-selected=true] .hub-folder-label { color:var(--ui-text); }
 .hub-map-settings { display:flex; flex-direction:column; gap:12px; max-width:560px; margin-inline:auto; }
 .hub-map-layer { padding:12px 0; border-bottom:1px solid var(--ui-line-soft); }
 .hub-map-toggle { display:flex; align-items:center; gap:10px; min-height:34px; }
