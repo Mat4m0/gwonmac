@@ -30,7 +30,7 @@
 .hub-results { min-height:0; flex:1; overflow:auto; padding:0 8px 8px; overscroll-behavior:contain; }
 .hub-group { padding:12px 10px 6px; color:var(--ui-accent-text); font:var(--ui-type-body-size)/var(--ui-type-body-line) var(--ui-font-display); }
 .hub-group:first-child { padding-top:4px; }
-.hub-row { position:relative; display:grid; grid-template-columns:30px auto minmax(0,1fr) auto; align-items:center; column-gap:12px; padding:8px 10px; min-height:46px; border-radius:var(--ui-radius-sm); cursor:pointer; }
+.hub-row { position:relative; display:grid; grid-template-columns:30px auto minmax(0,1fr) auto; align-items:center; column-gap:12px; padding:6px 10px; min-height:40px; border-radius:var(--ui-radius-sm); cursor:pointer; }
 .hub-row:hover { background:var(--ui-hover); }
 .hub-icon { width:28px; height:28px; display:grid; place-items:center; border-radius:var(--ui-radius-sm); color:var(--ui-accent); background:var(--ui-well-fill); box-shadow:var(--ui-shadow-inset); }
 .hub-icon svg { width:20px; height:20px; }

@@ -24,7 +24,7 @@ Build and team previews use the existing planner and observed execution runner.
   saved phrases and pins, disabled capabilities, silent Storage, character choice,
   Trade query transfer, detachment, and inline Maps controls.
 - Browser visual exploration: home and conversion states, both themes, 390px width,
-  reduced motion. Raycast-style hierarchy with category icons, 54px rows, a spacious
+  reduced motion. Raycast-style hierarchy with category icons, 40px rows, a spacious
   search area, rounded selection, conversion cards and a compact action footer.
 - 1,692 unit tests passed, including bounded calculator arithmetic, late quotes,
   stale rates, private/global phrase validation and single-build target guards.
@@ -283,7 +283,9 @@ label, the scope chip, count, keycaps, placeholder, footer labels, the header
 name, crumb, separator, caption and context, and Settings rows. The same suite
 checks that the Hub never dims the game around it in either style or under
 Reduce Transparency, that Reduce Transparency restores the opaque inks, and that
-the footer stays one line while arrowing at narrow and minimum sizes. At 65 %
+the footer stays one line while arrowing at narrow and minimum sizes. In all six
+panel fonts, both styles and 94 % and 65 % opacity, non-build result rows are
+40 px, keycaps centre on their titles within 1 px and no title is clipped. At 65 %
 over the checkerboard, title, detail, keycap, count, placeholder and gold
 heading inks stay apart in both styles, and a dark scene behind the panel
 composes exactly as it would without the Hub's highlight cap. The custom

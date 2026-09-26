@@ -272,6 +272,35 @@ test('a narrow or minimum Hub keeps one footer line while arrowing', async ({ pa
   }
 });
 
+test('result rows stay 40 px with centred keycaps and whole titles in every panel font', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/?hub');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  for (const uiStyle of ['guild-wars', 'obsidian'] as const) {
+    for (const uiPanelOpacity of [94, 65]) {
+      for (const uiFont of ['guild-wars', 'inter', 'system', 'georgia', 'avenir', 'palatino']) {
+        await page.evaluate(appearance => window.gwApplyFixtureAppearance?.(appearance), { uiStyle, uiPanelOpacity, uiFont });
+        for (const query of ['kam', 'k']) {
+          await search.fill(query);
+          const rows = await page.locator('.hub-row:not(.hub-build-row)').evaluateAll(rows => rows.map(row => {
+            const title = row.querySelector('.hub-title')!;
+            const centre = (element: Element) => { const box = element.getBoundingClientRect(); return box.top + box.height / 2; };
+            const keycap = row.querySelector('.hub-row-type .ui-kbd');
+            return { height: row.getBoundingClientRect().height, offset: keycap ? Math.abs(centre(keycap) - centre(title)) : 0, clipped: title.scrollWidth - title.clientWidth };
+          }));
+          const label = `${uiStyle} ${uiPanelOpacity}% ${uiFont} ${query}`;
+          expect(rows.length, label).toBeGreaterThan(0);
+          expect(new Set(rows.map(row => Math.round(row.height))), label).toEqual(new Set([40]));
+          for (const row of rows) {
+            expect(row.offset, label).toBeLessThanOrEqual(1);
+            expect(row.clipped, label).toBeLessThanOrEqual(1);
+          }
+        }
+      }
+    }
+  }
+});
+
 test('Settings navigation keeps every section on one line in every panel font', async ({ page }) => {
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
