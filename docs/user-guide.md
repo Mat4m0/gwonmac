@@ -207,10 +207,19 @@ favourites, recent places, and Guild Hall stay in the same window. Command-T
 and `/tp` also open Travel inside Hub.
 
 Search a friend's alias or character name and press Enter to choose an action.
+With Whispers enabled, people search also finds your conversations, recent
+people, and names seen in chat during this game session. `whisper Character Name`
+always offers that exact name, spelled as you typed it, after any similar known
+people.
 **Travel to outpost** uses Any district; it does not join the friend's exact
 instance. Offline or stale locations cannot start a trip. **Whisper** opens a
 compact conversation. You can also type `whisper Character Name` to start one.
 Press Enter or Send to submit a message; merely opening a result sends nothing.
+
+A name copied from Discord or a web page can contain a trailing space or an
+invisible character. Paste into a Guild Wars text field removes them, so the
+name works like a typed name. The cleaned text also replaces the clipboard.
+Password and email fields receive the clipboard unchanged.
 
 Whispers uses one conversation interface for person search, the Whispers shortcut,
 and the unread launcher. Messages, drafts, history, mute and unread state stay in

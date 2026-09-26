@@ -267,6 +267,37 @@ test.describe("renderer text editing", () => {
     }
   });
 
+  test("pastes a copied name as typed text but leaves secret fields exact", async () => {
+    const fixture = await launchPlayableClient("gw-clipboard-name-e2e-");
+    try {
+      const { app, page } = fixture;
+      await startGameInput(page);
+      const before = await app.evaluate(({ clipboard }) => clipboard.readText());
+      try {
+        const pasteInto = async (id: string, text: string) => {
+          await app.evaluate(({ clipboard }, value) => clipboard.writeText(value), text);
+          await page.evaluate((fieldId) => {
+            const field = document.getElementById(fieldId) as HTMLInputElement;
+            field.value = "";
+            field.focus();
+            (window as OskWindow).Module.oskActiveInput = field;
+          }, id);
+          await clickEdit(app, EDIT_ITEMS.paste);
+        };
+        await pasteInto("osk-input-text", "\u200eMo\u00a0Kai ");
+        await expect(page.locator("#osk-input-text")).toHaveValue("Mo Kai");
+        expect(await app.evaluate(({ clipboard }) => clipboard.readText())).toBe("Mo Kai");
+        await pasteInto("osk-input-password", " pass\u00a0word ");
+        await expect(page.locator("#osk-input-password")).toHaveValue(" pass\u00a0word ");
+        expect(await app.evaluate(({ clipboard }) => clipboard.readText())).toBe(" pass\u00a0word ");
+      } finally {
+        await app.evaluate(({ clipboard }, text) => clipboard.writeText(text), before);
+      }
+    } finally {
+      await closeOffline(fixture);
+    }
+  });
+
   test("keeps password exports private and falls back for a Settings input", async () => {
     const fixture = await launchPlayableClient("gw-private-editing-e2e-");
     try {
@@ -353,7 +384,9 @@ test.describe("renderer text editing", () => {
           { command: "copy", text: "x", extra: true },
           { command: "cut" },
           { command: "cut", text: "x".repeat(64 * 1024 + 1) },
-          { command: "paste", text: "secret" },
+          { command: "paste" },
+          { command: "paste", field: "other" },
+          { command: "paste", field: "text", text: "secret" },
           { command: "selectAll", text: "secret" },
           { command: "undo" },
         ];
@@ -366,7 +399,7 @@ test.describe("renderer text editing", () => {
           }
         }));
       });
-      expect(rejected).toEqual(Array.from({ length: 11 }, () => true));
+      expect(rejected).toEqual(Array.from({ length: 13 }, () => true));
     } finally {
       await closeOffline(fixture);
     }

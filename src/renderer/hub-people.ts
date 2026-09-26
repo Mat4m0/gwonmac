@@ -4,16 +4,21 @@
  */
 import { currentTravelFriend, type TravelFriend, type TravelFriends } from '../shared/friends.js';
 import { travelDestination } from '../shared/travel.js';
-import { matchHubRows, parseHubQuery, type HubRow, type HubSource } from '../shared/hub.js';
-import { whisperPersonKey, whisperUnread, type WhisperSession } from '../shared/whisper-session.js';
-import { whisperLine } from '../shared/whispers.js';
+import { parseHubQuery, type HubRow, type HubSource } from '../shared/hub.js';
+import { normaliseCharacterName } from '../shared/player-text.js';
+import { findPeople, whisperPersonKey, whisperUnread, type Person, type WhisperSession } from '../shared/whisper-session.js';
+import { isCharacterName } from '../shared/whispers.js';
 import type { Hub } from './hub.js';
+
+const toolEnabled = (setting: 'whispersEnabled' | 'travelPalette') =>
+  !!window.gwToolsSettings?.().gwonmacTools && !!window.gwToolsSettings?.()[setting];
+const MAX_PEOPLE = 8;
 
 type FriendTravel = Readonly<{
   unavailable(): string | null;
   run(friend: TravelFriend, generation: number): Promise<void>;
 }>;
-export function createHubPeople(hub: Hub, session: WhisperSession, travel: FriendTravel | null) {
+export function createHubPeople(hub: Pick<Hub, 'attach' | 'showRows'>, session: WhisperSession, travel: FriendTravel | null) {
   let friends: TravelFriends = { status: 'waiting', reason: 'unavailable' };
   let enabled = false;
   let detach: (() => void) | null = null;
@@ -24,7 +29,7 @@ export function createHubPeople(hub: Hub, session: WhisperSession, travel: Frien
     session.open(name, { visible: false });
     window.dispatchEvent(new CustomEvent('gw:whispers-toggle', { cancelable: true, detail: 'show' }));
   };
-  const contact = (event: Event) => { if (event instanceof CustomEvent && typeof event.detail === 'string' && window.gwToolsSettings?.().gwonmacTools && window.gwToolsSettings?.().whispersEnabled) whisper(event.detail); };
+  const contact = (event: Event) => { if (event instanceof CustomEvent && typeof event.detail === 'string' && toolEnabled('whispersEnabled')) whisper(event.detail); };
   window.addEventListener('gw:whisper-person', contact);
   function person(name: string, friendKey?: string) {
     const selectedFeed = friends;
@@ -43,12 +48,10 @@ export function createHubPeople(hub: Hub, session: WhisperSession, travel: Frien
         : !selectedFriend || selectedFeed.status !== 'ready' || !currentTravelFriend(feed, selectedFriend, selectedFeed.generation)
         ? 'This friend’s location changed. Select them again.'
         : travel?.unavailable() ?? (travel ? null : 'Travel is unavailable');
-      const whispersEnabled = !!window.gwToolsSettings?.().gwonmacTools && !!window.gwToolsSettings?.().whispersEnabled;
-      const travelEnabled = !!window.gwToolsSettings?.().gwonmacTools && !!window.gwToolsSettings?.().travelPalette;
-      const rows: HubRow[] = whispersEnabled ? [{ id: 'person:whisper', title: 'Whisper', detail: `Message ${currentName}`, group: 'Actions', action: 'Write whisper',
+      const rows: HubRow[] = toolEnabled('whispersEnabled') ? [{ id: 'person:whisper', title: 'Whisper', detail: `Message ${currentName}`, group: 'Actions', action: 'Write whisper',
         ...(changed ? { unavailable: 'This friend changed or is unavailable. Select them again.' } : !session.state.available ? { unavailable: 'Whispers is unavailable. Enable it in Settings or wait for Guild Wars.' } : {}),
         run: () => whisper(currentName) }] : [];
-      if (friendKey && travelEnabled) rows.push({ id: 'person:travel', title: 'Travel to outpost', detail: `${destination?.name ?? 'Location unavailable'} · Any district`, group: 'Actions', action: 'Travel',
+      if (friendKey && toolEnabled('travelPalette')) rows.push({ id: 'person:travel', title: 'Travel to outpost', detail: `${destination?.name ?? 'Location unavailable'} · Any district`, group: 'Actions', action: 'Travel',
         ...(reason ? { unavailable: reason } : {}), run: async () => {
           if (!selectedFriend || selectedFeed.status !== 'ready' || !travel) throw new Error('Friend travel is unavailable');
           await travel.run(selectedFriend, selectedFeed.generation);
@@ -60,44 +63,45 @@ export function createHubPeople(hub: Hub, session: WhisperSession, travel: Frien
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
     setVisible() {},
     search(query) {
-      const whispersEnabled = !!window.gwToolsSettings?.().gwonmacTools && !!window.gwToolsSettings?.().whispersEnabled;
+      const whispersEnabled = toolEnabled('whispersEnabled');
       const parsed = parseHubQuery(query);
       if (parsed.scope === 'whisper' && !whispersEnabled) return [];
       if (parsed.scope && parsed.scope !== 'whisper') return [];
-      query = parsed.term;
-      const rows: HubRow[] = [];
-      const names = new Set<string>();
-      if (friends.status === 'ready') for (const friend of friends.friends) {
-        const name = friend.character || friend.alias;
-        if (!name) continue;
-        names.add(whisperPersonKey(name));
-        if (!query.trim()) continue;
-        rows.push({ id: `friend:${friend.key}`, title: friend.alias || name,
-          detail: `${friend.character && friend.character !== friend.alias ? `${friend.character} · ` : ''}${friend.status}${friend.status !== 'offline' ? ` · ${travelDestination(friend.mapId)?.name ?? 'Location unavailable'}` : ''}`,
-          keywords: name, group: 'People', action: 'View actions', actions: () => person(name, friend.key), run: () => person(name, friend.key) });
+      if (!parsed.term) {
+        // Home lists only conversations that still need the player.
+        return whispersEnabled ? session.state.conversations.filter(conversation => whisperUnread(conversation) || conversation.draft)
+          .map(conversation => row({ key: conversation.key, name: conversation.name, source: 'conversation', activity: conversation.activity, exact: false, conversation })) : [];
       }
-      for (const conversation of whispersEnabled ? session.state.conversations : []) {
-        const unread = whisperUnread(conversation);
-        if (!query.trim() && !unread && !conversation.draft) continue;
-        if (query.trim() && names.has(conversation.key)) continue;
-        rows.push({ id: `person:${conversation.key}`, title: conversation.name, detail: unread ? `${unread} unread · Whisper` : conversation.draft ? 'Continue draft' : 'Conversation', group: 'People', action: 'View actions', actions: () => person(conversation.name), run: () => person(conversation.name) });
+      const people = findPeople(session.state, parsed.text, friends)
+        .filter(person => whispersEnabled || person.source === 'friend').slice(0, MAX_PEOPLE);
+      const rows = people.map(row);
+      // An addressed name stays reachable beside similar known names. It comes last,
+      // so Enter on a partial name still chooses the known person. Unscoped search
+      // offers only known people: any phrase could otherwise pose as a name.
+      const typed = normaliseCharacterName(parsed.text);
+      if (parsed.scope === 'whisper' && session.state.available && isCharacterName(typed) && !people.some(person => person.exact)) {
+        rows.push({ id: `person:typed:${whisperPersonKey(typed)}`, title: typed, detail: 'Character name', group: 'People',
+          action: 'View actions', actions: () => person(typed), run: () => person(typed) });
       }
-      if (query.trim() && whispersEnabled) for (const recent of session.state.recent) {
-        if (names.has(recent.key)) continue;
-        rows.push({ id: `person:${recent.key}`, title: recent.name, detail: 'Recent conversation', group: 'People', action: 'View actions', actions: () => person(recent.name), run: () => person(recent.name) });
-      }
-      const matches = matchHubRows(rows, query).slice(0, 8);
-      const recipient = parsed.scope === 'whisper' ? parsed.term : null;
-      if (!matches.length && recipient && session.state.available) {
-        const name = recipient;
-        try {
-          whisperLine(name, 'x');
-          matches.push({ id: 'person:new', title: `Whisper to ${name}`, detail: 'Character name · Write a message', group: 'People', action: 'Write whisper', run: () => whisper(name) });
-        } catch { /* A partial or invalid character name is not an action. */ }
-      }
-      return parsed.scope === 'whisper' ? matches.map(row => row.id === 'person:new' ? row : ({ ...row, action: 'Write whisper', run: () => whisper(row.keywords || row.title) })) : matches;
+      return parsed.scope === 'whisper'
+        ? rows.map(entry => ({ ...entry, action: 'Write whisper', run: () => whisper(entry.keywords || entry.title) }))
+        : rows;
     },
   };
+  function row(entry: Person): HubRow {
+    const { friend, conversation } = entry;
+    if (friend) {
+      const name = friend.character || friend.alias;
+      return { id: `friend:${friend.key}`, title: friend.alias || name,
+        detail: `${friend.character && friend.character !== friend.alias ? `${friend.character} · ` : ''}${friend.status}${friend.status !== 'offline' ? ` · ${travelDestination(friend.mapId)?.name ?? 'Location unavailable'}` : ''}`,
+        keywords: name, group: 'People', action: 'View actions', actions: () => person(name, friend.key), run: () => person(name, friend.key) };
+    }
+    const unread = conversation ? whisperUnread(conversation) : 0;
+    const detail = conversation ? (unread ? `${unread} unread · Whisper` : conversation.draft ? 'Continue draft' : 'Conversation')
+      : entry.source === 'recent' ? 'Recent conversation' : 'Seen in chat';
+    return { id: `person:${entry.key}`, title: entry.name, detail, group: 'People', action: 'View actions',
+      actions: () => person(entry.name), run: () => person(entry.name) };
+  }
   return {
     setEnabled(next: boolean) {
       if (enabled === next) return;

@@ -532,7 +532,7 @@ test('floating chat keeps its draft and appearance when reopened', async ({ page
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
   await search.fill('whisper Foo'); await search.press('Enter');
-  const draft = page.getByRole('textbox', { name: 'Message foo', exact: true });
+  const draft = page.getByRole('textbox', { name: 'Message Foo', exact: true });
   await expect(draft).toBeFocused(); await draft.fill('Keep my draft');
   await draft.press('Home'); await draft.press('ArrowLeft');
   await expect(draft).toBeVisible(); await expect(draft).toHaveValue('Keep my draft');

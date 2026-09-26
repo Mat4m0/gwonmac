@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createWhisperSession, whisperUnread } from "../../src/shared/whisper-session.ts";
+import { createWhisperSession, findPeople, whisperUnread } from "../../src/shared/whisper-session.ts";
 
 test("original log owns messages, duplicate text stays distinct, collapse preserves draft", async () => {
   const requests: string[] = [];
@@ -112,4 +112,37 @@ test('compact and full composers share one draft without opening two surfaces', 
   assert.equal(session.state.conversations[0]?.error, 'Offline');
   session.reset();
   assert.equal(session.state.conversations.length, 0);
+});
+
+test('people search finds every known source, ranks exact names first and honours source switches', () => {
+  const session = createWhisperSession(async () => {});
+  session.updateFriends({ status: 'ready', sequence: 1, generation: 1, friends: [
+    { key: 'f', character: 'Mo Kaiser', alias: 'Kai Account', status: 'online', mapId: 449 },
+  ] });
+  session.observe([
+    { id: 1, sender: 'Mo Kai', direction: 'participant' },
+    { id: 2, sender: 'Moira Chatter', direction: 'participant' },
+    { id: 3, sender: 'Mona Whisper', message: 'Hi', direction: 'incoming' },
+  ]);
+  const found = (query: string) => findPeople(session.state, query).map(person => `${person.source}:${person.name}${person.exact ? '!' : ''}`);
+  assert.deepEqual(found('mo kai'), ['chat:Mo Kai!', 'friend:Mo Kaiser'], 'an exact chat name outranks a friend prefix');
+  assert.deepEqual(found('mo'), ['friend:Mo Kaiser', 'conversation:Mona Whisper', 'chat:Moira Chatter', 'chat:Mo Kai'], 'the most recent chat name first');
+  assert.deepEqual(found('account'), ['friend:Mo Kaiser'], 'a friend is found by the account alias');
+  assert.deepEqual(found('  MO\u00a0KAI\u200b '), ['chat:Mo Kai!', 'friend:Mo Kaiser'], 'pasted spacing and invisible characters are ignored');
+  assert.deepEqual(found(''), []);
+  session.setSuggest('chat', false);
+  assert.deepEqual(found('mo'), ['friend:Mo Kaiser', 'conversation:Mona Whisper']);
+  session.setSuggest('friends', false);
+  assert.deepEqual(found('mo'), ['conversation:Mona Whisper'], 'conversations the player started are never switched off');
+  session.reset();
+  assert.deepEqual(session.state.suggest, { friends: true, chat: true });
+});
+
+test('a pasted name opens the same conversation as the typed name', () => {
+  const session = createWhisperSession(async () => {});
+  session.open('Mo Kai');
+  session.open('\u200eMo\u00a0 Kai \n');
+  assert.deepEqual(session.state.conversations.map(c => [c.key, c.name]), [['mo kai', 'Mo Kai']]);
+  session.observe([{ id: 1, sender: 'Chat\u00a0Person\u200b', direction: 'participant' }]);
+  assert.equal(session.state.participants[0]?.name, 'Chat Person');
 });
