@@ -127,11 +127,9 @@ do not focus a decorative heading or disabled primary action.
   needed. Right must never execute a world-changing command.
 - Enter executes the displayed primary action. A click does the same for the
   clicked row. A separate details affordance may inspect without executing.
-- Backspace only edits text and never navigates; on an empty query it is a
-  no-op, and on a focused row, card or button it edits the search.
-  Command-Backspace is Back: one level per physical press from any focus in Hub,
-  fields included, a no-op at Home, ignored during composition. The mouse back
-  button does the same. The shortcut recorder refuses Command-Backspace.
+- Backspace deletes while editing nonempty text. Outside editing, or in empty
+  search, it returns one stage. No navigation during composition. Empty textareas
+  and ordinary form fields retain native editing rather than becoming Back controls.
 - Escape closes the top submenu/details first, then clears a non-empty query,
   then goes back a stage, then dismisses Hub. X dismisses Hub directly. Direct entry has no fake parent.
 - Tab/Shift+Tab continues reaching controls. Arrow behavior must not trap focus.
