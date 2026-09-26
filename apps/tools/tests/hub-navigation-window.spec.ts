@@ -32,27 +32,16 @@ test('Hub has a locked frame, invisible corner hit area and bounded movable geom
   await page.screenshot({ path: info.outputPath('hub-maps-breadcrumb.png') });
 });
 
-test('Command-Backspace and breadcrumb ancestors restore history; Backspace only edits', async ({ page }) => {
+test('Backspace and breadcrumb ancestors restore history without deleting typed text', async ({ page }) => {
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
-  const legend = page.locator('.hub-legend');
-  await expect(legend).toBeHidden();
-  await search.fill('kee'); await search.press('Meta+Backspace');
-  await expect(search).toHaveValue('kee'); await expect(page.locator('.hub-caption')).toHaveText('Home');
   await search.fill('accounts'); await search.press('Enter');
   await search.fill('second'); await search.press('Enter');
   await expect(page.locator('.hub-breadcrumbs')).toHaveText('Home›Accounts›Second');
-  await expect(legend).toHaveText('⌘⌫ Back');
-  await expect(page.getByRole('button', { name: 'Back', exact: true })).toHaveAttribute('aria-keyshortcuts', 'Meta+Backspace');
   await search.fill('keep'); await search.press('Backspace');
   await expect(search).toHaveValue('kee');
   await expect(page.locator('.hub-caption')).toHaveText('Second');
   await search.fill(''); await search.press('Backspace');
-  await expect(page.locator('.hub-caption')).toHaveText('Second');
-  // A held ⌘⌫ goes back one level only, straight from a non-empty query.
-  await search.fill('kee');
-  await page.keyboard.down('Meta'); await page.keyboard.down('Backspace'); await page.keyboard.down('Backspace');
-  await page.keyboard.up('Backspace'); await page.keyboard.up('Meta');
   await expect(search).toHaveValue('second');
   await expect(page.locator('.hub-caption')).toHaveText('Accounts');
   await search.press('Enter');
@@ -84,10 +73,7 @@ test('arrows connect Hub results, character carousel, search and Back', async ({
   await expect(back).toBeFocused();
   await page.keyboard.press('ArrowDown'); await expect(picker).toBeFocused();
   await page.keyboard.press('ArrowDown'); await expect(selected).toBeFocused();
-  // Backspace on a card edits the (empty) character search and never leaves the view.
   await page.keyboard.press('Backspace');
-  await expect(picker).toBeFocused(); await expect(search).toBeHidden();
-  await page.keyboard.press('Meta+Backspace');
   await expect(search).toHaveValue('switch character');
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', /Character/);
 });

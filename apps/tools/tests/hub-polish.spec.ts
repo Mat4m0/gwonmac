@@ -37,7 +37,7 @@ test('Home separates current context, teaches commands, and shows resolved short
   await expect(page.locator('.hub-scope')).toHaveText('team');
   await page.getByRole('button', { name: 'Actions', exact: true }).click();
   await expect(page.locator('.hub-actions')).toBeHidden();
-  await expect(page.getByRole('button', { name: 'Back', exact: true })).toHaveAttribute('title', 'Back to Home (⌘⌫)');
+  await expect(page.getByRole('button', { name: 'Back', exact: true })).toHaveAttribute('title', 'Back to Home');
   await page.getByRole('button', { name: 'Back', exact: true }).click();
   await expect(search).toHaveValue('team gom afk');
 });

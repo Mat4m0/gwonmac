@@ -27,7 +27,7 @@ export function createHub(parent: HTMLElement) {
     <div class="hub-search"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 8 10-8 10L4 12 12 2Zm0 5v10M8 12h8"/></svg><span class="hub-scope" hidden></span><input type="text" role="combobox" aria-label="Search people, places, builds" aria-autocomplete="list" aria-controls="hub-results" aria-expanded="true" placeholder="Search people, places, builds…" autocomplete="off" spellcheck="false" maxlength="120"></div>
     <p class="hub-hint" id="hub-hint" hidden></p><div class="hub-rate-controls" hidden></div><div class="hub-results ui-scroll" id="hub-results" role="listbox" aria-label="Results" tabindex="-1"></div>
     <pre class="hub-preview ui-scroll" hidden></pre><div class="hub-view" hidden></div><p class="hub-status" role="status" hidden></p>
-    <footer class="hub-footer"><span class="hub-legend" hidden><kbd class="ui-kbd" aria-label="Command Backspace">⌘⌫</kbd> Back</span><button class="hub-primary ui-button" data-variant="primary"></button><span class="hub-count"></span><button class="hub-actions ui-button" data-variant="quiet">Actions</button></footer>
+    <footer class="hub-footer"><button class="hub-primary ui-button" data-variant="primary"></button><span class="hub-count"></span><button class="hub-actions ui-button" data-variant="quiet">Actions</button></footer>
     <button class="ui-window-resize hub-resize" aria-label="Resize Hub" title="Drag to resize, or use arrow keys" hidden></button>
   </section>`;
   parent.append(root);
@@ -314,10 +314,8 @@ export function createHub(parent: HTMLElement) {
     const parent = history.at(-1);
     const destination = parent?.view?.title ?? parent?.scope?.title ?? 'Home';
     backButton.hidden = !parent;
-    required<HTMLElement>('.hub-legend').hidden = !parent;
     backButton.textContent = '←';
-    backButton.title = `Back to ${destination} (⌘⌫)`;
-    backButton.setAttribute('aria-keyshortcuts', 'Meta+Backspace');
+    backButton.title = `Back to ${destination}`;
     backButton.setAttribute('aria-description', `Return to ${destination}`);
     const actionsButton = required<HTMLButtonElement>('.hub-actions');
     actionsButton.hidden = !!scope && !scope.summary?.skills && !rows.find(row => row.id === selected)?.skills;
@@ -508,13 +506,6 @@ export function createHub(parent: HTMLElement) {
   list.addEventListener('mousedown', event => event.preventDefault());
   root.addEventListener('keydown', event => {
     restoringFocus?.disconnect(); restoringFocus = null;
-    // ⌘⌫ is Back from any focus in Hub, fields included: one level per physical
-    // press, a no-op at Home. Plain ⌫ only edits text and never navigates.
-    if (event.key === 'Backspace' && event.metaKey && !event.isComposing && !event.defaultPrevented) {
-      event.preventDefault(); event.stopPropagation();
-      if (!event.repeat && history.length) back();
-      return;
-    }
     // Typing on a list-stage button returns to search; Space still presses the button.
     if (!event.defaultPrevented && !search.hidden && event.target instanceof HTMLElement && event.target !== input && !content.contains(event.target)
       && !event.target.matches('input,textarea,select') && !(event.key === ' ' && event.target.matches('button')) && resumeSearchInput(event, input)) return;
@@ -524,6 +515,11 @@ export function createHub(parent: HTMLElement) {
     if (event.key === 'Escape') { event.preventDefault(); if (!event.repeat) dismiss(); return; }
     const target = event.target instanceof HTMLElement ? event.target : null;
     if (!target || target === required<HTMLElement>('.hub-resize')) return;
+    const editing = target.matches('input,textarea,select,[contenteditable="true"]');
+    if (event.key === 'Backspace' && (!editing || target instanceof HTMLInputElement && (target === input || target.getAttribute('role') === 'combobox') && !target.value)) {
+      if (history.length) { event.preventDefault(); event.stopPropagation(); back(); }
+      return;
+    }
     if (target.closest('.hub-footer')) {
       const controls = [primary, required<HTMLButtonElement>('.hub-actions')].filter(button => !button.hidden && !button.disabled);
       if (event.key === 'ArrowUp') { event.preventDefault(); input.focus(); }
@@ -594,8 +590,6 @@ export function createHub(parent: HTMLElement) {
   required<HTMLButtonElement>('.hub-close').onclick = () => close();
   backButton.onclick = back; primary.onclick = () => { void run(); };
   root.addEventListener('pointerdown', () => { restoringFocus?.disconnect(); restoringFocus = null; });
-  // The mouse back button is Back, like ⌘⌫.
-  root.addEventListener('mouseup', event => { if (event.button === 3) { event.preventDefault(); if (history.length) back(); } });
   // A press on blank panel space or a disabled control parks focus on the dialog
   // itself; return it to the last control so the keyboard keeps its place.
   let lastFocus: HTMLElement | null = null;

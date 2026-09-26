@@ -35,8 +35,6 @@
 .hub-footer { display:flex; align-items:center; justify-content:flex-end; gap:8px; padding:8px; min-height:48px; flex-shrink:0; border-top:1px solid var(--ui-line-soft); }
 .hub-primary { display:flex; align-items:center; gap:10px; }
 .hub-count { margin-right:auto; order:-1; color:var(--ui-text-muted); font:var(--ui-type-caption-size)/var(--ui-type-caption-line) var(--ui-font-reading); }
-.hub-legend { order:-2; display:flex; align-items:center; gap:4px; color:var(--ui-text-muted); font:var(--ui-type-caption-size)/var(--ui-type-caption-line) var(--ui-font-reading); }
-.hub-legend[hidden] { display:none; }
 .hub-footer kbd { font:var(--ui-type-caption-size)/var(--ui-type-caption-line) var(--ui-font-interface); }
 .hub-status,.hub-empty { margin:0; padding:16px; color:var(--ui-text-muted); font-family:var(--ui-font-reading); }
 .hub-status { border-top:1px solid var(--ui-line-soft); }

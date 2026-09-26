@@ -199,8 +199,7 @@ styles. Deleting a custom style requires confirmation.
 ## Hub command palette
 
 Press **Command-R** to search people, outposts, tools, and commands. Type a name, use Up and Down,
-and press Enter for the action shown in the footer. The **Actions** button opens secondary actions. **Command-Backspace** goes back one
-level; Backspace only edits text. **Command-K** opens Trade. Escape clears typed text first, then goes back, then
+and press Enter for the action shown in the footer. The **Actions** button opens secondary actions. **Command-K** opens Trade. Escape clears typed text first, then goes back, then
 closes the palette. The game keeps running while Hub is open.
 
 With Travel enabled, search an outpost or your custom Travel phrase. Travel,

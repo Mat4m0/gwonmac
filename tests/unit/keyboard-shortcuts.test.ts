@@ -91,7 +91,6 @@ describe("keyboard shortcuts", () => {
     assert.equal(shortcutReserved({ key: "1", shift: false, option: false }), true);
     assert.equal(shortcutReserved({ key: "0", shift: false, option: false }), false);
     assert.equal(shortcutReserved({ key: "r", shift: false, option: false }), false);
-    assert.equal(shortcutReserved({ key: "backspace", shift: false, option: false }), true, "Command+Backspace is Hub Back");
     assert.equal(shortcutReserved({ key: "r", shift: true, option: false }), false);
     assert.equal(shortcutConflict(
       "tools.toggle",
