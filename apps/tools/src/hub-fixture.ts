@@ -129,11 +129,12 @@ export function mountHubFixture(target: HTMLElement) {
   window.addEventListener('hub-fixture-unavailable', () => session.setAvailable(false));
   session.setAvailable(true);
   // The synthetic play region follows the demo Travel host; the scenario select adds an explorable area.
+  // A zone change reads as the kernel's unavailable game state, which it can publish for a moment mid-trip.
   let explorable = false;
   const regionListeners = new Set<() => void>();
   const region = (): CompanionPlayRegionState => {
     const state = travelHost.state.value;
-    return state.status !== 'ready' ? { status: 'waiting', reason: 'stale' } : { status: 'ready', sequence: 1, mapId: state.mapId,
+    return state.status !== 'ready' ? { status: 'waiting', reason: 'game' } : { status: 'ready', sequence: 1, mapId: state.mapId,
       instanceType: explorable ? 1 : 0, playRegion: isPvpTravelDestination(state.mapId) ? 'pvp' : 'pve', travelContext: state.travelContext,
       characterKey: state.characterKey, unlockedMapWords: null, guildHall: state.guildHall, hasGuildHall: state.hasGuildHall };
   };

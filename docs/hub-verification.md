@@ -16,7 +16,8 @@ invite**. Reset fixture clears only fixture data. The fixture is excluded from
 the embedded entry point.
 
 The fixture wires the production party invite to a synthetic play region that
-follows the demo Travel host. The player starts in Lion's Arch; Romi Ranger is
+follows the demo Travel host. A trip reads as the game's unavailable state, which
+the live game can publish for a moment during a zone change. The player starts in Lion's Arch; Romi Ranger is
 in Kamadan. **People to invite** adds the chat names Mo Kaiser and Kai Mo Bearer,
 four online friends named Zed (Kamadan, Ascalon City, Lion's Arch, Kaineng
 Center), and Arena Ace in Random Arenas. The app element records each sent
