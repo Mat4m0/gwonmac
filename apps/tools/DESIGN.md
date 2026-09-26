@@ -61,6 +61,15 @@ text, and spacing. `strong` and headings remain semantic in markup but stay at
 the real 400 weight when Guild Wars Original is selected. Fonts with genuine
 weight families use the same semantic weight tokens at 500, 600, and 700.
 
+Every `--ui-type-*` role and the base font tokens derive from one
+`--ui-text-scale` in `tokens.css`. A `.ui-text-scope` re-derives them at its
+own scale; the Hub uses this for the player's **Text size** (100–200 %, D-16),
+so its whole ramp grows by one factor inside the fixed 780 × 590 frame while
+the game, page zoom and other panels stay unchanged. Hub rules that still use
+a literal size multiply it by the same scale. Once a result row runs short of
+room at a larger size, its detail stacks under the title and both wrap, so
+rows grow and the list scrolls instead of clipping.
+
 ## Component rules
 
 - Use `.ui-frame` for a framed panel. Hub and floating work windows attach
@@ -147,8 +156,9 @@ tracking behavior belong in
 
 The saved interface style is `guild-wars`, `obsidian`, or `custom`. Font and
 panel opacity remain independent. Panel opacity is from 65% through 100%.
-These preferences must not change component markup, layout density, or
-behavior. Every player-facing Settings and Tools stylesheet consumes the
+Hub text size is from 100% through 200% and applies to the Hub only.
+These preferences must not change component markup or behavior; only text
+size may let Hub rows grow to fit larger type. Every player-facing Settings and Tools stylesheet consumes the
 shared tokens; local palette literals are not allowed.
 
 ## Window and interaction rules

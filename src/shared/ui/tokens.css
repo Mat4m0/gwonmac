@@ -133,21 +133,10 @@
   --ui-target-min: 24px;
   --ui-gap: var(--ui-space-2);
 
-  /* Dense utility typography, matching the supplied Guild Wars reference. */
-  --ui-font-size: 14px;
-  --ui-font-size-sm: 12px;
-  --ui-font-size-lg: 16px;
-  --ui-line-height: 20px;
-  --ui-type-caption-size: 12px;
-  --ui-type-caption-line: 16px;
-  --ui-type-body-size: 14px;
-  --ui-type-body-line: 20px;
-  --ui-type-subtitle-size: 16px;
-  --ui-type-subtitle-line: 22px;
-  --ui-type-title-size: 20px;
-  --ui-type-title-line: 26px;
-  --ui-type-window-size: 18px;
-  --ui-type-window-line: 24px;
+  /* Type roles follow one text scale (below). The Hub scope sets its own from
+   * the player's Hub text size; everything else stays at 1. */
+  --ui-text-scale: 1;
+  --ui-hub-text-scale: 1;
   --ui-font: "QTFrizQuad", "Palatino Linotype", "Book Antiqua", Palatino,
     "URW Palladio L", Georgia, serif;
   --ui-font-display: var(--ui-font);
@@ -296,6 +285,26 @@
   --ui-z-status: 9;
   --ui-z-tools: 30;
   --ui-z-toast: 40;
+}
+
+/* Dense utility typography, matching the supplied Guild Wars reference. A
+ * scope that sets its own `--ui-text-scale` re-derives every role here with
+ * one factor, so no role drifts from the ramp (the Hub's text size, D-16). */
+:root, .ui-text-scope {
+  --ui-font-size: calc(14px * var(--ui-text-scale));
+  --ui-font-size-sm: calc(12px * var(--ui-text-scale));
+  --ui-font-size-lg: calc(16px * var(--ui-text-scale));
+  --ui-line-height: calc(20px * var(--ui-text-scale));
+  --ui-type-caption-size: calc(12px * var(--ui-text-scale));
+  --ui-type-caption-line: calc(16px * var(--ui-text-scale));
+  --ui-type-body-size: calc(14px * var(--ui-text-scale));
+  --ui-type-body-line: calc(20px * var(--ui-text-scale));
+  --ui-type-subtitle-size: calc(16px * var(--ui-text-scale));
+  --ui-type-subtitle-line: calc(22px * var(--ui-text-scale));
+  --ui-type-title-size: calc(20px * var(--ui-text-scale));
+  --ui-type-title-line: calc(26px * var(--ui-text-scale));
+  --ui-type-window-size: calc(18px * var(--ui-text-scale));
+  --ui-type-window-line: calc(24px * var(--ui-text-scale));
 }
 
 /* Preserve semantic emphasis in the markup while letting the selected face

@@ -45,6 +45,7 @@ describe("settings", () => {
       uiFont: "guild-wars",
       controllerPromptStyle: "game-default",
       uiPanelOpacity: 94,
+      hubTextSize: 100,
       cartographyEnabled: true,
       characterSwitchEnabled: true,
       resignEnabled: false,
@@ -172,6 +173,7 @@ describe("settings", () => {
     assert.equal("nativeCursor" in got, false);
     assert.deepEqual(got, {
       uiPanelOpacity: 94,
+      hubTextSize: 100,
       renderScale: 1,
       uiStyle: "guild-wars",
       uiCustomTheme: DEFAULT_CUSTOM_UI_THEME,
@@ -379,6 +381,11 @@ describe("settings", () => {
     // readable over moving art.
     assert.throws(() => parseSettings({ uiPanelOpacity: 64 }), AppError);
     assert.throws(() => parseSettings({ uiPanelOpacity: 94.5 }), AppError);
+    // Hub text size is a whole percentage from the ramp to twice its size.
+    assert.equal(parseSettings({ hubTextSize: 150 }).hubTextSize, 150);
+    for (const hubTextSize of [99, 201, 150.5, "150"]) {
+      assert.throws(() => parseSettings({ hubTextSize }), AppError);
+    }
     assert.equal("uiTheme" in parseSettings({ uiTheme: "jade" }), false);
     assert.equal("uiDensity" in parseSettings({ uiDensity: "compact" }), false);
     assert.equal("uiBorderWidth" in parseSettings({ uiBorderWidth: 4 }), false);
@@ -663,6 +670,7 @@ describe("settings", () => {
       "formatVersion",
       "gwonmacTools",
       "hubShortcuts",
+      "hubTextSize",
       "lastUpdateCheckAt",
       "memoryWarningPosition",
       "quickItemMove",
@@ -754,6 +762,7 @@ describe("settings", () => {
     assert.equal("teamManagement" in loaded, false);
     assert.deepEqual(loaded, {
       uiPanelOpacity: 94,
+      hubTextSize: 100,
       renderScale: 1.5,
       uiStyle: "guild-wars",
       uiCustomTheme: DEFAULT_CUSTOM_UI_THEME,

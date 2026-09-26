@@ -37,6 +37,7 @@ window.gwApplyFixtureAppearance = (fixture: StandaloneAppearanceFixture) => {
     uiPanelOpacity: fixture.uiPanelOpacity,
     uiFont: fixture.uiFont ?? DEFAULT_SETTINGS.uiFont,
     uiCustomTheme: fixture.uiCustomTheme ?? DEFAULT_SETTINGS.uiCustomTheme,
+    hubTextSize: fixture.hubTextSize ?? DEFAULT_SETTINGS.hubTextSize,
   });
 };
 

@@ -25,6 +25,8 @@ import {
   UPDATE_TRACKS,
   UI_PANEL_OPACITY_MAX,
   UI_PANEL_OPACITY_MIN,
+  HUB_TEXT_SIZE_MAX,
+  HUB_TEXT_SIZE_MIN,
   UI_FONTS,
   UI_STYLES,
   type AppSettings,
@@ -176,6 +178,14 @@ export function parseSettings(raw: unknown): AppSettings {
       "uiPanelOpacity",
       UI_PANEL_OPACITY_MIN,
       UI_PANEL_OPACITY_MAX,
+    );
+  }
+  if ("hubTextSize" in src) {
+    out.hubTextSize = asBoundedInteger(
+      src.hubTextSize,
+      "hubTextSize",
+      HUB_TEXT_SIZE_MIN,
+      HUB_TEXT_SIZE_MAX,
     );
   }
   if ("cartographyPresetLibrary" in src) {

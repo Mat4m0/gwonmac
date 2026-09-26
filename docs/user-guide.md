@@ -206,7 +206,9 @@ the game shows through. At low opacity, Hub holds back only the brightest parts
 of the scene behind its panel, so titles, grey detail and gold headings keep
 their normal colours over snow or sky. With macOS **Reduce
 Transparency**, the panel becomes solid and keeps its normal colours, while the
-game around it stays visible.
+game around it stays visible. **Settings → Appearance → Text size** enlarges
+Hub text up to 200 %. The Hub window keeps its size, longer results wrap onto
+a second line, and the game and other panels keep their size.
 
 With Travel enabled, search an outpost or your custom Travel phrase. Travel,
 favourites, recent places, and Guild Hall stay in the same window. Command-T

@@ -378,6 +378,8 @@ export const DIAGNOSTIC_PROFILES = [
 export type DiagnosticProfile = (typeof DIAGNOSTIC_PROFILES)[number];
 export const UI_PANEL_OPACITY_MIN = 65;
 export const UI_PANEL_OPACITY_MAX = 100;
+export const HUB_TEXT_SIZE_MIN = 100;
+export const HUB_TEXT_SIZE_MAX = 200;
 export const LAST_UPDATE_CHECK_AT_MAX = 8_640_000_000_000_000;
 
 export interface AppSettings {
@@ -395,6 +397,11 @@ export interface AppSettings {
    * game behind them. This is presentation only and never reaches the game.
    */
   uiPanelOpacity: number;
+  /**
+   * Hub text size in percent. It scales every Hub type role inside the fixed
+   * Hub frame; the game and other panels keep their size.
+   */
+  hubTextSize: number;
   /** Enable map guidance and its controls without changing saved layer visibility. */
   cartographyEnabled: boolean;
   /** Show certified walkability on the native Compass and Mission Map. */
@@ -602,6 +609,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   uiFont: "guild-wars",
   controllerPromptStyle: "game-default",
   uiPanelOpacity: 94,
+  hubTextSize: 100,
   cartographyEnabled: true,
   cartographyOverlayEnabled: false,
   cartographyGridEnabled: false,

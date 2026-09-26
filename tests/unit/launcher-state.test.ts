@@ -78,7 +78,7 @@ describe("launcher presentation state", () => {
   });
   it("validates restored appearance controls through the launcher boundary", () => {
     const patch = {
-      uiStyle: "custom", uiFont: "inter", uiPanelOpacity: 80,
+      uiStyle: "custom", uiFont: "inter", uiPanelOpacity: 80, hubTextSize: 150,
       controllerPromptStyle: "playstation", uiCustomTheme: DEFAULT_CUSTOM_UI_THEME,
     };
     assert.deepEqual(parseLauncherSettingsPatch(patch), patch);
@@ -87,6 +87,7 @@ describe("launcher presentation state", () => {
       { controllerPromptStyle: "unknown" }, { uiPanelOpacity: 64 },
       { uiPanelOpacity: 101 }, { uiPanelOpacity: 80.5 },
       { uiPanelOpacity: "80" }, { uiCustomTheme: {} },
+      { hubTextSize: 90 }, { hubTextSize: 210 }, { hubTextSize: 125.5 },
       { uiCustomTheme: { ...DEFAULT_CUSTOM_UI_THEME, accent: "red" } },
       { uiCustomTheme: { ...DEFAULT_CUSTOM_UI_THEME, extra: true } },
     ]) assert.throws(() => parseLauncherSettingsPatch(invalid));

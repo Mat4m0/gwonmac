@@ -301,6 +301,72 @@ test('result rows stay 40 px with centred keycaps and whole titles in every pane
   }
 });
 
+test('Hub text size scales every type role inside the fixed frame, keeps the task and never zooms the game', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/?hub');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const game = () => page.evaluate(() => ({ canvas: JSON.stringify(document.getElementById('canvas')!.getBoundingClientRect()), ratio: devicePixelRatio, root: getComputedStyle(document.documentElement).fontSize, outside: getComputedStyle(document.querySelector('.hub-fixture-controls button')!).fontSize }));
+  await expect(search).toBeFocused();
+  const before = await game();
+  const box = await page.locator('.hub-panel').boundingBox();
+  await search.fill('kam');
+  await page.keyboard.press('ArrowDown');
+  const task = () => page.evaluate(() => {
+    const input = document.querySelector<HTMLInputElement>('#hub .hub-search input')!;
+    const focused = document.activeElement;
+    return { query: input.value, caret: [input.selectionStart, input.selectionEnd], selected: document.querySelector('#hub .hub-row[aria-selected=true]')?.getAttribute('data-id'), active: input.getAttribute('aria-activedescendant'), focus: focused?.id || focused?.className };
+  });
+  const kept = await task();
+  // A live size change is presentation only: the task and focus stay put.
+  await page.evaluate(() => window.gwApplyFixtureAppearance?.({ uiStyle: 'guild-wars', uiPanelOpacity: 94, hubTextSize: 150 }));
+  await expect.poll(() => page.locator('.hub-title').first().evaluate(element => getComputedStyle(element).fontSize)).toBe('21px');
+  expect(await task()).toEqual(kept);
+  expect(kept.focus).not.toBe('');
+  expect(await game()).toEqual(before);
+
+  await search.fill('settings'); await search.press('Enter');
+  await page.getByRole('button', { name: 'Appearance', exact: true }).click();
+  const size = page.getByLabel('Text size', { exact: true });
+  await expect(size).toHaveAttribute('min', '100');
+  await expect(size).toHaveAttribute('max', '200');
+  await size.fill('200');
+  await expect.poll(() => page.evaluate(() => document.documentElement.style.getPropertyValue('--ui-hub-text-scale'))).toBe('2');
+  expect(await page.locator('.hub-settings nav').getByRole('button').evaluateAll(buttons => buttons.every(button => button.scrollWidth <= button.clientWidth + 1))).toBe(true);
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  for (const reload of [false, true]) {
+    if (reload) { await page.reload(); await expect(search).toBeFocused(); }
+    await search.fill('kam');
+    const type = await page.evaluate(() => {
+      const size = (selector: string) => getComputedStyle(document.querySelector(`#hub ${selector}`)!).fontSize;
+      return { title: size('.hub-title'), detail: size('.hub-row:not([aria-selected=true]) > .hub-detail'), group: size('.hub-group'), search: size('.hub-search input'), count: size('.hub-count') };
+    });
+    expect(type, reload ? 'after reload' : 'live').toEqual({ title: '28px', detail: '24px', group: '28px', search: '36px', count: '24px' });
+    expect(await page.locator('.hub-panel').boundingBox()).toEqual(box);
+    expect(await game()).toEqual(before);
+    for (const query of ['kam', 'k', 'team', '10 ecto in p']) {
+      await search.fill(query);
+      const layout = await page.evaluate(() => {
+        const panel = document.querySelector('#hub .hub-panel')!; const list = document.querySelector('#hub .hub-results')!;
+        const label = document.querySelector('#hub .hub-primary-label')!;
+        return {
+          overflow: Math.max(panel.scrollWidth - panel.clientWidth, list.scrollWidth - list.clientWidth, ...[...document.querySelectorAll('#hub .hub-row')].map(row => row.scrollWidth - row.clientWidth)),
+          rows: [...document.querySelectorAll('#hub .hub-row:not(.hub-build-row, .hub-conversion)')].map(row => row.getBoundingClientRect().height),
+          scrolls: list.scrollHeight > list.clientHeight,
+          primaryLines: label.getBoundingClientRect().height / parseFloat(getComputedStyle(label).lineHeight || '0'),
+        };
+      });
+      expect(layout.overflow, query).toBeLessThanOrEqual(1);
+      for (const height of layout.rows) expect(height, `${query} rows grow`).toBeGreaterThan(40);
+      if (query === 'k') expect(layout.scrolls, 'the list scrolls').toBe(true);
+      expect(layout.primaryLines, `${query} footer primary`).toBeLessThan(1.5);
+      await expect(page.locator('.hub-primary')).toHaveAccessibleName(/^(Travel to|Open|Copy|Search|Show|Whisper).+/u);
+    }
+  }
+  await search.fill('travel'); await search.press('Enter');
+  await expect(page.getByRole('combobox', { name: 'Destination, phrase, or friend' })).toBeVisible();
+  expect(await page.locator('.hub-panel').evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
+});
+
 test('Settings navigation keeps every section on one line in every panel font', async ({ page }) => {
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });

@@ -13,7 +13,7 @@ import type {
   FullDownloadState,
   NoticeCode,
 } from "./contracts.js";
-import { RENDER_SCALES, UI_STYLES, UI_FONTS, CONTROLLER_PROMPT_STYLES, UI_PANEL_OPACITY_MIN, UI_PANEL_OPACITY_MAX } from "./contracts.js";
+import { RENDER_SCALES, UI_STYLES, UI_FONTS, CONTROLLER_PROMPT_STYLES, UI_PANEL_OPACITY_MIN, UI_PANEL_OPACITY_MAX, HUB_TEXT_SIZE_MIN, HUB_TEXT_SIZE_MAX } from "./contracts.js";
 import {
   COMPASS_RANGE_OPACITY_MAX,
   COMPASS_RANGE_OPACITY_MIN,
@@ -198,6 +198,7 @@ export interface LauncherSettings {
   readonly uiFont: AppSettings["uiFont"];
   readonly uiCustomTheme: AppSettings["uiCustomTheme"];
   readonly uiPanelOpacity: AppSettings["uiPanelOpacity"];
+  readonly hubTextSize: AppSettings["hubTextSize"];
   readonly controllerPromptStyle: AppSettings["controllerPromptStyle"];
   readonly autoCheckUpdates: boolean;
   readonly updateTrack: AppSettings["updateTrack"];
@@ -399,7 +400,7 @@ export function parseLauncherNewsId(value: unknown): string {
 
 export function parseLauncherSettingsPatch(value: unknown): LauncherSettingsPatch {
   const source = exactObject(value, [
-    "uiStyle", "uiFont", "uiCustomTheme", "uiPanelOpacity", "controllerPromptStyle",
+    "uiStyle", "uiFont", "uiCustomTheme", "uiPanelOpacity", "hubTextSize", "controllerPromptStyle",
     "autoCheckUpdates", "updateTrack", "renderScale", "extendedMemoryEnabled", "showDiagnostics",
     "autoRelogAfterReload", "characterSwitchProfession", "characterSwitchLevel",
     "characterSwitchLocation", "skillKeyBindings", "skillCooldownColor", "alcoholTimerPosition",
@@ -434,6 +435,11 @@ export function parseLauncherSettingsPatch(value: unknown): LauncherSettingsPatc
     if (typeof source.uiPanelOpacity !== "number" || !Number.isInteger(source.uiPanelOpacity)
       || source.uiPanelOpacity < UI_PANEL_OPACITY_MIN || source.uiPanelOpacity > UI_PANEL_OPACITY_MAX) throw new Error("Panel opacity is invalid");
     result.uiPanelOpacity = source.uiPanelOpacity;
+  }
+  if (source.hubTextSize !== undefined) {
+    if (typeof source.hubTextSize !== "number" || !Number.isInteger(source.hubTextSize)
+      || source.hubTextSize < HUB_TEXT_SIZE_MIN || source.hubTextSize > HUB_TEXT_SIZE_MAX) throw new Error("Hub text size is invalid");
+    result.hubTextSize = source.hubTextSize;
   }
   for (const key of [
     "autoCheckUpdates", "extendedMemoryEnabled", "showDiagnostics",

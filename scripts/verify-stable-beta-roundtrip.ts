@@ -33,6 +33,8 @@ import {
   RENDER_SCALES,
   UI_PANEL_OPACITY_MAX,
   UI_PANEL_OPACITY_MIN,
+  HUB_TEXT_SIZE_MAX,
+  HUB_TEXT_SIZE_MIN,
   UI_FONTS,
   UI_STYLES,
   UPDATE_TRACKS,
@@ -339,6 +341,7 @@ const cycle = <T>(values: readonly T[], index: number): T =>
 
 const booleanValues = [false, true] as const;
 const opacityValues = [UI_PANEL_OPACITY_MIN, UI_PANEL_OPACITY_MAX] as const;
+const hubTextSizeValues = [HUB_TEXT_SIZE_MIN, HUB_TEXT_SIZE_MAX] as const;
 const updateCheckValues = [null, 0, LAST_UPDATE_CHECK_AT_MAX] as const;
 const compatibilityValues = [null, "a".repeat(64)] as const;
 const distinctModernCustomTheme = {
@@ -389,6 +392,7 @@ const domainCaseCount = Math.max(
   CONTROLLER_PROMPT_STYLES.length,
   ELITE_MISSION_MAP_MARKERS.length,
   opacityValues.length,
+  hubTextSizeValues.length,
   booleanValues.length,
   UPDATE_TRACKS.length,
   updateCheckValues.length,
@@ -407,6 +411,7 @@ const candidateSettingsDomains = Array.from(
       uiFont: cycle(UI_FONTS, index),
       controllerPromptStyle: cycle(CONTROLLER_PROMPT_STYLES, index),
       uiPanelOpacity: cycle(opacityValues, index),
+      hubTextSize: cycle(hubTextSizeValues, index + 1),
       characterSwitchEnabled: cycle(booleanValues, index),
       resignEnabled: cycle(booleanValues, index),
       whispersEnabled: cycle(booleanValues, index),

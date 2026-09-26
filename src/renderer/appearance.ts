@@ -98,6 +98,11 @@ export const appearanceVariables = (
   const variables: Record<string, string> = {
     "--ui-panel-opacity": String(settings.uiPanelOpacity / 100),
   };
+  /* The player's Hub text size scales the Hub's type roles only (tokens.css,
+   * D-16). It is a preference, never derived from a query or view. */
+  if (settings.hubTextSize !== 100) {
+    variables["--ui-hub-text-scale"] = String(settings.hubTextSize / 100);
+  }
   const theme = settings.uiStyle === "custom"
     ? settings.uiCustomTheme
     : defaultCustomUiTheme(settings.uiStyle === "obsidian" ? "modern" : "classic");

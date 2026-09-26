@@ -285,7 +285,12 @@ checks that the Hub never dims the game around it in either style or under
 Reduce Transparency, that Reduce Transparency restores the opaque inks, and that
 the footer stays one line while arrowing at narrow and minimum sizes. In all six
 panel fonts, both styles and 94 % and 65 % opacity, non-build result rows are
-40 px, keycaps centre on their titles within 1 px and no title is clipped. At 65 %
+40 px, keycaps centre on their titles within 1 px and no title is clipped. Hub
+text size at 150 % and 200 % scales titles, detail, headings, search and count
+by one factor, keeps the 780 × 590 frame and the task (query, caret, selection,
+focus), survives a reload, never changes the canvas box, device pixel ratio or
+text outside the Hub, and leaves no horizontal overflow in Home, Settings,
+Travel, `team` and the calculator. At 65 %
 over the checkerboard, title, detail, keycap, count, placeholder and gold
 heading inks stay apart in both styles, and a dark scene behind the panel
 composes exactly as it would without the Hub's highlight cap. The custom

@@ -3,7 +3,7 @@
  * Persistence, validation and shortcut conflicts belong to the native preferences owner.
  */
 import { hubIcon } from './hub-icons.js';
-import { UI_FONTS, UI_PANEL_OPACITY_MIN } from '../shared/contracts.js';
+import { HUB_TEXT_SIZE_MAX, HUB_TEXT_SIZE_MIN, UI_FONTS, UI_PANEL_OPACITY_MIN } from '../shared/contracts.js';
 import type { Hub } from './hub.js';
 import type { HubSettingsChange, HubSettingsPatch, HubSettingsSnapshot } from '../shared/hub-settings.js';
 import { GLOBAL_TOOLS } from '../shared/launcher-contracts.js';
@@ -60,9 +60,9 @@ export function openHubSettings(hub: Hub) {
       for (const choice of options) { const option = doc.createElement('option'); option.textContent = choice.label; option.value = String(choice.value); input.append(option); }
       input.value = String(snapshot?.settings[key]); input.onchange = () => { const chosen = options.find(choice => String(choice.value) === input.value); if (chosen) void save({ kind: 'settings', patch: { [key]: chosen.value } }, title); }; row(title, input, detail);
     }
-    function range(title: string, key: keyof HubSettingsPatch, min = 0) {
-      const wrap = doc.createElement('span'); wrap.className = 'hub-setting-range'; const input = doc.createElement('input'); input.type = 'range'; input.className = 'ui-range'; input.min = String(min); input.max = '100'; input.value = String(snapshot?.settings[key] ?? 100); input.setAttribute('aria-label', title);
-      const output = doc.createElement('output'); output.textContent = `${input.value}%`; input.oninput = () => { output.textContent = `${input.value}%`; }; input.onchange = () => { void save({ kind: 'settings', patch: { [key]: Number(input.value) } }, title); }; wrap.append(input, output); row(title, wrap);
+    function range(title: string, key: keyof HubSettingsPatch, min = 0, max = 100, step = 1, detail = '') {
+      const wrap = doc.createElement('span'); wrap.className = 'hub-setting-range'; const input = doc.createElement('input'); input.type = 'range'; input.className = 'ui-range'; input.min = String(min); input.max = String(max); input.step = String(step); input.value = String(snapshot?.settings[key] ?? 100); input.setAttribute('aria-label', title);
+      const output = doc.createElement('output'); output.textContent = `${input.value}%`; input.oninput = () => { output.textContent = `${input.value}%`; }; input.onchange = () => { void save({ kind: 'settings', patch: { [key]: Number(input.value) } }, title); }; wrap.append(input, output); row(title, wrap, detail);
     }
     function chooseShortcut(action: ShortcutAction, binding: ShortcutBinding | null) {
       const conflict = binding && snapshot ? shortcutConflict(action, binding, snapshot.shortcuts) : null;
@@ -86,6 +86,7 @@ export function openHubSettings(hub: Hub) {
         row('Reset Hub position', resetPosition, 'Restore the default position and size, and lock the Hub.');
         select('Panel style', 'uiStyle', [{ label: 'Guild Wars', value: 'guild-wars' }, { label: 'Modern', value: 'obsidian' }, { label: 'Your custom theme', value: 'custom' }]);
         range('Panel opacity', 'uiPanelOpacity', UI_PANEL_OPACITY_MIN);
+        range('Text size', 'hubTextSize', HUB_TEXT_SIZE_MIN, HUB_TEXT_SIZE_MAX, 10, 'Hub text only. The game and other panels keep their size.');
         select('Panel font', 'uiFont', UI_FONTS.map(value => ({ label: value === 'guild-wars' ? 'Guild Wars' : value.charAt(0).toUpperCase() + value.slice(1), value })), 'Changes Hub and other in-game panels. Messages keep a readable text face.');
         settingToggle('Relog after reload', 'autoRelogAfterReload');
       } else if (page === 'Shortcuts') {

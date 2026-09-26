@@ -38,13 +38,22 @@ export function mountHubFixture(target: HTMLElement) {
   const record = (message: string) => { target.dataset.action = message; };
   let settings: AppSettings = { ...DEFAULT_SETTINGS, gwonmacTools: true, travelPalette: true, whispersEnabled: true, buildLibrary: true, tradeChat: true, xunlaiStorage: true };
   try { settings.hubShortcuts = JSON.parse(localStorage.getItem('hub-fixture-shortcuts') ?? '[]'); } catch { /* Disposable fixture data. */ }
+  // Hub Settings changes persist across reloads like the native preferences owner.
+  const applyAppearance = () => window.gwApplyFixtureAppearance?.({ uiStyle: settings.uiStyle, uiPanelOpacity: settings.uiPanelOpacity, uiFont: settings.uiFont, uiCustomTheme: settings.uiCustomTheme, hubTextSize: settings.hubTextSize });
+  try {
+    const saved = localStorage.getItem('hub-fixture-settings');
+    if (saved) { const change = parseHubSettingsChange({ kind: 'settings', patch: JSON.parse(saved) }); if (change.kind === 'settings') { settings = { ...settings, ...change.patch }; applyAppearance(); } }
+  } catch { /* Disposable fixture data. */ }
   const settingsListeners = new Set<(value: AppSettings) => void>();
   let capturingShortcut = false;
   const hubSettings: HubSettingsApi = {
     get: async () => ({ settings, tools: { configured: settings.gwonmacTools, loaded: true, restartRequired: !settings.gwonmacTools, features: Object.fromEntries(GLOBAL_TOOLS.map(tool => [tool, { enabled: settings[FEATURE_SELECTION_POLICIES[GLOBAL_TOOL_FEATURES[tool]].activation.setting] }])) as GlobalToolSettings }, shortcuts: resolveShortcuts(settings.shortcutOverrides) }),
     update: async raw => {
       const change = parseHubSettingsChange(raw);
-      if (change.kind === 'settings') settings = { ...settings, ...change.patch };
+      if (change.kind === 'settings') {
+        settings = { ...settings, ...change.patch };
+        try { localStorage.setItem('hub-fixture-settings', JSON.stringify({ ...JSON.parse(localStorage.getItem('hub-fixture-settings') ?? '{}'), ...change.patch })); } catch { /* Disposable fixture data. */ }
+      }
       else if (change.kind === 'master') settings = { ...settings, gwonmacTools: change.enabled };
       else if (change.kind === 'tool') settings = { ...settings, [FEATURE_SELECTION_POLICIES[GLOBAL_TOOL_FEATURES[change.tool]].activation.setting]: change.enabled };
       else {
@@ -53,7 +62,7 @@ export function mountHubFixture(target: HTMLElement) {
         if (conflict) settings = { ...settings, shortcutOverrides: withShortcutOverride(settings.shortcutOverrides, conflict, null) };
         settings = { ...settings, shortcutOverrides: withShortcutOverride(settings.shortcutOverrides, change.action, change.binding) };
       }
-      window.gwApplyFixtureAppearance?.({ uiStyle: settings.uiStyle, uiPanelOpacity: settings.uiPanelOpacity, uiFont: settings.uiFont, uiCustomTheme: settings.uiCustomTheme });
+      applyAppearance();
       window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: settings }));
     },
     capture: () => new Promise(resolve => {
@@ -152,7 +161,7 @@ export function mountHubFixture(target: HTMLElement) {
     const option = document.createElement('option'); option.value = value; option.textContent = label; scenario.append(option);
   }
   scenario.onchange = () => { game.setScenario(scenario.value); hub.show(); };
-  const reset = document.createElement('button'); reset.className = 'ui-button'; reset.textContent = 'Reset fixture'; reset.onclick = () => { localStorage.removeItem('hub-fixture-shortcuts'); localStorage.removeItem('hub-fixture-library'); location.reload(); };
+  const reset = document.createElement('button'); reset.className = 'ui-button'; reset.textContent = 'Reset fixture'; reset.onclick = () => { localStorage.removeItem('hub-fixture-shortcuts'); localStorage.removeItem('hub-fixture-library'); localStorage.removeItem('hub-fixture-settings'); location.reload(); };
   const label = document.createElement('span'); label.textContent = 'Synthetic game · sample prices';
   controls.style.flexWrap = 'wrap'; controls.append(theme, scenario, reset, label); target.append(controls);
   window.addEventListener('keydown', event => {

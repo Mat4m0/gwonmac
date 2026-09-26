@@ -24,6 +24,16 @@ describe("appearance settings", () => {
     });
   });
 
+  it("scales Hub type only for a chosen Hub text size", () => {
+    assert.equal(appearanceVariables(DEFAULT_SETTINGS)["--ui-hub-text-scale"], undefined);
+    assert.equal(appearanceVariables({ ...DEFAULT_SETTINGS, hubTextSize: 150 })["--ui-hub-text-scale"], "1.5");
+    assert.equal(appearanceVariables({ ...DEFAULT_SETTINGS, hubTextSize: 200 })["--ui-hub-text-scale"], "2");
+    /* Text size never changes material or ink. */
+    const scaled = { ...appearanceVariables({ ...DEFAULT_SETTINGS, uiPanelOpacity: 65, hubTextSize: 200 }) };
+    delete scaled["--ui-hub-text-scale"];
+    assert.deepEqual(scaled, appearanceVariables({ ...DEFAULT_SETTINGS, uiPanelOpacity: 65 }));
+  });
+
   /* The rendered worst cases the projector must beat, using the colours
    * tokens.css actually paints: the panel over snow, the same with the
    * accent hover layer, and the panel over black. */

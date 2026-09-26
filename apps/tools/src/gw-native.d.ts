@@ -9,6 +9,7 @@ export type StandaloneAppearanceFixture = Readonly<{
   uiPanelOpacity: AppSettings["uiPanelOpacity"];
   uiFont?: AppSettings["uiFont"];
   uiCustomTheme?: CustomUiTheme;
+  hubTextSize?: AppSettings["hubTextSize"];
 }>;
 
 declare global {

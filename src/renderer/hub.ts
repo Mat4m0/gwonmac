@@ -18,7 +18,7 @@ export function createHub(parent: HTMLElement) {
   const document = parent.ownerDocument;
   const root = document.createElement('dialog');
   root.id = 'hub';
-  root.className = 'ui-modal ui-modal-layer';
+  root.className = 'ui-modal ui-modal-layer ui-text-scope';
   root.dataset.page = "home";
   root.setAttribute('aria-label', 'Hub');
   root.innerHTML = `<section class="hub-panel ui-frame">
