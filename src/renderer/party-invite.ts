@@ -31,17 +31,18 @@ export function createPartyInvite(input: PartyInviteInput) {
   const arrivalTimeoutMs = input.arrivalTimeoutMs ?? 60_000;
   /** Withdraws the one pending arrival; null while nothing waits. */
   let pending: (() => void) | null = null;
-  /** Why an invite cannot be sent now. A friend elsewhere cannot receive it from here. */
-  function unavailable(friend?: TravelFriend): string | null {
+  /**
+   * Why an invite cannot be sent now. A friend elsewhere cannot receive it from here;
+   * the reason points to Travel and invite only when the caller offers that action.
+   */
+  function unavailable(friend?: TravelFriend, travelOffered = false): string | null {
     const region = input.region();
     if (pending) return TRAVELLING;
     if (!inOutpost(region)) return 'Invite players from an outpost';
     if (!input.chatReady()) return 'Guild Wars chat is not ready';
     if (friend && region.status === 'ready' && friend.mapId !== region.mapId) {
-      // Point to Travel and invite only where it can start: a PvE travel destination.
-      const place = travelDestination(friend.mapId);
-      const travelable = !!input.travel && !!place && !isPvpTravelDestination(friend.mapId);
-      return `${friend.character || friend.alias} is in ${place?.name ?? 'another map'}.${travelable ? ' Use Travel and invite.' : ''}`;
+      const place = travelDestination(friend.mapId)?.name ?? 'another map';
+      return `${friend.character || friend.alias} is in ${place}.${travelOffered ? ' Use Travel and invite.' : ''}`;
     }
     return null;
   }

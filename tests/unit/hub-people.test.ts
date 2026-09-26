@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createHubPeople } from '../../src/renderer/hub-people.ts';
 import { createPartyInvite, type PartyInvite } from '../../src/renderer/party-invite.ts';
+import type { TravelFriend } from '../../src/shared/friends.ts';
 import type { HubRow, HubSource } from '../../src/shared/hub.ts';
 import { createWhisperSession } from '../../src/shared/whisper-session.ts';
 
@@ -10,9 +11,11 @@ const KAISER = 'Kai Account|Mo Kaiser · online · Kamadan, Jewel of Istan';
 
 type Harness = {
   search(query: string): string[]; source: HubSource; session: ReturnType<typeof createWhisperSession>;
-  page(): readonly HubRow[]; receipts: string[];
+  page(): readonly HubRow[]; receipts: string[]; setFriends(friends: readonly TravelFriend[]): void;
 };
-function withPeople(settings: Record<string, boolean>, run: (people: Harness) => void | Promise<void>, party: PartyInvite | null = null) {
+type FriendTravel = Parameters<typeof createHubPeople>[2];
+function withPeople(settings: Record<string, boolean>, run: (people: Harness) => void | Promise<void>, party: PartyInvite | null = null,
+  travel: FriendTravel = { unavailable: () => null, run: async () => {} }) {
   const originalWindow = globalThis.window;
   const browserWindow = Object.assign(new EventTarget(), { gwToolsSettings: () => settings });
   Object.defineProperty(globalThis, 'window', { configurable: true, value: browserWindow });
@@ -21,7 +24,6 @@ function withPeople(settings: Record<string, boolean>, run: (people: Harness) =>
   const receipts: string[] = [];
   const session = createWhisperSession(async () => {});
   session.setAvailable(true);
-  const travel = { unavailable: () => null, run: async () => {} };
   const people = createHubPeople({
     showRows(_title, rows) { page = rows; }, attach(next) { source = next; return () => {}; },
     close(message) { if (message) receipts.push(message); }, notify(message) { receipts.push(message); },
@@ -32,12 +34,13 @@ function withPeople(settings: Record<string, boolean>, run: (people: Harness) =>
   };
   try {
     people.setEnabled(true);
-    const friends = { status: 'ready' as const, sequence: 1, generation: 1, friends: [
-      { key: 'f', character: 'Mo Kaiser', alias: 'Kai Account', status: 'online' as const, mapId: 449 },
-    ] };
-    session.updateFriends(friends); people.updateFriends(friends);
+    const setFriends = (list: readonly TravelFriend[]) => {
+      const friends = { status: 'ready' as const, sequence: 1, generation: 1, friends: list };
+      session.updateFriends(friends); people.updateFriends(friends);
+    };
+    setFriends([{ key: 'f', character: 'Mo Kaiser', alias: 'Kai Account', status: 'online', mapId: 449 }]);
     session.observe([{ id: 1, sender: 'Moira Chatter', direction: 'participant' }]);
-    const result = run({ source: source!, session, receipts, page: () => page(),
+    const result = run({ source: source!, session, receipts, page: () => page(), setFriends,
       search: query => source!.search(query).map(row => `${row.title}|${row.detail}`) });
     if (result instanceof Promise) return result.finally(finish);
   } catch (error) { finish(); throw error; }
@@ -174,4 +177,32 @@ test('Invite is unavailable for a friend in another map and says where they are'
     assert.equal(page().find(row => row.id === 'person:invite')!.unavailable, undefined, 'a chat name has no known map');
     assert.deepEqual(invited, []);
   }, party);
+});
+
+function lionsArchInvite() {
+  const region = { status: 'ready', sequence: 1, mapId: 55, instanceType: 0, playRegion: 'pve', travelContext: 'world', characterKey: 'a',
+    unlockedMapWords: null, guildHall: false, hasGuildHall: false } as const;
+  return createPartyInvite({ region: () => region, subscribeRegion: () => () => {}, chatReady: () => true, invite: async () => {}, travel: async () => {} });
+}
+
+test('Invite points to Travel and invite only when that row is shown and can start', async () => {
+  const elsewhere = 'Mo Kaiser is in Kamadan, Jewel of Istan.';
+  const inviteReason = (page: () => readonly HubRow[]) => page().find(row => row.id === 'person:invite')!.unavailable;
+  await withPeople({ gwonmacTools: true, whispersEnabled: true, travelPalette: false }, ({ source, page }) => {
+    void source.search('mo kaiser')[0]!.run();
+    assert.deepEqual(actions(page()), ['Whisper', `Invite to party (${elsewhere})`], 'a hidden Travel palette is never pointed to');
+    assert.equal(source.search('invite Mo Kaiser')[0]!.unavailable, elsewhere);
+  }, lionsArchInvite());
+  await withPeople(ALL_TOOLS, ({ source, page }) => {
+    void source.search('mo kaiser')[0]!.run();
+    assert.equal(page().find(row => row.id === 'person:travel-invite')!.unavailable, 'Travel is busy');
+    assert.equal(inviteReason(page), elsewhere, 'an unavailable Travel is never pointed to');
+    assert.equal(source.search('invite Mo Kaiser')[0]!.unavailable, elsewhere);
+  }, lionsArchInvite(), { unavailable: () => 'Travel is busy', run: async () => {} });
+  await withPeople(ALL_TOOLS, ({ source, page, setFriends }) => {
+    setFriends([{ key: 'f', character: 'Mo Kaiser', alias: 'Kai Account', status: 'online', mapId: 188 }]);
+    void source.search('mo kaiser')[0]!.run();
+    assert.equal(page().find(row => row.id === 'person:travel-invite')!.unavailable, 'Invites from Hub need a PvE outpost');
+    assert.equal(inviteReason(page), 'Mo Kaiser is in Random Arenas.', 'a PvP outpost is never pointed to');
+  }, lionsArchInvite());
 });
