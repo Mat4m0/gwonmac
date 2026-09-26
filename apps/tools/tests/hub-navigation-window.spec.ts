@@ -133,6 +133,24 @@ test('a view opened by its shortcut goes Back to the real Home, by key, button 3
   await expect(legend).toHaveText('⌘⌫ Back');
 });
 
+test('Escape from a shortcut-opened view returns to its real Home before it closes Hub', async ({ page }) => {
+  await page.goto('/?hub');
+  const hub = page.locator('#hub');
+  const caption = page.locator('.hub-caption');
+  for (const [shortcut, title] of [['Meta+t', 'Travel'], ['Meta+e', 'Characters']] as const) {
+    await page.getByRole('button', { name: 'Close Hub', exact: true }).click();
+    await expect(hub).toBeHidden();
+    await page.keyboard.press(shortcut);
+    await expect(caption).toHaveText(title);
+    await page.keyboard.press('Escape');
+    await expect(caption, shortcut).toHaveText('Home');
+    await expect(hub).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(hub, shortcut).toBeHidden();
+    await page.getByRole('button', { name: 'Open Hub', exact: true }).click();
+  }
+});
+
 test('Command-Backspace closes an open disclosure before it goes back', async ({ page }) => {
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });

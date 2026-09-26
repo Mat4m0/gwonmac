@@ -65,8 +65,9 @@ Remove the dedicated Settings accelerator as requested; retain the explicit menu
 
 Direct shortcuts enter the same feature owner as search. They use its Hub view
 or popout according to the table. Do not create duplicate windows. Disabled-feature shortcuts do nothing.
-Keep each existing shortcut toggle/focus contract. Direct entry has no artificial
-Home history step. Returning restores the actual launching control; first entry
+Keep each existing shortcut toggle/focus contract. Direct entry while Hub is
+closed starts from a fresh Home, its real parent; no other history step is
+invented. Returning restores the actual launching control; first entry
 focuses the task control, such as the current character card, rather than always search.
 The shortcuts are window-scoped, not system-wide hotkeys.
 
@@ -106,7 +107,8 @@ The footer names what Enter will do. Do not rely on colour or icons alone.
 - Escape closes an action menu or open disclosure, then clears a non-empty query,
   then goes back one level, then dismisses Hub and returns focus to the game.
   Hub handles the key itself, so every visit follows the same order.
-- A direct shortcut has no artificial Home step when Escape closes its section.
+- A view that its direct shortcut opens while Hub is closed sits on a fresh Home,
+  so Escape returns to Home before it closes Hub.
 - A visible Actions button exposes secondary actions. Tab reaches it; its menu
   supports normal arrow navigation. Do not consume text-editing arrow keys.
 - Back restores query, caret, selection, scroll, and the launching control.

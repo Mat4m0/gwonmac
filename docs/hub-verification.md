@@ -500,7 +500,7 @@ Control-N/P, Home/End and Page Up/Down move one selection without wrapping;
 typing after any of them continues the query at its caret. Characters
 retain Left/Right selection; Up reaches search, then Back. A view that its
 shortcut opens while Hub is closed (Command-T, Command-E) starts from a fresh
-Home, so Back returns there; no earlier page is invented. Command-Backspace and
+Home, so Back and Escape return there before Hub closes; no earlier page is invented. Command-Backspace and
 the mouse back button close an open disclosure first and cancel a confirmation
 such as "Leave this area?" before they leave a view.
 

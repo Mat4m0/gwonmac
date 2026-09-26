@@ -323,7 +323,8 @@ close an open disclosure, then let the view leave an inner level: a view owns
 such a level by cancelling the `gw:hub-back` event, so on "Leave this area?"
 Back acts as Stay here and in Character Switch or Travel settings it returns to
 the cards or destinations, as Escape does. A view that its shortcut opens while
-Hub is closed starts from a fresh Home, which is its real parent. List stages
+Hub is closed starts from a fresh Home, which is its real parent, so Back and
+Escape return there before Hub closes. List stages
 show a "⌘⌫ Back" footer legend only when a level exists; views show the Back
 button with the same shortcut. The shortcut recorder refuses Command-Backspace
 as "Reserved for Back". History restores query, selection, scroll and the actual

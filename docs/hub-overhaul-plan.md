@@ -499,7 +499,7 @@ Hub is a transient search surface: outside-click dismissal preserves the task. F
 1. Typing searches; it never sends, travels, switches or applies.
 2. Enter performs the visible primary action for the selected identity. Ambiguous names require selection; partial build/team matches lead to review.
 3. Back restores the immediate parent, query, selected identity and scroll position.
-4. Escape dismisses the active submenu, then the current level, then Hub. Direct shortcuts do not create a fake Home step.
+4. Escape dismisses the active submenu, then the current level, then Hub. A view that a direct shortcut opens while Hub is closed sits on a fresh Home, its real parent, so Escape returns there before Hub closes; no other step is invented.
 5. Text editing keeps its normal arrow keys. Carousel arrows operate when the carousel owns navigation. Tab reaches actions and form controls.
 6. Background updates preserve focus and selection by identity. A vanished selection cannot silently become a different actionable item.
 7. Disabled features disappear from search, pins, aliases, recents and child actions. Settings may retain disabled, read-only shortcut rows.

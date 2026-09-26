@@ -215,7 +215,8 @@ a second line, and the game and other panels keep their size.
 
 With Travel enabled, search an outpost or your custom Travel phrase. Travel,
 favourites, recent places, and Guild Hall stay in the same window. Command-T
-and `/tp` also open Travel inside Hub.
+and `/tp` also open Travel inside Hub, on top of Home, so Escape goes back to
+Home before it closes Hub.
 
 Search a friend's alias or character name and press Enter to choose an action.
 With Whispers enabled, people search also finds your conversations, recent
@@ -288,8 +289,9 @@ The search bar is shown for every account size. Initial focus remains on the
 current character. Press Left or Up for the previous character. Press Right or
 Down for the next character. Start typing a character name or primary profession
 to move focus to search. Secondary professions are not searched. The number keys
-1–9 and 0 switch to the first ten characters. Use **View → Reload Guild Wars**
-to reload.
+1–9 and 0 switch to the first ten characters. Switch Character opens inside
+Hub, on top of Home, so Escape goes back to Home before it closes Hub.
+Use **View → Reload Guild Wars** to reload.
 
 Enable **Resign** in **Settings → Tools**. It is off by default and requires
 Tools. Its shortcut is unassigned by default and can be assigned or cleared
