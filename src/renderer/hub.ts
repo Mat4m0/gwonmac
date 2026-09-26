@@ -274,6 +274,9 @@ export function createHub(parent: HTMLElement) {
     title.append(' ', label);
   }
   let renderedSummary: HubSummary | undefined;
+  /** Advances on every page change; a click run that crosses it is cancelled. */
+  let pageGeneration = 0;
+  let pressed: { id: string; page: number } | null = null;
   function paintNavigation() {
     const summary = disposeView ? undefined : scope?.summary;
     const summaryPanel = required<HTMLElement>('.hub-summary');
@@ -408,7 +411,12 @@ export function createHub(parent: HTMLElement) {
         }
       }
       option.addEventListener('pointermove', event => { if (event.movementX || event.movementY) select(row.id); });
-      option.addEventListener('click', () => { select(row.id); focusResult(); void run(); });
+      option.addEventListener('click', event => {
+        // A multi-click never runs what its first click revealed (HUB-242): a page change
+        // in between cancels it, and only a consequential row runs on its own double-click.
+        if (event.detail <= 1) { pressed = { id: row.id, page: pageGeneration }; select(row.id); focusResult(); if (!row.consequential) void run(); }
+        else if (event.detail === 2 && row.consequential && pressed?.id === row.id && pressed.page === pageGeneration) void run();
+      });
       list.append(option);
     });
     count.textContent = `${rows.length} result${rows.length === 1 ? '' : 's'}`;
@@ -436,7 +444,7 @@ export function createHub(parent: HTMLElement) {
     finally { pending = false; select(selected); }
   }
   function resetView() {
-    restoringFocus?.disconnect(); restoringFocus = null;
+    restoringFocus?.disconnect(); restoringFocus = null; pageGeneration++;
     disposeView?.(); disposeView = null; activeView = null; viewAvailable = null; returnFromView = null; content.replaceChildren(); content.hidden = true;
     search.hidden = false; list.hidden = false; footer.hidden = false;
   }
@@ -590,9 +598,11 @@ export function createHub(parent: HTMLElement) {
     if (row.actions) { row.actions(); return true; }
     presenter.showRows(row.title, () => [row]); return true;
   };
-  required<HTMLButtonElement>('.hub-actions').onclick = actions;
+  // Footer and Back act once per click run; a trailing click never reaches the next page.
+  required<HTMLButtonElement>('.hub-actions').onclick = event => { if (event.detail <= 1) actions(); };
   required<HTMLButtonElement>('.hub-close').onclick = () => close();
-  backButton.onclick = back; primary.onclick = () => { void run(); };
+  backButton.onclick = event => { if (event.detail <= 1) back(); };
+  primary.onclick = event => { if (event.detail <= 1) void run(); };
   root.addEventListener('pointerdown', () => { restoringFocus?.disconnect(); restoringFocus = null; });
   // The mouse back button is Back, like ⌘⌫.
   root.addEventListener('mouseup', event => { if (event.button === 3) { event.preventDefault(); if (history.length) back(); } });

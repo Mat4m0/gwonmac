@@ -28,6 +28,11 @@ export type HubRow = Readonly<{
   quoteBasis?: Readonly<{ value:string; options:readonly {value:string;label:string}[]; choose(value:string):void }>;
   conversion?: Readonly<{ input: string; from: string; to: string; iconFrom?: string; iconTo?: string }>;
   unavailable?: string;
+  /**
+   * Changes the game or the account: a click only selects, and the footer primary
+   * or a double-click that started on this row runs it (D-24).
+   */
+  consequential?: boolean;
   /** Opens the canonical saved record in its existing authoring workspace. */
   workspace?(): void;
   actions?(): void;
