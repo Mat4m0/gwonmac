@@ -5,7 +5,7 @@
 import { concat, encodeCode, encodeIndexVector, encodeSection, parseCode, parseExports,
   parseIndexVector, sectionById, sleb, splitSections, uleb, vectorPayload, WASM_HEADER } from "../core/wasm-binary.js";
 import { encodeName } from "./cartography-transform-internals.js";
-import { NATIVE_RENDER_REFERENCE_FUNCTIONS, nativeModelBusy } from "./native-render-reference.js";
+import { NATIVE_RENDER_REFERENCE_FUNCTIONS, nativeGraphicsBusy, nativeModelBusy } from "./native-render-reference.js";
 import { functionBodySha256, wasmEvidence } from "./wasm-evidence.js";
 import { NATIVE_PUBLISH_BUSY } from "../../shared/native-publish.js";
 import { NATIVE_HUD_MAGIC, NATIVE_HUD_ATLAS_SIZE, NATIVE_HUD_LABELS, NATIVE_HUD_QUADS,
@@ -282,6 +282,7 @@ export function appendNativeHud(input: Uint8Array, skillBarGlobal: number): Uint
   // Retexturing a record's retained model asserts while the renderer holds it;
   // this runs from the host's frame, so report busy before changing any record.
   const atlas = concat(op(1, 5, 0x7f),
+    nativeGraphicsBusy(6), op(0x04, 0x40), i(NATIVE_PUBLISH_BUSY), op(0x0f, 0x0b),
     each(5, concat(record(5), load(8), op(0x04, 0x40),
       nativeModelBusy(concat(record(5), load(8)), 6), op(0x04, 0x40), i(NATIVE_PUBLISH_BUSY), op(0x0f, 0x0b), op(0x0b))),
     validMemory(i(atlasBytes)), l(1), i(atlasBytes), op(0x46, 0x71, 0x45, 0x04, 0x40), i(0), op(0x0f, 0x0b),

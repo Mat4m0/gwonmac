@@ -160,7 +160,14 @@ Stationary Compass geometry is reused; range geometry changes only with its
 Canvas rectangle or artwork, not camera motion.
 
 Textures are published from the application's animation frame, outside the
-client's own frame. Guild Wars asserts `m_renderRefCount == 0` in
+client's own frame. The client can suspend while flushing its graphics queue.
+Creating or retexturing a model can start another flush, which asserts
+`m_queueFlushing == GR_QUEUES` in `GrDev.cpp`. Every publisher first checks the
+certified current device and queue phase, including before its first upload.
+A missing device or an active flush reports busy without changing native state.
+The host keeps the current artwork and retries on a later frame.
+
+Guild Wars asserts `m_renderRefCount == 0` in
 `GrModel.cpp` when a retained model is retextured while its renderer still
 holds it, and that assertion aborts the client. Every Compass and map publish
 therefore reads the same native field first. While it is held, the publish

@@ -99,9 +99,13 @@ setting accepts red, cream, gold, blue, or an exact six-digit custom RGB value.
 
 The atlas allocates on first use. It stays cached across brief idle periods so a
 new cooldown does not need another pixel upload. Repacking for changed artwork
-republishes current geometry and withdraws removed labels. A repack retextures
-every retained label, which Guild Wars forbids while its renderer still holds
-one (`m_renderRefCount == 0` in `GrModel.cpp` aborts the client). The upload
+republishes current geometry and withdraws removed labels.
+
+Atlas uploads first check the certified graphics queue phase. A missing device
+or an active flush reports busy before allocating or changing any resource;
+the host retries on a later frame. This also applies to the first atlas upload.
+A repack retextures every retained label, which Guild Wars forbids while its
+renderer still holds one (`m_renderRefCount == 0` in `GrModel.cpp` aborts the client). The upload
 then reports busy and changes nothing; labels keep the current atlas until a
 later render repacks again. [Cartography](cartography.md) describes the shared
 guard.

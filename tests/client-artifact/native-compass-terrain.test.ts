@@ -43,8 +43,8 @@ test("native terrain owns bounded resources, follows its Canvas and refuses inva
     section(1, sectionById(sections, 1)),
     section(2, concat(uleb(peers.length), ...peers.map((index) => concat(encodeName("peer"), encodeName(String(index)), Uint8Array.of(0), uleb(module.functionTypeIndices[index]!))))),
     section(3, concat(uleb(selected.length), ...selected.map((index) => uleb(module.functionTypeIndices[index]!)))),
-    // Large enough for the native model-type word the render-reference guard reads.
-    section(5, Uint8Array.of(1, 0, 24)), section(6, sectionById(sections, 6)),
+    // Include the native model-type word and current graphics-device pointer.
+    section(5, Uint8Array.of(1, 0, 48)), section(6, sectionById(sections, 6)),
     section(7, concat(uleb(labels.length + globals.length + 2),
       ...labels.map((name, index) => concat(encodeName(name), Uint8Array.of(0), uleb(peers.length + index))),
       encodeName("memory"), Uint8Array.of(2, 0), encodeName("stack"), Uint8Array.of(3, 0),
@@ -81,6 +81,9 @@ test("native terrain owns bounded resources, follows its Canvas and refuses inva
   const invoke = (name: string, ...args: number[]) => { const target = exports[name]; assert.equal(typeof target, "function"); if (typeof target === "function") return target(...args); };
   const MODEL = 196608 + 4096; const MODEL_TYPE = 20;
   view.setUint32(20 + 1341168, MODEL_TYPE, true);
+  const DEVICE = 400_000;
+  view.setUint32(2734712, DEVICE, true);
+  view.setUint32(DEVICE + 460, 3, true);
   scalar("stack", 196608); scalar("gwonmac_cartography_context_status", 1); scalar("gwonmac_cartography_context_area_epoch", 7);
   const owner = 256; const camera = 768; const direction = 784; const region = 2048; const bytes = 32 + 64 * 64 * 4;
   const rectangle = (width: number, height: number) => {
@@ -92,11 +95,24 @@ test("native terrain owns bounded resources, follows its Canvas and refuses inva
     [-8192, 8192, 16384].forEach((value, index) => view.setFloat32(region + 16 + index * 4, value, true));
     view.setUint32(region + 28, 1, true);
   };
+  const assertQueueBusy = () => {
+    for (const phase of [null, 0, 1, 2, 4]) {
+      view.setUint32(2734712, phase === null ? 0 : DEVICE, true);
+      view.setUint32(DEVICE + 460, phase ?? 3, true);
+      const before = new Uint8Array(view.buffer).slice();
+      assert.equal(invoke("publish", region, bytes), 2, `queue phase ${phase} defers publishing`);
+      assert.deepEqual(new Uint8Array(view.buffer), before, "busy leaves native memory unchanged");
+    }
+    view.setUint32(2734712, DEVICE, true);
+    view.setUint32(DEVICE + 460, 3, true);
+  };
   header(); assert.equal(invoke("publish", region, bytes), 0); assert.equal(textureCreates, 0);
   invoke("init", owner); invoke("attach", owner, 43); assert.equal(attachments, 1);
+  assertQueueBusy(); assert.equal(textureCreates, 0, "first upload waits before allocating");
   assert.equal(invoke("publish", region, bytes), 1); assert.deepEqual(released.splice(0), [22, 21]);
   // While the native renderer holds the model, publishing reports busy and
   // changes nothing; the host retries on a later frame.
+  assertQueueBusy(); assert.equal(textureCreates, 1, "existing texture stays allocated");
   view.setUint32(MODEL + 152, 1, true); header();
   assert.equal(invoke("publish", region, bytes), 2);
   assert.equal(textureCreates, 1); assert.deepEqual(released, []);

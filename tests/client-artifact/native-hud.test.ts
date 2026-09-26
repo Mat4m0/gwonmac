@@ -114,9 +114,24 @@ for (const channel of ["cooldowns", "keys", "effects"] as const) {
   const scalar = (name: string, value: number) => { const target = exports[name]; assert.ok(target instanceof WebAssembly.Global); target.value = value; };
   const MODEL = 7_500_000, MODEL_TYPE = 20;
   view.setUint32(20 + 1341168, MODEL_TYPE, true);
+  const DEVICE = 7_600_000;
+  view.setUint32(2734712, DEVICE, true);
+  view.setUint32(DEVICE + 460, 3, true);
   scalar("stack", 7_900_000); scalar("skillbar", 43);
   const region = 2048, atlasBytes = 8 + 1024 * 1024 * 4;
   view.setUint32(region, NATIVE_HUD_MAGIC, true); view.setUint32(region + 4, 1024, true);
+  const assertQueueBusy = () => {
+    for (const phase of [null, 0, 1, 2, 4]) {
+      view.setUint32(2734712, phase === null ? 0 : DEVICE, true);
+      view.setUint32(DEVICE + 460, phase ?? 3, true);
+      const before = new Uint8Array(view.buffer).slice();
+      assert.equal(invoke("atlas", region, atlasBytes), 2, `queue phase ${phase} defers publishing`);
+      assert.deepEqual(new Uint8Array(view.buffer), before, "busy leaves native memory unchanged");
+    }
+    view.setUint32(2734712, DEVICE, true);
+    view.setUint32(DEVICE + 460, 3, true);
+  };
+  assertQueueBusy(); assert.equal(textureCreates, 0, "first upload waits before allocating");
   assert.equal(invoke("atlas", region, atlasBytes - 1), 0);
   assert.equal(invoke("atlas", region, atlasBytes), 1);
   const frame = 256, parent = 1024, outputVector = 1800;
@@ -189,6 +204,7 @@ for (const channel of ["cooldowns", "keys", "effects"] as const) {
   // Repacking the atlas retextures every retained label. While the native
   // renderer holds one, the upload reports busy and changes nothing.
   u(region, NATIVE_HUD_MAGIC); u(region + 4, 1024);
+  assertQueueBusy(); assert.equal(textureCreates, 1, "existing texture stays allocated");
   u(MODEL + 152, 1);
   const resourcesBeforeBusy = refs.size;
   assert.equal(invoke("atlas", region, atlasBytes), 2);

@@ -7,7 +7,7 @@ import {
   parseIndexVector, sectionById, sleb, splitSections, uleb, vectorPayload, WASM_HEADER,
 } from "../core/wasm-binary.js";
 import { encodeName } from "./cartography-transform-internals.js";
-import { NATIVE_RENDER_REFERENCE_FUNCTIONS, nativeModelBusy } from "./native-render-reference.js";
+import { NATIVE_RENDER_REFERENCE_FUNCTIONS, nativeGraphicsBusy, nativeModelBusy } from "./native-render-reference.js";
 import { functionBodySha256, wasmEvidence } from "./wasm-evidence.js";
 import { NATIVE_PUBLISH_BUSY } from "../../shared/native-publish.js";
 import { NATIVE_MAP_GRAPHICS_HEADER_BYTES, NATIVE_MAP_GRAPHICS_MAGIC,
@@ -168,6 +168,7 @@ export function appendNativeMapGraphics(input: Uint8Array): Uint8Array {
     // A retained model's texture swap asserts while the renderer holds it; this
     // runs from the host's frame, so report busy before hiding or allocating.
     const publish = concat(op(1, 8, 0x7f),
+      nativeGraphicsBusy(9), op(0x04, 0x40), i(NATIVE_PUBLISH_BUSY), op(0x0f, 0x0b),
       g(2), op(0x04, 0x40), nativeModelBusy(g(2), 9), op(0x04, 0x40), i(NATIVE_PUBLISH_BUSY), op(0x0f, 0x0b, 0x0b),
       call(hideIndex),
       l(0), i(0), op(0x4b), l(0), i(3), op(0x71, 0x45, 0x71),
