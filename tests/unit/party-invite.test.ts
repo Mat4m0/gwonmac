@@ -117,6 +117,27 @@ test('Travel and invite from the first outpost after login adopts the first know
   assert.deepEqual(h.invited, []);
 });
 
+test('Travel and invite never sends from a relogged character that publishes no key yet', async (context) => {
+  context.mock.timers.enable({ apis: ['setTimeout'] });
+  const relogged = harness();
+  const { invited } = await relogged.party.travelAndInvite(friend, 1);
+  relogged.move({ status: 'waiting', reason: 'game' });
+  relogged.move(outpost(449, null));
+  context.mock.timers.tick(2_000);
+  await assert.rejects(invited, /character changed\. The invite was not sent/, 'character selection withdraws the invite');
+  assert.equal(relogged.listeners.size, 0);
+
+  const unknown = harness();
+  const { invited: unknownInvite } = await unknown.party.travelAndInvite(friend, 1);
+  unknown.move(loading);
+  unknown.move(outpost(449, null));
+  context.mock.timers.tick(2_000);
+  assert.deepEqual(unknown.invited, [], 'a null key after a known one is no arrival');
+  unknown.move(outpost(449, 'b'));
+  await assert.rejects(unknownInvite, /character changed/);
+  assert.deepEqual([...relogged.invited, ...unknown.invited], []);
+});
+
 test('Travel and invite refuses a PvP outpost up front and a non-PvE arrival at once', async (context) => {
   context.mock.timers.enable({ apis: ['setTimeout'] });
   const h = harness();

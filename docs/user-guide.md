@@ -236,7 +236,8 @@ footer names who is invited, for example **Invite Mo Kai**. Guild Wars answers
 the invite in chat.
 For a friend elsewhere, **Invite to party** says where they are. For a PvE
 outpost, use **Travel and invite**: it travels there (Any district) and invites them once you
-arrive. It is unavailable for PvP outposts such as Random Arenas. If you land in
+arrive. If you change character or return to character selection first, no
+invite is sent. It is unavailable for PvP outposts such as Random Arenas. If you land in
 a different district, Guild Wars cannot find them; Hub then shows the game's
 answer in chat. Both actions need Whispers enabled.
 
