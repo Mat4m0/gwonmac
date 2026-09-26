@@ -244,6 +244,7 @@ export function createHub(parent: HTMLElement) {
     primary.replaceChildren(document.createTextNode(row ? row.action : 'Select a result'));
     if (row) { const key = document.createElement('kbd'); key.textContent = '↵'; primary.append(key); }
     primary.disabled = !row || !!row.unavailable || pending;
+    primary.dataset.variant = row?.destructive ? 'danger' : 'primary';
     // Footer slots never hide, so nothing slides under a resting pointer; they disable instead.
     const actionsButton = required<HTMLButtonElement>('.hub-actions');
     actionsButton.disabled = !row || (!!scope && !row.skills && !scope.summary?.skills);
@@ -419,7 +420,7 @@ export function createHub(parent: HTMLElement) {
       const previous = previousRows[index];
       return previous && row.id === previous.id && row.title === previous.title
         && row.detail === previous.detail && row.group === previous.group
-        && row.action === previous.action && row.unavailable === previous.unavailable && row.preview === previous.preview && row.folder === previous.folder && row.attributeStatus === previous.attributeStatus && JSON.stringify([row.skills, row.attributes, row.professions]) === JSON.stringify([previous.skills, previous.attributes, previous.professions]);
+        && row.action === previous.action && row.destructive === previous.destructive && row.unavailable === previous.unavailable && row.preview === previous.preview && row.folder === previous.folder && row.attributeStatus === previous.attributeStatus && JSON.stringify([row.skills, row.attributes, row.professions]) === JSON.stringify([previous.skills, previous.attributes, previous.professions]);
     })) { select(selected); return; }
     list.replaceChildren();
     let group = '';
@@ -433,6 +434,7 @@ export function createHub(parent: HTMLElement) {
       const option = document.createElement('div');
       option.id = `hub-result-${index}`; option.dataset.id = row.id; option.className = 'hub-row';
       option.setAttribute('role', 'option'); option.setAttribute('aria-disabled', String(!!row.unavailable));
+      if (row.destructive) option.dataset.destructive = 'true';
       const title = document.createElement('span'); title.className = 'hub-title'; title.textContent = row.title;
       appendProfessionLabel(title, row.professions);
       appendFolderLabel(title, row.folder);

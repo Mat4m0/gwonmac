@@ -31,6 +31,10 @@
 .hub-row[aria-selected=true] { background:var(--ui-selection-fill); box-shadow:var(--ui-shadow-selected); color:var(--ui-selection-ink); }
 .hub-row[aria-selected=true]::before { content:''; position:absolute; left:0; top:8px; bottom:8px; width:2px; background:var(--ui-selection-marker); }
 .hub-row[aria-disabled=true] { cursor:default; }
+/* A row that ends something (closing the running account) reads as consequential before it is selected. */
+.hub-row[data-destructive=true] .hub-title { color:var(--ui-danger); }
+.hub-row[data-destructive=true][aria-selected=true] .hub-title { color:inherit; }
+.hub-row[data-destructive=true][aria-selected=true]::before { background:var(--ui-danger); }
 .hub-row[aria-disabled=true] .hub-title { color:var(--ui-text-muted); }
 .hub-footer { display:flex; align-items:center; justify-content:flex-end; gap:8px; padding:8px; min-height:48px; flex-shrink:0; border-top:1px solid var(--ui-line-soft); }
 .hub-primary { display:flex; align-items:center; gap:10px; }

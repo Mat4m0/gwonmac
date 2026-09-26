@@ -60,13 +60,17 @@ export function createHubAccounts(hub: HubPresenter<HTMLElement>, api: { get(): 
       return () => { arming.disarm(); view.remove(); };
     });
   }
+  /**
+   * Keeping the running game open is row 0 and the default; replacing it comes second and reads
+   * as consequential (D-23). The footer names each row's own consequence, never a generic verb.
+   */
   const actions = (profile: Profile): HubRow[] => {
     const current = snapshot?.profiles.find(item => item.id === snapshot?.current)?.name ?? 'current account';
-    return (['replace', 'open'] as const).map(mode => {
+    return (['open', 'replace'] as const).map(mode => {
       const title = mode === 'replace' ? `Close ${current} and open ${profile.name}` : `${profile.state === 'running' ? 'Show' : 'Open'} ${profile.name}`;
       return { id: `account:${profile.id}:${mode}`, title,
         detail: mode === 'replace' ? 'Save and close the current game after this account opens' : `Keep ${current} running`,
-        group: 'Accounts', action: mode === 'replace' ? 'Switch account' : profile.state === 'running' ? 'Show account' : 'Open account', consequential: true,
+        group: 'Accounts', action: title, consequential: true, ...(mode === 'replace' ? { destructive: true } : {}),
         run: mode === 'replace' ? async () => { await verify(profile); confirmReplace(profile, title, current); } : () => open(profile, mode) };
     });
   };

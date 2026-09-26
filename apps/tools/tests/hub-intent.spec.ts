@@ -28,7 +28,8 @@ test('account actions restore each visited account and command row', async ({ pa
   await expect(account).toContainText('Second');
   const identity = await account.getAttribute('data-id');
   await page.keyboard.press('Enter');
-  await expect(page.locator('.hub-row[aria-selected="true"]')).toContainText('Close');
+  // D-23: the page opens on keeping Main running, never on the replace.
+  await expect(page.locator('.hub-row[aria-selected="true"]')).toContainText('Open Second');
   await page.keyboard.press('Meta+Backspace');
   await expect(page.locator(`.hub-row[data-id="${identity}"]`)).toHaveAttribute('aria-selected', 'true');
   await page.keyboard.press('Meta+Backspace');

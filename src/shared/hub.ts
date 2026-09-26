@@ -17,6 +17,8 @@ export type HubRow = Readonly<{
   preferred?: boolean;
   /** The primary changes the game or the account: travel, invite, apply, switch or account (D-24). Never selected on a guess. */
   consequential?: boolean;
+  /** The primary ends something the player cannot take back (closing the running account); styled as such. */
+  destructive?: boolean;
   /** The primary travels out of an explorable area; a fresh Home never preselects it (D-13). */
   leavesArea?: boolean;
   preview?: string;

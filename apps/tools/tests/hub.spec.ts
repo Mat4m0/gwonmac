@@ -506,14 +506,15 @@ test('account search offers explicit keep-open and replacement choices', async (
   await search.fill('acc second');
   const rows = page.locator('#hub').getByRole('option');
   await expect(rows).toHaveCount(2);
-  await expect(rows.nth(0)).toContainText('Close Main and open Second');
-  await expect(rows.nth(1)).toContainText('Open Second');
+  // Keeping the running game open is row 0 and the default (D-23).
+  await expect(rows.nth(0)).toContainText('Open Second');
+  await expect(rows.nth(1)).toContainText('Close Main and open Second');
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', /Account/);
-  await search.press('ArrowDown'); await page.keyboard.press('Enter');
+  await page.keyboard.press('Enter');
   await expect(page.locator('#app')).toHaveAttribute('data-action', 'Account Second open');
   await page.getByRole('button', { name: 'Open Hub', exact: true }).click();
   // Replacing closes the running game: Enter opens an armed confirmation, and only its Enter replaces.
-  await search.fill('acc second'); await search.press('Enter');
+  await search.fill('acc second'); await search.press('ArrowDown'); await search.press('Enter');
   const replace = page.getByRole('button', { name: /^Close Main and open Second/ });
   await expect(replace).toBeFocused();
   await expect(page.locator('#app')).toHaveAttribute('data-action', 'Account Second open');

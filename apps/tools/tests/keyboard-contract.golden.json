@@ -192,7 +192,7 @@
   "accounts": {
     "1": "Accounts | focus search | sel - | q \"1\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "a": "Accounts | focus search | sel - | q \"a\" | action - | life outpost | canvas down 0 up 0 pointer 0",
-    "Enter": "Second | focus search | sel account:<profile>:replace | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
+    "Enter": "Second | focus search | sel account:<profile>:open | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Escape": "Home | focus search | sel accounts | q \"switch account\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Backspace": "Accounts | focus search | sel account:<profile> | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Meta+Backspace": "Home | focus search | sel accounts | q \"switch account\" | action - | life outpost | canvas down 0 up 0 pointer 0",

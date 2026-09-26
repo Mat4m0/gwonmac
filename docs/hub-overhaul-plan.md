@@ -101,7 +101,7 @@ always expose the consequence of Enter before it can change the game.
 | Fresh Hub | Global search | Already focused | Visible selected result action |
 | Character carousel | Current/explicitly selected character | Up or type from card | Switch to named character |
 | Account picker | First eligible alternative account | Up/type from rows | Open named account actions |
-| Account actions | Switch action for the chosen account | Available but not required | Named switch/show/open operation |
+| Account actions | "Open X · Keep Main running"; the replace comes second and reads as destructive (D-23) | Available but not required | The selected row's own consequence, e.g. "Close Main and open Second" |
 | Travel | Existing destination search with a useful selected destination | Already focused | Travel to named destination |
 | Build Library/folder | First available folder/build row | Up/type from rows | Open folder or choose build target |
 | Build target page | Apply to me | Up/type from rows | Apply to named player, or open hero picker |

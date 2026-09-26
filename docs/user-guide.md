@@ -440,10 +440,11 @@ Type `char Toefte` in Hub and press Enter on **Switch to Toefte**. Switching fro
 an explorable area retains the existing leave-area confirmation. The current
 character is labelled and cannot be switched to again.
 
-Type `acc second` to choose **Close Main and open Second** or **Open Second**.
-The first asks **Close Main?** before it does anything; confirm it after a brief
-moment with Enter or its button, or go back with **Keep Main**, Escape or
-Command-Backspace. It then opens the target successfully before saving and
-closing the current game. The second keeps both accounts open. Already-open accounts are shown instead
+Type `acc second` to choose **Open Second** or **Close Main and open Second**.
+**Open Second** comes first and is selected, and keeps both accounts open. The
+second, shown in red, asks **Close Main?** before it does anything; confirm it
+after a brief moment with Enter or its button, or go back with **Keep Main**,
+Escape or Command-Backspace. It then opens the target successfully before saving
+and closing the current game. The footer names the selected choice. Already-open accounts are shown instead
 of launched twice. Search **Switch Account** to browse all saved accounts. Sign-in
 stays in the normal Guild Wars window.

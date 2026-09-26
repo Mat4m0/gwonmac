@@ -52,7 +52,8 @@ async function clicks(page: Page, target: Locator, count: number, gap = 120, at?
 const consequential: Record<string, { query?: string; open(page: Page): Promise<Locator>; footer: RegExp; ran: string[] }> = {
   'Continue Eye of the North': { open: async page => row(page, 'Eye of the North'), footer: /^Travel to Eye of the North/, ran: ['TRAVEL Eye of the North'] },
   'Apply to me': { open: async page => { await enter(page, 'build smiter'); return page.getByRole('option', { name: /Apply to me/ }); }, footer: /^Apply to me/, ran: ['apply-build', 'command:1', 'command:2'] },
-  'Close Main and open Second': { open: async page => { await enter(page, 'acc s'); return row(page, 'Close Main and open Second'); }, footer: /^Switch account/, ran: [] },
+  'Open Second': { open: async page => { await enter(page, 'acc s'); return page.locator('.hub-row[data-id$=":open"]'); }, footer: /^Open Second/, ran: ['Account Second open'] },
+  'Close Main and open Second': { open: async page => { await enter(page, 'acc s'); return row(page, 'Close Main and open Second'); }, footer: /^Close Main and open Second/, ran: [] },
   'character card': { open: async page => { await page.keyboard.press('Meta+e'); return page.locator('button[data-character-key="mesmer"]'); }, footer: /^Switch to Fixture Mesmer/, ran: ['Character mesmer'] },
   'Invite to party': { query: '&party', open: async page => { await enter(page, 'zed delta'); await expect(caption(page)).toHaveText('Zed Delta'); return row(page, 'Invite to party'); }, footer: /^Invite Zed Delta/, ran: ['PARTY.INVITE Zed Delta'] },
 };
@@ -328,9 +329,17 @@ test('Characters: a double-click that raises Leave this area? never confirms it'
   }
 });
 
-test('Accounts: a replace needs one deliberate armed confirmation', async ({ page }) => {
+test('Accounts: keeping the running game open is the default; a replace needs one deliberate armed confirmation', async ({ page }) => {
   await open(page);
   await search(page).fill('acc second');
+  // D-23: Open Second is row 0 and selected; the replace is second and reads as destructive.
+  await expect(page.locator('.hub-row').nth(0)).toHaveAttribute('data-id', /:open$/);
+  await expect(page.locator('.hub-row[aria-selected="true"]')).toContainText('Open Second');
+  await expect(primary(page)).toHaveText(/^Open Second/);
+  await expect(page.locator('.hub-row[data-destructive="true"]')).toContainText('Close Main and open Second');
+  await search(page).press('ArrowDown');
+  await expect(primary(page)).toHaveText(/^Close Main and open Second/);
+  await expect(primary(page)).toHaveAttribute('data-variant', 'danger');
   await search(page).press('Enter');
   await expect(caption(page)).toHaveText('Close Main?');
   const confirm = page.getByRole('button', { name: /^Close Main and open Second/ });
@@ -343,10 +352,24 @@ test('Accounts: a replace needs one deliberate armed confirmation', async ({ pag
   expect(await ledger(page)).toEqual(['Account Second replace']);
   // Back cancels it.
   await page.getByRole('button', { name: 'Open Hub', exact: true }).click();
-  await search(page).fill('acc second'); await search(page).press('Enter');
+  await search(page).fill('acc second'); await search(page).press('ArrowDown'); await search(page).press('Enter');
   await page.keyboard.press('Meta+Backspace');
   await expect(page.locator('.hub-row[aria-selected="true"]')).toContainText('Close Main and open Second');
   expect(await ledger(page)).toEqual(['Account Second replace']);
+});
+
+test('Accounts: a double-click on an account opens its page on Open Second and runs nothing (PPL-35)', async ({ page }) => {
+  for (const gap of GAPS) {
+    await open(page);
+    await enter(page, 'switch account');
+    await expect(caption(page)).toHaveText('Accounts');
+    await clicks(page, row(page, /^Second/), 2, gap);
+    await expect(caption(page)).toHaveText('Second');
+    await expect(page.locator('.hub-row[aria-selected="true"]')).toHaveAttribute('data-id', /:open$/);
+    await expect(primary(page)).toHaveText(/^Open Second/);
+    expect(await ledger(page)).toEqual([]);
+    expect(await canvas(page)).toEqual([]);
+  }
 });
 
 test('right-click selects a row and opens its Actions', async ({ page }) => {

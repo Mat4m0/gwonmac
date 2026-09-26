@@ -55,3 +55,14 @@ test('Hub account choices reload on rename before any account operation', async 
   assert.ok(displayed.some(row => row.title === 'Renamed'));
   assert.ok(source.search('acc renamed').some(row => row.title.includes('Renamed')));
 });
+
+test('Hub account actions keep the running game first and name each consequence (D-23)', async () => {
+  const { createHubAccounts } = await import('../../src/renderer/hub-accounts.js');
+  const snapshot = hubAccountSnapshot(fixture().accounts, current);
+  const source = createHubAccounts({ close() {}, attach: () => () => {}, showView() {}, showRows() {} }, { get: async () => snapshot, open: async () => {} });
+  source.setVisible(true); await Promise.resolve();
+  assert.deepEqual(source.search('acc second').map(row => [row.title, row.action, !!row.destructive]), [
+    ['Open Second', 'Open Second', false],
+    ['Close Main and open Second', 'Close Main and open Second', true],
+  ]);
+});
