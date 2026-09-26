@@ -270,7 +270,8 @@ Storage opens quietly and does not show a failure popup.
 Use `team gom afk` to review and apply that saved team, or `build smiter` to load
 an exact saved build on your character. Prefixes open a review first; duplicate
 names require selection. Builds can also target an existing hero without replacing
-your team. `10 ecto in p` shows labelled NPC trader buy and sell estimates with
+your team. The footer names the build and its target before Enter, for example
+**Apply Smiter to Fixture Monk** or **Review GOM AFK**. `10 ecto in p` shows labelled NPC trader buy and sell estimates with
 observation times. Fixed gold/platinum conversions work offline. Amounts accept attached or spaced
 units: `1p`, `1 p`, `100k`, `.5e`, `2a`, and `10zkeys`. Use `in` or `to`.
 Stacks, mixed sums and multiplication work too: `1 stack ecto in p`,

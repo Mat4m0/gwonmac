@@ -73,6 +73,8 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
   const revision = (item: Item) => JSON.stringify(item.kind === 'team' ? [item.value, controller.library.value?.builds] : item.value);
   const playerName = () => { const source = window.gwCharacterSwitch; const state = source?.characters; return source && ['outpost', 'pve-explorable', 'pvp-explorable'].includes(source.context) && state?.status === 'ready' && state.selectedIndex !== null ? state.characters[state.selectedIndex]?.name ?? 'Your character' : 'Your character'; };
   const targetName = (hero: HeroId | null) => hero === null ? playerName() : heroLabel(hero);
+  /** The footer names the build and its target before Enter: "Apply Smiter to Fixture Monk". */
+  const applyAction = (build: Build, hero: HeroId | null) => { const target = targetName(hero); return `Apply ${build.name} to ${target === 'Your character' ? 'your character' : target}`; };
   const skillPreview = (build: Pick<Build, 'skills'>) => build.skills.map(id => {
     const skill = id === null ? null : host.skills.get(id);
     return { name: skill?.name ?? (id === null ? 'Empty slot' : `Unknown skill ${id}`), iconUrl: skill?.iconUrl ?? null, elite: skill?.elite ?? false, description: skill?.description ?? null };
@@ -175,7 +177,7 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
     const applyRow = (hero: HeroId | null, title: string): HubRow => {
       const refusal = unavailable(hero);
       return { id: `apply:${hero ?? 'me'}`, title, ...equipped(hero, item.value), group: 'Current build',
-        action: hero === null ? 'Apply to me' : `Apply to ${targetName(hero)}`, consequential: true,
+        action: applyAction(item.value, hero), consequential: true,
         ...(refusal ? { unavailable: refusal } : {}), run: () => apply(item, expected, hero) };
     };
     function compareTarget(hero: HeroId | null) {
@@ -192,7 +194,7 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
           const refusal = member ? unavailable(id) : 'Add this hero to your party first.';
           return { id: `hero:${id}`, title: heroLabel(id), ...equipped(id, item.value), group: member ? 'In your party' : 'Unlocked heroes',
             keywords: professions?.flatMap(value => value ? [PROFESSIONS[value].name] : []).join(' ') ?? '',
-            preferred: !refusal, consequential: !refusal, action: refusal ? 'Review availability' : `Apply to ${heroLabel(id)}`, ...(refusal ? { detail: refusal } : {}),
+            preferred: !refusal, consequential: !refusal, action: refusal ? 'Review availability' : applyAction(item.value, id), ...(refusal ? { detail: refusal } : {}),
             navigate: () => compareTarget(id), run: () => refusal ? compareTarget(id) : apply(item, expected, id) };
         }).sort((a, b) => Number(a.group !== 'In your party') - Number(b.group !== 'In your party') || a.title.localeCompare(b.title));
         return rows.length ? rows : [{ id: 'heroes-unavailable', title: 'No heroes observed', detail: 'Enter a PvE outpost to read your heroes.', group: 'Heroes', action: 'Choose hero', unavailable: 'Hero information is not available yet.', run() {} }];
@@ -285,7 +287,7 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
       if (!item) return undefined;
       if (item.kind === 'build') return { ...buildRow(item), group: 'Pinned' };
       return { id, title: item.value.name, detail: 'Saved team', group: 'Pinned',
-        preview: preview(item), action: 'Review', run: () => review(item), actions: () => review(item) };
+        preview: preview(item), action: `Review ${item.value.name}`, run: () => review(item), actions: () => review(item) };
     },
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
     setVisible(next) {
@@ -307,7 +309,7 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
         const expected = revision(item);
         const refusal = direct ? assess(item, null) : null;
         return { id: `team:${item.value.id}`, title: item.value.name, detail: 'Saved team',
-          group: 'Teams', preview: preview(item), action: direct ? `Apply team ${item.value.name}` : 'Review', consequential: direct, navigate: () => review(item),
+          group: 'Teams', preview: preview(item), action: direct ? `Apply team ${item.value.name}` : `Review ${item.value.name}`, consequential: direct, navigate: () => review(item),
           ...(refusal ? { unavailable: refusal } : {}), actions: () => review(item),
           run: () => direct ? apply(item, expected, null) : review(item) } satisfies HubRow;
       }), ...(parsed.scope === 'build' ? templateStates() : [])];

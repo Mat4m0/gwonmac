@@ -149,7 +149,7 @@ test('exact team applies through the observed runner, prefixes only review', asy
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
   await search.fill('team gom af');
-  await expect(page.getByRole('button', { name: 'Review ↵', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Review GOM AFK ↵', exact: true })).toBeEnabled();
   await search.press('Enter');
   await expect(page.getByRole('heading', { name: 'GOM AFK' })).toBeVisible();
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', /command|apply/);
@@ -174,7 +174,8 @@ test('exact build has a visible target and does not apply while typing', async (
   await search.press('Enter');
   await expect(page.getByRole('dialog', { name: 'Hub', exact: true })).toBeVisible();
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', /command|apply/);
-  await page.getByRole('button', { name: 'Apply to me ↵', exact: true }).click();
+  // The footer names the build and the character before Enter (BLD-09).
+  await page.getByRole('button', { name: 'Apply Smiter to Fixture Monk ↵', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Hub', exact: true })).not.toBeVisible();
 });
 

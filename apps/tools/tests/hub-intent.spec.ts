@@ -122,7 +122,7 @@ test('a modified Enter never runs the primary; only a plain Enter does', async (
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: searchName });
   await search.fill('build smiter'); await search.press('Enter');
-  await expect(page.locator('.hub-primary')).toHaveText(/^Apply to me/);
+  await expect(page.locator('.hub-primary')).toHaveText(/^Apply Smiter to Fixture Monk/);
   for (const chord of ['Meta+Enter', 'Control+Enter', 'Alt+Enter']) {
     await search.press(chord);
     await expect(page.locator('#hub')).toBeVisible();
@@ -147,7 +147,7 @@ test('held Enter on footer actions and Backspace in ordinary fields keep their s
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: searchName });
   await search.fill('build monk'); await search.press('Enter');
-  const apply = page.getByRole('button', { name: 'Apply to me ↵', exact: true });
+  const apply = page.getByRole('button', { name: /^Apply .+ to Fixture Monk ↵$/ });
   await apply.focus();
   expect(await apply.evaluate(button => button.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', repeat: true, bubbles: true, cancelable: true })))).toBe(false);
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', /command|apply/);

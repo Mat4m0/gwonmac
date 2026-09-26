@@ -51,7 +51,7 @@ async function clicks(page: Page, target: Locator, count: number, gap = 120, at?
 /** Rows whose primary changes the game or the account (D-24), opened on their own page. */
 const consequential: Record<string, { query?: string; open(page: Page): Promise<Locator>; footer: RegExp; ran: string[] }> = {
   'Continue Eye of the North': { open: async page => row(page, 'Eye of the North'), footer: /^Travel to Eye of the North/, ran: ['TRAVEL Eye of the North'] },
-  'Apply to me': { open: async page => { await enter(page, 'build smiter'); return page.getByRole('option', { name: /Apply to me/ }); }, footer: /^Apply to me/, ran: ['apply-build', 'command:1', 'command:2'] },
+  'Apply to me': { open: async page => { await enter(page, 'build smiter'); return page.getByRole('option', { name: /Apply to me/ }); }, footer: /^Apply Smiter to Fixture Monk/, ran: ['apply-build', 'command:1', 'command:2'] },
   'Open Second': { open: async page => { await enter(page, 'acc s'); return page.locator('.hub-row[data-id$=":open"]'); }, footer: /^Open Second/, ran: ['Account Second open'] },
   'Close Main and open Second': { open: async page => { await enter(page, 'acc s'); return row(page, 'Close Main and open Second'); }, footer: /^Close Main and open Second/, ran: [] },
   'character card': { open: async page => { await page.keyboard.press('Meta+e'); return page.locator('button[data-character-key="mesmer"]'); }, footer: /^Switch to Fixture Mesmer/, ran: ['Character mesmer'] },
@@ -207,11 +207,11 @@ test.describe('a navigational row', () => {
     await expect(primary(page)).toHaveText(/^Choose target/);
     await clicks(page, primary(page), 2);
     await expect(caption(page)).toHaveText('Smiter');
-    await expect(primary(page)).toHaveText(/^Apply to me/);
+    await expect(primary(page)).toHaveText(/^Apply Smiter to Fixture Monk/);
     await expect(primary(page)).toBeEnabled();
     await search(page).press('Meta+Backspace');
     await search(page).fill('team gom');
-    await expect(primary(page)).toHaveText(/^Review/);
+    await expect(primary(page)).toHaveText(/^Review GOM AFK/);
     await clicks(page, primary(page), 2);
     await expect(caption(page)).toHaveText('GOM AFK');
     await clicks(page, page.getByRole('button', { name: /^Apply team GOM AFK/ }), 3);
@@ -439,7 +439,7 @@ test('a person page\'s world actions only select on a click', async ({ page }) =
   await enter(page, 'zed delta');
   await expect(caption(page)).toHaveText('Zed Delta');
   await page.waitForTimeout(600);
-  for (const [title, footer] of [['Invite to party', /^Invite Zed Delta/], ['Travel and invite', /^Travel and invite Zed Delta/], ['Travel to outpost', /^Travel/]] as const) {
+  for (const [title, footer] of [['Invite to party', /^Invite Zed Delta/], ['Travel and invite', /^Travel and invite Zed Delta/], ['Travel to outpost', /^Travel to \S/]] as const) {
     const target = row(page, title);
     if (!await target.count()) continue;
     await clicks(page, target, 1);
