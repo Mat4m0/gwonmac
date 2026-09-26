@@ -206,6 +206,23 @@ test('comparison details are keyboard accessible without applying a build', asyn
   await expect(page.getByRole('button', { name: 'Details', exact: true })).toBeFocused();
 });
 
+test('library words reach the working Build Library row, never a loading placeholder', async ({ page }) => {
+  await page.goto('/?hub');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  for (const query of ['library', 'lib', 'Build Library', 'teams']) {
+    await search.fill(query);
+    const row = page.locator('.hub-row[data-id="builds"]');
+    await expect(row).toContainText('Browse saved builds and Guild Wars template folders');
+    await expect(row).toHaveAttribute('aria-disabled', 'false');
+    await expect(page.locator('#hub-results')).not.toContainText('loading');
+  }
+  await search.fill('library');
+  await expect(page.locator('.hub-primary')).toBeEnabled();
+  await search.press('Enter');
+  await expect(page.locator('.hub-caption')).toHaveText('Build Library');
+  await expect(page.locator('.hub-row', { hasText: 'Word of Healing' }).first()).toBeVisible();
+});
+
 for (const width of [390, 1280]) {
 test(`recent build targets and editor handoff retain their place at ${width}px`, async ({ page }) => {
   await page.setViewportSize({ width, height: 720 });
