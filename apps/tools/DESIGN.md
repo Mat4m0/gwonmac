@@ -257,7 +257,9 @@ physical press; a page opened directly by its shortcut returns to Home, and Home
 ignores it. The press bubbles to Hub, so a mounted view with its own inner level
 (a confirmation, Character Switch settings, Travel Customize) steps out of it first,
 the way Esc does, and marks the press handled. Backspace only edits text and never
-navigates. History restores query, selection, scroll and the focused control. Hub lists keep focus in search and move the active descendant. First entry and restoration are separate: character cards,
+navigates. History restores query, selection, scroll and the focused control. Form fields keep their draft for
+the session by page path and field name, unless the stored value they started from
+changed meanwhile. Hub lists keep focus in search and move the active descendant. First entry and restoration are separate: character cards,
 account choices and action lists start on their useful item; search stays optional.
 Fresh Home starts in search. Temporary app blur and popout handoffs retain the
 session task; explicit closure starts a fresh task next time. Resume refreshes

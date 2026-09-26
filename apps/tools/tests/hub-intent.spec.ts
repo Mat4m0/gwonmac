@@ -158,10 +158,21 @@ test('held Enter on footer actions and Backspace in ordinary fields keep their s
   await phrase.fill(''); await phrase.press('Backspace');
   await expect(page.locator('.hub-caption')).toHaveText('Search phrase');
   await expect(phrase).toBeFocused();
-  // Command-Backspace is Back from a form field too, and never deletes its text.
+  // Command-Backspace is Back from a form field too; the form keeps its draft for the session.
   await phrase.fill('keep me'); await phrase.press('Meta+Backspace');
   await expect(page.locator('.hub-caption')).toHaveText('GOM AFK');
-  await expect(page.getByRole('textbox', { name: 'Search phrase', exact: true })).toHaveCount(0);
+  await expect(phrase).toHaveCount(0);
+  await page.getByRole('option', { name: /Set search phrase/ }).click();
+  await expect(phrase).toHaveValue('keep me');
+  await expect(phrase).toBeFocused();
+  // A closed and reopened Hub still has it.
+  await page.getByRole('button', { name: 'Close Hub', exact: true }).click();
+  await expect(page.locator('#hub')).toBeHidden();
+  await page.getByRole('button', { name: 'Open Hub', exact: true }).click();
+  await search.fill('team gom afk');
+  await page.getByRole('button', { name: 'Actions', exact: true }).click();
+  await page.getByRole('option', { name: /Set search phrase/ }).click();
+  await expect(phrase).toHaveValue('keep me');
 });
 
 test('a legacy phrase that is now a scope word keeps its pins and only stops matching', async ({ page }) => {

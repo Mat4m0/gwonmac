@@ -111,6 +111,34 @@ export function createHub(parent: HTMLElement) {
     }
   }
   const capture = (): Page => ({ scope, query: input.value, selected, scroll: list.scrollTop, view: activeView, focus: focusPlace() });
+  const pageTitle = (page: Pick<Page, 'scope' | 'view'>) => page.view?.title ?? page.scope?.title ?? 'Home';
+  /**
+   * Form drafts last the session, keyed by page path and field name: leaving a form keeps what
+   * was typed and returning restores it, unless the stored value the field started from changed.
+   */
+  const drafts = new Map<string, { initial: string; value: string }>();
+  const draftInitials = new Map<string, string>();
+  let draftPage: string | null = null;
+  const draftFields = () => [...content.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
+    'form input:not([type]), form input[type=text], form input[type=search], form textarea, form select')]
+    .flatMap(field => { const name = field.getAttribute('aria-label') || field.name || field.id; return name ? [[`${draftPage} › ${name}`, field] as const] : []; });
+  function restoreDrafts(path: string) {
+    draftPage = path; draftInitials.clear();
+    for (const [key, field] of draftFields()) {
+      draftInitials.set(key, field.value);
+      const draft = drafts.get(key);
+      if (draft && draft.initial !== field.value) drafts.delete(key);
+      else if (draft) { field.value = draft.value; field.dispatchEvent(new Event(field instanceof HTMLSelectElement ? 'change' : 'input', { bubbles: true })); }
+    }
+  }
+  function keepDrafts() {
+    if (draftPage === null) return;
+    for (const [key, field] of draftFields()) {
+      const initial = draftInitials.get(key) ?? field.value;
+      if (field.value === initial) drafts.delete(key); else drafts.set(key, { initial, value: field.value });
+    }
+    draftPage = null;
+  }
   function remember() { history.push(capture()); }
   function restorePage(page: Page) {
     resetView(); scope = page.scope;
@@ -324,7 +352,7 @@ export function createHub(parent: HTMLElement) {
     // One quiet lifecycle line on list stages; a report in the status line takes its place.
     lifecycle.textContent = disposeView ? '' : [...sources.keys()].filter(sourceEnabled).map(source => source.lifecycle?.()).find(Boolean) ?? '';
     lifecycle.hidden = !lifecycle.textContent;
-    const trail = history.map((page, index) => ({ title: page.view?.title ?? page.scope?.title ?? 'Home', index }));
+    const trail = history.map((page, index) => ({ title: pageTitle(page), index }));
     const nextNavigation = JSON.stringify([trail, currentTitle]);
     if (navigationRevision !== nextNavigation) {
       navigationRevision = nextNavigation;
@@ -338,7 +366,7 @@ export function createHub(parent: HTMLElement) {
       caption.setAttribute('aria-current', 'page'); breadcrumbs.append(caption);
     }
     const parent = history.at(-1);
-    const destination = parent?.view?.title ?? parent?.scope?.title ?? 'Home';
+    const destination = parent ? pageTitle(parent) : 'Home';
     backButton.hidden = atHome();
     backButton.textContent = '←';
     backButton.title = 'Back (⌘⌫)';
@@ -461,7 +489,7 @@ export function createHub(parent: HTMLElement) {
     finally { pending = false; select(selected); }
   }
   function resetView() {
-    restoringFocus?.disconnect(); restoringFocus = null;
+    restoringFocus?.disconnect(); restoringFocus = null; keepDrafts();
     disposeView?.(); disposeView = null; activeView = null; viewAvailable = null; returnFromView = null; content.replaceChildren(); content.hidden = true;
     search.hidden = false; list.hidden = false; footer.hidden = false;
   }
@@ -702,6 +730,7 @@ export function createHub(parent: HTMLElement) {
       activeView = { title, mount, ...(available ? { available } : {}) };
       viewAvailable = available ?? null;
       disposeView = mount(content, back);
+      restoreDrafts([...history.map(pageTitle), title].join(' › '));
       paintNavigation();
       if (!content.contains(document.activeElement)) firstControl().focus();
     },

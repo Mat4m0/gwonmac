@@ -204,8 +204,9 @@ closes the palette. **Command-Backspace** goes back one level from anywhere in
 Hub, including a text field, and never closes it; the Back arrow and the mouse
 back button do the same. Inside a page it first leaves that page's own level:
 it cancels a "Leave this area?" confirmation and closes Character Switch
-settings or Travel's Customize view. Backspace alone only deletes text. The game
-keeps running while Hub is open. The footer's left side lists the keys that work in
+settings or Travel's Customize view. A form you leave keeps what you typed until
+you quit the game. Backspace alone only deletes text. The game keeps running
+while Hub is open. The footer's left side lists the keys that work in
 the current view.
 
 The header shows your character and where you are. In an explorable area, Hub
