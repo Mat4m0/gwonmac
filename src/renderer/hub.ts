@@ -209,7 +209,7 @@ export function createHub(parent: HTMLElement) {
     if (!row) input.removeAttribute('aria-activedescendant');
     const preview = required<HTMLElement>('.hub-preview');
     preview.textContent = row?.preview ?? ''; preview.hidden = !row?.preview || !!disposeView;
-    const label = document.createElement('span'); label.className = 'hub-primary-label'; label.textContent = row ? row.action : 'Select a result'; primary.replaceChildren(label);
+    const label = document.createElement('span'); label.className = 'hub-primary-label'; label.textContent = row ? row.action : 'Select a result'; label.title = row?.action ?? ''; primary.replaceChildren(label);
     if (row) { const key = document.createElement('kbd'); key.textContent = '↵'; primary.append(key); }
     primary.disabled = !row || !!row.unavailable || pending;
     const actionsButton = required<HTMLButtonElement>('.hub-actions');

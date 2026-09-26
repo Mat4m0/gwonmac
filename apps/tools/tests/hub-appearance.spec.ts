@@ -323,6 +323,43 @@ test('a narrow or minimum Hub keeps one footer line while arrowing', async ({ pa
   }
 });
 
+test('at a larger text size the minimum Hub footer gives up the count before the named primary', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/?hub');
+  await page.locator('.hub-panel').evaluate(panel => Object.assign(panel.style, { transform: 'none', left: '100px', top: '100px', width: '340px', height: '380px' }));
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  for (const hubTextSize of [100, 150, 200]) {
+    await page.evaluate(hubTextSize => window.gwApplyFixtureAppearance?.({ uiStyle: 'guild-wars', uiPanelOpacity: 94, hubTextSize }), hubTextSize);
+    for (const query of ['kam', 'k', 'settings']) {
+      await search.fill(query);
+      const heights = new Set<number>();
+      for (let step = 0; step < 4; step += 1) {
+        const footer = await page.evaluate(() => {
+          const label = document.querySelector<HTMLElement>('#hub .hub-primary-label')!;
+          const style = getComputedStyle(label);
+          const context = document.createElement('canvas').getContext('2d')!; context.font = style.font;
+          return {
+            height: Math.round(document.querySelector('#hub .hub-footer')!.getBoundingClientRect().height),
+            text: label.textContent, title: label.title, visible: label.clientWidth, truncated: label.scrollWidth > label.clientWidth + 1,
+            verb: context.measureText(label.textContent!.split(' ')[0]!).width, em: parseFloat(style.fontSize),
+            count: document.querySelector('#hub .hub-count')!.getBoundingClientRect().width,
+          };
+        });
+        const label = `${hubTextSize}% ${query} “${footer.text}”`;
+        heights.add(footer.height);
+        expect(footer.title, label).toBe(footer.text);
+        // The count gives way before a single pixel of the primary does.
+        if (footer.truncated) expect(footer.count, label).toBeLessThanOrEqual(1);
+        // Up to 150 % the whole verb stays; at 200 % the label still shows its start.
+        if (hubTextSize <= 150) expect(footer.visible, label).toBeGreaterThanOrEqual(footer.verb);
+        else expect(footer.visible, label).toBeGreaterThanOrEqual(2.5 * footer.em);
+        await page.keyboard.press('ArrowDown');
+      }
+      expect([...heights], `${hubTextSize}% ${query} footer height`).toHaveLength(1);
+    }
+  }
+});
+
 test('result rows stay 40 px with centred keycaps and whole titles in every panel font', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/?hub');

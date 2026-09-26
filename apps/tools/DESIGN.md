@@ -69,7 +69,9 @@ the game, page zoom and other panels stay unchanged. Hub rules that still use
 a literal size multiply it by the same scale. Once a result row runs short of
 room at a larger size, its detail stacks under the title and both wrap, so
 rows grow and the list scrolls instead of clipping. Character cards keep their
-154 px at 100 % and grow with the text inside them.
+154 px at 100 % and grow with the text inside them. The footer stays one line:
+the result count yields first, then the primary label ellipsizes and keeps its
+full action as accessible name and tooltip.
 
 ## Component rules
 

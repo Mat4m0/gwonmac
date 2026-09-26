@@ -408,7 +408,10 @@ Escape returns to Hub. While editing a query, Left/Right preserve caret movement
 Right at the end can activate a search result. Tab reaches Travel settings.
 Hub keeps the same size and position across results and tools; content scrolls inside.
 An unlocked Hub can be resized down to 340 × 380 points, which still shows the
-search, three results, and a one-line footer.
+search, three results, and a one-line footer at the normal text size. At a
+larger text size the list shows fewer rows and scrolls. When the footer runs
+short of room, the result count gives way first; a long action then ends in an
+ellipsis, and pointing at it shows the whole action.
 
 Type `char Toefte` in Hub and press Enter on **Switch to Toefte**. Switching from
 an explorable area retains the existing leave-area confirmation. The current
