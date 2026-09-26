@@ -35,6 +35,9 @@
   --ui-art-head-radius: 0;
   --ui-art-head-fill: transparent;
   --ui-art-head-shadow: none;
+  /* Classic head text sits on the painted metal strip, which the ink guard
+   * cannot model, so its secondary copy uses the brightest ink. */
+  --ui-art-head-ink: var(--ui-text-bright);
   --ui-art-title-size: var(--ui-type-body-size);
   --ui-art-head-control-height: 26px;
   --ui-art-head-detail-display: none;
@@ -169,6 +172,9 @@
   --ui-text-faint: #948e7e;
   --ui-display-text: var(--ui-text-bright);
   --ui-accent: #e6c882;
+  /* Accent used as text. The projector re-inks only this role when the accent
+   * would fall below 4.5:1; fills, rails and icons keep the exact accent. */
+  --ui-accent-text: var(--ui-accent);
   --ui-accent-hover: var(--gw-gold-bright);
   --ui-accent-strong: #8a7433;
   --ui-accent-ink: #171613;
@@ -185,6 +191,10 @@
   --ui-danger: #e0574e;
   --ui-success: #4ad84a;
   --ui-overlay-fill: color-mix(in srgb, var(--ui-outline) 78%, transparent);
+  /* Modal layers never dim the game. The saved panel opacity is the one
+   * control over how much scene shows through, in every style and under
+   * Reduce Transparency, and the ink guard models exactly that. */
+  --ui-scrim: transparent;
   --ui-well-strong-fill: color-mix(in srgb, var(--ui-well-fill) 95%, var(--ui-outline));
   --ui-well-overlay-fill: color-mix(in srgb, var(--ui-outline) 72%, var(--ui-well-fill));
   --ui-accent-well-fill: color-mix(in srgb, var(--ui-accent) 10%, var(--ui-well));
@@ -373,6 +383,7 @@
   --ui-art-head-radius: var(--ui-radius);
   --ui-art-head-fill: var(--ui-title-fill) padding-box, var(--ui-frame) border-box;
   --ui-art-head-shadow: var(--ui-title-shadow);
+  --ui-art-head-ink: var(--ui-text-muted);
   --ui-art-title-size: var(--ui-type-window-size);
   --ui-art-head-control-height: var(--ui-control-height);
   --ui-art-head-detail-display: block;
@@ -387,7 +398,7 @@
   --ui-accent: oklch(0.79 0.105 83);
   --ui-accent-hover: oklch(0.88 0.095 86);
   --ui-accent-strong: oklch(0.7 0.105 82);
-  --ui-accent-ink: oklch(0.16 0.006 80);
+  --ui-accent-ink: oklch(0.13 0.006 80);
   --ui-primary-fill: linear-gradient(oklch(0.79 0.105 83), oklch(0.79 0.105 83));
   --ui-primary-ring: linear-gradient(oklch(0.56 0.02 82), oklch(0.56 0.02 82));
   --ui-primary-ink: var(--ui-accent-ink);
@@ -450,7 +461,6 @@
 @media (prefers-reduced-transparency: reduce) {
   :root {
     --ui-effective-panel-opacity: 1;
-    --ui-overlay-fill: #080807;
   }
 }
 

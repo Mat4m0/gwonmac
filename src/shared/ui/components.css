@@ -96,6 +96,8 @@
   border-radius: var(--ui-art-head-radius);
   background: var(--ui-art-head-fill);
   box-shadow: var(--ui-art-head-shadow);
+  --ui-text-muted: var(--ui-art-head-ink);
+  --ui-text-faint: var(--ui-art-head-ink);
 }
 .ui-frame.ui-art-frame > .ui-window-head .ui-panel-title {
   font-size: var(--ui-art-title-size);
@@ -118,7 +120,7 @@
 /* Top-level task dialogs share one modal treatment. Their owners decide only
  * content, close policy, and initial focus; the renderer surface controller
  * owns backdrop dismissal, input isolation, and focus restoration. */
-.ui-modal::backdrop { background: var(--ui-overlay-fill); }
+.ui-modal::backdrop { background: var(--ui-scrim); }
 
 /* Palette dialogs use the whole top layer as their dismissible hit area while
  * their visible panel stays compact. Explicit top/left positioning avoids the
@@ -529,7 +531,7 @@
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--ui-accent);
+  color: var(--ui-accent-text);
   font: inherit;
   cursor: pointer;
   text-decoration: none;
@@ -908,7 +910,7 @@
   text-wrap: pretty;
 }
 
-.ui-status-line[data-tone="progress"] { color: var(--ui-accent); }
+.ui-status-line[data-tone="progress"] { color: var(--ui-accent-text); }
 .ui-status-line[data-tone="success"] {
   color: color-mix(in srgb, var(--ui-success) 74%, var(--ui-text-bright));
 }
@@ -1151,6 +1153,10 @@ button.ui-chip[aria-disabled="true"] {
   color: var(--ui-text-faint);
   font: var(--ui-font-size-sm) / 1.4 var(--ui-font-data);
 }
+
+/* A selected row or option paints a lighter fill; its keycaps follow its
+ * brighter selected ink so they stay readable at every opacity. */
+[aria-selected="true"] .ui-kbd { color: var(--ui-text-muted); }
 
 /* ========================================================= skill slots == */
 
@@ -1440,6 +1446,10 @@ button.ui-chip[aria-disabled="true"] {
   cursor:pointer; font:inherit; min-width:28px; min-height:28px;
 }
 .ui-window-head > .ui-window-close { font:22px/1 var(--ui-font-reading); }
+/* Crumbs are buttons; the UA sheet would drop the head's text shadow. The
+ * Classic head already uses its brightest ink, so hover also underlines. */
+.hub-crumb { text-shadow:inherit; text-underline-offset:3px; }
+.hub-crumb:hover { text-decoration:underline; }
 .ui-window-close:hover, .ui-window-lock:hover, .hub-crumb:hover { color:var(--ui-text-bright); }
 .ui-window-close:focus-visible, .ui-window-lock:focus-visible, .hub-crumb:focus-visible { outline:1px solid var(--ui-focus); outline-offset:-2px; }
 .ui-window-lock svg { width:15px; height:15px; fill:none; stroke:currentColor; stroke-width:1.6; }

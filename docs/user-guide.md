@@ -200,7 +200,12 @@ styles. Deleting a custom style requires confirmation.
 
 Press **Command-R** to search people, outposts, tools, and commands. Type a name, use Up and Down,
 and press Enter for the action shown in the footer. The **Actions** button opens secondary actions. **Command-K** opens Trade. Escape goes back or
-closes the palette. The game keeps running while Hub is open.
+closes the palette. The game keeps running while Hub is open and stays fully
+visible around it; panel opacity is the only setting that changes how much of
+the game shows through. At low opacity over bright scenes, secondary text and
+gold headings brighten just enough to stay readable. With macOS **Reduce
+Transparency**, the panel becomes solid and keeps its normal colours, while the
+game around it stays visible.
 
 With Travel enabled, search an outpost or your custom Travel phrase. Travel,
 favourites, recent places, and Guild Hall stay in the same window. Command-T

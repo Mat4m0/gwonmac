@@ -9,7 +9,7 @@
  * client renders, what it sends, or what it is permitted to do.
  */
 import type { AppSettings } from "../shared/contracts.js";
-import { defaultCustomUiTheme } from "../shared/ui-theme.js";
+import { defaultCustomUiTheme, type CustomUiTheme, type UiThemeColor } from "../shared/ui-theme.js";
 import { parseRgb, compositeColor, accessibleForeground, readableForeground } from "../shared/ui-color.js";
 
 const fontChoices = new WeakMap<HTMLElement, AppSettings["uiFont"]>();
@@ -47,8 +47,30 @@ function loadGuildWarsFont(generation: string): Promise<boolean> {
 export const ensureGuildWarsFont = (): Promise<boolean> =>
   loadGuildWarsFont(activeGeneration);
 
+/* What tokens.css paints for each material where a palette role is left at
+ * its default. The model must measure painted colours, not the custom-palette
+ * seeds, or it re-inks text that is already readable. Faint is not a palette
+ * role, so a custom muted colour stands in for it. */
+const PAINTED = {
+  classic: { window: "#080807", text: "#EBE5D3", mutedText: "#B2AC9D", faintText: "#948E7E", accent: "#E6C882" },
+  modern: { window: "#0F0D0A", text: "#ECE7DF", mutedText: "#B5B0A7", faintText: "#908C84", accent: "#DBB568" },
+} as const;
+
+/* Rendering rounds every composited channel to 8 bits. A little headroom keeps
+ * guarded ink at or above 4.5:1 once it is actually painted. */
+const TEXT_CONTRAST = 4.6;
+
+const reducedTransparency = typeof matchMedia === "function"
+  ? matchMedia("(prefers-reduced-transparency: reduce)")
+  : null;
+const appliedSettings = new Map<HTMLElement, AppSettings>();
+reducedTransparency?.addEventListener("change", () => {
+  for (const [root, settings] of appliedSettings) applyAppearance(settings, root);
+});
+
 export const appearanceVariables = (
   settings: AppSettings,
+  options: { readonly reducedTransparency?: boolean } = {},
 ): Readonly<Record<string, string>> => {
   const variables: Record<string, string> = {
     "--ui-panel-opacity": String(settings.uiPanelOpacity / 100),
@@ -57,25 +79,50 @@ export const appearanceVariables = (
     ? settings.uiCustomTheme
     : defaultCustomUiTheme(settings.uiStyle === "obsidian" ? "modern" : "classic");
   const baseline = defaultCustomUiTheme(theme.material);
-  const opacity = settings.uiPanelOpacity / 100;
-  const textBackgrounds = [
-    compositeColor(theme.window, "#FFFFFF", opacity),
-    compositeColor(theme.window, "#000000", opacity),
-    theme.titlebar,
-    theme.surface,
-    theme.recessed,
-  ];
-  const safeText = accessibleForeground(theme.text, textBackgrounds);
-  const safeMutedText = accessibleForeground(theme.mutedText, textBackgrounds);
+  const painted = (field: keyof typeof PAINTED.classic & keyof CustomUiTheme): UiThemeColor =>
+    theme[field] !== baseline[field] ? theme[field] : PAINTED[theme.material][field];
 
-  /* At low panel opacity the game is part of the rendered background. Muted
-   * copy cannot stay dim over bright snow and still be readable, so the
-   * projector temporarily narrows the ink range without changing the saved
-   * opacity. Hierarchy still comes from type role and spacing. */
-  if (safeMutedText !== theme.mutedText) {
-    variables["--ui-text-muted"] = safeMutedText;
-    variables["--ui-text-faint"] = safeMutedText;
-  }
+  /* One worst-case legibility model for every text role. Panels never dim
+   * the game around them (tokens.css `--ui-scrim`), so at low opacity the
+   * brightest possible scene, snow, is part of the rendered background. Reduce
+   * Transparency paints the panel opaque, so the guard then uses the
+   * effective opacity of 1 and keeps the designed hierarchy. The Classic art
+   * strip is not modelled: its text uses the brightest ink (tokens.css). */
+  const opacity = options.reducedTransparency ? 1 : settings.uiPanelOpacity / 100;
+  const overSnow = compositeColor(painted("window"), "#FFFFFF", opacity);
+  const textBackgrounds = [
+    overSnow,
+    /* Hovered rows and settings rows add the accent-tinted hover layer. */
+    compositeColor(PAINTED[theme.material].accent, overSnow, 0.1),
+    compositeColor(painted("window"), "#000000", opacity),
+    /* Opaque surfaces only move when a player recolours them. */
+    ...(["titlebar", "surface", "recessed"] as const)
+      .filter((field) => theme[field] !== baseline[field])
+      .map((field) => theme[field]),
+  ];
+  const ink = (preferred: UiThemeColor) =>
+    accessibleForeground(preferred, textBackgrounds, TEXT_CONTRAST);
+  const text = painted("text");
+  const mutedText = painted("mutedText");
+  const faintText = theme.mutedText === baseline.mutedText
+    ? PAINTED[theme.material].faintText
+    : theme.mutedText;
+  const accent = painted("accent");
+  const safeText = ink(text);
+  const safeMutedText = ink(mutedText);
+  const safeFaintText = ink(faintText);
+  const safeAccentText = ink(accent);
+
+  /* Each role moves only as far as it must, so one opacity step never
+   * re-inks a whole role at once and faint stays distinct from muted wherever
+   * both are readable. Hierarchy also comes from type role and size: row
+   * detail keeps the smaller Reading role. */
+  if (safeText !== text) variables["--ui-text"] = safeText;
+  if (safeMutedText !== mutedText) variables["--ui-text-muted"] = safeMutedText;
+  if (safeFaintText !== faintText) variables["--ui-text-faint"] = safeFaintText;
+  /* The accent keeps its exact colour for fills, rails and icons. Only its
+   * text role is re-inked. */
+  if (safeAccentText !== accent) variables["--ui-accent-text"] = safeAccentText;
   if (settings.uiStyle !== "custom") return variables;
 
   if (theme.window !== baseline.window) {
@@ -113,6 +160,7 @@ export const appearanceVariables = (
   if (theme.accent !== baseline.accent) {
     const accentInk = readableForeground(theme.accent);
     variables["--ui-accent"] = theme.accent;
+    variables["--ui-accent-text"] = safeAccentText;
     variables["--ui-accent-hover"] = `color-mix(in srgb, ${theme.accent} 82%, ${safeText})`;
     variables["--ui-accent-strong"] = `color-mix(in srgb, ${theme.accent} 70%, ${theme.window})`;
     variables["--ui-accent-ink"] = accentInk;
@@ -122,14 +170,14 @@ export const appearanceVariables = (
     variables["--ui-selection-marker"] = theme.accent;
     variables["--ui-ring-gold"] = `linear-gradient(${theme.accent}, ${theme.accent})`;
   }
-  if (theme.text !== baseline.text || safeText !== theme.text) {
+  if (theme.text !== baseline.text) {
     variables["--ui-text"] = safeText;
     variables["--ui-text-bright"] = safeText;
     variables["--ui-display-text"] = safeText;
   }
-  if (theme.mutedText !== baseline.mutedText || safeMutedText !== theme.mutedText) {
+  if (theme.mutedText !== baseline.mutedText) {
     variables["--ui-text-muted"] = safeMutedText;
-    variables["--ui-text-faint"] = safeMutedText;
+    variables["--ui-text-faint"] = safeFaintText;
   }
   if (theme.border !== baseline.border) {
     variables["--ui-control-mark"] = theme.border;
@@ -158,10 +206,13 @@ export function applyAppearance(
   generation = activeGeneration,
 ): void {
   activeGeneration = generation;
+  appliedSettings.set(root, settings);
   for (const name of appliedThemeVariables.get(root) ?? []) {
     root.style.removeProperty(name);
   }
-  const variables = appearanceVariables(settings);
+  const variables = appearanceVariables(settings, {
+    reducedTransparency: reducedTransparency?.matches ?? false,
+  });
   for (const [name, value] of Object.entries(variables)) {
     root.style.setProperty(name, value);
   }

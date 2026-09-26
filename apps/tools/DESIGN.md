@@ -228,6 +228,27 @@ Settings dialog too. Body text must have a contrast ratio of at least 4.5:1.
 Large text must have a ratio of at least 3:1. Test minimum opacity over bright,
 detailed game artwork.
 
+### Legibility model
+
+[`appearance.ts`](../../src/renderer/appearance.ts) owns one worst-case model
+for every text role. It measures the colours `tokens.css` actually paints (or
+the player's recoloured roles) against the panel at its effective opacity over
+snow, the same with the accent hover layer, and the panel over black. Reduce
+Transparency makes the effective opacity 1 while the saved opacity stays
+unchanged. Text, muted, faint and accent-as-text move only as far as they must,
+so hierarchy then comes from type role and size: row detail keeps the smaller
+Reading role.
+
+- `--ui-accent-text` is the accent used as text (group headings, the scope
+  chip, the build summary label, links, progress, the current-character
+  marker). Fills, selection rails and icons keep the exact `--ui-accent`.
+- Modal layers never dim the game. `.ui-modal::backdrop` uses `--ui-scrim`,
+  which is transparent in every style and under Reduce Transparency, so the
+  saved panel opacity is the only control over how much scene shows through.
+- The Classic head sits on painted metal the model cannot measure, so its
+  secondary copy (crumbs, caption, context) uses `--ui-art-head-ink`, the
+  brightest ink, with the Classic text shadow.
+
 ## Compact reading surfaces
 
 Whispers uses the shared `.ui-frame` with `data-variant="quiet"`: the theme's
