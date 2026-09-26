@@ -348,12 +348,17 @@ view. Shared code should emerge only for shared responsibilities, not visual sim
 The keyboard contract is a golden matrix
 (`apps/tools/tests/hub-keyboard-contract.spec.ts`): every key in every view of the
 browser fixture, each cell in a fresh browser context, compared with
-`apps/tools/tests/keyboard-contract.golden.json`. The table records current
-behaviour, including known defects. A change that alters keyboard behaviour
-regenerates it with `KEYBOARD_GOLDEN=update` and commits the reviewed table diff.
-The Electron `tests/electron/hub-input-contract.spec.ts` records which physical keys
-reach the game canvas through the main process; cases that document a current leak
-are marked `fixme` until their fix lands.
+`apps/tools/tests/keyboard-contract.golden.json`. A cell records the surface,
+focus, selection, query, last game action (including `TRAVEL <place>`), the
+lifecycle afterwards, and the key-downs, key-ups and pointer events that reached
+the canvas. The table records current behaviour, including known defects. A change
+that alters keyboard behaviour regenerates it with `KEYBOARD_GOLDEN=update` and
+commits the reviewed table diff.
+The Electron `tests/electron/hub-input-contract.spec.ts` covers the native half:
+main claims Command-R, Command-B, Command-T, Command-D and Command-Q before the Hub,
+their releases stay out of the game after focus returns to the canvas, direct
+scopes open in the open Hub, and the Quit or Reload sheet takes priority over it.
+Cases that document a current leak are marked `fixme` until their fix lands.
 
 Extend existing fixtures with realistic mixed professions, missing observations,
 long names, empty/large folders, and account state changes. Measure large-list typing
