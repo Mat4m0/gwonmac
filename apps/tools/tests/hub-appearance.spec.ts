@@ -196,6 +196,29 @@ test('one scrim policy: the game around the Hub is never dimmed, even with Reduc
   }
 });
 
+test('a narrow or minimum Hub keeps one footer line while arrowing', async ({ page }) => {
+  for (const size of [{ viewport: { width: 390, height: 800 } }, { viewport: { width: 1280, height: 800 }, panel: { width: 340, height: 380 } }]) {
+    await page.setViewportSize(size.viewport);
+    await page.goto('/?hub');
+    if (size.panel) await page.locator('.hub-panel').evaluate((panel, box) => Object.assign(panel.style, { transform: 'none', left: '100px', top: '100px', width: `${box.width}px`, height: `${box.height}px` }), size.panel);
+    for (const uiFont of ['guild-wars', 'georgia', 'inter']) {
+      await page.evaluate(uiFont => window.gwApplyFixtureAppearance?.({ uiStyle: 'guild-wars', uiPanelOpacity: 94, uiFont }), uiFont);
+      const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+      await search.fill('k');
+      const geometry = new Set<string>();
+      for (let step = 0; step < 10; step += 1) {
+        geometry.add(await page.evaluate(() => [document.querySelector('.hub-footer')!, document.querySelector('.hub-results')!, document.querySelector('.hub-primary')!].map(element => Math.round(element.getBoundingClientRect().height)).join('/')));
+        await page.keyboard.press('ArrowDown');
+      }
+      expect([...geometry], `${uiFont} footer/list/primary heights`).toHaveLength(1);
+      const visibleRows = await page.evaluate(() => { const list = document.querySelector('.hub-results')!.getBoundingClientRect(); return [...document.querySelectorAll('.hub-row')].filter(row => { const box = row.getBoundingClientRect(); return box.top >= list.top - 1 && box.bottom <= list.bottom + 1; }).length; });
+      expect(visibleRows).toBeGreaterThanOrEqual(3);
+      const primary = page.locator('.hub-primary');
+      await expect(primary).toHaveAccessibleName(/^(Open|Travel|Switch|Whisper|Search|Browse|Show|Call|Invite).+/u);
+    }
+  }
+});
+
 test('compact Hub keeps navigation reachable with reduced motion over a bright backdrop', async ({ page }, info) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize({ width: 390, height: 800 });

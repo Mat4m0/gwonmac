@@ -404,6 +404,8 @@ stay in a compact grid. With an empty query, arrows choose and Enter travels.
 Escape returns to Hub. While editing a query, Left/Right preserve caret movement;
 Right at the end can activate a search result. Tab reaches Travel settings.
 Hub keeps the same size and position across results and tools; content scrolls inside.
+An unlocked Hub can be resized down to 340 × 380 points, which still shows the
+search, three results, and a one-line footer.
 
 Type `char Toefte` in Hub and press Enter on **Switch to Toefte**. Switching from
 an explorable area retains the existing leave-area confirmation. The current

@@ -33,7 +33,7 @@ export function installHubWindow(panel: HTMLElement, heading: HTMLElement, lock:
     try { if (value) localStorage.setItem(storageKey, value); } catch { /* Placement remains usable when storage is unavailable. */ }
   };
   try {
-    const stored = restoreFloatingWindowPlacement(localStorage.getItem(storageKey), viewport(), { width: 340, height: 300 });
+    const stored = restoreFloatingWindowPlacement(localStorage.getItem(storageKey), viewport(), { width: 340, height: 380 });
     if (stored) place(stored.left, stored.top, stored.width, stored.height);
   } catch { /* Use the default geometry when storage is unavailable. */ }
   const fit = () => {
@@ -72,7 +72,8 @@ export function installHubWindow(panel: HTMLElement, heading: HTMLElement, lock:
   const disposeResize = installResizeGrip(grip, {
     setActive: active => { if (!active) save(); },
     size: () => panel.getBoundingClientRect(),
-    limits: () => { const box = panel.getBoundingClientRect(); return { minWidth: 340, minHeight: 300, maxWidth: window.innerWidth - box.left - 8, maxHeight: window.innerHeight - box.top - 8 }; },
+    // The smallest Hub still shows search, three results and a one-line footer.
+    limits: () => { const box = panel.getBoundingClientRect(); return { minWidth: 340, minHeight: 380, maxWidth: window.innerWidth - box.left - 8, maxHeight: window.innerHeight - box.top - 8 }; },
     resize: (width, height) => { if (!locked) { const box = panel.getBoundingClientRect(); place(box.left, box.top, width, height); } },
   });
   const saveResize = () => save();

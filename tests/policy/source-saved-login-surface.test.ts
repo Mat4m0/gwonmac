@@ -96,6 +96,6 @@ test("Core browser persistence is limited to validated Hub geometry", () => {
   assert.match(hubPlacement, /const storageKey = 'gwonmac\.hub-window-placement';/);
   assert.equal([...hubPlacement.matchAll(placementCalls)].length, 3);
   assert.match(hubPlacement, /const value = serializeFloatingWindowPlacement\(panel\.getBoundingClientRect\(\), viewport\(\)\);/);
-  assert.match(hubPlacement, /restoreFloatingWindowPlacement\(localStorage\.getItem\(storageKey\), viewport\(\), \{ width: 340, height: 300 \}\)/);
+  assert.match(hubPlacement, /restoreFloatingWindowPlacement\(localStorage\.getItem\(storageKey\), viewport\(\), \{ width: 340, height: 380 \}\)/);
   assert.doesNotMatch(read("src/shared/ui/window-placement.ts"), /password|credential|sessionStorage|localStorage/iu);
 });
