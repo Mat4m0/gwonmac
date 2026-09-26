@@ -689,8 +689,6 @@ function onKeydown(event: KeyboardEvent): void {
   }
   const step = mode.value === "travel" && event.target === input.value ? listSelectionStep(event, pageSize()) : null;
   if (step !== null) {
-    // Inside Hub, Up on the first result moves on to Back instead of staying put.
-    if (props.inset && event.key === "ArrowUp" && active.value === 0) return;
     event.preventDefault();
     void moveActive(step);
     return;

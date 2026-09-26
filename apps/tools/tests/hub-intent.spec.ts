@@ -72,6 +72,22 @@ test('native editing shortcuts from results return to the same search', async ({
   await expect(search).toHaveValue('switch');
 });
 
+test('Up on the first Travel result stays in the Travel search (D-2)', async ({ page }) => {
+  await page.goto('/?hub');
+  const search = page.getByRole('combobox', { name: searchName });
+  await search.fill('travel'); await search.press('Enter');
+  const travel = page.getByRole('combobox', { name: 'Destination, phrase, or friend' });
+  await expect(travel).toBeFocused();
+  await travel.fill('kam');
+  await expect(travel).toHaveAttribute('aria-activedescendant', /travel-/);
+  const first = await travel.getAttribute('aria-activedescendant');
+  await travel.press('ArrowUp'); await travel.press('ArrowUp');
+  await expect(travel).toBeFocused();
+  await expect(travel).toHaveAttribute('aria-activedescendant', first!);
+  await page.keyboard.type('e'); await expect(travel).toHaveValue('kame');
+  await page.keyboard.press('Backspace'); await expect(travel).toHaveValue('kam');
+});
+
 test('Travel and Settings restore their own state after a temporary hide', async ({ page }) => {
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: searchName });

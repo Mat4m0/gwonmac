@@ -26,6 +26,7 @@ function fixture(options: Readonly<{
   friends?: TravelFriends;
   unavailable?: string | null;
   guildHallUnavailable?: string | null;
+  inset?: boolean;
 }> = {}, attachTo?: Element) {
   const state = ref<TravelHost["state"]["value"]>({
     status: "ready", mapId: 55, travelContext: "world", characterKey: null, unlockedMapWords: null,
@@ -83,7 +84,7 @@ function fixture(options: Readonly<{
     traceSearch,
   };
   const wrapper = mount(TravelPalette, {
-    props: { host, visible: true },
+    props: { host, visible: true, ...(options.inset ? { inset: true } : {}) },
     ...(attachTo === undefined ? {} : { attachTo }),
   });
   return {
@@ -789,6 +790,30 @@ describe("TravelPalette", () => {
     expect(selected()).toBe(0);
     await search.trigger("keydown", { key: "PageDown" });
     expect(selected()).toBeGreaterThan(0);
+    wrapper.unmount();
+  });
+
+  it("keeps Up on the first result inside Hub so focus stays in search", async () => {
+    const roster = [
+      { key: "0123456789abcdef", status: "online" as const, mapId: 449,
+        alias: "First Friend", character: "First Character" },
+      { key: "fedcba9876543210", status: "away" as const, mapId: 194,
+        alias: "Second Friend", character: "Second Character" },
+    ];
+    const { wrapper } = fixture({ inset: true, friends: {
+      status: "ready", sequence: 2, generation: 1, friends: roster,
+    } }, document.body);
+    await flushPromises();
+    const search = wrapper.get<HTMLInputElement>('[role="combobox"]');
+    await search.setValue("friend");
+    const selected = () => wrapper.findAll(".travel-result").findIndex(row => row.attributes("aria-selected") === "true");
+    expect(selected()).toBe(0);
+    // Hub moves focus to Back for an unclaimed Up on a view's combobox, so Travel must claim it.
+    const up = new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true, cancelable: true });
+    search.element.dispatchEvent(up);
+    await flushPromises();
+    expect(up.defaultPrevented).toBe(true);
+    expect(selected()).toBe(0);
     wrapper.unmount();
   });
 
