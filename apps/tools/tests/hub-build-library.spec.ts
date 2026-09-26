@@ -223,6 +223,17 @@ test('library words reach the working Build Library row, never a loading placeho
   await expect(page.locator('.hub-row', { hasText: 'Word of Healing' }).first()).toBeVisible();
 });
 
+test('Build details of a library row titles the build without a dangling separator', async ({ page }) => {
+  await page.goto('/?hub');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  await search.fill('build'); await search.press('Enter');
+  await expect(page.locator('.hub-caption')).toHaveText('Build Library');
+  await page.keyboard.press('ArrowDown');
+  await expect(page.locator('.hub-row[aria-selected=true]')).toContainText('Word of Healing');
+  await page.getByRole('button', { name: 'Details', exact: true }).click();
+  await expect(page.locator('.hub-build-details h2').first()).toHaveText('Word of Healing');
+});
+
 for (const width of [390, 1280]) {
 test(`recent build targets and editor handoff retain their place at ${width}px`, async ({ page }) => {
   await page.setViewportSize({ width, height: 720 });
