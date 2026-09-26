@@ -61,7 +61,7 @@ test('a friend opens explicit actions and an offline location cannot travel', as
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
   await search.fill('romi');
   await page.getByRole('button', { name: 'Actions', exact: true }).click();
-  await expect(page.locator('#hub').getByRole('option')).toHaveCount(2);
+  await expect(page.locator('#hub').getByRole('option').locator('.hub-title')).toHaveText(['Whisper', 'Travel to outpost', 'Invite to party', 'Travel and invite']);
   await expect(page.locator('#hub').getByRole('option', { name: /Travel to outpost/ })).toContainText('Any district');
   await page.getByRole('button', { name: 'Back', exact: true }).click();
   await expect(search).toHaveValue('romi');
