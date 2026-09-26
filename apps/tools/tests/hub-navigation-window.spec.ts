@@ -78,6 +78,28 @@ test('Command-Backspace goes back one level from any focus and never deletes tex
   await expect(search).toHaveValue('second');
 });
 
+test('a list drawn under a resting pointer keeps one visible selection until the pointer moves', async ({ page }) => {
+  await page.goto('/?hub');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const results = (await page.locator('#hub .hub-results').boundingBox())!;
+  const x = results.x + results.width / 2, y = results.y + 150;
+  // Park the pointer first; the rows then render under it without any movement.
+  await page.mouse.move(x, y);
+  await search.pressSequentially('k');
+  const selected = page.locator('#hub .hub-row[aria-selected=true]');
+  const hovered = page.locator('#hub .hub-row:hover');
+  await expect(hovered).toHaveCount(1);
+  const first = await selected.getAttribute('data-id');
+  expect(await hovered.getAttribute('data-id')).not.toBe(first);
+  // The resting pointer paints nothing, so only the selected row looks selected.
+  expect(await hovered.evaluate(row => getComputedStyle(row).backgroundColor)).toBe('rgba(0, 0, 0, 0)');
+  await page.mouse.wheel(0, 40);
+  await expect(selected).toHaveAttribute('data-id', first!);
+  await page.mouse.move(x + 8, y);
+  await expect(selected).toHaveAttribute('data-id', (await hovered.getAttribute('data-id'))!);
+  await expect(search).toBeFocused();
+});
+
 test('list keys move one selection without wrapping while focus and typing stay in search', async ({ page }) => {
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });

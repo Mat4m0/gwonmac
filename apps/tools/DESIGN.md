@@ -325,7 +325,9 @@ Result lists keep DOM focus in search and move only `aria-activedescendant`
 (D-2). Up/Down, Control-N/P, Home/End and Page Up/Down move the one selection
 through one no-wrap helper (`src/shared/list-selection.ts`): Up on the first
 result and Down on the last stay put, and a click selects without taking focus
-from search. Right at the end of the query opens the selected result's
+from search. Pointer movement over a row selects it; a resting pointer or the
+wheel does not. Result rows therefore have no separate hover tone, so a list
+drawn under a resting pointer shows only the one selection. Right at the end of the query opens the selected result's
 choices. Character cards use Left/Right; Up returns to search, then to Back.
 Escape closes an open disclosure, then clears a non-empty query, then goes Back
 one level, then closes Hub (D-4). Hub handles the key itself rather than the

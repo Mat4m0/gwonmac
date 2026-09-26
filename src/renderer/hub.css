@@ -27,7 +27,8 @@
 .hub-group { padding:12px 10px 6px; color:var(--ui-accent-text); font:var(--ui-type-body-size)/var(--ui-type-body-line) var(--ui-font-display); }
 .hub-group:first-child { padding-top:4px; }
 .hub-row { position:relative; display:grid; grid-template-columns:30px auto minmax(0,1fr) auto; align-items:center; column-gap:12px; padding:6px 10px; min-height:40px; border-radius:var(--ui-radius-sm); cursor:pointer; }
-.hub-row:hover { background:var(--ui-hover); }
+/* No :hover fill: a list can render under a resting pointer. Real pointer
+ * movement moves the one selection instead (hub.ts). */
 .hub-icon { width:28px; height:28px; display:grid; place-items:center; border-radius:var(--ui-radius-sm); color:var(--ui-accent); background:var(--ui-well-fill); box-shadow:var(--ui-shadow-inset); }
 .hub-icon svg { width:20px; height:20px; }
 .hub-icon img { width:28px; height:28px; object-fit:contain; }
