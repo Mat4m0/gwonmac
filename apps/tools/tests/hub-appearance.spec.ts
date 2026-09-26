@@ -230,7 +230,7 @@ for (const [uiStyle, uiPanelOpacity] of [['obsidian', 65], ['guild-wars', 94], [
 }
 
 // The Hub's popouts and in-game dialogs hold the scene back like the Hub
-// (D-29), so their secondary copy keeps its muted ink and still reads.
+// (the D-28 legibility floor), so their secondary copy keeps its muted ink and still reads.
 for (const uiStyle of ['guild-wars', 'obsidian'] as const) {
   test(`Whispers and Trade keep the Hub's ink hierarchy at 65% over a bright scene in ${uiStyle}`, async ({ page }) => {
     const media = await page.context().newCDPSession(page);
@@ -315,6 +315,10 @@ for (const uiStyle of ['guild-wars', 'obsidian'] as const) {
       expect(ratio(inks.title, inks.caption), 'title over caption').toBeGreaterThanOrEqual(1.5);
       expect(ratio(inks.title, inks.context), 'title over context').toBeGreaterThanOrEqual(1.5);
     }
+    // The secondary text role (D-29) also steps one size down at low opacity.
+    const secondary = () => page.evaluate(() => ['.hub-row:not([aria-selected=true]) > .hub-detail', '.hub-count', '.hub-row:not([aria-selected=true]) .hub-title']
+      .map(selector => getComputedStyle(document.querySelector(`#hub ${selector}`)!).fontSize));
+    expect(await secondary(), 'detail, count and title size at 65%').toEqual(['11px', '11px', '14px']);
     await page.screenshot({ path: info.outputPath(`${uiStyle}-65-hierarchy.png`) });
     // The cap holds back only highlights: over a dark scene the panel composes
     // exactly as it would without it, and the game around the Hub is untouched.
@@ -340,6 +344,11 @@ for (const uiStyle of ['guild-wars', 'obsidian'] as const) {
     });
     expect(crumb, 'crumb ink').toEqual(headInk);
     if (uiStyle === 'obsidian') expect(ratio(inks.title, crumb), 'title over crumb').toBeGreaterThanOrEqual(1.5);
+    // Where ink alone keeps the hierarchy, secondary text stays at caption size.
+    await page.evaluate(appearance => window.gwApplyFixtureAppearance?.(appearance), { uiStyle, uiPanelOpacity: 100 });
+    await page.getByRole('button', { name: 'Back', exact: true }).click();
+    await page.getByRole('combobox', { name: 'Search people, places, builds' }).fill('k');
+    expect(await secondary(), 'detail, count and title size at 100%').toEqual(['12px', '12px', '14px']);
   });
 }
 

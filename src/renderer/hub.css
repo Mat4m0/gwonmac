@@ -7,7 +7,9 @@
 }
 .hub-panel,.hub-panel * { box-sizing:border-box; }
 /* The Hub's panel is all text, so it holds bright scenes back behind its fill
- * (`.ui-scene-cap`, components.css). The game around the Hub is never dimmed.
+ * (`.ui-scene-cap`, components.css; the D-28 legibility floor), and its
+ * Reading-role secondary copy uses the secondary text role (D-29, tokens.css).
+ * The game around the Hub is never dimmed.
  * The player's Hub text size (D-16) re-derives every type role in here. */
 #hub { --ui-text-scale:var(--ui-hub-text-scale); }
 .hub-heading { display:flex; align-items:center; gap:10px; min-height:44px; padding:8px 16px; flex-shrink:0; z-index:var(--ui-z-title); }
@@ -33,7 +35,7 @@
 .hub-icon svg { width:20px; height:20px; }
 .hub-icon img { width:28px; height:28px; object-fit:contain; }
 .hub-title { color:var(--ui-text-bright); font:var(--ui-type-body-size)/var(--ui-type-body-line) var(--ui-font-interface); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.hub-row > .hub-detail { min-width:0; padding:0; display:block; font:var(--ui-type-caption-size)/var(--ui-type-caption-line) var(--ui-font-reading); color:var(--ui-text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.hub-row > .hub-detail { min-width:0; padding:0; display:block; font:var(--ui-type-secondary-size)/var(--ui-type-caption-line) var(--ui-font-reading); color:var(--ui-text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .hub-row-type { display:flex; gap:3px; margin-left:8px; font-size:var(--ui-type-caption-size); color:var(--ui-text-faint); }
 .hub-row[aria-selected=true] { background:var(--ui-selection-fill); box-shadow:var(--ui-shadow-selected); color:var(--ui-selection-ink); }
 .hub-row[aria-selected=true]::before { content:''; position:absolute; left:0; top:8px; bottom:8px; width:2px; background:var(--ui-selection-marker); }
@@ -41,7 +43,7 @@
 .hub-row[aria-disabled=true] .hub-title { color:var(--ui-text-muted); }
 .hub-footer { display:flex; align-items:center; justify-content:flex-end; gap:8px; padding:8px; min-height:48px; flex-shrink:0; border-top:1px solid var(--ui-line-soft); }
 .hub-primary { display:flex; align-items:center; gap:10px; }
-.hub-count { margin-right:auto; order:-1; color:var(--ui-text-muted); font:var(--ui-type-caption-size)/var(--ui-type-caption-line) var(--ui-font-reading); }
+.hub-count { margin-right:auto; order:-1; color:var(--ui-text-muted); font:var(--ui-type-secondary-size)/var(--ui-type-caption-line) var(--ui-font-reading); }
 .hub-footer kbd { font:var(--ui-type-caption-size)/var(--ui-type-caption-line) var(--ui-font-interface); }
 .hub-status,.hub-empty { margin:0; padding:16px; color:var(--ui-text-muted); font-family:var(--ui-font-reading); }
 .hub-status { border-top:1px solid var(--ui-line-soft); }
@@ -79,7 +81,7 @@
   .hub-row:not(.hub-build-row, .hub-conversion, [data-id^="account:"]) > .hub-row-type { grid-column:3; grid-row:1 / 3; }
 }
 
-.hub-preview { margin:0; padding:8px 16px; min-height:0; flex:0 1 auto; overflow:auto; max-height:230px; white-space:pre-wrap; overflow-wrap:anywhere; font:var(--ui-type-caption-size)/1.55 var(--ui-font-reading); border-top:1px solid var(--ui-line-soft); color:var(--ui-text-muted); }
+.hub-preview { margin:0; padding:8px 16px; min-height:0; flex:0 1 auto; overflow:auto; max-height:230px; white-space:pre-wrap; overflow-wrap:anywhere; font:var(--ui-type-secondary-size)/1.55 var(--ui-font-reading); border-top:1px solid var(--ui-line-soft); color:var(--ui-text-muted); }
 .hub-view .hub-detail { padding:16px 20px; display:grid; gap:12px; }
 .hub-view .hub-detail h2,.hub-view .hub-detail p { margin:0; }
 .hub-view .hub-detail pre { white-space:pre-wrap; font:inherit; }
@@ -309,13 +311,13 @@
 /* Context and examples teach the existing grammar without changing execution. */
 .hub-back { max-width:42%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .hub-scope { flex:none; order:1; padding:2px 6px; border:1px solid var(--ui-line-soft); border-radius:var(--ui-radius-sm); color:var(--ui-accent-text); font:var(--ui-type-caption-size)/1.4 var(--ui-font-interface); }
-.hub-hint { margin:0; padding:0 16px 8px; color:var(--ui-text-muted); font:var(--ui-type-caption-size)/1.4 var(--ui-font-reading); }
+.hub-hint { margin:0; padding:0 16px 8px; color:var(--ui-text-muted); font:var(--ui-type-secondary-size)/1.4 var(--ui-font-reading); }
 .hub-row-type .ui-kbd { min-width:20px; padding:2px 4px; }
 /* One footer line at every Hub width and text size, so arrowing never resizes
  * the list. The ⌘⌫ legend and the result count give up their room first; the
  * primary then ellipsizes and keeps its full label as the accessible name and
  * tooltip. */
-.hub-legend { order:-2; flex:0 1000 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ui-text-muted); font:var(--ui-type-caption-size)/var(--ui-type-caption-line) var(--ui-font-reading); }
+.hub-legend { order:-2; flex:0 1000 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--ui-text-muted); font:var(--ui-type-secondary-size)/var(--ui-type-caption-line) var(--ui-font-reading); }
 .hub-footer .hub-primary { min-width:0; flex:0 1 auto; text-align:left; }
 .hub-footer .hub-primary kbd,.hub-footer .hub-actions { flex:none; white-space:nowrap; }
 .hub-count { flex:0 1000 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }

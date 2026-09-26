@@ -103,7 +103,8 @@ describe("appearance settings", () => {
       assert.equal(appearanceVariables({ ...DEFAULT_SETTINGS, uiStyle: style, uiPanelOpacity: 94 })["--ui-hub-backdrop"], undefined);
       assert.equal(appearanceVariables({ ...DEFAULT_SETTINGS, uiStyle: style, uiPanelOpacity: 65 }, { reducedTransparency: true })["--ui-hub-backdrop"], undefined);
       /* At the shipped minimum the shared guard alone flattens every role,
-       * which is why every text panel over the game caps the scene (D-29). */
+       * which is why every text panel over the game caps the scene (the D-28
+       * legibility floor) and secondary text steps a size down (D-29). */
       const shared = inks(style, 65);
       assert.ok(contrastRatio(shared["--ui-text"]!, shared["--ui-text-muted"]!) < 1.1);
     }

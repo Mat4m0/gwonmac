@@ -321,6 +321,9 @@ export function applyAppearance(
     root.style.setProperty(name, value);
   }
   writeSceneCap(root, variables["--ui-hub-scene-cap"]);
+  // Where ink alone would flatten the hierarchy, secondary text steps down a size (D-29, tokens.css).
+  if (variables["--ui-hub-scene-cap"] !== undefined) root.dataset.uiLowOpacity = "";
+  else delete root.dataset.uiLowOpacity;
   appliedThemeVariables.set(root, Object.keys(variables));
   if (
     settings.uiStyle === "obsidian"

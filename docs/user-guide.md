@@ -206,7 +206,8 @@ it never deletes text and does nothing on Home. On a question such as "Leave thi
 visible around it; panel opacity is the only setting that changes how much of
 the game shows through. At low opacity, Hub holds back only the brightest parts
 of the scene behind its panel, so titles, grey detail and gold headings keep
-their normal colours over snow or sky. With macOS **Reduce
+their normal colours over snow or sky, and grey detail text becomes one size
+smaller so it stays apart from titles. With macOS **Reduce
 Transparency**, the panel becomes solid and keeps its normal colours, while the
 game around it stays visible. **Settings → Appearance → Text size** enlarges
 Hub text up to 200 %. The Hub window keeps its size, longer results wrap onto

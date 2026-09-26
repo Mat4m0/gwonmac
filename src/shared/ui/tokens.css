@@ -302,6 +302,16 @@
   --ui-type-title-line: calc(26px * var(--ui-text-scale));
   --ui-type-window-size: calc(18px * var(--ui-text-scale));
   --ui-type-window-line: calc(24px * var(--ui-text-scale));
+  /* The secondary text role (D-29): Reading-role detail, counts, hints and
+   * previews at caption size. */
+  --ui-type-secondary-size: var(--ui-type-caption-size);
+}
+
+/* At low opacity ink alone cannot keep title and detail apart (appearance.ts
+ * marks the root while it holds the scene back), so the secondary role also
+ * steps one size down. Line heights stay, so rows keep their geometry. */
+:root[data-ui-low-opacity], :root[data-ui-low-opacity] .ui-text-scope {
+  --ui-type-secondary-size: calc(11px * var(--ui-text-scale));
 }
 
 /* The art-frame head's secondary ink. Each frame re-derives it from the inks
