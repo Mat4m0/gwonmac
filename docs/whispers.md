@@ -100,6 +100,12 @@ invite; a non-PvE arrival withdraws it at once. Disposing Tools withdraws a
 pending arrival. The friend feed has no district, so an arrival in another
 district can fail in Guild Wars.
 
+In the `invite` scope only an exact name invites: the exact typed name or an
+exact known person comes first, and the footer names the target, such as
+**Invite Mo Kai**. A prefix or "Seen in chat" match opens the person page.
+Receipts claim only the sent command: "Sent /invite Mo Kai. Guild Wars answers
+in chat."
+
 ## Reuse and evidence
 
 The older `gwonmac-whispers` worktree contains incoming-event research and a
