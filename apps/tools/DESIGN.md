@@ -271,8 +271,11 @@ outside the Hub keep the shared inks, which assume the uncapped scene.
   saved panel opacity is the only control over how much scene shows through;
   the Hub's cap only limits how bright that scene can be behind its text.
 - The Classic head sits on painted metal the model cannot measure, so its
-  secondary copy (crumbs, caption, context) uses `--ui-art-head-ink`, the
-  brightest ink, with the Classic text shadow.
+  secondary copy (crumbs, caption, context) uses the brightest ink, with the
+  Classic text shadow. The Modern head's secondary copy reads muted. The
+  style only chooses a weight (`--ui-art-head-lift`); each frame re-derives
+  `--ui-art-head-ink` from the inks it sits in (`tokens.css`), so the Hub's head uses the Hub-scoped inks
+  like the rest of its panel.
 
 ## Compact reading surfaces
 

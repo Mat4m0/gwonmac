@@ -41,7 +41,7 @@
   --ui-art-head-shadow: none;
   /* Classic head text sits on the painted metal strip, which the ink guard
    * cannot model, so its secondary copy uses the brightest ink. */
-  --ui-art-head-ink: var(--ui-text-bright);
+  --ui-art-head-lift: 100%;
   --ui-art-title-size: var(--ui-type-body-size);
   --ui-art-head-control-height: 26px;
   --ui-art-head-detail-display: none;
@@ -307,6 +307,13 @@
   --ui-type-window-line: calc(24px * var(--ui-text-scale));
 }
 
+/* The art-frame head's secondary ink. Each frame re-derives it from the inks
+ * it sits in, so a surface that remaps its inks (the Hub, hub.css) keeps them
+ * in its head; the style only chooses the share of the brightest ink. */
+:root, .ui-art-frame {
+  --ui-art-head-ink: color-mix(in srgb, var(--ui-text-bright) var(--ui-art-head-lift), var(--ui-text-muted));
+}
+
 /* Preserve semantic emphasis in the markup while letting the selected face
  * decide whether that emphasis is expressed through stroke weight. */
 :where(strong, b, h1, h2, h3, h4, h5, h6) {
@@ -408,7 +415,7 @@
   --ui-art-head-radius: var(--ui-radius);
   --ui-art-head-fill: var(--ui-title-fill) padding-box, var(--ui-frame) border-box;
   --ui-art-head-shadow: var(--ui-title-shadow);
-  --ui-art-head-ink: var(--ui-text-muted);
+  --ui-art-head-lift: 0%;
   --ui-art-title-size: var(--ui-type-window-size);
   --ui-art-head-control-height: var(--ui-control-height);
   --ui-art-head-detail-display: block;

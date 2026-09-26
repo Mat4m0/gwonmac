@@ -240,6 +240,7 @@ for (const uiStyle of ['guild-wars', 'obsidian'] as const) {
         title: color('.hub-row:not([aria-selected=true]) .hub-title'), detail: color('.hub-row:not([aria-selected=true]) > .hub-detail'),
         keycap: color('.hub-row:not([aria-selected=true]) .ui-kbd'), group: color('.hub-group'), count: color('.hub-count'),
         typed: color('.hub-search input'), placeholder: color('.hub-search input', '::placeholder'),
+        caption: color('.hub-caption'), context: color('.hub-context'),
       };
     });
     expect(ratio(inks.title, inks.detail), 'title over detail').toBeGreaterThanOrEqual(1.5);
@@ -248,6 +249,14 @@ for (const uiStyle of ['guild-wars', 'obsidian'] as const) {
     expect(ratio(inks.typed, inks.placeholder), 'typed text over placeholder').toBeGreaterThanOrEqual(1.5);
     // Group headings stay gold: a warm hue, not a near-white tone.
     expect(inks.group[0]! - inks.group[2]!, `group ${inks.group.join(',')}`).toBeGreaterThanOrEqual(60);
+    // The head uses the Hub's inks too. Modern's caption and game context are
+    // secondary copy; Classic's sit on the painted strip in the brightest ink.
+    const headInk = uiStyle === 'obsidian' ? inks.detail : inks.typed;
+    expect([inks.caption, inks.context], 'head ink').toEqual([headInk, headInk]);
+    if (uiStyle === 'obsidian') {
+      expect(ratio(inks.title, inks.caption), 'title over caption').toBeGreaterThanOrEqual(1.5);
+      expect(ratio(inks.title, inks.context), 'title over context').toBeGreaterThanOrEqual(1.5);
+    }
     await page.screenshot({ path: info.outputPath(`${uiStyle}-65-hierarchy.png`) });
     // The cap holds back only highlights: over a dark scene the panel composes
     // exactly as it would without it, and the game around the Hub is untouched.
@@ -263,6 +272,16 @@ for (const uiStyle of ['guild-wars', 'obsidian'] as const) {
     expect(relativeLuminance(await pixel())).toBeLessThan(relativeLuminance(brightUncapped));
     await scene.evaluate(element => { element.textContent = 'body { background: #202020 !important; } .hub-fixture-controls { visibility:hidden; }'; });
     expect(await pixel()).toEqual(await withoutCap());
+    // A breadcrumb is head copy as well.
+    await page.getByRole('combobox', { name: 'Search people, places, builds' }).fill('settings');
+    await page.keyboard.press('Enter');
+    const crumb = await page.locator('#hub .hub-crumb').first().evaluate(element => {
+      const context = document.createElement('canvas').getContext('2d')!;
+      context.fillStyle = getComputedStyle(element).color; context.fillRect(0, 0, 1, 1);
+      return [...context.getImageData(0, 0, 1, 1).data.slice(0, 3)];
+    });
+    expect(crumb, 'crumb ink').toEqual(headInk);
+    if (uiStyle === 'obsidian') expect(ratio(inks.title, crumb), 'title over crumb').toBeGreaterThanOrEqual(1.5);
   });
 }
 

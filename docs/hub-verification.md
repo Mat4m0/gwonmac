@@ -299,7 +299,9 @@ live theme, font and opacity change keeps the query, caret, selection, focus
 and the list's scroll offset (clamped only when a taller Modern list has less
 to scroll), never focuses `<body>` and never paints a second selection. At 65 %
 over the checkerboard, title, detail, keycap, count, placeholder and gold
-heading inks stay apart in both styles, and a dark scene behind the panel
+heading inks stay apart in both styles; the header's caption, game context
+and breadcrumb use the Hub's own inks (Modern's muted, apart from the titles;
+Classic's brightest on the painted strip), and a dark scene behind the panel
 composes exactly as it would without the Hub's highlight cap. The custom
 Modern finish is covered by its own frame-mask check. The Workbench suite separately checks critical
 team and skill feedback contrast. These are bounded contrast checks, not an
