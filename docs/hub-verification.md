@@ -277,7 +277,9 @@ favourites and its action hints reachable.
 [Appearance checks](../apps/tools/tests/hub-appearance.spec.ts) include minimum
 opacity, a bright checkerboard backdrop, reduced motion, font changes, Custom
 Classic, Modern round trips and device-pixel density. Composed screenshot pixels
-under Hub result labels meet 4.5:1. The Workbench suite separately checks critical
+under Hub result labels meet 4.5:1. A custom theme with the Modern flat finish is
+checked by pixel in the Hub (four borders, 65–100 % opacity), Trade, the Build
+Library window and Hub Settings: the first row's centre is never the border colour. The Workbench suite separately checks critical
 team and skill feedback contrast. These are bounded contrast checks, not an
 exhaustive accessibility certification. [Hub Electron checks](../tests/electron/input-hub.spec.ts)
 exercise actual 200% window zoom and the `gw://app` artwork route. Native

@@ -81,8 +81,12 @@
   padding: var(--ui-art-surface-width);
   border-radius: var(--ui-art-surface-radius);
   background: var(--ui-art-surface-fill);
-  mask: var(--ui-art-surface-mask);
+  /* The shorthands reset the composite to `add`; restate the ring's cut-out
+   * or Modern paints `--ui-frame` over the whole panel. */
   -webkit-mask: var(--ui-art-surface-mask);
+  -webkit-mask-composite: xor;
+  mask: var(--ui-art-surface-mask);
+  mask-composite: exclude;
   z-index: var(--ui-art-surface-z);
 }
 .ui-frame.ui-art-frame::after { display: var(--ui-art-corners); }
