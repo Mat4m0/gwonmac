@@ -134,3 +134,34 @@ test('one list move keeps focus in search: arrows, Control-N/P, pages and ends n
   await expect(page.locator('.hub-caption')).toHaveText('Commands');
   await expect(search).toBeFocused();
 });
+
+test('one list move from no selection: End lands on the last result, every other move on the first', async ({ page }) => {
+  await page.goto('/?hub&party');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const rows = page.locator('.hub-row');
+  const selected = page.locator('.hub-row[aria-selected="true"]');
+  // A bare consequential scope preselects nothing, so Enter can never invite on a guess.
+  for (const [key, last] of [['End', true], ['Home', false], ['PageUp', false], ['ArrowUp', false], ['ArrowDown', false], ['Control+n', false], ['PageDown', false]] as const) {
+    await search.fill('invite ');
+    await expect(rows.nth(2)).toBeVisible();
+    await expect(selected).toHaveCount(0);
+    const count = await rows.count();
+    await search.press(key);
+    await expect(rows.nth(last ? count - 1 : 0), key).toHaveAttribute('aria-selected', 'true');
+    await expect(search).toBeFocused();
+  }
+});
+
+test('list keys without results keep the caret and the text selection in search', async ({ page }) => {
+  await page.goto('/?hub');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  await search.fill('qqqzzz');
+  await expect(page.locator('.hub-empty')).toBeVisible();
+  for (const key of ['ArrowDown', 'ArrowUp', 'End', 'Home', 'PageDown', 'Control+n']) {
+    await search.evaluate(input => (input as HTMLInputElement).setSelectionRange(1, 3));
+    await search.press(key);
+    expect(await search.evaluate(input => [(input as HTMLInputElement).selectionStart, (input as HTMLInputElement).selectionEnd]), key).toEqual([1, 3]);
+  }
+  await page.keyboard.press('Delete');
+  await expect(search).toHaveValue('qzzz');
+});

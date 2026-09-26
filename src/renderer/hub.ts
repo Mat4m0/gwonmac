@@ -512,12 +512,14 @@ export function createHub(parent: HTMLElement) {
   input.addEventListener('keydown', event => {
     if (event.isComposing) return;
     const step = listStep(event);
-    if (step !== null && rows.length) {
+    if (step !== null) {
+      // The list owns these keys even without results, so they never move the caret or drop a text selection.
       event.preventDefault();
+      if (!rows.length) return;
       const index = rows.findIndex(row => row.id === selected);
-      // The first press from no selection lands on the first result.
-      const next = index < 0 ? (step < 0 ? -1 : 0) : Math.max(0, Math.min(rows.length - 1, index + step));
-      if (next >= 0) select(rows[next]!.id, true);
+      // From no selection, End lands on the last result and every other move on the first.
+      const next = index < 0 ? (step === Infinity ? rows.length - 1 : 0) : Math.max(0, Math.min(rows.length - 1, index + step));
+      select(rows[next]!.id, true);
     } else if (event.key === 'ArrowRight' && !event.repeat && input.selectionStart === input.value.length && input.selectionEnd === input.value.length) {
       const row = rows.find(row => row.id === selected);
       if (row?.navigate) { event.preventDefault(); row.navigate(); }
