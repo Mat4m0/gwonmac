@@ -229,11 +229,13 @@ off Whispers clear the session.
 
 In an outpost, choose **Invite to party** on a person, or type
 `invite Character Name`, to invite that character. Only the exact name invites;
-a partial name or a name seen in chat opens that person's actions instead. The
+a partial name or a name seen in chat opens that person's actions instead.
+Character names have at least two words, so a single typed word stays below
+known people and says **Type the full character name**. The
 footer names who is invited, for example **Invite Mo Kai**. Guild Wars answers
 the invite in chat.
-For a friend in another outpost, **Invite to party** says where they are. Use
-**Travel and invite**: it travels there (Any district) and invites them once you
+For a friend elsewhere, **Invite to party** says where they are. For a PvE
+outpost, use **Travel and invite**: it travels there (Any district) and invites them once you
 arrive. It is unavailable for PvP outposts such as Random Arenas. If you land in
 a different district, Guild Wars cannot find them; Hub then shows the game's
 answer in chat. Both actions need Whispers enabled.

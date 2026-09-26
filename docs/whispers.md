@@ -105,6 +105,9 @@ district can fail in Guild Wars.
 In the `invite` scope only an exact name invites: the exact typed name or an
 exact known person comes first, and the footer names the target, such as
 **Invite Mo Kai**. A prefix or "Seen in chat" match opens the person page.
+Every Guild Wars character name has at least two words, so a typed single word
+never invites: it stays after known people and reads "Type the full character
+name".
 Receipts claim only the sent command: "Sent /invite Mo Kai. Guild Wars answers
 in chat."
 

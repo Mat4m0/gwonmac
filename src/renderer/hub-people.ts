@@ -7,13 +7,14 @@ import { travelDestination } from '../shared/travel.js';
 import { parseHubQuery, type HubRow, type HubSource } from '../shared/hub.js';
 import { normaliseCharacterName } from '../shared/player-text.js';
 import { findPeople, whisperPersonKey, whisperUnread, type Person, type WhisperSession } from '../shared/whisper-session.js';
-import { isCharacterName } from '../shared/whispers.js';
+import { isCharacterName, isFullCharacterName } from '../shared/whispers.js';
 import type { Hub } from './hub.js';
 import type { PartyInvite } from './party-invite.js';
 
 const toolEnabled = (setting: 'whispersEnabled' | 'travelPalette') =>
   !!window.gwToolsSettings?.().gwonmacTools && !!window.gwToolsSettings?.()[setting];
 const MAX_PEOPLE = 8;
+const PARTIAL_NAME = 'Type the full character name';
 
 type FriendTravel = Readonly<{
   unavailable(): string | null;
@@ -63,7 +64,7 @@ export function createHubPeople(hub: Pick<Hub, 'attach' | 'showRows' | 'close' |
         const target = friendKey ? friend?.character ?? '' : name;
         const offline = !!friendKey && (!friend || friend.status === 'offline' || !friend.character);
         const inviteReason = changed ? 'This friend changed or is unavailable. Select them again.'
-          : offline ? 'This friend is offline' : party.unavailable(friend);
+          : offline ? 'This friend is offline' : !friendKey && !isFullCharacterName(name) ? PARTIAL_NAME : party.unavailable(friend);
         rows.push({ id: 'person:invite', title: 'Invite to party', detail: `Add ${target || name} to your party`, group: 'Actions', action: `Invite ${target || name}`,
           ...(inviteReason ? { unavailable: inviteReason } : {}), run: () => inviteNow(party, target, friend) });
         if (friendKey && friend && travel && toolEnabled('travelPalette')) {
@@ -108,8 +109,11 @@ export function createHubPeople(hub: Pick<Hub, 'attach' | 'showRows' | 'close' |
       if (parsed.scope === 'invite' && party) {
         // Only an exact name invites, and it comes first. A prefix or chat match
         // opens the person page instead, so Enter never invites a similar name.
+        // A single word is part of a name: it stays last and says why it cannot invite.
         const invites = rows.map((entry, index) => people[index]!.exact ? inviteRow(party, entry, people[index]!.friend) : entry);
-        return typedRow ? [inviteRow(party, typedRow), ...invites] : invites;
+        if (!typedRow) return invites;
+        return isFullCharacterName(typed) ? [inviteRow(party, typedRow), ...invites]
+          : [...invites, { ...inviteRow(party, typedRow), unavailable: PARTIAL_NAME }];
       }
       // A whisper only opens a draft, so Enter on a partial name keeps the known person first.
       if (typedRow) rows.push(typedRow);
