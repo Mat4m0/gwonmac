@@ -10,11 +10,14 @@ export const ELITE_REGIONS = ["Tyria", "Cantha", "Elona", "Eye of the North"] as
 export type EliteRegion = typeof ELITE_REGIONS[number];
 export type EliteProfessionFilter = Readonly<{ kind: "all" | "mine" }>
   | Readonly<{ kind: "custom"; values: readonly Profession[] }>;
+/** Which learned status the planner lists: not yet learned, learned, or both. */
+export const ELITE_LEARNED_FILTERS = ["missing", "learned", "any"] as const;
+export type EliteLearnedFilter = typeof ELITE_LEARNED_FILTERS[number];
 export type EliteViewPreferences = Readonly<{
   search: string;
   professions: EliteProfessionFilter;
   region: EliteRegion | "";
-  hideLearned: boolean;
+  learned: EliteLearnedFilter;
   mode: "browse" | "tracked";
   worldMap: boolean;
   panelOpen: boolean;
@@ -23,7 +26,7 @@ export type EliteViewPreferences = Readonly<{
 }>;
 export const DEFAULT_ELITE_VIEW: EliteViewPreferences = Object.freeze({
   search: "", professions: Object.freeze({ kind: "all" }), region: "",
-  hideLearned: true, mode: "browse", worldMap: true, panelOpen: false, panelHeightRatio: 0.8, focusedSkill: null,
+  learned: "missing", mode: "browse", worldMap: true, panelOpen: false, panelHeightRatio: 0.8, focusedSkill: null,
 });
 export type EliteLocation = Readonly<{
   id: string;
@@ -38,17 +41,18 @@ export type EliteLocation = Readonly<{
 export type EliteTracking = Readonly<{
   skills: readonly number[];
   activeLocation: string | null;
-  missionMap: boolean;
   view: EliteViewPreferences;
 }>;
 export const EMPTY_ELITE_TRACKING: EliteTracking = Object.freeze({
-  skills: Object.freeze([]), activeLocation: null, missionMap: true, view: DEFAULT_ELITE_VIEW,
+  skills: Object.freeze([]), activeLocation: null, view: DEFAULT_ELITE_VIEW,
 });
 export type EliteChange =
   | Readonly<{ kind: "track" | "remove"; skillId: number }>
-  | Readonly<{ kind: "target"; locationId: string }>
-  | Readonly<{ kind: "view"; view: EliteViewPreferences }>
-  | Readonly<{ kind: "mission-map"; show: boolean }>;
+  /** A null location returns to the automatic target. */
+  | Readonly<{ kind: "target"; locationId: string | null }>
+  /** Removes several skills in one save, such as every captured Hunt list skill. */
+  | Readonly<{ kind: "remove-skills"; skillIds: readonly number[] }>
+  | Readonly<{ kind: "view"; view: EliteViewPreferences }>;
 export type EliteUpdate = Readonly<{ characterKey: TravelCharacterKey; change: EliteChange }>;
 
 function object(value: unknown): Record<string, unknown> {
@@ -64,8 +68,11 @@ function exact(value: Record<string, unknown>, keys: readonly string[]): void {
 }
 export function parseEliteView(value: unknown): EliteViewPreferences {
   const input = object(value);
-  const keys = ["search", "professions", "region", "hideLearned", "mode", "worldMap", "panelOpen", "focusedSkill"];
+  // Older files store the two-way `hideLearned` switch instead of `learned`.
+  const keys = ["search", "professions", "region", "learned" in input ? "learned" : "hideLearned", "mode", "worldMap", "panelOpen", "focusedSkill"];
   exact(input, "panelHeightRatio" in input ? [...keys, "panelHeightRatio"] : keys);
+  const learned = "learned" in input ? ELITE_LEARNED_FILTERS.find(value => value === input.learned)
+    : typeof input.hideLearned === "boolean" ? input.hideLearned ? "missing" : "any" : undefined;
   const panelHeightRatio = "panelHeightRatio" in input ? input.panelHeightRatio : DEFAULT_ELITE_VIEW.panelHeightRatio;
   const filter = object(input.professions);
   let professions: EliteProfessionFilter;
@@ -83,12 +90,12 @@ export function parseEliteView(value: unknown): EliteViewPreferences {
   if (typeof input.search !== "string" || input.search.length > 200
     || typeof panelHeightRatio !== "number" || !Number.isFinite(panelHeightRatio) || panelHeightRatio < 0.2 || panelHeightRatio > 1
     || region === undefined
-    || typeof input.hideLearned !== "boolean" || typeof input.worldMap !== "boolean" || typeof input.panelOpen !== "boolean"
+    || learned === undefined || typeof input.worldMap !== "boolean" || typeof input.panelOpen !== "boolean"
     || (input.mode !== "browse" && input.mode !== "tracked")
     || (input.focusedSkill !== null && (typeof input.focusedSkill !== "number" || !Number.isSafeInteger(input.focusedSkill)
       || input.focusedSkill < 1 || input.focusedSkill > 10_000))) throw new TypeError("Invalid map preferences");
   return Object.freeze({ search: input.search, professions: Object.freeze(professions),
-    region, hideLearned: input.hideLearned, mode: input.mode,
+    region, learned, mode: input.mode,
     worldMap: input.worldMap, panelOpen: input.panelOpen, panelHeightRatio, focusedSkill: input.focusedSkill });
 }
 export function parseEliteCharacter(value: unknown): Readonly<{ characterKey: TravelCharacterKey }> {
@@ -114,28 +121,32 @@ export function parseEliteUpdate(value: unknown): EliteUpdate {
   }
   if (change.kind === "target") {
     exact(change, ["kind", "locationId"]);
-    if (typeof change.locationId !== "string" || !/^[a-f0-9]{16}$/u.test(change.locationId)) {
+    if (change.locationId !== null && (typeof change.locationId !== "string" || !/^[a-f0-9]{16}$/u.test(change.locationId))) {
       throw new TypeError("Invalid capture location");
     }
     return { characterKey, change: { kind: "target", locationId: change.locationId } };
   }
-  if (change.kind === "mission-map") {
-    exact(change, ["kind", "show"]);
-    if (typeof change.show !== "boolean") throw new TypeError("Invalid mission map choice");
-    return { characterKey, change: { kind: "mission-map", show: change.show } };
+  if (change.kind === "remove-skills") {
+    exact(change, ["kind", "skillIds"]);
+    const ids: unknown = change.skillIds;
+    if (!Array.isArray(ids) || ids.length < 1 || ids.length > 500 || new Set(ids).size !== ids.length
+      || !ids.every((id: unknown) => typeof id === "number" && Number.isSafeInteger(id) && id >= 1 && id <= 10_000)) throw new TypeError("Invalid skills");
+    return { characterKey, change: { kind: "remove-skills", skillIds: Object.freeze([...ids as number[]]) } };
   }
   throw new TypeError("Unknown tracking action");
 }
 export function parseEliteTracking(value: unknown, locations: readonly EliteLocation[]): EliteTracking {
   const input = object(value);
-  // An absent view means the player has not saved map preferences yet.
-  exact(input, "view" in input ? ["skills", "activeLocation", "missionMap", "view"] : ["skills", "activeLocation", "missionMap"]);
+  // An absent view means the player has not saved map preferences yet. The
+  // per-character missionMap switch moved to the eliteMissionMapMarkers setting;
+  // an older file keeps loading and drops it on its next save.
+  exact(input, ["skills", "activeLocation", ...("view" in input ? ["view"] : []), ...("missionMap" in input ? ["missionMap"] : [])]);
   const view = "view" in input ? parseEliteView(input.view) : DEFAULT_ELITE_VIEW;
   const known = new Set(locations.map((location) => location.skillId));
   if (!Array.isArray(input.skills) || input.skills.length > known.size
     || input.skills.some((id: unknown) => typeof id !== "number" || !known.has(id))
     || new Set(input.skills).size !== input.skills.length
-    || typeof input.missionMap !== "boolean") throw new TypeError("Invalid tracking choices");
+    || ("missionMap" in input && typeof input.missionMap !== "boolean")) throw new TypeError("Invalid tracking choices");
   const skills: number[] = input.skills.map(Number);
   const active = input.activeLocation;
   if (active !== null && (typeof active !== "string" || !locations.some((location) =>
@@ -143,7 +154,7 @@ export function parseEliteTracking(value: unknown, locations: readonly EliteLoca
     throw new TypeError("Active boss must belong to a tracked skill");
   }
   if (view.focusedSkill !== null && !known.has(view.focusedSkill)) throw new TypeError("Unknown focused skill");
-  return Object.freeze({ skills: Object.freeze(skills), activeLocation: active, missionMap: input.missionMap, view });
+  return Object.freeze({ skills: Object.freeze(skills), activeLocation: active, view });
 }
 export function changeEliteTracking(
   current: EliteTracking, change: EliteChange, locations: readonly EliteLocation[],
@@ -153,12 +164,18 @@ export function changeEliteTracking(
     if (view.focusedSkill !== null && !locations.some(entry => entry.skillId === view.focusedSkill)) throw new TypeError("Unknown focused skill");
     return { ...current, view };
   }
-  if (change.kind === "mission-map") return { ...current, missionMap: change.show };
   if (change.kind === "target") {
+    if (change.locationId === null) return { ...current, activeLocation: null };
     const location = locations.find((entry) => entry.id === change.locationId);
     if (!location) throw new TypeError("Unknown capture location");
     return { ...current, activeLocation: location.id,
       skills: [...new Set([...current.skills, location.skillId])] };
+  }
+  if (change.kind === "remove-skills") {
+    const removed = new Set(change.skillIds);
+    const active = locations.find((entry) => entry.id === current.activeLocation);
+    return { ...current, skills: current.skills.filter((id) => !removed.has(id)),
+      activeLocation: active && removed.has(active.skillId) ? null : current.activeLocation };
   }
   if (!locations.some((entry) => entry.skillId === change.skillId)) throw new TypeError("Unknown capture skill");
   if (change.kind === "track") return { ...current, skills: [...new Set([...current.skills, change.skillId])] };

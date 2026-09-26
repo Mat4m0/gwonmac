@@ -567,6 +567,8 @@ window.gwToolsSettings = () => Object.freeze({
   cartographyOverlayEnabled: appSettings?.cartographyOverlayEnabled ?? false,
   cartographyGridEnabled: appSettings?.cartographyGridEnabled ?? false,
   compassRangeIndicatorsEnabled: appSettings?.compassRangeIndicatorsEnabled ?? false,
+  eliteSkillsEnabled: appSettings?.eliteSkillsEnabled ?? true,
+  eliteMissionMapMarkers: appSettings?.eliteMissionMapMarkers ?? "saved",
   skillKeyBindings: appSettings?.skillKeyBindings ?? emptySkillKeyBindings,
   skillKeyLabelsEnabled: appSettings?.skillKeyLabelsEnabled ?? false,
   skillCooldownOverlayEnabled: appSettings?.skillCooldownOverlayEnabled ?? true,

@@ -50,6 +50,7 @@ import {
 import { DISTRIBUTION_CHANNEL_CONFIG } from "../src/shared/distribution-channel.ts";
 import { DEFAULT_CUSTOM_UI_THEME } from "../src/shared/ui-theme.ts";
 import { CARTOGRAPHY_BUILTIN_PRESETS } from "../src/shared/cartography-overlay.ts";
+import { ELITE_MISSION_MAP_MARKERS } from "../src/shared/elite-map-settings.ts";
 import {
   compareReleaseVersions,
   parseReleaseVersion,
@@ -386,6 +387,7 @@ const domainCaseCount = Math.max(
   UI_STYLES.length,
   UI_FONTS.length,
   CONTROLLER_PROMPT_STYLES.length,
+  ELITE_MISSION_MAP_MARKERS.length,
   opacityValues.length,
   booleanValues.length,
   UPDATE_TRACKS.length,
@@ -438,6 +440,8 @@ const candidateSettingsDomains = Array.from(
       cartographyWalkabilityOpacity: cycle([0, 55, 100] as const, index),
       cartographyGridOpacity: cycle([0, 65, 100] as const, index),
       cartographyControlIdleOpacity: cycle([15, 35, 100] as const, index),
+      eliteSkillsEnabled: cycle(booleanValues, index + 1),
+      eliteMissionMapMarkers: cycle(ELITE_MISSION_MAP_MARKERS, index),
       gwonmacTools: cycle(booleanValues, index),
       buildLibrary: cycle(booleanValues, index + 1),
       tradeChat: cycle(booleanValues, index),

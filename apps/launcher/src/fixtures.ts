@@ -88,6 +88,8 @@ export const fixtureSnapshot: LauncherSnapshot = {
     cartographyWalkabilityOpacity: 55,
     cartographyGridOpacity: 65,
     cartographyControlIdleOpacity: 35,
+    eliteSkillsEnabled: true,
+    eliteMissionMapMarkers: "saved",
   },
   texturePacks: {
     selectedPackId: null,

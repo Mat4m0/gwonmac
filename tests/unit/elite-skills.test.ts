@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -66,6 +66,23 @@ describe("elite capture plans", () => {
 });
 
 
+describe("hunt list changes", () => {
+  it("returns to the automatic target and removes several skills in one change", () => {
+    const [first, second] = [ELITE_LOCATIONS[0]!, ELITE_LOCATIONS.find(entry => entry.skillId !== ELITE_LOCATIONS[0]!.skillId)!];
+    let plan = changeEliteTracking(EMPTY_ELITE_TRACKING, { kind: "target", locationId: first.id }, ELITE_LOCATIONS);
+    plan = changeEliteTracking(plan, { kind: "track", skillId: second.skillId }, ELITE_LOCATIONS);
+    assert.equal(changeEliteTracking(plan, { kind: "target", locationId: null }, ELITE_LOCATIONS).activeLocation, null);
+    const pruned = changeEliteTracking(plan, { kind: "remove-skills", skillIds: [first.skillId, second.skillId] }, ELITE_LOCATIONS);
+    assert.deepEqual([pruned.skills, pruned.activeLocation], [[], null]);
+    const parse = (change: unknown) => parseEliteUpdate({ characterKey: characterA, change });
+    assert.deepEqual(parse({ kind: "target", locationId: null }).change, { kind: "target", locationId: null });
+    assert.deepEqual(parse({ kind: "remove-skills", skillIds: [1, 2] }).change, { kind: "remove-skills", skillIds: [1, 2] });
+    for (const skillIds of [[], [1, 1], [0], [1.5], "1", new Array(501).fill(0).map((_, index) => index + 1)]) {
+      assert.throws(() => parse({ kind: "remove-skills", skillIds }));
+    }
+  });
+});
+
 describe("elite view persistence", () => {
   it("validates bounded preferences and rejects malformed or unknown choices", () => {
     const valid = { ...DEFAULT_ELITE_VIEW, search: "Hundred Blades", professions: { kind: "custom", values: ["W", "R"] } };
@@ -74,12 +91,19 @@ describe("elite view persistence", () => {
     assert.doesNotThrow(() => parse({ ...valid, professions: { kind: "custom", values: [] } }));
     for (const patch of [
       { search: "x".repeat(201) }, { search: 1 }, { region: "Unknown" }, { worldMap: 1 }, { panelOpen: null }, { panelHeightRatio: 0 }, { panelHeightRatio: 1.1 }, { panelHeightRatio: NaN }, { panelHeightRatio: "0.8" },
-      { hideLearned: "yes" }, { mode: "all" }, { focusedSkill: -1 }, { focusedSkill: 1.5 }, { extra: true },
+      { learned: "yes" }, { learned: true }, { mode: "all" }, { focusedSkill: -1 }, { focusedSkill: 1.5 }, { extra: true },
       { professions: { kind: "custom", values: ["W", "W"] } },
       { professions: { kind: "custom", values: ["Warrior"] } }, { professions: { kind: "mine", values: ["W"] } },
     ]) assert.throws(() => parse({ ...valid, ...patch }));
     assert.throws(() => changeEliteTracking(EMPTY_ELITE_TRACKING,
       { kind: "view", view: { ...DEFAULT_ELITE_VIEW, focusedSkill: 9999 } }, ELITE_LOCATIONS));
+    // Files from before the three-way learned filter keep their choice.
+    const legacy: Record<string, unknown> = { ...valid }; delete legacy.learned;
+    const learnedOf = (view: unknown) => { const { change } = parse(view); return change.kind === "view" ? change.view.learned : null; };
+    assert.equal(learnedOf({ ...legacy, hideLearned: true }), "missing");
+    assert.equal(learnedOf({ ...legacy, hideLearned: false }), "any");
+    assert.throws(() => parse({ ...legacy, hideLearned: "yes" }));
+    assert.throws(() => parse({ ...valid, hideLearned: true }), "one learned field only");
   });
   it("defaults height for saved preferences written before resizing was added", () => {
     const { panelHeightRatio, ...view } = DEFAULT_ELITE_VIEW;
@@ -97,14 +121,16 @@ describe("elite view persistence", () => {
       const store = new EliteTrackingStore();
       assert.deepEqual((await store.get(path, characterA)).view, DEFAULT_ELITE_VIEW);
       const view = { ...DEFAULT_ELITE_VIEW, search: "Hundred Blades", professions: { kind: "mine" as const },
-        panelOpen: true, panelHeightRatio: 0.65, worldMap: false, region: "Cantha" as const, hideLearned: false, mode: "tracked" as const };
+        panelOpen: true, panelHeightRatio: 0.65, worldMap: false, region: "Cantha" as const, learned: "any" as const, mode: "tracked" as const };
       await store.update(path, { characterKey: characterA, change: { kind: "view", view } });
       const restart = new EliteTrackingStore();
       const saved = await restart.get(path, characterA);
       assert.deepEqual(saved.view, view);
       assert.deepEqual(saved.skills, [338]);
       assert.equal(saved.activeLocation, lissah.id);
-      assert.equal(saved.missionMap, false);
+      // The retired per-character mission switch loads and disappears on save.
+      assert.equal("missionMap" in saved, false);
+      assert.doesNotMatch(await readFile(path, "utf8"), /missionMap/);
       assert.deepEqual(await restart.get(path, characterB), EMPTY_ELITE_TRACKING);
       const none = { ...view, professions: { kind: "custom" as const, values: [] } };
       await restart.update(path, { characterKey: characterA, change: { kind: "view", view: none } });

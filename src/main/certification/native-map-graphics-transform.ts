@@ -1,5 +1,6 @@
 /**
- * Owns bounded Cartography textures drawn by the native Mission and World Map.
+ * Owns bounded map textures drawn by the native Mission and World Map, and the
+ * read-only answer to whether the game routes the pointer to one of those maps.
  * Exact draw events retain the game's clipping, ordering and graphics context.
  */
 import {
@@ -10,8 +11,9 @@ import { encodeName } from "./cartography-transform-internals.js";
 import { NATIVE_RENDER_REFERENCE_FUNCTIONS, nativeGraphicsBusy, nativeModelBusy } from "./native-render-reference.js";
 import { functionBodySha256, wasmEvidence } from "./wasm-evidence.js";
 import { NATIVE_PUBLISH_BUSY } from "../../shared/native-publish.js";
-import { NATIVE_MAP_GRAPHICS_HEADER_BYTES, NATIVE_MAP_GRAPHICS_MAGIC,
-  NATIVE_MAP_GRAPHICS_MAX_SIZE, NATIVE_MAP_GRAPHICS_SURFACES } from "../../shared/native-map-graphics.js";
+import { NATIVE_MAP_GRAPHICS_HEADER_BYTES, NATIVE_MAP_GRAPHICS_MAGIC, NATIVE_MAP_GRAPHICS_MAX_SIZE,
+  NATIVE_MAP_GRAPHICS_SURFACES, NATIVE_MAP_QUAD_BYTES, NATIVE_MAP_QUADS_MAGIC, NATIVE_MAP_QUADS_MAX,
+  NATIVE_MAP_QUAD_SURFACES } from "../../shared/native-map-graphics.js";
 
 const CHECKED = [
   [
@@ -99,7 +101,30 @@ const CHECKED = [
     "150d8921520d98fbfa28dc4faf5e2fe488a65c69832b13d7dcf489b2f07d7b60"
   ],
   ...NATIVE_RENDER_REFERENCE_FUNCTIONS,
+  // FrMouse owns the frame under the pointer: 6271 sets a state slot, 6285
+  // moves hover into UNDER_MOUSE, and 6284/6295 clear it on destroy or mode change.
+  [
+    6271,
+    "892ddf5dea9cc02118524bbba718a4ab13c4fd8a87b11ac06b812a0042b428e4"
+  ],
+  [
+    6284,
+    "0accbe055da29e2795b2863459de19c822cf60b8b4571c5c6d6d650ba5057209"
+  ],
+  [
+    6285,
+    "9af865306eea824efa28b02ad0a0b763a6d3a4b0004ec695004d0c7dbfe0d038"
+  ],
+  [
+    6295,
+    "5012cf591c2b1edee0fd41b642a3ce2407b3385d6f776ae6d3357b5b22a329f8"
+  ]
 ] as const;
+/** FrMouse's hovered frame pointer; frames keep their ID at 0xbc and parent relation at 0x128. */
+const UNDER_MOUSE = 5911100;
+const FRAME_ID = 0xbc;
+const FRAME_RELATION = 0x128;
+const MAX_POINTER_DEPTH = 16;
 const op = (...bytes: number[]) => Uint8Array.of(...bytes);
 const i = (value: number) => concat(op(0x41), sleb(value));
 const l = (index: number) => concat(op(0x20), uleb(index));
@@ -132,10 +157,15 @@ export function appendNativeMapGraphics(input: Uint8Array): Uint8Array {
   const extraBodies: Uint8Array[] = []; const extraExports: Uint8Array[] = [];
   const scalarNames = ["owner", "buffer", "draw", "area", "serial", "uploads", "draws", "created", "destroyed", "continent"];
   const first = module.functionImportCount + bodies.length;
+  // Later surfaces draw after earlier ones on the same map: each hook lands
+  // after the calls already inserted at that original offset.
+  const inserted = new Map<number, number>();
   for (const [surfaceIndex, surface] of NATIVE_MAP_GRAPHICS_SURFACES.entries()) {
     const base = globals.count + surfaceIndex * scalarNames.length;
     const isWorld = surface.startsWith("world");
-    const isHover = surface.endsWith("_hover");
+    // Quad surfaces draw many world rectangles from one atlas: each marker stays
+    // at screen resolution instead of sharing one view-sized bitmap.
+    const quads = (NATIVE_MAP_QUAD_SURFACES as readonly string[]).includes(surface);
     const g = (index: number) => concat(op(0x23), uleb(base + index));
     const put = (index: number) => concat(op(0x24), uleb(base + index));
     const increment = (index: number) => concat(g(index), i(1), op(0x6a), put(index));
@@ -165,26 +195,63 @@ export function appendNativeMapGraphics(input: Uint8Array): Uint8Array {
       l(local), l(local), i(1), op(0x6b, 0x71, 0x45, 0x71));
     // Native bitmap layers (14205) use alpha stage 7 / translucent order 11.
     // The Compass ring's additive stage 4 cannot darken the terrain outside.
+    const quadLoop = (body: Uint8Array) => concat(i(0), s(10), op(0x02, 0x40, 0x03, 0x40),
+      l(10), l(9), op(0x4f, 0x0d, 1), body, l(10), i(1), op(0x6a), s(10), op(0x0c, 0, 0x0b, 0x0b));
+    const bitmapMesh = concat(
+      g(1), i(4), call(1446), s(8),
+      ...Array.from({length: 4}, (_, vertex) => concat(
+        l(8), l(0), load(32 + vertex * 8, true), save(vertex * 24, true),
+        l(8), l(0), load(36 + vertex * 8, true), op(0x8c), save(vertex * 24 + 4, true),
+        l(8), f(0), save(vertex * 24 + 8, true), l(8), i(-1), save(vertex * 24 + 12),
+        l(8), f(vertex === 1 || vertex === 2 ? 1 : 0), save(vertex * 24 + 16, true),
+        l(8), f(vertex >= 2 ? 1 : 0), save(vertex * 24 + 20, true))),
+      g(1), i(6), call(1445), s(8),
+      ...[0, 1, 2, 0, 2, 3].map((vertex, index) => concat(l(8), i(vertex), op(0x3b, 1), uleb(index * 2))));
+    // Each quad record is x0, y0, x1, y1 in world units, then u0, v0, u1, v1.
+    const quadMesh = concat(
+      g(1), l(9), i(4), op(0x6c), call(1446), s(8),
+      l(0), i(NATIVE_MAP_GRAPHICS_HEADER_BYTES), op(0x6a), s(12),
+      quadLoop(concat(
+        ...Array.from({length: 4}, (_, vertex) => concat(
+          l(8), l(12), load(vertex === 1 || vertex === 2 ? 8 : 0, true), save(vertex * 24, true),
+          l(8), l(12), load(vertex >= 2 ? 12 : 4, true), op(0x8c), save(vertex * 24 + 4, true),
+          l(8), f(0), save(vertex * 24 + 8, true), l(8), i(-1), save(vertex * 24 + 12),
+          l(8), l(12), load(vertex === 1 || vertex === 2 ? 24 : 16, true), save(vertex * 24 + 16, true),
+          l(8), l(12), load(vertex >= 2 ? 28 : 20, true), save(vertex * 24 + 20, true))),
+        l(8), i(96), op(0x6a), s(8), l(12), i(NATIVE_MAP_QUAD_BYTES), op(0x6a), s(12))),
+      g(1), l(9), i(6), op(0x6c), call(1445), s(11),
+      quadLoop(concat(
+        ...[0, 1, 2, 0, 2, 3].map((vertex, index) => concat(l(11), l(10), i(4), op(0x6c), i(vertex), op(0x6a), op(0x3b, 1), uleb(index * 2))),
+        l(11), i(12), op(0x6a), s(11))));
+    // Every quad float must be finite and bounded before any native call.
+    const quadFloats = concat(i(0), s(10), op(0x02, 0x40, 0x03, 0x40),
+      l(10), l(9), i(8), op(0x6c), op(0x4f, 0x0d, 1),
+      l(0), l(10), i(4), op(0x6c), op(0x6a), load(NATIVE_MAP_GRAPHICS_HEADER_BYTES, true), op(0x8b), f(1000000), op(0x5f, 0x45),
+      op(0x04, 0x40), i(0), op(0x0f, 0x0b),
+      l(10), i(1), op(0x6a), s(10), op(0x0c, 0, 0x0b, 0x0b));
+    const pixelOffset = quads ? concat(i(NATIVE_MAP_GRAPHICS_HEADER_BYTES), l(9), i(NATIVE_MAP_QUAD_BYTES), op(0x6c, 0x6a)) : i(NATIVE_MAP_GRAPHICS_HEADER_BYTES);
     // A retained model's texture swap asserts while the renderer holds it; this
     // runs from the host's frame, so report busy before hiding or allocating.
-    const publish = concat(op(1, 8, 0x7f),
-      nativeGraphicsBusy(9), op(0x04, 0x40), i(NATIVE_PUBLISH_BUSY), op(0x0f, 0x0b),
-      g(2), op(0x04, 0x40), nativeModelBusy(g(2), 9), op(0x04, 0x40), i(NATIVE_PUBLISH_BUSY), op(0x0f, 0x0b, 0x0b),
+    const busyScratch = quads ? 13 : 9;
+    const publish = concat(op(1, quads ? 12 : 8, 0x7f),
+      nativeGraphicsBusy(busyScratch), op(0x04, 0x40), i(NATIVE_PUBLISH_BUSY), op(0x0f, 0x0b),
+      g(2), op(0x04, 0x40), nativeModelBusy(g(2), busyScratch), op(0x04, 0x40), i(NATIVE_PUBLISH_BUSY), op(0x0f, 0x0b, 0x0b),
       call(hideIndex),
       l(0), i(0), op(0x4b), l(0), i(3), op(0x71, 0x45, 0x71),
       l(1), i(NATIVE_MAP_GRAPHICS_HEADER_BYTES), op(0x4f, 0x71), memoryEnd(i(NATIVE_MAP_GRAPHICS_HEADER_BYTES)), op(0x71),
       op(0x45, 0x04, 0x40), i(0), op(0x0f, 0x0b),
-      l(0), load(12), s(5), l(0), load(16), s(6), l(0), load(8), s(7),
-      l(0), load(0), i(NATIVE_MAP_GRAPHICS_MAGIC), op(0x46), l(0), load(4), l(1), op(0x46, 0x71),
+      l(0), load(12), s(5), l(0), load(16), s(6), l(0), load(8), s(7), ...(quads ? [l(0), load(28), s(9)] : []),
+      l(0), load(0), i(quads ? NATIVE_MAP_QUADS_MAGIC : NATIVE_MAP_GRAPHICS_MAGIC), op(0x46), l(0), load(4), l(1), op(0x46, 0x71),
       dimension(5), op(0x71), dimension(6), op(0x71),
-      l(1), l(5), l(6), op(0x6c), i(4), op(0x6c), i(NATIVE_MAP_GRAPHICS_HEADER_BYTES), op(0x6a, 0x46, 0x71),
+      ...(quads ? [l(9), i(1), op(0x4f, 0x71), l(9), i(NATIVE_MAP_QUADS_MAX), op(0x4d, 0x71)] : []),
+      l(1), l(5), l(6), op(0x6c), i(4), op(0x6c), pixelOffset, op(0x6a, 0x46, 0x71),
       memoryEnd(l(1)), op(0x71), l(7), i(0), op(0x4a, 0x71), l(7), op(0x23), uleb(epoch), op(0x46, 0x71),
       op(0x23), uleb(status), i(1), op(0x46, 0x71), g(0), i(0), op(0x47, 0x71),
       l(0), load(20), i(0), op(0x4a, 0x71),
       ...(isWorld ? [l(0), load(24), g(9), op(0x46, 0x71)] : []),
-      ...Array.from({length: 8}, (_, index) => concat(finite(32 + index * 4), op(0x71))),
-      op(0x45, 0x04, 0x40), i(0), op(0x0f, 0x0b), stack(4, 64),
-      l(4), l(0), i(NATIVE_MAP_GRAPHICS_HEADER_BYTES), op(0x6a), save(0),
+      ...(quads ? [] : Array.from({length: 8}, (_, index) => concat(finite(32 + index * 4), op(0x71)))),
+      op(0x45, 0x04, 0x40), i(0), op(0x0f, 0x0b), ...(quads ? [quadFloats] : []), stack(4, 64),
+      l(4), l(0), pixelOffset, op(0x6a), save(0),
       l(4), l(5), save(8), l(4), l(6), save(12),
       l(4), i(0), l(4), i(8), op(0x6a), i(1), i(112), call(2249), s(2),
       l(4), l(2), save(16), l(4), i(7), save(20), l(4), i(482), save(24),
@@ -194,15 +261,7 @@ export function appendNativeMapGraphics(input: Uint8Array): Uint8Array {
         i(1), l(4), i(28), op(0x6a), l(4), i(32), op(0x6a), i(0), i(0), call(1554), put(2), increment(7),
       op(0x05), g(2), i(0), l(3), call(1569), op(0x0b),
       l(3), call(748), l(2), call(748),
-      g(1), i(4), call(1446), s(8),
-      ...Array.from({length: 4}, (_, vertex) => concat(
-        l(8), l(0), load(32 + vertex * 8, true), save(vertex * 24, true),
-        l(8), l(0), load(36 + vertex * 8, true), op(0x8c), save(vertex * 24 + 4, true),
-        l(8), f(0), save(vertex * 24 + 8, true), l(8), i(-1), save(vertex * 24 + 12),
-        l(8), f(vertex === 1 || vertex === 2 ? 1 : 0), save(vertex * 24 + 16, true),
-        l(8), f(vertex >= 2 ? 1 : 0), save(vertex * 24 + 20, true))),
-      g(1), i(6), call(1445), s(8),
-      ...[0, 1, 2, 0, 2, 3].map((vertex, index) => concat(l(8), i(vertex), op(0x3b, 1), uleb(index * 2))),
+      quads ? quadMesh : bitmapMesh,
       ...[36, 40, 44].map((offset) => concat(l(4), f(-1000000), save(offset, true))),
       ...[48, 52, 56].map((offset) => concat(l(4), f(1000000), save(offset, true))),
       g(1), l(4), i(36), op(0x6a), l(4), i(48), op(0x6a), call(1449), g(1), call(1448),
@@ -212,13 +271,10 @@ export function appendNativeMapGraphics(input: Uint8Array): Uint8Array {
       ? [[16136, 939, concat(l(0), call(renderIndex))], [16125, 3, concat(l(0), call(destroyIndex))]] as const
       : [[16224, 830, concat(l(4), load(0), call(renderIndex))], [16170, 3, concat(l(0), call(destroyIndex))]] as const;
     for (const [index, originalOffset, bytes] of hooks) {
-      let offset = originalOffset;
-      if (isHover && (index === 16136 || index === 16224)) {
-        const earlierRender = first + (isWorld ? 4 : 0) + 2;
-        offset += (isWorld ? concat(l(4), load(0), call(earlierRender)) : concat(l(0), call(earlierRender))).length;
-      }
+      const offset = originalOffset + (inserted.get(index) ?? 0);
       const local = index - module.functionImportCount; const body = bodies[local]!;
       bodies[local] = concat(body.slice(0, offset), bytes, body.slice(offset));
+      inserted.set(index, (inserted.get(index) ?? 0) + bytes.length);
     }
     for (const [name, index] of [["hide", hideIndex], ["publish", publishIndex]] as const) {
       extraExports.push(concat(encodeName(`gwonmac_${surface}_graphics_${name}`), op(0), uleb(index)));
@@ -227,10 +283,25 @@ export function appendNativeMapGraphics(input: Uint8Array): Uint8Array {
       extraExports.push(concat(encodeName(`gwonmac_${surface}_graphics_${scalarNames[index]}`), op(3), uleb(base + index)));
     }
   }
-  const extraTypes = [op(0x60, 0, 0), op(0x60, 1, 0x7f, 0), op(0x60, 2, 0x7f, 0x7f, 1, 0x7f)];
+  // Answers 1 only when the hovered frame or one of its ancestors has the map's
+  // frame ID. Every frame read is bounded by memory; no game state is written.
+  const pointerIndex = first + extraBodies.length;
+  extraBodies.push(concat(op(1, 2, 0x7f),
+    l(0), i(0), op(0x4c, 0x04, 0x40), i(0), op(0x0f, 0x0b),
+    i(0), load(UNDER_MOUSE), s(1),
+    op(0x03, 0x40),
+      l(1), op(0x45), l(1), op(0xad), i(FRAME_RELATION + 4), op(0xad, 0x7c),
+      op(0x3f, 0, 0xad), op(0x42), sleb(65536), op(0x7e, 0x58, 0x45, 0x72, 0x04, 0x40), i(0), op(0x0f, 0x0b),
+      l(1), load(FRAME_ID), l(0), op(0x46, 0x04, 0x40), i(1), op(0x0f, 0x0b),
+      l(1), load(FRAME_RELATION), s(1), l(1), op(0x45, 0x04, 0x40), i(0), op(0x0f, 0x0b),
+      l(1), i(FRAME_RELATION), op(0x6b), s(1),
+      l(2), i(1), op(0x6a), s(2), l(2), i(MAX_POINTER_DEPTH), op(0x49, 0x0d, 0),
+    op(0x0b), i(0), op(0x0b)));
+  extraExports.push(concat(encodeName("gwonmac_map_pointer_within"), op(0), uleb(pointerIndex)));
+  const extraTypes = [op(0x60, 0, 0), op(0x60, 1, 0x7f, 0), op(0x60, 2, 0x7f, 0x7f, 1, 0x7f), op(0x60, 1, 0x7f, 1, 0x7f)];
   return concat(WASM_HEADER, ...sections.map((section) => encodeSection({id: section.id,
     body: section.id === 1 ? concat(uleb(signatures.count + extraTypes.length), signatures.entries, ...extraTypes)
-      : section.id === 3 ? encodeIndexVector([...types, ...NATIVE_MAP_GRAPHICS_SURFACES.flatMap(() => [0, 1, 1, 2].map((type) => signatures.count + type))])
+      : section.id === 3 ? encodeIndexVector([...types, ...NATIVE_MAP_GRAPHICS_SURFACES.flatMap(() => [0, 1, 1, 2].map((type) => signatures.count + type)), signatures.count + 3])
       : section.id === 6 ? concat(uleb(globals.count + scalarNames.length * NATIVE_MAP_GRAPHICS_SURFACES.length), globals.entries, ...Array.from({length: scalarNames.length * NATIVE_MAP_GRAPHICS_SURFACES.length}, () => concat(op(0x7f, 1), i(0), op(0x0b))))
       : section.id === 7 ? concat(uleb(exportVector.count + extraExports.length), exportVector.entries, ...extraExports)
       : section.id === 10 ? encodeCode([...bodies, ...extraBodies]) : section.body,

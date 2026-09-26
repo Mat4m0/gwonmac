@@ -1,7 +1,7 @@
 /** Mounts one Elite Skills planner; both map surfaces consume its character plan. */
 import { createApp, h, ref, shallowRef } from "vue";
 import EliteSkillsApp from "./EliteSkillsApp.vue";
-import { EMPTY_ELITE_MAP, type EliteMapHandle, type EliteMapView } from "../../../src/shared/elite-map";
+import { EMPTY_ELITE_MAP, type EliteMapHandle, type EliteMapHost, type EliteMapView } from "../../../src/shared/elite-map";
 import type { EliteLocation } from "../../../src/shared/elite-skills";
 import type { EliteTrackingHost } from "./use-elite-tracking";
 import { createSkillCatalogue, type SkillPresentation } from "./skill-catalog";
@@ -12,7 +12,7 @@ export function mountEliteSkills(target: HTMLElement, options: {
   openWiki: (location: EliteLocation, page: "boss" | "skill") => void | Promise<void>;
   onOpenChange: (open: boolean) => void;
   initialView?: EliteMapView;
-}): EliteMapHandle {
+} & EliteMapHost): EliteMapHandle {
   const view = shallowRef(options.initialView ?? EMPTY_ELITE_MAP);
   const catalogue = createSkillCatalogue([]);
   const catalogueVersion = ref(0);
@@ -36,11 +36,12 @@ export function mountEliteSkills(target: HTMLElement, options: {
     ref: component, view: view.value, catalogue, catalogueVersion: catalogueVersion.value,
     catalogueProblem: catalogueProblem.value, trackingHost: options.tracking,
     openWiki: options.openWiki, reloadSkills: () => { void loadSkills(); },
-    onOpenChange: options.onOpenChange,
+    onOpenChange: options.onOpenChange, present: options.present, setMissionMarkers: options.setMissionMarkers,
   }) });
   app.mount(target);
   void loadSkills();
   return { update: (next) => { view.value = next; },
+    pointer: (hit) => component.value?.pointer(hit), activate: (hit) => component.value?.activate(hit),
     find: (id) => component.value?.find(id), close: () => component.value?.close(),
     dispose: () => { disposed = true; app.unmount(); },
   };

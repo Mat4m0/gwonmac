@@ -70,6 +70,20 @@ describe("Maps settings", () => {
     expect(save).toHaveBeenCalledWith({ compassRangeTheme: "monochrome" });
   });
 
+  it("saves the Elite Skills choices and disables Mission Map markers while the planner is off", async () => {
+    const save = vi.fn(async () => undefined);
+    const wrapper = mount(MapsSettings, { props: { settings: fixtureSnapshot.settings, save } });
+    const markers = wrapper.get('[aria-label="Mission Map markers"]');
+    expect(markers.findAll("option").map(option => option.text())).toEqual(["Hunt list", "All planner matches", "Off"]);
+    await markers.setValue("all");
+    expect(save).toHaveBeenCalledWith({ eliteMissionMapMarkers: "all" });
+    await wrapper.get('[aria-label="Elite skill planner"]').setValue(false);
+    expect(save).toHaveBeenCalledWith({ eliteSkillsEnabled: false });
+    expect(markers.attributes("disabled")).toBeUndefined();
+    await wrapper.setProps({ settings: { ...fixtureSnapshot.settings, eliteSkillsEnabled: false } });
+    expect(markers.attributes("disabled")).toBeDefined();
+  });
+
   it("reports a failed persistence call without claiming the change was saved", async () => {
     const wrapper = mount(MapsSettings, { props: { settings: fixtureSnapshot.settings, save: async () => { throw new Error("disk"); } } });
     await wrapper.findAll('input[type="checkbox"]')[0]!.setValue(true);

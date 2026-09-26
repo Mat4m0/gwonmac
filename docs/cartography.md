@@ -143,7 +143,8 @@ continent tint. It works before the map window is opened.
 Terrain, remaining markers, and ranges are composed inside their owning native
 maps. Compass terrain and markers share a native Canvas texture; ranges have a
 separate retained mesh. Mission and World Map bitmap quads draw after their
-native background and before foreground icons. Native matrices and clipping
+native background and before foreground icons. [Elite skills](elite-skills.md#map-markers)
+markers use the same native owner and draw after these layers. Native matrices and clipping
 control continuous motion and coverage by later panels and tooltips. The old
 positioned browser drawing surfaces are removed. Menus and tooltips remain
 application UI. Compass and Mission Map share the inverse-veil painter.

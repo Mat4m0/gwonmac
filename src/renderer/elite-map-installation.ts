@@ -1,6 +1,8 @@
 /**
  * Owns Elite Skills against the certified Maps lifetime and existing input boundary.
- * It reads scalar map projections only and never sends map or gameplay commands.
+ * It reads scalar map projections, draws the planner's markers inside the native
+ * maps, and claims only marker presses on a map the game routes the pointer to.
+ * It never sends map or gameplay commands.
  */
 import { isTravelCharacterKey } from "../shared/travel-history.js";
 import type { ToolboxObservation } from "../shared/builds/live-party.js";
@@ -14,6 +16,9 @@ import { eliteMapSurfaces } from "./elite-map-projection.js";
 import { ensureToolsStylesheet } from "./tools-stylesheet.js";
 import { requireToolsApi } from "./tools-native-api.js";
 import { createNonActivatingSurface } from "./non-activating-surface.js";
+import { createEliteMapGraphics } from "./elite-map-graphics.js";
+import { EMPTY_ELITE_SCENE, type PlacedEliteMarker } from "../shared/elite-map-scene.js";
+import { installEliteMapPointer, type EliteMapPointerSurface } from "../shared/ui/elite-map-pointer.js";
 export function createEliteMapInstallation(options: {
   exports: WebAssembly.Exports;
   state(): Readonly<{ region: CompanionPlayRegionState; observation: ToolboxObservation; onWorldMap: boolean }>;
@@ -52,11 +57,22 @@ export function createEliteMapInstallation(options: {
       root.addEventListener("wheel", (event) => event.stopPropagation(), { passive: true });
       root.addEventListener("pointerdown", () => surface.raise(), true);
       remove = () => { surface.dispose(); input.dispose(); root.remove(); };
+      const releaseHost = remove;
+      const graphics = createEliteMapGraphics(options.exports, document);
+      remove = () => { try { graphics.dispose(); } finally { releaseHost(); } };
+      const within = options.exports.gwonmac_map_pointer_within;
+      const owns = (frameId: number) => typeof within === "function" && within(frameId) === 1;
+      let scene = EMPTY_ELITE_SCENE;
+      let targets: EliteMapPointerSurface[] = [];
+      const pointer = installEliteMapPointer({ view: window, accepts: (target) => target === canvas,
+        surfaces: () => targets, hover: (hit) => app?.pointer(hit), activate: (hit) => app?.activate(hit) });
+      remove = () => { pointer.dispose(); try { graphics.dispose(); } finally { releaseHost(); } };
       app = bundle.mountEliteSkills(root, { nativeApi: requireToolsApi(), onOpenChange: (open) => {
         surface.setOpen(open);
         if (open && document.pointerLockElement) document.exitPointerLock();
         input.releaseKeyboard();
-      } });
+      }, present: (next) => { scene = next; },
+      setMissionMarkers: async (mode) => { await window.gwNative.settings.set({ eliteMissionMapMarkers: mode }); } });
       cleanup = remove;
       let lastView = "";
       let lastParty = "";
@@ -82,17 +98,35 @@ export function createEliteMapInstallation(options: {
           nextPartyPoll = now + 200;
         }
         const before = context?.refresh() ? context.snapshot() : null;
+        const missionFrame = ready ? mission?.snapshot() ?? null : null;
+        const worldFrame = ready ? world?.snapshot() ?? null : null;
+        const canvasBox = canvas.getBoundingClientRect();
         const surfaces = eliteMapSurfaces({ context: before, mapId, anchor: ready ? anchor?.snapshot() ?? null : null, onWorldMap, compass: ready ? compass?.snapshot() ?? null : null,
-          mission: ready ? mission?.snapshot() ?? null : null, world: ready ? world?.snapshot() ?? null : null,
-          canvas: canvas.getBoundingClientRect() });
+          mission: missionFrame, world: worldFrame, canvas: canvasBox });
         const after = context?.snapshot();
         const stable = before && after && before.sequence === after.sequence;
         const next = { ...(stable ? surfaces : { world: null, mission: null }), mapId,
           characterKey: ready && isTravelCharacterKey(region.characterKey) ? region.characterKey : null,
-          observation: observed };
-        // Vue receives changes only. Native pan/zoom still follows animation frames.
-        const signature = JSON.stringify([next.world, next.mission, next.mapId, next.characterKey, lastParty]);
+          observation: observed, missionMarkers: window.gwToolsSettings().eliteMissionMapMarkers };
+        // Native pan and zoom move the drawn markers every frame. Vue changes only
+        // when a map opens, closes, moves its box, or its planner input changes.
+        const signature = JSON.stringify([next.world?.box, next.world?.continent, next.mission?.box, Boolean(next.mission?.transform),
+          next.mapId, next.characterKey, lastParty, next.missionMarkers]);
         if (signature !== lastView) { lastView = signature; app.update(next); }
+        const pixelRatio = canvas.width / Math.max(1, canvasBox.width);
+        const placedWorld = graphics.update("world", next.world && worldFrame ? { area: worldFrame.generation, continent: worldFrame.continent,
+          surface: next.world, markers: scene.world, pixelRatio, zoom: worldFrame.zoom } : null);
+        const missionSurface = next.mission?.transform ? { box: next.mission.box, transform: next.mission.transform } : null;
+        const placedMission = graphics.update("mission", missionSurface && missionFrame ? { area: missionFrame.generation, continent: 0,
+          // The Mission Map zooms from 1 to 3.5; markers grow over that same range.
+          surface: missionSurface, markers: scene.mission, pixelRatio, zoom: (missionFrame.zoom - 1) / 2.5 } : null);
+        const target = (name: "world" | "mission", box: EliteMapPointerSurface["box"], placed: readonly PlacedEliteMarker[], frameId: number) =>
+          placed.length ? [{ name, box, placed, ownsPointer: () => owns(frameId) }] : [];
+        targets = [
+          ...(missionSurface && missionFrame ? target("mission", missionSurface.box, placedMission, missionFrame.frameId) : []),
+          ...(next.world && worldFrame ? target("world", next.world.box, placedWorld, worldFrame.frameId) : []),
+        ];
+        pointer.refresh();
         frame = requestAnimationFrame(render);
       };
       render();

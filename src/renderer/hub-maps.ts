@@ -21,6 +21,7 @@ export function openHubMaps(hub: HubPresenter<HTMLElement>) {
         ['cartographyGridEnabled', 'Exploration grid', 'cartographyGridOpacity', 'Grid opacity'],
         ['cartographyOverlayEnabled', 'Walkable terrain', 'cartographyWalkabilityOpacity', 'Terrain opacity'],
         ['compassRangeIndicatorsEnabled', 'Compass ranges', null, null],
+        ['eliteSkillsEnabled', 'Elite skills', null, null],
       ] as const) {
         const group = doc.createElement('div'); group.className = 'hub-map-layer';
         const label = doc.createElement('label'); label.className = 'ui-check hub-map-toggle';

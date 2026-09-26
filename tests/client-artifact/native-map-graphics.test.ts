@@ -6,7 +6,8 @@ import { transformCartographySpikeWasm } from "../../src/main/certification/path
 import { wasmEvidence } from "../../src/main/certification/wasm-evidence.js";
 import { concat, encodeCode, encodeSection, parseCode, parseExports, sectionById, splitSections, uleb, WASM_HEADER } from "../../src/main/core/wasm-binary.js";
 import { encodeName } from "../../src/main/certification/cartography-transform-internals.js";
-import { NATIVE_MAP_GRAPHICS_MAGIC } from "../../src/shared/native-map-graphics.js";
+import { NATIVE_MAP_GRAPHICS_MAGIC, NATIVE_MAP_GRAPHICS_SURFACES, NATIVE_MAP_QUADS_MAGIC, NATIVE_MAP_QUADS_MAX,
+  NATIVE_MAP_QUAD_SURFACES } from "../../src/shared/native-map-graphics.js";
 
 test("each native map owns its mesh, restores matrices and refuses stale or malformed textures", async () => {
   assert.ok(process.env.GW_CLIENT_WASM);
@@ -15,7 +16,9 @@ test("each native map owns its mesh, restores matrices and refuses stale or malf
   const sections = splitSections(output); const bodies = parseCode(sectionById(sections, 10));
   const evidence = wasmEvidence(output); assert.ok(evidence); const module = evidence.moduleView();
   const exported = parseExports(sectionById(sections, 7)); const decoded = evidence.decodeFunctions([]);
-  for (const surface of ["mission", "world", "mission_hover", "world_hover"] as const) {
+  for (const surface of NATIVE_MAP_GRAPHICS_SURFACES) {
+    const quads = (NATIVE_MAP_QUAD_SURFACES as readonly string[]).includes(surface);
+    const count = quads ? 2 : 1;
     const publishIndex = exported.find((entry) => entry.name === `gwonmac_${surface}_graphics_publish`)?.index;
     assert.ok(publishIndex !== undefined);
     const selected = Array.from({length: 4}, (_, index) => publishIndex - 3 + index);
@@ -50,8 +53,8 @@ test("each native map owns its mesh, restores matrices and refuses stale or malf
     let textures = 0; let meshes = 0; let draws = 0;
     const { exports } = new WebAssembly.Instance(new WebAssembly.Module(Uint8Array.from(fixture)), {peer: {
       1444: (format: number, flags: number) => { assert.deepEqual([format, flags], [265, 0]); meshes += 1; return 11; },
-      1445: (handle: number, count: number) => { assert.deepEqual([handle, count], [11, 6]); return 131072; },
-      1446: (handle: number, count: number) => { assert.deepEqual([handle, count], [11, 4]); return 65536; },
+      1445: (handle: number, indices: number) => { assert.deepEqual([handle, indices], [11, 6 * count]); return 131072; },
+      1446: (handle: number, vertices: number) => { assert.deepEqual([handle, vertices], [11, 4 * count]); return 65536; },
       1448: (handle: number) => { assert.equal(handle, 11); }, 1449: () => {},
       1554: (count: number, buffer: number, material: number, flags: number, extra: number) => {
         assert.deepEqual([count, view.getUint32(buffer, true), view.getUint32(material, true), flags, extra], [1, 11, 22, 0, 0]); return 12;
@@ -69,7 +72,7 @@ test("each native map owns its mesh, restores matrices and refuses stale or malf
       264: (to: number, from: number, bytes: number) => { assert.equal(bytes, 52); new Uint8Array(view.buffer).copyWithin(to, from, from + bytes); },
       2956: (pass: number, count: number, pointer: number, flags: number) => { assert.deepEqual([pass, count, view.getUint32(pointer, true), flags], [0, 1, 12, 0]); draws += 1; matrixEvents.push("draw"); },
       2249: (mips: number, format: number, dimensions: number, levels: number, flags: number) => {
-        assert.deepEqual([view.getUint32(mips, true), format, view.getUint32(dimensions, true), view.getUint32(dimensions + 4, true), levels, flags], [2112, 0, 64, 64, 1, 112]); textures += 1; return 21;
+        assert.deepEqual([view.getUint32(mips, true), format, view.getUint32(dimensions, true), view.getUint32(dimensions + 4, true), levels, flags], [2112 + (quads ? count * 32 : 0), 0, 64, 64, 1, 112]); textures += 1; return 21;
       },
       3137: () => 22, 748: (handle: number) => { released.push(handle); },
     }});
@@ -82,11 +85,13 @@ test("each native map owns its mesh, restores matrices and refuses stale or malf
     view.setUint32(2734712, DEVICE, true);
     view.setUint32(DEVICE + 460, 3, true);
     scalar("stack", 196608); scalar("gwonmac_cartography_context_status", 1); scalar("gwonmac_cartography_context_area_epoch", 7);
-    const owner = 256; const region = 2048; const bytes = 64 + 64 * 64 * 4;
+    const owner = 256; const region = 2048; const bytes = 64 + (quads ? count * 32 : 0) + 64 * 64 * 4;
     view.setFloat32(1024, 17, true); view.setUint32(owner + 4, 2, true);
     const header = () => {
-      [NATIVE_MAP_GRAPHICS_MAGIC, bytes, 7, 64, 64, 1, 2, 0].forEach((value, index) => view.setUint32(region + index * 4, value, true));
-      [100, 200, 300, 200, 300, 400, 100, 400].forEach((value, index) => view.setFloat32(region + 32 + index * 4, value, true));
+      [quads ? NATIVE_MAP_QUADS_MAGIC : NATIVE_MAP_GRAPHICS_MAGIC, bytes, 7, 64, 64, 1, 2, quads ? count : 0].forEach((value, index) => view.setUint32(region + index * 4, value, true));
+      if (!quads) [100, 200, 300, 200, 300, 400, 100, 400].forEach((value, index) => view.setFloat32(region + 32 + index * 4, value, true));
+      else [[100, 200, 300, 400, 0, 0, 0.5, 1], [500, 600, 520, 620, 0.5, 0, 1, 1]].flat()
+        .forEach((value, index) => view.setFloat32(region + 64 + index * 4, value, true));
     };
     const assertQueueBusy = () => {
       for (const phase of [null, 0, 1, 2, 4]) {
@@ -106,6 +111,12 @@ test("each native map owns its mesh, restores matrices and refuses stale or malf
     invoke("render", owner); assert.equal(draws, 1);
     assert.deepEqual(matrixEvents.splice(0), ["save", "identity", "capture-model", "capture-view", "draw", "restore"]);
     assert.equal(view.getFloat32(65536, true), 100); assert.equal(view.getFloat32(65540, true), -200);
+    assert.equal(view.getFloat32(65536 + 2 * 24, true), 300); assert.equal(view.getFloat32(65536 + 2 * 24 + 4, true), -400);
+    if (quads) {
+      assert.equal(view.getFloat32(65536 + 24 + 16, true), 0.5, "each quad samples its own atlas cell");
+      assert.equal(view.getFloat32(65536 + 96, true), 500, "the second quad has its own world rectangle");
+      assert.deepEqual([0, 1, 2, 3, 4, 5].map((index) => view.getUint16(131072 + 12 + index * 2, true)), [4, 5, 6, 4, 6, 7]);
+    }
     invoke("render", owner); assert.equal(textures, 1, "native draws reuse the texture");
     // While the native renderer holds the model, publishing reports busy and
     // changes nothing; the host retries on a later frame.
@@ -119,7 +130,13 @@ test("each native map owns its mesh, restores matrices and refuses stale or malf
     for (const [offset, value] of [[0, 0], [8, 6], [12, 63], [16, 4096], [20, 0]] as const) {
       header(); view.setUint32(region + offset, value, true); assert.equal(invoke("publish", region, bytes), 0);
     }
-    header(); view.setFloat32(region + 32, NaN, true); assert.equal(invoke("publish", region, bytes), 0);
+    header(); view.setFloat32(region + (quads ? 64 + 36 : 32), NaN, true); assert.equal(invoke("publish", region, bytes), 0);
+    if (quads) {
+      header(); view.setFloat32(region + 64 + 40, 2e6, true); assert.equal(invoke("publish", region, bytes), 0, "unbounded quad");
+      for (const refused of [0, NATIVE_MAP_QUADS_MAX + 1]) {
+        header(); view.setUint32(region + 28, refused, true); assert.equal(invoke("publish", region, bytes), 0, `quad count ${refused}`);
+      }
+    }
     assert.equal(invoke("publish", memory.buffer.byteLength - 4, bytes), 0); assert.equal(invoke("publish", -1, bytes), 0);
     assert.equal(textures, 2);
     header(); assert.equal(invoke("publish", region, bytes), 1);
@@ -132,4 +149,49 @@ test("each native map owns its mesh, restores matrices and refuses stale or malf
     }
     released.length = 0; invoke("destroy", owner); invoke("destroy", owner); assert.deepEqual(released, [12, 11]);
   }
+});
+
+test("each map draws its surfaces in the shared order", async () => {
+  assert.ok(process.env.GW_CLIENT_WASM);
+  const output = transformCartographySpikeWasm(new Uint8Array(await readFile(process.env.GW_CLIENT_WASM)), "relocated");
+  const exported = parseExports(sectionById(splitSections(output), 7));
+  const evidence = wasmEvidence(output); assert.ok(evidence); const decoded = evidence.decodeFunctions([]);
+  for (const [map, dispatcher] of [["mission", 16136], ["world", 16224]] as const) {
+    const renders = NATIVE_MAP_GRAPHICS_SURFACES.filter((surface) => surface.startsWith(map)).map((surface) => {
+      const publish = exported.find((entry) => entry.name === `gwonmac_${surface}_graphics_publish`)?.index;
+      assert.ok(publish !== undefined); return publish - 1;
+    });
+    const sites = decoded.find((row) => row.functionIndex === dispatcher)?.callSites; assert.ok(sites);
+    const offsets = renders.map((index) => { const calls = sites.get(index); assert.equal(calls?.length, 1); return calls[0]!.offset; });
+    assert.deepEqual(offsets, [...offsets].sort((a, b) => a - b), `${map} surfaces draw in declaration order`);
+  }
+});
+
+test("the map pointer answer follows the hovered frame's ancestors and refuses bad memory", async () => {
+  assert.ok(process.env.GW_CLIENT_WASM);
+  const output = transformCartographySpikeWasm(new Uint8Array(await readFile(process.env.GW_CLIENT_WASM)), "relocated");
+  const sections = splitSections(output); const bodies = parseCode(sectionById(sections, 10));
+  const evidence = wasmEvidence(output); assert.ok(evidence); const module = evidence.moduleView();
+  const index = parseExports(sectionById(sections, 7)).find((entry) => entry.name === "gwonmac_map_pointer_within")?.index;
+  assert.ok(index !== undefined);
+  assert.equal(evidence.decodeFunctions([]).find((row) => row.functionIndex === index)?.callSites.size ?? 0, 0, "the answer calls nothing");
+  const section = (id: number, body: Uint8Array) => encodeSection({id, body});
+  const fixture = concat(WASM_HEADER, section(1, sectionById(sections, 1)),
+    section(3, concat(uleb(1), uleb(module.functionTypeIndices[index]!))), section(5, concat(Uint8Array.of(1, 0), uleb(96))),
+    section(7, concat(uleb(2), encodeName("pointer"), Uint8Array.of(0, 0), encodeName("memory"), Uint8Array.of(2, 0))),
+    section(10, encodeCode([bodies[index - module.functionImportCount]!])));
+  const { exports } = new WebAssembly.Instance(new WebAssembly.Module(Uint8Array.from(fixture)));
+  const memory = exports.memory; assert.ok(memory instanceof WebAssembly.Memory); const view = new DataView(memory.buffer);
+  const pointer = exports.pointer; assert.equal(typeof pointer, "function"); if (typeof pointer !== "function") return;
+  const UNDER_MOUSE = 5911100; const [map, panel, marker] = [65536, 131072, 196608];
+  const frame = (at: number, id: number, parent: number) => { view.setUint32(at + 0xbc, id, true); view.setUint32(at + 0x128, parent ? parent + 0x128 : 0, true); };
+  frame(map, 77, 0); frame(panel, 90, 0); frame(marker, 12, map);
+  view.setUint32(UNDER_MOUSE, 0, true); assert.equal(pointer(77), 0, "nothing hovered");
+  view.setUint32(UNDER_MOUSE, map, true); assert.equal(pointer(77), 1); assert.equal(pointer(0), 0); assert.equal(pointer(-1), 0);
+  view.setUint32(UNDER_MOUSE, marker, true); assert.equal(pointer(77), 1, "a child of the map counts");
+  view.setUint32(UNDER_MOUSE, panel, true); assert.equal(pointer(77), 0, "a covering panel does not");
+  view.setUint32(UNDER_MOUSE, memory.buffer.byteLength - 8, true); assert.equal(pointer(77), 0, "out-of-bounds frames are refused");
+  let tail = 262144; frame(tail, 1, 0);
+  for (let depth = 0; depth < 20; depth += 1) { const next = tail + 1024; frame(next, 2, tail); tail = next; }
+  view.setUint32(UNDER_MOUSE, tail, true); assert.equal(pointer(1), 0, "the ancestor walk is bounded");
 });

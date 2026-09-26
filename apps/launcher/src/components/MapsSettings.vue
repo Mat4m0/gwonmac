@@ -13,6 +13,11 @@ import {
   type CompassRangeTheme,
 } from "@shared/compass-ranges";
 import {
+  ELITE_MISSION_MAP_MARKERS,
+  ELITE_MISSION_MAP_MARKER_LABELS,
+  type EliteMissionMapMarkers,
+} from "@shared/elite-map-settings";
+import {
   CARTOGRAPHY_BUILTIN_PRESETS,
   isCartographyBuiltinPresetId,
   type CartographyColor,
@@ -216,6 +221,11 @@ async function updateUnseen(patch: Partial<CartographyPresetStyle["grid"]["unsee
       <ShortcutSetting v-if="shortcuts" action="cartography.walkability.toggle" :shortcuts="shortcuts" :api="api" :perform-save="performSave" />
       <input id="map-terrain" type="checkbox" aria-label="Walkable terrain" aria-describedby="map-terrain-help" :checked="settings.cartographyOverlayEnabled" @change="persist({ cartographyOverlayEnabled: ($event.currentTarget as HTMLInputElement).checked })" />
     </div>
+  </div>
+  <h2 class="settings-subheading">Elite skills</h2>
+  <div class="setting-group map-elite-skills">
+    <label><span><strong>Elite skill planner</strong><small>Adds the planner to the World Map and your Hunt list to the Mission Map.</small></span><input type="checkbox" aria-label="Elite skill planner" :checked="settings.eliteSkillsEnabled" @change="persist({ eliteSkillsEnabled: ($event.currentTarget as HTMLInputElement).checked })" /></label>
+    <label><span><strong>Mission Map markers</strong><small>What the Mission Map shows while you play. The Hunt list includes your target.</small></span><select aria-label="Mission Map markers" :value="settings.eliteMissionMapMarkers" :disabled="!settings.eliteSkillsEnabled" @change="persist({ eliteMissionMapMarkers: ($event.currentTarget as HTMLSelectElement).value as EliteMissionMapMarkers })"><option v-for="mode in ELITE_MISSION_MAP_MARKERS" :key="mode" :value="mode">{{ ELITE_MISSION_MAP_MARKER_LABELS[mode] }}</option></select></label>
   </div>
   <h2 class="settings-subheading">Map appearance</h2>
   <div class="setting-group map-appearance">

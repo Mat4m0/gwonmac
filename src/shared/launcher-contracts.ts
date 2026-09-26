@@ -4,6 +4,7 @@
  * commands and the rebuildable projection the Vue application renders.
  */
 import { isAlcoholTimerPosition } from "./alcohol-timer.js";
+import { isEliteMissionMapMarkers, type EliteMissionMapMarkers } from "./elite-map-settings.js";
 import type {
   AppSettings,
   AppUpdateState,
@@ -231,6 +232,8 @@ export interface LauncherSettings {
   readonly cartographyWalkabilityOpacity: number;
   readonly cartographyGridOpacity: number;
   readonly cartographyControlIdleOpacity: number;
+  readonly eliteSkillsEnabled: boolean;
+  readonly eliteMissionMapMarkers: EliteMissionMapMarkers;
 }
 
 export type LauncherSettingsPatch = Partial<LauncherSettings>;
@@ -407,7 +410,7 @@ export function parseLauncherSettingsPatch(value: unknown): LauncherSettingsPatc
     "compassRangeTheme",
     "cartographyRevealMode",
     "cartographyPresetLibrary", "cartographyWalkabilityOpacity", "cartographyGridOpacity",
-    "cartographyControlIdleOpacity",
+    "cartographyControlIdleOpacity", "eliteSkillsEnabled", "eliteMissionMapMarkers",
   ], "launcher settings patch");
   const result: { -readonly [K in keyof LauncherSettings]?: LauncherSettings[K] } = {};
   if (source.uiStyle !== undefined) {
@@ -438,6 +441,7 @@ export function parseLauncherSettingsPatch(value: unknown): LauncherSettingsPatc
     "chatFilterAllyDrops", "chatFilterHallOfHeroes", "chatFilterTitleAchievements",
     "cartographyOverlayEnabled", "cartographyGridEnabled", "cartographyCompassGridEnabled", "compassRangeIndicatorsEnabled",
     "compassRangeEarshotEnabled", "compassRangeCastEnabled", "compassRangeSpiritEnabled", "compassRangeSpiritExtendedEnabled",
+    "eliteSkillsEnabled",
   ] as const) {
     if (source[key] === undefined) continue;
     if (typeof source[key] !== "boolean") throw new Error(`${key} must be a boolean`);
@@ -469,6 +473,10 @@ export function parseLauncherSettingsPatch(value: unknown): LauncherSettingsPatc
   if (source.cartographyRevealMode !== undefined) {
     if (!["off", "normal", "birds-eye"].includes(source.cartographyRevealMode as string)) throw new Error("cartography reveal mode is invalid");
     result.cartographyRevealMode = source.cartographyRevealMode as AppSettings["cartographyRevealMode"];
+  }
+  if (source.eliteMissionMapMarkers !== undefined) {
+    if (!isEliteMissionMapMarkers(source.eliteMissionMapMarkers)) throw new Error("Mission Map markers are invalid");
+    result.eliteMissionMapMarkers = source.eliteMissionMapMarkers;
   }
   if (source.compassRangeTheme !== undefined) {
     if (!COMPASS_RANGE_THEMES.includes(source.compassRangeTheme as CompassRangeTheme)) throw new Error("Compass range theme is invalid");

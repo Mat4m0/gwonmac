@@ -32,6 +32,7 @@ import {
   type RendererSettingsPatch,
 } from "../../shared/contracts.js";
 import { isDigest } from "../../shared/digest.js";
+import { isEliteMissionMapMarkers } from "../../shared/elite-map-settings.js";
 import { AppError } from "../../shared/errors.js";
 import { isHubShortcuts } from '../../shared/hub-preferences.js';
 import { isShortcutOverrides } from "../../shared/keyboard-shortcuts.js";
@@ -233,6 +234,12 @@ export function parseSettings(raw: unknown): AppSettings {
     }
     out.cartographyRevealMode = mode;
   }
+  if ("eliteMissionMapMarkers" in src) {
+    if (!isEliteMissionMapMarkers(src.eliteMissionMapMarkers)) {
+      throw new AppError("bad_settings", "settings.eliteMissionMapMarkers is invalid");
+    }
+    out.eliteMissionMapMarkers = src.eliteMissionMapMarkers;
+  }
   if ("hubShortcuts" in src) {
     if (!isHubShortcuts(src.hubShortcuts) || src.hubShortcuts.some(entry => /^(build|team):/u.test(entry.id))) throw new AppError("bad_settings", "Invalid Hub shortcuts");
     out.hubShortcuts = src.hubShortcuts.map(entry => ({ ...entry }));
@@ -286,6 +293,7 @@ export function parseSettings(raw: unknown): AppSettings {
     "compassRangeCastEnabled",
     "compassRangeSpiritEnabled",
     "compassRangeSpiritExtendedEnabled",
+    "eliteSkillsEnabled",
     "buildLibrary",
     "tradeChat",
     "xunlaiStorage",

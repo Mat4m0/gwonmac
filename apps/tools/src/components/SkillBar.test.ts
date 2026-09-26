@@ -13,6 +13,7 @@ describe("SkillBar", () => {
     const catalogue = createSkillCatalogue([{
       id: skill,
       name: "Orison of Healing",
+      type: "Spell",
       profession: "Mo",
       attribute: "HealingPrayers",
       elite: false,

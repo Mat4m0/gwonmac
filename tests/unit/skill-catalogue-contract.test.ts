@@ -8,6 +8,7 @@ const skill = () => ({
   profession: "Me",
   attribute: "DominationMagic",
   elite: false,
+  type: "Spell",
   availability: "pve",
   energyCost: 15,
   adrenalineCost: 0,
@@ -30,6 +31,10 @@ test("one malformed skill refuses the whole catalogue", () => {
   assert.throws(
     () => parseSkillCatalogue([skill(), { ...skill(), rechargeSeconds: "soon" }]),
     /\[1\]\.rechargeSeconds must be a finite number/,
+  );
+  assert.throws(
+    () => parseSkillCatalogue([{ ...skill(), type: "Touch Skill" }]),
+    /\[0\]\.type must be a known skill type/,
   );
   assert.throws(
     () => parseSkillCatalogue([{ ...skill(), profession: "Chronomancer" }]),

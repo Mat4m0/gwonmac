@@ -613,7 +613,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
     const eliteRegion = snapshot().playRegionState;
     const nextEliteIdentity = eliteRegion.status === "ready" ? `${eliteRegion.characterKey}:${eliteRegion.mapId}` : "";
     if (nextEliteIdentity !== eliteIdentity) { party = null; eliteIdentity = nextEliteIdentity; }
-    eliteMaps.update(policy().cartography);
+    eliteMaps.update(policy().cartography && snapshot().settings.eliteSkillsEnabled);
     hubPeople?.setEnabled(policy().travel || policy().whispers);
     quickItemMoveInstallation?.update(policy().quickItemMove);
   };

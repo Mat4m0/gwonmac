@@ -68,6 +68,8 @@ describe("settings", () => {
       cartographyWalkabilityOpacity: 55,
       cartographyGridOpacity: 65,
       cartographyControlIdleOpacity: 35,
+      eliteSkillsEnabled: true,
+      eliteMissionMapMarkers: "saved",
       hubShortcuts: [],
       gwonmacTools: false,
       buildLibrary: true,
@@ -111,6 +113,19 @@ describe("settings", () => {
     assert.equal(parseSettings({ cartographyGridEnabled: true }).cartographyCompassGridEnabled, false);
     assert.deepEqual(parseSettingsPatch({ cartographyCompassGridEnabled: true }), { cartographyCompassGridEnabled: true });
     assert.throws(() => parseSettingsPatch({ cartographyCompassGridEnabled: "true" }), AppError);
+  });
+
+  it("defaults Elite Skills on for existing settings and validates its Mission Map markers", () => {
+    const defaults = parseSettings({ cartographyEnabled: true });
+    assert.equal(defaults.eliteSkillsEnabled, true);
+    assert.equal(defaults.eliteMissionMapMarkers, "saved");
+    assert.throws(() => parseSettingsPatch({ eliteMissionMapMarkers: "target" }), AppError);
+    assert.deepEqual(parseRendererSettingsPatch({ eliteSkillsEnabled: false, eliteMissionMapMarkers: "all" }), {
+      eliteSkillsEnabled: false,
+      eliteMissionMapMarkers: "all",
+    });
+    assert.throws(() => parseSettingsPatch({ eliteSkillsEnabled: "false" }), AppError);
+    assert.throws(() => parseSettingsPatch({ eliteMissionMapMarkers: "boss" }), AppError);
   });
 
   it("defaults Compass ranges off while preserving each selected range", () => {
@@ -185,6 +200,8 @@ describe("settings", () => {
       cartographyWalkabilityOpacity: 55,
       cartographyGridOpacity: 65,
       cartographyControlIdleOpacity: 35,
+      eliteSkillsEnabled: true,
+      eliteMissionMapMarkers: "saved",
       hubShortcuts: [],
       gwonmacTools: false,
       buildLibrary: true,
@@ -640,6 +657,8 @@ describe("settings", () => {
       "controllerPromptStyle",
       "dataStrategy",
       "effectTimersEnabled",
+      "eliteMissionMapMarkers",
+      "eliteSkillsEnabled",
       "extendedMemoryEnabled",
       "formatVersion",
       "gwonmacTools",
@@ -763,6 +782,8 @@ describe("settings", () => {
       cartographyWalkabilityOpacity: 55,
       cartographyGridOpacity: 65,
       cartographyControlIdleOpacity: 35,
+      eliteSkillsEnabled: true,
+      eliteMissionMapMarkers: "saved",
       hubShortcuts: [],
       gwonmacTools: false,
       buildLibrary: true,
