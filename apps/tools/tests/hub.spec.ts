@@ -508,7 +508,7 @@ test('account search offers explicit keep-open and replacement choices', async (
   await expect(rows.nth(0)).toContainText('Close Main and open Second');
   await expect(rows.nth(1)).toContainText('Open Second');
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', /Account/);
-  await search.press('ArrowDown'); await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter');
+  await search.press('ArrowDown'); await page.keyboard.press('Enter');
   await expect(page.locator('#app')).toHaveAttribute('data-action', 'Account Second open');
   await page.getByRole('button', { name: 'Open Hub', exact: true }).click();
   await search.fill('acc second'); await search.press('Enter');
@@ -694,18 +694,20 @@ test('typing after result navigation resumes the search at its caret without run
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
   await search.press('ArrowDown');
-  await expect(page.locator('.hub-row[aria-selected="true"]')).toBeFocused();
+  await expect(page.locator('.hub-row[aria-selected="true"]')).toHaveCount(1);
+  await expect(search).toBeFocused();
   await page.keyboard.type('build monk');
   await expect(search).toBeFocused();
   await expect(search).toHaveValue('build monk');
   await expect(page.locator('.hub-build-row')).toHaveCount(4);
   await search.press('ArrowDown'); await page.keyboard.press('ArrowDown');
+  await expect(search).toHaveAttribute('aria-activedescendant', 'hub-result-2');
   await page.keyboard.type(' Protection');
   await expect(search).toHaveValue('build monk Protection');
   await expect(page.locator('.hub-build-row')).toHaveCount(1);
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', /command|apply/);
   // A selection in the existing query is replaced, rather than appending twice.
-  await search.press('Home'); await search.press('Shift+End'); await search.press('ArrowDown');
+  await search.press('ControlOrMeta+a'); await search.press('ArrowDown');
   await page.keyboard.type('build smiter');
   await expect(search).toHaveValue('build smiter');
   await search.press('ArrowDown'); await page.keyboard.press('Enter');
@@ -713,6 +715,8 @@ test('typing after result navigation resumes the search at its caret without run
   await search.press('ArrowDown'); await page.keyboard.type('hero');
   await expect(search).toHaveValue('hero');
   await expect(page.locator('.hub-row')).toContainText('Apply to hero');
+  // Focus never left search, so Backspace edits the query instead of leaving the page.
   await search.press('ArrowDown'); await page.keyboard.press('Backspace');
-  await expect(search).toHaveValue('build smiter');
+  await expect(search).toHaveValue('her');
+  await expect(page.locator('.hub-summary')).toContainText('Smiter');
 });
