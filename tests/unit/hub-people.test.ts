@@ -141,6 +141,20 @@ test('the invite scope invites only an exact name, first, and names it in the fo
   });
 });
 
+test('a single typed word never becomes the default invite', async () => {
+  const { party, calls } = invitePort();
+  await withPeople(ALL_TOOLS, ({ source, page }) => {
+    assert.deepEqual(source.search('invite z').map(row => `${row.title}|${row.unavailable ?? row.action}`),
+      ['z|Type the full character name'], 'nothing known matches, so the partial name says why');
+    assert.deepEqual(source.search('invite Mo').map(row => `${row.title}|${row.unavailable ?? row.action}`),
+      ['Kai Account|View actions', 'Moira Chatter|View actions', 'Mo|Type the full character name'],
+      'known people come first; the partial name stays last');
+    void source.search('whisper Mo').find(row => row.id.startsWith('person:typed:'))!.actions!();
+    assert.equal(page().find(row => row.id === 'person:invite')!.unavailable, 'Type the full character name');
+    assert.deepEqual(calls, []);
+  }, party);
+});
+
 test('Invite is unavailable for a friend in another map and says where they are', async () => {
   const invited: string[] = [];
   const region = { status: 'ready', sequence: 1, mapId: 55, instanceType: 0, playRegion: 'pve', travelContext: 'world', characterKey: 'a',

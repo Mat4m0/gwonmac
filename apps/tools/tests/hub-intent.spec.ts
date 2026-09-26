@@ -183,9 +183,14 @@ test.describe('party invite', () => {
     await page.keyboard.press('Enter');
     await expect(page.locator('.hub-caption')).toHaveText('Mo Kaiser');
     await page.getByRole('button', { name: 'Home', exact: true }).click();
-    await search.fill('invite a'); await search.press('Enter');
-    expect(await invites(page)).not.toMatch(/Alpha|Kaiser|Bearer/);
-    await page.getByRole('button', { name: 'Open Hub', exact: true }).click();
+    for (const partial of ['invite a', 'invite Mo']) {
+      await search.fill(partial);
+      await expect(page.locator('.hub-row').last()).toContainText('Type the full character name');
+      await search.press('Enter');
+      expect(await invites(page)).toBeNull();
+      await expect(page.locator('#hub')).toBeVisible();
+      await page.getByRole('button', { name: 'Home', exact: true }).click();
+    }
     await search.fill('invite Mo Kai'); await search.press('Enter');
     await expect(page.locator('#app')).toHaveAttribute('data-invites', /(^|\|)Mo Kai$/);
     await expect(page.locator('.hub-receipt')).toHaveText('Sent /invite Mo Kai. Guild Wars answers in chat.');

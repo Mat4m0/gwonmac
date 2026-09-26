@@ -36,6 +36,14 @@ export function isCharacterName(value: string): boolean {
     && !/[,"]/u.test(value) && !hasControl(value) && !/[\ud800-\udfff]/u.test(value);
 }
 
+/**
+ * Whether this text can be a whole Guild Wars character name. Every character
+ * name has at least two words, so one word is only part of a name.
+ */
+export function isFullCharacterName(value: string): boolean {
+  return isCharacterName(value) && /\S\s+\S/u.test(value);
+}
+
 /** The chat command that invites one character by name into the player's party. */
 export const PARTY_INVITE_PREFIX = "/invite ";
 
