@@ -186,6 +186,22 @@ test('Command-Q opens the native Quit or Reload sheet over the open Hub, and Can
   } finally { await closeOffline(fixture); }
 });
 
+test('Shift-Tab moves focus inside the open Hub and never reaches the game', async () => {
+  const fixture = await launch();
+  try {
+    const { page } = fixture;
+    const hub = hubOf(page);
+    await chord(fixture, 'R', ['meta']);
+    await expect(hub).toBeVisible();
+    await expect(searchOf(page)).toBeFocused();
+    await clearCanvasKeys(page);
+    await chord(fixture, 'Tab', ['shift']);
+    await expect(searchOf(page)).not.toBeFocused();
+    expect(await page.evaluate(() => document.getElementById('hub')?.contains(document.activeElement) ?? false)).toBe(true);
+    expect(await canvasKeysFor(page, 'Tab')).toEqual([]);
+  } finally { await closeOffline(fixture); }
+});
+
 // HUB-003: a press the Hub owns keeps its key-up and repeats out of the game.
 test('the Escape that closes the Hub never reaches the game, held or tapped', async () => {
   const fixture = await launch();
