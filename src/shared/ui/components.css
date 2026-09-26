@@ -81,6 +81,7 @@
   padding: var(--ui-art-surface-width);
   border-radius: var(--ui-art-surface-radius);
   background: var(--ui-art-surface-fill);
+  box-shadow: var(--ui-art-surface-shadow);
   mask: var(--ui-art-surface-mask);
   -webkit-mask: var(--ui-art-surface-mask);
   z-index: var(--ui-art-surface-z);
@@ -88,8 +89,13 @@
 .ui-frame.ui-art-frame::after { display: var(--ui-art-corners); }
 /* Text panels over the game (the Hub, its popouts and in-game dialogs) hold
  * bright scenes back behind their fill and use the inks measured for that, so
- * low opacity keeps the title, detail and gold hierarchy (appearance.ts,
- * D-28, D-29). The treatment follows the layer that paints the fill. */
+ * low opacity keeps the title, detail and gold hierarchy (appearance.ts, the
+ * D-28 legibility floor). The cap goes on the layer that paints the fill.
+ * An artwork frame paints it on `::before` in every style: a `backdrop-filter`
+ * on the frame itself would make it the containing block of its fixed
+ * descendants (drag previews, in-place dialogs). The other capped panels
+ * (Switch Character, Resign) are already that block through their centring
+ * transform. */
 .ui-scene-cap {
   --ui-text: var(--ui-hub-text);
   --ui-text-bright: var(--ui-hub-text-bright);
@@ -99,8 +105,8 @@
   --ui-accent-text: var(--ui-hub-accent-text);
   backdrop-filter: var(--ui-hub-backdrop);
 }
-.ui-scene-cap.ui-art-frame { backdrop-filter: var(--ui-art-backdrop); }
-.ui-scene-cap.ui-art-frame::before { backdrop-filter: var(--ui-art-surface-backdrop); }
+.ui-scene-cap.ui-art-frame { backdrop-filter: none; }
+.ui-scene-cap.ui-art-frame::before { backdrop-filter: var(--ui-hub-backdrop); }
 /* A panel embedded in a capped panel already sits on held-back scene. */
 .ui-scene-cap .ui-scene-cap,
 .ui-scene-cap .ui-scene-cap.ui-art-frame,

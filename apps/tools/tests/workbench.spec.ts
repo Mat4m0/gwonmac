@@ -386,6 +386,41 @@ test("keeps bar and commit actions reachable at short height", async ({ page }) 
   await expect(page.getByRole("button", { name: "Export build" })).toBeVisible();
 });
 
+// Modern at 65 % caps the scene behind the Build Library. The cap must stay off
+// the window itself, or the window becomes the containing block of its fixed
+// drag previews and in-place dialogs and they shift by its left and top.
+test("drag previews follow the pointer when Modern caps a low-opacity scene", async ({ page }) => {
+  await page.evaluate(() => window.gwApplyFixtureAppearance?.({ uiStyle: "obsidian", uiPanelOpacity: 65 }));
+  await expect.poll(() => page.evaluate(() => document.documentElement.style.getPropertyValue("--ui-hub-backdrop"))).not.toBe("");
+  await openBuild(page);
+  const frame = (await page.locator(".tools-window").first().boundingBox())!;
+  expect(Math.min(frame.x, frame.y)).toBeGreaterThan(0);
+  const expectPreviewAt = async (selector: string, x: number, y: number, offset: number) => {
+    const preview = (await page.locator(selector).boundingBox())!;
+    expect([Math.round(preview.x - x), Math.round(preview.y - y)]).toEqual([offset, offset]);
+  };
+  const slot = (await page.locator(".authoring-bar .skill").first().boundingBox())!;
+  const x = slot.x + slot.width / 2 + 40, y = slot.y + slot.height / 2;
+  await page.mouse.move(slot.x + slot.width / 2, y);
+  await page.mouse.down();
+  await page.mouse.move(x, y, { steps: 4 });
+  await expectPreviewAt(".skill-reorder-preview", x, y, 12);
+  await page.keyboard.press("Escape");
+  await page.mouse.up();
+
+  await page.locator(".authoring-bar .skill").nth(7).click();
+  await page.getByRole("searchbox", { name: "Search skills" }).fill("Infuse Health");
+  const handle = page.locator(".skill-result .catalogue-drag-handle").first();
+  await handle.scrollIntoViewIfNeeded();
+  const from = (await handle.boundingBox())!;
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(from.x + from.width / 2 + 30, from.y + from.height / 2, { steps: 4 });
+  await expectPreviewAt(".catalogue-pointer-preview", from.x + from.width / 2 + 30, from.y + from.height / 2, 14);
+  await page.keyboard.press("Escape");
+  await page.mouse.up();
+});
+
 test("Escape cancels skill movement before it closes the catalogue", async ({ page }) => {
   await openBuild(page);
   const first = page.locator(".authoring-bar .skill").first();

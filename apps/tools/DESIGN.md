@@ -256,8 +256,9 @@ Over snow at low opacity, ink alone cannot keep a hierarchy: every role would
 have to be near white. Every text panel over the game (the Hub, Trade, Build
 Library, Whispers, Switch Character and Resign) therefore opts into
 `.ui-scene-cap` (`components.css`) and holds the scene's highlights back behind
-its fill (D-28). A `backdrop-filter` soft cap
-passes the scene unchanged up to 60 % of the cap and eases toward it above, so
+its fill (D-28). A `backdrop-filter` soft cap on the layer that paints the fill
+(the frame's `::before` in Classic and Modern, never the frame itself, so drag
+previews and in-place dialogs keep their viewport position) passes the scene unchanged up to 60 % of the cap and eases toward it above, so
 dark scenes keep every detail and the game around the Hub is never dimmed. The
 model picks the brightest cap at which text, muted and accent-as-text keep their
 painted ink (about 48 % of full brightness at 65 % opacity; no cap from about

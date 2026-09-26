@@ -25,10 +25,7 @@
   --ui-art-surface-fill: var(--ui-panel-fill);
   --ui-art-surface-mask: none;
   --ui-art-surface-z: -1;
-  /* A backdrop treatment follows the layer that paints the panel fill:
-   * Classic paints it on the inset surface, Modern on the frame itself. */
-  --ui-art-backdrop: none;
-  --ui-art-surface-backdrop: var(--ui-hub-backdrop);
+  --ui-art-surface-shadow: none;
   --ui-art-corners: none;
   --ui-art-head-position: absolute;
   --ui-art-head-inset: 10px 20px auto;
@@ -395,16 +392,17 @@
 :root[data-ui-style="obsidian"] {
   --ui-art-display: none;
   --ui-art-padding: 6px 7px 8px;
-  --ui-art-fill: var(--ui-panel-fill);
-  --ui-art-shadow: 0 0 0 1px var(--ui-outline), inset 0 1px 0 var(--ui-edge-inner), var(--ui-frame-inset), var(--ui-shadow);
+  /* Like Classic, Modern paints its fill on the surface layer behind the
+   * content, never on the frame itself (see `.ui-scene-cap`). */
+  --ui-art-fill: transparent;
+  --ui-art-shadow: 0 0 0 1px var(--ui-outline), var(--ui-shadow);
   --ui-art-surface-inset: 0;
-  --ui-art-surface-width: var(--ui-frame-width);
+  --ui-art-surface-width: 0;
   --ui-art-surface-radius: var(--ui-radius-lg);
-  --ui-art-surface-fill: var(--ui-frame);
-  --ui-art-surface-mask: var(--ui-mask-paint) content-box, var(--ui-mask-paint);
-  --ui-art-surface-z: var(--ui-z-frame);
-  --ui-art-backdrop: var(--ui-hub-backdrop);
-  --ui-art-surface-backdrop: none;
+  --ui-art-surface-fill: var(--ui-panel-fill);
+  --ui-art-surface-mask: none;
+  --ui-art-surface-z: -1;
+  --ui-art-surface-shadow: inset 0 1px 0 var(--ui-edge-inner), var(--ui-frame-inset);
   --ui-art-corners: block;
   --ui-art-head-position: relative;
   --ui-art-head-inset: auto;

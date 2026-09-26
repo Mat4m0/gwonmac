@@ -255,6 +255,15 @@ for (const uiStyle of ['guild-wars', 'obsidian'] as const) {
     await page.keyboard.press('Meta+k');
     await expect(page.locator('.trade-window')).toBeVisible();
     expect(await inks('.trade-window')).toEqual(hub);
+    // The cap sits on the fill layer, never on the frame, so fixed descendants
+    // (in-place dialogs, drag previews) still place against the viewport.
+    for (const selector of ['#whisper-window', '.trade-window']) {
+      expect(await page.locator(selector).evaluate(frame => {
+        const probe = document.createElement('div'); probe.style.cssText = 'position:fixed;left:100px;top:100px;width:1px;height:1px';
+        frame.append(probe); const { x, y } = probe.getBoundingClientRect(); probe.remove();
+        return [x, y, getComputedStyle(frame).backdropFilter, getComputedStyle(frame, '::before').backdropFilter];
+      }), selector).toEqual([100, 100, 'none', 'url("#ui-hub-scene-cap")']);
+    }
     await page.locator('#whisper-window').evaluate(element => { element.style.visibility = 'hidden'; });
     measured.push(...await textContrast(page, { title: '.ui-panel-title', columns: '.trade-columns span', age: '.age-cell' }, '.trade-window'));
     for (const role of ['title', 'presence', 'empty', 'hints', 'columns', 'age']) expect(measured.some(label => label.role === role), `${role} was measured`).toBe(true);
