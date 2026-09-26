@@ -393,7 +393,9 @@ Cases that document a current leak are marked `fixme` until their fix lands.
 The pointer contract is `apps/tools/tests/hub-pointer.spec.ts` (human click runs
 in the browser fixture) with the gate's unit test in
 `apps/tools/src/surface-click-runs.test.ts`; `tests/electron/input-hub.spec.ts`
-checks that a closing double-click or triple-click never reaches the game canvas.
+checks that a closing double-click or triple-click never reaches the game canvas,
+also through Electron's native mouse input on a closing row, × and the backdrop,
+where the input trace shows no later press and no double-click flag.
 
 Extend existing fixtures with realistic mixed professions, missing observations,
 long names, empty/large folders, and account state changes. Measure large-list typing
