@@ -678,7 +678,8 @@ function onKeydown(event: KeyboardEvent): void {
     void moveActive(event.key === "ArrowDown" ? 1 : -1);
     return;
   }
-  if (mode.value === "travel" && event.target === input.value && event.key === "Enter") {
+  // Only a plain Enter travels; a modified Enter is never a second route to it.
+  if (mode.value === "travel" && event.target === input.value && event.key === "Enter" && !event.metaKey && !event.ctrlKey && !event.altKey) {
     if (event.repeat) { event.preventDefault(); return; }
     if (activeDestination.value !== null
       && selectable(activeDestination.value)

@@ -130,6 +130,15 @@ test('a modified Enter never runs the primary; only a plain Enter does', async (
   await search.fill('kamadan'); await search.press('Meta+Enter');
   await expect(page.locator('#hub')).toBeVisible();
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', /travel/i);
+  // Travel's own search follows the same rule.
+  await page.keyboard.press('Meta+t');
+  const travel = page.getByRole('combobox', { name: 'Destination, phrase, or friend' });
+  await expect(travel).toBeFocused();
+  await travel.press('Meta+Enter');
+  await page.waitForTimeout(700);
+  await expect(page.locator('#hub')).toBeVisible();
+  await expect(travel).toBeFocused();
+  await expect(page.locator('#app')).not.toHaveAttribute('data-action', /travel/i);
 });
 
 
