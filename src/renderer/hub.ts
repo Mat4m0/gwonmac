@@ -416,7 +416,10 @@ export function createHub(parent: HTMLElement) {
     const exactCount = rows.filter(row => normaliseHubQuery(row.title) === parsed.term || savedRows.some(saved => saved.id === row.id)).length;
     const prior = previousRows.find(row => row.id === selected);
     const revised = prior && rows.find(row => row.id === selected)?.preview !== prior.preview;
-    const initial = !input.value.trim() ? rows.find(row => row.preferred && !row.unavailable) ?? rows.find(row => !row.unavailable) ?? rows[0] : rows[0];
+    // A bare scope (`travel `) lists without a term, so nothing in it is an explicit result:
+    // only a row that opens a page may start selected, and Enter never travels or invites on a guess.
+    const initial = !input.value.trim() ? rows.find(row => row.preferred && !row.unavailable) ?? rows.find(row => !row.unavailable) ?? rows[0]
+      : !scope && parsed.scope && !parsed.term ? rows.find(row => row.navigate && !row.unavailable) : rows[0];
     select((prior?.id === 'quote-state' || prior?.id === 'market-state') && !!rows[0]?.conversion ? rows[0].id : reset ? exactCount > 1 ? null : initial?.id ?? null : !revised && rows.some(row => row.id === selected) ? selected : null);
     if (hadRowFocus) (list.querySelector<HTMLElement>('[aria-selected="true"]') ?? input).focus();
     if (!rows.length) {

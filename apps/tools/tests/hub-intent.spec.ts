@@ -164,6 +164,21 @@ test('the phrase editor refuses a new phrase that starts with a scope word', asy
   await expect(page.locator('.hub-view [role="status"]')).toHaveText('Saved');
 });
 
+test('a bare travel scope in an explorable area selects Browse travel, so Enter never leaves the area', async ({ page }) => {
+  await page.goto('/?hub&lifecycle=pve-explorable');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  const search = page.getByRole('combobox', { name: searchName });
+  await search.pressSequentially('travel ');
+  await expect(page.locator('.hub-scope')).toHaveText('travel');
+  // Recent places are listed first, yet none is a result the player asked for.
+  await expect(page.locator('.hub-row[data-id^="place:"]').first()).toBeVisible();
+  await expect(page.locator('.hub-row[aria-selected="true"]')).toHaveAttribute('data-id', 'travel');
+  await expect(page.locator('.hub-primary')).toHaveText(/^Browse travel/);
+  await search.press('Enter');
+  await expect(page.locator('.hub-caption')).toHaveText('Travel');
+  await expect(page.getByLabel('Lifecycle state', { exact: true })).toHaveValue('pve-explorable');
+});
+
 test.describe('party invite', () => {
   const invites = (page: import('@playwright/test').Page) => page.locator('#app').getAttribute('data-invites');
   test.beforeEach(async ({ page }) => {
@@ -226,19 +241,27 @@ test.describe('party invite', () => {
     await expect(page.locator('.hub-receipt')).toHaveText('Sent /invite Mo Kai. Guild Wars answers in chat.');
   });
 
-  test('a bare invite scope lists online friends, the ones invitable here first, and names the target', async ({ page }) => {
+  test('a bare invite scope lists online friends, the ones invitable here first, and invites only a chosen one', async ({ page }) => {
     const search = page.getByRole('combobox', { name: searchName });
     await search.pressSequentially('invite ');
     await expect(page.locator('.hub-scope')).toHaveText('invite');
     const primary = page.locator('.hub-primary');
-    await expect(primary).toBeEnabled();
-    await expect(primary).toHaveText(/^Invite \S+ \S+/);
-    const target = (await primary.innerText()).replace(/^Invite /u, '').replace(/\s*↵$/u, '').trim();
     await expect(page.locator('.hub-row', { hasText: 'Zed Alpha' })).toContainText('Zed Alpha is in Kamadan, Jewel of Istan. Use Travel and invite.');
     await expect(page.locator('.hub-row', { hasText: 'Offline Friend' })).toHaveCount(0);
     const disabled = await page.locator('.hub-row').evaluateAll(rows => rows.map(row => row.getAttribute('aria-disabled') === 'true'));
     expect(disabled).toEqual([...disabled].sort((a, b) => Number(a) - Number(b)));
+    // No name was typed: nothing is preselected, and Enter sends nothing.
+    await expect(page.locator('.hub-row[aria-selected="true"]')).toHaveCount(0);
+    await expect(primary).toBeDisabled();
     await search.press('Enter');
+    expect(await invites(page)).toBeNull();
+    await expect(page.locator('#hub')).toBeVisible();
+    // A row the player chooses names its target before Enter.
+    await search.press('ArrowDown');
+    await expect(primary).toBeEnabled();
+    await expect(primary).toHaveText(/^Invite \S+ \S+/);
+    const target = (await primary.innerText()).replace(/^Invite /u, '').replace(/\s*↵$/u, '').trim();
+    await page.keyboard.press('Enter');
     await expect(page.locator('#app')).toHaveAttribute('data-invites', target);
   });
 

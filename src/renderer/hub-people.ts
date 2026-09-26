@@ -105,11 +105,11 @@ export function createHubPeople(hub: Pick<Hub, 'attach' | 'showRows' | 'close' |
       const addressed = parsed.scope === 'whisper' || (parsed.scope === 'invite' && !!party);
       if (parsed.scope && (!addressed || !whispersEnabled)) return [];
       if (parsed.scope === 'invite' && party && !parsed.term) {
-        // `invite ` lists the online friends, each an exact invite by character name:
-        // those who can be invited now first, then by name.
+        // `invite ` lists the online friends, those who can be invited now first, then by name.
+        // No name was typed, so Hub preselects none of them; a chosen row invites by character name.
         const online = friends.status === 'ready' && session.state.suggest.friends
           ? friends.friends.filter(friend => friend.character && friend.status !== 'offline' && friend.status !== 'unknown') : [];
-        return online.map(friend => inviteRow(party, row({ key: whisperPersonKey(friend.character), name: friend.character, source: 'friend', activity: 0, exact: true, friend }), friend))
+        return online.map(friend => inviteRow(party, row({ key: whisperPersonKey(friend.character), name: friend.character, source: 'friend', activity: 0, exact: false, friend }), friend))
           .sort((a, b) => Number(!!a.unavailable) - Number(!!b.unavailable) || a.action.localeCompare(b.action) || a.id.localeCompare(b.id)).slice(0, MAX_PEOPLE);
       }
       if (!parsed.term) {

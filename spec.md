@@ -120,6 +120,9 @@ Recognize a closed set of leading words: `team`, `build`, `travel`, `char`, `acc
 The rest of the input is a name query, not executable instructions. A leading word
 followed by a space enters its scope with an empty query, so `invite ` lists the
 online friends and `team ` lists the saved teams; a lone word is still a search.
+An empty query resolves nothing: only a row that opens a page, such as **Browse
+travel**, may start selected, so `travel ` then Enter never travels and `invite `
+then Enter never invites.
 
 Recognize conversions only when the entire input matches a supported numeric
 expression or `<amount> <unit> in <unit>`. Parse with a bounded grammar, never eval.

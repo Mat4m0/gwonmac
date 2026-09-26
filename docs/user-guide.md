@@ -234,6 +234,7 @@ Character names have at least two words, so a single typed word stays below
 known people and says **Type the full character name**. The
 footer names who is invited, for example **Invite Mo Kai**. Type `invite `
 with a space to list your online friends, those you can invite from here first.
+None is selected until you choose one, so Enter alone invites nobody.
 Guild Wars answers the invite in chat.
 For a friend elsewhere, **Invite to party** says where they are. For a PvE
 outpost, when the Travel tool is on, use **Travel and invite**: it travels there (Any district) and invites them once you
