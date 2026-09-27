@@ -290,17 +290,18 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
           const label = `${index === 0 ? playerName() : slot.hero === null ? 'Unassigned hero' : heroLabel(slot.hero)} · ${build?.name ?? 'Keep build'}${slot.behaviour ? ` · ${slot.behaviour}` : ''}`;
           if (build) showBuild(build, label); else { const text = doc.createElement('p'); text.textContent = label; description.append(text); }
         });
-      // A refusal or the running apply shows under the title, before the roster, never below the fold.
+      // A refusal or the stored outcome shows under the title, before the roster, never below the fold.
+      // The running apply's progress has one owner, the Hub status line (HUB-083).
       const status = doc.createElement('p'); status.setAttribute('role', 'status');
       const update = () => {
         const latest = current(item);
         const changed = !latest || revision(latest) !== expected;
-        const refusal = changed ? 'This configuration changed. Go back and review it again.' : assess(item, null);
-        footer.primary({ label: applying ? `Applying ${item.value.name}…` : `Apply team ${item.value.name}`, disabled: !!refusal || applying,
-          // A failure on this page shows under the title; after the player left, the Hub reports it.
+        const mine = applying && runningKey === outcomeKey(item, null);
+        const refusal = changed ? 'This configuration changed. Go back and review it again.' : mine ? null : assess(item, null);
+        footer.primary({ label: mine ? `Applying ${item.value.name}…` : `Apply team ${item.value.name}`, disabled: !!refusal || applying,
+          // A failure on this page shows under the title, and the task clears its progress; after the player left, the Hub reports it.
           run: task => apply(item, expected, null, task).catch(error => { if (!task.live()) throw error; update(); }) });
-        const running = applying && runningKey === outcomeKey(item, null) ? progress : '';
-        status.textContent = running || outcomes.get(outcomeKey(item, null))?.message || refusal || '';
+        status.textContent = outcomes.get(outcomeKey(item, null))?.message || refusal || '';
         status.hidden = !status.textContent;
       };
       view.append(title, status, description); target.append(view);

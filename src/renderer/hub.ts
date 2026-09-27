@@ -311,8 +311,8 @@ export function createHub(parent: HTMLElement) {
     footer.hidden = viewFooter.own;
     const action = viewFooter.primary ?? done;
     primary.replaceChildren(document.createTextNode(action.label));
-    // Enter runs a named primary, so only that one carries the keycap.
-    if (viewFooter.primary) { const key = document.createElement('kbd'); key.textContent = '↵'; primary.append(key); }
+    // Enter runs a named primary, so only that one carries the keycap, and not while it runs.
+    if (viewFooter.primary && !viewRunning) { const key = document.createElement('kbd'); key.textContent = '↵'; primary.append(key); }
     disablePrimary(!!action.disabled || viewRunning);
     primary.dataset.variant = action.destructive ? 'danger' : 'primary';
     if (!action.armed) { viewArming?.arming.disarm(); viewArming = null; }
@@ -335,7 +335,7 @@ export function createHub(parent: HTMLElement) {
     viewRunning = true; report(''); paintViewFooter();
     try { await action.run(task); }
     catch (error) { task.fail(error); }
-    finally { if (viewFooter === state) { viewRunning = false; paintViewFooter(); } }
+    finally { task.end(); if (viewFooter === state) { viewRunning = false; paintViewFooter(); } }
   }
   function renderSkillBar(skills: NonNullable<HubRow['skills']>) {
     const bar = document.createElement('span'); bar.className = 'hub-skill-bar';
@@ -568,17 +568,20 @@ export function createHub(parent: HTMLElement) {
    * action reports progress and failures in the status line and its success closes the Hub with
    * the receipt. After the player moved on, it only reports: a receipt, or a failure receipt.
    */
-  function startTask(): HubTask & { fail(error: unknown): void } {
+  function startTask(): HubTask & { fail(error: unknown): void; end(): void } {
     const started = session;
     const live = () => root.open && session === started;
+    let shown = '';
     return {
       live,
-      progress: message => { if (live()) report(message); },
+      progress: message => { if (live()) { report(message); shown = message; } },
       done: receipt => { if (live()) close(receipt); else if (receipt) notify(receipt); },
       fail: error => {
         const message = error instanceof Error ? error.message : 'The action could not complete. Try again.';
         if (live()) report(message); else notify(message, 'failed');
       },
+      // An action that ended without a receipt, e.g. one whose view shows its own outcome, never leaves its progress behind.
+      end: () => { if (live() && shown && status.textContent === shown) report(''); },
     };
   }
   async function run() {
@@ -589,13 +592,13 @@ export function createHub(parent: HTMLElement) {
     if (row.unavailable) { report(row.unavailable); return; }
     const task = startTask();
     const mine = { session, label: row.pending?.label ?? row.action, again: row.pending?.again ?? `${row.action} is still running.` };
-    running = mine; select(selected); report(row.pending?.label ?? '');
+    running = mine; select(selected); report(''); if (row.pending) task.progress(row.pending.label);
     try {
       if(row.searchQuery!==undefined){remember();resetView();scope=null;caption.textContent='Home';input.value=row.searchQuery;refresh(true);input.focus();input.select();}
       else await row.run(task);
     }
     catch (error) { task.fail(error); }
-    finally { if (running === mine) { running = null; if (root.open) select(selected); } }
+    finally { task.end(); if (running === mine) { running = null; if (root.open) select(selected); } }
   }
   function resetView() {
     endSession(); restoringFocus?.disconnect(); restoringFocus = null; keepDrafts(); pressed = null; modal.pageChanged();

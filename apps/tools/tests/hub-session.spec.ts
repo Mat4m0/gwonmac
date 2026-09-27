@@ -46,6 +46,26 @@ test('a late invite completion never closes or wipes the reopened Hub (PPL-16)',
   expect(await actions(page)).toEqual(['PARTY.INVITE Zed Delta']);
 });
 
+test('a team apply that fails on its review leaves the outcome there and no progress in the status line (HUB-083)', async ({ page }) => {
+  await open(page, '&slow-apply');
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-scenario', { detail: 'partial' })));
+  const review = page.locator('.hub-build-review [role=status]');
+  await enter(page, 'team gom af');
+  await expect(page.locator('.hub-caption')).toHaveText('GOM AFK');
+  await primary(page).click();
+  // One owner for progress: the Hub status line; the review never repeats it.
+  await expect(status(page)).toHaveText(/^Applying GOM AFK… \d+\/16$/);
+  await expect(primary(page)).toHaveText('Applying GOM AFK…');
+  await expect(review).toBeHidden();
+  await expect(review).toHaveText(/^Synthetic interruption/);
+  await expect(status(page)).toBeHidden();
+  await expect(page.locator('.hub-panel')).toHaveAttribute('data-busy', 'false');
+  await expect(primary(page)).toHaveText('Apply team GOM AFK↵');
+  await page.waitForTimeout(600);
+  await expect(status(page)).toBeHidden();
+  expect(await actions(page)).toEqual(['apply-team']);
+});
+
 test('a template folder that loads late never opens over a newer page or a closed Hub (HUB-004)', async ({ page }) => {
   for (const moveOn of ['type', 'close'] as const) {
     await open(page, '&templates-ms=1200');

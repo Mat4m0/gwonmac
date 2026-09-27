@@ -289,7 +289,9 @@ keeps running and never closes or changes the page you are on: its receipt
 appears in the status line, or where Hub stood if it is closed. A failure after
 Hub closed names what stopped, such as "GOM AFK partly applied. Open Hub to
 review.", and waits in the status line of the next opening; the team's row then
-reads **Partly applied · Review**. A Travel trip that did not start or arrive and
+reads **Partly applied · Review**. A team apply that fails on its open review
+shows the cause under the review's title and clears the progress from the status
+line. A Travel trip that did not start or arrive and
 a character switch that failed are reported the same way, and Command-E then
 opens on the character you tried. `10 ecto in p` shows labelled NPC trader buy and sell estimates with
 observation times. Fixed gold/platinum conversions work offline. Amounts accept attached or spaced
