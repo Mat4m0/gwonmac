@@ -342,6 +342,121 @@ test('the Escape that closes the Hub never reaches the game, held or tapped', as
   } finally { await closeOffline(fixture); }
 });
 
+// KEY-23 (HUB-003): Command-Backspace is the game's while the Hub is closed. In the Hub
+// it is Back, one level per physical press, and neither its repeats nor its release
+// reach the game; a later key does.
+test('Command-Backspace reaches chat unchanged with the Hub closed, and a held one in the Hub goes back one level only', async () => {
+  const fixture = await launch();
+  try {
+    const { page } = fixture;
+    const hub = hubOf(page);
+    const caption = hub.locator('.hub-caption');
+    // (a) The Hub is closed and the game's chat field has text.
+    await page.evaluate(() => {
+      const field = document.getElementById('osk-input-text');
+      if (!(field instanceof HTMLInputElement)) throw new Error('#osk-input-text is missing');
+      const chat: string[] = [];
+      Object.assign(window, { __hubContractChat: chat });
+      for (const type of ['keydown', 'keyup'] as const) {
+        field.addEventListener(type, event => { chat.push(`${type}:${event.code}${event.metaKey ? ':meta' : ''}${event.repeat ? ':repeat' : ''}`); });
+      }
+      field.value = 'hello there';
+      field.focus();
+      (window.Module as { oskActiveInput?: Element | null }).oskActiveInput = field;
+    });
+    const chat = () => page.evaluate(() => [...(window as typeof window & { __hubContractChat: string[] }).__hubContractChat]);
+    await chord(fixture, 'Backspace', ['meta']);
+    await expect.poll(chat).toEqual(['keydown:Backspace:meta', 'keyup:Backspace:meta']);
+    await expect(hub).toBeHidden();
+    // (b) Home › Commands, then Command-Backspace held with five auto-repeats.
+    await page.evaluate(() => document.getElementById('canvas')?.focus());
+    await chord(fixture, 'R', ['meta']);
+    await expect(hub).toBeVisible();
+    await searchOf(page).fill('commands');
+    await expect(hub.locator('.hub-row[aria-selected="true"]')).toHaveAttribute('data-id', 'commands');
+    await page.keyboard.press('Enter');
+    await expect(caption).toHaveText('Commands');
+    await clearCanvasKeys(page);
+    await sendKey(fixture, 'keyDown', 'Backspace', ['meta']);
+    await expect(caption).toHaveText('Home');
+    for (let repeat = 0; repeat < 5; repeat++) await sendKey(fixture, 'keyDown', 'Backspace', ['meta', 'isautorepeat']);
+    await sendKey(fixture, 'keyUp', 'Backspace', ['meta']);
+    await page.waitForTimeout(200);
+    await expect(hub).toBeVisible();
+    await expect(caption).toHaveText('Home');
+    await expect(searchOf(page)).toHaveValue('commands');
+    await expect(searchOf(page)).toBeFocused();
+    expect(await canvasKeys(page)).toEqual([]);
+    // (c) After the Hub closes, a fresh W and a fresh Backspace belong to the game again.
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
+    await expect(hub).toBeHidden();
+    await expect.poll(() => isDomActiveElement(page.locator('#canvas'))).toBe(true);
+    await clearCanvasKeys(page);
+    await page.keyboard.press('w');
+    await page.keyboard.press('Backspace');
+    expect(await canvasKeys(page)).toEqual(['keydown:KeyW', 'keyup:KeyW', 'keydown:Backspace', 'keyup:Backspace']);
+  } finally { await closeOffline(fixture); }
+});
+
+// CALC-33 (HUB-003, HUB-048): a held Backspace in search only deletes text, well past an empty query.
+test('a held Backspace on a calculator query empties it and never reaches the game', async () => {
+  const fixture = await launch();
+  try {
+    const { page } = fixture;
+    const hub = hubOf(page);
+    await chord(fixture, 'R', ['meta']);
+    await expect(hub).toBeVisible();
+    await searchOf(page).fill('10 ectos in p');
+    await clearCanvasKeys(page);
+    // About three seconds of auto-repeat: 13 characters, then some 80 repeats on an empty query.
+    await sendKey(fixture, 'keyDown', 'Backspace');
+    for (let repeat = 0; repeat < 90; repeat++) await sendKey(fixture, 'keyDown', 'Backspace', ['isautorepeat']);
+    await sendKey(fixture, 'keyUp', 'Backspace');
+    await expect(searchOf(page)).toHaveValue('');
+    await page.waitForTimeout(200);
+    await expect(hub).toBeVisible();
+    await expect(hub.locator('.hub-caption')).toHaveText('Home');
+    await expect(searchOf(page)).toBeFocused();
+    expect(await canvasKeys(page)).toEqual([]);
+  } finally { await closeOffline(fixture); }
+});
+
+// HUB-003: Escape that a view answers itself (Travel clearing its query) is never claimed
+// by the surface controller, so its repeats and release rest on the owned press alone.
+test('a held Escape that Travel answers, then the one that closes the Hub, never reach the game', async () => {
+  const fixture = await launch({ travelPalette: true });
+  try {
+    const { page } = fixture;
+    const hub = hubOf(page);
+    await installReadyTravel(page);
+    await page.evaluate(() => document.getElementById('canvas')?.focus());
+    await chord(fixture, 'T', ['meta']);
+    await expect(hub.locator('.hub-caption')).toHaveText('Travel');
+    const travel = page.getByRole('combobox', { name: 'Destination, phrase, or friend' });
+    await expect.poll(() => isDomActiveElement(travel)).toBe(true);
+    await page.keyboard.type('kam');
+    await expect(travel).toHaveValue('kam');
+    await clearCanvasKeys(page);
+    // The first held Escape clears Travel's query and takes one step only.
+    await hold(fixture, 'Escape', () => expect(travel).toHaveValue(''));
+    await page.waitForTimeout(200);
+    await expect(hub).toBeVisible();
+    await expect(hub.locator('.hub-caption')).toHaveText('Travel');
+    expect(await canvasKeys(page)).toEqual([]);
+    // The next closes the Hub (Travel opened directly, D-4); the game has focus before its repeats and release.
+    await hold(fixture, 'Escape', async () => {
+      await expect(hub).toBeHidden();
+      await expect.poll(() => isDomActiveElement(page.locator('#canvas'))).toBe(true);
+    });
+    await page.waitForTimeout(200);
+    expect(await canvasKeys(page)).toEqual([]);
+    expect(await trips(page)).toEqual([]);
+    await page.keyboard.press('w');
+    expect(await canvasKeys(page)).toEqual(['keydown:KeyW', 'keyup:KeyW']);
+  } finally { await closeOffline(fixture); }
+});
+
 // KEY-33, TRV-10 (HUB-003): Enter held through a trip, with native auto-repeat.
 // The trip closes the Hub while Enter is down; its repeats and release then
 // land on the game canvas and belong to the press the Hub owned.
