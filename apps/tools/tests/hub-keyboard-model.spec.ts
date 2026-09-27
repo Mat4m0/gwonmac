@@ -43,6 +43,32 @@ test('Travel moves one selection with the shared list keys and never wraps (HUB-
   await expect(travel).toBeFocused();
 });
 
+test('Characters: search leads the Tab order, the cards are one roving Tab stop, and ↑ in search stays (HUB-137, HUB-138)', async ({ page }) => {
+  await openHub(page);
+  await page.keyboard.press('Meta+e');
+  const card = page.locator('#character-switch-list button[data-selected=true]');
+  await expect(card).toBeFocused();
+  await page.keyboard.press('ArrowRight'); await page.keyboard.press('ArrowRight');
+  const chosen = await card.getAttribute('data-character-key');
+  await expect(page.locator('#character-switch-list button[tabindex="0"]')).toHaveCount(1);
+  await expect(page.locator('#character-switch-list button[tabindex="0"]')).toHaveAttribute('data-character-key', chosen!);
+  const query = page.locator('#character-switch-query');
+  // In DOM order the search comes before the heading, where it is drawn.
+  expect(await page.evaluate(() => {
+    const search = document.querySelector('#character-switch-query')!;
+    const heading = document.querySelector('#character-switch-title')!;
+    return Boolean(search.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING);
+  })).toBe(true);
+  await page.keyboard.press('ArrowUp'); await expect(query).toBeFocused();
+  await page.keyboard.press('ArrowUp'); await expect(query).toBeFocused();
+  // Tab from the search reaches the selected card, not the first one.
+  for (let press = 0; press < 6 && !(await card.evaluate(element => element === document.activeElement)); press++) await page.keyboard.press('Tab');
+  await expect(card).toBeFocused();
+  await expect(card).toHaveAttribute('data-character-key', chosen!);
+  await expect(page.locator('.character-switch-list-hints')).toContainText('↑ search');
+  await expect(page.locator('.character-switch-list-hints')).not.toContainText('Back');
+});
+
 test('Settings arrows stay in their column: sections do not wrap, → enters a section, ← returns (HUB-054)', async ({ page }) => {
   await openHub(page);
   await hubSearch(page).fill('settings'); await page.keyboard.press('Enter');

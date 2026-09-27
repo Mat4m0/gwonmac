@@ -192,6 +192,8 @@ export function createCharacterSwitchPalette(
   const busy = () => source.action.status === "switching";
   const carouselRadius = () => window.gwHub ? (window.innerWidth <= 640 ? 1 : 2) : window.innerWidth <= 680 ? 1 : window.innerWidth <= 1050 ? 2 : 3;
   const hub = window.gwHub;
+  // In the Hub the search leads the view, so it leads the Tab order too (HUB-138).
+  if (hub) panel.prepend(search);
   let hubBack: (() => void) | undefined;
   const modal = hub ? {
     show() { hub.showView('Characters', (target, back, footer) => {
@@ -209,8 +211,10 @@ export function createCharacterSwitchPalette(
   } : window.gwSurfaces.registerDialog({ root, priority: 7, transient: true,
     dismiss: () => closePalette(true), restoreFocus: () => canvas });
   const updateRowSelection = () => {
+    // One Tab stop for the cards, on the selected one (roving tabindex, HUB-138).
     for (const button of list.querySelectorAll<HTMLButtonElement>("button[data-row]")) {
       button.dataset.selected = String(Number(button.dataset.row) === selected);
+      button.tabIndex = Number(button.dataset.row) === selected ? 0 : -1;
       if (list.getAttribute("role") === "listbox") {
         button.setAttribute("aria-selected", String(Number(button.dataset.row) === selected));
       } else button.removeAttribute("aria-selected");
@@ -330,10 +334,7 @@ export function createCharacterSwitchPalette(
         button.type = "button";
         button.id = `character-switch-option-${index}`;
         button.className = "character-switch-row";
-        if (horizontal || searching) {
-          button.setAttribute("role", "option");
-          button.tabIndex = -1;
-        }
+        if (horizontal || searching) button.setAttribute("role", "option");
         button.dataset.index = String(index);
         button.dataset.row = String(rowIndex);
         button.dataset.characterKey = character.characterKey;
