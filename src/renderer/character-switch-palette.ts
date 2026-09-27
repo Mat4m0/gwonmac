@@ -30,7 +30,7 @@ const failureMessage = (code: CharacterSwitchFailureCode): string => {
     case "focus-lost": return "Return focus to Guild Wars and try again.";
     case "logout-refused":
     case "logout-invalid":
-    case "logout-timeout": return "Guild Wars could not leave this area. Return to an outpost and try again.";
+    case "logout-timeout": return "Guild Wars did not return to the character selector. Try again.";
     case "target-missing":
     case "selector-timeout":
     case "selector-refused":
@@ -186,6 +186,9 @@ export function createCharacterSwitchPalette(
   let enabled = false;
   let rows: ReturnType<typeof orderCharacters> = [];
   let withdrawnForSwitch = false;
+  /** The character the last switch asked for; after a failure the next opening starts on it (HUB-035). */
+  let requestedKey: string | undefined;
+  let attemptedKey: string | undefined;
   const busy = () => source.action.status === "switching";
   const carouselRadius = () => window.gwHub ? (window.innerWidth <= 640 ? 1 : 2) : window.innerWidth <= 680 ? 1 : window.innerWidth <= 1050 ? 2 : 3;
   const hub = window.gwHub;
@@ -256,6 +259,12 @@ export function createCharacterSwitchPalette(
     // An accepted switch leaves the current game state. Withdraw once from
     // the action itself, not from local view state: a blurred Hub can keep
     // this view mounted while it is hidden and resume it later.
+    // A switch that fails after the palette withdrew is reported through the Hub's receipt, never
+    // only inside the closed palette; the next opening starts on the attempted card (HUB-035).
+    if (!busy() && withdrawnForSwitch && view.kind === "closed" && source.action.status === "failed") {
+      attemptedKey = requestedKey;
+      hub?.notify(failureMessage(source.action.code), "failed");
+    }
     if (!busy()) withdrawnForSwitch = false;
     else if (!withdrawnForSwitch) {
       withdrawnForSwitch = true;
@@ -483,8 +492,10 @@ export function createCharacterSwitchPalette(
       rows = hub || layout === "horizontal"
         ? state.characters.map((character, index) => Object.freeze({ character, index }))
         : orderCharacters(state.characters);
-      const opening = rows.findIndex(({ character, index }) => characterKey === undefined
-        ? index === state.selectedIndex : character.characterKey === characterKey);
+      const wanted = characterKey ?? attemptedKey;
+      attemptedKey = undefined;
+      const opening = rows.findIndex(({ character, index }) => wanted === undefined
+        ? index === state.selectedIndex : character.characterKey === wanted);
       selected = opening < 0 ? 0 : opening;
     } else {
       rows = [];
@@ -497,6 +508,7 @@ export function createCharacterSwitchPalette(
   };
   const beginRequest = (characterKey: string) => {
     if (source.action.status === "failed") source.reset();
+    requestedKey = characterKey;
     source.request(characterKey);
     if (source.action.status === "confirming") {
       const state = source.characters;
