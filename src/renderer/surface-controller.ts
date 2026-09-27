@@ -4,8 +4,9 @@
  * Tools deliberately stays open when a player clicks Guild Wars, so DOM focus
  * alone cannot decide which surface Escape or Tab belongs to. This
  * controller keeps one ordered list of visible host surfaces. Escape dismisses
- * the topmost one and Tab enters or wraps within it. Dialogs use the platform's
- * modal behavior, with one shared backdrop, dismissal, and focus lifecycle.
+ * the topmost one and Tab wraps within it; Tab on the game canvas stays with
+ * the game (D-12). Dialogs use the platform's modal behavior, with one shared
+ * backdrop, dismissal, and focus lifecycle.
  * A press that starts on a surface owns its repeats and release, so a key that
  * closes a surface never continues into the game, and a held Enter activates
  * a surface control only once.
@@ -170,6 +171,14 @@ export function installSurfaceController(
       || event.metaKey
     ) return;
 
+    const active = document.activeElement;
+    // Tab is a Guild Wars key while the game has the keyboard (D-12): an open
+    // popout never takes it from the canvas, and neither does Chromium's own
+    // focus step. Other page focus keeps its native Tab.
+    if (active !== null && active !== document.body && !onSurface(active)) {
+      if (active instanceof HTMLCanvasElement) event.preventDefault();
+      return;
+    }
     const elements = focusableElements(surface.root);
     if (elements.length === 0) {
       claim(event);
@@ -177,7 +186,6 @@ export function installSurfaceController(
     }
     const first = elements[0]!;
     const last = elements.at(-1)!;
-    const active = document.activeElement;
     if (!surface.root.contains(active)) {
       claim(event);
       (event.shiftKey ? last : first).focus({ preventScroll: true });

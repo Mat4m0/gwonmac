@@ -333,7 +333,9 @@ like a compact working tool, consistent with Hero/Build management.
 
 ## Keyboard and accessibility
 
-- Tab enters the active Trade Chat window and follows visual reading order.
+- Tab follows visual reading order inside Trade Chat and wraps at its ends.
+  Tab on the game canvas stays with Guild Wars; the window is entered by
+  its shortcut, a click, or `/`.
 - The search field, intent filter, results, and actions have visible focus.
 - Up and Down move through results when the result list has focus.
 - Enter selects the focused result.

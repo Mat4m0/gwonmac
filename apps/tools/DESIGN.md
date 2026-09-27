@@ -164,7 +164,10 @@ shared tokens; local palette literals are not allowed.
 - A press that starts on a GWonMac surface owns its repeats and release. A held
   Enter activates a surface control once, and a key that closes a surface never
   continues into Guild Wars.
-- Tab enters the topmost open GWonMac surface and wraps inside its controls.
+- Tab wraps inside the topmost open GWonMac surface's controls. It never
+  leaves the game canvas (D-12): while Guild Wars has the keyboard, Tab and
+  the keys after it stay in the game. A player enters a popout through its
+  shortcut, a click, or `/` inside the panel.
 - Keep native confirmation dialogs above non-modal Tools and Travel surfaces.
 - Open Travel with Quick Travel destinations only; reveal the full catalogue as
   the player searches.

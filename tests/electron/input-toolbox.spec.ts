@@ -362,13 +362,15 @@ test.describe("renderer Tools input", () => {
       await expect(body).toHaveAttribute("data-toolbox-game-key-ups", "1");
       await expect(body).toHaveAttribute("data-toolbox-last-key-up", "KeyW");
 
-      // Tab is the explicit keyboard entry into the open topmost surface. It
-      // is claimed before Guild Wars and wraps inside the surface at its ends.
+      // Tab on the canvas is a Guild Wars key (D-12): the open tool never
+      // takes it or the focus. Inside the tool, Tab is claimed before Guild
+      // Wars and wraps at the surface's ends.
       await page.keyboard.press("Tab");
-      await expect.poll(() => isDomActiveElement(
-        page.getByRole("button", { name: "Tool action" }),
-      )).toBe(true);
-      await expect(body).toHaveAttribute("data-toolbox-game-keys", "1");
+      await expect(body).toHaveAttribute("data-toolbox-game-keys", "2");
+      await expect(body).toHaveAttribute("data-toolbox-game-key-ups", "2");
+      await expect.poll(() => isDomActiveElement(page.locator("#canvas")))
+        .toBe(true);
+      await expect(tool).toBeVisible();
       await page.getByRole("button", { name: "Close tool" }).focus();
       await page.keyboard.press("Tab");
       await expect.poll(() => isDomActiveElement(
@@ -378,7 +380,7 @@ test.describe("renderer Tools input", () => {
 
       // The tool is open and the game still has the keyboard.
       await page.keyboard.press("x");
-      await expect(body).toHaveAttribute("data-toolbox-game-keys", "2");
+      await expect(body).toHaveAttribute("data-toolbox-game-keys", "3");
 
       // The foundation draws no persistent HUD chrome over Guild Wars.
       await expect(root.locator('[data-role="hud"]')).toHaveCount(0);
@@ -399,7 +401,7 @@ test.describe("renderer Tools input", () => {
       await expect.poll(() => isDomActiveElement(page.locator("#canvas")))
         .toBe(true);
       await page.keyboard.press("x");
-      await expect(body).toHaveAttribute("data-toolbox-game-keys", "3");
+      await expect(body).toHaveAttribute("data-toolbox-game-keys", "4");
 
       // Clicking into a text field is the one gesture that means "I want to
       // type", so it hands the keyboard over — and what is typed stays inside
@@ -409,7 +411,7 @@ test.describe("renderer Tools input", () => {
         .toBe(true);
       await page.keyboard.type("aggro");
       await expect(page.getByLabel("Tool field")).toHaveValue("aggro");
-      await expect(body).toHaveAttribute("data-toolbox-game-keys", "3");
+      await expect(body).toHaveAttribute("data-toolbox-game-keys", "4");
 
       // Escape closes the topmost host surface even when a field owns focus.
       // It does not also spend an in-game Escape.
@@ -417,7 +419,7 @@ test.describe("renderer Tools input", () => {
       await expect.poll(() => isDomActiveElement(page.locator("#canvas")))
         .toBe(true);
       await expect(tool).toBeHidden();
-      await expect(body).toHaveAttribute("data-toolbox-game-keys", "3");
+      await expect(body).toHaveAttribute("data-toolbox-game-keys", "4");
 
       await page.evaluate(() => window.dispatchEvent(
         new CustomEvent("gw:tools-toggle", { cancelable: true }),

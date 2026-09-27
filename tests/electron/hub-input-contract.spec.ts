@@ -486,16 +486,20 @@ test.fixme('a disabled tool shortcut never hands its letter to the game', async 
   } finally { await closeOffline(fixture); }
 });
 
-// D-12: never claim Tab while the game canvas has focus, even with a popout open.
-test.fixme('Tab reaches the game while Trade is open and the canvas has focus', async () => {
+// D-12 (KEY-35): never claim Tab while the game canvas has focus, even with a popout open.
+test('Tab reaches the game while Trade is open and the canvas has focus', async () => {
   const fixture = await launch({ tradeChat: true });
   try {
     const { page } = fixture;
+    const trade = page.locator('#toolbox-trade .trade-window');
     await chord(fixture, 'K', ['meta']);
-    await expect(page.locator('#toolbox-trade .trade-window')).toBeVisible();
+    await expect(trade).toBeVisible();
     await page.evaluate(() => document.getElementById('canvas')?.focus());
     await clearCanvasKeys(page);
     await page.keyboard.press('Tab');
-    expect(await canvasKeys(page)).toEqual(['keydown:Tab', 'keyup:Tab']);
+    await page.keyboard.press('Space');
+    expect(await canvasKeys(page)).toEqual(['keydown:Tab', 'keyup:Tab', 'keydown:Space', 'keyup:Space']);
+    expect(await isDomActiveElement(page.locator('#canvas'))).toBe(true);
+    await expect(trade).toBeVisible();
   } finally { await closeOffline(fixture); }
 });
