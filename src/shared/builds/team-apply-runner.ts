@@ -39,6 +39,7 @@ import type {
 } from "./team-apply.js";
 import {
   canReconcileTeamRoster,
+  plannedTeamApplyChanges,
   preflightTeamApply,
   teamRosterOrderMatches,
 } from "./team-apply.js";
@@ -89,6 +90,8 @@ export type TeamApplyEvent = Readonly<{
     | "cancelled" | "failed";
   message: string;
   elapsedMs: number;
+  /** Changes confirmed so far out of those the opening party needed, for "5/16" progress. */
+  changes?: Readonly<{ done: number; planned: number }>;
 }>;
 
 /** Live QA observed ordinary roster publications just beyond one second. */
@@ -382,15 +385,23 @@ function sameAttributes(
  */
 async function runConfiguration(
   plan: TeamApplyPlan,
-  environment: TeamApplyEnvironment,
+  base: TeamApplyEnvironment,
   commandId: number,
   reconcileRoster: boolean,
 ): Promise<TeamApplyResult> {
-  const opening = environment.party();
+  const opening = base.party();
   const preflight = preflightTeamApply(plan, opening);
   if (!preflight.ready) {
     throw new TeamApplyPreflightRefusal(preflight.blockers[0]);
   }
+  // Every confirmation that lands is one change, so each event can say how far the plan got.
+  const planned = plannedTeamApplyChanges(plan, opening, reconcileRoster);
+  let landed = 0;
+  const report = base.onEvent;
+  const environment: TeamApplyEnvironment = report ? { ...base, onEvent: (event) => {
+    if (event.state === "confirmed" || event.state === "stable") landed += 1;
+    report({ ...event, changes: Object.freeze({ done: landed, planned: Math.max(planned, landed) }) });
+  } } : base;
 
   const wanted = plan.members
     .filter((member): member is TeamApplyMember & { hero: number } =>
