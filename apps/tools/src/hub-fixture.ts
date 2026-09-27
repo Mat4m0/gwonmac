@@ -48,7 +48,10 @@ export type FixtureCanvasEvent = Readonly<{ type: string; code?: string; repeat?
 
 export function mountHubFixture(target: HTMLElement) {
   const params = new URLSearchParams(location.search);
-  const record = (message: string) => { target.dataset.action = message; };
+  // Every game or account action in order, so a test can count what one press ran.
+  const actions: string[] = [];
+  window.gwFixtureActions = actions;
+  const record = (message: string) => { actions.push(message); target.dataset.action = message; };
   // The game canvas fills the window as in production; anything that reaches it would reach Guild Wars.
   const canvas = document.createElement('canvas'); canvas.id = 'canvas'; canvas.tabIndex = 0;
   canvas.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;z-index:0;outline:none';
