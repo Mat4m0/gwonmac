@@ -99,6 +99,9 @@ export function createHub(parent: HTMLElement) {
   };
   // List stages keep DOM focus in search; the selection moves by aria-activedescendant (D-2).
   const focusResult = () => input.focus({ preventScroll: true });
+  /** Where typing goes: the Hub search on list stages, else a list view's own search (Travel, Characters). */
+  const searchField = () => !search.hidden ? input
+    : [...content.querySelectorAll<HTMLInputElement>('input[type=search],input[role=combobox]')].find(field => field.getClientRects().length > 0 && !field.disabled) ?? null;
   /** A view's first usable control, else Back, so focus never falls to <body> (a disabled button refuses it). */
   const firstControl = () => [...content.querySelectorAll<HTMLElement>('input,select,textarea,button,[tabindex="0"]')]
     .find(control => control.getClientRects().length > 0 && !control.matches(':disabled')) ?? backButton;
@@ -721,9 +724,11 @@ export function createHub(parent: HTMLElement) {
   root.addEventListener('mouseup', event => { if (event.button === 3) { event.preventDefault(); back(); } });
   root.addEventListener('keydown', event => {
     restoringFocus?.disconnect(); restoringFocus = null;
-    // Typing on a list-stage button returns to search; Space still presses the button.
-    if (!event.defaultPrevented && !search.hidden && event.target instanceof HTMLElement && event.target !== input && !content.contains(event.target)
-      && !event.target.matches('input,textarea,select') && !(event.key === ' ' && event.target.matches('button')) && resumeSearchInput(event, input)) return;
+    // Typing on a button or blank space returns to the page's search, the header's included;
+    // Space still presses the button. A form view has no search and keeps its keys.
+    const field = searchField();
+    if (!event.defaultPrevented && field && event.target instanceof HTMLElement && event.target !== field && !event.target.isContentEditable
+      && !event.target.matches('input,textarea,select') && !(event.key === ' ' && event.target.matches('button,summary')) && resumeSearchInput(event, field)) return;
     if (event.defaultPrevented || event.isComposing || event.metaKey || event.ctrlKey || event.altKey) return;
     const target = event.target instanceof HTMLElement ? event.target : null;
     if (!target || target === required<HTMLElement>('.hub-resize')) return;

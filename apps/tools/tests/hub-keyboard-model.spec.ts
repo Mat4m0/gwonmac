@@ -128,6 +128,25 @@ test('Characters: search leads the Tab order, the cards are one roving Tab stop,
   await expect(page.locator('.character-switch-list-hints')).not.toContainText('Back');
 });
 
+test('typing and ⌫ on a view\'s buttons and the header edit that view\'s search (HUB-046)', async ({ page }) => {
+  await openHub(page);
+  for (const [shortcut, name] of [['Meta+e', 'Search characters'], ['Meta+t', 'Destination, phrase, or friend']] as const) {
+    await page.keyboard.press(shortcut);
+    const search = page.getByRole('combobox', { name });
+    await search.fill('toe');
+    for (const control of [page.locator('.hub-back'), page.locator('.hub-crumb').first(), page.locator('.hub-lock'), page.locator('#hub .hub-view button:not([data-row])').first()]) {
+      await control.focus();
+      await page.keyboard.type('mo'); await page.keyboard.press('Backspace');
+      await expect(search).toBeFocused();
+      await expect(search).toHaveValue('toem');
+      await page.keyboard.press('Backspace');
+    }
+    await expect(page.locator('.hub-caption')).toHaveText(shortcut === 'Meta+e' ? 'Characters' : 'Travel');
+    await page.keyboard.press('Meta+Backspace');
+    await expect(page.locator('.hub-caption')).toHaveText('Home');
+  }
+});
+
 test('Characters: Escape during composition keeps the query (HUB-140)', async ({ page }) => {
   await openHub(page);
   await page.keyboard.press('Meta+e');
