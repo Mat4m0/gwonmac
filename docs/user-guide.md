@@ -301,8 +301,9 @@ runs under the search; a click or another Enter never starts a second action.
 When it ends on the page that started it, Hub closes with a receipt such as
 "GOM AFK applied." If you typed, went back or closed Hub meanwhile, the action
 keeps running and never closes or changes the page you are on: its counted
-progress stays in the status line while you type, and its receipt replaces it
-there, or appears where Hub stood if it is closed. An account that
+progress stays in the status line while you type, a newer message such as a
+refusal keeps the line until your next key, and the receipt replaces it there,
+or appears where Hub stood if it is closed. An account that
 opens in its own window still finishes the task: the next Command-R starts at
 Home. A failure after
 Hub closed names what stopped, such as "GOM AFK partly applied. Open Hub to

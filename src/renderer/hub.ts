@@ -602,7 +602,9 @@ export function createHub(parent: HTMLElement) {
     const token = {};
     return {
       live,
-      progress: message => { progress = { owner: token, message }; report(''); },
+      // Progress repaints only over itself or an empty line (or on its own page): a newer
+      // message, e.g. a refusal or another action's failure, stays until the next report('').
+      progress: message => { progress = { owner: token, message }; if (live() || progressInStatus || status.hidden) report(''); },
       done: receipt => {
         if (live() || (!root.open && suspended && suspendedSession === started)) close(receipt);
         else if (receipt) notify(receipt);

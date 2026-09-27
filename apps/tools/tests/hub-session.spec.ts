@@ -119,6 +119,24 @@ test('a running apply keeps its progress in the status line after Back and throu
   }
 });
 
+test('a running apply left behind by typing never paints over a newer failure in the status line (KEY-19)', async ({ page }) => {
+  await open(page, '&party&slow-apply&invite-fail=Guild Wars chat is not ready');
+  await enter(page, 'team gom afk');
+  await expect(status(page)).toHaveText(/^Applying GOM AFK… \d+\/16$/);
+  await enter(page, 'invite Zed Delta');
+  const failure = '/invite Zed Delta was not sent. Guild Wars chat is not ready.';
+  await expect(status(page)).toHaveText(failure);
+  // Several apply steps land meanwhile; the newer failure keeps the line.
+  const progressed = await page.evaluate(() => window.gwFixtureActions.length);
+  await expect.poll(() => page.evaluate(() => window.gwFixtureActions.length), { timeout: 5_000 }).toBeGreaterThan(progressed + 1);
+  await expect(status(page)).toHaveText(failure);
+  await expect(status(page)).toHaveAttribute('aria-busy', 'false');
+  // The next repaint shows the running apply again.
+  await page.keyboard.type('x');
+  await expect(status(page)).toHaveText(/^Applying GOM AFK… \d+\/16$/);
+  await expect(status(page)).toHaveAttribute('aria-busy', 'true');
+});
+
 test('a team apply that fails on its review leaves the outcome there and no progress in the status line (HUB-083)', async ({ page }) => {
   await open(page, '&slow-apply');
   await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-scenario', { detail: 'partial' })));
