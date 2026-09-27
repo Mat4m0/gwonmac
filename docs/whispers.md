@@ -117,7 +117,9 @@ Every Guild Wars character name has at least two words, so a typed single word
 never invites: it stays after known people and reads "Type the full character
 name".
 Receipts claim only the sent command: "Sent /invite Mo Kai. Guild Wars answers
-in chat."
+in chat." A refusal names the command it stopped, "/invite Mo Kai was not
+sent. Guild Wars chat is not ready.", so it still reads right when it arrives
+after Hub moved on or closed.
 
 ## Reuse and evidence
 
