@@ -225,7 +225,9 @@ test('arrow keys scroll Build details and never jump to Back (HUB-088)', async (
 });
 
 test('Whispers: Escape clears the picker text first, ↓ walks the people, ⌘⌫ keeps its native meaning in the message (HUB-079)', async ({ page }) => {
-  await openHub(page);
+  // One continued conversation (Romi) ahead of the online friends, so ↓ crosses from one group to the next.
+  await openHub(page, '&party');
+  await page.evaluate(() => window.dispatchEvent(new Event('hub-fixture-incoming')));
   await page.keyboard.press('Escape');
   await page.keyboard.press('Meta+d');
   const picker = page.locator('#whisper-person');
@@ -238,13 +240,27 @@ test('Whispers: Escape clears the picker text first, ↓ walks the people, ⌘�
   await expect(picker).toBeFocused();
   // The empty picker's hint promises ↑ ↓: they walk the listed people and Enter opens one.
   await expect(page.locator('.whisper-hints')).toContainText('↑ ↓ choose');
+  const people = page.locator('[id^="whisper-pick-"]');
+  await expect(people).toHaveCount(6);
+  await expect(page.locator('#whisper-pick-0')).toContainText('Romi Ranger');
+  await expect(page.locator('#whisper-pick-1')).toContainText('Zed Alpha');
   await page.keyboard.press('ArrowDown');
   await expect(picker).toHaveAttribute('aria-activedescendant', 'whisper-pick-0');
   await expect(page.locator('#whisper-pick-0')).toHaveAttribute('data-highlighted', 'true');
   await page.keyboard.press('ArrowDown');
-  await expect(picker).toHaveAttribute('aria-activedescendant', 'whisper-pick-0');
+  await expect(picker).toHaveAttribute('aria-activedescendant', 'whisper-pick-1');
+  await expect(page.locator('[data-highlighted="true"]')).toHaveCount(1);
+  await page.keyboard.press('End');
+  await expect(picker).toHaveAttribute('aria-activedescendant', 'whisper-pick-5');
+  await page.keyboard.press('ArrowDown');
+  await expect(picker).toHaveAttribute('aria-activedescendant', 'whisper-pick-5');
+  await page.keyboard.press('ArrowUp');
+  await expect(picker).toHaveAttribute('aria-activedescendant', 'whisper-pick-4');
+  await expect(picker).toBeFocused();
+  // Enter opens the highlighted person, a friend here, not the first conversation.
+  await expect(page.locator('#whisper-pick-4')).toContainText('Zed Gamma');
   await page.keyboard.press('Enter');
-  const draft = page.getByRole('textbox', { name: 'Message Romi Ranger', exact: true });
+  const draft = page.getByRole('textbox', { name: 'Message Zed Gamma', exact: true });
   await expect(draft).toBeFocused();
   await page.keyboard.type('hello there');
   await page.keyboard.press('Meta+Backspace');
