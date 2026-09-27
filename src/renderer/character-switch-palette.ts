@@ -445,9 +445,10 @@ export function createCharacterSwitchPalette(
     }
     for (const input of layoutInputs) input.checked = input.value === layout;
     const searchHint = searchEnabled ? ' <kbd class="ui-kbd">type</kbd> search' : "";
-    // The hints name what the keys do now: ↑ reaches the search, Esc clears a query before it leaves.
+    // The hints name what the keys do now: ↑ reaches the search, Esc clears a query before it
+    // leaves, and in the Hub ⌘⌫ always has a level to return to.
     const escape = normaliseCharacterQuery(query) !== "" ? "clear" : hub?.hasParent ? "back" : "close";
-    listHints.innerHTML = `<kbd class="ui-kbd">${hub ? "← →" : "←↑ →↓"}</kbd> choose${hub && searchEnabled ? ' <kbd class="ui-kbd">↑</kbd> search' : searchHint} <kbd class="ui-kbd">return</kbd> switch <kbd class="ui-kbd">esc</kbd> ${escape}`;
+    listHints.innerHTML = `<kbd class="ui-kbd">${hub ? "← →" : "←↑ →↓"}</kbd> choose${hub && searchEnabled ? ' <kbd class="ui-kbd">↑</kbd> search' : searchHint} <kbd class="ui-kbd">return</kbd> switch <kbd class="ui-kbd">esc</kbd> ${escape}${hub ? ' <kbd class="ui-kbd">⌘</kbd><kbd class="ui-kbd">⌫</kbd> back' : ""}`;
     queryInput.setAttribute("aria-expanded", String(searching && rows.length > 0));
     if (searching) queryInput.setAttribute("aria-controls", "character-switch-list");
     else queryInput.removeAttribute("aria-controls");

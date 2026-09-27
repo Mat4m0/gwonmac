@@ -53,6 +53,8 @@ test('Escape on a page its shortcut opened clears the query, then closes without
   await page.keyboard.press('Meta+t');
   const travel = page.getByRole('combobox', { name: 'Destination, phrase, or friend' });
   await expect(travel).toBeFocused();
+  // The hint names what Esc does here, and ⌘⌫ still has the real Home to return to.
+  await expect(page.locator('.travel-key-hints')).toContainText('Esc close ⌘⌫ back');
   await travel.fill('kam');
   // A held Escape clears the query and stops there: one step per physical press.
   await page.evaluate(() => window.gwFixtureCanvas?.clear());
@@ -66,7 +68,7 @@ test('Escape on a page its shortcut opened clears the query, then closes without
   // ⌘⌫ there returns to the real Home instead, and the Characters hint names each Esc step.
   await page.keyboard.press('Meta+e');
   const hints = page.locator('.character-switch-list-hints');
-  await expect(hints).toContainText('esc close');
+  await expect(hints).toContainText('esc close ⌘⌫ back');
   await page.keyboard.press('Meta+Backspace');
   await expect(page.locator('.hub-caption')).toHaveText('Home');
   await hubSearch(page).fill('switch character'); await page.keyboard.press('Enter');

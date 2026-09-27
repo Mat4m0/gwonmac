@@ -119,4 +119,6 @@ export interface HubPresenter<Target> {
   attach(source: HubSource): () => void;
   showRows(title: string, rows: () => readonly HubRow[], summary?: HubSummary): void;
   showView(title: string, mount: HubViewMount<Target>, available?: () => boolean): void;
+  /** Whether Esc on an empty query goes back to a parent page rather than closing the Hub. */
+  readonly hasParent?: boolean;
 }
