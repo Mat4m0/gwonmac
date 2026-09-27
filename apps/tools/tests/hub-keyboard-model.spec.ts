@@ -291,13 +291,28 @@ test('Trade: Escape and ⌘⌫ leave the Saved drawer, the Actions menu and Trad
   await page.keyboard.press('Escape');
   await expect(drawer).toHaveCount(0);
   await expect(trade).toBeVisible();
-  // A mouse-opened menu closes on Escape even while the game keeps the keyboard.
+  // A mouse-opened menu closes on Escape even while the game keeps the keyboard,
+  // and the keyboard stays with the game: Trade is non-activating.
+  const canvas = page.locator('#canvas');
   const menu = trade.locator('.offer-actions');
+  await canvas.focus();
   await menu.locator('summary').click();
   await expect(menu).toHaveAttribute('open', '');
+  await expect(canvas).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(menu).not.toHaveAttribute('open', '');
   await expect(trade).toBeVisible();
+  await expect(canvas).toBeFocused();
+  // The drawer takes focus when it opens; once the player clicks back into the game, Escape leaves it there.
+  await trade.getByRole('button', { name: /Saved/ }).click();
+  await expect(drawer).toBeVisible();
+  await canvas.focus();
+  await page.keyboard.press('Escape');
+  await expect(drawer).toHaveCount(0);
+  await expect(canvas).toBeFocused();
+  await page.evaluate(() => window.gwFixtureCanvas?.clear());
+  await page.keyboard.press('w');
+  await expect.poll(() => canvasKeys(page)).toBe(2);
   await trade.getByRole('button', { name: 'Trader prices' }).click();
   const item = trade.locator('[data-trader-id]');
   await item.first().focus();

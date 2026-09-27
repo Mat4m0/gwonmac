@@ -40,10 +40,18 @@ const props = defineProps<{
   active: boolean;
 }>();
 const offerActions = ref<HTMLDetailsElement | null>(null);
-function closeOfferActions() {
+function closeOfferActions(restoreFocus = ownsFocus()) {
   if (!offerActions.value?.open) return;
   offerActions.value.open = false;
-  offerActions.value.querySelector('summary')?.focus();
+  if (restoreFocus) offerActions.value.querySelector('summary')?.focus();
+}
+/**
+ * Trade is a non-activating surface: a click leaves the keyboard with the game.
+ * Closing a level hands focus back inside Trade only while Trade holds it, so an
+ * Escape or a click from the game never moves the game's keyboard into Trade.
+ */
+function ownsFocus(): boolean {
+  return panel.value?.contains(document.activeElement) ?? false;
 }
 const whispersEnabled = ref(false);
 const updateWhispersEnabled = () => { whispersEnabled.value = !!window.gwToolsSettings?.().gwonmacTools && !!window.gwToolsSettings?.().whispersEnabled; };
@@ -333,7 +341,7 @@ async function openPlayer(sender: string, focusTimestamp: number | null = null):
   }
 }
 
-function closePlayer(): void {
+function closePlayer(restoreFocus = ownsFocus()): void {
   const previous = playerReturn.value;
   requestRevision += 1;
   resetPlayerView();
@@ -347,7 +355,7 @@ function closePlayer(): void {
     const selector = previous.focusTimestamp === null
       ? null
       : `[data-player-timestamp="${previous.focusTimestamp}"]`;
-    if (selector) list.value?.querySelector<HTMLElement>(selector)?.focus();
+    if (selector && restoreFocus) list.value?.querySelector<HTMLElement>(selector)?.focus();
   });
 }
 
@@ -428,9 +436,9 @@ function openSaved(): void {
   nextTick(() => savedClose.value?.focus());
 }
 
-function closeSaved(): void {
+function closeSaved(restoreFocus = ownsFocus()): void {
   savedOpen.value = false;
-  nextTick(() => savedButton.value?.focus());
+  if (restoreFocus) nextTick(() => savedButton.value?.focus());
 }
 
 async function inspectSavedOffer(offer: TradeSavedOffer): Promise<void> {
@@ -473,12 +481,13 @@ function onListKeydown(event: KeyboardEvent): void {
  * sub-view (Trader prices, the narrow offer sheet, a player's listings).
  */
 function stepBack(): boolean {
-  if (offerActions.value?.open) closeOfferActions();
-  else if (savedOpen.value) closeSaved();
-  else if (view.value === "prices") closePrices();
+  const restoreFocus = ownsFocus();
+  if (offerActions.value?.open) closeOfferActions(restoreFocus);
+  else if (savedOpen.value) closeSaved(restoreFocus);
+  else if (view.value === "prices") closePrices(restoreFocus);
   // The offer sheet is a level only in the narrow layout, where it covers the ledger.
   else if (detailOpen.value && (panel.value?.querySelector(".mobile-back")?.getClientRects().length ?? 0) > 0) detailOpen.value = false;
-  else if (playerName.value) closePlayer();
+  else if (playerName.value) closePlayer(restoreFocus);
   else return false;
   return true;
 }
@@ -515,9 +524,9 @@ function openPrices(): void {
   view.value = "prices";
 }
 
-function closePrices(): void {
+function closePrices(restoreFocus = ownsFocus()): void {
   view.value = "listings";
-  void nextTick(() => pricesButton.value?.focus());
+  if (restoreFocus) void nextTick(() => pricesButton.value?.focus());
 }
 
 watch(source, (next) => {
@@ -667,7 +676,7 @@ useClassicFrame(panel);
         v-show="view === 'prices'"
         :host="host"
         :visible="visible && view === 'prices'"
-        @back="closePrices"
+        @back="closePrices()"
       />
 
       <div v-show="view === 'listings'" class="trade-toolbar">
@@ -719,7 +728,7 @@ useClassicFrame(panel);
           {{ submittedQuery ? `Results for “${submittedQuery}”` : "Latest messages" }}
         </span>
         <span v-else class="player-summary">
-          <button class="ui-link" @click="closePlayer">
+          <button class="ui-link" @click="closePlayer()">
             ← {{ submittedQuery ? "Back to results" : "Back to offers" }}
           </button>
           <strong><TradeIcon name="player" /><bdi>{{ playerName }}</bdi></strong>
@@ -893,7 +902,7 @@ useClassicFrame(panel);
               <strong>Saved</strong>
               <span>{{ savedCount }} {{ savedCount === 1 ? "item" : "items" }}</span>
             </div>
-            <button ref="savedClose" class="ui-button" data-icon aria-label="Close Saved" @click="closeSaved">×</button>
+            <button ref="savedClose" class="ui-button" data-icon aria-label="Close Saved" @click="closeSaved()">×</button>
           </header>
           <div class="ui-segment saved-tabs" data-fill role="group" aria-label="Saved item type">
             <button :aria-pressed="savedTab === 'offers'" @click="savedTab = 'offers'">Offers {{ saved.offers.length }}</button>
