@@ -249,6 +249,7 @@ const api = {
     showLauncher: () => ipcRenderer.invoke(IPC.appShowLauncher),
     openSettings: () => ipcRenderer.invoke(IPC.appOpenSettings),
     requestQuit: () => ipcRenderer.invoke(IPC.appRequestQuit),
+    showQuitOrReload: () => ipcRenderer.invoke(IPC.appShowQuitOrReload),
     reloadGame: (cause) => ipcRenderer.invoke(IPC.appReloadGame, cause),
     claimRelogIntent: () => ipcRenderer.invoke(IPC.appClaimRelogIntent),
   },

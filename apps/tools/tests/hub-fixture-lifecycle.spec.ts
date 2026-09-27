@@ -85,15 +85,31 @@ test.describe('shortcuts through commands.ts', () => {
     await expect(page.locator('.hub-fixture-quit')).toBeVisible();
   });
 
-  // HUB-001: the row promises the confirmation sheet but quits at once. The fixture
-  // models production, so this documents the open P0 until its fix lands.
+  // HUB-001: the row promises the confirmation sheet, so it opens it and quits nothing.
   test('the Quit or Reload row opens the confirmation sheet', async ({ page }) => {
-    test.fail(true, 'HUB-001: the Hub row calls requestQuit instead of the Quit-or-Reload sheet');
     await open(page);
     const search = page.getByRole('combobox', { name: searchName });
-    await search.fill('reload'); await search.press('Enter');
-    await expect(page.getByRole('dialog', { name: 'Quit or reload Guild Wars?' })).toBeVisible({ timeout: 2_000 });
-    await expect(page.locator('#app')).not.toHaveAttribute('data-action', 'Game quit');
+    const sheet = page.getByRole('dialog', { name: 'Quit or reload Guild Wars?' });
+    for (const word of ['reload', 'quit', 'restart']) {
+      if (!await page.locator('#hub').isVisible()) await page.keyboard.press('Meta+r');
+      await search.fill(word);
+      await expect(page.locator('#hub .hub-primary')).toContainText('Review options');
+      await search.press('Enter');
+      await expect(sheet).toBeVisible();
+      await expect(page.locator('#hub')).toBeHidden();
+      await page.keyboard.press('Escape');
+      await expect(sheet).toBeHidden();
+      await expect(page.locator('#app')).toHaveAttribute('data-action', 'Quit or reload cancelled');
+    }
+    // A double-click on the row runs it once: one sheet, and the trailing click quits nothing.
+    await page.keyboard.press('Meta+r');
+    await expect(search).toBeFocused();
+    await search.fill('reload');
+    await page.locator('#hub .hub-row', { hasText: 'Quit or Reload Game' }).dblclick();
+    await expect(sheet).toBeVisible();
+    await expect(page.locator('.hub-fixture-quit')).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#app')).toHaveAttribute('data-action', 'Quit or reload cancelled');
   });
 });
 

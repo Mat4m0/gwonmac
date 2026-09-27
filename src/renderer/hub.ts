@@ -176,7 +176,6 @@ export function createHub(parent: HTMLElement) {
       throw new Error('Unavailable in the current game state.');
     }
   };
-  const handoff = (name: string, detail?: unknown) => { dispatch(name, detail); suspend(); };
   const commands = (): HubRow[] => {
     const settings = window.gwToolsSettings?.();
     const tool = (id: string, title: string, detail: string, keywords: string, enabled: boolean | undefined, event: string): HubRow[] => enabled ? [{
@@ -197,8 +196,9 @@ export function createHub(parent: HTMLElement) {
       { id: 'commands', title: 'Commands', detail: 'Examples you can edit and run', keywords: 'help guide examples', group: 'Commands', action: 'Browse examples', run: () => presenter.showRows('Commands', commandExamples) },
       { id: 'help', title: 'Project website', detail: 'Documentation and latest changes', keywords: 'help documentation', group: 'Commands', action: 'Open website', run: async () => { await window.gwNative.app.openExternal('github'); close(); } },
       ...(!input.value.trim() ? [] : [
-        ...(settings?.gwonmacTools && settings.callTargetEnabled ? [{ id: 'call-target', title: 'Call Target', detail: 'Call the selected target to your party', keywords: 'ping attack party', group: 'Commands', action: 'Call target', run: () => handoff('gw:call-target') }] : []),
-        { id: 'reload', title: 'Quit or Reload Game…', detail: 'Opens confirmation for this account', keywords: 'restart reconnect', group: 'Commands', action: 'Review options', run: async () => { close(); await window.gwNative.app.requestQuit(); } },
+        // Call Target stays on its own shortcut: it acts only while the game has focus (HUB-133).
+        // Quit or Reload opens the account's confirmation sheet, never a direct quit (HUB-001).
+        { id: 'reload', title: 'Quit or Reload Game…', detail: 'Opens confirmation for this account', keywords: 'restart reconnect', group: 'Commands', action: 'Review options', run: async () => { close(); await window.gwNative.app.showQuitOrReload(); } },
         ...(settings?.gwonmacTools && settings.resignEnabled ? [{ id: 'resign', title: 'Resign…', detail: 'Opens the existing confirmation', group: 'Commands', action: 'Review resign', run: () => { dispatch('gw:resign-show'); close(); } }] : []),
       ]),
     ];

@@ -134,7 +134,7 @@ import {
   bootstrapAccountWorkspace,
   loadAccountMode,
 } from "./core/multiple-accounts.js";
-import { refreshNativeAccountsMenu } from "./window-menu.js";
+import { refreshNativeAccountsMenu, showQuitOrReloadGame } from "./window-menu.js";
 import { createLauncherWindow, prepareLauncherWindowState } from "./accounts-window.js";
 import { MultipleAccountsController } from "./multiple-accounts-controller.js";
 import { WindowCoordinator } from "./window-coordinator.js";
@@ -1041,6 +1041,8 @@ if (primaryInstance) void app.whenReady().then(async () => {
     loadAccountTemplates: (win) => accounts.loadTemplates(win),
     saveAccountTemplates: (win, entries) => accounts.saveTemplates(win, entries),
     requestQuit: requestGameQuit,
+    // The Hub's "Quit or Reload Game…" opens the same sheet as Command-Q (HUB-001).
+    showQuitOrReload: (win) => showQuitOrReloadGame(host, win),
     hubAccountsGet: win => {
       const context = windowRegistry.contextForWebContents(win.webContents.id);
       if (context?.role !== 'game') throw new Error('Game account required');

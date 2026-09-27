@@ -190,6 +190,33 @@ test('Command-Q opens the native Quit or Reload sheet over the open Hub, and Can
   } finally { await closeOffline(fixture); }
 });
 
+// HUB-001: the Hub row promises this sheet, so it opens it and never quits directly.
+test('the Hub "Quit or Reload Game…" row opens the same native sheet and quits nothing', async () => {
+  const fixture = await launch();
+  try {
+    const { app, page } = fixture;
+    await app.evaluate(({ dialog }) => {
+      const record: string[] = [];
+      (globalThis as DialogRecord).__hubContractDialogs = record;
+      Object.defineProperty(dialog, 'showMessageBox', {
+        configurable: true,
+        value: async (_window: unknown, options: { message?: string }) => { record.push(options.message ?? ''); return { response: 2, checkboxChecked: false }; },
+      });
+    });
+    const dialogs = () => app.evaluate(() => [...(globalThis as DialogRecord).__hubContractDialogs ?? []]);
+    await chord(fixture, 'R', ['meta']);
+    await expect(hubOf(page)).toBeVisible();
+    await searchOf(page).fill('reload');
+    await clearCanvasKeys(page);
+    await page.keyboard.press('Enter');
+    await expect.poll(dialogs).toEqual(['Quit or reload Guild Wars?']);
+    await expect(hubOf(page)).toBeHidden();
+    expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().filter(win => !win.isDestroyed()).length)).toBeGreaterThan(0);
+    expect(page.isClosed()).toBe(false);
+    expect(await canvasKeysFor(page, 'Enter')).toEqual([]);
+  } finally { await closeOffline(fixture); }
+});
+
 test('Shift-Tab moves focus inside the open Hub and never reaches the game', async () => {
   const fixture = await launch();
   try {

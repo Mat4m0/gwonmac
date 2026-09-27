@@ -144,6 +144,7 @@ export interface IpcContext {
   showLauncher: () => void;
   openSettings: () => void;
   requestQuit: (win: BrowserWindow) => void;
+  showQuitOrReload: (win: BrowserWindow) => Promise<void>;
   reloadGame: (win: BrowserWindow, cause: GameReloadCause) => Promise<void>;
   claimRelogIntent: (win: BrowserWindow) => boolean;
   loadAccountTemplates: (win: BrowserWindow) => Promise<AccountTemplateLibrary | null>;
@@ -600,6 +601,7 @@ export function registerIpcHandlers(ctx: IpcContext): {
     appShowLauncher: channel(nothing, () => ctx.showLauncher()),
     appOpenSettings: channel(nothing, () => ctx.openSettings()),
     appRequestQuit: channel(nothing, (win) => ctx.requestQuit(win)),
+    appShowQuitOrReload: channel(nothing, (win) => ctx.showQuitOrReload(win)),
 
     appReloadGame: channel(asGameReloadCause, (win, cause) =>
       ctx.reloadGame(win, cause)),
