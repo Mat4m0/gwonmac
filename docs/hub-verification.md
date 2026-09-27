@@ -42,7 +42,7 @@ URL switches set the same state at load: `?hub&lifecycle=pve-explorable`,
 Hub session races: `?slow-apply` lands each apply command half a second after it
 was sent on the real confirmation clock (a GOM AFK apply takes about 16 seconds),
 `?accounts-ms=1500` and `?invite-ms=4000` delay opening an account and sending an
-invite, `?invite-fail=<reason>` makes the invite fail with that reason, and
+invite, `?templates-ms=1200` delays each read of the Guild Wars template files, `?invite-fail=<reason>` makes the invite fail with that reason, and
 `?switch-fail=<code>` makes a character switch run for a second and then fail
 with that failure code. Tests can also dispatch
 `hub-fixture-lifecycle`, `hub-fixture-party` and `hub-fixture-scenario` events.

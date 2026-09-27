@@ -49,7 +49,7 @@ export type FixtureCanvasEvent = Readonly<{ type: string; code?: string; repeat?
 export function mountHubFixture(target: HTMLElement) {
   const params = new URLSearchParams(location.search);
   // Slow and failing game answers for the session races (HUB-004): `?accounts-ms=`, `?invite-ms=`,
-  // `?invite-fail=<reason>`, `?switch-fail=<code>` and `?slow-apply` (the runner on the real clock).
+  // `?invite-fail=<reason>`, `?switch-fail=<code>`, `?templates-ms=` and `?slow-apply` (the runner on the real clock).
   const delay = (name: string) => new Promise(resolve => setTimeout(resolve, Number(params.get(name)) || 0));
   // Every game or account action in order, so a test can count what one press ran.
   const actions: string[] = [];
@@ -115,7 +115,7 @@ export function mountHubFixture(target: HTMLElement) {
   });
   const hub = createHub(document.body);
   const librarySize = Number(params.get('library'));
-  const game = createHubGameFixture(record, { ...(Number.isSafeInteger(librarySize) && librarySize > 0 ? { librarySize } : {}), realTime: params.has('slow-apply') });
+  const game = createHubGameFixture(record, { ...(Number.isSafeInteger(librarySize) && librarySize > 0 ? { librarySize } : {}), realTime: params.has('slow-apply'), templatesMs: Number(params.get('templates-ms')) || 0 });
   window.gwHub = hub;
   // One synthetic lifecycle feeds Travel, the play region, Characters and the party (`?lifecycle=`).
   const travelHost = createDemoTravelHost();

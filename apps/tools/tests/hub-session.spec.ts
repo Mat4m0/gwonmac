@@ -46,6 +46,29 @@ test('a late invite completion never closes or wipes the reopened Hub (PPL-16)',
   expect(await actions(page)).toEqual(['PARTY.INVITE Zed Delta']);
 });
 
+test('a template folder that loads late never opens over a newer page or a closed Hub (HUB-004)', async ({ page }) => {
+  for (const moveOn of ['type', 'close'] as const) {
+    await open(page, '&templates-ms=1200');
+    await search(page).fill('build library');
+    await search(page).press('Enter');
+    await expect(page.locator('.hub-caption')).toHaveText('Build Library');
+    const templates = page.locator('#hub .hub-row[data-id="game-templates"]');
+    while (await templates.getAttribute('aria-selected') !== 'true') await search(page).press('ArrowUp');
+    await search(page).press('ArrowRight');
+    if (moveOn === 'type') await page.keyboard.type('sm');
+    else await page.locator('.hub-close').click();
+    await page.waitForTimeout(1600);
+    if (moveOn === 'type') {
+      await expect(page.locator('.hub-caption'), moveOn).toHaveText('Build Library');
+      await expect(search(page), moveOn).toHaveValue('sm');
+      await expect(search(page), moveOn).toBeFocused();
+    } else {
+      await expect(hub(page), moveOn).toBeHidden();
+      await expect(page.locator('#canvas'), moveOn).toBeFocused();
+    }
+  }
+});
+
 test('a long team apply names counted progress, and a repeated Enter never starts another (BLD-02)', async ({ page }) => {
   await open(page, '&slow-apply');
   await enter(page, 'team gom afk');

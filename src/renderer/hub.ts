@@ -681,7 +681,7 @@ export function createHub(parent: HTMLElement) {
       select(rows[listIndexAfter(rows.findIndex(row => row.id === selected), rows.length, step)]!.id, true);
     } else if (event.key === 'ArrowRight' && !event.repeat && input.selectionStart === input.value.length && input.selectionEnd === input.value.length) {
       const row = rows.find(row => row.id === selected);
-      if (row?.navigate) { event.preventDefault(); row.navigate(); }
+      if (row?.navigate) { event.preventDefault(); row.navigate(startTask()); }
     } else if (event.key === 'Enter' && !event.metaKey && !event.ctrlKey && !event.altKey) {
       // Only a plain Enter runs the named primary; a modified Enter is never a second route to it.
       event.preventDefault(); if (!event.repeat) void run();

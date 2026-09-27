@@ -255,12 +255,12 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
       return [...folderRows, ...files, ...templateStates(), ...(!folderRows.length && !files.length && !reading && !templateProblem ? [{ id: 'templates-empty', title: 'No skill templates here', detail: 'Save a skill template in Guild Wars, then retry.', group: 'Sources', action: 'Refresh templates', run: async () => { await readTemplates(); refresh(); } }] : [])];
     });
   }
-  /** Reads the template files, then opens them, unless the player moved on meanwhile. */
-  async function openTemplates(task?: HubTask) { try { await readTemplates(); } catch { templateProblem = 'Could not read templates.'; } if (!task || task.live()) browseTemplates(); }
+  /** Reads the template files, then opens them, unless the player moved on or closed the Hub meanwhile (HUB-004). */
+  async function openTemplates(task: HubTask) { try { await readTemplates(); } catch { templateProblem = 'Could not read templates.'; } if (task.live()) browseTemplates(); }
   const libraryRow = (): HubRow => ({ id: 'builds', title: 'Build Library', detail: 'Browse saved builds and Guild Wars template folders', keywords: 'templates skills folders builds', group: 'Tools', action: 'Browse builds', navigate() { browseLibrary(); }, run: () => browseLibrary() });
   function browseLibrary() {
     hub.showRows('Build Library', () => [
-      { id: 'game-templates', title: 'Guild Wars templates', detail: 'Your existing skill template files and folders', group: 'Builds', action: 'Browse templates', navigate: () => openTemplates(), run: task => openTemplates(task) },
+      { id: 'game-templates', title: 'Guild Wars templates', detail: 'Your existing skill template files and folders', group: 'Builds', action: 'Browse templates', navigate: openTemplates, run: openTemplates },
       ...all().filter((item): item is Item & { kind: 'build' } => item.kind === 'build' && !String(item.value.id).startsWith('template:')).map(buildRow),
       ...templateStates(),
     ]);

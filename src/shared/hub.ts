@@ -27,8 +27,11 @@ export type HubRow = Readonly<{
   attributeStatus?: string;
   folder?: string | null;
   professions?: readonly Readonly<{ name: string; icon: string; code: string }>[];
-  /** Opens a read-only child page; Right Arrow must never apply a build. */
-  navigate?(): void;
+  /**
+   * Opens a read-only child page; Right Arrow must never apply a build. The task binds a child
+   * page that loads first to the page that asked for it, so a late read never opens it (HUB-004).
+   */
+  navigate?(task: HubTask): void;
   searchQuery?: string;
   icon?: string;
   quoteBasis?: Readonly<{ value:string; options:readonly {value:string;label:string}[]; choose(value:string):void }>;

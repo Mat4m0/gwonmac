@@ -30,8 +30,9 @@ export function scaleLibrary(library: BuildLibrary, size: number): BuildLibrary 
 /**
  * `realTime` is the slowed runner: each command lands half a second after it was sent and the
  * production confirmation clock waits for it, so a team apply takes seconds, as in the game.
+ * `templatesMs` delays each read of the Guild Wars template files.
  */
-export function createHubGameFixture(record: (action: string) => void, options: { librarySize?: number; realTime?: boolean } = {}) {
+export function createHubGameFixture(record: (action: string) => void, options: { librarySize?: number; realTime?: boolean; templatesMs?: number } = {}) {
   const base = createDemoHost();
   const first = demoLibrary.builds.find(build => build.professions[0] === 'Mo')!;
   const smiter: Build = { ...first, id: buildId('hub-smiter'), name: 'Smiter', origin: 'Templates/Skills/Smiter.txt' };
@@ -87,15 +88,18 @@ export function createHubGameFixture(record: (action: string) => void, options: 
   const host: ToolsHost = { ...base, party,
     async loadLibrary() { return { library, recovered: false }; },
     async saveLibrary(value) { library = value; if (!scaled) localStorage.setItem("hub-fixture-library", JSON.stringify(value)); return value; },
-    async loadTemplates() { return [
-      { path: 'Skills/Monk/Protection.txt', contents: encodeSkillTemplate(first) ?? '' },
-      { path: 'Skills/Mesmer/Panic.txt', contents: encodeSkillTemplate(demoLibrary.builds.find(build => build.professions[0] === 'Me')!) ?? '' },
-      ...(folders ? [
-        { path: 'Skills/Team Builds/Farming/Protection.txt', contents: encodeSkillTemplate(first) ?? '' },
-        { path: 'Skills/Team Builds/Dungeons/Protection.txt', contents: encodeSkillTemplate(first) ?? '' },
-      ] : []),
-      ...(duplicate ? [{ path: 'Other/Smiter.txt', contents: encodeSkillTemplate(smiter) ?? '' }] : []),
-    ]; },
+    async loadTemplates() {
+      if (options.templatesMs) await new Promise(resolve => setTimeout(resolve, options.templatesMs));
+      return [
+        { path: 'Skills/Monk/Protection.txt', contents: encodeSkillTemplate(first) ?? '' },
+        { path: 'Skills/Mesmer/Panic.txt', contents: encodeSkillTemplate(demoLibrary.builds.find(build => build.professions[0] === 'Me')!) ?? '' },
+        ...(folders ? [
+          { path: 'Skills/Team Builds/Farming/Protection.txt', contents: encodeSkillTemplate(first) ?? '' },
+          { path: 'Skills/Team Builds/Dungeons/Protection.txt', contents: encodeSkillTemplate(first) ?? '' },
+        ] : []),
+        ...(duplicate ? [{ path: 'Other/Smiter.txt', contents: encodeSkillTemplate(smiter) ?? '' }] : []),
+      ];
+    },
     async applyTeam(plan, onEvent) { record('apply-team'); return runTeamApply(plan, { ...environment(), ...(onEvent ? { onEvent } : {}) }, 1); },
     async applyBuild(build, id, onEvent) { record('apply-build'); return runBuildApply(build, id, { ...environment(), ...(onEvent ? { onEvent } : {}) }, 2); },
     async openStorage() { throw new Error('Synthetic storage refusal'); },
