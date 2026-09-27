@@ -27,6 +27,14 @@ test('consecutive Escapes pop one level each and never close the Hub early (HUB-
     await expect(hubSearch(page)).toHaveValue('switch account');
     await expect(page.locator('#hub')).toBeVisible();
   }
+  // Three Build Library levels deep, then one Escape per level back to Home (KEY-09).
+  await hubSearch(page).fill('build library');
+  await page.keyboard.press('Enter'); await page.keyboard.press('Enter'); await page.keyboard.press('Enter');
+  await expect(page.locator('.hub-breadcrumbs')).toHaveText('Home›Build Library›Guild Wars templates›Mesmer');
+  await page.keyboard.press('Escape'); await page.keyboard.press('Escape'); await page.keyboard.press('Escape');
+  await expect(page.locator('.hub-breadcrumbs')).toHaveText('Home');
+  await expect(hubSearch(page)).toHaveValue('build library');
+  await expect(page.locator('#hub')).toBeVisible();
 });
 
 test('Escape and Command-Backspace close an open disclosure before they leave its page', async ({ page }) => {

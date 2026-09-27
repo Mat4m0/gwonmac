@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 test('Hub has a locked frame, invisible corner hit area and bounded movable geometry', async ({ page }, info) => {
   await page.goto('/?hub');
@@ -348,17 +348,185 @@ test('Backspace on a focused footer button edits the search and returns focus to
   await expect(page.locator('.hub-caption')).toHaveText('Home');
 });
 
-test('the mouse back button goes back one level and never closes the Hub', async ({ page }) => {
+/** A real mouse back button (button 3) press and release where the pointer rests, as macOS sends it. */
+async function pressMouseBack(page: Page, times = 1) {
+  const cdp = await page.context().newCDPSession(page);
+  const { x, y } = await page.evaluate(() => (window as unknown as { pointerAt: { x: number; y: number } }).pointerAt);
+  for (let press = 0; press < times; press++) {
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'back', buttons: 16, clickCount: 1 });
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'back', buttons: 0, clickCount: 1 });
+  }
+  await cdp.detach();
+}
+/** Rests the pointer over a row with real movement, as a player's hand would before pressing back. */
+async function restPointer(page: Page, row: Locator) {
+  const box = (await row.boundingBox())!;
+  await page.mouse.move(box.x + 40, box.y + box.height / 2 - 4);
+  await page.mouse.move(box.x + 60, box.y + box.height / 2);
+  await page.evaluate(point => { (window as unknown as { pointerAt: typeof point }).pointerAt = point; }, { x: box.x + 60, y: box.y + box.height / 2 });
+}
+const selectedRow = (page: Page) => page.locator('#hub .hub-row[aria-selected="true"]');
+const mouseLedger = (page: Page) => page.evaluate(() => (window.gwFixtureCanvas?.events ?? []).filter(event => !event.type.startsWith('key')));
+
+test('the mouse back button goes back one level, restores the parent exactly and never runs a row (PTR-33, KEY-26)', async ({ page }) => {
   await page.goto('/?hub');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
-  await search.fill('accounts'); await search.press('Enter');
-  await expect(page.locator('.hub-caption')).toHaveText('Accounts');
-  const back = () => page.locator('.hub-panel').dispatchEvent('mouseup', { button: 3 });
-  await back();
-  await expect(page.locator('.hub-caption')).toHaveText('Home');
-  await expect(search).toHaveValue('accounts');
-  await back();
+  const caption = page.locator('.hub-caption');
+  const announced = page.locator('#hub .hub-announce');
+  // An account page: the parent's query, caret and selection come back, and the pointer's row is not taken.
+  await search.fill('acc s'); await search.press('ArrowDown');
+  await expect(selectedRow(page)).toContainText('Second');
+  const second = await selectedRow(page).getAttribute('data-id');
+  await search.press('Enter');
+  await expect(caption).toHaveText('Second');
+  await restPointer(page, page.locator('#hub .hub-row').last());
+  await page.evaluate(() => window.gwFixtureCanvas?.clear());
+  await pressMouseBack(page);
+  await expect(caption).toHaveText('Home');
+  await expect(search).toHaveValue('acc s');
+  await expect(search).toBeFocused();
+  expect(await search.evaluate((field: HTMLInputElement) => [field.selectionStart, field.selectionEnd])).toEqual([5, 5]);
+  await expect(selectedRow(page)).toHaveAttribute('data-id', second!);
+  await expect(selectedRow(page)).toHaveCount(1);
+  await expect(announced).toHaveText('Home');
+  // A scrolled parent (Settings, low on Home) keeps its scroll position and its selection.
+  await search.fill('');
+  await search.press('End');
+  while (await selectedRow(page).getAttribute('data-id') !== 'settings') await search.press('ArrowUp');
+  const scroll = await page.locator('#hub-results').evaluate(list => list.scrollTop);
+  expect(scroll).toBeGreaterThan(0);
+  await search.press('Enter');
+  await expect(caption).toHaveText('Settings');
+  await restPointer(page, page.locator('.hub-view button:visible').first());
+  await pressMouseBack(page);
+  await expect(caption).toHaveText('Home');
+  await expect(selectedRow(page)).toHaveAttribute('data-id', 'settings');
+  expect(await page.locator('#hub-results').evaluate(list => list.scrollTop)).toBe(scroll);
+  // The Smiter target page: the row under the pointer is never applied.
+  await search.fill('build smiter'); await search.press('Enter');
+  await expect(page.locator('.hub-breadcrumbs')).toHaveText('Home›Smiter');
+  await restPointer(page, page.locator('#hub .hub-row').first());
+  await pressMouseBack(page);
+  await expect(caption).toHaveText('Home');
+  await expect(search).toHaveValue('build smiter');
+  await expect(selectedRow(page)).toContainText('Smiter');
+  await page.waitForTimeout(300);
   await expect(page.locator('#hub')).toBeVisible();
+  expect(await page.evaluate(() => window.gwFixtureActions)).toEqual([]);
+  expect(await mouseLedger(page)).toEqual([]);
+});
+
+test('the mouse back button at Home does nothing and never closes the Hub (PTR-34)', async ({ page }) => {
+  await page.goto('/?hub');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  await search.fill('kam');
+  await restPointer(page, page.locator('#hub .hub-row').first());
+  const selection = await selectedRow(page).getAttribute('data-id');
+  await page.evaluate(() => window.gwFixtureCanvas?.clear());
+  await pressMouseBack(page);
+  await pressMouseBack(page, 3);
+  await page.waitForTimeout(300);
+  await expect(page.locator('#hub')).toBeVisible();
+  await expect(page.locator('.hub-caption')).toHaveText('Home');
+  await expect(search).toHaveValue('kam');
+  await expect(search).toBeFocused();
+  await expect(selectedRow(page)).toHaveAttribute('data-id', selection!);
+  await expect(page.locator('#hub .hub-announce')).toHaveText('');
+  expect(await page.evaluate(() => window.gwFixtureActions)).toEqual([]);
+  expect(await mouseLedger(page)).toEqual([]);
+});
+
+test('a held Command-Backspace on a person page goes back one level to the people list (PPL-29)', async ({ page }) => {
+  await page.goto('/?hub&party');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  await search.fill('mo');
+  while (await selectedRow(page).getAttribute('data-id') !== 'person:kai mo bearer') await search.press('ArrowDown');
+  const scroll = await page.locator('#hub-results').evaluate(list => list.scrollTop);
+  expect(scroll).toBeGreaterThan(0);
+  await search.press('Enter');
+  await expect(page.locator('.hub-breadcrumbs')).toHaveText('Home›Kai Mo Bearer');
+  await page.evaluate(() => window.gwFixtureCanvas?.clear());
+  // About a second of auto-repeat: one keydown and 25 repeats.
+  await page.keyboard.down('Meta');
+  for (let press = 0; press < 26; press++) await page.keyboard.down('Backspace');
+  await page.keyboard.up('Backspace'); await page.keyboard.up('Meta');
+  await expect(page.locator('.hub-breadcrumbs')).toHaveText('Home');
+  await expect(page.locator('#hub')).toBeVisible();
+  await expect(search).toHaveValue('mo');
+  await expect(search).toBeFocused();
+  expect(await search.evaluate((field: HTMLInputElement) => [field.selectionStart, field.selectionEnd])).toEqual([2, 2]);
+  await expect(selectedRow(page)).toHaveAttribute('data-id', 'person:kai mo bearer');
+  expect(await page.locator('#hub-results').evaluate(list => list.scrollTop)).toBe(scroll);
+  await expect(page.locator('#hub .hub-announce')).toHaveText('Home');
+  expect(await page.evaluate(() => window.gwFixtureCanvas?.events.length)).toBe(0);
+});
+
+test('a held Backspace on a person page or an empty Build Library folder never leaves it or removes anything (PPL-30, BLD-25)', async ({ page }) => {
+  await page.goto('/?hub&party');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const crumbs = page.locator('.hub-breadcrumbs');
+  const holdBackspace = async (repeats: number) => {
+    for (let press = 0; press <= repeats; press++) await page.keyboard.down('Backspace');
+    await page.keyboard.up('Backspace');
+  };
+  await search.fill('romi'); await search.press('Enter');
+  await expect(crumbs).toHaveText('Home›Romi Ranger');
+  const actions = await page.locator('#hub .hub-row').allTextContents();
+  await page.evaluate(() => window.gwFixtureCanvas?.clear());
+  await holdBackspace(25);
+  await expect(crumbs).toHaveText('Home›Romi Ranger');
+  await expect(search).toHaveValue('');
+  await expect(search).toBeFocused();
+  expect(await page.locator('#hub .hub-row').allTextContents()).toEqual(actions);
+  // Build Library › Guild Wars templates › Monk with an empty query: two seconds of repeats.
+  await page.keyboard.press('Meta+Backspace');
+  await search.fill('build library'); await search.press('Enter');
+  await expect(crumbs).toHaveText('Home›Build Library');
+  await search.press('Enter');
+  await expect(crumbs).toHaveText('Home›Build Library›Guild Wars templates');
+  while (!(await selectedRow(page).textContent())?.startsWith('Monk')) await search.press('ArrowDown');
+  await search.press('Enter');
+  await expect(crumbs).toHaveText('Home›Build Library›Guild Wars templates›Monk');
+  const builds = await page.locator('#hub .hub-row').allTextContents();
+  await holdBackspace(50);
+  await expect(crumbs).toHaveText('Home›Build Library›Guild Wars templates›Monk');
+  expect(await page.locator('#hub .hub-row').allTextContents()).toEqual(builds);
+  expect(await page.evaluate(() => window.gwFixtureCanvas?.events.length)).toBe(0);
+  expect(await page.evaluate(() => window.gwFixtureActions)).toEqual([]);
+});
+
+test('Backspace on a selected pinned build only edits the search and keeps the pin (BLD-25)', async ({ page }) => {
+  await page.goto('/?hub');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  await page.evaluate(() => localStorage.removeItem('hub-fixture-library'));
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  await search.fill('build smiter');
+  await page.getByRole('button', { name: 'Actions', exact: true }).click();
+  await page.locator('#hub').getByRole('option', { name: /Pin to Hub/ }).click();
+  await page.reload();
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  await expect(search).toHaveValue('');
+  const pinned = page.locator('#hub .hub-group', { hasText: 'Pinned' });
+  await expect(pinned).toBeVisible();
+  const pin = page.locator('#hub .hub-row[data-id="build:hub-smiter"]').first();
+  await expect(pin).toBeVisible();
+  await search.press('Home');
+  await expect(selectedRow(page)).toHaveAttribute('data-id', 'build:hub-smiter');
+  await search.press('Backspace');
+  await expect(search).toHaveValue('');
+  await expect(page.locator('.hub-breadcrumbs')).toHaveText('Home');
+  await search.fill('s'); await search.press('Backspace');
+  await expect(search).toHaveValue('');
+  await expect(pinned).toBeVisible();
+  await expect(pin).toBeVisible();
+  await page.reload();
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  await expect(page.locator('#hub .hub-group', { hasText: 'Pinned' })).toBeVisible();
+  await expect(page.locator('#hub .hub-row[data-id="build:hub-smiter"]').first()).toBeVisible();
 });
 
 // HUB-048: a held Backspace only edits; it never leaves Travel or its picker, nor eats Home's query.
