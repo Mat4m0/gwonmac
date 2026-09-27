@@ -72,7 +72,7 @@ Current integrated features are:
   Partner offers are never changed. The feature has one live Settings switch,
   is off by default, and withdraws during confirmed PvP play.
 - **Travel**: Command-T or `/tp` opens host-owned destination
-  autocomplete and 1–9 shortcuts. Search filters positively locked maps from
+  autocomplete and 1–9 shortcuts that select a favourite; only Enter travels. Search filters positively locked maps from
   the current character's bounded unlock set, and Recent persists certified map
   observations per privacy-safe character key. A named, bounded Travel action
   rechecks the unlock at the game-thread drain. While the palette is open,

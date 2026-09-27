@@ -229,7 +229,8 @@ the area. While a map loads, the same line says when Travel returns.
 With Travel enabled, search an outpost or your custom Travel phrase. Travel,
 favourites, recent places, and Guild Hall stay in the same window. A click on a
 destination selects it; press Enter, click **Travel to …** in the footer, or
-double-click the destination to travel. A trip closes Hub. The favourite for
+double-click the destination to travel. With an empty search, the number keys
+1–9 select that favourite; press Enter to travel. A trip closes Hub. The favourite for
 the outpost you are in is shown but cannot be chosen. Command-T
 and `/tp` also open Travel inside Hub.
 

@@ -593,3 +593,24 @@ test.describe('Characters: typing never switches', () => {
     }
   });
 });
+
+// D-5, HUB-003: a Travel digit selects its favourite; a held digit repeats nothing.
+test('a Travel number key selects its favourite, a held one repeats nothing, and only Enter travels', async ({ page }) => {
+  await page.goto('/?hub');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Meta+t');
+  const travelSearch = page.locator('#travel-search-input');
+  await expect(travelSearch).toBeFocused();
+  for (let press = 0; press < 6; press++) await page.keyboard.down('1');
+  await page.keyboard.up('1');
+  const favourite = page.locator('#travel-favorite-0');
+  await expect(favourite).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('.travel-primary')).toHaveText(/^Travel to Ascalon City/u);
+  await expect(page.locator('.hub-caption')).toHaveText('Travel');
+  await expect(travelSearch).toHaveValue('');
+  await expect(page.locator('#app')).not.toHaveAttribute('data-action', /TRAVEL/u);
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#app')).toHaveAttribute('data-action', 'TRAVEL Ascalon City');
+  await expect(page.locator('#hub')).toBeHidden();
+});

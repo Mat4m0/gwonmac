@@ -728,10 +728,31 @@ async function moveActive(direction: 1 | -1): Promise<void> {
   let next = active.value < 0 ? (direction === 1 ? entries.length - 1 : 0) : active.value;
   do next = (next + direction + entries.length) % entries.length;
   while (!selectable(entries[next]!));
+  await reveal(next);
+}
+
+/** Selects a destination by keyboard and scrolls it into view. */
+async function reveal(index: number): Promise<void> {
   hover.release();
-  active.value = next;
+  active.value = index;
   await nextTick();
   palette.value?.querySelector<HTMLElement>(`#travel-${activeResultId.value}`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
+}
+
+/** A number key selects its favourite; only Enter travels (D-5). */
+function selectShortcut(slot: number): void {
+  const shortcut = shortcuts.value[slot];
+  if (shortcut && shortcut.mapId === currentMapId.value) {
+    setFeedback(`You are already in ${travelDestination(shortcut.mapId)?.name ?? "this place"}.`, "warning");
+  } else if (shortcut && isAvailable(shortcut.mapId)) {
+    const index = showingSmallCatalogue.value
+      ? selectableDestinations.value.findIndex((entry) => resultDestination(entry)?.mapId === shortcut.mapId)
+      : recentDestinations.value.length + assignedShortcuts.value.findIndex((row) => row.index === slot);
+    if (index >= 0 && index < selectableDestinations.value.length) void reveal(index);
+  } else if (shortcut && availability(shortcut.mapId) === "outside-context") {
+    const message = travelContextRefusal(props.host.state.value, shortcut.mapId);
+    if (message !== null) setFeedback(message, "warning");
+  } else void openShortcutManager(slot);
 }
 
 function onKeydown(event: KeyboardEvent): void {
@@ -782,17 +803,8 @@ function onKeydown(event: KeyboardEvent): void {
   }
   if (/^Digit[1-9]$/u.test(event.code) && mode.value === "travel" && !hasQuery.value && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
     event.preventDefault();
-    // One trip per physical press; a held digit never repeats it (HUB-003).
-    if (event.repeat) return;
-    const slot = Number(event.code.slice(5)) - 1;
-    const shortcut = shortcuts.value[slot];
-    if (shortcut && shortcut.mapId === currentMapId.value) setFeedback(`You are already in ${travelDestination(shortcut.mapId)?.name ?? "this place"}.`, "warning");
-    else if (shortcut && isAvailable(shortcut.mapId)) void travel(shortcut);
-    else if (shortcut && availability(shortcut.mapId) === "outside-context") {
-      const message = travelContextRefusal(props.host.state.value, shortcut.mapId);
-      if (message !== null) setFeedback(message, "warning");
-    }
-    else void openShortcutManager(slot);
+    // A held digit repeats nothing and never types (HUB-003).
+    if (!event.repeat) selectShortcut(Number(event.code.slice(5)) - 1);
   }
 }
 
@@ -837,7 +849,7 @@ function onKeydown(event: KeyboardEvent): void {
         </div>
       </section>
       <section v-if="!showingSmallCatalogue" class="travel-section travel-favorites" aria-labelledby="travel-favorites-title">
-        <header class="travel-section-head"><h2 id="travel-favorites-title">Favorites</h2><span>Press 1–9</span></header>
+        <header class="travel-section-head"><h2 id="travel-favorites-title">Favorites</h2><span>1–9 select</span></header>
         <div v-if="assignedShortcuts.length" class="travel-favorite-grid">
           <button v-for="(row, index) in assignedShortcuts" :id="`travel-favorite-${row.index}`" :key="row.index" :tabindex="inset ? -1 : undefined" :data-active="active === recentDestinations.length + index || undefined" :role="inset ? 'option' : undefined" :aria-selected="inset ? active === recentDestinations.length + index : undefined" @pointermove="moved($event) && (active = recentDestinations.length + index)" type="button" class="travel-favorite ui-raised" :title="row.destination?.mapId === currentMapId ? `${row.destination?.name} · Current location` : row.destination?.name" :data-current="row.destination?.mapId === currentMapId || undefined" :disabled="travelPending || host.unavailable !== null || row.destination?.mapId === currentMapId" :aria-label="row.destination?.mapId === currentMapId ? `${row.destination?.name}, current location, shortcut ${row.index + 1}` : `Travel to ${row.destination?.name}, shortcut ${row.index + 1}`" @mousedown="keepSearchFocus" @click="pick($event, recentDestinations.length + index)" @contextmenu="selectOnly($event, recentDestinations.length + index)"><svg v-if="inset" class="travel-place-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 8 8-8 10-8-10 8-8Z"/><circle cx="12" cy="10" r="2.5"/></svg><template v-if="inset"><span>{{ row.destination && favoriteLabel(row.destination) }}</span><b>{{ row.index + 1 }}</b></template><template v-else><b>{{ row.index + 1 }}</b><span>{{ row.destination && favoriteLabel(row.destination) }}</span></template></button>
         </div>
@@ -847,7 +859,7 @@ function onKeydown(event: KeyboardEvent): void {
 
     <section v-else id="travel-customize-panel" class="ui-scroll travel-body travel-customize" role="region" aria-label="Travel settings">
       <section class="travel-customize-group" aria-labelledby="travel-shortcuts-title">
-        <header class="travel-section-head"><h2 id="travel-shortcuts-title">Number shortcuts</h2><span>Press 1–9</span></header>
+        <header class="travel-section-head"><h2 id="travel-shortcuts-title">Number shortcuts</h2><span>1–9 select</span></header>
         <div class="travel-customize-shortcuts">
           <button v-for="row in shortcutRows" :key="row.index" type="button" class="travel-favorite ui-raised" :title="row.destination?.name" :data-empty="row.destination === null" :aria-pressed="editingShortcutSlot === row.index" :aria-label="row.destination === null ? `Assign shortcut ${row.index + 1}` : `Change shortcut ${row.index + 1}, ${row.destination.name}`" :disabled="preferenceControlsDisabled" @click="editingShortcutSlot = editingShortcutSlot === row.index ? null : row.index"><b>{{ row.index + 1 }}</b><span>{{ row.destination ? favoriteLabel(row.destination) : 'Assign' }}</span></button>
         </div>
