@@ -16,7 +16,7 @@ import type {
 } from "./character-switch-model.js";
 import { currentCharacterIndex } from "./character-switch-model.js";
 import { armConfirmation } from "./surface-controller.js";
-import { listIndexAfter, listKeyStep } from "./list-keys.js";
+import { listIndexAfter, listKeyStep } from "../shared/ui/list-keys.js";
 
 const failureMessage = (code: CharacterSwitchFailureCode): string => {
   switch (code) {

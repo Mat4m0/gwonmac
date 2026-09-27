@@ -5,7 +5,7 @@
 import { isHubShortcuts, type HubShortcut } from '../shared/hub-preferences.js';
 import { HUB_SCOPES, normaliseHubQuery, type HubPresenter, type HubRow } from '../shared/hub.js';
 import { calculate, parseConversion } from '../shared/hub-calculator.js';
-import { listIndexAfter, listKeyStep } from './list-keys.js';
+import { listIndexAfter, listKeyStep } from '../shared/ui/list-keys.js';
 
 /** First words that Hub's query grammar owns. */
 export const HUB_RESERVED_WORDS: readonly string[] = [...HUB_SCOPES, 'settings', 'hub', 'commands', 'help', 'titles', 'rates', 'launcher'];

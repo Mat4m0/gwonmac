@@ -14,7 +14,7 @@ import { editHubShortcut, hubPhraseReserved, manageHubShortcuts } from './hub-pr
 import { isHubShortcuts, type HubShortcut } from '../shared/hub-preferences.js';
 import { createHubCalculator } from './hub-calculator.js';
 import { armConfirmation } from './surface-controller.js';
-import { listIndexAfter, listKeyStep } from './list-keys.js';
+import { listIndexAfter, listKeyStep } from '../shared/ui/list-keys.js';
 import { createHoverSelection } from '../shared/ui/hover-selection.js';
 import { matchHubRows, parseHubQuery, normaliseHubQuery, type HubRow, type HubSource, type HubSummary, type HubTask, type HubViewAction, type HubViewFooter, type HubViewMount } from '../shared/hub.js';
 export function createHub(parent: HTMLElement) {
