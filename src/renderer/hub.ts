@@ -13,7 +13,7 @@ import { openHubMaps } from './hub-maps.js';
 import { editHubShortcut, hubPhraseReserved, manageHubShortcuts } from './hub-preferences.js';
 import { isHubShortcuts, type HubShortcut } from '../shared/hub-preferences.js';
 import { createHubCalculator } from './hub-calculator.js';
-import { armConfirmation } from './surface-controller.js';
+import { armConfirmation, closeDisclosure } from './surface-controller.js';
 import { listIndexAfter, listKeyStep } from '../shared/ui/list-keys.js';
 import { createHoverSelection } from '../shared/ui/hover-selection.js';
 import { matchHubRows, parseHubQuery, normaliseHubQuery, type HubRow, type HubSource, type HubSummary, type HubTask, type HubViewAction, type HubViewFooter, type HubViewMount } from '../shared/hub.js';
@@ -77,7 +77,6 @@ export function createHub(parent: HTMLElement) {
   let viewArming: { label: string; arming: ReturnType<typeof armConfirmation> } | null = null;
   let disposeView: (() => void) | null = null;
   let viewAvailable: (() => boolean) | null = null;
-  let returnFromView: (() => void) | null = null;
   let restoreQuery = '';
   type FocusPlace = { selector: string; range?: readonly [number, number] };
   type Page = { scope: RowScope | null; query: string; selected: string | null; scroll: number; view: MountedView | null; focus: FocusPlace };
@@ -163,6 +162,11 @@ export function createHub(parent: HTMLElement) {
     }
     restoreFocus(page.focus);
   }
+  /**
+   * Esc's step out of a page and a view's own way out ("Done", Travel or Characters leaving):
+   * the parent page, or a close where there is none. A page opened directly by its shortcut
+   * has no artificial Home step for Esc.
+   */
   function restoreParent() {
     const parent = history.pop();
     if (!parent) { close(); return; }
@@ -309,7 +313,7 @@ export function createHub(parent: HTMLElement) {
     }
   }
   /** "Done" steps back; it is the primary of a view that names none, so the footer never goes blank. */
-  const done: HubViewAction = { label: 'Done', run: () => back() };
+  const done: HubViewAction = { label: 'Done', run: () => restoreParent() };
   function paintViewFooter() {
     if (!viewFooter) return;
     footer.hidden = viewFooter.own;
@@ -613,7 +617,7 @@ export function createHub(parent: HTMLElement) {
   }
   function resetView() {
     endSession(); restoringFocus?.disconnect(); restoringFocus = null; keepDrafts(); pressed = null; modal.pageChanged();
-    disposeView?.(); disposeView = null; activeView = null; viewAvailable = null; returnFromView = null; content.replaceChildren(); content.hidden = true;
+    disposeView?.(); disposeView = null; activeView = null; viewAvailable = null; content.replaceChildren(); content.hidden = true;
     viewFooter = null; viewRunning = false; viewArming?.arming.disarm(); viewArming = null;
     search.hidden = false; list.hidden = false; footer.hidden = false;
   }
@@ -621,23 +625,22 @@ export function createHub(parent: HTMLElement) {
     history.length = 0; resetView(); scope = null; input.value = restoreQuery;
     root.dataset.page = 'home'; caption.textContent = 'Home'; input.placeholder = 'Search people, places, builds…'; report(''); refresh(true); input.focus();
   }
-  function back() {
-    if (returnFromView) returnFromView();
-    else restoreParent();
-  }
   function atHome() { return !scope && !activeView; }
   /**
    * ⌘⌫, the Back button and the mouse back button: exactly one level up, never a close.
    * A page opened directly (⌘T, ⌘E, ⌘B) has no parent and returns to the real Home.
    */
-  function backOneLevel() {
-    if (history.length) back();
+  function back() {
+    if (history.length) restoreParent();
     else if (!atHome()) home();
   }
-  /** Esc: clear a typed query, then go back one level, then close (D-4). */
+  /**
+   * Esc once a view's own levels and an open disclosure had their say (the surface controller's
+   * one Escape rule): clear a typed query, then go back one level, then close (D-4).
+   */
   function dismiss() {
     if (!search.hidden && input.value) { endSession(); input.value = ''; report(''); refresh(true); input.focus(); return; }
-    if (history.length) back(); else close();
+    restoreParent();
   }
   function close(message?: string) {
     if (root.open) frame = required<HTMLElement>('.hub-panel').getBoundingClientRect();
@@ -712,20 +715,16 @@ export function createHub(parent: HTMLElement) {
     event.stopPropagation();
     if (event.defaultPrevented) return;
     event.preventDefault();
-    if (event.repeat) return;
-    const expanded = event.target instanceof Element ? event.target.closest<HTMLDetailsElement>('details[open]') : null;
-    if (expanded && root.contains(expanded)) { expanded.open = false; expanded.querySelector('summary')?.focus(); return; }
-    backOneLevel();
+    if (event.repeat || closeDisclosure(event.target, root)) return;
+    back();
   });
-  root.addEventListener('mouseup', event => { if (event.button === 3) { event.preventDefault(); backOneLevel(); } });
+  root.addEventListener('mouseup', event => { if (event.button === 3) { event.preventDefault(); back(); } });
   root.addEventListener('keydown', event => {
     restoringFocus?.disconnect(); restoringFocus = null;
     // Typing on a list-stage button returns to search; Space still presses the button.
     if (!event.defaultPrevented && !search.hidden && event.target instanceof HTMLElement && event.target !== input && !content.contains(event.target)
       && !event.target.matches('input,textarea,select') && !(event.key === ' ' && event.target.matches('button')) && resumeSearchInput(event, input)) return;
     if (event.defaultPrevented || event.isComposing || event.metaKey || event.ctrlKey || event.altKey) return;
-    // Hub owns Esc before the native cancel: one step per physical press.
-    if (event.key === 'Escape') { event.preventDefault(); if (!event.repeat) dismiss(); return; }
     const target = event.target instanceof HTMLElement ? event.target : null;
     if (!target || target === required<HTMLElement>('.hub-resize')) return;
     if (target.closest('.hub-footer')) {
@@ -804,7 +803,7 @@ export function createHub(parent: HTMLElement) {
   required<HTMLButtonElement>('.hub-actions').onclick = event => { if (!viewFooter) actions(); else if (event.detail <= 1) void runViewAction(viewFooter.secondary, event); };
   required<HTMLButtonElement>('.hub-close').onclick = () => close();
   // The primary acts once per click run, so a double-click on it runs its action once.
-  backButton.onclick = backOneLevel;
+  backButton.onclick = back;
   primary.onclick = event => { if (event.detail > 1) return; if (viewFooter) void runViewAction(viewFooter.primary ?? done, event); else void run(); };
   root.addEventListener('pointerdown', () => { restoringFocus?.disconnect(); restoringFocus = null; });
   // A press on blank panel space or a disabled control parks focus on the dialog
@@ -837,6 +836,8 @@ export function createHub(parent: HTMLElement) {
     /** A mounted view replaced its own page (a confirmation): a click run from before it is cancelled. */
     pageChanged: () => modal.pageChanged(),
     get visible() { return root.open; },
+    /** Whether Esc on an empty query goes back to a parent page rather than closing the Hub. */
+    get hasParent() { return history.length > 0; },
     attach(next: HubSource) {
       if (sourceEnabled(next)) enabledSources.add(next);
       sources.set(next, next.subscribe(() => refresh())); next.setVisible(root.open && sourceEnabled(next)); refresh();
@@ -858,7 +859,6 @@ export function createHub(parent: HTMLElement) {
       if (!scope) restoreQuery = input.value;
       if (fromOpenHub && !restoring) remember();
       resetView();
-      returnFromView = restoreParent;
       root.dataset.page = 'section'; caption.textContent = title;
       required<HTMLElement>('.hub-preview').hidden = true; required<HTMLElement>('.hub-rate-controls').hidden = true;
       search.hidden = true; list.hidden = true; content.hidden = false;
@@ -873,7 +873,7 @@ export function createHub(parent: HTMLElement) {
         own: () => { state.own = true; if (viewFooter === state) paintViewFooter(); },
       };
       paintViewFooter();
-      disposeView = mount(content, back, shell);
+      disposeView = mount(content, restoreParent, shell);
       restoreDrafts([...history.map(pageTitle), title].join(' › '));
       paintNavigation();
       if (!content.contains(document.activeElement)) firstControl().focus();

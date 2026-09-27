@@ -15,7 +15,7 @@ import type {
   CharacterSwitchSource,
 } from "./character-switch-model.js";
 import { currentCharacterIndex } from "./character-switch-model.js";
-import { armConfirmation } from "./surface-controller.js";
+import { armConfirmation, closeDisclosure } from "./surface-controller.js";
 import { listIndexAfter, listKeyStep } from "../shared/ui/list-keys.js";
 
 const failureMessage = (code: CharacterSwitchFailureCode): string => {
@@ -445,7 +445,9 @@ export function createCharacterSwitchPalette(
     }
     for (const input of layoutInputs) input.checked = input.value === layout;
     const searchHint = searchEnabled ? ' <kbd class="ui-kbd">type</kbd> search' : "";
-    listHints.innerHTML = `<kbd class="ui-kbd">${hub ? "← →" : "←↑ →↓"}</kbd> choose${hub && searchEnabled ? ' <kbd class="ui-kbd">↑</kbd> search' : searchHint} <kbd class="ui-kbd">return</kbd> switch <kbd class="ui-kbd">esc</kbd> ${hub ? "back" : "close"}`;
+    // The hints name what the keys do now: ↑ reaches the search, Esc clears a query before it leaves.
+    const escape = normaliseCharacterQuery(query) !== "" ? "clear" : hub?.hasParent ? "back" : "close";
+    listHints.innerHTML = `<kbd class="ui-kbd">${hub ? "← →" : "←↑ →↓"}</kbd> choose${hub && searchEnabled ? ' <kbd class="ui-kbd">↑</kbd> search' : searchHint} <kbd class="ui-kbd">return</kbd> switch <kbd class="ui-kbd">esc</kbd> ${escape}`;
     queryInput.setAttribute("aria-expanded", String(searching && rows.length > 0));
     if (searching) queryInput.setAttribute("aria-controls", "character-switch-list");
     else queryInput.removeAttribute("aria-controls");
@@ -541,7 +543,9 @@ export function createCharacterSwitchPalette(
     render();
     focusSelected();
   };
-  root.addEventListener("keydown", (event) => {
+  // The panel answers first; the surface controller's Escape rule on the dialog root runs after it.
+  panel.addEventListener("keydown", (event) => {
+    // Escape during composition cancels the composition, never the query (HUB-140).
     if (event.isComposing || event.defaultPrevented) return;
     // From the cards ⌘⌫ is the Hub's own Back; one level per physical press.
     if (hub && isHubBackKey(event) && (view.kind === "confirming" || view.kind === "settings")) {
@@ -551,6 +555,8 @@ export function createCharacterSwitchPalette(
     }
     if (event.key === "Escape") {
       event.preventDefault();
+      // One step per physical press; an open disclosure is the innermost level.
+      if (event.repeat || closeDisclosure(event.target, panel)) return;
       if (view.kind === "confirming" || view.kind === "settings") leaveInnerView();
       else if (normaliseCharacterQuery(query) !== "") {
         query = "";
@@ -594,17 +600,6 @@ export function createCharacterSwitchPalette(
     revealSelected();
   });
   queryInput.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && normaliseCharacterQuery(query) !== "") {
-      event.preventDefault();
-      event.stopPropagation();
-      query = "";
-      queryInput.value = "";
-      selected = 0;
-      render();
-      queryInput.focus({ preventScroll: true });
-      revealSelected();
-      return;
-    }
     if (event.key !== "Enter" || busy() || event.isComposing || event.repeat || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
     event.preventDefault();
     requestSelected();

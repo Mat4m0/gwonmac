@@ -778,6 +778,8 @@ function onKeydown(event: KeyboardEvent): void {
   }
   if (event.key === "Escape" || (event.key === "ArrowLeft" && plainArrow && atStart && !hasQuery.value)) {
     event.preventDefault();
+    // One step per physical press: a held Esc clears the query and stops there.
+    if (event.repeat) return;
     if (mode.value === "customize") void selectMode("travel");
     else if (hasQuery.value) {
       query.value = "";

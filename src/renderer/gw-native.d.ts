@@ -117,6 +117,8 @@ declare global {
       priority: number;
       transient?: boolean;
       dismiss(): void;
+      /** What Escape does once no inner level answered it; `dismiss` when absent. */
+      escape?(): void;
     }>): GwonmacSurfaceHandle;
     registerDialog(dialog: Readonly<{
       root: HTMLDialogElement;

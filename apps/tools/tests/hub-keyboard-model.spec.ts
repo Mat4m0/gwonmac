@@ -14,6 +14,65 @@ const openHub = async (page: Page, query = '') => {
 };
 const canvasKeys = (page: Page) => page.evaluate(() => (window.gwFixtureCanvas?.events ?? []).filter(event => event.type.startsWith('key')).length);
 
+test('consecutive Escapes pop one level each and never close the Hub early (HUB-005)', async ({ page }) => {
+  await openHub(page);
+  const caption = page.locator('.hub-caption');
+  // No evaluate or locator read between the presses: those would grant user activation.
+  for (let cycle = 0; cycle < 5; cycle++) {
+    await hubSearch(page).fill('switch account');
+    await page.keyboard.press('Enter'); await page.keyboard.press('Enter');
+    await expect(caption).toHaveText('Second');
+    await page.keyboard.press('Escape'); await page.keyboard.press('Escape');
+    await expect(caption).toHaveText('Home');
+    await expect(hubSearch(page)).toHaveValue('switch account');
+    await expect(page.locator('#hub')).toBeVisible();
+  }
+});
+
+test('Escape and Command-Backspace close an open disclosure before they leave its page', async ({ page }) => {
+  await openHub(page);
+  await hubSearch(page).fill('team gom afk'); await page.keyboard.press('ArrowRight');
+  await expect(page.locator('.hub-caption')).toHaveText('GOM AFK');
+  const summary = page.locator('#hub details summary').first();
+  for (const key of ['Escape', 'Meta+Backspace']) {
+    await summary.click();
+    await expect(page.locator('#hub details[open]')).toHaveCount(1);
+    await page.keyboard.press(key);
+    await expect(page.locator('#hub details[open]')).toHaveCount(0);
+    await expect(summary).toBeFocused();
+    await expect(page.locator('.hub-caption')).toHaveText('GOM AFK');
+  }
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.hub-caption')).toHaveText('Home');
+});
+
+test('Escape on a page its shortcut opened clears the query, then closes without a Home step (D-4)', async ({ page }) => {
+  await openHub(page);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#hub')).toBeHidden();
+  await page.keyboard.press('Meta+t');
+  const travel = page.getByRole('combobox', { name: 'Destination, phrase, or friend' });
+  await expect(travel).toBeFocused();
+  await travel.fill('kam');
+  // A held Escape clears the query and stops there: one step per physical press.
+  await page.evaluate(() => window.gwFixtureCanvas?.clear());
+  for (let press = 0; press < 4; press++) await page.keyboard.down('Escape');
+  await page.keyboard.up('Escape');
+  await expect(travel).toHaveValue('');
+  await expect(page.locator('.hub-caption')).toHaveText('Travel');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#hub')).toBeHidden();
+  expect(await canvasKeys(page)).toBe(0);
+  // ⌘⌫ there returns to the real Home instead, and the Characters hint names each Esc step.
+  await page.keyboard.press('Meta+e');
+  const hints = page.locator('.character-switch-list-hints');
+  await expect(hints).toContainText('esc close');
+  await page.keyboard.press('Meta+Backspace');
+  await expect(page.locator('.hub-caption')).toHaveText('Home');
+  await hubSearch(page).fill('switch character'); await page.keyboard.press('Enter');
+  await expect(hints).toContainText('esc back');
+});
+
 test('Travel moves one selection with the shared list keys and never wraps (HUB-044, HUB-137)', async ({ page }) => {
   await openHub(page);
   await page.keyboard.press('Meta+t');
@@ -67,6 +126,21 @@ test('Characters: search leads the Tab order, the cards are one roving Tab stop,
   await expect(card).toHaveAttribute('data-character-key', chosen!);
   await expect(page.locator('.character-switch-list-hints')).toContainText('↑ search');
   await expect(page.locator('.character-switch-list-hints')).not.toContainText('Back');
+});
+
+test('Characters: Escape during composition keeps the query (HUB-140)', async ({ page }) => {
+  await openHub(page);
+  await page.keyboard.press('Meta+e');
+  await page.keyboard.type('toe');
+  const query = page.locator('#character-switch-query');
+  await expect(query).toHaveValue('toe');
+  await expect(page.locator('.character-switch-list-hints')).toContainText('esc clear');
+  await query.evaluate(element => element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', isComposing: true, bubbles: true, cancelable: true })));
+  await expect(query).toHaveValue('toe');
+  await expect(page.locator('.hub-caption')).toHaveText('Characters');
+  await page.keyboard.press('Escape');
+  await expect(query).toHaveValue('');
+  await expect(page.locator('.hub-caption')).toHaveText('Characters');
 });
 
 test('Settings arrows stay in their column: sections do not wrap, → enters a section, ← returns (HUB-054)', async ({ page }) => {

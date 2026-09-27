@@ -3,10 +3,14 @@
  *
  * Tools deliberately stays open when a player clicks Guild Wars, so DOM focus
  * alone cannot decide which surface Escape or Tab belongs to. This
- * controller keeps one ordered list of visible host surfaces. Escape dismisses
- * the topmost one and Tab wraps within it; Tab on the game canvas stays with
- * the game (D-12). Dialogs use the platform's modal behavior, with one shared
- * backdrop, dismissal, and focus lifecycle.
+ * controller keeps one ordered list of visible host surfaces and owns the one
+ * Escape rule: a surface that holds focus answers Escape itself, innermost
+ * level first (its own menu, drawer or cleared search), then an open
+ * disclosure closes, and only then the surface steps back or hides. Escape
+ * from outside every surface dismisses the topmost one. Tab wraps within the
+ * topmost surface; Tab on the game canvas stays with the game (D-12). Dialogs
+ * use the platform's modal behavior, with one shared backdrop, dismissal, and
+ * focus lifecycle.
  * A press that starts on a surface owns its repeats and release, so a key that
  * closes a surface never continues into the game, and a held Enter activates
  * a surface control only once.
@@ -26,6 +30,8 @@ type Surface = Readonly<{
   priority: number;
   transient?: boolean;
   dismiss(): void;
+  /** What Escape does once no inner level answered it; `dismiss` when absent. */
+  escape?(): void;
 }>;
 
 type OpenSurface = Surface & { order: number };
@@ -86,6 +92,18 @@ export function armConfirmation(button: HTMLElement) {
   });
 }
 
+/**
+ * Closes the open disclosure (a menu or `<details>`) that holds the target and
+ * returns focus to its summary: the innermost level of Escape and ⌘⌫.
+ */
+export function closeDisclosure(target: EventTarget | null, root: Element): boolean {
+  const expanded = target instanceof Element ? target.closest<HTMLDetailsElement>("details[open]") : null;
+  if (!expanded || !root.contains(expanded)) return false;
+  expanded.open = false;
+  expanded.querySelector("summary")?.focus({ preventScroll: true });
+  return true;
+}
+
 function focusableElements(root: HTMLElement): HTMLElement[] {
   return [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((element) =>
     !element.hidden
@@ -116,6 +134,10 @@ export function installSurfaceController(
   const topmost = () => [...surfaces.values()].sort((left, right) =>
     right.priority - left.priority || right.order - left.order
   )[0] ?? null;
+  const openRoot = (target: EventTarget | null) => {
+    const root = target instanceof Element ? target.closest("[data-gwonmac-surface]") : null;
+    return root !== null && [...surfaces.values()].some((surface) => surface.root === root);
+  };
 
   const dismissTransient = (except?: symbol) => {
     const open = [...surfaces.entries()]
@@ -155,13 +177,10 @@ export function installSurfaceController(
     if (!surface || (nativeModal !== null && nativeModal !== surface.root)) return;
 
     if (event.key === "Escape") {
-      if (nativeModal !== null) return; // The native cancel event owns dismissal.
+      // A focused surface answers in the bubble phase (`escapeAtRoot`); a composition keeps its Escape.
+      if (event.isComposing || nativeModal !== null || openRoot(event.target)) return;
       claim(event);
-      const expanded = (event.target instanceof Element ? event.target.closest<HTMLDetailsElement>('details[open]') : null);
-      if (expanded && surface.root.contains(expanded)) {
-        expanded.open = false; expanded.querySelector('summary')?.focus(); return;
-      }
-      surface.dismiss();
+      if (!event.repeat) (surface.escape ?? surface.dismiss)();
       return;
     }
     if (
@@ -325,6 +344,22 @@ export function installSurfaceController(
     surface.root.dataset.gwonmacSurface = "";
     const page = { generation: 0 };
     pages.set(surface.root, page);
+    // The one Escape rule for a focused surface, after its own controls had their say:
+    // an inner level that answered keeps the press; then a disclosure closes; then
+    // the surface steps back or hides. One step per physical press, never into the game.
+    // For a native dialog, handling the key-down also withholds Chromium's cancel, whose
+    // second consecutive request could not be cancelled and would close the dialog (HUB-005).
+    const escapeAtRoot = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.isComposing || !open) return;
+      if (event.defaultPrevented) {
+        event.stopPropagation();
+        return;
+      }
+      claim(event);
+      if (event.repeat || closeDisclosure(event.target, surface.root)) return;
+      (surface.escape ?? surface.dismiss)();
+    };
+    surface.root.addEventListener("keydown", escapeAtRoot);
     return Object.freeze({
       setOpen(next: boolean) {
         if (next === open) return;
@@ -351,6 +386,7 @@ export function installSurfaceController(
         page.generation++;
         surfaces.delete(id);
         pages.delete(surface.root);
+        surface.root.removeEventListener("keydown", escapeAtRoot);
         delete surface.root.dataset.gwonmacSurface;
       },
     });
@@ -372,6 +408,7 @@ export function installSurfaceController(
         priority: dialog.priority,
         ...(dialog.transient === undefined ? {} : { transient: dialog.transient }),
         dismiss: dismissForReplacement,
+        escape: dialog.dismiss,
       });
       let disposed = false;
 
