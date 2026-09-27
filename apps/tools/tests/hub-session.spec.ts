@@ -121,6 +121,17 @@ test('a template folder that loads late never opens over a newer page or a close
   }
 });
 
+test('results that arrive after the query found none get its selection, so Enter acts on them (HUB-003)', async ({ page }) => {
+  await open(page, '&travel-load-ms=800');
+  await search(page).fill('travel kam');
+  await expect(primary(page)).toHaveText('Select a result');
+  await expect(page.locator('#hub .hub-row[data-id="place:449"]')).toHaveAttribute('aria-selected', 'true');
+  await expect(primary(page)).toHaveText('Travel to Kamadan, Jewel of Istan↵');
+  await search(page).press('Enter');
+  await expect(hub(page)).toBeHidden();
+  expect(await actions(page)).toEqual(['TRAVEL Kamadan, Jewel of Istan']);
+});
+
 test('a long team apply names counted progress, and a repeated Enter never starts another (BLD-02)', async ({ page }) => {
   await open(page, '&slow-apply');
   await enter(page, 'team gom afk');

@@ -178,7 +178,9 @@ export function mountHubFixture(target: HTMLElement) {
     },
   });
   const travel = createHubTravel(travelHost, hub);
-  hub.attach(travel.source);
+  // `?travel-load-ms=` attaches Travel late, as the game loads its lazy bundle after the Hub opened.
+  const travelLoadMs = Number(params.get('travel-load-ms')) || 0;
+  if (travelLoadMs) setTimeout(() => hub.attach(travel.source), travelLoadMs); else hub.attach(travel.source);
   let id = 0;
   let failSend = false;
   let sends = 0;
