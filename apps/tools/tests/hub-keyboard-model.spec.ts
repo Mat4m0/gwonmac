@@ -234,6 +234,42 @@ test('Whispers: Escape clears the picker text first, ↓ walks the people, ⌘�
   expect(await canvasKeys(page)).toBe(0);
 });
 
+test('Trade: Escape and ⌘⌫ leave the Saved drawer, the Actions menu and Trader prices before Trade hides (HUB-120)', async ({ page }) => {
+  await openHub(page);
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Meta+k');
+  const trade = page.getByRole('dialog', { name: 'Trade Chat' });
+  await expect(trade).toBeVisible();
+  await trade.getByRole('button', { name: /Saved/ }).click();
+  const drawer = trade.getByRole('complementary', { name: 'Saved trade items' });
+  await expect(drawer).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(drawer).toHaveCount(0);
+  await expect(trade).toBeVisible();
+  // A mouse-opened menu closes on Escape even while the game keeps the keyboard.
+  const menu = trade.locator('.offer-actions');
+  await menu.locator('summary').click();
+  await expect(menu).toHaveAttribute('open', '');
+  await page.keyboard.press('Escape');
+  await expect(menu).not.toHaveAttribute('open', '');
+  await expect(trade).toBeVisible();
+  await trade.getByRole('button', { name: 'Trader prices' }).click();
+  const item = trade.locator('[data-trader-id]');
+  await item.first().focus();
+  await page.keyboard.press('End');
+  await expect(item.last()).toBeFocused();
+  await page.keyboard.press('Home');
+  await expect(item.first()).toBeFocused();
+  await page.keyboard.press('Meta+Backspace');
+  await expect(trade).toHaveAttribute('data-view', 'listings');
+  await expect(trade).toBeVisible();
+  // At the listings ⌘⌫ does nothing; Escape hides Trade.
+  await page.keyboard.press('Meta+Backspace');
+  await expect(trade).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(trade).toBeHidden();
+});
+
 test('the Trade ledger moves with the shared list keys (HUB-044)', async ({ page }) => {
   await openHub(page);
   await page.keyboard.press('Escape');

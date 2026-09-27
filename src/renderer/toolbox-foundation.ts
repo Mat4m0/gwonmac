@@ -31,6 +31,8 @@ export interface MountedTool {
   setVisible(visible: boolean): void;
   setActive?(active: boolean): void;
   requestClose(): void;
+  /** Steps out of one inner level (a menu, drawer or sub-view); false when none is open. */
+  stepBack?(): boolean;
   search?(query: string): void;
   update(state: ToolboxState): void;
   dispose(): void;
@@ -119,6 +121,8 @@ export function createToolboxFoundation(
         root: element,
         priority: 4,
         dismiss: () => requestClose(slot),
+        // Escape leaves the tool's innermost level first, even while the game holds focus (HUB-120).
+        escape: () => { if (!slot.tool?.stepBack?.()) requestClose(slot); },
       }),
     };
     return slot;

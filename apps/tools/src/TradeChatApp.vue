@@ -27,6 +27,7 @@ import {
 } from "./trade-ledger";
 import { useClassicFrame } from "./ui/use-classic-frame";
 import { listIndexAfter, listKeyStep, listPage } from "../../../src/shared/ui/list-keys";
+import { isHubBackKey } from "../../../src/shared/keyboard-shortcuts";
 import { useFloatingWindow } from "./use-floating-window";
 import TradeIcon from "./TradeIcon.vue";
 import TraderPrices from "./components/TraderPrices.vue";
@@ -71,7 +72,7 @@ type PlayerReturnState = {
   focusTimestamp: number | null;
 };
 
-defineExpose({ search(value: string) { query.value = value; view.value = "listings"; void runSearch(); } });
+defineExpose({ search(value: string) { query.value = value; view.value = "listings"; void runSearch(); }, stepBack });
 
 const source = ref<TradeSource>("kamadan");
 const view = ref<"listings" | "prices">("listings");
@@ -467,14 +468,34 @@ function onListKeydown(event: KeyboardEvent): void {
   });
 }
 
+/**
+ * Trade's own levels, innermost first: the Actions menu, the Saved drawer, then a
+ * sub-view (Trader prices, the narrow offer sheet, a player's listings).
+ */
+function stepBack(): boolean {
+  if (offerActions.value?.open) closeOfferActions();
+  else if (savedOpen.value) closeSaved();
+  else if (view.value === "prices") closePrices();
+  // The offer sheet is a level only in the narrow layout, where it covers the ledger.
+  else if (detailOpen.value && (panel.value?.querySelector(".mobile-back")?.getClientRects().length ?? 0) > 0) detailOpen.value = false;
+  else if (playerName.value) closePlayer();
+  else return false;
+  return true;
+}
+
+/**
+ * ⌘⌫ steps out of one Trade level per physical press, like Escape through the
+ * surface controller (HUB-120). At the listings it does nothing: it never hides
+ * Trade or edits the search.
+ */
+function onWindowBack(event: KeyboardEvent): void {
+  if (!isHubBackKey(event) || event.defaultPrevented) return;
+  event.preventDefault();
+  if (!event.repeat) stepBack();
+}
+
 function onWindowKeydown(event: KeyboardEvent): void {
   if (!props.visible || !props.active) return;
-  if (event.key === "Escape" && savedOpen.value) {
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    closeSaved();
-    return;
-  }
   if (
     view.value === "listings"
     &&
@@ -621,6 +642,7 @@ useClassicFrame(panel);
       aria-label="Trade Chat"
       data-design-contract="trade-ledger-v1"
       :data-view="view"
+      @keydown="onWindowBack"
     >
       <header class="ui-panel-head ui-window-head window-bar" @pointerdown="startDrag">
         <div class="window-brand trade-brand" aria-hidden="true">
@@ -836,7 +858,7 @@ useClassicFrame(panel);
           </div>
           <footer class="inspector-actions">
             <button v-if="whispersEnabled" class="ui-button" data-variant="primary" :aria-label="`Whisper ${selected.sender}`" @click="whisperSeller(selected.sender)">Whisper seller</button>
-            <details ref="offerActions" class="offer-actions" @keydown.esc.stop.prevent="closeOfferActions">
+            <details ref="offerActions" class="offer-actions">
               <summary class="ui-button">Actions</summary>
               <div class="inspector-action-group" role="group" aria-label="Offer actions">
                 <button class="ui-button" :aria-pressed="offerSaved(selected)" :disabled="!savedReady" @click="toggleOffer(selected)">
@@ -865,7 +887,6 @@ useClassicFrame(panel);
           class="trade-saved-drawer ui-drawer ui-raised"
           role="complementary"
           aria-label="Saved trade items"
-          @keydown.esc.stop.prevent="closeSaved"
         >
           <header class="saved-drawer-head ui-drawer-head">
             <div>

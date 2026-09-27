@@ -194,6 +194,7 @@ export function mountTradeInto(
         setVisible: (visible: boolean) => visible ? app.show() : app.hide(),
         setActive: app.setActive,
         requestClose: app.hide,
+        stepBack: app.stepBack,
         search: app.search,
         update: () => {},
         dispose: app.dispose,

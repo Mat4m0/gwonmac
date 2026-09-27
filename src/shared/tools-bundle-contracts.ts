@@ -57,6 +57,8 @@ export type TravelPaletteHandle = Readonly<{
 
 export type TradeChatHandle = Readonly<{
   search: (query: string) => void;
+  /** Steps out of one Trade level (menu, Saved drawer, sub-view); false at the listings. */
+  stepBack: () => boolean;
   show: () => void;
   hide: () => void;
   toggle: () => void;

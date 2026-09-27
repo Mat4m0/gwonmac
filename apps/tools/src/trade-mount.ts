@@ -35,6 +35,7 @@ export function mountTradeChat(
   app.mount(target);
   return Object.freeze({
     search: (query: string) => view.value?.search(query),
+    stepBack: () => view.value?.stepBack() ?? false,
     show: () => setVisible(true),
     hide: () => setVisible(false),
     toggle: () => setVisible(!visible.value),
