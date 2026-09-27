@@ -280,7 +280,8 @@ the way Esc does, and marks the press handled. Travel and Characters, which keep
 their own footer, list Command-Backspace there and name what Esc does now (clear,
 back or close). Backspace only edits text and never navigates; typing or Backspace
 on a button, the header or blank space edits the page's search: Hub search on list
-stages, the view's own search in Travel and Characters. A form view has none. History restores
+stages, the view's own search in Travel and Characters. A form view has none, and
+Travel's Customize panel keeps its keys like a form. History restores
 query, selection, scroll and the focused control. The search field's description
 leads with the page title, so a screen reader that stays in search after Back
 hears where it landed. In a view, Up/Down step between controls in screen order

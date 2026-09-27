@@ -157,6 +157,22 @@ test('typing and ⌫ on a view\'s buttons and the header edit that view\'s searc
   }
 });
 
+test('Travel Customize stays form-first: typing on its controls never jumps to the Travel search (HUB-046)', async ({ page }) => {
+  await openHub(page);
+  await page.keyboard.press('Meta+t');
+  const search = page.getByRole('combobox', { name: 'Destination, phrase, or friend' });
+  await page.getByRole('button', { name: 'Customize Travel' }).click();
+  const panel = page.locator('#travel-customize-panel');
+  await expect(panel).toBeVisible();
+  for (const control of [page.getByRole('button', { name: '+ Add phrase' }), page.locator('.travel-customize-shortcuts button').first()]) {
+    await control.focus();
+    await page.keyboard.type('d'); await page.keyboard.press('Backspace');
+    await expect(control).toBeFocused();
+    await expect(panel).toBeVisible();
+    await expect(search).toHaveValue('');
+  }
+});
+
 test('Characters: Escape during composition keeps the query (HUB-140)', async ({ page }) => {
   await openHub(page);
   await page.keyboard.press('Meta+e');

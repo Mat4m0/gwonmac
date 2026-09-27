@@ -751,10 +751,12 @@ export function createHub(parent: HTMLElement) {
   root.addEventListener('keydown', event => {
     restoringFocus?.disconnect(); restoringFocus = null;
     // Typing on a button or blank space returns to the page's search, the header's included;
-    // Space still presses the button. A form view has no search and keeps its keys.
+    // Space still presses the button. A form keeps its keys: a form view has no search, and
+    // a form region a view marks with data-hub-form (Travel's Customize) stays form-first.
     const field = searchField();
     if (!event.defaultPrevented && field && event.target instanceof HTMLElement && event.target !== field && !event.target.isContentEditable
-      && !event.target.matches('input,textarea,select') && !(event.key === ' ' && event.target.matches('button,summary')) && resumeSearchInput(event, field)) return;
+      && !event.target.matches('input,textarea,select') && !event.target.closest('[data-hub-form]')
+      && !(event.key === ' ' && event.target.matches('button,summary')) && resumeSearchInput(event, field)) return;
     if (event.defaultPrevented || event.isComposing || event.metaKey || event.ctrlKey || event.altKey) return;
     const target = event.target instanceof HTMLElement ? event.target : null;
     if (!target || target === required<HTMLElement>('.hub-resize')) return;

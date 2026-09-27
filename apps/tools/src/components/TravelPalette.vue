@@ -861,7 +861,7 @@ function onKeydown(event: KeyboardEvent): void {
       </section>
     </section>
 
-    <section v-else id="travel-customize-panel" class="ui-scroll travel-body travel-customize" role="region" aria-label="Travel settings">
+    <section v-else id="travel-customize-panel" class="ui-scroll travel-body travel-customize" role="region" aria-label="Travel settings" data-hub-form>
       <section class="travel-customize-group" aria-labelledby="travel-shortcuts-title">
         <header class="travel-section-head"><h2 id="travel-shortcuts-title">Number shortcuts</h2><span>1–9 select</span></header>
         <div class="travel-customize-shortcuts">

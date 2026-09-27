@@ -223,7 +223,8 @@ it cancels a "Leave this area?" confirmation and closes Character Switch
 settings or Travel's Customize view. A form you leave keeps what you typed until
 you quit the game. Backspace alone only deletes text; on a focused result, card or
 button, including the top bar, it deletes from the page's search (Travel and
-Character Switch use their own) and returns you there, and so does typing. The game keeps
+Character Switch use their own) and returns you there, and so does typing.
+Forms keep their keys, Customize Travel included. The game keeps
 running while Hub is open. The footer's left side lists the keys that work in
 the current view, and every page keeps it: a review, a confirmation or a form
 names its action there, for example **Apply team GOM AFK** or **Save phrase**,
