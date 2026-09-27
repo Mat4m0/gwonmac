@@ -344,8 +344,11 @@ like a compact working tool, consistent with Hero/Build management.
 - `/` focuses Trade search when focus is not in an input.
 - Escape and Command-Backspace leave Trade's own levels first, one per press:
   the Actions menu, then the Saved drawer, then Trader prices, the narrow offer
-  sheet or a player's listings. Then Escape hides Trade through the surface
-  controller, and Command-Backspace does nothing. Neither clears search.
+  sheet or a player's listings. Then Escape clears a typed or submitted search
+  and, at the empty live feed, hides Trade through the surface controller.
+  Command-Backspace never edits the search and does nothing at the listings.
+  Closing a level returns focus inside Trade only while Trade held it; from
+  the game, the keyboard stays with the game.
 - Live arrivals are not announced one by one to assistive technology.
 - Connection changes and submitted-search result counts use one polite status
   announcement.

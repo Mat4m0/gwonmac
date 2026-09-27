@@ -279,7 +279,7 @@ test('Whispers: Escape clears the picker text first, ↓ walks the people, ⌘�
   expect(await canvasKeys(page)).toBe(0);
 });
 
-test('Trade: Escape and ⌘⌫ leave the Saved drawer, the Actions menu and Trader prices before Trade hides (HUB-120)', async ({ page }) => {
+test('Trade: Escape and ⌘⌫ leave the Saved drawer, the Actions menu and Trader prices, and Escape a typed search, before Trade hides (HUB-120)', async ({ page }) => {
   await openHub(page);
   await page.keyboard.press('Escape');
   await page.keyboard.press('Meta+k');
@@ -323,11 +323,25 @@ test('Trade: Escape and ⌘⌫ leave the Saved drawer, the Actions menu and Trad
   await page.keyboard.press('Meta+Backspace');
   await expect(trade).toHaveAttribute('data-view', 'listings');
   await expect(trade).toBeVisible();
-  // At the listings ⌘⌫ does nothing; Escape hides Trade.
+  // At the listings ⌘⌫ does nothing, not even to a typed search; Escape clears the search, then hides Trade (D-4).
+  const search = trade.getByRole('searchbox', { name: 'Search offers or character names' });
+  await search.fill('ecto');
   await page.keyboard.press('Meta+Backspace');
+  await expect(trade).toBeVisible();
+  await expect(search).toHaveValue('ecto');
+  await page.keyboard.press('Escape');
+  await expect(search).toHaveValue('');
   await expect(trade).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(trade).toBeHidden();
+  // A submitted search clears the same way, back to the live feed.
+  await page.keyboard.press('Meta+k');
+  await search.fill('ecto'); await page.keyboard.press('Enter');
+  await expect(trade.getByRole('button', { name: 'Live feed' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(search).toHaveValue('');
+  await expect(trade.getByRole('button', { name: 'Live feed' })).toHaveCount(0);
+  await expect(trade).toBeVisible();
 });
 
 test('the Trade ledger moves with the shared list keys (HUB-044)', async ({ page }) => {

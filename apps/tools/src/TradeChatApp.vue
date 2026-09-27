@@ -80,7 +80,11 @@ type PlayerReturnState = {
   focusTimestamp: number | null;
 };
 
-defineExpose({ search(value: string) { query.value = value; view.value = "listings"; void runSearch(); }, stepBack });
+defineExpose({
+  search(value: string) { query.value = value; view.value = "listings"; void runSearch(); },
+  /** Escape's step: Trade's inner levels, then a typed search. */
+  stepBack: () => stepBack(true),
+});
 
 const source = ref<TradeSource>("kamadan");
 const view = ref<"listings" | "prices">("listings");
@@ -478,9 +482,10 @@ function onListKeydown(event: KeyboardEvent): void {
 
 /**
  * Trade's own levels, innermost first: the Actions menu, the Saved drawer, then a
- * sub-view (Trader prices, the narrow offer sheet, a player's listings).
+ * sub-view (Trader prices, the narrow offer sheet, a player's listings), then for
+ * Escape only a typed search (D-4). ⌘⌫ never edits the search.
  */
-function stepBack(): boolean {
+function stepBack(clearQuery: boolean): boolean {
   const restoreFocus = ownsFocus();
   if (offerActions.value?.open) closeOfferActions(restoreFocus);
   else if (savedOpen.value) closeSaved(restoreFocus);
@@ -488,6 +493,7 @@ function stepBack(): boolean {
   // The offer sheet is a level only in the narrow layout, where it covers the ledger.
   else if (detailOpen.value && (panel.value?.querySelector(".mobile-back")?.getClientRects().length ?? 0) > 0) detailOpen.value = false;
   else if (playerName.value) closePlayer(restoreFocus);
+  else if (clearQuery && (query.value || submittedQuery.value)) clearSearch();
   else return false;
   return true;
 }
@@ -500,7 +506,7 @@ function stepBack(): boolean {
 function onWindowBack(event: KeyboardEvent): void {
   if (!isHubBackKey(event) || event.defaultPrevented) return;
   event.preventDefault();
-  if (!event.repeat) stepBack();
+  if (!event.repeat) stepBack(false);
 }
 
 function onWindowKeydown(event: KeyboardEvent): void {
