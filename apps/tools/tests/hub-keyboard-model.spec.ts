@@ -203,6 +203,37 @@ test('arrow keys scroll Build details and never jump to Back (HUB-088)', async (
   await expect(details).toBeFocused();
 });
 
+test('Whispers: Escape clears the picker text first, ↓ walks the people, ⌘⌫ keeps its native meaning in the message (HUB-079)', async ({ page }) => {
+  await openHub(page);
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Meta+d');
+  const picker = page.locator('#whisper-person');
+  await expect(picker).toBeFocused();
+  await page.keyboard.type('ro');
+  await page.evaluate(() => window.gwFixtureCanvas?.clear());
+  await page.keyboard.press('Escape');
+  await expect(picker).toHaveValue('');
+  await expect(page.locator('#whisper-window')).toBeVisible();
+  await expect(picker).toBeFocused();
+  // The empty picker's hint promises ↑ ↓: they walk the listed people and Enter opens one.
+  await expect(page.locator('.whisper-hints')).toContainText('↑ ↓ choose');
+  await page.keyboard.press('ArrowDown');
+  await expect(picker).toHaveAttribute('aria-activedescendant', 'whisper-pick-0');
+  await expect(page.locator('#whisper-pick-0')).toHaveAttribute('data-highlighted', 'true');
+  await page.keyboard.press('ArrowDown');
+  await expect(picker).toHaveAttribute('aria-activedescendant', 'whisper-pick-0');
+  await page.keyboard.press('Enter');
+  const draft = page.getByRole('textbox', { name: 'Message Romi Ranger', exact: true });
+  await expect(draft).toBeFocused();
+  await page.keyboard.type('hello there');
+  await page.keyboard.press('Meta+Backspace');
+  await expect(draft).toHaveValue('');
+  await expect(draft).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#whisper-window')).toBeHidden();
+  expect(await canvasKeys(page)).toBe(0);
+});
+
 test('the Trade ledger moves with the shared list keys (HUB-044)', async ({ page }) => {
   await openHub(page);
   await page.keyboard.press('Escape');
