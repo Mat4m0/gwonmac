@@ -173,6 +173,23 @@ test('Settings arrows stay in their column: sections do not wrap, → enters a s
   await expect(page.locator('.hub-settings-body :focus')).toBeEnabled();
 });
 
+test('Escape at a shortcut conflict clears the prompt and returns to its shortcut (HUB-053)', async ({ page }) => {
+  await openHub(page);
+  await hubSearch(page).fill('settings'); await page.keyboard.press('Enter');
+  await page.getByRole('button', { name: 'Shortcuts', exact: true }).click();
+  const record = page.locator('.hub-shortcut-record[aria-label="Travel"]');
+  await record.click();
+  await page.keyboard.press('Meta+e');
+  const status = page.locator('.hub-settings-status');
+  await expect(status).toContainText('Used by Switch Character');
+  await expect(status.getByRole('button', { name: 'Cancel' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(status).toHaveText('');
+  await expect(page.locator('.hub-settings-body h2')).toHaveText('Shortcuts');
+  await expect(page.locator('.hub-caption')).toHaveText('Settings');
+  await expect(record).toBeFocused();
+});
+
 test('arrow keys scroll Build details and never jump to Back (HUB-088)', async ({ page }) => {
   await openHub(page);
   await hubSearch(page).fill('build smiter'); await page.keyboard.press('Enter');

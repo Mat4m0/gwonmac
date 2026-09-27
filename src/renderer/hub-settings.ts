@@ -9,7 +9,7 @@ import type { HubSettingsChange, HubSettingsPatch, HubSettingsSnapshot } from '.
 import { GLOBAL_TOOLS } from '../shared/launcher-contracts.js';
 import { TOOL_PRESENTATION } from '../shared/tool-presentation.js';
 import { listIndexAfter, listKeyStep } from '../shared/ui/list-keys.js';
-import { DEFAULT_SHORTCUTS, HUB_BACK_SHORTCUT, SHORTCUT_CAPTURE_HINT, shortcutEquals, shortcutKeycaps, shortcutReserved, SHORTCUT_ACTIONS, SHORTCUT_LABELS, shortcutConflict, type ShortcutAction, type ShortcutBinding } from '../shared/keyboard-shortcuts.js';
+import { DEFAULT_SHORTCUTS, HUB_BACK_SHORTCUT, isHubBackKey, SHORTCUT_CAPTURE_HINT, shortcutEquals, shortcutKeycaps, shortcutReserved, SHORTCUT_ACTIONS, SHORTCUT_LABELS, shortcutConflict, type ShortcutAction, type ShortcutBinding } from '../shared/keyboard-shortcuts.js';
 
 export function openHubSettings(hub: Hub) {
   let page = 'Tools';
@@ -21,13 +21,13 @@ export function openHubSettings(hub: Hub) {
     const body = doc.createElement('div'); body.className = 'hub-settings-body ui-scroll';
     const status = doc.createElement('p'); status.className = 'hub-settings-status'; status.setAttribute('role', 'status');
     view.append(nav, body, status); target.append(view);
-    let snapshot: HubSettingsSnapshot | null = null; let disposed = false; let pending = false;
     // ← from a section's control returns to its section; a slider, a list box and text keep their own ←.
     body.addEventListener('keydown', event => {
       if (event.key !== 'ArrowLeft' || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey || !(event.target instanceof HTMLElement)
         || event.target.matches('select,textarea,input:not([type=checkbox]):not([type=radio])')) return;
       event.preventDefault(); nav.querySelector<HTMLElement>('[aria-current="true"]')?.focus();
     });
+    let snapshot: HubSettingsSnapshot | null = null; let disposed = false; let pending = false;
     const api = window.gwNative.hubSettings;
     const sections = ['Tools', 'Appearance', 'Shortcuts', 'Maps', 'Chat & characters'];
     const buttons = sections.map(name => {
@@ -35,8 +35,8 @@ export function openHubSettings(hub: Hub) {
       const icons: Record<string, string> = { Tools: 'settings', Appearance: 'appearance', Shortcuts: 'keyboard', Maps: 'maps', 'Chat & characters': 'whispers' };
       button.prepend(hubIcon(doc, { id: icons[name] ?? 'settings', group: 'Settings' }));
       button.onclick = () => { page = name; status.textContent = ''; render(); };
-      button.onkeydown = event => {
       // The sections are a list: the shared list keys choose one, without wrapping; → enters its first usable control.
+      button.onkeydown = event => {
         if (event.key === 'ArrowRight' && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
           event.preventDefault(); body.querySelector<HTMLElement>('input:not(:disabled),select:not(:disabled),button:not(:disabled)')?.focus(); return;
         }
@@ -80,7 +80,14 @@ export function openHubSettings(hub: Hub) {
       if (conflict) {
         status.replaceChildren(doc.createTextNode(`Used by ${SHORTCUT_LABELS[conflict]}. Replace that shortcut? `));
         const replace = doc.createElement('button'); replace.className = 'ui-button'; replace.textContent = 'Replace'; replace.onclick = () => { void save({ kind: 'shortcut', action, binding }, SHORTCUT_LABELS[action]); };
-        const cancel = doc.createElement('button'); cancel.className = 'ui-button'; cancel.textContent = 'Cancel'; cancel.onclick = () => { status.textContent = ''; }; status.append(replace, cancel); cancel.focus();
+        // Esc and ⌘⌫ answer the prompt like Cancel, and the keyboard returns to the shortcut it was about (HUB-053).
+        const dismissPrompt = () => { status.textContent = ''; body.querySelector<HTMLElement>(`[aria-label="${CSS.escape(SHORTCUT_LABELS[action])}"]`)?.focus(); };
+        const cancel = doc.createElement('button'); cancel.className = 'ui-button'; cancel.textContent = 'Cancel'; cancel.onclick = dismissPrompt;
+        status.onkeydown = event => {
+          if ((event.key !== 'Escape' && !isHubBackKey(event)) || event.isComposing || !status.contains(cancel)) return;
+          event.preventDefault(); if (!event.repeat) dismissPrompt();
+        };
+        status.append(replace, cancel); cancel.focus();
       } else void save({ kind: 'shortcut', action, binding }, SHORTCUT_LABELS[action]);
     }
     function render() {
