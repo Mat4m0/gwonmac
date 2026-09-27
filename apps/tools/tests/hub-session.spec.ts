@@ -46,6 +46,38 @@ test('a late invite completion never closes or wipes the reopened Hub (PPL-16)',
   expect(await actions(page)).toEqual(['PARTY.INVITE Zed Delta']);
 });
 
+test('a team apply that completes while the player types keeps the Hub, the query and the focus (BLD-01)', async ({ page }) => {
+  test.setTimeout(60_000);
+  await open(page, '&slow-apply');
+  await page.keyboard.press('Escape');
+  await expect(hub(page)).toBeHidden();
+  await page.locator('#canvas').focus();
+  await page.keyboard.press('Meta+r');
+  await expect(search(page)).toBeFocused();
+  await page.evaluate(() => window.gwFixtureCanvas?.clear());
+  await page.keyboard.type('team gom afk'); await page.keyboard.press('Enter');
+  await expect(status(page)).toHaveText(/^Applying GOM AFK… \d+\/16$/);
+  await page.keyboard.press('ControlOrMeta+a'); await page.keyboard.press('Backspace');
+  // Type slowly through the apply's completion, then the rest of the query past it.
+  const query = 'travel kamadan 12345678';
+  let landed = -1;
+  for (const [index, character] of [...query].entries()) {
+    await page.keyboard.type(character);
+    if (landed < 0 && await status(page).textContent() === 'GOM AFK applied.') landed = index;
+    if (landed < 0) await page.waitForTimeout(900);
+  }
+  // The receipt landed while the player was still typing, and the keys after it kept it.
+  expect(landed).toBeGreaterThan(0);
+  expect(landed).toBeLessThan(query.length - 1);
+  await expect(status(page)).toHaveText('GOM AFK applied.');
+  await expect(hub(page)).toBeVisible();
+  await expect(page.locator('.hub-caption')).toHaveText('Home');
+  await expect(search(page)).toHaveValue('travel kamadan 12345678');
+  await expect(search(page)).toBeFocused();
+  expect(await keydowns(page)).toBe(0);
+  expect(await actions(page)).toEqual(['apply-team']);
+});
+
 test('a team apply that fails on its review leaves the outcome there and no progress in the status line (HUB-083)', async ({ page }) => {
   await open(page, '&slow-apply');
   await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-scenario', { detail: 'partial' })));
