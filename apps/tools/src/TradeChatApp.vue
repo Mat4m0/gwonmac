@@ -26,6 +26,7 @@ import {
   type TradeIntent,
 } from "./trade-ledger";
 import { useClassicFrame } from "./ui/use-classic-frame";
+import { listIndexAfter, listKeyStep, listPage } from "../../../src/shared/ui/list-keys";
 import { useFloatingWindow } from "./use-floating-window";
 import TradeIcon from "./TradeIcon.vue";
 import TraderPrices from "./components/TraderPrices.vue";
@@ -451,18 +452,17 @@ function currentOffersFor(sender: string): number {
   return current.value.live.filter((message) => message.sender.toLocaleLowerCase() === key).length;
 }
 
+/** The shared list move over the ledger; the ends hold. */
 function onListKeydown(event: KeyboardEvent): void {
-  if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
   const rows = visibleMessages.value;
-  if (!rows.length) return;
+  const step = listKeyStep(event, listPage(list.value, list.value?.querySelector<HTMLElement>(".trade-row")));
+  if (step === null || !rows.length) return;
   event.preventDefault();
   const index = rows.findIndex((message) => message.timestamp === current.value.selection);
-  const next = event.key === "ArrowDown"
-    ? Math.min(rows.length - 1, index + 1)
-    : Math.max(0, index < 0 ? 0 : index - 1);
-  selectMessage(rows[next]!);
+  const next = rows[listIndexAfter(index, rows.length, step)]!;
+  selectMessage(next);
   nextTick(() => {
-    list.value?.querySelector<HTMLElement>(`[data-timestamp="${rows[next]!.timestamp}"]`)
+    list.value?.querySelector<HTMLElement>(`[data-timestamp="${next.timestamp}"]`)
       ?.focus({ preventScroll: false });
   });
 }

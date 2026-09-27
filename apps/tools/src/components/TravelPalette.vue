@@ -22,6 +22,7 @@ import { TRAVEL_HISTORY_VISIBLE_LIMIT } from "../../../../src/shared/travel-hist
 import { guildWarsMapName } from "../../../../src/shared/guild-wars-map-names";
 import { isHubBackKey } from "../../../../src/shared/keyboard-shortcuts";
 import { createHoverSelection } from "../../../../src/shared/ui/hover-selection";
+import { listIndexAfter, listKeyStep, listPage } from "../../../../src/shared/ui/list-keys";
 import { useTravelPreferences } from "../travel-preferences";
 import TravelDestinationPicker from "./TravelDestinationPicker.vue";
 
@@ -722,13 +723,11 @@ function moved(event: PointerEvent): boolean {
   return hover.selects(event);
 }
 
-async function moveActive(direction: 1 | -1): Promise<void> {
+/** The shared list move over the destinations it may choose; the ends hold. */
+async function moveActive(step: number): Promise<void> {
   const entries = selectableDestinations.value;
-  if (!entries.some(selectable)) return;
-  let next = active.value < 0 ? (direction === 1 ? entries.length - 1 : 0) : active.value;
-  do next = (next + direction + entries.length) % entries.length;
-  while (!selectable(entries[next]!));
-  await reveal(next);
+  const next = listIndexAfter(active.value, entries.length, step, (index) => selectable(entries[index]!));
+  if (next >= 0) await reveal(next);
 }
 
 /** Selects a destination by keyboard and scrolls it into view. */
@@ -759,8 +758,15 @@ function onKeydown(event: KeyboardEvent): void {
   if (!props.visible || event.isComposing) return;
   const plainArrow = !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey;
   const atStart = event.target === input.value && input.value?.selectionStart === 0 && input.value.selectionEnd === 0;
-  if (props.inset && mode.value === 'travel' && !hasQuery.value && event.target === input.value && plainArrow && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
-    event.preventDefault(); void moveActive(event.key === 'ArrowRight' ? 1 : -1); return;
+  // The keyboard stays in search: the shared list keys move one selection without wrapping,
+  // and in the Hub ← → step the Recent carousel while there is no query.
+  const step = mode.value === "travel" && event.target === input.value
+    ? listKeyStep(event, listPage(palette.value?.querySelector<HTMLElement>(".travel-body"), palette.value?.querySelector<HTMLElement>(`#travel-${activeResultId.value}`)), props.inset && !hasQuery.value)
+    : null;
+  if (step !== null) {
+    event.preventDefault();
+    void moveActive(step);
+    return;
   }
   // In the Hub, ⌘⌫ leaves Customize like Esc; an open picker closes first, and from the
   // destination list the press is the Hub's own Back.
@@ -777,12 +783,6 @@ function onKeydown(event: KeyboardEvent): void {
       query.value = "";
       void nextTick(() => input.value?.focus());
     } else emit("close");
-    return;
-  }
-  if (mode.value === "travel" && event.target === input.value && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
-    if (props.inset && event.key === "ArrowUp" && active.value === 0) return;
-    event.preventDefault();
-    void moveActive(event.key === "ArrowDown" ? 1 : -1);
     return;
   }
   // Only a plain Enter travels; a modified Enter is never a second route to it.

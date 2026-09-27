@@ -15,6 +15,7 @@ import {
   type TraderItem,
   type TraderProfession,
 } from "../../../../src/shared/trader-catalog";
+import { listIndexAfter, listKeyStep, listPage } from "../../../../src/shared/ui/list-keys";
 import PriceHistoryChart from "./PriceHistoryChart.vue";
 import TraderItemIcon from "./TraderItemIcon.vue";
 
@@ -193,10 +194,10 @@ function selectItem(item: TraderItem): void {
   void nextTick(() => pricesRoot.value?.scrollIntoView({ block: "nearest" }));
 }
 
-function moveSelection(direction: -1 | 1): void {
-  if (!visibleItems.value.length) return;
-  const index = selectedIndex.value < 0 ? 0 : selectedIndex.value;
-  const next = visibleItems.value[Math.max(0, Math.min(visibleItems.value.length - 1, index + direction))];
+/** The shared list move over the visible items; the ends hold. */
+function moveSelection(step: number): void {
+  const items = visibleItems.value;
+  const next = items[listIndexAfter(selectedIndex.value, items.length, step)];
   if (!next) return;
   selectItem(next);
   void nextTick(() => pricesRoot.value
@@ -205,19 +206,10 @@ function moveSelection(direction: -1 | 1): void {
 }
 
 function onCatalogueKeydown(event: KeyboardEvent): void {
-  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-    event.preventDefault();
-    moveSelection(event.key === "ArrowDown" ? 1 : -1);
-    return;
-  }
-  if (event.key !== "Home" && event.key !== "End") return;
+  const step = listKeyStep(event, listPage(catalogue.value, catalogue.value?.querySelector<HTMLElement>("[data-trader-id]")));
+  if (step === null) return;
   event.preventDefault();
-  const item = event.key === "Home" ? visibleItems.value[0] : visibleItems.value.at(-1);
-  if (!item) return;
-  selectItem(item);
-  void nextTick(() => pricesRoot.value
-    ?.querySelector<HTMLElement>(`[data-trader-id="${item.modelId}"]`)
-    ?.focus());
+  moveSelection(step);
 }
 
 function formatPrice(price: number | undefined): string {

@@ -5,6 +5,7 @@ import {
   travelDestination,
   type TravelDestination,
 } from "../../../../src/shared/travel";
+import { listIndexAfter, listKeyStep, listPage } from "../../../../src/shared/ui/list-keys";
 
 const props = withDefaults(defineProps<{
   modelValue: number | null;
@@ -62,10 +63,6 @@ function clear(): void {
   close();
 }
 
-function move(direction: 1 | -1): void {
-  if (results.value.length === 0) return;
-  active.value = (active.value + direction + results.value.length) % results.value.length;
-}
 
 function onKeydown(event: KeyboardEvent): void {
   if (event.isComposing) return;
@@ -76,10 +73,14 @@ function onKeydown(event: KeyboardEvent): void {
     details.value?.querySelector<HTMLElement>("summary")?.focus();
     return;
   }
-  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+  // The shared list move, without wrapping.
+  const step = listKeyStep(event, listPage(details.value?.querySelector<HTMLElement>(".travel-destination-results"), details.value?.querySelector<HTMLElement>("[role=option]")));
+  if (step !== null) {
     event.preventDefault();
     event.stopPropagation();
-    move(event.key === "ArrowDown" ? 1 : -1);
+    if (!results.value.length) return;
+    active.value = listIndexAfter(active.value, results.value.length, step);
+    void nextTick(() => details.value?.querySelector("[role=option][aria-selected=true]")?.scrollIntoView({ block: "nearest" }));
     return;
   }
   if (event.key === "Enter" && activeDestination.value !== null) {
