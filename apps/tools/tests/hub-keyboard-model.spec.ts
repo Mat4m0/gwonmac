@@ -264,16 +264,23 @@ test('Whispers: Escape clears the picker text first, ↓ walks the people, ⌘�
   await expect(picker).toBeFocused();
   // The empty picker's hint promises ↑ ↓: they walk the listed people and Enter opens one.
   await expect(page.locator('.whisper-hints')).toContainText('↑ ↓ choose');
-  const people = page.locator('[id^="whisper-pick-"]');
+  // The walk is announced: the combobox is expanded over a listbox of options, and the chosen one is selected.
+  const people = page.getByRole('listbox', { name: 'People' }).getByRole('option');
   await expect(people).toHaveCount(6);
+  await expect(picker).toHaveAttribute('aria-controls', 'whisper-people');
+  await expect(picker).toHaveAttribute('aria-expanded', 'true');
   await expect(page.locator('#whisper-pick-0')).toContainText('Romi Ranger');
   await expect(page.locator('#whisper-pick-1')).toContainText('Zed Alpha');
+  await expect(page.locator('#whisper-people [aria-selected="true"]')).toHaveCount(0);
   await page.keyboard.press('ArrowDown');
   await expect(picker).toHaveAttribute('aria-activedescendant', 'whisper-pick-0');
   await expect(page.locator('#whisper-pick-0')).toHaveAttribute('data-highlighted', 'true');
+  await expect(people.nth(0)).toHaveAttribute('aria-selected', 'true');
   await page.keyboard.press('ArrowDown');
   await expect(picker).toHaveAttribute('aria-activedescendant', 'whisper-pick-1');
   await expect(page.locator('[data-highlighted="true"]')).toHaveCount(1);
+  await expect(page.locator('#whisper-people [aria-selected="true"]')).toHaveCount(1);
+  await expect(people.nth(1)).toHaveAttribute('aria-selected', 'true');
   await page.keyboard.press('End');
   await expect(picker).toHaveAttribute('aria-activedescendant', 'whisper-pick-5');
   await page.keyboard.press('ArrowDown');
