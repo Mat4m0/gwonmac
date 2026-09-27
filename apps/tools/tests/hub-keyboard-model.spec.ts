@@ -83,6 +83,67 @@ test('Escape on a page its shortcut opened clears the query, then closes without
   await expect(hints).toContainText('esc back');
 });
 
+test('list stages keep focus in search: ↓ moves one selection, Tab never lands on the list, ↓ steps from a hovered row (HUB-045, HUB-047)', async ({ page }) => {
+  await openHub(page);
+  const stages = [
+    { name: 'Home', search: hubSearch(page), options: '#hub-results [role="option"]', enter: async () => {} },
+    { name: 'Smiter', search: hubSearch(page), options: '#hub-results [role="option"]', enter: async () => { await hubSearch(page).fill('build smiter'); await page.keyboard.press('Enter'); } },
+    { name: 'Travel', search: page.getByRole('combobox', { name: 'Destination, phrase, or friend' }), options: '#travel-panel [role="option"]:visible', enter: async () => { await page.keyboard.press('Meta+Backspace'); await page.keyboard.press('Meta+t'); } },
+  ];
+  const activeId = () => page.evaluate(() => document.activeElement?.id || document.activeElement?.tagName);
+  for (const stage of stages) {
+    await stage.enter();
+    await expect(page.locator('.hub-caption')).toHaveText(stage.name);
+    const { search } = stage;
+    const options = page.locator(stage.options);
+    const selected = page.locator(`${stage.options.replace(':visible', '')}[aria-selected="true"]`);
+    const expectOneSelection = async () => {
+      await expect(search).toBeFocused();
+      await expect(selected).toHaveCount(1);
+      await expect(search).toHaveAttribute('aria-activedescendant', (await selected.getAttribute('id'))!);
+    };
+    await expect(search).toBeFocused();
+    const enabled = () => options.evaluateAll(elements => elements.filter(element => !element.matches(':disabled,[aria-disabled="true"]')).map(element => element.id));
+    for (let press = 0; press < 2; press++) {
+      const ids = await enabled();
+      const before = ids.indexOf((await search.getAttribute('aria-activedescendant')) ?? '');
+      await page.keyboard.press('ArrowDown');
+      // The ends hold: the two-row Smiter page stays on its last row.
+      await expect(search).toHaveAttribute('aria-activedescendant', ids[Math.min(before + 1, ids.length - 1)]!);
+      await expectOneSelection();
+    }
+    // A full Tab and Shift+Tab cycle returns to search without resting on the results scroller.
+    for (const key of ['Tab', 'Shift+Tab']) {
+      const visited: string[] = [];
+      for (let press = 0; press < 30; press++) {
+        await page.keyboard.press(key);
+        const id = await activeId();
+        if (id === await search.getAttribute('id') || await search.evaluate(element => element === document.activeElement)) break;
+        visited.push(String(id));
+      }
+      await expect(search, `${stage.name} ${key} cycle`).toBeFocused();
+      expect(visited, `${stage.name} ${key} cycle`).not.toContain('hub-results');
+      expect(visited, `${stage.name} ${key} cycle`).not.toContain('BODY');
+    }
+    await expectOneSelection();
+    // A real pointer move selects the row under it, and ↓ steps from there, not from the older selection
+    // (where the page is long enough to tell them apart).
+    const ids = await enabled();
+    const current = await search.getAttribute('aria-activedescendant');
+    const hovered = ids.find((id, index) => index < ids.length - 1 && id !== current && ids[index + 1] !== current)
+      ?? ids.find((id, index) => index < ids.length - 1 && id !== current)!;
+    const box = (await page.locator(`#${hovered}`).boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 8 });
+    await expect(page.locator(`#${hovered}`)).toHaveAttribute('aria-selected', 'true');
+    await expectOneSelection();
+    await page.keyboard.press('ArrowDown');
+    await expect(search).toHaveAttribute('aria-activedescendant', ids[ids.indexOf(hovered) + 1]!);
+    await expectOneSelection();
+    // Park the pointer outside the Hub so the next stage opens without a resting hover.
+    await page.mouse.move(2, 2);
+  }
+});
+
 test('Travel moves one selection with the shared list keys and never wraps (HUB-044, HUB-137)', async ({ page }) => {
   await openHub(page);
   await page.keyboard.press('Meta+t');
