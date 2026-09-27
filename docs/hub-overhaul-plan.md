@@ -398,7 +398,12 @@ in the browser fixture) with the gate's unit test in
 checks that a closing double-click or triple-click never reaches the game canvas,
 also through Electron's native mouse input on a closing row, × and the backdrop,
 where the input trace shows no later press and no double-click flag. The
-fixture's `?double-click-ms=` models a slower Double-click speed.
+fixture's `?double-click-ms=` models a slower Double-click speed. The Travel and
+Apply double-clicks (TRV-09, BLD-12) are covered in the fixture, with the canvas
+exactly empty and a fresh click a second later reaching it; in Electron they are
+live checks, because the offline playable client has no logged-in character to
+travel or apply a build with, and its native click-run path is the one the
+closing-row case above already drives.
 
 Extend existing fixtures with realistic mixed professions, missing observations,
 long names, empty/large folders, and account state changes. Measure large-list typing

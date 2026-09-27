@@ -272,6 +272,36 @@ test.describe('trailing clicks never reach the game', () => {
     await expect.poll(() => canvas(page)).toEqual(['pointerdown:0', 'mousedown:1', 'mouseup:1', 'click:1']);
   });
 
+  // TRV-09 in the fixture: the Travel view is its own surface page, and its closing trip
+  // keeps the whole run out of the game. The Electron playable client has no travel host.
+  for (const gap of [120, 450]) {
+    test(`Travel: a double-clicked recent (${gap} ms) travels once and leaves the game untouched`, async ({ page }) => {
+      const kamadan = (view: Page) => view.locator('.travel-recent', { hasText: 'Kamadan' }).first();
+      // Where a keyboard trip leaves focus is where the double-click must leave it too.
+      await open(page);
+      await page.keyboard.press('Meta+t');
+      await expect(kamadan(page)).toHaveAttribute('aria-selected', 'true');
+      await page.keyboard.press('Enter');
+      await expect(page.locator('#hub')).toBeHidden();
+      const keyboardFocus = await page.evaluate(() => document.activeElement?.id);
+      await open(page);
+      await page.keyboard.press('Meta+t');
+      await expect(caption(page)).toHaveText('Travel');
+      await page.evaluate(() => window.gwFixtureCanvas?.clear());
+      await clicks(page, kamadan(page), 2, gap);
+      await expect(page.locator('#hub')).toBeHidden();
+      expect(await ledger(page)).toEqual(['TRAVEL Kamadan, Jewel of Istan']);
+      expect(await canvas(page)).toEqual([]);
+      expect(await page.evaluate(() => document.activeElement?.id)).toBe(keyboardFocus);
+      // A fresh click a second later reaches the game as one ordinary press.
+      await page.waitForTimeout(1000);
+      await page.mouse.move(30, 300);
+      await page.mouse.down({ clickCount: 1 }); await page.mouse.up({ clickCount: 1 });
+      await expect.poll(() => canvas(page)).toEqual(['pointerdown:0', 'mousedown:1', 'mouseup:1', 'click:1']);
+      expect(await ledger(page)).toEqual(['TRAVEL Kamadan, Jewel of Istan']);
+    });
+  }
+
   for (const [name, query, pick, destination] of [
     ['whisper romi', 'whisper romi', '', '#whisper-window'],
     ['Whispers tool', '', 'whispers', '#whisper-window'],
