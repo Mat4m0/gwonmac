@@ -101,16 +101,34 @@ test.describe('shortcuts through commands.ts', () => {
       await expect(sheet).toBeHidden();
       await expect(page.locator('#app')).toHaveAttribute('data-action', 'Quit or reload cancelled');
     }
-    // A double-click on the row runs it once: one sheet, and the trailing click quits nothing.
-    await page.keyboard.press('Meta+r');
-    await expect(search).toBeFocused();
-    await search.fill('reload');
-    await page.locator('#hub .hub-row', { hasText: 'Quit or Reload Game' }).dblclick();
-    await expect(sheet).toBeVisible();
-    await expect(page.locator('.hub-fixture-quit')).toHaveCount(0);
-    await page.keyboard.press('Escape');
-    await expect(page.locator('#app')).toHaveAttribute('data-action', 'Quit or reload cancelled');
   });
+
+  // PTR-28: a double-click on the row or the footer primary, or a single click on
+  // the row, asks for the sheet exactly once; its later click never reaches the game.
+  for (const [gesture, clicks, locate] of [
+    ['double-click on the row', 2, (page: Page) => page.locator('#hub .hub-row', { hasText: 'Quit or Reload Game' })],
+    ['single click on the row', 1, (page: Page) => page.locator('#hub .hub-row', { hasText: 'Quit or Reload Game' })],
+    ['double-click on the footer primary', 2, (page: Page) => page.locator('#hub .hub-primary')],
+  ] as const) {
+    test(`a ${gesture} opens the Quit or Reload sheet once and quits nothing`, async ({ page }) => {
+      await open(page);
+      const search = page.getByRole('combobox', { name: searchName });
+      const sheet = page.getByRole('dialog', { name: 'Quit or reload Guild Wars?' });
+      await search.fill('reload');
+      await expect(page.locator('#hub .hub-primary')).toContainText('Review options');
+      await page.evaluate(() => window.gwFixtureCanvas?.clear());
+      await locate(page).click({ clickCount: clicks });
+      await expect(sheet).toBeVisible();
+      // Past the double-click interval, so a second request would have arrived.
+      await page.waitForTimeout(600);
+      await expect(sheet).toHaveAttribute('data-requests', '1');
+      expect(await canvasEvents(page)).toEqual([]);
+      await expect(page.locator('.hub-fixture-quit')).toHaveCount(0);
+      await page.keyboard.press('Escape');
+      await expect(page.locator('#app')).toHaveAttribute('data-action', 'Quit or reload cancelled');
+      expect(await page.evaluate(() => window.gwFixtureActions?.filter(action => /^(Game|Quit)/u.test(action)))).toEqual(['Quit or reload cancelled']);
+    });
+  }
 
   // A native sheet cannot be armed, so it opens only after the press that asked for it:
   // a held Enter never answers "Reload Guild Wars" with its auto-repeat.

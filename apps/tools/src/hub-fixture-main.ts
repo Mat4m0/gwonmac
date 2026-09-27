@@ -118,6 +118,8 @@ function createQuitOrReloadSheet(record: (action: string) => void, resetInput: (
     get open() { return dialog.open; },
     /** Resolves when the sheet settles; a second request joins the open sheet (`runExclusiveReloadDialog`). */
     async show() {
+      // Every request is counted, joined or not, so a test can require exactly one.
+      dialog.dataset.requests = String(Number(dialog.dataset.requests ?? 0) + 1);
       if (dialog.open) return;
       await resetInput();
       dialog.returnValue = '';
