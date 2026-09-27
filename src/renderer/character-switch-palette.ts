@@ -444,7 +444,7 @@ export function createCharacterSwitchPalette(
     }
     for (const input of layoutInputs) input.checked = input.value === layout;
     const searchHint = searchEnabled ? ' <kbd class="ui-kbd">type</kbd> search' : "";
-    listHints.innerHTML = `<kbd class="ui-kbd">${hub ? "← →" : "←↑ →↓"}</kbd> choose${hub && searchEnabled ? ' <kbd class="ui-kbd">↑</kbd> search / Back' : searchHint} <kbd class="ui-kbd">return</kbd> switch <kbd class="ui-kbd">esc</kbd> ${hub ? "back" : "close"}`;
+    listHints.innerHTML = `<kbd class="ui-kbd">${hub ? "← →" : "←↑ →↓"}</kbd> choose${hub && searchEnabled ? ' <kbd class="ui-kbd">↑</kbd> search' : searchHint} <kbd class="ui-kbd">return</kbd> switch <kbd class="ui-kbd">esc</kbd> ${hub ? "back" : "close"}`;
     queryInput.setAttribute("aria-expanded", String(searching && rows.length > 0));
     if (searching) queryInput.setAttribute("aria-controls", "character-switch-list");
     else queryInput.removeAttribute("aria-controls");
@@ -571,6 +571,8 @@ export function createCharacterSwitchPalette(
       focusSelected();
       revealSelected();
     }
+    // The search is the top of the view: ↑ there stays, like at the top of every list.
+    else if (event.key === "ArrowUp" && event.target === queryInput) event.preventDefault();
     else {
       // A digit selects and reveals its card; only Enter switches (D-5, HUB-002).
       if (normaliseCharacterQuery(query) !== "" || event.target instanceof HTMLInputElement

@@ -8,6 +8,7 @@ import type { Hub } from './hub.js';
 import type { HubSettingsChange, HubSettingsPatch, HubSettingsSnapshot } from '../shared/hub-settings.js';
 import { GLOBAL_TOOLS } from '../shared/launcher-contracts.js';
 import { TOOL_PRESENTATION } from '../shared/tool-presentation.js';
+import { listIndexAfter, listKeyStep } from '../shared/ui/list-keys.js';
 import { DEFAULT_SHORTCUTS, HUB_BACK_SHORTCUT, SHORTCUT_CAPTURE_HINT, shortcutEquals, shortcutKeycaps, shortcutReserved, SHORTCUT_ACTIONS, SHORTCUT_LABELS, shortcutConflict, type ShortcutAction, type ShortcutBinding } from '../shared/keyboard-shortcuts.js';
 
 export function openHubSettings(hub: Hub) {
@@ -21,6 +22,12 @@ export function openHubSettings(hub: Hub) {
     const status = doc.createElement('p'); status.className = 'hub-settings-status'; status.setAttribute('role', 'status');
     view.append(nav, body, status); target.append(view);
     let snapshot: HubSettingsSnapshot | null = null; let disposed = false; let pending = false;
+    // ← from a section's control returns to its section; a slider, a list box and text keep their own ←.
+    body.addEventListener('keydown', event => {
+      if (event.key !== 'ArrowLeft' || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey || !(event.target instanceof HTMLElement)
+        || event.target.matches('select,textarea,input:not([type=checkbox]):not([type=radio])')) return;
+      event.preventDefault(); nav.querySelector<HTMLElement>('[aria-current="true"]')?.focus();
+    });
     const api = window.gwNative.hubSettings;
     const sections = ['Tools', 'Appearance', 'Shortcuts', 'Maps', 'Chat & characters'];
     const buttons = sections.map(name => {
@@ -29,11 +36,15 @@ export function openHubSettings(hub: Hub) {
       button.prepend(hubIcon(doc, { id: icons[name] ?? 'settings', group: 'Settings' }));
       button.onclick = () => { page = name; status.textContent = ''; render(); };
       button.onkeydown = event => {
-        if (!['ArrowDown', 'ArrowUp', 'ArrowRight'].includes(event.key)) return;
-        if (event.key === 'ArrowUp' && name === sections[0]) return;
+      // The sections are a list: the shared list keys choose one, without wrapping; → enters its first usable control.
+        if (event.key === 'ArrowRight' && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
+          event.preventDefault(); body.querySelector<HTMLElement>('input:not(:disabled),select:not(:disabled),button:not(:disabled)')?.focus(); return;
+        }
+        const step = listKeyStep(event, sections.length);
+        if (step === null) return;
         event.preventDefault();
-        if (event.key === 'ArrowRight') { body.querySelector<HTMLElement>('input,select,button')?.focus(); return; }
-        const index = sections.indexOf(name); const next = buttons[(index + (event.key === 'ArrowDown' ? 1 : -1) + sections.length) % sections.length]; next?.click(); next?.focus();
+        const next = buttons[listIndexAfter(sections.indexOf(name), sections.length, step)];
+        if (next && next !== button) { next.click(); next.focus(); }
       };
       nav.append(button); return button;
     });

@@ -43,6 +43,49 @@ test('Travel moves one selection with the shared list keys and never wraps (HUB-
   await expect(travel).toBeFocused();
 });
 
+test('Settings arrows stay in their column: sections do not wrap, → enters a section, ← returns (HUB-054)', async ({ page }) => {
+  await openHub(page);
+  await hubSearch(page).fill('settings'); await page.keyboard.press('Enter');
+  const tools = page.getByRole('button', { name: 'Tools', exact: true });
+  await expect(tools).toBeFocused();
+  await page.keyboard.press('ArrowUp');
+  await expect(tools).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  const enable = page.getByRole('checkbox', { name: 'Enable Tools' });
+  await expect(enable).toBeFocused();
+  const heading = page.locator('.hub-settings-body h2');
+  for (let press = 0; press < 16; press++) {
+    await page.keyboard.press('ArrowDown');
+    await expect(page.locator('.hub-settings nav button:focus')).toHaveCount(0);
+  }
+  await expect(heading).toHaveText('Tools');
+  await page.keyboard.press('ArrowLeft');
+  await expect(tools).toBeFocused();
+  await page.keyboard.press('End');
+  await expect(heading).toHaveText('Chat & characters');
+  await page.keyboard.press('ArrowDown');
+  await expect(heading).toHaveText('Chat & characters');
+  // → enters the first usable control even where the first one is disabled.
+  await page.getByRole('button', { name: 'Shortcuts', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(heading).toHaveText('Shortcuts');
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('.hub-settings-body :focus')).toBeEnabled();
+});
+
+test('arrow keys scroll Build details and never jump to Back (HUB-088)', async ({ page }) => {
+  await openHub(page);
+  await hubSearch(page).fill('build smiter'); await page.keyboard.press('Enter');
+  await page.getByRole('button', { name: 'Details' }).click();
+  const details = page.locator('.hub-build-details');
+  await expect(details).toBeFocused();
+  for (let press = 0; press < 3; press++) await page.keyboard.press('ArrowDown');
+  await expect.poll(() => details.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+  for (let press = 0; press < 3; press++) await page.keyboard.press('ArrowUp');
+  await expect.poll(() => details.evaluate(element => element.scrollTop)).toBe(0);
+  await expect(details).toBeFocused();
+});
+
 test('the Trade ledger moves with the shared list keys (HUB-044)', async ({ page }) => {
   await openHub(page);
   await page.keyboard.press('Escape');

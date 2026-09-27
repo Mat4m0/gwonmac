@@ -88,10 +88,8 @@ test('arrows connect Hub results, character carousel, search and Back', async ({
   await page.keyboard.press('ArrowUp');
   const picker = page.locator('.character-switch-search input');
   await expect(picker).toBeFocused();
-  await page.keyboard.press('ArrowUp');
-  const back = page.getByRole('button', { name: 'Back', exact: true });
-  await expect(back).toBeFocused();
-  await page.keyboard.press('ArrowDown'); await expect(picker).toBeFocused();
+  // The search is the top of the view: ↑ there stays (HUB-137).
+  await page.keyboard.press('ArrowUp'); await expect(picker).toBeFocused();
   await page.keyboard.press('ArrowDown'); await expect(selected).toBeFocused();
   // Backspace never navigates; Command-Backspace returns from the card to Home.
   await page.keyboard.press('Backspace');

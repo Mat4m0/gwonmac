@@ -746,17 +746,18 @@ export function createHub(parent: HTMLElement) {
       && !target.matches('button,a[href],summary,select,textarea,input[type=checkbox],input[type=radio],input[type=range]')) {
       event.preventDefault(); void runViewAction(viewFooter.primary, event); return;
     }
-    if (content.contains(target) && event.key === 'ArrowUp' && target.matches('input[role=combobox]')) {
-      event.preventDefault(); (backButton.hidden ? required<HTMLButtonElement>('.hub-lock') : backButton).focus(); return;
-    }
+    // ↑ ↓ step between a view's controls in screen order, within the focused control's column
+    // (a nav or a scrolled body, HUB-054), and stop at its ends. A combobox's arrows belong to
+    // its list, and a focused scroller that overflows scrolls natively (HUB-088).
     if (content.contains(target) && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
-      if (target.matches('select,input[type="range"],textarea') || target.isContentEditable) return;
-      const controls = [...content.querySelectorAll<HTMLElement>('input,select,button,a[href],summary,[tabindex="0"]')].filter(control => control.getClientRects().length && !control.matches(':disabled')).sort((a, b) => { const left = a.getBoundingClientRect(), right = b.getBoundingClientRect(); return left.top - right.top || left.left - right.left; });
+      if (target.matches('select,input[type="range"],input[role=combobox],textarea') || target.isContentEditable) return;
+      if (!target.matches('input,button,a[href],summary') && target.scrollHeight > target.clientHeight) return;
+      const column = target.parentElement?.closest<HTMLElement>('nav,.ui-scroll') ?? content;
+      const controls = [...(content.contains(column) ? column : content).querySelectorAll<HTMLElement>('input,select,button,a[href],summary,[tabindex="0"]')].filter(control => control.getClientRects().length && !control.matches(':disabled')).sort((a, b) => { const left = a.getBoundingClientRect(), right = b.getBoundingClientRect(); return left.top - right.top || left.left - right.left; });
       const index = controls.indexOf(target);
       if (index < 0) return;
       event.preventDefault();
-      if (event.key === 'ArrowUp' && index === 0) (backButton.hidden ? required<HTMLButtonElement>('.hub-lock') : backButton).focus();
-      else controls[Math.max(0, Math.min(controls.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)))]?.focus();
+      controls[Math.max(0, Math.min(controls.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)))]?.focus();
     }
   });
   function showBuildDetails(row: HubRow) {

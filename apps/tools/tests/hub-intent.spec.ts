@@ -12,9 +12,10 @@ test('character entry is card-first and Back restores the launching result', asy
   await expect(card).not.toHaveAttribute('data-character-key', first!);
   await page.keyboard.press('ArrowUp');
   await expect(page.locator('#character-switch-query')).toBeFocused();
+  // The search is the top of the view: ↑ there stays (HUB-137).
   await page.keyboard.press('ArrowUp');
-  await expect(page.getByRole('button', { name: 'Back', exact: true })).toBeFocused();
-  await page.keyboard.press('Enter');
+  await expect(page.locator('#character-switch-query')).toBeFocused();
+  await page.keyboard.press('Meta+Backspace');
   await expect(search).toHaveValue('sw');
   await expect(page.locator('.hub-row[data-id="character"]')).toHaveAttribute('aria-selected', 'true');
   await expect(search).toBeFocused();
