@@ -217,7 +217,8 @@ step. In Settings, Up and Down stay in the section list or in the section; Right
 enters a section and Left returns to its name. Escape at a shortcut conflict
 cancels the prompt. **Command-Backspace** goes back one level from anywhere in
 Hub, including a text field, and never closes it; the Back arrow and the mouse
-back button do the same. Inside a page it first leaves that page's own level:
+back button do the same, and VoiceOver speaks the title of the page you return
+to. Inside a page it first leaves that page's own level:
 it cancels a "Leave this area?" confirmation and closes Character Switch
 settings or Travel's Customize view. A form you leave keeps what you typed until
 you quit the game. Backspace alone only deletes text; on a focused result, card or

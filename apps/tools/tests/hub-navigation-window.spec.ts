@@ -228,6 +228,44 @@ test('a view whose first buttons are disabled still takes focus, and Command-Bac
   await expect(search).toBeFocused();
 });
 
+test('Command-Backspace goes back one Build Library level, restores the parent and speaks its title (BLD-24)', async ({ page }) => {
+  await page.goto('/?hub');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const announced = page.locator('#hub .hub-announce');
+  await expect(announced).toHaveAttribute('aria-live', 'polite');
+  await expect(announced).toHaveText('');
+  await search.fill('build smi');
+  await search.press('ArrowLeft'); await search.press('ArrowLeft');
+  await expect(page.locator('#hub .hub-row[aria-selected="true"]')).toContainText('Smiter');
+  await search.press('Enter');
+  await expect(page.locator('.hub-breadcrumbs')).toHaveText('Home›Smiter');
+  await search.press('ArrowDown'); await search.press('Enter');
+  await expect(page.locator('.hub-breadcrumbs')).toHaveText('Home›Smiter›Heroes');
+  await page.keyboard.type('liv');
+  // One press: back to the target page without clearing the child query first, and the title is spoken.
+  await page.keyboard.press('Meta+Backspace');
+  await expect(page.locator('.hub-breadcrumbs')).toHaveText('Home›Smiter');
+  await expect(search).toHaveValue('');
+  await expect(search).toBeFocused();
+  await expect(page.locator('#hub .hub-row[aria-selected="true"]')).toContainText('Apply to hero');
+  await expect(announced).toHaveText('Smiter');
+  // A held press goes back one more level only, to the query with its caret and selection.
+  await page.keyboard.down('Meta');
+  for (let press = 0; press < 26; press++) await page.keyboard.down('Backspace');
+  await page.keyboard.up('Backspace'); await page.keyboard.up('Meta');
+  await expect(page.locator('.hub-breadcrumbs')).toHaveText('Home');
+  await expect(search).toHaveValue('build smi');
+  expect(await search.evaluate((field: HTMLInputElement) => [field.selectionStart, field.selectionEnd])).toEqual([7, 7]);
+  await expect(page.locator('#hub .hub-row[aria-selected="true"]')).toContainText('Smiter');
+  await expect(announced).toHaveText('Home');
+  // The same destination twice still changes the region's text, so it is spoken again.
+  await search.press('Enter');
+  await page.keyboard.press('Meta+Backspace');
+  await expect.poll(() => announced.evaluate(region => region.textContent)).toBe('Home\u00a0');
+  expect(await page.evaluate(() => window.gwFixtureCanvas?.events.length)).toBe(0);
+});
+
 test('a page opened directly returns to the real Home, and Home ignores Command-Backspace', async ({ page }) => {
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });

@@ -29,7 +29,7 @@ export function createHub(parent: HTMLElement) {
     <section class="hub-summary" aria-label="Build to apply" hidden></section>
     <div class="hub-search"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 8 10-8 10L4 12 12 2Zm0 5v10M8 12h8"/></svg><span class="hub-scope" hidden></span><input type="text" role="combobox" aria-label="Search people, places, builds" aria-autocomplete="list" aria-controls="hub-results" aria-expanded="true" placeholder="Search people, places, builds…" autocomplete="off" spellcheck="false" maxlength="120"><span class="hub-progress" aria-hidden="true"></span></div>
     <p class="hub-hint" id="hub-hint" hidden></p><div class="hub-rate-controls" hidden></div><div class="hub-results ui-scroll" id="hub-results" role="listbox" aria-label="Results" tabindex="-1"></div>
-    <pre class="hub-preview ui-scroll" hidden></pre><div class="hub-view" hidden></div><p class="hub-status" role="status" hidden></p><p class="hub-lifecycle" hidden></p>
+    <pre class="hub-preview ui-scroll" hidden></pre><div class="hub-view" hidden></div><p class="hub-status" role="status" hidden></p><p class="hub-lifecycle" hidden></p><p class="hub-announce ui-sr-only" aria-live="polite" aria-atomic="true"></p>
     <footer class="hub-footer"><span class="hub-legend"></span><span class="hub-count"></span><button class="hub-primary ui-button" data-variant="primary"></button><button class="hub-actions ui-button" data-variant="quiet">Actions</button></footer>
     <button class="ui-window-resize hub-resize" aria-label="Resize Hub" title="Drag to resize, or use arrow keys" hidden></button>
   </section>`;
@@ -58,6 +58,7 @@ export function createHub(parent: HTMLElement) {
   const count = required<HTMLElement>('.hub-count');
   const legend = required<HTMLElement>('.hub-legend');
   const lifecycle = required<HTMLElement>('.hub-lifecycle');
+  const announcer = required<HTMLElement>('.hub-announce');
   let rows: readonly HubRow[] = [];
   let shortcutRevision = '';
   let navigationRevision = '';
@@ -648,6 +649,19 @@ export function createHub(parent: HTMLElement) {
   function back() {
     if (history.length) restoreParent();
     else if (!atHome()) home();
+    else return;
+    announceDestination();
+  }
+  /**
+   * Focus stays in search across Back, so nothing else tells a screen reader where it landed:
+   * the destination's title is spoken once, as the answer to the player's own press. It is
+   * never a feed update (D-15), and it stays mounted so its first message is heard (HUB-114).
+   */
+  function announceDestination() {
+    if (!root.open) return;
+    const title = activeView?.title ?? scope?.title ?? 'Home';
+    // The same destination twice in a row still changes the text, so it is spoken again.
+    announcer.textContent = announcer.textContent === title ? `${title}\u00a0` : title;
   }
   /**
    * Esc once a view's own levels and an open disclosure had their say (the surface controller's
@@ -655,12 +669,12 @@ export function createHub(parent: HTMLElement) {
    */
   function dismiss() {
     if (!search.hidden && input.value) { endSession(); input.value = ''; report(''); refresh(true); input.focus(); return; }
-    restoreParent();
+    restoreParent(); announceDestination();
   }
   function close(message?: string) {
     if (root.open) frame = required<HTMLElement>('.hub-panel').getBoundingClientRect();
     suspended = null; history.length = 0; resetView(); modal.close(); for (const source of sources.keys()) source.setVisible(false); scope = null;
-    input.value = ''; restoreQuery = ''; report(''); selected = null;
+    input.value = ''; restoreQuery = ''; report(''); selected = null; announcer.textContent = '';
     if (typeof message === 'string' && message) notify(message);
   }
   /**
