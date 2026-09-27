@@ -204,7 +204,7 @@ page at once. A click on a result that changes the game or your account (travel,
 apply a build, switch character, invite, open an account) only selects it: press
 Enter, click the footer action, or double-click that result. A double-click never
 runs anything on the page its first click opened, and it never reaches the game
-after Hub closes. The **Actions** button, or a right-click on a result, opens secondary actions. **Command-K** opens Trade. Escape clears typed text first, then goes back, then
+after Hub closes. The **Actions** button, or a right-click on a result, opens secondary actions. A right-click on a Travel destination or a character card only selects it. **Command-K** opens Trade. Escape clears typed text first, then goes back, then
 closes the palette. **Command-Backspace** goes back one level from anywhere in
 Hub, including a text field, and never closes it; the Back arrow and the mouse
 back button do the same. Inside a page it first leaves that page's own level:

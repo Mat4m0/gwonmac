@@ -601,6 +601,18 @@ export function createCharacterSwitchPalette(
       updateRowSelection();
     } else if (event.detail === 0 || (event.detail === 2 && pressedKey === button.dataset.characterKey)) requestSelected();
   });
+  // Right-click selects a card like a click and switches nothing, even as part
+  // of a later double-click (HUB-248). A card has no Actions of its own.
+  list.addEventListener("contextmenu", (event) => {
+    const button = (event.target as Element).closest<HTMLButtonElement>("button[data-index]");
+    if (!button) return;
+    event.preventDefault();
+    if (button.disabled) return;
+    selected = rows.findIndex(({ index }) => index === Number(button.dataset.index));
+    pressedKey = undefined;
+    updateRowSelection();
+    button.focus({ preventScroll: true });
+  });
   primaryButton.addEventListener("click", (event) => {
     if (event.detail <= 1 && view.kind === "characters") requestSelected();
   });

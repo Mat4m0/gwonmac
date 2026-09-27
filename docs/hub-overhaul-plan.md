@@ -143,7 +143,9 @@ do not focus a decorative heading or disabled primary action.
   movement: a view that appears under a resting pointer, a wheel scroll or the
   trailing click of a double-click never moves the selection the footer names,
   in Hub lists and Travel alike (HUB-012). Right-click on a row selects it and
-  opens its Actions. A separate details affordance may inspect without executing.
+  opens its Actions. Right-click on a Travel destination or a character card
+  selects it like a click and runs nothing; they have no Actions of their own.
+  A separate details affordance may inspect without executing.
 - Destructive confirmations (Resign, "Leave and switch", closing the running
   account) share one arming helper: they accept nothing until ~400 ms after they
   appear, never the later click of a multi-click, and mark `data-armed` once

@@ -510,6 +510,44 @@ test('right-click selects a row and opens its Actions', async ({ page }) => {
   expect(await ledger(page)).toEqual([]);
 });
 
+test('right-click selects a Travel destination or a character card and runs nothing', async ({ page }) => {
+  /** A right press as a person makes it; returns whether the native menu was suppressed. */
+  const rightClick = async (target: Locator) => {
+    // The Hub dialog stops the event on its way up, so read it once its dispatch has ended.
+    await page.evaluate(() => window.addEventListener('contextmenu', event => { setTimeout(() => { (window as unknown as { menu: boolean }).menu = !event.defaultPrevented; }); }, { capture: true, once: true }));
+    const box = (await target.boundingBox())!;
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2, { button: 'right' });
+    const menu = () => page.evaluate(() => (window as unknown as { menu?: boolean }).menu);
+    await expect.poll(menu).not.toBeUndefined();
+    const shown = await menu();
+    await page.evaluate(() => { delete (window as unknown as { menu?: boolean }).menu; });
+    return shown;
+  };
+  await open(page);
+  await page.keyboard.press('Meta+t');
+  await expect(page.locator('#travel-recent-449')).toHaveAttribute('aria-selected', 'true');
+  for (const [target, named] of [['#travel-favorite-0', /^Travel to Ascalon City/], ['#travel-recent-194', /^Travel to Kaineng Center/]] as const) {
+    expect(await rightClick(page.locator(target)), target).toBe(false);
+    await expect(page.locator(target)).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('.travel-primary')).toHaveText(named);
+    await expect(page.locator('#travel-search-input')).toBeFocused();
+  }
+  // The outpost the player stands in is no trip, so a right-click cannot select it either.
+  expect(await rightClick(page.locator('#travel-favorite-1'))).toBe(false);
+  await expect(page.locator('#travel-favorite-1')).toHaveAttribute('aria-selected', 'false');
+  await expect(page.locator('#travel-recent-194')).toHaveAttribute('aria-selected', 'true');
+  await expect(caption(page)).toHaveText('Travel');
+  await page.keyboard.press('Meta+e');
+  const card = page.locator('button[data-character-key="mesmer"]');
+  expect(await rightClick(card)).toBe(false);
+  await expect(card).toHaveAttribute('aria-selected', 'true');
+  await expect(card).toBeFocused();
+  await expect(page.locator('.character-switch-action')).toHaveText(/^Switch to Fixture Mesmer/);
+  await page.waitForTimeout(600);
+  expect(await ledger(page)).toEqual([]);
+  expect(await canvas(page)).toEqual([]);
+});
+
 test('the footer slots keep their place from page to page', async ({ page }) => {
   await open(page);
   const slot = async () => {
