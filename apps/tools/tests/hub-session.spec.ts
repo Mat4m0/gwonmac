@@ -185,11 +185,27 @@ test('leaving the page of a running apply is never navigated back (BLD-06)', asy
   await page.keyboard.press('Meta+Backspace');
   await expect(page.locator('.hub-caption')).toHaveText('Home');
   // Home is usable while the apply runs elsewhere.
+  await expect(search(page)).toHaveValue('build smiter');
   await expect(primary(page)).toHaveText('Choose target↵');
+  // The restored query lists only Smiter; the full Home lists Travel below the preferred place.
+  await page.keyboard.press('Escape');
+  await expect(search(page)).toHaveValue('');
+  const travel = page.locator('#hub .hub-row[data-id="travel"]');
+  await expect(travel).toHaveAttribute('aria-selected', 'false');
+  while (await travel.getAttribute('aria-selected') !== 'true') await search(page).press('ArrowDown');
+  await expect(primary(page)).toHaveText('Browse travel↵');
+  // The selection was made before the apply finished, so its completion is what is checked.
+  await expect(status(page)).toBeHidden();
   await expect(status(page)).toHaveText('Smiter applied to Fixture Monk.');
+  await page.waitForTimeout(300);
   await expect(hub(page)).toBeVisible();
   await expect(page.locator('.hub-caption')).toHaveText('Home');
-  await expect(search(page)).toHaveValue('build smiter');
+  await expect(search(page)).toHaveValue('');
+  await expect(search(page)).toBeFocused();
+  await expect(travel).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('#hub .hub-row[aria-selected="true"]')).toHaveCount(1);
+  await expect(primary(page)).toHaveText('Browse travel↵');
+  expect(await actions(page)).toEqual(['apply-build']);
 });
 
 test('clicks during a running account action never start or retarget a second one (PTR-35)', async ({ page }) => {
