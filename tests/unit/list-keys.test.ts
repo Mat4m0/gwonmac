@@ -39,6 +39,23 @@ describe("the one list move", () => {
     assert.equal(listIndexAfter(-1, 3, 1, () => false), -1);
     assert.equal(listIndexAfter(-1, 0, 1), -1);
   });
+  it("holds on an unusable current item at either end, never moving against the step or asking outside the list", () => {
+    const asked: number[] = [];
+    const none = (index: number) => (asked.push(index), false);
+    assert.equal(listIndexAfter(4, 5, 1, none), 4);
+    assert.equal(listIndexAfter(0, 5, -1, none), 0);
+    assert.equal(listIndexAfter(4, 5, Infinity, none), 4);
+    assert.equal(listIndexAfter(0, 5, -Infinity, none), 0);
+    assert.equal(listIndexAfter(0, 1, 1, none), 0);
+    assert.ok(asked.every(index => index >= 0 && index < 5), `asked outside the list: ${asked.join(", ")}`);
+    const allButFirst = (index: number) => index !== 0;
+    assert.equal(listIndexAfter(0, 5, -1, allButFirst), 0);
+    assert.equal(listIndexAfter(0, 5, -Infinity, allButFirst), 0);
+    assert.equal(listIndexAfter(0, 5, 1, allButFirst), 1);
+    const allButLast = (index: number) => index !== 4;
+    assert.equal(listIndexAfter(4, 5, 1, allButLast), 4);
+    assert.equal(listIndexAfter(4, 5, -1, allButLast), 3);
+  });
   it("pages by the rows that fit, keeping one for context", () => {
     const box = (clientHeight: number, offsetHeight = 0) => ({ clientHeight, offsetHeight });
     assert.equal(listPage(box(400), box(0, 40)), 9);
