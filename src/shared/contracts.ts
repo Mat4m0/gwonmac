@@ -998,6 +998,11 @@ export interface RendererInit {
   templateFsTrace: boolean;
   /** Opaque, immutable generation selected when this game window opened. */
   texturePackGeneration: string | null;
+  /**
+   * The player's macOS double-click interval in milliseconds, read when this
+   * game window opened; null when unset, which means the system default.
+   */
+  doubleClickMs: number | null;
 }
 
 /**

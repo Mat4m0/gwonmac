@@ -135,7 +135,9 @@ do not focus a decorative heading or disabled primary action.
   first click revealed: one window-capture owner in `surface-controller.ts`
   ties a click run to the surface page its first press landed on, and any page
   change, closed surface or move to another surface swallows the rest of the run
-  wherever it lands, the game canvas included (HUB-242, HUB-244). Rapid clicks on
+  wherever it lands, the game canvas included (HUB-242, HUB-244). A press counts
+  as part of the run within the player's own macOS Double-click speed, which
+  main passes to the renderer, as Chromium counts it. Rapid clicks on
   an unchanged page still count. Footer slots disable instead of hiding, so
   nothing slides under a resting pointer. Hover selects only on real pointer
   movement: a view that appears under a resting pointer, a wheel scroll or the
@@ -395,7 +397,8 @@ in the browser fixture) with the gate's unit test in
 `apps/tools/src/surface-click-runs.test.ts`; `tests/electron/input-hub.spec.ts`
 checks that a closing double-click or triple-click never reaches the game canvas,
 also through Electron's native mouse input on a closing row, × and the backdrop,
-where the input trace shows no later press and no double-click flag.
+where the input trace shows no later press and no double-click flag. The
+fixture's `?double-click-ms=` models a slower Double-click speed.
 
 Extend existing fixtures with realistic mixed professions, missing observations,
 long names, empty/large folders, and account state changes. Measure large-list typing

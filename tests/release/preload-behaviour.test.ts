@@ -726,6 +726,7 @@ test("the launch configuration is read from argv, and defaults to production", (
     diagnosticProfile: "standard",
     templateFsTrace: false,
     texturePackGeneration: null,
+    doubleClickMs: null,
   });
   assert.deepEqual(
     plainInit(
@@ -740,6 +741,7 @@ test("the launch configuration is read from argv, and defaults to production", (
             diagnosticProfile: "direct-canvas",
             templateFsTrace: true,
             texturePackGeneration: "0123456789abcdef0123456789abcdef",
+            doubleClickMs: 1200,
           }),
       ]).api.init,
     ),
@@ -750,6 +752,7 @@ test("the launch configuration is read from argv, and defaults to production", (
       diagnosticProfile: "direct-canvas",
       templateFsTrace: true,
       texturePackGeneration: "0123456789abcdef0123456789abcdef",
+      doubleClickMs: 1200,
     },
   );
   assert.deepEqual(
@@ -770,6 +773,7 @@ test("the launch configuration is read from argv, and defaults to production", (
       diagnosticProfile: "standard",
       templateFsTrace: false,
       texturePackGeneration: null,
+      doubleClickMs: null,
     },
   );
   // Anything that is not the exact boolean `true`, and anything unparseable,
@@ -777,6 +781,10 @@ test("the launch configuration is read from argv, and defaults to production", (
   for (const malformed of [
     '{"enhancementSelection":{"nativeCursor":"yes"}',
     '{"enhancementSelection":{"nativeCursor":1}}',
+    // A double-click interval must be a plausible positive number of milliseconds.
+    '{"doubleClickMs":"700"}',
+    '{"doubleClickMs":-5}',
+    '{"doubleClickMs":1e9}',
   ]) {
     assert.deepEqual(
       plainInit(load([RENDERER_INIT_ARGUMENT + malformed]).api.init),
@@ -787,6 +795,7 @@ test("the launch configuration is read from argv, and defaults to production", (
         diagnosticProfile: "standard",
         templateFsTrace: false,
         texturePackGeneration: null,
+        doubleClickMs: null,
       },
       malformed,
     );

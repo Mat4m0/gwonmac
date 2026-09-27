@@ -257,6 +257,21 @@ test.describe('trailing clicks never reach the game', () => {
     });
   }
 
+  test('a player\'s slower Double-click speed still keeps the trailing press from the game', async ({ page }) => {
+    // Main passes the macOS setting (Accessibility › Double-click speed); here it is 1.5 s.
+    for (const gap of [700, 1200]) {
+      await open(page, '&double-click-ms=1500');
+      await clicks(page, page.getByRole('button', { name: 'Close Hub', exact: true }), 2, gap);
+      await expect(page.locator('#hub')).toBeHidden();
+      expect(await canvas(page), `${gap} ms`).toEqual([]);
+    }
+    // Past the player's interval, a press is a fresh one and reaches the game whole.
+    await page.waitForTimeout(1000);
+    await page.mouse.move(30, 300);
+    await page.mouse.down({ clickCount: 1 }); await page.mouse.up({ clickCount: 1 });
+    await expect.poll(() => canvas(page)).toEqual(['pointerdown:0', 'mousedown:1', 'mouseup:1', 'click:1']);
+  });
+
   for (const [name, query, pick, destination] of [
     ['whisper romi', 'whisper romi', '', '#whisper-window'],
     ['Whispers tool', '', 'whispers', '#whisper-window'],

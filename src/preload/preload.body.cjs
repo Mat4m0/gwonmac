@@ -95,6 +95,13 @@ function rendererInit() {
         && /^[0-9a-f]{32}$/.test(parsed.texturePackGeneration)
         ? parsed.texturePackGeneration
         : null,
+    doubleClickMs:
+      typeof parsed.doubleClickMs === "number"
+        && Number.isFinite(parsed.doubleClickMs)
+        && parsed.doubleClickMs > 0
+        && parsed.doubleClickMs <= 10_000
+        ? parsed.doubleClickMs
+        : null,
   };
 }
 

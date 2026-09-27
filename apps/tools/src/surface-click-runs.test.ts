@@ -19,7 +19,12 @@ beforeAll(() => {
     window.addEventListener(type, event => later.push(`${type}:${(event as MouseEvent).detail}`), true);
   }
 });
-afterEach(() => { document.body.replaceChildren(); later.length = 0; });
+afterEach(() => {
+  document.body.replaceChildren();
+  // Each test starts with no click run in progress: one fresh press far away.
+  fire(document.body, 'mousedown', 1, true, 900);
+  later.length = 0;
+});
 
 function fire(target: Element, type: string, detail: number, trusted = true, x = 40) {
   const init = { bubbles: true, cancelable: true, button: 0, clientX: x, clientY: 40, detail };
@@ -102,12 +107,43 @@ describe('click runs', () => {
     expect(view.received.filter(entry => entry.startsWith('canvas'))).toEqual([]);
   });
 
+  it('keeps the trailing pointerdown within the player\'s slower double-click speed', () => {
+    // A press later than the macOS default (500 ms) still continues the run
+    // when the player slowed Double-click speed, as Chromium counts it.
+    const slow = installSurfaceController(document, { doubleClickMs: 1500 });
+    const root = document.createElement('div');
+    const canvas = document.createElement('canvas');
+    document.body.append(root, canvas);
+    const surface = slow.register({ root, priority: 6, dismiss() {} });
+    surface.setOpen(true);
+    const received: string[] = [];
+    for (const type of ['pointerdown', 'mousedown', 'click']) canvas.addEventListener(type, event => received.push(`${type}:${(event as MouseEvent).detail}`));
+    const at = (type: string, detail: number, timeStamp: number, target: Element = canvas) => {
+      const event = type.startsWith('pointer')
+        ? new PointerEvent(type, { bubbles: true, cancelable: true, button: 0, clientX: 40, clientY: 40 })
+        : new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, clientX: 40, clientY: 40, detail });
+      Object.defineProperty(event, 'isTrusted', { value: true });
+      Object.defineProperty(event, 'timeStamp', { value: timeStamp });
+      target.dispatchEvent(event);
+    };
+    for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) at(type, type.startsWith('pointer') ? 0 : 1, 1000, root);
+    surface.setOpen(false);
+    for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click', 'dblclick']) at(type, type.startsWith('pointer') ? 0 : 2, 2200);
+    expect(received).toEqual([]);
+    // Past the player's interval a press is a fresh one.
+    for (const type of ['pointerdown', 'mousedown', 'click']) at(type, type.startsWith('pointer') ? 0 : 1, 4000);
+    expect(received).toEqual(['pointerdown:0', 'mousedown:1', 'click:1']);
+  });
+
   it('leaves the game\'s own double-clicks and synthetic events alone', () => {
     const view = mount();
     press(view.canvas, 1);
     view.surface.pageChanged();
     press(view.canvas, 2);
-    expect(view.received.filter(entry => entry.startsWith('canvas'))).toHaveLength(6);
+    expect(view.received.filter(entry => entry.startsWith('canvas'))).toEqual([
+      'canvas pointerdown:0', 'canvas mousedown:1', 'canvas click:1',
+      'canvas pointerdown:0', 'canvas mousedown:2', 'canvas click:2', 'canvas dblclick:2',
+    ]);
     // A synthetic release (input.ts replays held buttons) is never swallowed.
     press(view.row, 1);
     view.surface.pageChanged();

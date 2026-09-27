@@ -45,8 +45,13 @@ const FOCUSABLE = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(",");
 
-/** A pointerdown belongs to the previous press of a cancelled run only this soon and this close. */
-const CLICK_RUN_MS = 500;
+/**
+ * A pointerdown belongs to the previous press of a cancelled run only within
+ * the system double-click interval and this close. macOS lets a player slow
+ * the interval (Accessibility › Double-click speed) and Chromium counts clicks
+ * by it, so main passes the player's setting; 500 ms is the macOS default.
+ */
+const DEFAULT_DOUBLE_CLICK_MS = 500;
 const CLICK_RUN_SLOP = 8;
 /** How long a destructive confirmation waits before it accepts an activation. */
 export const CONFIRMATION_ARMING_MS = 400;
@@ -85,7 +90,9 @@ function focusableElements(root: HTMLElement): HTMLElement[] {
 
 export function installSurfaceController(
   document: Document,
+  options: Readonly<{ doubleClickMs?: number | null }> = {},
 ): GwonmacSurfaceController {
+  const clickRunMs = options.doubleClickMs ?? DEFAULT_DOUBLE_CLICK_MS;
   const surfaces = new Map<symbol, OpenSurface>();
   // Each registered root's page generation. It advances when the surface
   // opens, closes or reports a page change.
@@ -236,7 +243,7 @@ export function installSurfaceController(
     // that would also drop the mousedown of a fresh press, which alone says
     // whether this press continues the run.
     if (run !== null && (stale(run) || (run.page !== null && pageOf(event.target) !== run.page))
-      && event.timeStamp - run.at <= CLICK_RUN_MS
+      && event.timeStamp - run.at <= clickRunMs
       && Math.hypot(event.clientX - run.x, event.clientY - run.y) <= CLICK_RUN_SLOP) {
       event.stopImmediatePropagation();
     }
