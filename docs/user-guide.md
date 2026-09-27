@@ -199,15 +199,23 @@ styles. Deleting a custom style requires confirmation.
 ## Hub command palette
 
 Press **Command-R** to search people, outposts, tools, and commands. Type a name, use Up and Down,
-and press Enter for the action shown in the footer. A click opens a tool or
+and press Enter for the action shown in the footer. Every list in Hub, Travel,
+Trade and Whispers moves the same way: Up and Down or Control-P and Control-N
+step, Page Up and Page Down move by a page, and Home and End jump to the first
+and last result. Lists stop at both ends instead of wrapping, and Up at the top
+stays where it is. A click opens a tool or
 page at once. A click on a result that changes the game or your account (travel,
 apply a build, switch character, invite, open an account) only selects it: press
 Enter, click the footer action, or double-click that result. Moving the pointer
 over other results on the way to the footer keeps the one you clicked; hover
 selects again after the pointer leaves the list or a key moves the selection.
 A double-click never runs anything on the page its first click opened, and it
-never reaches the game after Hub closes. The **Actions** button, or a right-click on a result, opens secondary actions. A right-click on a Travel destination or a character card only selects it. **Command-K** opens Trade. Escape clears typed text first, then goes back, then
-closes the palette. **Command-Backspace** goes back one level from anywhere in
+never reaches the game after Hub closes. The **Actions** button, or a right-click on a result, opens secondary actions. A right-click on a Travel destination or a character card only selects it. **Command-K** opens Trade. Escape first closes an open menu or disclosure, then
+clears typed text, then goes back, then closes the palette; a page you opened
+with its own shortcut closes without a stop at Home. A held Escape takes one
+step. In Settings, Up and Down stay in the section list or in the section; Right
+enters a section and Left returns to its name. Escape at a shortcut conflict
+cancels the prompt. **Command-Backspace** goes back one level from anywhere in
 Hub, including a text field, and never closes it; the Back arrow and the mouse
 back button do the same. Inside a page it first leaves that page's own level:
 it cancels a "Leave this area?" confirmation and closes Character Switch
@@ -251,7 +259,11 @@ Password and email fields receive the clipboard unchanged.
 
 Whispers uses one conversation interface for person search, the Whispers shortcut,
 and the unread launcher. Messages, drafts, history, mute and unread state stay in
-that view. Escape or Left at the start of a draft returns to people; closing Hub
+that view. Escape or Left at the start of a draft returns to people. In **Find a
+friend…**, Escape clears the text before it hides Whispers, and Up and Down walk
+your conversations, friends and recent people; Enter opens the highlighted one.
+Command-Backspace returns from a conversation to that list, except in the
+message field, where it deletes to the start of the line as usual. Closing Hub
 keeps drafts for the game session. Character changes, leaving the game, or turning
 off Whispers clear the session.
 
@@ -464,7 +476,8 @@ See [title calculators](hub-title-calculators.md) for supported items and syntax
 
 
 Inside Hub, recent Travel destinations form a horizontal carousel and Favorites
-stay in a compact grid. With an empty query, arrows choose and Enter travels.
+stay in a compact grid. With an empty query, arrows choose and Enter travels;
+the selection stops at the first and last destination.
 Escape returns to Hub. While editing a query, Left/Right preserve caret movement;
 Right at the end can activate a search result. Tab reaches Travel settings.
 Hub keeps the same size and position across results and tools; content scrolls inside.

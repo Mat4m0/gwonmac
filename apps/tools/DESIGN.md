@@ -160,7 +160,16 @@ shared tokens; local palette literals are not allowed.
 - Start a Tools drag only from title-bar furniture.
 - Do not start a drag from an interactive child.
 - Keep a non-modal surface open when the player clicks Guild Wars behind it.
-- Escape closes the topmost GWonMac surface before Guild Wars receives it.
+- Escape follows one rule on every GWonMac surface, before Guild Wars receives
+  it: the surface that holds focus answers first, innermost level first (its
+  menu, drawer, prompt or typed search), then an open disclosure closes, and
+  only then the surface steps back or hides. From the game, Escape reaches the
+  topmost surface, which still leaves an open inner level first. One step per
+  physical press; an Escape during composition belongs to the input method.
+- Every list and carousel moves one selection with the shared list keys:
+  Up/Down and Control-P/N step, Page Up/Down move by the visible rows, Home/End
+  jump, and no list wraps. Up at the top of a list stays; it never jumps to
+  Back or the window chrome.
 - A press that starts on a GWonMac surface owns its repeats and release. A held
   Enter activates a surface control once, and a key that closes a surface never
   continues into Guild Wars.
@@ -204,8 +213,10 @@ shared tokens; local palette literals are not allowed.
   motion replaces translation with a brief cross-fade.
 - Reveal compact save and follow actions on ledger-row hover or keyboard focus;
   keep them visible for touch input. Keep Whisper seller visible in the bottom inspector. Put save, follow, copy,
-  and source commands under Actions. Escape closes Actions before leaving the
-  current view. The message remains the visual focus.
+  and source commands under Actions. Escape and Command-Backspace close Actions,
+  then the Saved drawer, then Trader prices, the narrow offer sheet or a
+  player's listings, before Escape hides Trade; Command-Backspace does nothing
+  at the listings. The message remains the visual focus.
 - Scroll to revealed Trade Chat messages smoothly by default and instantly
   when reduced motion is active.
 - Keep scrolling flex and grid children shrinkable.
@@ -258,6 +269,9 @@ places with their reason. User pins keep their existing order and availability.
 Tool rows show meaningful descriptions and resolved shortcut keycaps.
 
 The top bar shows clickable ancestor breadcrumbs and an understated Back arrow.
+Esc closes an open disclosure, then clears a typed query, then goes back one page,
+then closes Hub; a page opened directly by its shortcut has no artificial Home step
+for Esc.
 Command-Backspace returns to the previous page from any focus in Hub, one page per
 physical press; a page opened directly by its shortcut returns to Home, and Home
 ignores it. The press bubbles to Hub, so a mounted view with its own inner level
@@ -266,7 +280,13 @@ the way Esc does, and marks the press handled. Backspace only edits text and nev
 navigates; on a list-stage button it edits the search like typing. History restores
 query, selection, scroll and the focused control. The search field's description
 leads with the page title, so a screen reader that stays in search after Back
-hears where it landed. Form fields keep their draft for
+hears where it landed. In a view, Up/Down step between controls in screen order
+within the focused control's column (Settings sections or the section body), stop
+at its ends and leave a scrolled region such as Build details to scroll natively.
+Settings sections are a list: Right enters the first usable control and Left
+returns to the section. Esc at a shortcut conflict answers it like Cancel. The
+Characters search leads its Tab order, and the cards are one Tab stop on the
+selected card. Form fields keep their draft for
 the session by page path and field name, unless the stored value they started from
 changed meanwhile. Hub lists keep focus in search and move the active descendant. First entry and restoration are separate: character cards,
 account choices and action lists start on their useful item; search stays optional.
@@ -303,7 +323,11 @@ Floating Trade keeps connection state beside result counts. Common filters share
 a row when width permits. Secondary actions expand inside the inspector without
 replacing the ledger. Opening a seller's Whisper leaves the Trade query and
 selected offer intact. Floating windows share visual and keyboard stacking.
-Escape closes an expanded Actions menu before its window.
+Escape closes an expanded Actions menu before its window. In the Whispers
+picker, Escape clears typed text before it hides the window, and Up/Down walk
+the listed conversations, friends and recent people while focus stays in the
+search. Command-Backspace returns from a conversation to the picker, except in
+the message field, where it keeps its macOS meaning.
 
 Only Hub starts locked. Its subtle top-bar lock enables dragging by
 the header and resizing through a 36px corner hit area. Floating tools have no

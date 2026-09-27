@@ -122,8 +122,10 @@ do not focus a decorative heading or disabled primary action.
   `aria-activedescendant` (D-2). Up, Down, Control-P, Control-N, Page Up, Page
   Down, Home and End move the one selection without wrapping; Up at the top is a
   no-op. Characters stay card-first and forms stay form-first. For carousels, Up at
-  the top reaches search; Up from search reaches Back. Travel may retain search focus while moving active destinations, but must
-  provide that upward escape at the first destination instead of wrapping forever.
+  the top reaches search, and Up in search stays. Travel, Trade, Trader prices,
+  Settings sections and the Whispers picker share the same list move
+  (`src/shared/ui/list-keys.ts`); none wraps, and none jumps to Back or the
+  window chrome.
 - Right on a navigational result opens its child. Use a quiet child cue where
   needed. Right must never execute a world-changing command.
 - Enter executes the displayed primary action. A click does the same for a
