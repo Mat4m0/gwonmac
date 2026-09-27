@@ -176,6 +176,8 @@ export function createHub(parent: HTMLElement) {
    */
   let session = 0;
   const endSession = () => { session++; };
+  /** The session a blur suspended; only that suspension, not a later page, belongs to its task. */
+  let suspendedSession = -1;
   /** The row action running on this page; the footer and status name it until it ends (HUB-083). */
   let running: { session: number; label: string; again: string } | null = null;
   const busy = () => running !== null && running.session === session;
@@ -571,6 +573,8 @@ export function createHub(parent: HTMLElement) {
    * Binds an action to the page session that starts it (HUB-004). While that page shows, the
    * action reports progress and failures in the status line and its success closes the Hub with
    * the receipt. After the player moved on, it only reports: a receipt, or a failure receipt.
+   * An action that focuses another window (Open an account, Show Launcher) suspends its own
+   * page; its success still ends the task, so the next opening starts at Home.
    */
   function startTask(): HubTask & { fail(error: unknown): void; end(): void } {
     const started = session;
@@ -579,7 +583,10 @@ export function createHub(parent: HTMLElement) {
     return {
       live,
       progress: message => { if (live()) { report(message); shown = message; } },
-      done: receipt => { if (live()) close(receipt); else if (receipt) notify(receipt); },
+      done: receipt => {
+        if (live() || (!root.open && suspended && suspendedSession === started)) close(receipt);
+        else if (receipt) notify(receipt);
+      },
       fail: error => {
         const message = error instanceof Error ? error.message : 'The action could not complete. Try again.';
         if (live()) report(message); else notify(message, 'failed');
@@ -656,7 +663,7 @@ export function createHub(parent: HTMLElement) {
   function suspend() {
     if (!root.open) return;
     frame = required<HTMLElement>('.hub-panel').getBoundingClientRect();
-    suspended = capture(); endSession(); modal.close();
+    suspended = capture(); suspendedSession = session; endSession(); modal.close();
     for (const source of sources.keys()) source.setVisible(false);
   }
   const modal = window.gwSurfaces.registerDialog({ root, priority: 6, transient: true,

@@ -286,7 +286,9 @@ runs under the search; a click or another Enter never starts a second action.
 When it ends on the page that started it, Hub closes with a receipt such as
 "GOM AFK applied." If you typed, went back or closed Hub meanwhile, the action
 keeps running and never closes or changes the page you are on: its receipt
-appears in the status line, or where Hub stood if it is closed. A failure after
+appears in the status line, or where Hub stood if it is closed. An account that
+opens in its own window still finishes the task: the next Command-R starts at
+Home. A failure after
 Hub closed names what stopped, such as "GOM AFK partly applied. Open Hub to
 review.", and waits in the status line of the next opening; the team's row then
 reads **Partly applied · Review**. A team apply that fails on its open review

@@ -208,6 +208,28 @@ test('clicks during a running account action never start or retarget a second on
   expect(await actions(page)).toEqual(['Account Second open']);
 });
 
+test('an account open that focuses another window still ends the task, so the next opening starts at Home (HUB-004)', async ({ page }) => {
+  await open(page, '&accounts-ms=1500');
+  await enter(page, 'acc s');
+  await expect(page.locator('.hub-caption')).toHaveText('Second');
+  await expect(primary(page)).toHaveText('Open Second↵');
+  await primary(page).click();
+  await expect(status(page)).toHaveText('Opening Second…');
+  // The opening account takes the focus while the action runs, which suspends this very page.
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await expect(hub(page)).toBeHidden();
+  await expect.poll(() => actions(page)).toEqual(['Account Second open']);
+  await page.waitForTimeout(100);
+  await page.keyboard.press('Meta+r');
+  await expect(hub(page)).toBeVisible();
+  await expect(page.locator('.hub-caption')).toHaveText('Home');
+  await expect(search(page)).toHaveValue('');
+  await expect(search(page)).toBeFocused();
+  await expect(primary(page)).not.toHaveText(/Second/);
+  await expect(status(page)).toBeHidden();
+  expect(await actions(page)).toEqual(['Account Second open']);
+});
+
 test('an invite that fails after the Hub closed names the command, now and on the next opening (PPL-17)', async ({ page }) => {
   await open(page, '&party&invite-ms=800&invite-fail=Guild Wars chat is not ready');
   await enter(page, 'invite Zed Delta');

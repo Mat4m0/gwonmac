@@ -217,7 +217,9 @@ global store. Do not retain detached DOM nodes as durable navigation identity.
   change, closing or suspending ends that session: the action keeps running, but
   its completion only reports (status line, or the receipt after Hub closed) and
   never closes, navigates or wipes a newer page. A late failure is a named failure
-  receipt that also waits in the status line of the next opening.
+  receipt that also waits in the status line of the next opening. An action that
+  focuses another window (opening an account, Show Launcher) suspends its own
+  page; its success still ends the task, so the next `⌘R` starts in global search.
 - Popout handoffs retain a return location during the session; reopening Hub may
   resume that location. Repeated shortcuts focus the existing destination as defined
   by that feature rather than creating duplicate windows or history entries.
