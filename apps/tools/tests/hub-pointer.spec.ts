@@ -442,8 +442,8 @@ test('Characters: a double-click that raises Leave this area? never confirms it'
     await page.keyboard.press('Meta+e');
     await page.keyboard.press('End');
     await clicks(page, page.locator('button[data-character-key="toefte"]'), count, 120, { x: 60, y: 12 });
-    await expect(page.locator('#character-switch-title')).toHaveText('Leave this area?');
-    const leave = page.getByRole('button', { name: 'Leave and switch', exact: true });
+    await expect(page.locator('#character-switch-title')).toHaveText('Leave this area and switch to Toefte?');
+    const leave = page.getByRole('button', { name: 'Leave and switch to Toefte', exact: true });
     await expect(leave).toBeVisible();
     expect(await ledger(page)).toEqual([]);
     await expect(leave).toHaveAttribute('data-armed', '');

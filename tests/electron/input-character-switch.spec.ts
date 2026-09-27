@@ -252,7 +252,13 @@ test("a 27-character account uses the Hub carousel and preserves search, identit
     ));
     await expect(selected).toContainText("Character 01");
     await expect.poll(() => isDomActiveElement(selected)).toBe(true);
+    // A digit selects and reveals its card; only Enter switches (D-5, HUB-002).
     await selected.press("0");
+    const tenth = list.locator('button[data-row="9"]');
+    await expect(tenth).toHaveAttribute("aria-selected", "true");
+    await expect.poll(() => isDomActiveElement(tenth)).toBe(true);
+    await expect(page.locator("body")).not.toHaveAttribute("data-character-switch-request", /.*/u);
+    await tenth.press("Enter");
     await expect(page.locator("body")).toHaveAttribute("data-character-switch-request", "9");
     await expect(dialog).toBeHidden();
     await page.evaluate(() => window.dispatchEvent(
@@ -359,7 +365,7 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
     ));
     // A click selects a card; its own double-click (or Enter) switches (D-24).
     await dialog.getByRole("option", { name: /Switch to Private Beta/u }).dblclick();
-    await expect(page.getByRole("heading", { name: "Leave this area?" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Leave this area and switch to Private Beta?" })).toBeVisible();
     await expect(page.locator("#character-switch-root")).toHaveAttribute(
       "aria-describedby",
       "character-switch-confirm-copy",
@@ -450,7 +456,7 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
     });
     await hubSearch.fill("char Private Beta");
     await hub.locator('[data-id="character:0000000000000002"]').dblclick();
-    await expect(page.getByRole("heading", { name: "Leave this area?" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Leave this area and switch to Private Beta?" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Leave and switch" })).toHaveAttribute("data-armed", "");
     await page.getByRole("button", { name: "Leave and switch" }).click();
     await expect(hub).toBeHidden();

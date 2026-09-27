@@ -39,7 +39,8 @@ Current integrated features are:
   for every account size and can be hidden. Profession search matches a
   substring of the canonical profession name and does not search the secondary
   profession. Character focus remains primary until typing starts a search.
-  Direct 1–9 and 0 shortcuts select the first ten characters. The exact
+  The 1–9 and 0 keys select and reveal the first ten characters; only Enter
+  switches (D-5). The exact
   companion projection owns the live records. Reload Guild Wars is in the View
   menu.
 

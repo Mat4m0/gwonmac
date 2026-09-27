@@ -256,9 +256,17 @@ test('Command-Backspace steps out of a view\'s own inner level before it leaves 
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
   const caption = page.locator('.hub-caption');
-  // On a confirmation it acts as Cancel, like Esc and Stay here.
+  // On a confirmation it acts as Cancel, like Esc and Stay here. One a Hub row asked for
+  // returns to that row (HUB-075); one a card asked for returns to the cards.
   await search.fill('char toefte'); await search.press('Enter');
-  await expect(page.locator('#character-switch-title')).toHaveText('Leave this area?');
+  await expect(page.locator('#character-switch-title')).toHaveText('Leave this area and switch to Toefte?');
+  await page.keyboard.press('Meta+Backspace');
+  await expect(caption).toHaveText('Home');
+  await expect(search).toHaveValue('char toefte');
+  await page.keyboard.press('Meta+e');
+  await expect(caption).toHaveText('Characters');
+  await page.keyboard.press('End'); await page.keyboard.press('Enter');
+  await expect(page.locator('#character-switch-title')).toHaveText('Leave this area and switch to Fixture Warrior?');
   await page.keyboard.press('Meta+Backspace');
   await expect(page.locator('#character-switch-title')).toHaveText('Switch Character');
   await expect(caption).toHaveText('Characters');
