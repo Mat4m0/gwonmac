@@ -276,8 +276,11 @@ Command-Backspace returns to the previous page from any focus in Hub, one page p
 physical press; a page opened directly by its shortcut returns to Home, and Home
 ignores it. The press bubbles to Hub, so a mounted view with its own inner level
 (a confirmation, Character Switch settings, Travel Customize) steps out of it first,
-the way Esc does, and marks the press handled. Backspace only edits text and never
-navigates; on a list-stage button it edits the search like typing. History restores
+the way Esc does, and marks the press handled. Travel and Characters, which keep
+their own footer, list Command-Backspace there and name what Esc does now (clear,
+back or close). Backspace only edits text and never navigates; typing or Backspace
+on a button, the header or blank space edits the page's search: Hub search on list
+stages, the view's own search in Travel and Characters. A form view has none. History restores
 query, selection, scroll and the focused control. The search field's description
 leads with the page title, so a screen reader that stays in search after Back
 hears where it landed. In a view, Up/Down step between controls in screen order
@@ -294,7 +297,7 @@ Fresh Home starts in search. Temporary app blur and popout handoffs retain the
 session task; explicit closure starts a fresh task next time. Resume refreshes
 current facts before execution. Account replacement invalidates prior targets.
 Arrow keys connect results, search, navigation and actions. Character cards use
-Left/Right; Up returns to search, then to Back. Native text editing, range and
+Left/Right; Up returns to search and stays there. Native text editing, range and
 select controls retain their own keys. Actions only opens contextual actions. Known query scopes stay visible, and typing a command name offers one
 relevant example. Neither examples nor typing execute an action.
 

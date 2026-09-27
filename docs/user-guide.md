@@ -220,8 +220,9 @@ Hub, including a text field, and never closes it; the Back arrow and the mouse
 back button do the same. Inside a page it first leaves that page's own level:
 it cancels a "Leave this area?" confirmation and closes Character Switch
 settings or Travel's Customize view. A form you leave keeps what you typed until
-you quit the game. Backspace alone only deletes text; on a focused result or
-footer button it deletes from the search and returns you there. The game keeps
+you quit the game. Backspace alone only deletes text; on a focused result, card or
+button, including the top bar, it deletes from the page's search (Travel and
+Character Switch use their own) and returns you there, and so does typing. The game keeps
 running while Hub is open. The footer's left side lists the keys that work in
 the current view, and every page keeps it: a review, a confirmation or a form
 names its action there, for example **Apply team GOM AFK** or **Save phrase**,
