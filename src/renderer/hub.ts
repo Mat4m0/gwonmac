@@ -656,7 +656,6 @@ export function createHub(parent: HTMLElement) {
     if (!event.defaultPrevented && !search.hidden && event.target instanceof HTMLElement && event.target !== input && !content.contains(event.target)
       && !event.target.matches('input,textarea,select') && !(event.key === ' ' && event.target.matches('button')) && resumeSearchInput(event, input)) return;
     if (event.defaultPrevented || event.isComposing || event.metaKey || event.ctrlKey || event.altKey) return;
-    if (event.key === 'Enter' && event.repeat) { event.preventDefault(); return; }
     // Hub owns Esc before the native cancel: one step per physical press.
     if (event.key === 'Escape') { event.preventDefault(); if (!event.repeat) dismiss(); return; }
     const target = event.target instanceof HTMLElement ? event.target : null;

@@ -135,6 +135,29 @@ test.describe('owned press (HUB-003)', () => {
     expect(await canvasKeys(page)).toEqual(['keydown:KeyW', 'keyup:KeyW']);
   });
 
+  test('a held Enter that travels or switches runs once and never reaches the game', async ({ page }) => {
+    const action = page.locator('#app');
+    await open(page);
+    await search(page).fill('travel kam');
+    expect(await hold(page, 'Enter')).toEqual([]);
+    await expect(action).toHaveAttribute('data-action', 'TRAVEL Kamadan, Jewel of Istan');
+    await open(page);
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Meta+t');
+    await page.keyboard.press('1');
+    expect(await hold(page, 'Enter')).toEqual([]);
+    await expect(action).toHaveAttribute('data-action', 'TRAVEL Ascalon City');
+    await open(page);
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Meta+e');
+    await page.keyboard.press('6');
+    expect(await hold(page, 'Enter')).toEqual([]);
+    await expect(action).toHaveAttribute('data-action', 'Character toefte');
+    await page.evaluate(() => window.gwFixtureCanvas?.clear());
+    await page.keyboard.press('w');
+    expect(await canvasKeys(page)).toEqual(['keydown:KeyW', 'keyup:KeyW']);
+  });
+
   test('the Enter that hands a person to Whispers never reaches the game, held or tapped', async ({ page }) => {
     for (const repeats of [0, 3]) {
       await open(page);

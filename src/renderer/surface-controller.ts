@@ -7,7 +7,8 @@
  * the topmost one and Tab enters or wraps within it. Dialogs use the platform's
  * modal behavior, with one shared backdrop, dismissal, and focus lifecycle.
  * A press that starts on a surface owns its repeats and release, so a key that
- * closes a surface never continues into the game.
+ * closes a surface never continues into the game, and a held Enter activates
+ * a surface control only once.
  *
  * The pointer has the same rule for a click run (HUB-242, HUB-244). Chromium
  * counts the clicks of one run in `detail`; a run belongs to the surface page
@@ -142,6 +143,11 @@ export function installSurfaceController(
       event.preventDefault();
       event.stopImmediatePropagation();
       return;
+    } else if (event.key === "Enter" && onSurface(event.target)) {
+      // A held Enter activates once: its auto-repeat never presses a button,
+      // submits a form or toggles a disclosure again (HUB-130). Surface
+      // handlers still see the repeat, already marked handled.
+      event.preventDefault();
     }
     const nativeModal = document.querySelector("dialog:modal");
     const surface = topmost();

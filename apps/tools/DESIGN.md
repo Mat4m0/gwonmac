@@ -161,6 +161,9 @@ shared tokens; local palette literals are not allowed.
 - Do not start a drag from an interactive child.
 - Keep a non-modal surface open when the player clicks Guild Wars behind it.
 - Escape closes the topmost GWonMac surface before Guild Wars receives it.
+- A press that starts on a GWonMac surface owns its repeats and release. A held
+  Enter activates a surface control once, and a key that closes a surface never
+  continues into Guild Wars.
 - Tab enters the topmost open GWonMac surface and wraps inside its controls.
 - Keep native confirmation dialogs above non-modal Tools and Travel surfaces.
 - Open Travel with Quick Travel destinations only; reveal the full catalogue as
