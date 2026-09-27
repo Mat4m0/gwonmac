@@ -5,7 +5,7 @@ import { createDemoTravelHost } from './travel-host';
 describe('Hub travel recents', () => {
   it('shows actionable recents and keeps unavailable places in explicit search', () => {
     const host = createDemoTravelHost();
-    const hub = { showView: vi.fn(), showRows: vi.fn(), attach: vi.fn(), close: vi.fn() };
+    const hub = { showView: vi.fn(), showRows: vi.fn(), attach: vi.fn(), close: vi.fn(), notify: vi.fn() };
     const travel = createHubTravel(host, hub);
     try {
       const state = host.state.value;
@@ -22,7 +22,7 @@ describe('Hub travel recents', () => {
 
   it('marks places consequential, flags leaving an explorable area and names the game state', () => {
     const host = createDemoTravelHost();
-    const hub = { showView: vi.fn(), showRows: vi.fn(), attach: vi.fn(), close: vi.fn() };
+    const hub = { showView: vi.fn(), showRows: vi.fn(), attach: vi.fn(), close: vi.fn(), notify: vi.fn() };
     const travel = createHubTravel(host, hub);
     try {
       const state = host.state.value;
@@ -50,6 +50,18 @@ describe('Hub travel recents', () => {
       host.state.value = { status: 'waiting', reason: 'loading' };
       expect(travel.source.context?.()).toBe('Map loading');
       expect(travel.source.lifecycle?.()).toBe('Map loading — Travel returns when the map has loaded');
+    } finally { travel.dispose(); }
+  });
+
+  it('starts a trip from a row and ends only the Hub task that asked for it', async () => {
+    const host = createDemoTravelHost();
+    const hub = { showView: vi.fn(), showRows: vi.fn(), attach: vi.fn(), close: vi.fn(), notify: vi.fn() };
+    const travel = createHubTravel(host, hub);
+    try {
+      const done = vi.fn();
+      await travel.source.search('kamadan').find(row => row.id === 'place:449')!.run({ live: () => false, progress() {}, done });
+      expect(done).toHaveBeenCalledOnce();
+      expect(hub.close).not.toHaveBeenCalled();
     } finally { travel.dispose(); }
   });
 });

@@ -63,7 +63,7 @@ export function createHubCalculator(options: {
       if(!term){clear();return [{id:'title:help',title:'Title calculator',detail:'Points, items needed and offer comparisons',group:'Commands',action:'Open calculator',searchQuery:'titles',run(){}}];}
       const titleResults=calculateTitle(term);
       if(titleResults){clear();return titleRows(titleResults);}
-      if(term==='rates'||term==='conversion rates')return [{id:'currency-rates',title:'Conversion rates',detail:manual?'Your rates':'Automatic observed prices',group:'Calculator',action:'Choose rates',run:editRates}];
+      if(term==='rates'||term==='conversion rates')return [{id:'currency-rates',title:'Conversion rates',detail:manual?'Your rates':'Automatic observed prices',group:'Calculator',action:'Choose rates',run:()=>editRates()}];
       try{
         const conversion=parseConversion(term);
         if(!conversion){clear();const value=calculate(term);return value?[result('calculation',formatFraction(value),term,formatFraction(value))]:[];}
@@ -92,7 +92,7 @@ export function createHubCalculator(options: {
           const relative=units.every(unit=>unit==='ecto'||unit==='armbrace'||unit==='zkey');
           const relativeRate=(unit:Currency)=>unit==='ecto'?fraction(1n):(unit==='armbrace'||unit==='zkey')&&rates[unit]?decimal(rates[unit]):rate(unit);
           try{return [card('manual-conversion',relative?relativeRate:rate,`Your rates · ${Object.entries(rates).filter(([,value])=>value).map(([unit,value])=>`1 ${unit} = ${value} ${unit==='ecto'?'g':'e'}`).join(' · ')}`)];}
-          catch(error){return [{id:'missing-manual-rate',title:error instanceof Error?error.message:'Set conversion rates',detail:'Your rates · No value invented',group:'Calculator',action:'Set rates',run:editRates}];}
+          catch(error){return [{id:'missing-manual-rate',title:error instanceof Error?error.message:'Set conversion rates',detail:'Your rates · No value invented',group:'Calculator',action:'Set rates',run:()=>editRates()}];}
         }
         if(!options.marketEnabled()){clear();return [];}
         const unquoted=units.find(unit=>unit==='armbrace'||unit==='zkey');

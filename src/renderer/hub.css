@@ -17,6 +17,13 @@
 .hub-search input { width:100%; min-width:0; background:transparent; border:0; color:var(--ui-text-bright); font:var(--ui-type-window-size)/var(--ui-type-window-line) var(--ui-font-interface); padding:0; outline:none; box-shadow:none; }
 .hub-search input::placeholder { color:var(--ui-text-faint); opacity:1; }
 .hub-panel .hub-search input:focus-visible { outline:none; box-shadow:none; }
+/* The thin bar under the search while this page's action runs (HUB-083); static without motion. */
+.hub-search { position:relative; }
+.hub-progress { position:absolute; left:12px; right:12px; bottom:3px; height:2px; overflow:hidden; opacity:0; pointer-events:none; }
+.hub-panel[data-busy=true] .hub-progress { opacity:1; }
+.hub-progress::after { content:""; position:absolute; inset:0 auto 0 0; width:30%; background:var(--ui-accent); animation:hub-progress 1.2s ease-in-out infinite; }
+@keyframes hub-progress { from { transform:translateX(-100%); } to { transform:translateX(340%); } }
+@media (prefers-reduced-motion: reduce) { .hub-progress::after { width:100%; opacity:.6; animation:none; } }
 .hub-results { min-height:0; flex:1; overflow:auto; padding:0 8px 8px; overscroll-behavior:contain; }
 .hub-group { padding:12px 10px 6px; color:var(--ui-accent); font:var(--ui-type-body-size)/var(--ui-type-body-line) var(--ui-font-display); }
 .hub-group:first-child { padding-top:4px; }
@@ -368,3 +375,4 @@
 .hub-build-details li { margin:10px 0; }
 .hub-build-details p { color:var(--ui-text-muted); white-space:pre-wrap; }
 .hub-receipt { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); max-width:calc(100vw - 32px); z-index:var(--ui-z-toast); padding:10px 16px; color:var(--ui-text); pointer-events:none; }
+.hub-receipt[data-outcome=failed] { border-inline-start:2px solid var(--ui-warning); }

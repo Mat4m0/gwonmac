@@ -4,7 +4,7 @@
  */
 import { currentTravelFriend, type TravelFriend, type TravelFriends } from '../shared/friends.js';
 import { travelDestination } from '../shared/travel.js';
-import { parseHubQuery, type HubRow, type HubSource } from '../shared/hub.js';
+import { parseHubQuery, type HubRow, type HubSource, type HubTask } from '../shared/hub.js';
 import { normaliseCharacterName } from '../shared/player-text.js';
 import { findPeople, whisperPersonKey, whisperUnread, type Person, type WhisperSession } from '../shared/whisper-session.js';
 import { isCharacterName, isFullCharacterName } from '../shared/whispers.js';
@@ -20,7 +20,7 @@ type FriendTravel = Readonly<{
   unavailable(): string | null;
   run(friend: TravelFriend, generation: number): Promise<void>;
 }>;
-export function createHubPeople(hub: Pick<Hub, 'attach' | 'showRows' | 'close' | 'notify'>, session: WhisperSession,
+export function createHubPeople(hub: Pick<Hub, 'attach' | 'showRows' | 'notify'>, session: WhisperSession,
   travel: FriendTravel | null, party: PartyInvite | null = null) {
   let friends: TravelFriends = { status: 'waiting', reason: 'unavailable' };
   let enabled = false;
@@ -67,9 +67,10 @@ export function createHubPeople(hub: Pick<Hub, 'attach' | 'showRows' | 'close' |
         ...(changed ? { unavailable: 'This friend changed or is unavailable. Select them again.' } : !session.state.available ? { unavailable: 'Whispers is unavailable. Enable it in Settings or wait for Guild Wars.' } : {}),
         run: () => whisper(currentName) }] : [];
       if (friendKey && toolEnabled('travelPalette')) rows.push({ id: 'person:travel', title: 'Travel to outpost', detail: `${destination?.name ?? 'Location unavailable'} · Any district`, group: 'Actions', action: destination ? `Travel to ${destination.name}` : 'Travel', consequential: true,
-        ...(reason ? { unavailable: reason } : {}), run: async () => {
+        ...(reason ? { unavailable: reason } : {}), run: async task => {
           if (!selectedFriend || selectedFeed.status !== 'ready' || !travel) throw new Error('Friend travel is unavailable');
           await travel.run(selectedFriend, selectedFeed.generation);
+          task.done();
         } });
       if (party && toolEnabled('whispersEnabled')) {
         // Invites address a character; an offline friend has only an account alias.
@@ -79,16 +80,16 @@ export function createHubPeople(hub: Pick<Hub, 'attach' | 'showRows' | 'close' |
         const inviteReason = changed ? 'This friend changed or is unavailable. Select them again.'
           : offline ? 'This friend is offline' : !friendKey && !isFullCharacterName(name) ? PARTIAL_NAME : party.unavailable(friend, travelInvite === null);
         rows.push({ id: 'person:invite', title: 'Invite to party', detail: `Add ${target || name} to your party`, group: 'Actions', action: `Invite ${target || name}`, consequential: true,
-          ...(inviteReason ? { unavailable: inviteReason } : {}), run: () => inviteNow(party, target, friend) });
+          pending: invitePending(target || name), ...(inviteReason ? { unavailable: inviteReason } : {}), run: task => inviteNow(party, target, task, friend) });
         if (travelInvite !== undefined) {
           const place = destination?.name ?? 'the outpost';
           rows.push({ id: 'person:travel-invite', title: 'Travel and invite', detail: `${place} · Any district, then invite ${target}`, group: 'Actions', action: `Travel and invite ${target}`, consequential: true,
-            ...(travelInvite ? { unavailable: travelInvite } : {}), run: async () => {
+            ...(travelInvite ? { unavailable: travelInvite } : {}), run: async task => {
               if (!selectedFriend || selectedFeed.status !== 'ready') throw new Error('Friend travel is unavailable');
               const { invited } = await party.travelAndInvite(selectedFriend, selectedFeed.generation);
-              hub.close(`Travelling to ${place}. Hub sends /invite ${target} on arrival.`);
+              task.done(`Travelling to ${place}. Hub sends /invite ${target} on arrival.`);
               invited.then(() => hub.notify(`Sent /invite ${target}. Guild Wars answers in chat.`),
-                error => hub.notify(error instanceof Error ? error.message : 'The invite was not sent.'));
+                error => hub.notify(error instanceof Error ? error.message : 'The invite was not sent.', 'failed'));
             } });
         }
       }
@@ -147,12 +148,21 @@ export function createHubPeople(hub: Pick<Hub, 'attach' | 'showRows' | 'close' |
     const target = friend ? friend.character : entry.title;
     const reason = friend && (friend.status === 'offline' || !friend.character) ? 'This friend is offline'
       : party.unavailable(friend, travelInviteReason(party, friend, true) === null);
-    return { ...entry, action: `Invite ${target || entry.title}`, consequential: true, ...(reason ? { unavailable: reason } : {}), run: () => inviteNow(party, target, friend) };
+    return { ...entry, action: `Invite ${target || entry.title}`, consequential: true, pending: invitePending(target || entry.title),
+      ...(reason ? { unavailable: reason } : {}), run: task => inviteNow(party, target, task, friend) };
   }
-  /** Guild Wars answers the invite in chat; Hub claims only that the command was sent. */
-  async function inviteNow(party: PartyInvite, target: string, friend?: TravelFriend) {
-    await party.invite(target, friend);
-    hub.close(`Sent /invite ${target}. Guild Wars answers in chat.`);
+  const invitePending = (target: string) => ({ label: `Inviting ${target}…`, again: `/invite ${target} is still being sent.` });
+  /**
+   * Guild Wars answers the invite in chat; Hub claims only that the command was sent.
+   * A refusal names the command it stopped, so it still reads right after the Hub moved on.
+   */
+  async function inviteNow(party: PartyInvite, target: string, task: HubTask, friend?: TravelFriend) {
+    try { await party.invite(target, friend); }
+    catch (error) {
+      const reason = error instanceof Error ? error.message : 'Try again';
+      throw new Error(`/invite ${target} was not sent. ${reason}${/[.!?]$/u.test(reason) ? '' : '.'}`, { cause: error });
+    }
+    task.done(`Sent /invite ${target}. Guild Wars answers in chat.`);
   }
   function row(entry: Person): HubRow {
     const { friend, conversation } = entry;

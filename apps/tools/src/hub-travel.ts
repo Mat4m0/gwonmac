@@ -1,6 +1,6 @@
 /** One Travel host serves both unified search and the existing detailed view. */
 import { createApp, h, watch } from 'vue';
-import type { HubPresenter, HubRow, HubSource } from '../../../src/shared/hub';
+import type { HubPresenter, HubRow, HubSource, HubTask } from '../../../src/shared/hub';
 import { matchHubRows, parseHubQuery, hubMatch } from '../../../src/shared/hub';
 import { TRAVEL_DESTINATIONS, travelDestination } from '../../../src/shared/travel';
 import { travelContextRefusal, travelDestinationAvailability } from '../../../src/shared/travel-command';
@@ -47,11 +47,11 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
       ?? (host.state.value.status === 'ready' && host.state.value.mapId === mapId ? 'Current location' : null)
       ?? (availability === 'locked' ? 'Not unlocked by this character' : null);
   }
+  /** Starts one trip; the Hub task that asked for it ends the Hub session. */
   async function travel(mapId: number) {
     const reason = refusal(mapId);
     if (reason) throw new Error(reason);
     await host.travel({ mapId });
-    hub.close();
   }
   const source: HubSource = {
     feature: 'travelPalette',
@@ -81,7 +81,7 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
         return { id: `place:${destination.mapId}`, title: destination.name,
           detail: query.trim() ? 'Outpost · Any district' : 'Recently visited · Any district',
           group: query.trim() ? 'Places' : 'Continue', action: `Travel to ${destination.name}`, consequential: true, leavesArea: explorable(),
-          ...(reason ? { unavailable: reason } : {}), run: () => travel(destination.mapId) };
+          ...(reason ? { unavailable: reason } : {}), run: async (task: HubTask) => { await travel(destination.mapId); task.done(); } };
       }), ...matchHubRows(tools, query)];
     },
   };

@@ -5,6 +5,8 @@ import { extractMarketObservations, estimateMarketRates, MARKET_MAX_AGE_MS, type
 import { formatFraction } from '../../src/shared/hub-calculator.js';
 import { TradeChatService } from '../../src/main/core/trade-chat-service.js';
 import { createHubCalculator } from '../../src/renderer/hub-calculator.js';
+/** Calculator rows copy without navigating, so any live task serves. */
+const task: import('../../src/shared/hub.js').HubTask = { live: () => true, progress() {}, done() {} };
 const now=Date.now();
 const ad=(message:string,index=0,timestamp=now)=>({source:'kamadan' as const,message,sender:`Advertiser ${index}`,timestamp});
 
@@ -67,7 +69,7 @@ test('Hub labels inferred results, retains side on copy and never fills a missin
   let copied='';const snapshot=estimateMarketRates(Array.from({length:6},(_,i)=>ad('WTS armbrace 30e',i)),now);
   const source=createHubCalculator({copy:async value=>{copied=value;},marketEnabled:()=>true,quotes:async()=>{throw new Error('NPC must not be fetched');},market:async()=>snapshot});
   source.setVisible(true);source.search('1a in e');await Promise.resolve();
-  const row=source.search('1a in e')[0]!;assert.equal(row.title,'~ 30 ecto');assert.match(row.detail,/Inferred median/);await row.run();assert.match(copied,/~ 30 ecto.*Seller asking prices/);
+  const row=source.search('1a in e')[0]!;assert.equal(row.title,'~ 30 ecto');assert.match(row.detail,/Inferred median/);await row.run(task);assert.match(copied,/~ 30 ecto.*Seller asking prices/);
   source.search('1p in a');await Promise.resolve();assert.equal(source.search('1p in a')[0]?.title,'Not enough recent prices');source.setVisible(false);
 });
 
@@ -92,5 +94,5 @@ test('sample prices are labelled on the result and clipboard, never as recent Ka
   let copied='';const snapshot={...estimateMarketRates(Array.from({length:6},(_,i)=>ad('WTS armbrace 30e',i)),now),sample:true as const};
   const source=createHubCalculator({copy:async value=>{copied=value;},marketEnabled:()=>true,quotes:async()=>({updatedAt:now,quotes:[]}),market:async()=>snapshot});
   source.setVisible(true);source.search('1a in e');await Promise.resolve();
-  const row=source.search('1a in e')[0]!;assert.equal(row.title,'~ 30 ecto (sample)');assert.match(row.detail,/Sample prices/);assert.doesNotMatch(row.detail,/recent Kamadan trade ads/);await row.run();assert.match(copied,/\(sample\)/);source.setVisible(false);
+  const row=source.search('1a in e')[0]!;assert.equal(row.title,'~ 30 ecto (sample)');assert.match(row.detail,/Sample prices/);assert.doesNotMatch(row.detail,/recent Kamadan trade ads/);await row.run(task);assert.match(copied,/\(sample\)/);source.setVisible(false);
 });
