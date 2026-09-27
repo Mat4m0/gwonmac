@@ -334,6 +334,68 @@ test('Travel: a click selects a destination and the footer travels once', async 
   await expect.poll(() => ledger(page)).toEqual(['TRAVEL Kaineng Center']);
 });
 
+/** Moves the pointer in small steps like a hand, and returns the other options it crossed. */
+async function glide(page: Page, from: Locator, to: Locator) {
+  await page.evaluate(() => {
+    const crossed = new Set<string>();
+    Object.assign(window, { crossed });
+    document.addEventListener('pointermove', event => {
+      const option = (event.target as Element).closest('[role="option"]');
+      if (option?.id) crossed.add(option.id);
+    }, true);
+  });
+  const start = (await from.boundingBox())!;
+  const end = (await to.boundingBox())!;
+  const origin = await from.getAttribute('id');
+  await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
+  await page.mouse.move(end.x + end.width / 2, end.y + end.height / 2, { steps: 24 });
+  return (await page.evaluate(() => [...(window as unknown as { crossed: Set<string> }).crossed])).filter(id => id !== origin);
+}
+
+test.describe('a clicked row keeps the footer while the pointer crosses other rows to it (D-24)', () => {
+  const subjects: Record<string, { open(page: Page): Promise<Locator>; footer: string; named: RegExp; ran: string[] }> = {
+    'Home: Continue Eye of the North': { open: async page => row(page, 'Eye of the North'), footer: '.hub-primary', named: /^Travel to Eye of the North/, ran: ['TRAVEL Eye of the North'] },
+    'Travel: Kaineng Center (TRV-07)': { open: async page => { await page.keyboard.press('Meta+t'); return page.locator('.travel-recent', { hasText: 'Kaineng Center' }); }, footer: '.travel-primary', named: /^Travel to Kaineng Center · Any district/, ran: ['TRAVEL Kaineng Center'] },
+    'build target: Apply to me (BLD-09)': { open: async page => { await enter(page, 'build smiter'); return page.getByRole('option', { name: /Apply to me/ }); }, footer: '.hub-primary', named: /^Apply Smiter to Fixture Monk/, ran: ['apply-build', 'command:1', 'command:2'] },
+  };
+  for (const [name, subject] of Object.entries(subjects)) {
+    test(name, async ({ page }) => {
+      await open(page);
+      const target = await subject.open(page);
+      await page.waitForTimeout(400);
+      await clicks(page, target, 1);
+      await expect(page.locator(subject.footer)).toHaveText(subject.named);
+      const crossed = await glide(page, target, page.locator(subject.footer));
+      // The path really crossed other rows, as a hand's path to the footer does.
+      expect(crossed.length).toBeGreaterThan(0);
+      await expect(target).toHaveAttribute('aria-selected', 'true');
+      await expect(page.locator(subject.footer)).toHaveText(subject.named);
+      await page.mouse.down(); await page.mouse.up();
+      await expect.poll(() => ledger(page)).toEqual(subject.ran);
+    });
+  }
+
+  test('hover selects again once the pointer leaves the list or a key moves the selection', async ({ page }) => {
+    await open(page);
+    const eye = row(page, 'Eye of the North');
+    await clicks(page, eye, 1);
+    await glide(page, eye, primary(page));
+    await expect(eye).toHaveAttribute('aria-selected', 'true');
+    // Back in the list after leaving it, a real move selects the row under the pointer.
+    const kaineng = row(page, 'Kaineng Center');
+    const box = (await kaineng.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 12 });
+    await expect(kaineng).toHaveAttribute('aria-selected', 'true');
+    // A key moves the selection past a click's hold too.
+    await clicks(page, kaineng, 1);
+    await search(page).press('ArrowDown');
+    await expect(kaineng).toHaveAttribute('aria-selected', 'false');
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 + 2);
+    await expect(kaineng).toHaveAttribute('aria-selected', 'true');
+    expect(await ledger(page)).toEqual([]);
+  });
+});
+
 test('Travel: a view that opens under a resting pointer keeps its selection (HUB-012)', async ({ page }) => {
   await open(page);
   await page.keyboard.press('Meta+t');

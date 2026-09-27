@@ -21,6 +21,7 @@ import {
 import { TRAVEL_HISTORY_VISIBLE_LIMIT } from "../../../../src/shared/travel-history";
 import { guildWarsMapName } from "../../../../src/shared/guild-wars-map-names";
 import { isHubBackKey } from "../../../../src/shared/keyboard-shortcuts";
+import { createHoverSelection } from "../../../../src/shared/ui/hover-selection";
 import { useTravelPreferences } from "../travel-preferences";
 import TravelDestinationPicker from "./TravelDestinationPicker.vue";
 
@@ -52,6 +53,8 @@ const input = ref<HTMLInputElement | null>(null);
 const settingsButton = ref<HTMLButtonElement | null>(null);
 const query = ref(props.resume?.query ?? "");
 const active = ref(0);
+/** Hover moves `active` only on real movement and never off a clicked destination. */
+const hover = createHoverSelection();
 const mode = ref<PaletteMode>(props.resume?.mode ?? "travel");
 const editingShortcutSlot = ref<number | null>(props.resume?.editingSlot ?? null);
 const addingPhrase = ref(props.resume?.addingPhrase ?? false);
@@ -404,6 +407,7 @@ function activateBrowseDestination(mapId: number): void {
 }
 
 watch(query, () => {
+  hover.release();
   active.value = 0;
   if (hasQuery.value) mode.value = "travel";
 });
@@ -428,6 +432,7 @@ watch(results, (next, previous) => {
 watch(() => props.visible, async (visible) => {
   if (!visible) return;
   const load = ++visibilityLoad;
+  hover.release();
   if (!props.resume) {
     query.value = ""; active.value = 0; mode.value = "travel";
     editingShortcutSlot.value = null; addingPhrase.value = false;
@@ -457,6 +462,7 @@ watch(() => props.visible, async (visible) => {
 
 async function selectMode(next: PaletteMode, focus: "search" | "settings" = "search"): Promise<void> {
   query.value = "";
+  hover.release();
   active.value = 0;
   mode.value = next;
   await nextTick();
@@ -682,7 +688,7 @@ function pick(event: MouseEvent, index: number): void {
   if (index < 0) return;
   const id = resultId(index);
   active.value = index;
-  if (event.detail === 1) pressed = id;
+  if (event.detail === 1) { pressed = id; hover.hold(); }
   else if (event.detail === 0 || (event.detail === 2 && pressed === id)) runActive();
 }
 /**
@@ -694,6 +700,7 @@ function selectOnly(event: MouseEvent, index: number): void {
   if (index < 0 || (event.currentTarget instanceof HTMLButtonElement && event.currentTarget.disabled)) return;
   active.value = index;
   pressed = null;
+  hover.hold();
 }
 /** The pointer's route to Enter, out of the Tab order: Enter already runs it from search or a destination. */
 function pickPrimary(event: MouseEvent): void {
@@ -705,14 +712,14 @@ function keepSearchFocus(event: MouseEvent): void {
 }
 
 /**
- * Hover selects only on real pointer movement. A view that appears under a resting
- * pointer, a wheel scroll or the trailing click of a double-click never moves the
- * selection that the footer names (HUB-012).
+ * Hover selects only on real pointer movement and leaves a clicked destination
+ * alone until the pointer leaves the list (HUB-012, D-24): the footer keeps naming
+ * what the player chose.
  */
 function moved(event: PointerEvent): boolean {
   // Like the arrow keys, hover passes over a destination that cannot be chosen.
   if (event.currentTarget instanceof HTMLButtonElement && event.currentTarget.disabled) return false;
-  return event.movementX !== 0 || event.movementY !== 0;
+  return hover.selects(event);
 }
 
 async function moveActive(direction: 1 | -1): Promise<void> {
@@ -721,6 +728,7 @@ async function moveActive(direction: 1 | -1): Promise<void> {
   let next = active.value < 0 ? (direction === 1 ? entries.length - 1 : 0) : active.value;
   do next = (next + direction + entries.length) % entries.length;
   while (!selectable(entries[next]!));
+  hover.release();
   active.value = next;
   await nextTick();
   palette.value?.querySelector<HTMLElement>(`#travel-${activeResultId.value}`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
@@ -800,7 +808,7 @@ function onKeydown(event: KeyboardEvent): void {
     <span class="ui-sr-only" role="status" aria-live="polite" aria-atomic="true">{{ searchStatusText }}</span>
     <div v-if="urgentNoticeVisible" class="travel-notice" :data-level="statusLevel" aria-hidden="true">{{ statusText }}</div>
 
-    <section v-if="hasQuery" id="travel-results-panel" class="ui-scroll travel-body" role="region" aria-label="Travel search results">
+    <section v-if="hasQuery" id="travel-results-panel" class="ui-scroll travel-body" role="region" aria-label="Travel search results" @pointerleave="hover.release()">
       <div v-if="results.length" class="travel-result-heading">{{ results.length === 1 ? 'Best match for' : 'Matches for' }} <strong>{{ query }}</strong></div>
       <div v-if="results.length" id="travel-results" class="travel-results" role="listbox">
         <button v-for="(result, index) in results" :id="`travel-${result.resultKey}`" :key="result.resultKey" type="button" class="travel-result ui-row" role="option" tabindex="-1" :aria-selected="index === active" :aria-disabled="searchResultDisabled(result)" :aria-label="searchResultAriaLabel(result)" :disabled="searchResultDisabled(result)" @pointermove="moved($event) && (active = index)" @mousedown="keepSearchFocus" @click="pick($event, index)" @contextmenu="selectOnly($event, index)">
@@ -815,7 +823,7 @@ function onKeydown(event: KeyboardEvent): void {
       <div v-else class="ui-empty travel-empty"><strong>{{ emptySearchTitle }}</strong><p>{{ emptySearchHelp }}</p><button type="button" class="ui-button" @click="query = ''">Clear search</button></div>
     </section>
 
-    <section v-else-if="mode === 'travel'" id="travel-panel" class="ui-scroll travel-body" :role="inset ? 'listbox' : 'region'" aria-label="Travel">
+    <section v-else-if="mode === 'travel'" id="travel-panel" class="ui-scroll travel-body" :role="inset ? 'listbox' : 'region'" aria-label="Travel" @pointerleave="hover.release()">
       <section v-if="showingSmallCatalogue" class="travel-section travel-available" aria-labelledby="travel-available-title">
         <header class="travel-section-head"><h2 id="travel-available-title">{{ browseUnlocksKnown && !browseIncludesLockedCurrent ? 'Available destinations' : 'Destinations' }}</h2><span>{{ browseCountText }}</span></header>
         <div id="travel-available" class="travel-recent-grid">

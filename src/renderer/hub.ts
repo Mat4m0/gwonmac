@@ -15,6 +15,7 @@ import { isHubShortcuts, type HubShortcut } from '../shared/hub-preferences.js';
 import { createHubCalculator } from './hub-calculator.js';
 import { armConfirmation } from './surface-controller.js';
 import { listIndexAfter, listKeyStep } from './list-keys.js';
+import { createHoverSelection } from '../shared/ui/hover-selection.js';
 import { matchHubRows, parseHubQuery, normaliseHubQuery, type HubRow, type HubSource, type HubSummary, type HubViewAction, type HubViewFooter, type HubViewMount } from '../shared/hub.js';
 export function createHub(parent: HTMLElement) {
   const document = parent.ownerDocument;
@@ -369,6 +370,7 @@ export function createHub(parent: HTMLElement) {
   let renderedSummary: HubSummary | undefined;
   /** The row the current click run selected; only its own double-click runs it (D-24). */
   let pressed: string | null = null;
+  const hover = createHoverSelection();
   function paintNavigation() {
     const summary = disposeView ? undefined : scope?.summary;
     const summaryPanel = required<HTMLElement>('.hub-summary');
@@ -429,6 +431,7 @@ export function createHub(parent: HTMLElement) {
   }
   function refresh(reset = false) {
     if (!root.open || disposeView) return;
+    if (reset) hover.release();
     paintNavigation();
     const previousRows = rows;
     const tradeQuery = parseHubQuery(input.value);
@@ -503,16 +506,17 @@ export function createHub(parent: HTMLElement) {
           option.append(renderBuildInfo(row));
         }
       }
-      option.addEventListener('pointermove', event => { if (event.movementX || event.movementY) select(row.id); });
+      option.addEventListener('pointermove', event => { if (hover.selects(event)) select(row.id); });
       // A click opens a navigational row but only selects one that changes the game or the
       // account; the footer primary or a double-click that started on this row runs it (D-24).
       // A page change between the clicks cancels the run in the surface controller (HUB-242).
+      // The click holds its selection while the pointer crosses other rows to the footer.
       option.addEventListener('click', event => {
-        if (event.detail <= 1) { pressed = row.id; select(row.id); focusResult(); if (!row.consequential) void run(); }
-        else if (event.detail === 2 && row.consequential && pressed === row.id) void run();
+        if (event.detail <= 1) { pressed = row.id; hover.hold(); select(row.id); focusResult(); if (!row.consequential) void run(); }
+        else if (event.detail === 2 && row.consequential && pressed === row.id && selected === row.id) void run();
       });
       // Right-click selects the row and opens its Actions (HUB-248).
-      option.addEventListener('contextmenu', event => { event.preventDefault(); select(row.id); focusResult(); actions(); });
+      option.addEventListener('contextmenu', event => { event.preventDefault(); hover.hold(); select(row.id); focusResult(); actions(); });
       list.append(option);
     });
     count.textContent = `${rows.length} result${rows.length === 1 ? '' : 's'}`;
@@ -618,6 +622,7 @@ export function createHub(parent: HTMLElement) {
       // The list owns these keys even without results, so they never move the caret or drop a text selection.
       event.preventDefault();
       if (!rows.length) return;
+      hover.release();
       select(rows[listIndexAfter(rows.findIndex(row => row.id === selected), rows.length, step)]!.id, true);
     } else if (event.key === 'ArrowRight' && !event.repeat && input.selectionStart === input.value.length && input.selectionEnd === input.value.length) {
       const row = rows.find(row => row.id === selected);
@@ -629,6 +634,7 @@ export function createHub(parent: HTMLElement) {
   });
   // A press on a result keeps the keyboard in search.
   list.addEventListener('mousedown', event => event.preventDefault());
+  list.addEventListener('pointerleave', () => hover.release());
   // ⌘⌫ is Back from any focus inside the Hub, text fields included; ⌫ alone only edits text.
   // It bubbles here, so a mounted view first steps out of its own inner level (a confirmation,
   // its settings) and marks the press handled; the Hub still owns the press either way.
