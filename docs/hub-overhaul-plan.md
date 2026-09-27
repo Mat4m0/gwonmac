@@ -216,7 +216,8 @@ global store. Do not retain detached DOM nodes as durable navigation identity.
   task. The next fresh `⌘R` starts in global search. Successful terminal actions
   also end the task. Persistent tool drafts/filters survive independently.
 - A running action belongs to the page session that started it. Typing, any page
-  change, closing or suspending ends that session: the action keeps running, but
+  change, closing or suspending ends that session: the action keeps running, its
+  progress stays in the status line (busy) on every page and through typing, and
   its completion only reports (status line, or the receipt after Hub closed) and
   never closes, navigates or wipes a newer page. A late failure is a named failure
   receipt that also waits in the status line of the next opening. An action that

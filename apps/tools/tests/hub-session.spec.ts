@@ -78,6 +78,47 @@ test('a team apply that completes while the player types keeps the Hub, the quer
   expect(await actions(page)).toEqual(['apply-team']);
 });
 
+test('a running apply keeps its progress in the status line after Back and through typing, and never navigates (KEY-19)', async ({ page }) => {
+  test.setTimeout(60_000);
+  const busyStatus = page.locator('.hub-status[aria-busy="true"]');
+  for (const from of ['review', 'home'] as const) {
+    await open(page, '&slow-apply');
+    await page.keyboard.type('team gom afk');
+    if (from === 'review') {
+      await page.keyboard.press('ArrowRight');
+      await expect(page.locator('.hub-caption')).toHaveText('GOM AFK');
+    }
+    await page.keyboard.press('Enter');
+    await expect(status(page)).toHaveText(/^Applying GOM AFK… \d+\/16$/);
+    await page.keyboard.press('Meta+Backspace');
+    await expect(page.locator('.hub-caption')).toHaveText('Home');
+    await expect(search(page)).toHaveValue('team gom afk');
+    // Back and every typed key leave the running apply's progress, busy, in the status line.
+    await expect(busyStatus).toHaveText(/^Applying GOM AFK… \d+\/16$/);
+    await expect(page.locator('.hub-panel')).toHaveAttribute('data-busy', 'true');
+    await page.keyboard.press('ControlOrMeta+a');
+    const seen = new Set<string>();
+    for (const character of 'travel kamadan') {
+      await page.keyboard.type(character);
+      const text = await status(page).textContent();
+      if (text === 'GOM AFK applied.') break;
+      await expect(busyStatus).toHaveText(/^Applying GOM AFK… \d+\/16$/);
+      seen.add(text ?? '');
+      await page.waitForTimeout(250);
+    }
+    expect(seen.size).toBeGreaterThan(1);
+    await expect(status(page)).toHaveText('GOM AFK applied.', { timeout: 20_000 });
+    await expect(status(page)).toHaveAttribute('aria-busy', 'false');
+    await expect(page.locator('.hub-panel')).toHaveAttribute('data-busy', 'false');
+    await expect(hub(page)).toBeVisible();
+    await expect(page.locator('.hub-caption')).toHaveText('Home');
+    await expect(page.locator('.hub-breadcrumbs')).toHaveText('Home');
+    await expect(search(page)).toBeFocused();
+    expect(await keydowns(page)).toBe(0);
+    expect(await actions(page)).toEqual(['apply-team']);
+  }
+});
+
 test('a team apply that fails on its review leaves the outcome there and no progress in the status line (HUB-083)', async ({ page }) => {
   await open(page, '&slow-apply');
   await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-scenario', { detail: 'partial' })));
@@ -195,7 +236,6 @@ test('leaving the page of a running apply is never navigated back (BLD-06)', asy
   while (await travel.getAttribute('aria-selected') !== 'true') await search(page).press('ArrowDown');
   await expect(primary(page)).toHaveText('Browse travel↵');
   // The selection was made before the apply finished, so its completion is what is checked.
-  await expect(status(page)).toBeHidden();
   await expect(status(page)).toHaveText('Smiter applied to Fixture Monk.');
   await page.waitForTimeout(300);
   await expect(hub(page)).toBeVisible();

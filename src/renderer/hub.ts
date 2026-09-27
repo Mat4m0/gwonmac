@@ -192,7 +192,18 @@ export function createHub(parent: HTMLElement) {
   let carriedFailure = '';
   /** A late task's receipt outlives the typing that ended its session; any other report replaces it. */
   let receiptInStatus = false;
-  const report = (message: string, receipt = false) => { status.textContent = message; status.hidden = !message; receiptInStatus = receipt && !!message; };
+  /**
+   * The latest progress of a running action, on its page or left behind by Back, typing or a
+   * close (KEY-19). The status line falls back to it, busy, whenever it has nothing newer to say.
+   */
+  let progress: { owner: object; message: string } | null = null;
+  let progressInStatus = false;
+  function report(message: string, receipt = false) {
+    const text = message || progress?.message || '';
+    status.textContent = text; status.hidden = !text;
+    receiptInStatus = receipt && !!message; progressInStatus = !message && !!text;
+    status.setAttribute('aria-busy', String(progressInStatus)); paintBusy();
+  }
   const dispatch = (name: string, detail?: unknown) => {
     if (window.dispatchEvent(new CustomEvent(name, { cancelable: true, detail }))) {
       throw new Error('Unavailable in the current game state.');
@@ -293,9 +304,9 @@ export function createHub(parent: HTMLElement) {
     primary.disabled = disabled;
     if (disabled && focused) (search.hidden ? firstControl() : input).focus({ preventScroll: true });
   }
-  /** `aria-busy` and the thin bar under the search while this page's action runs. */
+  /** `aria-busy` and the thin bar under the search while this page's action runs or the status line shows progress. */
   function paintBusy() {
-    const working = busy() || (viewRunning && !!viewFooter);
+    const working = busy() || (viewRunning && !!viewFooter) || progressInStatus;
     list.setAttribute('aria-busy', String(busy())); content.setAttribute('aria-busy', String(viewRunning && !!viewFooter));
     required<HTMLElement>('.hub-panel').dataset.busy = String(working);
   }
@@ -579,17 +590,18 @@ export function createHub(parent: HTMLElement) {
   /**
    * Binds an action to the page session that starts it (HUB-004). While that page shows, the
    * action reports progress and failures in the status line and its success closes the Hub with
-   * the receipt. After the player moved on, it only reports: a receipt, or a failure receipt.
+   * the receipt. After the player moved on, it never navigates: its progress stays in the status
+   * line, and it ends with a receipt or a failure receipt.
    * An action that focuses another window (Open an account, Show Launcher) suspends its own
    * page; its success still ends the task, so the next opening starts at Home.
    */
   function startTask(): HubTask & { fail(error: unknown): void; end(): void } {
     const started = session;
     const live = () => root.open && session === started;
-    let shown = '';
+    const token = {};
     return {
       live,
-      progress: message => { if (live()) { report(message); shown = message; } },
+      progress: message => { progress = { owner: token, message }; report(''); },
       done: receipt => {
         if (live() || (!root.open && suspended && suspendedSession === started)) close(receipt);
         else if (receipt) notify(receipt);
@@ -599,7 +611,7 @@ export function createHub(parent: HTMLElement) {
         if (live()) report(message); else notify(message, 'failed');
       },
       // An action that ended without a receipt, e.g. one whose view shows its own outcome, never leaves its progress behind.
-      end: () => { if (live() && shown && status.textContent === shown) report(''); },
+      end: () => { if (progress?.owner !== token) return; progress = null; if (progressInStatus) report(''); },
     };
   }
   async function run() {
