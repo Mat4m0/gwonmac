@@ -53,6 +53,20 @@ describe('Hub travel recents', () => {
     } finally { travel.dispose(); }
   });
 
+  it('reports a trip that fails after the quiet close once, and keeps success quiet (HUB-072)', () => {
+    const host = createDemoTravelHost();
+    const hub = { showView: vi.fn(), showRows: vi.fn(), attach: vi.fn(), close: vi.fn(), notify: vi.fn() };
+    const travel = createHubTravel(host, hub);
+    try {
+      host.notice.value = { message: 'Travelling to Kamadan…', level: 'info' };
+      host.notice.value = { message: 'Travel started.', level: 'success' };
+      expect(hub.notify).not.toHaveBeenCalled();
+      host.notice.value = { message: 'Travel did not start. Check that this destination is unlocked, then try again.', level: 'warning' };
+      expect(hub.notify).toHaveBeenCalledOnce();
+      expect(hub.notify).toHaveBeenCalledWith('Travel did not start. Check that this destination is unlocked, then try again.', 'failed');
+    } finally { travel.dispose(); }
+  });
+
   it('starts a trip from a row and ends only the Hub task that asked for it', async () => {
     const host = createDemoTravelHost();
     const hub = { showView: vi.fn(), showRows: vi.fn(), attach: vi.fn(), close: vi.fn(), notify: vi.fn() };

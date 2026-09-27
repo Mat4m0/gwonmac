@@ -17,6 +17,12 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
   const listeners = new Set<() => void>();
   const refresh = () => { for (const listener of listeners) listener(); };
   const stop = watch([host.state, host.attempt, host.history, preferences.synonyms], refresh, { flush: 'sync' });
+  // A trip that fails after the quiet close ("did not start", "did not confirm arrival") is
+  // reported once through the Hub's receipt; success stays quiet, and the open Travel view
+  // shows its own notice (HUB-072).
+  const stopNotice = watch(host.notice, notice => {
+    if (notice && (notice.level === 'warning' || notice.level === 'danger') && !active) hub.notify(notice.message, 'failed');
+  }, { flush: 'sync' });
   const load = async () => {
     try { await Promise.all([preferences.load(), host.loadHistory()]); loadError = ''; }
     catch { loadError = 'Travel preferences could not load. Open Travel to retry.'; }
@@ -87,6 +93,6 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
   };
   return { source, open, travel, get active() { return active; },
     update: host.updateGameState, updateFriends: host.updateFriends,
-    dispose() { disposed = true; stop(); listeners.clear(); host.dispose(); },
+    dispose() { disposed = true; stop(); stopNotice(); listeners.clear(); host.dispose(); },
   };
 }
