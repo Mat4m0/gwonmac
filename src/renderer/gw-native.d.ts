@@ -126,6 +126,8 @@ declare global {
       restoreFocus(): HTMLElement | null;
     }>): GwonmacDialogHandle;
     dismissTransient(): void;
+    /** Resolves once the press that activated a control has ended, before a native sheet opens. */
+    afterPress(): Promise<void>;
   }
 
   type InputTraceEntry = SharedInputTraceEntry;

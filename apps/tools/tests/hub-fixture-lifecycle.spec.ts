@@ -111,6 +111,24 @@ test.describe('shortcuts through commands.ts', () => {
     await page.keyboard.press('Escape');
     await expect(page.locator('#app')).toHaveAttribute('data-action', 'Quit or reload cancelled');
   });
+
+  // A native sheet cannot be armed, so it opens only after the press that asked for it:
+  // a held Enter never answers "Reload Guild Wars" with its auto-repeat.
+  test('a held Enter on the Quit or Reload row opens the sheet only after release', async ({ page }) => {
+    await open(page);
+    const search = page.getByRole('combobox', { name: searchName });
+    const sheet = page.getByRole('dialog', { name: 'Quit or reload Guild Wars?' });
+    await search.fill('reload');
+    for (let press = 0; press < 6; press++) { await page.keyboard.down('Enter'); await page.waitForTimeout(60); }
+    await expect(page.locator('#hub')).toBeHidden();
+    await expect(sheet).toBeHidden();
+    await page.keyboard.up('Enter');
+    await expect(sheet).toBeVisible();
+    await expect(sheet.getByRole('button', { name: 'Reload Guild Wars' })).toBeFocused();
+    await expect(page.locator('#app')).not.toHaveAttribute('data-action', /Game (reload|quit)/u);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#app')).toHaveAttribute('data-action', 'Quit or reload cancelled');
+  });
 });
 
 test('the canvas ledger records only input that reaches the game', async ({ page }) => {

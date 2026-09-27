@@ -15,7 +15,8 @@
  * before a later press of the run, the rest of the run is swallowed wherever
  * it lands, the game canvas included, so a double-click never runs what its
  * first click revealed and never reaches Guild Wars as a world click.
- * Destructive confirmations share one arming rule for the same reason.
+ * Destructive confirmations share one arming rule for the same reason, and a
+ * native sheet opens only after the press that asked for it has ended.
  */
 
 type Surface = Readonly<{
@@ -55,6 +56,10 @@ const DEFAULT_DOUBLE_CLICK_MS = 500;
 const CLICK_RUN_SLOP = 8;
 /** How long a destructive confirmation waits before it accepts an activation. */
 export const CONFIRMATION_ARMING_MS = 400;
+/** The keys that activate a control; their held press is what a native sheet must not inherit. */
+const ACTIVATION_KEYS = new Set(["Enter", "NumpadEnter", "Space"]);
+/** A lost key-up never keeps a native sheet from opening. */
+const PRESS_WAIT_LIMIT_MS = 5000;
 
 /**
  * Arms a destructive confirmation (Resign, Leave and switch, account replace):
@@ -278,6 +283,25 @@ export function installSurfaceController(
     }, true);
   }
 
+  /**
+   * A native sheet (Quit or Reload) cannot be armed like a DOM confirmation: its
+   * default button takes the next Return, auto-repeat included, and a click on it.
+   * So a surface opens one only after the press that asked for it has ended: no
+   * activation key that began on a surface is still held, and its click run can
+   * add no further click.
+   */
+  const afterPress = () => new Promise<void>((resolve) => {
+    const deadline = performance.now() + PRESS_WAIT_LIMIT_MS;
+    const check = () => {
+      const now = performance.now();
+      const held = [...ownedPresses].some((code) => ACTIVATION_KEYS.has(code))
+        || (run !== null && now - run.at <= clickRunMs);
+      if (!held || now > deadline) resolve();
+      else setTimeout(check, 50);
+    };
+    check();
+  });
+
   const register = (surface: Surface): GwonmacSurfaceHandle => {
     const id = Symbol("surface");
     let open = false;
@@ -407,5 +431,6 @@ export function installSurfaceController(
       });
     },
     dismissTransient,
+    afterPress,
   });
 }

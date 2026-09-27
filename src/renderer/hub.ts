@@ -198,7 +198,8 @@ export function createHub(parent: HTMLElement) {
       ...(!input.value.trim() ? [] : [
         // Call Target stays on its own shortcut: it acts only while the game has focus (HUB-133).
         // Quit or Reload opens the account's confirmation sheet, never a direct quit (HUB-001).
-        { id: 'reload', title: 'Quit or Reload Game…', detail: 'Opens confirmation for this account', keywords: 'restart reconnect', group: 'Commands', action: 'Review options', run: async () => { close(); await window.gwNative.app.showQuitOrReload(); } },
+        // The sheet waits for the press that asked for it, so its repeat or trailing click never answers it.
+        { id: 'reload', title: 'Quit or Reload Game…', detail: 'Opens confirmation for this account', keywords: 'restart reconnect', group: 'Commands', action: 'Review options', run: async () => { close(); await window.gwSurfaces.afterPress(); await window.gwNative.app.showQuitOrReload(); } },
         ...(settings?.gwonmacTools && settings.resignEnabled ? [{ id: 'resign', title: 'Resign…', detail: 'Opens the existing confirmation', group: 'Commands', action: 'Review resign', run: () => { dispatch('gw:resign-show'); close(); } }] : []),
       ]),
     ];
