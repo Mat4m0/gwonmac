@@ -28,12 +28,14 @@ describe("window shortcut input", () => {
       dispatch({ preventDefault() { claimed = true; } }, { type, code, key: code.slice(3), meta: true, control: false, shift: false, alt: false, isAutoRepeat: repeat });
       return claimed;
     };
+    // Off, the chord stays claimed and does nothing (HUB-037).
     updateWindowShortcuts(win, DEFAULT_SETTINGS);
-    assert.equal(send("keyDown"), false);
+    assert.equal(send("keyDown"), true);
     updateWindowShortcuts(win, { ...DEFAULT_SETTINGS, gwonmacTools: true });
-    assert.equal(send("keyDown"), false);
+    assert.equal(send("keyDown"), true);
     updateWindowShortcuts(win, { ...DEFAULT_SETTINGS, callTargetEnabled: true });
-    assert.equal(send("keyDown"), false);
+    assert.equal(send("keyDown"), true);
+    assert.deepEqual(actions, []);
     const enabled = { ...DEFAULT_SETTINGS, gwonmacTools: true, callTargetEnabled: true };
     updateWindowShortcuts(win, enabled);
     assert.equal(send("keyDown"), true);
@@ -47,7 +49,7 @@ describe("window shortcut input", () => {
     assert.equal(send("keyDown", "KeyJ"), true);
     assert.equal(send("keyUp", "KeyJ"), true);
     updateWindowShortcuts(win, { ...enabled, callTargetEnabled: false });
-    assert.equal(send("keyDown"), false);
+    assert.equal(send("keyDown"), true);
     assert.deepEqual(actions, ["game.call-target", "game.call-target"]);
   });
 
@@ -70,9 +72,9 @@ describe("window shortcut input", () => {
     updateWindowShortcuts(win, assigned);
     assert.equal(press(), true);
     updateWindowShortcuts(win, { ...assigned, whispersEnabled: false });
-    assert.equal(press(), false);
+    assert.equal(press(), true);
     updateWindowShortcuts(win, { ...assigned, gwonmacTools: false });
-    assert.equal(press(), false);
+    assert.equal(press(), true);
     updateWindowShortcuts(win, { ...enabled, shortcutOverrides: { "whispers.toggle": { key: "j", shift: true, option: false } } });
     assert.equal(press(), false);
     assert.equal(press("KeyJ"), true);
@@ -125,15 +127,15 @@ describe("window shortcut input", () => {
       return prevented;
     };
     updateWindowShortcuts(win, settings);
-    assert.equal(press("KeyG"), false);
+    assert.equal(press("KeyG"), true);
     assert.equal(press("KeyR"), true);
     updateWindowShortcuts(win, { ...settings, gwonmacTools: true, characterSwitchEnabled: false });
     assert.equal(press("KeyR"), true);
     assert.equal(press("KeyG"), true);
     assert.equal(press("KeyL"), true);
     updateWindowShortcuts(win, { ...settings, gwonmacTools: true, cartographyEnabled: false });
-    assert.equal(press("KeyG"), false);
-    assert.equal(press("KeyL"), false);
+    assert.equal(press("KeyG"), true);
+    assert.equal(press("KeyL"), true);
     assert.deepEqual(actions, ["hub.toggle", "hub.toggle", "cartography.grid.toggle", "cartography.walkability.toggle"]);
   });
   it("runs one Command action, preserves Control, and contains capture repeats", async () => {
@@ -360,7 +362,7 @@ describe("window shortcut input", () => {
       gwonmacTools: true,
       buildLibrary: false,
     });
-    assert.equal(dispatch(keyDown("KeyB", "b")), false);
+    assert.equal(dispatch(keyDown("KeyB", "b")), true);
     assert.deepEqual(actions, ["tools.toggle"]);
   });
 });
@@ -451,5 +453,15 @@ describe("window shortcut layout and ownership", () => {
       assert.equal(press(code, key), true, layout);
       assert.deepEqual(calls, [expected], layout);
     }
+  });
+
+  it("keeps a disabled tool's chord from Guild Wars without running it (HUB-037)", () => {
+    const { calls, press } = install({ ...DEFAULT_SETTINGS, gwonmacTools: false });
+    for (const [code, key] of [["KeyS", "s"], ["KeyD", "d"], ["KeyT", "t"], ["KeyB", "b"]] as const) {
+      assert.equal(press(code, key), true, key);
+    }
+    assert.deepEqual(calls, []);
+    // A key no shortcut names still reaches the game.
+    assert.equal(press("KeyJ", "j"), false);
   });
 });

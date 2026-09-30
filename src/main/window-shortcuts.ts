@@ -5,7 +5,7 @@
 import { isAppShortcutCaptureActive } from "./launcher-shortcut-capture.js";
 import type { BrowserWindow } from "electron";
 import type { AppSettings, GameTextEditCommand } from "../shared/contracts.js";
-import { featureActivationRequested } from "../shared/feature-contracts.js";
+import { featureActivationRequested, type FeatureId } from "../shared/feature-contracts.js";
 import {
   resolveShortcuts,
   HUB_SHORTCUT,
@@ -71,21 +71,30 @@ const QUIT_CHORD = commandChord("q");
 const textEditCommand = (input: Electron.Input): GameTextEditCommand | null =>
   TEXT_EDIT_CHORDS.find(([binding]) => shortcutMatches(binding, input))?.[1] ?? null;
 
+/** The feature whose activation lets each shortcut action run. */
+const SHORTCUT_FEATURES = [
+  ["game.call-target", "callTarget"],
+  ["game.resign", "resign"],
+  ["character.switch", "characterSwitch"],
+  ["tools.toggle", "buildLibrary"],
+  ["whispers.toggle", "whispers"],
+  ["trade.toggle", "tradeChat"],
+  ["storage.open", "xunlaiStorage"],
+  ["travel.open", "travel"],
+  ["cartography.grid.toggle", "cartography"],
+  ["cartography.walkability.toggle", "cartography"],
+] as const satisfies readonly (readonly [ShortcutAction, FeatureId])[];
+
 class WindowShortcuts {
   #hubAvailable = true;
   readonly #actions: ShortcutActions;
-  #shortcuts = resolveShortcuts({
-    "game.call-target": null,
-    "game.resign": null,
-    "character.switch": null,
-    "tools.toggle": null,
-    "trade.toggle": null,
-    "whispers.toggle": null,
-    "storage.open": null,
-    "travel.open": null,
-    "cartography.grid.toggle": null,
-    "cartography.walkability.toggle": null,
-  });
+  /**
+   * Every assigned chord stays claimed, and only an enabled action runs: Guild
+   * Wars acts on the base key whatever modifier is held, so a disabled tool's
+   * Command-S would otherwise walk the character backward.
+   */
+  #shortcuts = resolveShortcuts({});
+  #enabled = new Set<ShortcutAction>();
   #capture: ((result: ShortcutCaptureResult) => void) | null = null;
   #skillCapture: ((result: SkillKeyCaptureResult) => void) | null = null;
   #claimedCodes = new Map<string, ClaimedKey>();
@@ -259,8 +268,9 @@ class WindowShortcuts {
             key: tracedKey(input.key), repeat: input.isAutoRepeat, decision: 'shortcut',
           });
           event.preventDefault();
-          this.#claimedCodes.set(input.code, action === "game.resign" ? 'sheet' : 'shortcut');
-          if (!input.isAutoRepeat) {
+          const runs = this.#enabled.has(action as ShortcutAction);
+          this.#claimedCodes.set(input.code, runs && action === "game.resign" ? 'sheet' : 'shortcut');
+          if (!input.isAutoRepeat && runs) {
             const operation = this.#actions.run(action as ShortcutAction);
             if (action === "game.resign") {
               // Native sheets can consume the physical key-up, as with Command-Q.
@@ -295,30 +305,9 @@ class WindowShortcuts {
     | "cartographyEnabled"
   >): void {
     this.#hubAvailable = hubShortcutAvailable(settings.shortcutOverrides);
-    const resolved = resolveShortcuts(settings.shortcutOverrides);
-    this.#shortcuts = {
-      "game.call-target": featureActivationRequested("callTarget", settings) ? resolved["game.call-target"] : null,
-      "game.resign": featureActivationRequested("resign", settings) ? resolved["game.resign"] : null,
-      "character.switch": featureActivationRequested("characterSwitch", settings)
-        ? resolved["character.switch"] : null,
-      "tools.toggle": featureActivationRequested("buildLibrary", settings)
-        ? resolved["tools.toggle"]
-        : null,
-      "whispers.toggle": featureActivationRequested("whispers", settings) ? resolved["whispers.toggle"] : null,
-      "trade.toggle": featureActivationRequested("tradeChat", settings)
-        ? resolved["trade.toggle"]
-        : null,
-      "storage.open": featureActivationRequested("xunlaiStorage", settings)
-        ? resolved["storage.open"]
-        : null,
-      "travel.open": featureActivationRequested("travel", settings)
-        ? resolved["travel.open"]
-        : null,
-      "cartography.grid.toggle": featureActivationRequested("cartography", settings)
-        ? resolved["cartography.grid.toggle"] : null,
-      "cartography.walkability.toggle": featureActivationRequested("cartography", settings)
-        ? resolved["cartography.walkability.toggle"] : null,
-    };
+    this.#shortcuts = resolveShortcuts(settings.shortcutOverrides);
+    this.#enabled = new Set(SHORTCUT_FEATURES.filter(([, feature]) => featureActivationRequested(feature, settings))
+      .map(([action]) => action));
   }
 
   capture(): Promise<ShortcutCaptureResult> {

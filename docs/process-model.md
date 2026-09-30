@@ -250,10 +250,11 @@ Command-Q quits wherever those keys sit. An input source without Latin letters
 keeps the US letter position, as macOS does. Digits, punctuation and named keys
 stay physical, so Command-1…9 is the digit row on every layout. The claim
 contains the pressed key's repeats and releases while allowing the translated
-Control chord through. Edit menu clicks
-use the same semantic command and focused-window route. A hidden Guild Wars
-text proxy claims the command. An ordinary gwonmac input declines it so
-Chromium edits normally. Copy and Cut send only non-password proxy text to
+Control chord through. An assigned app shortcut whose tool is off stays
+claimed and does nothing, because Guild Wars acts on the base key whatever
+modifier is held. Edit menu clicks use the same semantic command and
+focused-window route. A hidden Guild Wars text proxy claims the command. An
+ordinary gwonmac input declines it so Chromium edits normally. Copy and Cut send only non-password proxy text to
 main. Main writes Cut text to the pasteboard before it sends Guild Wars
 Control-X. Paste validates the clipboard in main and sends Guild Wars a
 Control-V chord, which also produces Chromium's trusted native Paste edit

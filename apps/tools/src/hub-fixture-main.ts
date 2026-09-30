@@ -69,16 +69,17 @@ export function installFixtureMain(options: FixtureMainOptions) {
     const shortcuts = resolveShortcuts(settings.shortcutOverrides);
     for (const [action, binding] of Object.entries(shortcuts) as [ShortcutAction, typeof shortcuts[ShortcutAction]][]) {
       if (!binding || !shortcutMatches(binding, input)) continue;
+      // A disabled tool's chord stays claimed and does nothing, as in main.
+      claim(event);
+      if (event.repeat) return;
       if (action in MAP_LAYERS) {
-        if (!featureActivationRequested('cartography', settings)) continue;
-        claim(event);
         const key = MAP_LAYERS[action as keyof typeof MAP_LAYERS];
-        if (!event.repeat) options.updateSettings({ [key]: !settings[key] });
+        if (featureActivationRequested('cartography', settings)) options.updateSettings({ [key]: !settings[key] });
         return;
       }
       const [feature, commands] = ACTIONS[action as keyof typeof ACTIONS];
-      if (!featureActivationRequested(feature, settings)) continue;
-      claim(event); if (!event.repeat) void run(commands); return;
+      if (featureActivationRequested(feature, settings)) void run(commands);
+      return;
     }
   };
   const onKeyUp = (event: KeyboardEvent) => {
