@@ -156,7 +156,7 @@ test('a single typed word never becomes the default invite', async () => {
     assert.deepEqual(source.search('invite Mo').map(row => `${row.title}|${row.unavailable ?? row.action}`),
       ['Kai Account|View actions', 'Moira Chatter|View actions', 'Mo|Type the full character name'],
       'known people come first; the partial name stays last');
-    void source.search('whisper Mo').find(row => row.id.startsWith('person:typed:'))!.actions!();
+    void source.search('whisper Mo').find(row => row.id.startsWith('person:typed:'))!.run(task);
     assert.equal(page().find(row => row.id === 'person:invite')!.unavailable, 'Type the full character name');
     assert.deepEqual(calls, []);
   }, party);

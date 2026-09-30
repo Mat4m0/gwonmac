@@ -34,7 +34,7 @@
     "PageDown": "Home | focus search | sel trade | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Control+n": "Home | focus search | sel place:194 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Meta+Enter": "Home | focus search | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
-    "Meta+j": "Home | focus search | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
+    "Meta+j": "Home | focus button.hub-menu-item | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Meta+r": "Home | focus search | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0"
   },
   "home-query": {
@@ -53,7 +53,7 @@
     "PageDown": "Home | focus search | sel trade | q \"kam\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Control+n": "Home | focus search | sel trade | q \"kam\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Meta+Enter": "Home | focus search | sel place:449 | q \"kam\" | action - | life outpost | canvas down 0 up 0 pointer 0",
-    "Meta+j": "Home | focus search | sel place:449 | q \"kam\" | action - | life outpost | canvas down 0 up 0 pointer 0",
+    "Meta+j": "Home | focus button.hub-menu-item | sel place:449 | q \"kam\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Meta+r": "Home | focus search | sel place:449 | q \"kam\" | action - | life outpost | canvas down 0 up 0 pointer 0"
   },
   "home-row": {
@@ -91,7 +91,7 @@
     "PageDown": "Home | focus search | sel maps | q \"\" | action - | life pve-explorable | canvas down 0 up 0 pointer 0",
     "Control+n": "Home | focus search | sel character | q \"\" | action - | life pve-explorable | canvas down 0 up 0 pointer 0",
     "Meta+Enter": "Home | focus search | sel travel | q \"\" | action - | life pve-explorable | canvas down 0 up 0 pointer 0",
-    "Meta+j": "Home | focus search | sel travel | q \"\" | action - | life pve-explorable | canvas down 0 up 0 pointer 0",
+    "Meta+j": "Home | focus button.hub-menu-item | sel travel | q \"\" | action - | life pve-explorable | canvas down 0 up 0 pointer 0",
     "Meta+r": "Home | focus search | sel travel | q \"\" | action - | life pve-explorable | canvas down 0 up 0 pointer 0"
   },
   "travel": {
@@ -167,7 +167,7 @@
     "PageDown": "Smiter | focus search | sel choose-hero | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Control+n": "Smiter | focus search | sel choose-hero | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Meta+Enter": "Smiter | focus search | sel apply:me | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
-    "Meta+j": "Smiter | focus search | sel apply:me | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
+    "Meta+j": "Smiter | focus button.hub-menu-item | sel apply:me | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Meta+r": "Home | focus search | sel build:hub-smiter | q \"build smiter\" | action - | life outpost | canvas down 0 up 0 pointer 0"
   },
   "person": {
@@ -243,7 +243,7 @@
     "PageDown": "Home | focus search | sel quote:result | q \"10 ecto in p\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Control+n": "Home | focus search | sel quote:result | q \"10 ecto in p\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Meta+Enter": "Home | focus search | sel quote:result | q \"10 ecto in p\" | action - | life outpost | canvas down 0 up 0 pointer 0",
-    "Meta+j": "Home | focus search | sel quote:result | q \"10 ecto in p\" | action - | life outpost | canvas down 0 up 0 pointer 0",
+    "Meta+j": "Home | focus button.hub-menu-item | sel quote:result | q \"10 ecto in p\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Meta+r": "Home | focus search | sel quote:result | q \"10 ecto in p\" | action - | life outpost | canvas down 0 up 0 pointer 0"
   },
   "trade": {
