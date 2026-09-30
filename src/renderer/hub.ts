@@ -909,7 +909,8 @@ export function createHub(parent: HTMLElement) {
     const entries: MenuEntry[] = [{ label: row.action, section: 'Primary', keys: ['↵'], ...(row.destructive ? { destructive: true } : {}), disabled: !!row.unavailable, run: () => run() }];
     if (row.skills || scope?.summary?.skills) entries.push({ label: 'Show build details', section: 'Details', run: () => showBuildDetails(row) });
     else if (row.actions && row.actionsLabel) entries.push({ label: row.actionsLabel, section: 'Details', run: () => row.actions?.() });
-    if (!scope && isHubShortcuts([{ id: row.id, phrase: '', pinned: false }])) {
+    // Any page offers them for a row the Hub can keep and find again, e.g. a build in a template folder (HUB-091).
+    if (isHubShortcuts([{ id: row.id, phrase: '', pinned: false }]) && lookup(row.id)) {
       const pinned = shortcuts().some(entry => entry.id === row.id && entry.pinned);
       entries.push({ label: pinned ? 'Unpin from Hub' : 'Pin to Hub', section: 'Personalize', run: async () => {
         const entries = shortcuts(); const old = entries.find(entry => entry.id === row.id);
