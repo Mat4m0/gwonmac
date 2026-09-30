@@ -544,6 +544,35 @@ test('Hub preferences: Move up keeps focus and a double-click moves the same pin
   expect(await ledger(page)).toEqual([]);
 });
 
+test('Remove all search phrases asks first, names the count and keeps the pins (HUB-092)', async ({ page }) => {
+  await page.goto('/?hub');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  const stored = [{ id: 'place:449', phrase: 'kama', pinned: true }, { id: 'travel', phrase: 'go', pinned: false }];
+  await page.evaluate(value => localStorage.setItem('hub-fixture-shortcuts', JSON.stringify(value)), stored);
+  await open(page);
+  const saved = () => page.evaluate(() => JSON.parse(localStorage.getItem('hub-fixture-shortcuts') ?? '[]'));
+  await enter(page, 'hub preferences');
+  const reset = page.getByRole('button', { name: 'Remove all search phrases…', exact: true });
+  await reset.click();
+  await expect(caption(page)).toHaveText('Remove search phrases?');
+  await expect(page.getByRole('heading', { name: 'Remove 2 search phrases?' })).toBeVisible();
+  await expect(primary(page)).toHaveText(/^Remove 2 search phrases/);
+  await expect(primary(page)).toHaveAttribute('data-variant', 'danger');
+  // Keep leaves every phrase.
+  await page.locator('.hub-actions').click();
+  await expect(caption(page)).toHaveText('Hub preferences');
+  expect(await saved()).toEqual(stored);
+  await reset.click();
+  await expect(caption(page)).toHaveText('Remove search phrases?');
+  await expect(primary(page)).toHaveAttribute('data-armed', '');
+  await page.keyboard.press('Enter');
+  await expect(caption(page)).toHaveText('Hub preferences');
+  await expect(page.locator('#hub .hub-status')).toHaveText('Removed 2 search phrases.');
+  await expect(page.getByRole('listbox', { name: 'Pins and search phrases' }).getByRole('option')).toHaveText(['Kamadan, Jewel of Istan · Pinned']);
+  expect(await saved()).toEqual([{ id: 'place:449', phrase: '', pinned: true }]);
+  await expect(reset).toBeDisabled();
+});
+
 test('every Hub view keeps the footer with a key legend and a named primary', async ({ page }) => {
   await open(page);
   for (const [query, title, named] of [['settings', 'Settings', /^Done$/], ['hub preferences', 'Hub preferences', /^Done$/], ['team gom', 'GOM AFK', /^Apply team GOM AFK↵$/]] as const) {

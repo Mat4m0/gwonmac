@@ -343,8 +343,9 @@ Reserve grammar words and unit names in their scopes. Reject conflicts when savi
 if imported data conflicts, require result selection. Renaming an item preserves
 its alias target. Deleting it removes its searchable alias and invalidates flows.
 
-Aliases change how an object is found, not its canonical label. Provide Reset aliases.
-A pin or phrase shows the same row that search shows for its object.
+Aliases change how an object is found, not its canonical label. Provide one
+confirmed action that removes every search phrase and keeps the pins. A pin or
+phrase shows the same row that search shows for its object.
 Builds, teams, characters, and private contacts must not leak across account profiles.
 
 Start custom flows with saved searches and parameterized named actions:

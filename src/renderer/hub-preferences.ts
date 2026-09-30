@@ -54,7 +54,7 @@ const libraryOwned = (id: string) => /^(build|team):/u.test(id);
  * Edit only references currently resolvable under the active feature/account rules.
  * One selected entry, by identity; Move up and Move down stay where they are, so a double-click
  * moves the same entry twice and focus never leaves the button. ⌥⌘↑/↓ move it from the list.
- * Removal names its target and passes an armed confirmation.
+ * Removing an entry or every phrase names what goes and passes an armed confirmation (HUB-092).
  */
 export function manageHubShortcuts(hub: HubPresenter<HTMLElement>, get: () => readonly HubShortcut[], lookup: (id: string) => HubRow | undefined, save: (value: readonly HubShortcut[]) => Promise<void>, resetPosition: () => void) {
   let chosen: string | null = null;
@@ -73,7 +73,7 @@ export function manageHubShortcuts(hub: HubPresenter<HTMLElement>, get: () => re
     const up = tool('Move up', '⌥⌘↑', 'Alt+Meta+ArrowUp');
     const down = tool('Move down', '⌥⌘↓', 'Alt+Meta+ArrowDown');
     const hint = doc.createElement('p'); hint.textContent = 'Choose a result, then Actions to pin it or give it a search phrase.';
-    const reset = doc.createElement('button'); reset.type = 'button'; reset.className = 'ui-button'; reset.textContent = 'Reset aliases';
+    const reset = doc.createElement('button'); reset.type = 'button'; reset.className = 'ui-button'; reset.textContent = 'Remove all search phrases…';
     const position = doc.createElement('button'); position.type = 'button'; position.className = 'ui-button'; position.textContent = 'Reset Hub position';
     const status = doc.createElement('p'); status.setAttribute('role', 'status');
     view.append(heading, list, tools, hint, reset, position, status); target.append(view);
@@ -82,6 +82,7 @@ export function manageHubShortcuts(hub: HubPresenter<HTMLElement>, get: () => re
     let saving = Promise.resolve();
     const entries = () => order.filter(entry => lookup(entry.id));
     const title = (entry: HubShortcut) => lookup(entry.id)?.title ?? entry.id;
+    const phrased = () => entries().filter(entry => entry.phrase);
     const persist = () => {
       const next = [...order];
       saving = saving.then(() => save(next)).catch(() => { status.textContent = 'Could not save. Try again.'; order = [...get()]; paint(); });
@@ -114,29 +115,42 @@ export function manageHubShortcuts(hub: HubPresenter<HTMLElement>, get: () => re
       list.hidden = tools.hidden = !visible.length; hint.hidden = !!visible.length;
       // aria-disabled, not disabled: the focused button keeps focus at the end of the list.
       up.setAttribute('aria-disabled', String(!neighbour(-1))); down.setAttribute('aria-disabled', String(!neighbour(1)));
-      reset.disabled = !visible.some(entry => entry.phrase);
+      reset.disabled = !phrased().length;
       const selected = visible.find(entry => entry.id === chosen);
       const row = selected && lookup(selected.id);
       footer.primary(row ? { label: `Set phrase for ${row.title}`, run: () => editHubShortcut(hub, row, get, save) } : null);
       footer.secondary(selected ? { label: `Remove ${title(selected)}…`, run: () => confirmRemove(selected) } : null);
     }
-    function confirmRemove(entry: HubShortcut) {
-      const name = title(entry);
-      hub.showView(`Remove ${name}?`, (confirmTarget, cancel, confirmFooter) => {
+    /** One confirmation page for both removals: it names what goes and what stays, and Keep is the way out. */
+    function confirm(caption: string, question: string, consequence: string, label: string, remove: () => Promise<void>, receipt: string) {
+      hub.showView(caption, (confirmTarget, cancel, confirmFooter) => {
         const page = doc.createElement('section'); page.className = 'hub-detail hub-confirm'; page.tabIndex = 0;
-        const question = doc.createElement('h2'); question.textContent = `Remove ${name} from Hub?`; page.setAttribute('aria-label', question.textContent);
-        const copy = doc.createElement('p'); copy.textContent = 'Its pin and search phrase go. The place, tool or build itself stays.';
-        page.append(question, copy); confirmTarget.append(page);
-        // Back on the list, the entry after the removed one is chosen, so the footer's Remove,
-        // which keeps the keyboard, names it (HUB-019).
-        confirmFooter.primary({ label: `Remove ${name}`, destructive: true, armed: true, run: async () => {
-          const visible = entries(); const at = visible.findIndex(value => value.id === entry.id);
-          await save(get().filter(value => value.id !== entry.id));
-          chosen = (visible[at + 1] ?? visible[at - 1])?.id ?? null; cancel();
-        } });
+        const ask = doc.createElement('h2'); ask.textContent = question; page.setAttribute('aria-label', question);
+        const copy = doc.createElement('p'); copy.textContent = consequence;
+        page.append(ask, copy); confirmTarget.append(page);
+        confirmFooter.primary({ label, destructive: true, armed: true, run: async () => { await remove(); cancel(); hub.notify(receipt); } });
         confirmFooter.secondary({ label: 'Keep', run: cancel });
         return () => page.remove();
       });
+    }
+    function confirmRemove(entry: HubShortcut) {
+      const name = title(entry);
+      // Back on the list, the entry after the removed one is chosen, so the footer's Remove,
+      // which keeps the keyboard, names it (HUB-019).
+      confirm(`Remove ${name}?`, `Remove ${name} from Hub?`, 'Its pin and search phrase go. The place, tool or build itself stays.', `Remove ${name}`, async () => {
+        const visible = entries(); const at = visible.findIndex(value => value.id === entry.id);
+        await save(get().filter(value => value.id !== entry.id));
+        chosen = (visible[at + 1] ?? visible[at - 1])?.id ?? null;
+      }, `Removed ${name} from Hub.`);
+    }
+    function confirmReset() {
+      const count = phrased().length;
+      const phrases = `${count} search phrase${count === 1 ? '' : 's'}`;
+      // Only resolvable entries lose their phrase; an unpinned entry then has nothing left and goes.
+      confirm('Remove search phrases?', `Remove ${phrases}?`, 'Pins stay pinned. Every result is found by its own name again.', `Remove ${phrases}`, async () => {
+        const visible = new Set(entries().map(entry => entry.id));
+        await save(get().flatMap(entry => !visible.has(entry.id) ? [entry] : entry.pinned ? [{ ...entry, phrase: '' }] : []));
+      }, `Removed ${phrases}.`);
     }
     up.onclick = () => move(-1); down.onclick = () => move(1);
     view.addEventListener('keydown', event => {
@@ -151,11 +165,7 @@ export function manageHubShortcuts(hub: HubPresenter<HTMLElement>, get: () => re
       const target = visible[listIndexAfter(visible.findIndex(entry => entry.id === chosen), visible.length, step)];
       if (target) { chosen = target.id; paint(); }
     });
-    reset.onclick = () => {
-      const visible = new Set(entries().map(entry => entry.id));
-      order = order.flatMap(entry => !visible.has(entry.id) ? [entry] : entry.pinned ? [{ ...entry, phrase: '' }] : []);
-      paint(); persist();
-    };
+    reset.onclick = confirmReset;
     position.onclick = () => { resetPosition(); status.textContent = 'Hub position and size reset. Window locked.'; };
     paint();
     return () => view.remove();

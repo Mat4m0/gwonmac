@@ -217,8 +217,8 @@ test('a view whose first buttons are disabled still takes focus, and Command-Bac
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
   await search.fill('hub preferences'); await page.keyboard.down('Enter');
   await expect(page.locator('.hub-caption')).toHaveText('Hub preferences');
-  // Nothing is pinned, so Reset aliases is disabled; focus goes to the first usable control.
-  await expect(page.getByRole('button', { name: 'Reset aliases', exact: true })).toBeDisabled();
+  // Nothing is pinned, so Remove all search phrases is disabled; focus goes to the first usable control.
+  await expect(page.getByRole('button', { name: 'Remove all search phrases…', exact: true })).toBeDisabled();
   await expect(page.getByRole('button', { name: 'Reset Hub position', exact: true })).toBeFocused();
   await page.keyboard.up('Enter');
   expect(await page.evaluate(() => document.activeElement === document.body)).toBe(false);
