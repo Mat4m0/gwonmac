@@ -250,9 +250,15 @@ detailed game artwork.
 [`appearance.ts`](../../src/renderer/appearance.ts) owns one worst-case model
 for every text role. It measures the inks `tokens.css` paints, or the colours a
 player chose, against the panel at its effective opacity over snow and over a
-black scene, each with and without the accent hover layer, and against any
-opaque surface the player recoloured. Reduce Transparency makes the effective
-opacity 1; the saved opacity stays unchanged.
+black scene, each with and without the accent hover layer. It includes actual
+title, raised and recessed paint, unchanged controls, and translucent wells.
+Tests pin default paint to `tokens.css`. Reduce Transparency makes the
+effective opacity 1; the saved opacity stays unchanged.
+
+Opposing custom surfaces can make 4.5:1 impossible for one shared ink. The
+existing neutral fallback maximises the minimum contrast; it does not guarantee
+AA for those palettes. Separate surface inks or palette limits need a design
+decision. The saved palette remains unchanged.
 
 - Text, bright, muted, faint and the accent used as text move separately and
   only as far as they must. One opacity step never re-inks a whole role, and

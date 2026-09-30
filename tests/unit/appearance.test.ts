@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   PAINTED_INKS,
+  PAINTED_SURFACES,
   appearanceVariables,
   applyAppearance,
 } from "../../src/renderer/appearance.js";
@@ -36,6 +37,7 @@ describe("appearance settings", () => {
     };
     assert.deepEqual(appearanceVariables(appearance), {
       "--ui-panel-opacity": "1",
+      "--ui-text-faint": "#A6A192",
     });
   });
 
@@ -209,6 +211,19 @@ describe("panel text legibility over the game", () => {
         faintText: token(source, "--ui-text-faint"),
         accent: token(source, "--ui-accent"),
       }, material);
+      const gradient = (name: string) => {
+        const value = new RegExp(`${name}: ([\\s\\S]+?);`, "u").exec(source)![1]!;
+        return [...value.matchAll(/#[a-f\d]{6}|oklch\([\d. ]+\)/giu)].map((match) => hex(match[0]));
+      };
+      assert.deepEqual(PAINTED_SURFACES[material], material === "classic" ? {
+        raised: gradient("--gw-face-graphite"), command: gradient("--gw-face-navy-quiet"),
+        well: token(source, "--ui-well"), wellFill: "#000000",
+        wellOpacity: Number(/--gw-sunk: rgb\(0 0 0 \/ ([\d]+)%\)/u.exec(source)![1]) / 100,
+      } : {
+        raised: gradient("--ui-raised-fill").slice(0, 1), command: gradient("--ui-raised-fill").slice(0, 1),
+        well: token(source, "--ui-well"), wellFill: token(source, "--ui-well"),
+        wellOpacity: Number(/--ui-well-fill: oklch\([\d. ]+ \/ ([\d.]+)\)/u.exec(source)![1]),
+      }, `${material} structural paint`);
     }
   });
 
@@ -217,7 +232,13 @@ describe("panel text legibility over the game", () => {
       const painted = PAINTED_INKS[uiStyle === "obsidian" ? "modern" : "classic"];
       for (let uiPanelOpacity = 65; uiPanelOpacity <= 100; uiPanelOpacity += 1) {
         const inks = publishedInks({ ...DEFAULT_SETTINGS, uiStyle, uiPanelOpacity });
-        for (const background of worstBackgrounds(painted.window, painted.accent, uiPanelOpacity / 100)) {
+        const surfaces = PAINTED_SURFACES[uiStyle === "obsidian" ? "modern" : "classic"];
+        const panels = (["#FFFFFF", "#000000"] as const).map((scene) => compositeColor(painted.window, scene, uiPanelOpacity / 100));
+        for (const background of [
+          ...worstBackgrounds(painted.window, painted.accent, uiPanelOpacity / 100),
+          ...surfaces.raised, ...surfaces.command, surfaces.well,
+          ...panels.map((panel) => compositeColor(surfaces.wellFill, panel, surfaces.wellOpacity)),
+        ]) {
           for (const [name, ink] of Object.entries(inks)) {
             assert.ok(contrastRatio(ink, background) >= 4.5, `${uiStyle} ${uiPanelOpacity}% ${name} ${ink} on ${background}`);
           }
@@ -248,6 +269,22 @@ describe("panel text legibility over the game", () => {
       const text = variables["--ui-accent-text"] as UiThemeColor;
       for (const background of worstBackgrounds(PAINTED_INKS.classic.window, PAINTED_INKS.classic.accent, 0.94)) {
         assert.ok(contrastRatio(text, background) >= 4.5, `${accent} as text ${text} on ${background}`);
+      }
+    }
+  });
+
+  it("includes unchanged control paint when a custom window turns white", () => {
+    // A white window previously made muted text dark on unchanged controls.
+    // Opposing surfaces cannot all reach AA with one ink; protect the actual
+    // best compromise rather than claiming the panel-only result is readable.
+    const variables = appearanceVariables({
+      ...DEFAULT_SETTINGS, uiStyle: "custom", uiPanelOpacity: 100,
+      uiCustomTheme: { ...DEFAULT_SETTINGS.uiCustomTheme, window: "#FFFFFF" },
+    });
+    for (const name of Object.keys(inkRoles)) {
+      assert.equal(variables[name], "#5F5F5F", name);
+      for (const background of ["#FFFFFF", "#898989", "#353739", "#090907"] as const) {
+        assert.ok(contrastRatio(variables[name] as UiThemeColor, background) >= 1.8, `${name} on ${background}`);
       }
     }
   });

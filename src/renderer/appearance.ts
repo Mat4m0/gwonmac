@@ -56,8 +56,23 @@ export const PAINTED_INKS = {
   modern: { window: "#0F0D0A", text: "#ECE7DF", bright: "#F8F5EE", mutedText: "#B5B0A7", faintText: "#908C84", accent: "#DBB568" },
 } as const satisfies Record<UiThemeMaterial, Record<string, UiThemeColor>>;
 
+/* Default structural paint from tokens.css, pinned by the appearance test.
+ * Include every opaque gradient stop and composite translucent wells over
+ * both panel extremes. Palette seeds do not describe unchanged CSS paint. */
+export const PAINTED_SURFACES = {
+  classic: {
+    raised: ["#232324", "#191B1C", "#353739", "#2B2D30", "#1F2224", "#242427"],
+    command: ["#1C2025", "#111923", "#16283B", "#20344A", "#17283A", "#111B28", "#1C2025"],
+    well: "#090907", wellFill: "#000000", wellOpacity: 0.46,
+  },
+  modern: {
+    raised: ["#221F1B"], command: ["#221F1B"],
+    well: "#040403", wellFill: "#040403", wellOpacity: 0.78,
+  },
+} as const;
+
 /* The browser rounds every composited channel to 8 bits. This headroom keeps
- * guarded ink at 4.5:1 or more once it is painted. */
+ * feasible ink at 4.5:1 or more once it is painted. */
 const TEXT_CONTRAST = 4.6;
 
 type InkRole = "text" | "bright" | "mutedText" | "faintText" | "accent";
@@ -98,8 +113,9 @@ export const appearanceVariables = (
   /* One worst-case legibility model for every text role. At low opacity the
    * game is part of the rendered background, and snow is its brightest case.
    * Text sits on the panel over that scene and over a black scene, each with
-   * and without the accent hover layer, and on any opaque surface the player
-   * recoloured. Reduce Transparency makes the effective opacity 1 while the
+   * and without the accent hover layer. The model includes actual title, raised
+   * and recessed paint, even for unchanged controls. Reduce Transparency makes
+   * the effective opacity 1 while the
    * saved opacity stays. The Classic art strip is artwork, not a colour, so
    * tokens.css gives its copy the text ink instead. */
   const opacity = options.reducedTransparency ? 1 : settings.uiPanelOpacity / 100;
@@ -108,12 +124,31 @@ export const appearanceVariables = (
     compositeColor(panelFill, "#FFFFFF", opacity),
     compositeColor(panelFill, "#000000", opacity),
   ];
+  const surfaces = PAINTED_SURFACES[theme.material];
+  const raised = theme.surface !== baseline.surface
+    ? theme.material === "modern" ? [theme.surface] : [
+      compositeColor(theme.surface, theme.border, 0.78), theme.surface,
+      compositeColor(theme.surface, theme.recessed, 0.86),
+    ]
+    : [...surfaces.raised, ...surfaces.command];
+  const title = theme.titlebar !== baseline.titlebar || theme.windowGradient !== baseline.windowGradient
+    ? theme.windowGradient ? [
+      compositeColor(theme.titlebar, theme.border, 0.92), theme.titlebar,
+      compositeColor(theme.titlebar, theme.recessed, 0.78),
+    ] : [theme.titlebar]
+    : theme.material === "classic" ? surfaces.raised : panels.flatMap((panel) => [
+      compositeColor("#FFFFFF", panel, 0.04), compositeColor("#000000", panel, 0.08),
+    ]);
+  const recessed = theme.recessed !== baseline.recessed;
   const textBackgrounds = [
     ...panels,
     ...panels.map((panel) => compositeColor(painted.accent, panel, 0.1)),
-    ...(["titlebar", "surface", "recessed"] as const)
-      .filter((field) => theme[field] !== baseline[field])
-      .map((field) => theme[field]),
+    ...title, ...raised,
+    recessed ? theme.recessed : surfaces.well,
+    ...panels.map((panel) => compositeColor(
+      recessed ? theme.recessed : surfaces.wellFill, panel,
+      recessed ? 0.88 : surfaces.wellOpacity,
+    )),
   ];
   const roles: Readonly<Record<InkRole, { painted: UiThemeColor; recoloured: boolean }>> = {
     text: { painted: recoloured("text") ? theme.text : painted.text, recoloured: recoloured("text") },

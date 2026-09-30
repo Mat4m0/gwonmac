@@ -72,8 +72,9 @@ export function compositeColor(
 
 /** Keep a player's chosen ink when it is readable. Otherwise move it by the
  * smallest possible amount toward light or dark until every rendered surface
- * reaches WCAG AA. This includes the bright-game worst case behind the window
- * opacity, which opaque-palette checks miss. */
+ * reaches WCAG AA when possible. Opposing surfaces use the best shared
+ * neutral fallback, which can remain below AA. This includes the bright-game
+ * worst case behind window opacity, which opaque-palette checks miss. */
 export function accessibleForeground(
   preferred: UiThemeColor,
   backgrounds: readonly UiThemeColor[],
