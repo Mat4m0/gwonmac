@@ -291,3 +291,16 @@ for (const [name, viewport, hub] of [['a narrow window', { width: 390, height: 8
     }
   });
 }
+
+test('every Settings section fits one line in all six panel fonts', async ({ page }) => {
+  await page.goto('/?hub');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  await search.fill('settings'); await search.press('Enter');
+  const nav = page.getByRole('navigation', { name: 'Settings sections' });
+  await expect(nav).toBeVisible();
+  for (const uiFont of PANEL_FONTS) {
+    await page.evaluate(value => window.gwApplyFixtureAppearance?.({ uiStyle: 'guild-wars', uiPanelOpacity: 94, uiFont: value }), uiFont);
+    const heights = await nav.getByRole('button').evaluateAll(buttons => buttons.map(button => Math.round(button.getBoundingClientRect().height)));
+    expect(new Set(heights).size, `${uiFont}: ${heights.join(', ')}`).toBe(1);
+  }
+});
