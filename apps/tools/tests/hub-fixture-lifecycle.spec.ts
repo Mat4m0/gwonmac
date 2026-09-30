@@ -37,6 +37,10 @@ test.describe('game lifecycle', () => {
     await search.fill('kamadan');
     await expect(page.locator('.hub-primary')).toHaveText(/^Travel to Kamadan/);
     await search.press('Enter');
+    // Leaving the explorable area asks first (D-27); the armed Leave starts the trip.
+    const leave = page.getByRole('button', { name: 'Leave and travel to Kamadan, Jewel of Istan', exact: true });
+    await expect(leave).toHaveAttribute('data-armed', '');
+    await leave.click();
     // The trip is recorded as a game action, like every other command that reaches the game.
     await expect(page.locator('#app')).toHaveAttribute('data-action', 'TRAVEL Kamadan, Jewel of Istan');
     await expect(lifecycle(page)).toHaveValue('outpost');

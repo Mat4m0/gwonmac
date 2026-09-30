@@ -38,6 +38,8 @@ const props = defineProps<{
   preferences?: ReturnType<typeof useTravelPreferences>;
   /** In the Hub, its footer: Travel names its trip there instead of in a footer of its own (HUB-042). */
   footer?: HubViewFooter;
+  /** In the Hub, the one "Leave this area?" step before a trip out of an explorable area (D-27); it rejects when the player stays. */
+  leaveArea?: (place: string, leave: () => Promise<void>) => Promise<void>;
   resume?: {
     query: string; selected: string | null; mode: "travel" | "customize";
     editingSlot: number | null; addingPhrase: boolean; phrase: string; mapId: number | null; scroll: number;
@@ -542,22 +544,32 @@ function toggleCustomize(): void {
   void selectMode(next, next === "customize" ? "settings" : "search");
 }
 
+/**
+ * Runs a trip; from an explorable area the Hub asks "Leave this area?" first, on its own page,
+ * and closes after the player leaves (D-27). Staying returns to Travel as it was.
+ */
+async function leaving(place: string, trip: () => Promise<void>): Promise<void> {
+  const state = props.host.state.value;
+  if (props.leaveArea && state.status === "ready" && state.explorable) await props.leaveArea(place, trip);
+  else await trip();
+}
+
 async function travel(request: TravelRequest): Promise<void> {
   if (travelPending.value || !isTravelRequest(request)) return;
   feedback.value = "";
   try {
-    await props.host.travel(request);
+    await leaving(travelDestination(request.mapId)?.name ?? "this place", () => props.host.travel(request));
     emit("travelled");
-  } catch { /* The host owns the refusal notice and resets its transaction. */ }
+  } catch { /* The host owns the refusal notice and resets its transaction; staying is no failure. */ }
 }
 
 async function travelToResult(result: SearchResult): Promise<void> {
   if (result.kind === "guild-hall") {
     if (result.disabledReason === null) {
       try {
-        await props.host.guildHall();
+        await leaving("Guild Hall", () => props.host.guildHall());
         emit("travelled");
-      } catch { /* The host owns the refusal notice. */ }
+      } catch { /* The host owns the refusal notice; staying is no failure. */ }
     }
     return;
   }

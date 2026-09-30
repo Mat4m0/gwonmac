@@ -17,6 +17,8 @@ import { createHub } from '../../../src/renderer/hub';
 // eslint-disable-next-line no-restricted-imports
 import { installSurfaceController } from '../../../src/renderer/surface-controller';
 // eslint-disable-next-line no-restricted-imports
+import { askLeaveArea, leaveAreaCopy } from '../../../src/renderer/leave-area';
+// eslint-disable-next-line no-restricted-imports
 import '../../../src/renderer/hub.css';
 // eslint-disable-next-line no-restricted-imports
 import { createHubPeople } from '../../../src/renderer/hub-people';
@@ -189,7 +191,7 @@ export function mountHubFixture(target: HTMLElement) {
       return { setVisible: visible => visible ? app.show() : app.hide(), setActive: app.setActive, requestClose: app.hide, stepBack: app.stepBack, search: app.search, update() {}, dispose: app.dispose };
     },
   });
-  const travel = createHubTravel(travelHost, hub);
+  const travel = createHubTravel(travelHost, hub, (place, leave) => askLeaveArea(hub, leaveAreaCopy('travel', place), leave));
   // `?travel-load-ms=` attaches Travel late, as the game loads its lazy bundle after the Hub opened.
   const travelLoadMs = Number(params.get('travel-load-ms')) || 0;
   if (travelLoadMs) setTimeout(() => hub.attach(travel.source), travelLoadMs); else hub.attach(travel.source);

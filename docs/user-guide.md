@@ -251,6 +251,10 @@ reason, and cannot be chosen. The selection stays on its destination while the
 game state changes; if that destination goes away, nothing else is selected.
 Command-1 to Command-9 saves the selected destination under that number; a
 destination has one number, and the note names what the number held before.
+From an explorable area, every trip from Hub first asks "Leave this area and
+travel to …?": a place row, the Travel view, a friend's **Travel to outpost** and
+**Travel and invite**. **Stay here** is selected, so Enter stays; **Leave and
+travel to …** accepts a click only after a brief moment.
 Command-T and `/tp` also open Travel inside Hub.
 
 Search a friend's alias or character name and press Enter to choose an action.

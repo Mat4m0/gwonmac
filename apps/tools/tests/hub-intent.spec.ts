@@ -292,6 +292,56 @@ test('a fresh Home in an explorable area starts on Travel, says why, and Enter n
   await expect(page.locator('.hub-lifecycle')).toBeHidden();
 });
 
+test.describe('Leave this area? before Travel (D-27, HUB-027)', () => {
+  const question = (page: import('@playwright/test').Page) => page.locator('#leave-area-question');
+  test('a trip from the Travel view asks first, Stay returns, and only an armed Leave travels', async ({ page }) => {
+    await page.goto('/?hub&lifecycle=pve-explorable');
+    await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+    await page.keyboard.press('Meta+t');
+    const travel = page.getByRole('combobox', { name: 'Destination, phrase, or friend' });
+    await expect(travel).toBeFocused();
+    await expect(page.locator('#travel-recent-449')).toHaveAttribute('data-active', 'true');
+    await travel.press('Enter');
+    await expect(question(page)).toHaveText('Leave this area and travel to Kamadan, Jewel of Istan?');
+    await expect(page.locator('#leave-area-stay')).toBeFocused();
+    await expect(page.locator('.hub-primary')).toHaveText(/^Stay here/);
+    // A second quick Enter stays: the safe choice has the keyboard.
+    await page.keyboard.press('Enter');
+    await expect(travel).toBeFocused();
+    await expect(page.locator('#travel-recent-449')).toHaveAttribute('data-active', 'true');
+    await travel.press('Enter');
+    const leave = page.getByRole('button', { name: 'Leave and travel to Kamadan, Jewel of Istan', exact: true });
+    await leave.dblclick();
+    await expect(page.locator('#app')).not.toHaveAttribute('data-action', /TRAVEL/);
+    await expect(leave).toHaveAttribute('data-armed', '');
+    await leave.click();
+    await expect(page.locator('#app')).toHaveAttribute('data-action', 'TRAVEL Kamadan, Jewel of Istan');
+    await expect(page.locator('#hub')).toBeHidden();
+  });
+
+  test('a Home place row and Travel and invite ask the same step, and staying sends nothing', async ({ page }) => {
+    await page.goto('/?hub&party&lifecycle=pve-explorable');
+    await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+    const search = page.getByRole('combobox', { name: searchName });
+    await search.fill('kamadan'); await search.press('Enter');
+    await expect(question(page)).toHaveText('Leave this area and travel to Kamadan, Jewel of Istan?');
+    await page.keyboard.press('Escape');
+    await expect(search).toHaveValue('kamadan');
+    await expect(page.locator('.hub-row[aria-selected="true"]')).toHaveAttribute('data-id', 'place:449');
+    await expect(page.locator('.hub-status')).toBeHidden();
+    await search.fill('zed beta'); await search.press('Enter');
+    const selected = page.locator('.hub-row[aria-selected="true"]');
+    while (!await selected.getAttribute('data-id').then(id => id === 'person:travel-invite')) await search.press('ArrowDown');
+    await search.press('Enter');
+    await expect(question(page)).toHaveText('Leave this area and travel to Ascalon City?');
+    await page.locator('#leave-area-stay').click();
+    await expect(page.locator('.hub-breadcrumbs')).toHaveText('Home›Zed Beta');
+    await expect(selected).toHaveAttribute('data-id', 'person:travel-invite');
+    await expect(page.locator('.hub-status')).toBeHidden();
+    await expect(page.locator('#app')).not.toHaveAttribute('data-action', /TRAVEL/);
+  });
+});
+
 test('a Guild Hall is an outpost: no explorable label, no leaving line, and a fresh Home keeps Continue', async ({ page }) => {
   // The fixture reads the instance type as the runtime does; a Guild Hall is no Travel destination.
   await page.goto('/?hub&lifecycle=guild-hall');

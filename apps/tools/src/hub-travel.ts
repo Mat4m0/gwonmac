@@ -9,7 +9,13 @@ import TravelPalette from './components/TravelPalette.vue';
 import type { TravelHost } from './travel-host';
 import { useTravelPreferences } from './travel-preferences';
 
-export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>) {
+/**
+ * Asks "Leave this area?" on its own Hub page before a trip out of an explorable area, runs
+ * `leave` when the player leaves, and rejects with an AbortError when they stay (D-27).
+ */
+export type LeaveArea = (place: string, leave: () => Promise<void>) => Promise<void>;
+
+export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>, leaveArea: LeaveArea) {
   const preferences = useTravelPreferences(host);
   let visible = false;
   let active = false;
@@ -39,7 +45,7 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
     return (target, back, footer) => {
       active = true;
       const app = createApp({ setup: () => () => h(TravelPalette, {
-        host, preferences, footer, ...(resume ? { resume } : {}), onRemember: state => { resume = state; }, inset: true, hubParent: !!hub.hasParent, visible: true, nativeDialog: true, onClose: back,
+        host, preferences, footer, leaveArea, ...(resume ? { resume } : {}), onRemember: state => { resume = state; }, inset: true, hubParent: !!hub.hasParent, visible: true, nativeDialog: true, onClose: back,
         // A trip ends the task: the Hub closes, whether Travel opened from Home or by Command-T (HUB-017).
         onTravelled: () => hub.close(),
       }) });
@@ -59,11 +65,16 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
       ?? (host.state.value.status === 'ready' && host.state.value.mapId === mapId ? 'Current location' : null)
       ?? (availability === 'locked' ? 'Not unlocked by this character' : null);
   }
-  /** Starts one trip; the Hub task that asked for it ends the Hub session. */
+  /**
+   * Starts one trip; the Hub task that asked for it ends the Hub session. A trip out of an
+   * explorable area asks first, whichever row, person page or invite asked for it (D-27).
+   */
   async function travel(mapId: number) {
     const reason = refusal(mapId);
     if (reason) throw new Error(reason);
-    await host.travel({ mapId });
+    const trip = () => host.travel({ mapId });
+    if (explorable()) await leaveArea(travelDestination(mapId)?.name ?? guildWarsMapName(mapId), trip);
+    else await trip();
   }
   const source: HubSource = {
     feature: 'travelPalette',

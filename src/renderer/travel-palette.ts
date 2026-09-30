@@ -7,6 +7,7 @@ import type { TravelCommand, TravelGameState } from '../shared/travel-command.js
 import type { EmbeddedToolsBundle } from '../shared/tools-bundle-contracts.js';
 import { matchHubRows, type HubSource, type HubViewMount } from '../shared/hub.js';
 import { ensureToolsStylesheet } from './tools-stylesheet.js';
+import { askLeaveArea, leaveAreaCopy } from './leave-area.js';
 import { requireToolsApi } from './tools-native-api.js';
 
 export function createTravelPalette(parent: HTMLElement, command: TravelCommand) {
@@ -32,7 +33,8 @@ export function createTravelPalette(parent: HTMLElement, command: TravelCommand)
       const specifier = './tools/tools-app.js';
       const bundle: EmbeddedToolsBundle<HTMLElement> = await import(specifier);
       if (disposed) return;
-      app = bundle.createHubTravel({ nativeApi: native, command, development: window.gwNative.init.development, hub });
+      app = bundle.createHubTravel({ nativeApi: native, command, development: window.gwNative.init.development, hub,
+        leaveArea: (place, leave) => askLeaveArea(hub, leaveAreaCopy('travel', place), leave) });
       app.update(state); app.updateFriends(friends);
       unsubscribe = app.source.subscribe(refresh);
       app.source.setVisible(enabled && hub.visible); refresh();

@@ -15,7 +15,8 @@ import type {
   CharacterSwitchSource,
 } from "./character-switch-model.js";
 import { currentCharacterIndex } from "./character-switch-model.js";
-import { armConfirmation, closeDisclosure } from "./surface-controller.js";
+import { closeDisclosure } from "./surface-controller.js";
+import { bindLeaveAreaChoice, leaveAreaCopy } from "./leave-area.js";
 import { listIndexAfter, listKeyStep } from "../shared/ui/list-keys.js";
 
 const failureMessage = (code: CharacterSwitchFailureCode): string => {
@@ -131,9 +132,11 @@ export function createCharacterSwitchPalette(
   const count = root.querySelector<HTMLElement>(".character-switch-count")!;
   const settingsPanel = root.querySelector<HTMLElement>(".character-switch-settings")!;
   const confirmPanel = root.querySelector<HTMLElement>(".character-switch-confirm")!;
+  const confirmCopy = root.querySelector<HTMLElement>("#character-switch-confirm-copy")!;
   const stayButton = root.querySelector<HTMLButtonElement>(".character-switch-stay")!;
   const leaveButton = root.querySelector<HTMLButtonElement>(".character-switch-leave")!;
-  const leaveArming = armConfirmation(leaveButton);
+  // The shared leave-area step: its words, its arming and its ← → between the two choices (D-27).
+  const leaveChoice = bindLeaveAreaChoice(stayButton, leaveButton);
   const primaryButton = root.querySelector<HTMLButtonElement>(".character-switch-action")!;
   const footerElement = root.querySelector<HTMLElement>(".character-switch-footer")!;
   const settingsToggle = root.querySelector<HTMLButtonElement>(".character-switch-settings-toggle")!;
@@ -263,8 +266,8 @@ export function createCharacterSwitchPalette(
       renderedView = view.kind;
       pressedKey = undefined;
       modal.pageChanged();
-      if (view.kind === "confirming") leaveArming.arm();
-      else leaveArming.disarm();
+      if (view.kind === "confirming") leaveChoice.arm();
+      else leaveChoice.disarm();
     }
     if (!enabled) {
       closePalette(true);
@@ -430,8 +433,10 @@ export function createCharacterSwitchPalette(
     const settingsMode = view.kind === "settings";
     const confirming = view.kind === "confirming";
     const pending = confirming ? confirmingTarget : null;
-    title.textContent = confirming && pending ? `Leave this area and switch to ${pending.name}?` : "Switch Character";
-    leaveButton.textContent = pending ? `Leave and switch to ${pending.name}` : "Leave and switch";
+    const copy = leaveAreaCopy("switch", pending?.name ?? "this character");
+    title.textContent = confirming ? copy.question : "Switch Character";
+    confirmCopy.textContent = copy.detail;
+    leaveButton.textContent = copy.leave;
     if (confirming) root.setAttribute("aria-describedby", "character-switch-confirm-copy");
     else root.removeAttribute("aria-describedby");
     list.hidden = settingsMode || confirming;
@@ -588,11 +593,6 @@ export function createCharacterSwitchPalette(
         queryInput.focus({ preventScroll: true });
         revealSelected();
       } else if (hubBack) hubBack(); else closePalette(true);
-    }
-    else if (view.kind === "confirming" && (event.key === "ArrowLeft" || event.key === "ArrowRight")
-      && (event.target === stayButton || event.target === leaveButton)) {
-      event.preventDefault();
-      (event.key === "ArrowLeft" ? stayButton : leaveButton).focus({ preventScroll: true });
     }
     else if (view.kind !== "characters") return;
     else if (event.key === "ArrowDown" && event.target === queryInput) {
@@ -759,7 +759,7 @@ export function createCharacterSwitchPalette(
     if (view.kind === "confirming") leaveInnerView();
   });
   leaveButton.addEventListener("click", (event) => {
-    if (view.kind !== "confirming" || !leaveArming.accepts(event)) return;
+    if (view.kind !== "confirming" || !leaveChoice.accepts(event)) return;
     view = Object.freeze({ kind: "characters" });
     source.confirm();
     render();

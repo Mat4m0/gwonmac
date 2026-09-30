@@ -99,6 +99,11 @@
 .hub-view .hub-detail { padding:16px 20px; display:grid; gap:12px; }
 .hub-view .hub-detail h2,.hub-view .hub-detail p { margin:0; }
 .hub-view .hub-detail pre { white-space:pre-wrap; font:inherit; }
+/* "Leave this area?" (D-27): the question, its consequence, Stay here first and the consequential leave. */
+.hub-leave-area { padding:16px 20px; display:grid; gap:12px; }
+.hub-leave-area h2,.hub-leave-area p { margin:0; }
+.hub-leave-area p { color:var(--ui-text-muted); }
+.hub-leave-area-actions { display:flex; justify-content:flex-end; flex-wrap:wrap; gap:var(--ui-space-2); padding-top:var(--ui-space-2); }
 
 .hub-view #character-switch-root { position:relative; inset:auto; width:100%; height:100%; padding:0; border:0; background:none; }
 .hub-view .character-switch-panel { position:relative; inset:auto; width:100%!important; height:100%; max-height:100%; transform:none; box-shadow:none; }

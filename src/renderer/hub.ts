@@ -650,6 +650,8 @@ export function createHub(parent: HTMLElement) {
         else if (receipt) notify(receipt);
       },
       fail: error => {
+        // A step the player declined, e.g. Stay here on "Leave this area?", is no failure.
+        if (error instanceof DOMException && error.name === 'AbortError') return;
         const message = error instanceof Error ? error.message : 'The action could not complete. Try again.';
         if (live()) report(message); else notify(message, 'failed');
       },

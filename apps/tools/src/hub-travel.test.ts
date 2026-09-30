@@ -6,7 +6,7 @@ describe('Hub travel recents', () => {
   it('shows actionable recents and keeps unavailable places in explicit search', () => {
     const host = createDemoTravelHost();
     const hub = { showView: vi.fn(), showRows: vi.fn(), attach: vi.fn(), close: vi.fn(), notify: vi.fn() };
-    const travel = createHubTravel(host, hub);
+    const travel = createHubTravel(host, hub, async (_place, leave) => leave());
     try {
       const state = host.state.value;
       if (state.status !== 'ready') throw new Error('Expected outpost fixture');
@@ -23,7 +23,7 @@ describe('Hub travel recents', () => {
   it('marks places consequential, flags leaving an explorable area and names the game state', () => {
     const host = createDemoTravelHost();
     const hub = { showView: vi.fn(), showRows: vi.fn(), attach: vi.fn(), close: vi.fn(), notify: vi.fn() };
-    const travel = createHubTravel(host, hub);
+    const travel = createHubTravel(host, hub, async (_place, leave) => leave());
     try {
       const state = host.state.value;
       if (state.status !== 'ready') throw new Error('Expected outpost fixture');
@@ -56,7 +56,7 @@ describe('Hub travel recents', () => {
   it('reports a trip that fails after the quiet close once, and keeps success quiet (HUB-072)', () => {
     const host = createDemoTravelHost();
     const hub = { showView: vi.fn(), showRows: vi.fn(), attach: vi.fn(), close: vi.fn(), notify: vi.fn() };
-    const travel = createHubTravel(host, hub);
+    const travel = createHubTravel(host, hub, async (_place, leave) => leave());
     try {
       host.notice.value = { message: 'Travelling to Kamadan…', level: 'info' };
       host.notice.value = { message: 'Travel started.', level: 'success' };
@@ -70,7 +70,7 @@ describe('Hub travel recents', () => {
   it('starts a trip from a row and ends only the Hub task that asked for it', async () => {
     const host = createDemoTravelHost();
     const hub = { showView: vi.fn(), showRows: vi.fn(), attach: vi.fn(), close: vi.fn(), notify: vi.fn() };
-    const travel = createHubTravel(host, hub);
+    const travel = createHubTravel(host, hub, async (_place, leave) => leave());
     try {
       const done = vi.fn();
       await travel.source.search('kamadan').find(row => row.id === 'place:449')!.run({ live: () => false, progress() {}, done });

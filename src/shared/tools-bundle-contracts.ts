@@ -81,7 +81,8 @@ export type EmbeddedToolsBundle<Target> = Readonly<{
     target: Target,
     options: ToolsAppMountOptions & Readonly<{ nativeApi: ToolsGwNativeApi; hub?: HubPresenter<Target> }>,
   ) => ToolsAppHandle;
-  createHubTravel: (options: { nativeApi: ToolsGwNativeApi; command: TravelCommand; development: boolean; hub: HubPresenter<Target> }) => {
+  /** `leaveArea` asks "Leave this area?" before a trip out of an explorable area and rejects with an AbortError when the player stays. */
+  createHubTravel: (options: { nativeApi: ToolsGwNativeApi; command: TravelCommand; development: boolean; hub: HubPresenter<Target>; leaveArea(place: string, leave: () => Promise<void>): Promise<void> }) => {
     source: HubSource;
     readonly active: boolean;
     open(): void;
