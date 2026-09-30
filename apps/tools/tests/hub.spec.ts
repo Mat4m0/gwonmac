@@ -291,13 +291,18 @@ test('character search switches the explicitly selected observed character', asy
   await expect(page.getByRole('dialog', { name: 'Hub', exact: true })).not.toBeVisible();
 });
 
-test('trade query opens the same floating searchable tool', async ({ page }) => {
+test('trade query opens the same floating searchable tool with the words as typed (HUB-124)', async ({ page }) => {
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
-  await search.fill('trade ecto'); await search.press('Enter');
-  await expect(page.locator('#toolbox-trade .trade-search input')).toHaveValue('ecto');
+  await search.fill('trade Polar Bear');
+  const row = page.locator('#hub .hub-row[aria-selected="true"]');
+  await expect(row).toContainText('Search Trade for Polar Bear');
+  await expect(row).not.toContainText('Kamadan');
+  await expect(row.locator('.hub-icon')).toHaveAttribute('data-kind', 'trade');
+  await search.press('Enter');
+  await expect(page.locator('#toolbox-trade .trade-search input')).toHaveValue('Polar Bear');
   await expect(page.locator('#hub')).not.toBeVisible();
-  await expect(page.locator('#toolbox-foundation .trade-search input')).toHaveValue('ecto');
+  await expect(page.locator('#toolbox-foundation .trade-search input')).toHaveValue('Polar Bear');
   await expect(page.getByRole('dialog', { name: 'Hub', exact: true })).not.toBeVisible();
 });
 

@@ -211,9 +211,12 @@ shared tokens; local palette literals are not allowed.
   It is non-modal at wide widths and an in-window sheet when narrow. Its entry
   and exit share the right edge, focus returns to its trigger, and reduced
   motion replaces translation with a brief cross-fade.
-- Reveal compact save and follow actions on ledger-row hover or keyboard focus;
-  keep them visible for touch input. Keep Whisper seller visible in the bottom inspector. Put save, follow, copy,
-  and source commands under Actions. Escape and Command-Backspace close Actions,
+- Reveal compact save and follow actions on ledger-row hover; keep them visible
+  for touch input. Keep **Whisper** and **Show listings**, named for the selected
+  author, visible in the bottom inspector; while a ledger row has focus they show
+  Return and Command-Return. Actions (Command-J) is a menu over the ledger that
+  repeats both and adds save, follow, copy and source commands; opening it and
+  its feedback move no control. Escape and Command-Backspace close Actions,
   then the Saved drawer, then Trader prices, the narrow offer sheet or a
   player's listings, before Escape hides Trade; Command-Backspace does nothing
   at the listings. The message remains the visual focus.
@@ -324,9 +327,10 @@ Team authoring keeps the roster first; Team options expands difficulty and tags,
 with the current difficulty visible in its summary.
 
 Floating Trade keeps connection state beside result counts. Common filters share
-a row when width permits. Secondary actions expand inside the inspector without
-replacing the ledger. Opening a seller's Whisper leaves the Trade query and
-selected offer intact. Floating windows share visual and keyboard stacking.
+a row when width permits. Secondary actions open in a menu anchored to the
+inspector's Actions, over the ledger. Opening a seller's Whisper leaves the Trade query and
+selected offer intact, and closing it returns the keyboard to the row or button
+that opened it. Floating windows share visual and keyboard stacking.
 Escape closes an expanded Actions menu before its window. In the Whispers
 picker, Escape clears typed text before it hides the window, and Up/Down walk
 the listed conversations, friends and recent people while focus stays in the

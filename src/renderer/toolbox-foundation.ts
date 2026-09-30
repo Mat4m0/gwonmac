@@ -12,16 +12,14 @@ type ToolboxState = ToolboxObservation;
 
 const OVERLAY_CSS = `
 #toolbox-foundation {
-  position: fixed;
-  inset: 0;
-  z-index: auto;
-  box-sizing: border-box;
+  /* No box and no stacking context: each tool host stacks at the root, beside Whispers (HUB-108). */
+  display: contents;
   pointer-events: none;
   color: #e8e4d8;
   font: 12px/1.45 -apple-system, "SF Pro Text", "Segoe UI", sans-serif;
 }
 #toolbox-foundation > [data-role] {
-  position: absolute;
+  position: fixed;
   inset: 0;
   pointer-events: none;
 }
@@ -92,9 +90,11 @@ export function createToolboxFoundation(
   let disposed = false;
   let active: Slot | null = null;
   let focusFrame: number | undefined;
+  let pendingFocus: Slot | null = null;
   const cancelPendingFocus = () => {
     if (focusFrame !== undefined) cancelAnimationFrame(focusFrame);
     focusFrame = undefined;
+    pendingFocus = null;
   };
   window.addEventListener("keydown", cancelPendingFocus, true);
   window.addEventListener("pointerdown", cancelPendingFocus, true);
@@ -156,6 +156,10 @@ export function createToolboxFoundation(
         mounted?.setVisible(slot.visible);
         mounted?.setActive?.(active === slot);
         if (slot.name === "builds") mounted?.update(state);
+        if (pendingFocus === slot) {
+          if (mounted) focusFloating(slot);
+          else pendingFocus = null;
+        }
       });
   };
 
@@ -192,12 +196,23 @@ export function createToolboxFoundation(
   const openFloating = (slot: Slot) => {
     window.gwHub?.suspend();
     setOpen(slot, true); activate(slot);
-    // A later surface change or user input owns focus over this deferred handoff.
+    // Keep the request through lazy mounting; a later press or surface change cancels it.
+    pendingFocus = slot;
+    focusFloating(slot);
+  };
+  function focusFloating(slot: Slot) {
+    if (focusFrame !== undefined) cancelAnimationFrame(focusFrame);
     focusFrame = requestAnimationFrame(() => {
       focusFrame = undefined;
-      if (!disposed && slot.visible && active === slot) [...slot.host.querySelectorAll<HTMLInputElement>('input')].find(input => !input.disabled && input.getClientRects().length)?.focus();
+      if (pendingFocus !== slot || disposed || !slot.visible || active !== slot) return;
+      const input = [...slot.host.querySelectorAll<HTMLInputElement>('input')]
+        .find(input => !input.disabled && input.getClientRects().length);
+      if (input) {
+        pendingFocus = null;
+        input.focus();
+      }
     });
-  };
+  }
   const onBuildsCommand = (event: Event) => {
     if (!availability.builds) return;
     event.preventDefault();

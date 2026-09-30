@@ -602,14 +602,28 @@ test.fixme('a disabled tool shortcut never hands its letter to the game', async 
 });
 
 // D-12 (KEY-35): never claim Tab while the game canvas has focus, even with a popout open.
-test('Tab reaches the game while Trade is open and the canvas has focus', async () => {
+test('Trade focuses search on its shortcut, keeps slash inside its controls, and leaves game chat and Tab with the canvas', async () => {
   const fixture = await launch({ tradeChat: true });
   try {
     const { page } = fixture;
     const trade = page.locator('#toolbox-trade .trade-window');
     await chord(fixture, 'K', ['meta']);
     await expect(trade).toBeVisible();
+    const search = trade.getByRole('searchbox', { name: 'Search offers or character names' });
+    await expect(search).toBeFocused();
+    await trade.getByRole('button', { name: /Saved 0/u }).focus();
+    await clearCanvasKeys(page);
+    await page.keyboard.press('/');
+    await expect(search).toBeFocused();
+    await expect(search).toHaveValue('');
+    expect(await canvasKeysFor(page, 'Slash')).toEqual([]);
     await page.evaluate(() => document.getElementById('canvas')?.focus());
+    await clearCanvasKeys(page);
+    await page.keyboard.press('/');
+    await page.keyboard.type('w1');
+    expect(await canvasKeysFor(page, 'Slash')).toEqual(['keydown:Slash', 'keyup:Slash']);
+    expect(await isDomActiveElement(page.locator('#canvas'))).toBe(true);
+    await expect(search).toHaveValue('');
     await clearCanvasKeys(page);
     await page.keyboard.press('Tab');
     await page.keyboard.press('Space');

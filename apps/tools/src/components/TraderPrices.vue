@@ -188,21 +188,62 @@ function selectCategory(next: TraderPriceCategory): void {
   catalogue.value?.scrollTo({ top: 0 });
 }
 
-function selectItem(item: TraderItem): void {
+/** Opens an item: at narrow widths its detail replaces the catalogue, and a keyboard in Trader prices follows it. */
+function openItem(item: TraderItem): void {
+  const owned = pricesRoot.value?.contains(document.activeElement) ?? false;
   selectedId.value = item.modelId;
   mobileDetail.value = true;
   void nextTick(() => pricesRoot.value?.scrollIntoView({ block: "nearest" }));
+  if (owned) focusSelection(item);
 }
 
-/** The shared list move over the visible items; the ends hold. */
-function moveSelection(step: number): void {
+/** Back from a narrow item detail to the catalogue, with a keyboard in Trader prices on the item's row. */
+function closeItem(): void {
+  const owned = pricesRoot.value?.contains(document.activeElement) ?? false;
+  mobileDetail.value = false;
+  if (owned && selected.value) focusSelection(selected.value);
+}
+
+/**
+ * The shared list move over the visible items; the ends hold. From the catalogue the
+ * keyboard follows the selected row; the detail's Previous and Next keep their place.
+ */
+function moveSelection(step: number, followRow = true): void {
   const items = visibleItems.value;
   const next = items[listIndexAfter(selectedIndex.value, items.length, step)];
   if (!next) return;
-  selectItem(next);
-  void nextTick(() => pricesRoot.value
-    ?.querySelector<HTMLElement>(`[data-trader-id="${next.modelId}"]`)
-    ?.focus());
+  selectedId.value = next.modelId;
+  if (followRow) focusSelection(next);
+}
+
+/**
+ * The item search reaches the catalogue (HUB-230): ↓ ⌃N and PgDn move the keyboard to
+ * the selected item, and ↵ picks the first match; the other keys edit the text.
+ */
+function onSearchKeydown(event: KeyboardEvent): void {
+  if (event.isComposing) return;
+  if (event.key === "Enter" && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
+    event.preventDefault();
+    const first = visibleItems.value[0];
+    if (event.repeat || !first) return;
+    openItem(first);
+    return;
+  }
+  const step = listKeyStep(event, 1);
+  if (step === null || step <= 0 || step === Infinity) return;
+  event.preventDefault();
+  if (selected.value) focusSelection(selected.value);
+}
+
+/**
+ * The keyboard follows the selection: to its row, or at narrow widths, where the
+ * item detail replaces the catalogue, to that detail.
+ */
+function focusSelection(item: TraderItem): void {
+  void nextTick(() => {
+    const row = pricesRoot.value?.querySelector<HTMLElement>(`[data-trader-id="${item.modelId}"]`);
+    (row?.getClientRects().length ? row : pricesRoot.value?.querySelector<HTMLElement>(".trader-price-detail"))?.focus();
+  });
 }
 
 function onCatalogueKeydown(event: KeyboardEvent): void {
@@ -240,7 +281,7 @@ function relativeAge(timestamp: number): string {
       </div>
       <label class="ui-input-group trader-item-search">
         <span class="ui-sr-only">Search trader items</span>
-        <input v-model="query" type="search" maxlength="80" placeholder="Search trader items">
+        <input v-model="query" type="search" maxlength="80" placeholder="Search trader items" @keydown="onSearchKeydown">
       </label>
       <span class="trader-updated" :data-stale="quotes && now - quotes.updatedAt > 15 * 60_000 ? '' : undefined">
         {{ updatedLabel }}
@@ -290,7 +331,7 @@ function relativeAge(timestamp: number): string {
             :data-trader-id="item.modelId"
             :aria-selected="selected?.modelId === item.modelId"
             :tabindex="selected?.modelId === item.modelId ? 0 : -1"
-            @click="selectItem(item)"
+            @click="openItem(item)"
           >
             <span class="trader-item-name">
               <TraderItemIcon :item="item" />
@@ -302,8 +343,8 @@ function relativeAge(timestamp: number): string {
         </div>
       </section>
 
-      <section v-if="selected" class="trader-price-detail ui-well" :aria-label="`${selected.name} price history`">
-        <button type="button" class="ui-button trader-mobile-back" @click="mobileDetail = false">← Back to prices</button>
+      <section v-if="selected" class="trader-price-detail ui-well" tabindex="-1" :aria-label="`${selected.name} price history`">
+        <button type="button" class="ui-button trader-mobile-back" @click="closeItem">← Back to prices</button>
         <header class="trader-price-detail-head">
           <TraderItemIcon :item="selected" size="large" />
           <div>
@@ -311,10 +352,10 @@ function relativeAge(timestamp: number): string {
             <span>{{ CATEGORY_LABELS[selected.category] }} · Kamadan trader</span>
           </div>
           <div class="trader-item-navigation">
-            <button class="ui-button" data-icon type="button" aria-label="Previous item" :disabled="selectedIndex <= 0" @click="moveSelection(-1)">
+            <button class="ui-button" data-icon type="button" aria-label="Previous item" :disabled="selectedIndex <= 0" @click="moveSelection(-1, false)">
               <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m10 3-5 5 5 5"/></svg>
             </button>
-            <button class="ui-button" data-icon type="button" aria-label="Next item" :disabled="selectedIndex >= visibleItems.length - 1" @click="moveSelection(1)">
+            <button class="ui-button" data-icon type="button" aria-label="Next item" :disabled="selectedIndex >= visibleItems.length - 1" @click="moveSelection(1, false)">
               <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>
             </button>
           </div>

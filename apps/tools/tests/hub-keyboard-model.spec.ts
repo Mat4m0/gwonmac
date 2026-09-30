@@ -381,18 +381,18 @@ test('Trade: Escape and ⌘⌫ leave the Saved drawer, the Actions menu and Trad
   await page.keyboard.press('Escape');
   await expect(drawer).toHaveCount(0);
   await expect(trade).toBeVisible();
-  // A mouse-opened menu closes on Escape even while the game keeps the keyboard,
-  // and the keyboard stays with the game: Trade is non-activating.
+  // Opening Actions by mouse enters the same keyboard menu as ⌘J.
+  // Escape returns to its trigger without closing Trade.
   const canvas = page.locator('#canvas');
   const menu = trade.locator('.offer-actions');
   await canvas.focus();
   await menu.locator('summary').click();
   await expect(menu).toHaveAttribute('open', '');
-  await expect(canvas).toBeFocused();
+  await expect(menu.getByRole('menuitem').first()).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(menu).not.toHaveAttribute('open', '');
   await expect(trade).toBeVisible();
-  await expect(canvas).toBeFocused();
+  await expect(menu.locator('summary')).toBeFocused();
   // The drawer takes focus when it opens; once the player clicks back into the game, Escape leaves it there.
   await trade.getByRole('button', { name: /Saved/ }).click();
   await expect(drawer).toBeVisible();
@@ -434,13 +434,26 @@ test('Trade: Escape and ⌘⌫ leave the Saved drawer, the Actions menu and Trad
   await expect(trade).toBeVisible();
 });
 
-test('the Trade ledger moves with the shared list keys (HUB-044)', async ({ page }) => {
+test('the Trade ledger moves with the shared list keys (HUB-044), from search and back (HUB-024, HUB-121)', async ({ page }) => {
   await openHub(page);
   await page.keyboard.press('Escape');
   await page.keyboard.press('Meta+k');
   const trade = page.getByRole('dialog', { name: 'Trade Chat' });
-  const rows = trade.locator('.trade-list [data-timestamp]');
-  await rows.first().focus();
+  const search = trade.getByRole('searchbox', { name: 'Search offers or character names' });
+  const rows = trade.getByRole('listbox', { name: 'Trade offers' }).getByRole('option');
+  await expect(search).toBeFocused();
+  await search.fill('arms');
+  // ↓ from search enters the ledger at the selected row; the query stays.
+  await page.keyboard.press('ArrowDown');
+  await expect(rows.first()).toBeFocused();
+  await expect(rows.first()).toHaveAttribute('aria-selected', 'true');
+  await expect(search).toHaveValue('arms');
+  // ↑ on the first row returns to search.
+  await page.keyboard.press('ArrowUp');
+  await expect(search).toBeFocused();
+  await search.fill('');
+  await page.keyboard.press('Control+n');
+  await expect(rows.first()).toBeFocused();
   await page.keyboard.press('End');
   await expect(rows.last()).toBeFocused();
   await page.keyboard.press('ArrowDown');
@@ -449,4 +462,15 @@ test('the Trade ledger moves with the shared list keys (HUB-044)', async ({ page
   await expect(rows.first()).toBeFocused();
   await page.keyboard.press('Control+n');
   await expect(rows.nth(1)).toBeFocused();
+  // The move steps from the focused row, not from an older selection.
+  await rows.nth(3).focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(rows.nth(4)).toBeFocused();
+  await expect(rows.nth(4)).toHaveAttribute('aria-selected', 'true');
+  // Typing on a row writes into the search, first key included.
+  await page.keyboard.type('choc');
+  await expect(search).toBeFocused();
+  await expect(search).toHaveValue('choc');
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toHaveAccessibleName(/^Acolyte Mira: /u);
 });

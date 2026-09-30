@@ -220,7 +220,9 @@ export function installSurfaceController(
     const last = elements.at(-1)!;
     if (!surface.root.contains(active)) {
       claim(event);
-      (event.shiftKey ? last : first).focus({ preventScroll: true });
+      // A surface may name where Tab enters it, such as Trade's search (HUB-225).
+      const entry = surface.root.querySelector("[data-surface-entry]");
+      (event.shiftKey ? last : entry && focusable(entry) ? entry : first).focus({ preventScroll: true });
     } else if (event.shiftKey && active === first) {
       claim(event);
       last.focus({ preventScroll: true });

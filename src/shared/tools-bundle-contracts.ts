@@ -62,7 +62,6 @@ export type TradeChatHandle = Readonly<{
   show: () => void;
   hide: () => void;
   toggle: () => void;
-  setActive: (active: boolean) => void;
   dispose: () => void;
 }>;
 

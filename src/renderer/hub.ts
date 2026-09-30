@@ -521,7 +521,8 @@ export function createHub(parent: HTMLElement) {
     const previousRows = rows;
     const tradeQuery = parseHubQuery(input.value);
     const tradeRows: HubRow[] = tradeQuery.scope === "trade" && tradeQuery.term && window.gwToolsSettings?.().gwonmacTools && window.gwToolsSettings?.().tradeChat
-      ? [{ id: "trade-query", title: `Search Trade for ${tradeQuery.term}`, detail: "Kamadan listings", group: "Tools", action: "Search Trade", run: () => dispatch("gw:trade-toggle", { query: tradeQuery.term }) }] : [];
+      // The player's own words, in the market Trade has open; `trade:` gives the row Trade's icon (HUB-124).
+      ? [{ id: "trade:query", title: `Search Trade for ${tradeQuery.text}`, detail: "Offers and character names", group: "Tools", action: "Search Trade", run: () => dispatch("gw:trade-toggle", { query: tradeQuery.text }) }] : [];
     const extra = scope ? scope.rows() : [...sources.keys()].filter(sourceEnabled).flatMap(source => source.search(input.value)).concat(tradeRows);
     const parsed = parseHubQuery(input.value);
     // A phrase saved before its words joined the grammar stays stored but no longer matches.

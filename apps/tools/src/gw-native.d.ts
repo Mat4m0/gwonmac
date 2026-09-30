@@ -25,6 +25,8 @@ declare global {
     gwFixtureActions?: readonly string[];
     /** Hub fixture only: renames the saved account "Second" for every later read. */
     gwFixtureAccounts?: Readonly<{ renameSecond(name: string): void }>;
+    /** Hub fixture only: the named seller re-posts, replacing their newest Trade message. */
+    gwTradeFixture?: Readonly<{ repost(sender: string, message: string): void }>;
   }
 }
 
