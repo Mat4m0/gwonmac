@@ -240,9 +240,45 @@ test('the phrase editor refuses a new phrase that starts with a scope word', asy
   await page.getByRole('menuitem', { name: /Set search phrase/ }).click();
   const phrase = page.getByRole('textbox', { name: 'Search phrase', exact: true });
   await phrase.fill('invite x'); await phrase.press('Enter');
-  await expect(page.locator('.hub-view [role="status"]')).toHaveText('Choose a unique phrase. Command words are reserved.');
+  await expect(page.getByRole('alert')).toHaveText('“invite x” starts with the command word “invite”. Choose another phrase.');
   await phrase.fill('gom night'); await phrase.press('Enter');
-  await expect(page.locator('.hub-view [role="status"]')).toHaveText('Saved');
+  // A saved phrase returns to the page that asked and says what it now finds (HUB-152).
+  await expect(page.locator('.hub-caption')).toHaveText('Home');
+  await expect(page.locator('#hub .hub-status')).toHaveText('“gom night” now finds GOM AFK.');
+});
+
+test('the phrase form stacks its label, names its error, submits with Command-Enter and keeps a draft through Esc (HUB-152)', async ({ page }) => {
+  await page.goto('/?hub');
+  const search = page.getByRole('combobox', { name: searchName });
+  const openForm = async () => {
+    await search.fill('team gom afk');
+    await page.keyboard.press('Meta+j');
+    await page.getByRole('menuitem', { name: /Set search phrase/ }).click();
+  };
+  await openForm();
+  const phrase = page.getByRole('textbox', { name: 'Search phrase', exact: true });
+  await expect(phrase).toBeFocused();
+  const label = await page.locator('.hub-view label').boundingBox(); const field = await phrase.boundingBox();
+  expect(label!.y + label!.height).toBeLessThanOrEqual(field!.y);
+  await expect(phrase).toHaveAccessibleDescription(/Type this exact phrase in Hub to find GOM AFK/);
+  // Esc leaves the form; the draft is still there when the player comes back.
+  await phrase.fill('keep me'); await phrase.press('Escape');
+  await expect(page.locator('.hub-caption')).toHaveText('Home');
+  await openForm();
+  await expect(phrase).toHaveValue('keep me');
+  await phrase.fill('invite x'); await phrase.press('Meta+Enter');
+  await expect(phrase).toHaveAttribute('aria-invalid', 'true');
+  await expect(phrase).toHaveAccessibleDescription(/^“invite x” starts with the command word “invite”\. Choose another phrase\./);
+  await expect(phrase).toBeFocused();
+  // Typing clears the error; Command-Enter saves from the field and returns.
+  await phrase.fill('gom evening');
+  await expect(phrase).not.toHaveAttribute('aria-invalid', 'true');
+  await expect(page.getByRole('alert')).toBeHidden();
+  await phrase.press('Meta+Enter');
+  await expect(page.locator('.hub-caption')).toHaveText('Home');
+  await expect(page.locator('#hub .hub-status')).toHaveText('“gom evening” now finds GOM AFK.');
+  await search.fill('gom evening');
+  await expect(page.locator('#hub .hub-row').first()).toHaveAttribute('data-id', /^team:/);
 });
 
 test('a bare travel scope in an explorable area selects Browse travel, so Enter never leaves the area', async ({ page }) => {

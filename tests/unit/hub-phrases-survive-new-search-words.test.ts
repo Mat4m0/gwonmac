@@ -72,9 +72,12 @@ test("stored phrases are refused only for shape, id, length and uniqueness", () 
   ]) assert.equal(isHubShortcuts(invalid), false, JSON.stringify(invalid).slice(0, 80));
 });
 
-test("the phrase editor still refuses a new phrase that the grammar reads first", () => {
-  for (const phrase of ["invite x", "Invite", "acc second", "team gom afk", "ecto", "1p in g", "1 p in g", "10e in p", "2+2"]) {
-    assert.equal(hubPhraseReserved(phrase), true, phrase);
-  }
-  for (const phrase of ["", "my route", "inviter", "romi", "ranger"]) assert.equal(hubPhraseReserved(phrase), false, phrase);
+test("the phrase editor still refuses a new phrase that the grammar reads first, and says how it reads it", () => {
+  const reads = {
+    "invite x": "command", "Invite": "command", "acc second": "command", "team gom afk": "command",
+    "ecto": "unit", "P": "unit",
+    "1p in g": "calculation", "1 p in g": "calculation", "10e in p": "calculation", "2+2": "calculation",
+    "": null, "my route": null, "inviter": null, "romi": null, "ranger": null,
+  };
+  for (const [phrase, reading] of Object.entries(reads)) assert.equal(hubPhraseReserved(phrase), reading, phrase);
 });

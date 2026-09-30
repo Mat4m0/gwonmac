@@ -220,7 +220,7 @@ test('a saved search phrase and pin survive reload and resolve the original item
   await page.getByRole('menuitem', { name: /Set search phrase/ }).click();
   await page.getByRole('textbox', { name: 'Search phrase' }).fill('evening team');
   await page.getByRole('button', { name: 'Save phrase' }).click();
-  await expect(page.getByRole('status')).toHaveText('Saved');
+  await expect(page.locator('#hub .hub-status')).toHaveText('“evening team” now finds GOM AFK.');
   await page.reload();
   await expect(page.locator('#hub').getByRole('option', { name: /GOM AFK/ })).toBeVisible();
   await search.fill('evening team');

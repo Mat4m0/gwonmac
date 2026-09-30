@@ -235,7 +235,7 @@ export function createHub(parent: HTMLElement) {
       ...(settings?.characterSwitchEnabled ? [{ id: 'character', title: 'Switch Character', detail: 'Choose another character', keywords: 'relog profession', group: 'Tools', action: 'Choose character', navigate: () => dispatch('gw:character-toggle'), run: () => dispatch('gw:character-toggle') }] : []),
       ...tool('storage', 'Open Xunlai Storage', 'Open your storage chest', 'chest bank', settings?.gwonmacTools && settings.xunlaiStorage, 'gw:storage-open'),
       ...(settings?.gwonmacTools && settings.cartographyEnabled ? [{ id: 'maps', title: 'Maps', detail: 'Exploration grid, walkable terrain and compass ranges', keywords: 'grid terrain compass opacity', group: 'Tools', action: 'Adjust maps', run: () => openHubMaps(presenter) }] : []),
-      { id: 'hub-preferences', title: 'Hub preferences', detail: 'Pins and exact search phrases', keywords: 'aliases vocabulary', group: 'Commands', action: 'Adjust Hub', run: () => manageHubShortcuts(presenter, shortcuts, lookup, saveShortcuts, hubWindow.reset) },
+      { id: 'hub-preferences', title: 'Hub preferences', detail: 'Pins and exact search phrases', keywords: 'aliases vocabulary', group: 'Commands', action: 'Adjust Hub', run: () => manageHubShortcuts(presenter, shortcutStore, hubWindow.reset) },
       { id: 'settings', title: 'Settings', detail: 'Game, appearance, tools, shortcuts and maps', keywords: 'preferences graphics appearance hotkeys', group: 'Commands', action: 'Open Settings', run: () => openSettings() },
       { id: 'launcher', title: 'Show Launcher', detail: 'Accounts, updates and game files', keywords: 'launcher administration', group: 'Commands', action: 'Show Launcher', run: async () => { await window.gwNative.app.showLauncher(); close(); } },
       { id: 'commands', title: 'Commands', detail: 'Examples you can edit and run', keywords: 'help guide examples', group: 'Commands', action: 'Browse examples', run: () => presenter.showRows('Commands', commandExamples) },
@@ -255,6 +255,7 @@ export function createHub(parent: HTMLElement) {
   const shortcuts = () => [...(window.gwToolsSettings?.().hubShortcuts ?? []), ...[...sources.keys()].filter(sourceEnabled).flatMap(source => source.shortcuts?.get() ?? [])];
   const lookup = (id: string): HubRow | undefined => [...sources.keys()].filter(sourceEnabled).map(source => source.lookup?.(id)).find(Boolean)
     ?? commands().find(row => row.id === id);
+  const shortcutStore = { get: () => shortcuts(), lookup, save: saveShortcuts };
   async function saveShortcuts(value: readonly HubShortcut[]) {
     if (!isHubShortcuts(value)) throw new Error('Invalid Hub shortcuts');
     const privateEntries = value.filter(entry => /^(build|team):/u.test(entry.id));
@@ -845,6 +846,11 @@ export function createHub(parent: HTMLElement) {
     if (!event.defaultPrevented && field && event.target instanceof HTMLElement && event.target !== field && !event.target.isContentEditable
       && !event.target.matches('input,textarea,select') && !event.target.closest('[data-hub-form]')
       && !(event.key === ' ' && event.target.matches('button,summary')) && resumeSearchInput(event, field)) return;
+    // ⌘↵ submits a form from any of its fields: the view's named primary, as Enter in a text field (HUB-152).
+    if (event.key === 'Enter' && event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && !event.defaultPrevented && !event.isComposing
+      && viewFooter?.primary && event.target instanceof HTMLElement && content.contains(event.target) && event.target.closest('form')) {
+      event.preventDefault(); if (!event.repeat) void runViewAction(viewFooter.primary, event); return;
+    }
     if (event.defaultPrevented || event.isComposing || event.metaKey || event.ctrlKey || event.altKey) return;
     const target = event.target instanceof HTMLElement ? event.target : null;
     if (!target || target === required<HTMLElement>('.hub-resize')) return;
@@ -917,7 +923,7 @@ export function createHub(parent: HTMLElement) {
         try { await saveShortcuts([...entries.filter(entry => entry.id !== row.id), { id: row.id, phrase: old?.phrase ?? '', pinned: !old?.pinned }]); report(pinned ? `Unpinned ${row.title}.` : `Pinned ${row.title}.`); }
         catch { report('Could not update the pin. Try again.', true); }
       } });
-      entries.push({ label: 'Set search phrase…', section: 'Personalize', run: () => editHubShortcut(presenter, row, shortcuts, saveShortcuts) });
+      entries.push({ label: 'Set search phrase…', section: 'Personalize', run: () => editHubShortcut(presenter, row, shortcutStore) });
     }
     return entries;
   }
