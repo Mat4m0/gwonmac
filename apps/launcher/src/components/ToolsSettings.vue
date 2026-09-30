@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { CHARACTER_DETAILS, CHAT_FILTERS } from "@shared/setting-copy";
 import { DEFAULT_ALCOHOL_TIMER_POSITION } from "@shared/alcohol-timer";
 import { computed, ref } from "vue";
 import { GLOBAL_TOOLS, type GlobalTool, type LauncherNativeApi, type LauncherSettingsPatch, type LauncherSnapshot } from "@shared/launcher-contracts";
@@ -12,16 +13,6 @@ const props = defineProps<{ snapshot: LauncherSnapshot; api?: LauncherNativeApi 
 const emit = defineEmits<{ maps: [] }>();
 const message = ref("");
 const hasActiveGames = computed(() => props.snapshot.profiles.some(profile => profile.state !== "ready" && profile.state !== "failed"));
-const characterDetails = [
-  { key: "characterSwitchProfession", label: "Show profession" },
-  { key: "characterSwitchLevel", label: "Show level" },
-  { key: "characterSwitchLocation", label: "Show location" },
-] as const;
-const chatFilterDetails = [
-  { key: "chatFilterAllyDrops", label: "Other party members' item drops" },
-  { key: "chatFilterHallOfHeroes", label: "Hall of Heroes winner announcements" },
-  { key: "chatFilterTitleAchievements", label: "Player title achievements" },
-] as const;
 const enabled = (tool: GlobalTool) => props.snapshot.tools.features[tool].enabled
   && (tool === "character-switch" || props.snapshot.tools.configured);
 async function perform(action: () => Promise<unknown> | undefined, nativeSave = false) {
@@ -55,13 +46,13 @@ function customColor(value: string) {
       <template v-if="enabled(tool)">
         <details v-if="tool === 'character-switch'" class="character-details">
           <summary>Character details</summary>
-          <label v-for="detail in characterDetails" :key="detail.key"><span>{{ detail.label }}</span><input type="checkbox" :checked="snapshot.settings[detail.key]" @change="perform(() => save({ [detail.key]: ($event.target as HTMLInputElement).checked }))" /></label>
+          <label v-for="detail in CHARACTER_DETAILS" :key="detail.key"><span>{{ detail.label }}</span><input type="checkbox" :checked="snapshot.settings[detail.key]" @change="perform(() => save({ [detail.key]: ($event.target as HTMLInputElement).checked }))" /></label>
         </details>
         <div v-if="tool === 'maps'" class="feature-details"><button class="secondary" @click="emit('maps')">Customize Maps</button><p>Choose layers, styles, and shortcuts. Map shortcuts are unassigned by default.</p></div>
         <div v-if="tool === 'alcohol-timer'" class="feature-details"><button class="secondary" @click="perform(() => save({ alcoholTimerPosition: { ...snapshot.settings.alcoholTimerPosition, locked: false } }))">Adjust position</button><button class="secondary" @click="perform(() => save({ alcoholTimerPosition: DEFAULT_ALCOHOL_TIMER_POSITION }))">Reset position</button><p>Drag the timer in a game window, then select its lock. Position stays fixed to the nearest game-window corner.</p></div>
         <SkillLabelsSettings v-if="tool === 'skill-key-labels'" :bindings="snapshot.settings.skillKeyBindings" :save="save" />
         <div v-if="tool === 'chat-filters'" class="chat-filter-details">
-          <label v-for="filter in chatFilterDetails" :key="filter.key"><span>{{ filter.label }}</span><input type="checkbox" :checked="snapshot.settings[filter.key]" @change="perform(() => save({ [filter.key]: ($event.target as HTMLInputElement).checked }))" /></label>
+          <label v-for="filter in CHAT_FILTERS" :key="filter.key"><span>{{ filter.label }}</span><input type="checkbox" :checked="snapshot.settings[filter.key]" @change="perform(() => save({ [filter.key]: ($event.target as HTMLInputElement).checked }))" /></label>
         </div>
         <template v-if="tool === 'skill-cooldowns'">
           <label><span>Timer color</span><select :value="snapshot.settings.skillCooldownColor.kind === 'preset' ? snapshot.settings.skillCooldownColor.preset : 'custom'" @change="perform(() => save({ skillCooldownColor: ($event.target as HTMLSelectElement).value === 'custom' ? { kind: 'custom', value: '#e35a4f' } : { kind: 'preset', preset: ($event.target as HTMLSelectElement).value as typeof SKILL_COOLDOWN_PRESETS[number] } }))"><option v-for="preset in SKILL_COOLDOWN_PRESETS" :key="preset" :value="preset">{{ preset }}</option><option value="custom">Custom</option></select></label>
