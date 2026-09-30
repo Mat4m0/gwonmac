@@ -127,6 +127,8 @@ test.describe('a row that changes the game', () => {
   test('pressing on one row and releasing on another activates neither', async ({ page }) => {
     await open(page);
     for (const [from, to] of [['Kamadan', 'Kaineng Center'], ['Settings', 'Show Launcher']] as const) {
+      // Launcher is available through typed search, rather than empty Home (HUB-185).
+      await search(page).fill(from === 'Settings' ? 's' : '');
       const start = row(page, from); await start.scrollIntoViewIfNeeded();
       const a = (await start.boundingBox())!;
       const b = (await row(page, to).boundingBox())!;

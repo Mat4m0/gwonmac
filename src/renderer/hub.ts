@@ -113,8 +113,9 @@ export function createHub(parent: HTMLElement) {
   const focusResult = () => input.focus({ preventScroll: true });
   /** The search names what it searches, as placeholder and accessible name alike (HUB-096). */
   const nameSearch = (page: string | null) => {
-    const name = page ? `Search in ${page}…` : 'Search people, places, builds…';
-    input.placeholder = name; input.setAttribute('aria-label', name.replace('…', ''));
+    const content = page === 'Build Library' ? 'builds' : ['Heroes', 'Accounts', 'Commands'].includes(page ?? '') ? page?.toLowerCase() : null;
+    const name = content ? `Search ${content}…` : page ? `Search in ${page}…` : 'Search people, places, builds…';
+    input.placeholder = name; input.setAttribute('aria-label', name);
   };
   /** Where typing goes: the Hub search on list stages, else a list view's own search (Travel, Characters). */
   const searchField = () => !search.hidden ? input
@@ -238,10 +239,10 @@ export function createHub(parent: HTMLElement) {
       ...tool('builds', 'Build Library', 'Saved builds and teams', 'teams templates skills', settings?.gwonmacTools && settings.buildLibrary, 'gw:tools-toggle').map(row => ({ ...row, unavailable: 'Build Library is loading.' })),
       ...tool('trade', 'Trade Chat', 'Find offers and contact sellers', 'kamadan prices trading market trader', settings?.gwonmacTools && settings.tradeChat, 'gw:trade-toggle'),
       ...tool('whispers', 'Whispers', 'Conversations, friends and drafts', 'friends people message chat', settings?.gwonmacTools && settings.whispersEnabled, 'gw:whispers-toggle'),
-      ...(settings?.characterSwitchEnabled ? [{ id: 'character', title: 'Switch Character', detail: 'Choose another character', keywords: 'relog profession', group: 'Tools', action: 'Choose character', navigate: () => dispatch('gw:character-toggle'), run: () => dispatch('gw:character-toggle') }] : []),
+      ...(settings?.characterSwitchEnabled ? [{ id: 'character', title: 'Switch Character', detail: 'Choose another character', keywords: 'relog profession characters alts', group: 'Tools', action: 'Choose character', navigate: () => dispatch('gw:character-toggle'), run: () => dispatch('gw:character-toggle') }] : []),
       ...tool('storage', 'Open Xunlai Storage', 'Open your storage chest', 'chest bank', settings?.gwonmacTools && settings.xunlaiStorage, 'gw:storage-open'),
       ...(settings?.gwonmacTools && settings.cartographyEnabled ? [{ id: 'maps', title: 'Maps', detail: 'Exploration grid, walkable terrain and compass ranges', keywords: 'grid terrain compass opacity', group: 'Tools', action: 'Adjust maps', run: () => openHubMaps(presenter) }] : []),
-      { id: 'commands', title: 'Commands', detail: 'Search words, calculator examples and keys', keywords: 'help guide examples cheatsheet shortcuts keys', group: 'Commands', action: 'Browse commands', run: () => presenter.showRows('Commands', commandExamples) },
+      { id: 'commands', title: 'Commands', detail: 'Search words, calculator examples and keys', aliases: ['?'], keywords: 'help guide examples cheatsheet shortcuts keys', group: 'Commands', action: 'Browse commands', run: () => presenter.showRows('Commands', commandExamples) },
       { id: 'hub-preferences', title: 'Hub preferences', detail: 'Pins and exact search phrases', keywords: 'aliases vocabulary', group: 'Commands', action: 'Adjust Hub', run: () => manageHubShortcuts(presenter, shortcuts, lookup, saveShortcuts, hubWindow.reset) },
       { id: 'settings', title: 'Settings', detail: 'Game, appearance, tools, shortcuts and maps', keywords: 'preferences graphics appearance hotkeys', group: 'Commands', action: 'Open Settings', run: () => openSettings() },
       // Launcher and the website are for a typed search; the first screen stays on the game (HUB-185).
@@ -282,29 +283,29 @@ export function createHub(parent: HTMLElement) {
     const enabled = new Set(commands(true).map(row => row.id));
     const example = (group: string, tool: string, title: string, fill: string, detail: string) => ({ group, tool, title, fill, detail });
     const examples = [
-      example('Search', 'travel', 'travel <place>', 'travel ', 'Find an outpost by name or alias'),
-      example('Search', 'character', 'char <name>', 'char ', 'Find one of your characters'),
-      example('Search', 'builds', 'build <name or profession>', 'build ', 'Browse saved builds; build mo lists Monk builds'),
-      example('Search', 'builds', 'team <name>', 'team ', 'Find a saved team'),
-      example('Search', 'builds', 'build folder:<folder> <name>', 'build folder:', 'Builds in a folder and its subfolders; quotes keep spaces'),
-      example('Search', 'builds', 'build Mo/Me', 'build Mo/Me', 'An exact profession pair'),
-      example('Search', 'whispers', 'whisper <name>', 'whisper ', 'Write to a person; nothing is sent until you send it'),
-      example('Search', 'whispers', 'invite <name>', 'invite ', 'Invite a person to your party from an outpost'),
-      example('Search', 'trade', 'trade <item>', 'trade ', 'Find offers or a seller in Trade Chat'),
-      example('Search', '', 'acc <name>', 'acc ', 'Choose how to open a saved account'),
+      example('Places', 'travel', 'travel <place>', 'travel ', 'Find an outpost by name or alias'),
+      example('Characters', 'character', 'char <name>', 'char ', 'Find one of your characters'),
+      example('Builds', 'builds', 'build <name or profession>', 'build ', 'Browse saved builds; build mo lists Monk builds'),
+      example('Builds', 'builds', 'team <name>', 'team ', 'Find a saved team'),
+      example('Builds', 'builds', 'build folder:<folder> <name>', 'build folder:', 'Builds in a folder and its subfolders; quotes keep spaces'),
+      example('Builds', 'builds', 'build Mo/Me', 'build Mo/Me', 'An exact profession pair'),
+      example('People', 'whispers', 'whisper <name>', 'whisper ', 'Write to a person; nothing is sent until you send it'),
+      example('People', 'whispers', 'invite <name>', 'invite ', 'Invite a person to your party from an outpost'),
+      example('Trade', 'trade', 'trade <item>', 'trade ', 'Find offers or a seller in Trade Chat'),
+      example('Accounts', '', 'acc <name>', 'acc ', 'Choose how to open a saved account'),
       example('Calculate', '', '1p in g', '1p in g', 'Platinum to gold'),
       example('Calculate', 'trade', '10e in p', '10e in p', 'Ectos at recent Kamadan prices'),
       example('Calculate', '', '2 * 250 + 75', '2 * 250 + 75', 'Plain arithmetic'),
       example('Calculate', '', 'titles', 'titles', 'Plan title points'),
     ];
-    const rows: HubRow[] = examples.filter(entry => !entry.tool || enabled.has(entry.tool)).map((entry, index) => ({ id: `example:${index}`, title: entry.title, detail: entry.detail, group: entry.group, action: 'Fill search', searchQuery: entry.fill, run() {} }));
+    const rows: HubRow[] = examples.filter(entry => !entry.tool || enabled.has(entry.tool)).map((entry, index) => ({ id: `example:${index}`, title: entry.title, detail: entry.detail, group: entry.group, action: `Fill search with ${entry.title}`, searchQuery: entry.fill, run() {} }));
     // Keys: a tool's shortcut can change in Settings; the Hub's own keys are fixed.
     const bindings = resolveShortcuts(window.gwToolsSettings?.().shortcutOverrides ?? {});
     const keys = (action: ShortcutAction) => shortcutKeycaps(bindings[action]).map(cap => cap.label).join('') || 'Not set';
     const toolKeys: [string, ShortcutAction, string][] = [['travel', 'travel.open', 'Travel'], ['character', 'character.switch', 'Switch Character'], ['builds', 'tools.toggle', 'Build Library'], ['trade', 'trade.toggle', 'Trade Chat'], ['whispers', 'whispers.toggle', 'Whispers']];
-    rows.push(...toolKeys.filter(([tool]) => enabled.has(tool)).map(([tool, action, name]) => ({ id: `key:${tool}`, title: name, detail: keys(action), group: 'Keys', action: 'Change shortcut', run: () => openSettings({ section: 'Shortcuts' as const }) })));
+    rows.push(...toolKeys.filter(([tool]) => enabled.has(tool)).map(([tool, action, name]) => ({ id: `key:${tool}`, title: name, detail: keys(action), group: 'Keys & shortcuts', action: 'Change shortcut', run: () => openSettings({ section: 'Shortcuts' as const }) })));
     for (const [id, name, detail] of [['actions', 'Actions for the selected row', '⌘J'], ['back', 'Back', '⌘⌫'], ['escape', 'Clear, back, then close', 'Esc'], ['open', 'Open a row with a page', '→']] as const)
-      rows.push({ id: `key:${id}`, title: name, detail, group: 'Keys', action: 'Fixed key', unavailable: 'The Hub’s own keys do not change.', run() {} });
+      rows.push({ id: `key:${id}`, title: name, detail, group: 'Keys & shortcuts', action: 'Fixed key', unavailable: 'The Hub’s own keys do not change.', run() {} });
     return rows;
   }
   /** Settings, optionally at one section with one control focused (search, the memory warning). */
@@ -543,7 +544,7 @@ export function createHub(parent: HTMLElement) {
     const query = parseHubQuery(input.value);
     const scopeLabel = required<HTMLElement>('.hub-scope');
     scopeLabel.textContent = query.scope ?? '';
-    scopeLabel.hidden = !!scope || !query.scope || !!disposeView;
+    scopeLabel.hidden = !!scope || !query.scope || !!disposeView || commands(true).some(row => normaliseHubQuery(row.title) === normaliseHubQuery(input.value));
     // The page title leads, so a screen reader that lands in search after Back hears where it is.
     input.setAttribute('aria-description', `${currentTitle}: ${scope ? 'search actions' : query.scope ? `search ${query.scope}` : 'search tools or use a command example'}`);
     const hint = required<HTMLElement>('.hub-hint');
@@ -558,7 +559,7 @@ export function createHub(parent: HTMLElement) {
     const previousRows = rows;
     const tradeQuery = parseHubQuery(input.value);
     const tradeRows: HubRow[] = tradeQuery.scope === "trade" && tradeQuery.term && window.gwToolsSettings?.().gwonmacTools && window.gwToolsSettings?.().tradeChat
-      ? [{ id: "trade-query", title: `Search Trade for ${tradeQuery.term}`, detail: "Kamadan listings", group: "Tools", action: "Search Trade", run: () => dispatch("gw:trade-toggle", { query: tradeQuery.term }) }] : [];
+      ? [{ id: "trade-query", title: `Search Trade for ${tradeQuery.term}`, detail: "Kamadan listings", group: "Tools", action: `Search Trade for ${tradeQuery.term}`, run: () => dispatch("gw:trade-toggle", { query: tradeQuery.term }) }] : [];
     const extra = scope ? scope.rows() : [...sources.keys()].filter(sourceEnabled).flatMap(source => source.search(input.value)).concat(tradeRows);
     const parsed = parseHubQuery(input.value);
     // A phrase saved before its words joined the grammar stays stored but no longer matches.
@@ -575,7 +576,7 @@ export function createHub(parent: HTMLElement) {
     const tierOf = (row: HubRow) => phraseIds.has(row.id) ? -1 : row.conversion || row.group === 'Calculator' ? 0 : hubTier(row, parsed.term) ?? 3;
     const best = new Map<string, number>();
     if (ranked) for (const row of rows) best.set(row.group, Math.min(best.get(row.group) ?? Infinity, tierOf(row)));
-    const groups = ["Pinned", "Calculator", "Teams", "Folders", "Builds", "Targets", "Current build", "Accounts", "Characters", "In your party", "Unlocked heroes", "Heroes", "People", "Places", "Continue", "Tools", "Commands", "Settings", "Sources"];
+    const groups = ["Pinned", "Calculator", "Teams", "Folders", "Builds", "Targets", "Current build", "Accounts", "Characters", "In your party", "Unlocked heroes", "Heroes", "People", "Places", "Continue", "Tools", "Commands", "Settings", "Sources", "Trade", "Calculate", "Keys & shortcuts"];
     const groupIndex = (group: string) => { const index = groups.indexOf(group); return index < 0 ? groups.length : index; };
     // Keep everyday game actions ahead of account management, independent of provider order.
     const tools = ['travel', 'character', 'whispers', 'builds', 'trade', 'storage', 'maps', 'accounts'];
@@ -654,7 +655,7 @@ export function createHub(parent: HTMLElement) {
     // is their own name for one row and always wins. Pins on an empty Home are no tie (HUB-060).
     // A query that is a row's whole name, `trade chat` included, answers with that row (HUB-008).
     const phraseHit = rows.find(row => phraseIds.has(row.id)) ?? (parsed.scope ? rows.find(row => normaliseHubQuery(row.title) === normaliseHubQuery(input.value)) : undefined);
-    const exactCount = parsed.term ? rows.filter(row => normaliseHubQuery(row.title) === parsed.term).length : 0;
+    const exactCount = parsed.term ? rows.filter(row => hubTier(row, parsed.term) === 0).length : 0;
     const prior = previousRows.find(row => row.id === selected);
     const revised = prior && rows.find(row => row.id === selected)?.preview !== prior.preview;
     // A bare scope (`travel `) lists without a term, so nothing in it is an explicit result:
@@ -713,7 +714,7 @@ export function createHub(parent: HTMLElement) {
     const mine = { session, label: row.pending?.label ?? row.action, again: row.pending?.again ?? `${row.action} is still running.` };
     running = mine; select(selected); report(''); if (row.pending) task.progress(row.pending.label);
     try {
-      if(row.searchQuery!==undefined){remember();resetView();scope=null;caption.textContent='Home';input.value=row.searchQuery;refresh(true);input.focus();input.select();}
+      if(row.searchQuery!==undefined){remember();resetView();scope=null;caption.textContent='Home';input.value=row.searchQuery;nameSearch(null);refresh(true);input.focus();const argument=parseHubQuery(input.value).scope?input.value.indexOf(' ')+1:0;input.setSelectionRange(argument,input.value.length);}
       else await row.run(task);
     }
     catch (error) { task.fail(error); }

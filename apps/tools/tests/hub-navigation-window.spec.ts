@@ -444,6 +444,10 @@ test('a held Command-Backspace on a person page goes back one level to the peopl
   const search = page.locator('.hub-search input');
   await search.fill('mo');
   while (await selectedRow(page).getAttribute('data-id') !== 'person:kai mo bearer') await search.press('ArrowDown');
+  // Ranking now places People first; explicitly scroll rather than assuming the selected row is below the fold.
+  await page.locator('#hub-results').hover({ position: { x: 2, y: 2 } });
+  await page.mouse.wheel(0, 400);
+  await expect.poll(() => page.locator('#hub-results').evaluate(list => list.scrollTop)).toBeGreaterThan(0);
   const scroll = await page.locator('#hub-results').evaluate(list => list.scrollTop);
   expect(scroll).toBeGreaterThan(0);
   await search.press('Enter');

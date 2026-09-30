@@ -105,9 +105,9 @@ test('a setting is found by its words, changes in game, follows the launcher, an
 test('a scoped list names what its search searches, as placeholder and accessible name (HUB-096)', async ({ page }) => {
   await page.goto('/?hub');
   const search = page.locator('.hub-search input');
-  await expect(search).toHaveAccessibleName('Search people, places, builds');
+  await expect(search).toHaveAccessibleName('Search people, places, builds…');
   await search.fill('build smiter'); await search.press('Enter');
   await search.fill('hero'); await search.press('Enter');
-  await expect(search).toHaveAttribute('placeholder', 'Search in Heroes…');
-  await expect(search).toHaveAccessibleName('Search in Heroes');
+  await expect(search).toHaveAttribute('placeholder', 'Search heroes…');
+  await expect(search).toHaveAccessibleName('Search heroes…');
 });

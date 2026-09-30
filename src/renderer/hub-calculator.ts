@@ -68,7 +68,7 @@ export function createHubCalculator(options: {
   /** The calculator's own tools, found by their words (HUB-063). */
   function calculatorCommands(term:string):HubRow[]{
     return [
-      {id:'title:help',title:'Title calculator',detail:'Points, items needed and offer comparisons',keywords:'titles calc calculator points',group:'Commands',action:'Open calculator',searchQuery:'titles',run(){}},
+      {id:'title:help',title:'Title calculator',detail:'Points, items needed and offer comparisons',keywords:'titles calc calculator points party',group:'Commands',action:'Open calculator',searchQuery:'titles',run(){}},
       {id:'currency-rates',title:'Conversion rates',detail:manual?'Your rates':'Automatic observed prices',keywords:'rate currency exchange calc ecto platinum gold',group:'Calculator',action:'Choose rates',run:()=>editRates()},
     ].filter(row=>hubTier(row,term)!==null);
   }

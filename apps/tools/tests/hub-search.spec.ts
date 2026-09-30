@@ -75,3 +75,52 @@ test('a profession code is also the start of a word while typing (HUB-059, D-17)
   await search(page).fill('build healer dervish');
   await expect(build).toHaveCount(0);
 });
+
+
+test('Commands is findable by ? and groups its fill-only examples by job (HUB-093, HUB-094)', async ({ page }) => {
+  await open(page);
+  await search(page).fill('?');
+  await expect(primary(page)).toHaveText(/^Browse commands/);
+  await search(page).press('Enter');
+  await expect(page.locator('.hub-caption')).toHaveText('Commands');
+  await expect(search(page)).toHaveAttribute('placeholder', 'Search commands…');
+  await expect(search(page)).toHaveAccessibleName('Search commands…');
+  const groups = await page.locator('.hub-group').allTextContents();
+  expect(groups.length).toBeGreaterThanOrEqual(6);
+  expect(groups).toContain('Keys & shortcuts');
+  await page.locator('.hub-row[data-id="example:0"]').click();
+  await expect(search(page)).toHaveValue('travel ');
+  expect(await search(page).evaluate((input: HTMLInputElement) => [input.selectionStart, input.selectionEnd])).toEqual([7, 7]);
+  expect(await page.locator('#app').getAttribute('data-action')).toBeNull();
+});
+
+
+test('an exact tool title has no scope chip and scoped Trade names the query (HUB-008)', async ({ page }) => {
+  await open(page);
+  await search(page).fill('trade chat');
+  await expect(page.locator('.hub-scope')).toBeHidden();
+  await expect(primary(page)).toHaveText(/^Open Trade Chat/);
+  await search(page).fill('trade ecto');
+  await expect(page.locator('.hub-scope')).toHaveText('trade');
+  await expect(primary(page)).toHaveText(/^Search Trade for ecto/);
+});
+
+test('a Commands footer names the example it fills (HUB-094)', async ({ page }) => {
+  await open(page);
+  await search(page).fill('commands'); await search(page).press('Enter');
+  await expect(primary(page)).toHaveText(/^Fill search with build <name or profession>/);
+});
+
+
+test('an exact catalogue alias and exact build name require a choice (HUB-008)', async ({ page }) => {
+  const library = { version: 3, tags: [], teams: [], hubShortcuts: [], builds: [{ id: 'alias-tie', name: 'Toa', professions: ['Mo', null], skills: [null, null, null, null, null, null, null, null], attributes: {}, tags: [], favourite: false, parent: null, notes: '', lastUsed: null, origin: null }] };
+  await page.addInitScript(value => localStorage.setItem('hub-fixture-library', value), JSON.stringify(library));
+  await open(page);
+  await search(page).fill('toa');
+  await expect(page.locator('.hub-row')).toHaveCount(2);
+  await expect(page.locator('.hub-row[aria-selected=true]')).toHaveCount(0);
+  await expect(primary(page)).toBeDisabled();
+  await search(page).press('Enter');
+  await expect(page.locator('.hub-caption')).toHaveText('Home');
+  expect(await page.locator('#app').getAttribute('data-action')).toBeNull();
+});
