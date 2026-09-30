@@ -333,11 +333,14 @@ selector. Material names and common aliases such as iron, feathers, dust and
 obby shards use Trade's catalogue and its quoted batch quantities. Fractional
 item results are labelled Equivalent value.
 
-Use Actions to pin a result or give it an exact search phrase. A new phrase cannot
-start with a command word such as `team` or `invite`, or read as a calculation. A
-phrase saved before its first word became a command word keeps its pin but no
-longer matches. Search **Hub
-preferences** to reorder pins, remove saved actions, or reset aliases. Search `resign` for its existing
+Use Actions (Command-J) to pin a result or give it an exact search phrase, on Home
+or inside a page such as a Build Library folder. A new phrase cannot start with a
+command word such as `team` or `invite`, read as a calculation, or equal another
+result's name, such as `maps`. Command-Enter saves the phrase. A phrase saved
+before its first word became a command word keeps its pin but no longer matches.
+Search **Hub preferences** to reorder pins, remove saved actions, or remove all
+search phrases after a confirmation. Places and tools come first, then this
+account's builds and teams; each group keeps its own order. Search `resign` for its existing
 confirmation, or `reload` for the account's Quit or Reload dialog. The `reload`
 row opens the same dialog as Command-Q and never quits on its own. Call target
 has no Hub row; use its shortcut while the game has keyboard focus.

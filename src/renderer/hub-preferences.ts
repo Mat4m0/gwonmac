@@ -2,33 +2,16 @@
  * Explicit editing of the selected Hub object's search phrase and pin.
  * Keeps presentation separate from canonical game and storage owners.
  */
-import { HUB_SHORTCUT_LIMIT, isHubShortcuts, type HubShortcut } from '../shared/hub-preferences.js';
-import { HUB_SCOPES, normaliseHubQuery, type HubPresenter, type HubRow } from '../shared/hub.js';
-import { calculate, parseConversion } from '../shared/hub-calculator.js';
+import { HUB_SHORTCUT_LIMIT, isHubShortcuts, hubPhraseReserved, isLibraryHubShortcut, type HubShortcut } from '../shared/hub-preferences.js';
+import { normaliseHubQuery, type HubPresenter, type HubRow, type HubTask } from '../shared/hub.js';
 import { listIndexAfter, listKeyStep } from '../shared/ui/list-keys.js';
 
-/** First words that Hub's query grammar owns. */
-export const HUB_RESERVED_WORDS: readonly string[] = [...HUB_SCOPES, 'settings', 'hub', 'commands', 'help', 'titles', 'rates', 'launcher'];
-/** Whole phrases that the calculator reads as a unit. */
-export const HUB_CALCULATOR_UNITS: readonly string[] = ['g', 'gold', 'p', 'plat', 'platinum', 'e', 'ecto', 'ectos', 'ectoplasm'];
-/**
- * What the query grammar reads a phrase as before any saved phrase: a command word first, a
- * calculator unit, or a calculation. Only the editor asks: a stored phrase stays valid when a
- * later release adds a word and simply stops matching.
- */
-export function hubPhraseReserved(phrase: string): 'command' | 'unit' | 'calculation' | null {
-  const term = normaliseHubQuery(phrase);
-  if (!term) return null;
-  if (HUB_RESERVED_WORDS.includes(term.split(' ')[0]!)) return 'command';
-  if (HUB_CALCULATOR_UNITS.includes(term)) return 'unit';
-  try { return parseConversion(term) || calculate(term) ? 'calculation' : null; } catch { return /^\d/u.test(term) ? 'calculation' : null; }
-}
-
-/** The Hub's pins and phrases: read, resolve and save. */
+/** The Hub's pins and phrases: read, resolve, save, and the result a phrase would already find by name. */
 export type HubShortcutStore = Readonly<{
   get(): readonly HubShortcut[];
   lookup(id: string): HubRow | undefined;
   save(value: readonly HubShortcut[]): Promise<void>;
+  exactlyNamed(phrase: string, id: string): HubRow | undefined;
 }>;
 
 /** Why a phrase cannot be saved for `id`, in words that say what to do; null when it can. */
@@ -39,9 +22,11 @@ function phraseProblem(phrase: string, id: string, next: readonly HubShortcut[],
   if (reserved === 'unit') return `${quoted} is a calculator unit. Choose another phrase.`;
   if (reserved === 'calculation') return `${quoted} reads as a calculation. Choose another phrase.`;
   const saved = next.find(entry => entry.id !== id && normaliseHubQuery(entry.phrase) === phrase);
-  if (saved) return `${quoted} already finds ${store.lookup(saved.id)?.title ?? 'another result'}. Choose another phrase.`;
-  if (next.length > HUB_SHORTCUT_LIMIT) return `Hub keeps up to ${HUB_SHORTCUT_LIMIT} pins and phrases. Remove one first.`;
-  return isHubShortcuts(next) ? null : 'This phrase cannot be saved. Choose another.';
+  const named = saved ? store.lookup(saved.id) ?? { title: 'another result' } : store.exactlyNamed(phrase, id);
+  if (named) return `${quoted} already finds ${named.title}. Choose another phrase.`;
+  const owned = next.filter(entry => isLibraryHubShortcut(entry.id) === isLibraryHubShortcut(id));
+  if (owned.length > HUB_SHORTCUT_LIMIT) return `Hub keeps up to ${HUB_SHORTCUT_LIMIT} pins and phrases. Remove one first.`;
+  return isHubShortcuts(owned) ? null : 'This phrase cannot be saved. Choose another.';
 }
 
 /**
@@ -70,27 +55,29 @@ export function editHubShortcut(hub: HubPresenter<HTMLElement>, row: HubRow, sto
     };
     invalid('');
     input.addEventListener('input', () => invalid(''));
-    // The footer's "Save phrase" is the form's one submit; Enter and ⌘↵ in the field run it.
-    const submit = async () => {
+    // The Hub's named footer action owns saving and its page-session boundary.
+    const submit = async (task: HubTask) => {
       const current = store.get(); const old = current.find(entry => entry.id === row.id);
       const phrase = normaliseHubQuery(input.value);
       if (!phrase && !old?.phrase) { invalid('Type a search phrase.'); input.focus(); return; }
-      const next = [...current.filter(entry => entry.id !== row.id), ...(phrase || old?.pinned ? [{ id: row.id, phrase, pinned: old?.pinned ?? false }] : [])];
+      const edited = { id: row.id, phrase, pinned: old?.pinned ?? false };
+      const next = old ? current.flatMap(entry => entry.id !== row.id ? [entry] : phrase || old.pinned ? [edited] : []) : [...current, edited];
       const problem = phrase ? phraseProblem(phrase, row.id, next, store) : null;
       if (problem) { invalid(problem); input.focus(); return; }
       try { await store.save(next); }
-      catch { invalid('Could not save the phrase. Try again.'); input.focus(); return; }
-      back();
-      hub.notify(phrase ? `“${phrase}” now finds ${row.title}.` : `Removed the search phrase for ${row.title}.`);
+      catch {
+        if (!task.live()) throw new Error('Could not save the phrase. Try again.');
+        invalid('Could not save the phrase. Try again.'); input.focus(); return;
+      }
+      const receipt = phrase ? `“${phrase}” now finds ${row.title}.` : `Removed the search phrase for ${row.title}.`;
+      if (task.live()) { back(); hub.notify(receipt); }
+      else task.done(receipt);
     };
-    form.onsubmit = event => { event.preventDefault(); void submit(); };
+    form.onsubmit = event => event.preventDefault();
     footer.primary({ label: 'Save phrase', run: submit });
     input.focus(); return () => form.remove();
   });
 }
-
-/** Pins and phrases live in two storage owners: Build Library entries and global ones never trade places. */
-const libraryOwned = (id: string) => /^(build|team):/u.test(id);
 
 /**
  * Edit only references currently resolvable under the active feature/account rules.
@@ -135,7 +122,7 @@ export function manageHubShortcuts(hub: HubPresenter<HTMLElement>, store: HubSho
     const neighbour = (direction: -1 | 1) => {
       const visible = entries(); const index = visible.findIndex(entry => entry.id === chosen);
       const other = index < 0 ? undefined : visible[index + direction];
-      return other && libraryOwned(other.id) === libraryOwned(chosen!) ? other : undefined;
+      return other && isLibraryHubShortcut(other.id) === isLibraryHubShortcut(chosen!) ? other : undefined;
     };
     function move(direction: -1 | 1) {
       const other = neighbour(direction);
@@ -151,16 +138,17 @@ export function manageHubShortcuts(hub: HubPresenter<HTMLElement>, store: HubSho
       let group: HTMLElement | null = null;
       visible.forEach((entry, index) => {
         // Home lists places and tools first, then this account's builds and teams.
-        if (!group || libraryOwned(entry.id) !== libraryOwned(visible[index - 1]!.id)) {
+        if (!group || isLibraryHubShortcut(entry.id) !== isLibraryHubShortcut(visible[index - 1]!.id)) {
           group = doc.createElement('div'); group.className = 'hub-preference-group'; group.setAttribute('role', 'group');
           const name = doc.createElement('div'); name.className = 'hub-group'; name.setAttribute('role', 'presentation');
-          name.id = `hub-preference-group-${index}`; name.textContent = libraryOwned(entry.id) ? 'Builds and teams' : 'Places and tools';
+          name.id = `hub-preference-group-${index}`; name.textContent = isLibraryHubShortcut(entry.id) ? 'Builds and teams' : 'Places and tools';
           group.setAttribute('aria-labelledby', name.id); group.append(name); list.append(group);
         }
         const option = doc.createElement('div'); option.className = 'hub-preference-option'; option.id = `hub-preference-${index}`;
         option.setAttribute('role', 'option'); option.setAttribute('aria-selected', String(entry.id === chosen));
         option.textContent = `${title(entry)}${entry.phrase ? ` · ${entry.phrase}` : ''}${entry.pinned ? ' · Pinned' : ''}`;
         option.onclick = () => { chosen = entry.id; paint(); list.focus({ preventScroll: true }); };
+        option.oncontextmenu = event => { event.preventDefault(); chosen = entry.id; paint(); list.focus({ preventScroll: true }); footer.openActions(); };
         group.append(option);
         if (entry.id === chosen) { list.setAttribute('aria-activedescendant', option.id); option.scrollIntoView({ block: 'nearest' }); }
       });
@@ -181,7 +169,7 @@ export function manageHubShortcuts(hub: HubPresenter<HTMLElement>, store: HubSho
         const ask = doc.createElement('h2'); ask.textContent = question; page.setAttribute('aria-label', question);
         const copy = doc.createElement('p'); copy.textContent = consequence;
         page.append(ask, copy); confirmTarget.append(page);
-        confirmFooter.primary({ label, destructive: true, armed: true, run: async () => { await remove(); cancel(); hub.notify(receipt); } });
+        confirmFooter.primary({ label, destructive: true, armed: true, run: async task => { await remove(); if (task.live()) { cancel(); hub.notify(receipt); } else task.done(receipt); } });
         confirmFooter.secondary({ label: 'Keep', run: cancel });
         return () => page.remove();
       });

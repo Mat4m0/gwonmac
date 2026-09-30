@@ -13,7 +13,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { loadBuildLibrary } from "../../src/main/core/build-library.ts";
 import { loadSettings, parseSettings } from "../../src/main/core/settings.ts";
-import { HUB_CALCULATOR_UNITS, HUB_RESERVED_WORDS, hubPhraseReserved } from "../../src/renderer/hub-preferences.ts";
+import { HUB_CALCULATOR_UNITS, HUB_RESERVED_WORDS, hubPhraseReserved } from "../../src/shared/hub-preferences.ts";
 import { parseBuildLibrary } from "../../src/shared/builds/parse-library.ts";
 import { LIBRARY_VERSION } from "../../src/shared/builds/library.ts";
 import { HUB_SCOPES } from "../../src/shared/hub.ts";
@@ -80,4 +80,14 @@ test("the phrase editor still refuses a new phrase that the grammar reads first,
     "": null, "my route": null, "inviter": null, "romi": null, "ranger": null,
   };
   for (const [phrase, reading] of Object.entries(reads)) assert.equal(hubPhraseReserved(phrase), reading, phrase);
+});
+
+
+test("utility pins persist through the closed shortcut validator without accepting executable ids", () => {
+  const pins = ['commands', 'settings', 'accounts'].map(id => ({ id, phrase: '', pinned: true }));
+  assert.equal(isHubShortcuts(pins), true);
+  assert.deepEqual(parseSettings({ ...settings(''), hubShortcuts: pins }).hubShortcuts, pins);
+  for (const id of ['javascript:quit()', 'command:arbitrary', 'accounts:replace']) {
+    assert.equal(isHubShortcuts([{ id, phrase: '', pinned: true }]), false, id);
+  }
 });

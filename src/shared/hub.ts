@@ -108,10 +108,11 @@ export type HubSummary = Readonly<Pick<HubRow, 'title' | 'detail' | 'skills' | '
 export type HubViewAction = Readonly<{ label: string; run(task: HubTask): void | Promise<void>; disabled?: boolean; destructive?: boolean; armed?: boolean }>;
 /**
  * The Hub footer stays in every view and names what Enter does there. A view sets its named
- * primary (Enter outside a control) and secondary; without one the primary reads "Done" and goes
- * back. Travel and Characters keep their own footer and say so with `own()`.
+ * primary (Enter outside a control) and a secondary in Actions; without a primary it reads "Done" and goes
+ * back. A view opens the shared Actions menu for its selected item with `openActions()`.
+ * Legacy embedded footers remain until their owning branch completes the cutover.
  */
-export type HubViewFooter = Readonly<{ primary(action: HubViewAction | null): void; secondary(action: HubViewAction | null): void; own(): void }>;
+export type HubViewFooter = Readonly<{ primary(action: HubViewAction | null): void; secondary(action: HubViewAction | null): void; openActions(): void; own(): void }>;
 export type HubViewMount<Target> = (target: Target, back: () => void, footer: HubViewFooter) => () => void;
 
 /**

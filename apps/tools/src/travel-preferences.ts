@@ -10,6 +10,8 @@ import {
   type TravelShortcuts,
   type TravelSynonyms,
 } from "../../../src/shared/travel";
+import { hubPhraseReserved } from "../../../src/shared/hub-preferences";
+import { normaliseHubQuery } from "../../../src/shared/hub";
 import type { TravelHost, TravelPreferences } from "./travel-host";
 
 export function useTravelPreferences(host: TravelHost) {
@@ -67,6 +69,15 @@ export function useTravelPreferences(host: TravelHost) {
   return Object.freeze({
     shortcuts,
     synonyms,
+    /** Read legacy global place phrases without moving them into Travel's store. */
+    searchSynonyms(query: string): TravelSynonyms {
+      const term = normaliseHubQuery(query);
+      const global = window.gwToolsSettings?.().hubShortcuts ?? [];
+      return [...synonyms.value, ...global.flatMap(entry => {
+        if (!entry.id.startsWith('place:') || !term || normaliseHubQuery(entry.phrase) !== term || hubPhraseReserved(entry.phrase)) return [];
+        return [{ term: entry.phrase, mapId: Number(entry.id.slice(6)) }];
+      })];
+    },
     ready,
     pending,
     disabled,

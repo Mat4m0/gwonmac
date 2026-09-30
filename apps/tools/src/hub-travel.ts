@@ -1,8 +1,8 @@
 /** One Travel host serves both unified search and the existing detailed view. */
 import { createApp, h, watch } from 'vue';
 import type { HubPresenter, HubRow, HubSource, HubTask, HubViewMount } from '../../../src/shared/hub';
-import { matchHubRows, parseHubQuery, hubMatch } from '../../../src/shared/hub';
-import { TRAVEL_DESTINATIONS, travelDestination } from '../../../src/shared/travel';
+import { matchHubRows, parseHubQuery } from '../../../src/shared/hub';
+import { searchTravelDestinations, travelDestination } from '../../../src/shared/travel';
 import { travelContextRefusal, travelDestinationAvailability } from '../../../src/shared/travel-command';
 import TravelPalette from './components/TravelPalette.vue';
 import type { TravelHost } from './travel-host';
@@ -64,6 +64,8 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
     if (reason) throw new Error(reason);
     await host.travel({ mapId });
   }
+  /** Travel's own search phrases for one place: they find it as exactly as its name. */
+  const phrases = (mapId: number, query: string) => preferences.searchSynonyms(query).filter(entry => entry.mapId === mapId).map(entry => entry.term);
   const toolRow = (): HubRow => ({ id: 'travel', title: 'Travel', detail: loadError || 'Outposts, favourites, recent places and Guild Hall', group: 'Tools', keywords: 'tp teleport destination', action: 'Browse travel', navigate: open, run: open });
   const source: HubSource = {
     feature: 'travelPalette',
@@ -90,11 +92,11 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
       const parsed = parseHubQuery(query);
       if (parsed.scope && parsed.scope !== 'travel') return [];
       query = parsed.term;
-      const destinations = query.trim() ? TRAVEL_DESTINATIONS.filter(destination => hubMatch(destination.name, query, preferences.synonyms.value.filter(entry => entry.mapId === destination.mapId).map(entry => entry.term)) !== null).slice(0, 8)
+      const destinations = query.trim() ? searchTravelDestinations(query, preferences.searchSynonyms(query), 8)
         : host.history.value.filter(id => !refusal(id)).slice(0, 3).flatMap(id => { const destination = travelDestination(id); return destination ? [destination] : []; });
       return [...destinations.map(destination => {
         const reason = refusal(destination.mapId);
-        return { id: `place:${destination.mapId}`, title: destination.name,
+        return { id: `place:${destination.mapId}`, title: destination.name, aliases: phrases(destination.mapId, query),
           detail: query.trim() ? 'Outpost · Any district' : 'Recently visited · Any district',
           group: query.trim() ? 'Places' : 'Continue', action: `Travel to ${destination.name}`, consequential: true, leavesArea: explorable(),
           ...(reason ? { unavailable: reason } : {}), run: async (task: HubTask) => { await travel(destination.mapId); task.done(); } };

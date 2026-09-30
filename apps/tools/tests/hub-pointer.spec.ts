@@ -469,7 +469,7 @@ test('Accounts: keeping the running game open is the default; a replace needs on
   const confirm = primary(page);
   await expect(confirm).toHaveText(/^Close Main and open Second/);
   await expect(confirm).toHaveAttribute('data-variant', 'danger');
-  await expect(page.locator('.hub-actions')).toHaveText('Keep Main');
+  await expect(page.locator('.hub-actions')).toHaveText('Actions⌘J');
   await expect(page.locator('.hub-legend')).toContainText('Back');
   await expect(page.locator('.hub-confirm')).toBeFocused();
   // An Enter or a multi-click before it arms confirms nothing.
@@ -481,6 +481,9 @@ test('Accounts: keeping the running game open is the default; a replace needs on
   // Back cancels it.
   await page.getByRole('button', { name: 'Open Hub', exact: true }).click();
   await search(page).fill('acc second'); await search(page).press('ArrowDown'); await search(page).press('Enter');
+  await page.keyboard.press('Meta+j');
+  await expect(page.getByRole('menuitem', { name: 'Keep Main' })).toBeVisible();
+  await page.keyboard.press('Escape');
   await page.keyboard.press('Meta+Backspace');
   await expect(page.locator('.hub-row[aria-selected="true"]')).toContainText('Close Main and open Second');
   expect(await ledger(page)).toEqual(['Account Second replace']);
@@ -531,8 +534,8 @@ test('Hub preferences: Move up keeps focus and a double-click moves the same pin
   await expect(options.nth(1)).toHaveAttribute('aria-selected', 'true');
   await expect.poll(saved).toEqual(['place:449', 'place:642', 'place:194']);
   // Removal names its target and passes an armed confirmation.
-  await expect(page.locator('.hub-actions')).toHaveText('Remove Eye of the North…');
   await page.locator('.hub-actions').click();
+  await page.getByRole('menuitem', { name: 'Remove Eye of the North…' }).click();
   await expect(caption(page)).toHaveText('Remove Eye of the North?');
   await page.keyboard.press('Enter');
   expect(await saved()).toHaveLength(3);
@@ -589,6 +592,7 @@ test('Remove all search phrases asks first, names the count and keeps the pins (
   await expect(primary(page)).toHaveAttribute('data-variant', 'danger');
   // Keep leaves every phrase.
   await page.locator('.hub-actions').click();
+  await page.getByRole('menuitem', { name: 'Keep', exact: true }).click();
   await expect(caption(page)).toHaveText('Hub preferences');
   expect(await saved()).toEqual(stored);
   await reset.click();
@@ -750,4 +754,31 @@ test('a double-click on a recently applied build opens its target page and appli
   await expect(caption(page)).not.toHaveText('Home');
   await expect(page.locator('#hub')).toBeVisible();
   expect((await ledger(page)).length).toBe(before);
+});
+
+
+test('Hub preferences keeps the Actions slot and opens its named actions with Command-J', async ({ page }) => {
+  await page.goto('/?hub');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  await page.evaluate(() => localStorage.setItem('hub-fixture-shortcuts', JSON.stringify([{ id: 'place:449', phrase: '', pinned: true }, { id: 'place:194', phrase: '', pinned: true }])));
+  await open(page);
+  await enter(page, 'hub preferences');
+  await expect(page.locator('.hub-actions')).toHaveText('Actions⌘J');
+  await page.keyboard.press('Meta+j');
+  await expect(page.getByRole('menu')).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: /Set phrase for Kamadan/ })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.getByRole('option', { name: 'Kaineng Center · Pinned', exact: true }).click({ button: 'right' });
+  await expect(page.getByRole('menuitem', { name: /Set phrase for Kaineng Center/ })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: /Remove Kaineng Center/ })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.getByRole('option', { name: 'Kamadan, Jewel of Istan · Pinned', exact: true }).click();
+  await page.keyboard.press('Meta+j');
+  await page.getByRole('menuitem', { name: /Remove Kamadan/ }).click();
+  await expect(caption(page)).toContainText('Remove Kamadan');
+  await expect(page.locator('.hub-actions')).toHaveText('Actions⌘J');
+  await page.keyboard.press('Meta+j');
+  await page.getByRole('menuitem', { name: 'Keep', exact: true }).click();
+  await expect(caption(page)).toHaveText('Hub preferences');
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('hub-fixture-shortcuts') ?? '[]'))).toEqual([{ id: 'place:449', phrase: '', pinned: true }, { id: 'place:194', phrase: '', pinned: true }]);
 });
