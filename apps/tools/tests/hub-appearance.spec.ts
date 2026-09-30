@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { PNG } from 'pngjs';
 
 for (const ratio of [1, 2]) {
@@ -135,3 +135,96 @@ test('Modern hover stays clearly weaker than the selection it is not', async ({ 
   // Hover is a faint lift; the selection stands at least 1.5 times further from it than hover from a plain row.
   expect(distance(selected, hover)).toBeGreaterThan(1.5 * distance(hover, plain));
 });
+
+
+const CHECKERBOARD = 'body { background: repeating-conic-gradient(#fff 0% 25%, #ddd 0% 50%) 0 / 32px 32px !important; } .hub-fixture-controls { visibility:hidden; }';
+const NIGHT = 'body { background: #000 !important; } .hub-fixture-controls { visibility:hidden; }';
+const luminance = (rgb: readonly number[]) => {
+  const linear = rgb.map(channel => { const value = channel / 255; return value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4; });
+  return .2126 * linear[0]! + .7152 * linear[1]! + .0722 * linear[2]!;
+};
+
+/** Composed contrast of visible text: the ink comes from the computed colour,
+ * the background from a screenshot with every glyph and shadow hidden, so the
+ * game backdrop, panel material, art strip, hover and selection fills count. */
+async function textContrast(page: Page, selectors: Record<string, string>) {
+  const labels = await page.evaluate(selectors => {
+    const context = document.createElement('canvas').getContext('2d', { willReadFrequently: true })!;
+    const srgb = (color: string) => { context.clearRect(0, 0, 1, 1); context.fillStyle = color; context.fillRect(0, 0, 1, 1); return [...context.getImageData(0, 0, 1, 1).data.slice(0, 3)]; };
+    return Object.entries(selectors).flatMap(([role, selector]) => {
+      if (role === 'placeholder') {
+        const input = document.querySelector<HTMLInputElement>('#hub .hub-search input')!;
+        const box = input.getBoundingClientRect();
+        return input.value ? [] : [{ role, text: input.placeholder, color: srgb(getComputedStyle(input, '::placeholder').color), box: { x: box.x, y: box.y, width: 160, height: box.height } }];
+      }
+      return [...document.querySelectorAll<HTMLElement>(selector.split(',').map(part => `#hub ${part.trim()}`).join(','))].flatMap(element => {
+        const range = document.createRange(); range.selectNodeContents(element);
+        const box = [...range.getClientRects()].find(rect => rect.width > 2);
+        if (!box) return [];
+        const hit = document.elementFromPoint(box.x + Math.min(6, box.width / 2), box.y + box.height / 2);
+        const scroller = element.closest('.hub-results, .hub-view')?.getBoundingClientRect();
+        if (!hit || !element.contains(hit) || (scroller && (box.top < scroller.top || box.bottom > scroller.bottom))) return [];
+        return [{ role, text: element.textContent?.trim() ?? '', color: srgb(getComputedStyle(element).color), box: { x: box.x, y: box.y, width: box.width, height: box.height } }];
+      });
+    });
+  }, selectors);
+  const hidden = await page.addStyleTag({ content: '#hub, #hub *, #hub input::placeholder { color:transparent !important; -webkit-text-fill-color:transparent !important; text-shadow:none !important; caret-color:transparent !important; } #hub svg, #hub img { visibility:hidden !important; }' });
+  const composed = PNG.sync.read(await page.screenshot());
+  await hidden.evaluate(element => element.remove());
+  return labels.map(label => {
+    const ink = luminance(label.color);
+    const ratios: number[] = [];
+    for (let y = Math.ceil(label.box.y + 1); y < label.box.y + label.box.height - 1; y += 2) {
+      for (let x = Math.ceil(label.box.x + 1); x < label.box.x + label.box.width - 1; x += 2) {
+        const offset = (y * composed.width + x) * 4;
+        const background = luminance([...composed.data.subarray(offset, offset + 3)]);
+        ratios.push((Math.max(background, ink) + .05) / (Math.min(background, ink) + .05));
+      }
+    }
+    // The 5th percentile ignores a stray antialiased edge of a neighbour.
+    ratios.sort((a, b) => a - b);
+    return { role: label.role, text: label.text, ratio: ratios[Math.floor(ratios.length * .05)] ?? 0 };
+  });
+}
+
+const TEXT_ROLES = {
+  title: '.hub-title', detail: '.hub-row > .hub-detail', group: '.hub-group', count: '.hub-count', keycap: '.hub-row-type .ui-kbd', legend: '.hub-legend > *',
+  name: '.hub-name', caption: '.hub-caption', context: '.hub-context', crumb: '.hub-crumb', separator: '.hub-breadcrumbs > span[aria-hidden]',
+  summary: '.hub-summary-label', scope: '.hub-scope:not([hidden])', placeholder: '', setting: '.hub-setting-row strong, .hub-setting-row small, .hub-settings h2',
+};
+const BLUE_ACCENT = { material: 'classic', window: '#0B0B0B', titlebar: '#292927', surface: '#202225', recessed: '#080807', selected: '#1B3554', accent: '#4A6FA5', text: '#F1EBDD', mutedText: '#B7B09F', border: '#D8D2BF', windowGradient: true } as const;
+// Modern gold headings (HUB-249) and the Classic head (HUB-106) are the known worst cases.
+for (const [name, appearance, scene] of [
+  ['Modern 65% over snow', { uiStyle: 'obsidian', uiPanelOpacity: 65 }, CHECKERBOARD],
+  ['Classic 94% over snow', { uiStyle: 'guild-wars', uiPanelOpacity: 94 }, CHECKERBOARD],
+  ['Classic 65% over snow', { uiStyle: 'guild-wars', uiPanelOpacity: 65 }, CHECKERBOARD],
+  ['a blue custom accent at 94% over night', { uiStyle: 'custom', uiPanelOpacity: 94, uiCustomTheme: BLUE_ACCENT }, NIGHT],
+] as const) {
+  test(`every Hub text role reads at 4.5:1 in ${name}`, async ({ page }) => {
+    const media = await page.context().newCDPSession(page);
+    await media.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-transparency', value: 'no-preference' }] });
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/?hub');
+    await page.addStyleTag({ content: scene });
+    const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+    await expect(search).toBeFocused();
+    await page.evaluate(value => window.gwApplyFixtureAppearance?.(value), appearance);
+    const measured = await textContrast(page, TEXT_ROLES);
+    await search.fill('build a');
+    await expect(page.locator('.hub-scope')).toBeVisible();
+    measured.push(...await textContrast(page, TEXT_ROLES));
+    await search.fill('build monk'); await search.press('ArrowRight');
+    await expect(page.locator('.hub-summary-label')).toBeVisible();
+    measured.push(...await textContrast(page, TEXT_ROLES));
+    await page.getByRole('button', { name: 'Back', exact: true }).click();
+    await search.fill('settings'); await search.press('Enter');
+    await page.getByRole('button', { name: 'Appearance', exact: true }).click();
+    await expect(page.locator('.hub-crumb').first()).toBeVisible();
+    measured.push(...await textContrast(page, TEXT_ROLES));
+    for (const role of Object.keys(TEXT_ROLES)) expect(measured.some(label => label.role === role), `${role} was measured`).toBe(true);
+    for (const label of measured) expect(label.ratio, `${label.role} “${label.text}”`).toBeGreaterThanOrEqual(4.5);
+    // A crumb is a button; it keeps the head's text shadow like the caption beside it.
+    const shadows = await page.locator('.hub-heading').evaluate(head => [head.querySelector('.hub-crumb'), head.querySelector('.hub-caption')].map(element => getComputedStyle(element!).textShadow));
+    expect(shadows[0]).toBe(shadows[1]);
+  });
+}

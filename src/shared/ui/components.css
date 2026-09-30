@@ -96,6 +96,8 @@
   border-radius: var(--ui-art-head-radius);
   background: var(--ui-art-head-fill);
   box-shadow: var(--ui-art-head-shadow);
+  --ui-text-muted: var(--ui-art-head-muted);
+  --ui-text-faint: var(--ui-art-head-faint);
 }
 .ui-frame.ui-art-frame > .ui-window-head .ui-panel-title {
   font-size: var(--ui-art-title-size);
@@ -1433,9 +1435,10 @@ button.ui-chip[aria-disabled="true"] {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-chat-outgoing-accent) 24%, transparent);
 }
 
-/* Window chrome keeps large interaction targets without a second painted button. */
+/* Window chrome keeps large interaction targets without a second painted button.
+ * These are buttons, so the UA sheet would drop the head's text shadow. */
 .ui-window-close, .ui-window-lock, .hub-crumb {
-  appearance:none; border:0; background:transparent; box-shadow:none; color:var(--ui-text-muted);
+  appearance:none; border:0; background:transparent; box-shadow:none; color:var(--ui-text-muted); text-shadow:inherit;
   display:inline-flex; align-items:center; justify-content:center; padding:0; flex:none;
   cursor:pointer; font:inherit; min-width:28px; min-height:28px;
 }

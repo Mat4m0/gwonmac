@@ -35,6 +35,10 @@
   --ui-art-head-radius: 0;
   --ui-art-head-fill: transparent;
   --ui-art-head-shadow: none;
+  /* The Classic head sits on painted metal, which the ink guard cannot
+   * measure, so its secondary copy uses the text ink. */
+  --ui-art-head-muted: var(--ui-text);
+  --ui-art-head-faint: var(--ui-text);
   --ui-art-title-size: var(--ui-type-body-size);
   --ui-art-head-control-height: 26px;
   --ui-art-head-detail-display: none;
@@ -378,6 +382,8 @@
   --ui-art-head-radius: var(--ui-radius);
   --ui-art-head-fill: var(--ui-title-fill) padding-box, var(--ui-frame) border-box;
   --ui-art-head-shadow: var(--ui-title-shadow);
+  --ui-art-head-muted: var(--ui-text-muted);
+  --ui-art-head-faint: var(--ui-text-faint);
   --ui-art-title-size: var(--ui-type-window-size);
   --ui-art-head-control-height: var(--ui-control-height);
   --ui-art-head-detail-display: block;
