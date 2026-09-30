@@ -348,8 +348,9 @@ Use Actions to pin a result or give it an exact search phrase. A new phrase cann
 start with a command word such as `team` or `invite`, or read as a calculation. A
 phrase saved before its first word became a command word keeps its pin but no
 longer matches. Search **Hub
-preferences** to reorder pins, remove saved actions, or reset aliases. Search `resign` for its existing
-confirmation, or `reload` for the account's Quit or Reload dialog. The `reload`
+preferences** to reorder pins, remove saved actions, or reset aliases. Search `resign` for its
+confirmation: the row says it asks before sending `/resign` and works only in a PvE area, and
+Cancel or Escape returns to your search. Search `reload` for the account's Quit or Reload dialog. The `reload`
 row opens the same dialog as Command-Q and never quits on its own. Call target
 has no Hub row; use its shortcut while the game has keyboard focus.
 
@@ -380,8 +381,9 @@ Enable **Resign** in **Settings → Tools**. It is off by default and requires
 Tools. Its shortcut is unassigned by default and can be assigned or cleared
 in the same row. Turning off Resign or Tools disables it immediately.
 
-Press the shortcut for **Resign** in PvE. Press Enter to confirm sending
-`/resign`, or click **Resign** in the in-game dialog. The dialog accepts a
+Press the shortcut for **Resign** in PvE. The dialog says that everyone must
+resign before the party returns to the outpost. Press Enter to confirm sending
+`/resign`, or click the red **Resign** button in the in-game dialog. The dialog accepts a
 confirmation only after a brief moment, so the press that opened it cannot also
 confirm it. Escape, **Cancel**, the close
 button, and clicking outside cancel. Close text fields first.

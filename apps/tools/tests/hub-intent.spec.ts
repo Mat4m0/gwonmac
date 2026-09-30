@@ -342,6 +342,51 @@ test.describe('Leave this area? before Travel (D-27, HUB-027)', () => {
   });
 });
 
+test('Resign says what it does before Enter, reads as destructive, and Cancel returns to the search (HUB-250, HUB-251)', async ({ page }) => {
+  await page.goto('/?hub&lifecycle=pve-explorable');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  const search = page.getByRole('combobox', { name: searchName });
+  const row = page.locator('.hub-row[data-id="resign"]');
+  await search.fill('resign');
+  await expect(row).toHaveAttribute('aria-selected', 'true');
+  await expect(row.locator('.hub-detail')).toHaveText('Asks before sending /resign · PvE only');
+  const dialog = page.locator('#resign-dialog');
+  const confirm = dialog.getByRole('button', { name: 'Resign', exact: true });
+  for (const cancel of ['Escape', 'Cancel'] as const) {
+    await page.evaluate(() => window.gwFixtureCanvas?.clear());
+    await search.press('Enter');
+    await expect(dialog).toBeVisible();
+    await expect(confirm).toHaveAttribute('data-variant', 'danger');
+    await expect(dialog).toContainText('When everyone has resigned, the party returns to the outpost');
+    if (cancel === 'Escape') await page.keyboard.press('Escape');
+    else await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await expect(dialog).toBeHidden();
+    await expect(search).toBeFocused();
+    await expect(search).toHaveValue('resign');
+    await expect(row).toHaveAttribute('aria-selected', 'true');
+    expect(await page.evaluate(() => window.gwFixtureCanvas?.events.filter(event => event.code === 'Escape').length)).toBe(0);
+  }
+  await expect(page.locator('#app')).not.toHaveAttribute('data-action', 'RESIGN');
+});
+
+test('Resign sends once from its armed confirmation, and says before Enter why it cannot while a map loads', async ({ page }) => {
+  await page.goto('/?hub&lifecycle=pve-explorable');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  const search = page.getByRole('combobox', { name: searchName });
+  const row = page.locator('.hub-row[data-id="resign"]');
+  await search.fill('resign'); await search.press('Enter');
+  const confirm = page.locator('#resign-dialog').getByRole('button', { name: 'Resign', exact: true });
+  await expect(confirm).toHaveAttribute('data-armed', '');
+  await confirm.click();
+  await expect(page.locator('#app')).toHaveAttribute('data-action', 'RESIGN');
+  await expect(page.locator('#hub')).toBeHidden();
+  // While a map loads, the reason shows on the row before Enter (HUB-135).
+  await page.getByLabel('Lifecycle state', { exact: true }).selectOption('map-loading');
+  await search.fill('resign');
+  await expect(row).toHaveAttribute('aria-disabled', 'true');
+  await expect(row.locator('.hub-detail')).toHaveText('Resign is available with Tools enabled in a PvE area.');
+});
+
 test('a Guild Hall is an outpost: no explorable label, no leaving line, and a fresh Home keeps Continue', async ({ page }) => {
   // The fixture reads the instance type as the runtime does; a Guild Hall is no Travel destination.
   await page.goto('/?hub&lifecycle=guild-hall');

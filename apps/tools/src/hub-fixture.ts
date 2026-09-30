@@ -19,6 +19,8 @@ import { installSurfaceController } from '../../../src/renderer/surface-controll
 // eslint-disable-next-line no-restricted-imports
 import { askLeaveArea, leaveAreaCopy } from '../../../src/renderer/leave-area';
 // eslint-disable-next-line no-restricted-imports
+import { installResignCommand } from '../../../src/renderer/resign';
+// eslint-disable-next-line no-restricted-imports
 import '../../../src/renderer/hub.css';
 // eslint-disable-next-line no-restricted-imports
 import { createHubPeople } from '../../../src/renderer/hub-people';
@@ -72,7 +74,7 @@ export function mountHubFixture(target: HTMLElement) {
   }
   window.gwFixtureCanvas = { events: canvasEvents, clear() { canvasEvents.length = 0; countCanvas(); } };
   countCanvas();
-  let settings: AppSettings = { ...DEFAULT_SETTINGS, gwonmacTools: true, travelPalette: true, whispersEnabled: true, buildLibrary: true, tradeChat: true, xunlaiStorage: true };
+  let settings: AppSettings = { ...DEFAULT_SETTINGS, gwonmacTools: true, travelPalette: true, whispersEnabled: true, buildLibrary: true, tradeChat: true, xunlaiStorage: true, resignEnabled: true };
   try { settings.hubShortcuts = JSON.parse(localStorage.getItem('hub-fixture-shortcuts') ?? '[]'); } catch { /* Disposable fixture data. */ }
   const settingsListeners = new Set<(value: AppSettings) => void>();
   let capturingShortcut = false;
@@ -181,6 +183,12 @@ export function mountHubFixture(target: HTMLElement) {
   };
   window.gwCharacterSwitch = characterSource;
   installCharacterSwitchHost(document.body).attach(characterSource);
+  // The production Resign owner over a synthetic command queue: /resign is a recorded game action.
+  const resign = installResignCommand({
+    enhancement_configure_resign: () => 0,
+    enhancement_resign: () => { record('RESIGN'); return 1; },
+  } as unknown as WebAssembly.Exports);
+  resign.update(settings.gwonmacTools && settings.resignEnabled);
   const foundation = createToolboxFoundation(document.body, {
     async mountTool(element, onVisibilityChange) {
       const app = mountToolsApp(element, { host: game.host, hub, mode: 'embedded', initiallyVisible: false, onVisibilityChange });
@@ -267,6 +275,7 @@ export function mountHubFixture(target: HTMLElement) {
     settings = { ...settings, ...event.detail }; for (const listener of settingsListeners) listener(settings);
     foundation.setAvailable({ builds: settings.gwonmacTools && settings.buildLibrary, trade: settings.gwonmacTools && settings.tradeChat });
     people.setEnabled(settings.gwonmacTools && (settings.travelPalette || settings.whispersEnabled));
+    resign.update(settings.gwonmacTools && settings.resignEnabled);
     window.dispatchEvent(new Event('gw:tools-settings'));
   } });
   const controls = document.createElement('div'); controls.className = 'hub-fixture-controls';

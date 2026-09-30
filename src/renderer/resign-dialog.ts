@@ -5,6 +5,9 @@
  */
 import { armConfirmation } from "./surface-controller.js";
 
+/** The Hub task that opened the confirmation: it ends when Resign is sent and resumes on Cancel (HUB-250). */
+export type ResignHandoff = Readonly<{ confirmed(): void; cancelled(): void }>;
+
 export function createResignDialog(
   parent: HTMLElement,
   unavailable: () => string | null,
@@ -37,12 +40,12 @@ export function createResignDialog(
       </button>
     </header>
     <div class="ui-panel-body">
-      <p id="resign-description">Resigning can end your current attempt.</p>
+      <p id="resign-description">Sends /resign to your party. When everyone has resigned, the party returns to the outpost and this attempt ends.</p>
       <p class="resign-error" role="alert" hidden></p>
     </div>
     <footer class="ui-panel-foot">
       <button type="button" class="ui-button" data-cancel>Cancel</button>
-      <button type="button" class="ui-button" data-variant="primary" data-confirm>Resign <kbd aria-hidden="true">↵</kbd></button>
+      <button type="button" class="ui-button" data-variant="danger" data-confirm>Resign <kbd aria-hidden="true">↵</kbd></button>
     </footer>
   </section>`;
   const closeButton = root.querySelector<HTMLButtonElement>("[data-icon]")!;
@@ -51,13 +54,21 @@ export function createResignDialog(
   const error = root.querySelector<HTMLParagraphElement>("[role=alert]")!;
   const arming = armConfirmation(confirmButton);
   parent.append(style, root);
-  const close = () => {
-    window.removeEventListener("blur", close);
+  let handoff: ResignHandoff | undefined;
+  /** Closes; an explicit cancel returns to the Hub task that opened it, a blur leaves it suspended. */
+  const close = (outcome: "cancelled" | "confirmed" | "blurred" = "cancelled") => {
+    if (!root.open) return;
+    window.removeEventListener("blur", onBlur);
     arming.disarm();
     modal.close();
+    const opener = handoff;
+    handoff = undefined;
+    if (outcome === "confirmed") opener?.confirmed();
+    else if (outcome === "cancelled") opener?.cancelled();
   };
+  const onBlur = () => close("blurred");
   const modal = window.gwSurfaces.registerDialog({
-    root, priority: 7, transient: true, dismiss: close, restoreFocus: () => canvas,
+    root, priority: 7, transient: true, dismiss: () => close(), restoreFocus: () => canvas,
   });
   const report = (message: string | null) => {
     error.textContent = message ?? "";
@@ -72,14 +83,14 @@ export function createResignDialog(
       const refusal = unavailable();
       if (refusal !== null) { report(refusal); cancelButton.focus(); return; }
       submit();
-      close();
+      close("confirmed");
     } catch (cause) {
       report(cause instanceof Error ? cause.message : "Resign could not be completed.");
       cancelButton.focus();
     }
   };
-  closeButton.addEventListener("click", close);
-  cancelButton.addEventListener("click", close);
+  closeButton.addEventListener("click", () => close());
+  cancelButton.addEventListener("click", () => close());
   confirmButton.addEventListener("click", (event) => confirm(event));
   root.addEventListener("keydown", (event) => {
     if (event.key === " " && event.target === confirmButton) event.preventDefault();
@@ -90,17 +101,19 @@ export function createResignDialog(
     confirm();
   });
   return Object.freeze({
-    show() {
+    show(opener?: ResignHandoff) {
       if (root.open) return;
+      handoff = opener;
       report(unavailable());
       modal.show();
       arming.arm();
       (confirmButton.disabled ? cancelButton : confirmButton).focus({ preventScroll: true });
-      window.addEventListener("blur", close);
+      window.addEventListener("blur", onBlur);
     },
-    close,
+    /** Closes without returning to a Hub task, e.g. when Resign is turned off. */
+    close: () => close("blurred"),
     dispose() {
-      window.removeEventListener("blur", close);
+      window.removeEventListener("blur", onBlur);
       modal.dispose();
       root.remove();
       style.remove();

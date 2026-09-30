@@ -294,7 +294,7 @@ the independent calculator and fixed conversions can remain enabled.
 | Accounts | Saved profile names and runtime state; `acc name` offers open or replace | Launch successfully before closing the source; normal sign-in |
 | Maps | Existing layer toggles, ranges, opacity, style controls | Update inline and remain open for comparison |
 | Storage | One existing named action | Dismiss and attempt; completely silent failure |
-| Resign/reload | Explicit search-only entries | Existing confirmation, never empty-query suggestions |
+| Resign/reload | Explicit search-only entries; Resign states "PvE only" and its refusal before Enter | Existing confirmation, never empty-query suggestions; cancelling Resign returns to the Hub search |
 | Settings | Explicit entry and relevant supported section links | User deliberately chooses configuration |
 
 Travel to a friend means **Travel to outpost**, not join their exact instance.
