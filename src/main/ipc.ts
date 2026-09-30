@@ -15,6 +15,7 @@
  */
 import { parseHubSettingsChange, type HubSettingsApi } from "../shared/hub-settings.js";
 import { parseShortcutAction } from "../shared/keyboard-shortcuts.js";
+import { parseLauncherSettingsSection, type LauncherSettingsSection } from "../shared/launcher-contracts.js";
 import type { HubAccountsSnapshot, HubAccountRequest } from '../shared/accounts-contracts.js';
 import { parseHubAccountRequest } from './accounts-ipc-values.js';
 import { clipboard, shell, type BrowserWindow } from "electron";
@@ -142,7 +143,7 @@ export interface IpcContext {
   hubAccountOpen: (win: BrowserWindow, request: HubAccountRequest) => Promise<void>;
   hubSettings: Omit<HubSettingsApi, "capture"> & { capture: (win: BrowserWindow, action: Parameters<HubSettingsApi["capture"]>[0]) => ReturnType<HubSettingsApi["capture"]> };
   showLauncher: () => void;
-  openSettings: () => void;
+  openSettings: (section: LauncherSettingsSection) => void;
   requestQuit: (win: BrowserWindow) => void;
   showQuitOrReload: (win: BrowserWindow) => Promise<void>;
   reloadGame: (win: BrowserWindow, cause: GameReloadCause) => Promise<void>;
@@ -599,7 +600,7 @@ export function registerIpcHandlers(ctx: IpcContext): {
     hubSettingsUpdate: channel(one(parseHubSettingsChange), (_win, change) => ctx.hubSettings.update(change)),
     hubShortcutCapture: channel(one(parseShortcutAction), (win, action) => ctx.hubSettings.capture(win, action)),
     appShowLauncher: channel(nothing, () => ctx.showLauncher()),
-    appOpenSettings: channel(nothing, () => ctx.openSettings()),
+    appOpenSettings: channel(one(parseLauncherSettingsSection), (_win, section) => ctx.openSettings(section)),
     appRequestQuit: channel(nothing, (win) => ctx.requestQuit(win)),
     appShowQuitOrReload: channel(nothing, (win) => ctx.showQuitOrReload(win)),
 

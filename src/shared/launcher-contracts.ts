@@ -81,7 +81,17 @@ export const LAUNCHER_IPC = Object.freeze({
   updatesRestartAndInstall: "gw:launcher:updates:restartAndInstall",
 } as const);
 
-export type LauncherDestination = "home" | "accounts" | "settings";
+/** The launcher's Settings sections, in navigation order. */
+export const LAUNCHER_SETTINGS_SECTIONS = ["general", "content", "advanced", "game", "tools", "maps", "texture-packs", "game-files"] as const;
+export type LauncherSettingsSection = typeof LAUNCHER_SETTINGS_SECTIONS[number];
+export function parseLauncherSettingsSection(value: unknown): LauncherSettingsSection {
+  const section = LAUNCHER_SETTINGS_SECTIONS.find((candidate) => candidate === value);
+  if (!section) throw new Error("Unknown launcher settings section");
+  return section;
+}
+
+/** `settings` opens the last Settings section; `settings/<section>` opens that one. */
+export type LauncherDestination = "home" | "accounts" | "settings" | `settings/${LauncherSettingsSection}`;
 
 export type LauncherInstallationKind =
   | "fresh"
