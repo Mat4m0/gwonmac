@@ -265,3 +265,29 @@ test('Reduce Transparency makes the Hub opaque without hiding the game or re-ink
     await reduce('no-preference');
   }
 });
+
+const PANEL_FONTS = ['guild-wars', 'inter', 'system', 'georgia', 'avenir', 'palatino'] as const;
+
+for (const [name, viewport, hub] of [['a narrow window', { width: 390, height: 800 }, null], ['the smallest Hub', { width: 1280, height: 800 }, { width: 340, height: 300 }]] as const) {
+  test(`the footer stays one line while arrowing in ${name}`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await page.goto('/?hub');
+    const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+    await expect(search).toBeFocused();
+    if (hub) await page.locator('.hub-panel').evaluate((panel, size) => { panel.style.width = `${size.width}px`; panel.style.height = `${size.height}px`; }, hub);
+    const primary = page.locator('.hub-primary');
+    for (const uiFont of PANEL_FONTS) {
+      await page.evaluate(value => window.gwApplyFixtureAppearance?.({ uiStyle: 'guild-wars', uiPanelOpacity: 94, uiFont: value }), uiFont);
+      await search.fill(''); await search.fill('k');
+      const heights = new Set<number>();
+      for (let step = 0; step < 6; step += 1) {
+        heights.add(await page.locator('.hub-footer').evaluate(element => Math.round(element.getBoundingClientRect().height)));
+        await search.press('ArrowDown');
+      }
+      expect([...heights], uiFont).toHaveLength(1);
+      expect([...heights][0], `${uiFont} footer`).toBeLessThanOrEqual(52);
+      // The full label stays the primary's name even where it ends in an ellipsis.
+      expect(await primary.getAttribute('title')).toBe(await primary.locator('.hub-primary-label').textContent());
+    }
+  });
+}

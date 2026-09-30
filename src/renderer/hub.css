@@ -91,7 +91,6 @@
   .hub-conversion { grid-template-columns:minmax(0,1fr) 20px minmax(0,1fr); gap:10px; padding:18px 10px; }
   .hub-conversion-input,.hub-conversion .hub-title { font-size:20px; }
   .hub-conversion > .hub-detail { grid-column:1 / -1; }
-  .hub-footer { flex-wrap:wrap; }
 }
 @media(max-height:500px) { .hub-panel { top:8px; height:calc(100vh - 16px); } }
 
@@ -325,7 +324,15 @@
 .hub-scope { flex:none; order:1; padding:2px 6px; border:1px solid var(--ui-line-soft); border-radius:var(--ui-radius-sm); color:var(--ui-accent-text); font:var(--ui-type-caption-size)/1.4 var(--ui-font-interface); }
 .hub-hint { margin:0; padding:0 16px 8px; color:var(--ui-text-muted); font:var(--ui-type-caption-size)/1.4 var(--ui-font-reading); }
 .hub-row-type .ui-kbd { min-width:20px; padding:2px 4px; }
-.hub-footer .hub-primary { min-width:0; text-align:left; }
+/* One footer line at every Hub width and font, so arrowing never resizes the
+ * list (HUB-238). Room goes first from the key legend, whose hints drop out
+ * whole onto a clipped second line, then from the count; the primary then
+ * ellipsizes and keeps its full label as the accessible name. */
+.hub-footer .hub-primary { min-width:0; flex:0 1 auto; text-align:left; }
+.hub-footer .hub-primary kbd,.hub-footer .hub-actions { flex:none; white-space:nowrap; }
+.hub-footer .hub-legend { flex:0 10000 auto; min-width:0; height:var(--ui-type-caption-line); overflow:hidden; }
+.hub-legend > * { white-space:nowrap; }
+.hub-footer .hub-count { flex:0 100 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; }
 .hub-primary-label { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .hub-panel:has(.hub-preview:not([hidden])) .hub-results { flex:0 1 auto; max-height:50%; }
 .hub-panel:has(.hub-preview:not([hidden])) .hub-preview { flex:1; max-height:none; }
