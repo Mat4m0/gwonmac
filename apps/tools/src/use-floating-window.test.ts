@@ -101,4 +101,36 @@ describe("useFloatingWindow", () => {
     expect(restored.get("section").attributes("style")).toContain("height: 600px");
     restored.unmount();
   });
+  it("returns to the player's place after the window shrinks and grows back, and saves only the player's move (HUB-109)", async () => {
+    vi.spyOn(window, "requestAnimationFrame").mockReturnValue(1);
+    const size = (width: number, height: number) => {
+      Object.defineProperty(window, "innerWidth", { configurable: true, value: width });
+      Object.defineProperty(window, "innerHeight", { configurable: true, value: height });
+      window.dispatchEvent(new Event("resize"));
+    };
+    size(1600, 1000);
+    const wrapper = mountWindow();
+    const panel = wrapper.get("section").element as HTMLElement;
+    giveWindowGeometry(panel);
+    const header = wrapper.get("header").element as HTMLElement;
+    Object.defineProperty(header, "setPointerCapture", { value: vi.fn() });
+    header.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 100, clientY: 70, pointerId: 1 }));
+    header.dispatchEvent(new PointerEvent("pointermove", { clientX: 800, clientY: 400, pointerId: 1 }));
+    header.dispatchEvent(new PointerEvent("pointerup", { pointerId: 1 }));
+    window.dispatchEvent(new PageTransitionEvent("pagehide"));
+    const saved = localStorage.getItem(storageKey);
+    await wrapper.vm.$nextTick();
+    const placed = wrapper.get("section").attributes("style");
+
+    size(900, 600);
+    await wrapper.vm.$nextTick();
+    expect(wrapper.get("section").attributes("style")).not.toBe(placed);
+    size(1600, 1000);
+    await wrapper.vm.$nextTick();
+    expect(wrapper.get("section").attributes("style")).toContain(placed);
+    expect(wrapper.get("section").attributes("style")).toContain("width: 800px");
+    window.dispatchEvent(new PageTransitionEvent("pagehide"));
+    expect(localStorage.getItem(storageKey)).toBe(saved);
+    wrapper.unmount();
+  });
 });

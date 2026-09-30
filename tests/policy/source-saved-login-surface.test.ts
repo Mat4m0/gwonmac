@@ -27,7 +27,7 @@ const shippedApplication = shippedSources().map(read).join("\n");
 // Geometry is the sole Core browser-storage owner. Remove only these exact calls
 // from the secret-surface check; any new key, argument or storage API still fails.
 const hubPlacement = read("src/renderer/hub-window.ts");
-const placementCalls = /localStorage\.(?:getItem\(storageKey\)|setItem\(storageKey, value\)|removeItem\(storageKey\))/gu;
+const placementCalls = /localStorage\.(?:getItem\(storageKey\)|setItem\(storageKey, intent\)|removeItem\(storageKey\))/gu;
 const withoutPlacementStorage = shippedSources().map(file => file === "src/renderer/hub-window.ts"
   ? read(file).replace(placementCalls, "approvedPlacementCall") : read(file)).join("\n");
 const legacyFilenameOwners = shippedSources().filter((file) =>
@@ -95,7 +95,9 @@ test("no build seeds the Steam token from the environment", () => {
 test("Core browser persistence is limited to validated Hub geometry", () => {
   assert.match(hubPlacement, /const storageKey = 'gwonmac\.hub-window-placement';/);
   assert.equal([...hubPlacement.matchAll(placementCalls)].length, 3);
-  assert.match(hubPlacement, /const value = serializeFloatingWindowPlacement\(panel\.getBoundingClientRect\(\), viewport\(\)\);/);
-  assert.match(hubPlacement, /restoreFloatingWindowPlacement\(localStorage\.getItem\(storageKey\), viewport\(\), \{ width: 340, height: 300 \}\)/);
+  // Only a serialized placement is written, and a stored one is used only after validation.
+  assert.match(hubPlacement, /intent = serializeFloatingWindowPlacement\(panel\.getBoundingClientRect\(\), viewport\(\)\);/);
+  assert.match(hubPlacement, /const minimum = \{ width: 340, height: 300 \};/);
+  assert.match(hubPlacement, /if \(restoreFloatingWindowPlacement\(intent, viewport\(\), minimum\)\) \{ placed = true; fit\(\); \} else intent = null;/);
   assert.doesNotMatch(read("src/shared/ui/window-placement.ts"), /password|credential|sessionStorage|localStorage/iu);
 });
