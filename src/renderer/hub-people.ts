@@ -17,7 +17,8 @@ const MAX_PEOPLE = 8;
 const PARTIAL_NAME = 'Type the full character name';
 
 type FriendTravel = Readonly<{
-  unavailable(): string | null;
+  /** Why a trip to this friend cannot start now, e.g. a map load or the player already there (HUB-068). */
+  unavailable(friend: TravelFriend): string | null;
   run(friend: TravelFriend, generation: number): Promise<void>;
 }>;
 export function createHubPeople(hub: Pick<Hub, 'attach' | 'showRows' | 'notify'>, session: WhisperSession,
@@ -41,7 +42,7 @@ export function createHubPeople(hub: Pick<Hub, 'attach' | 'showRows' | 'notify'>
       : friend.status === 'unknown' ? 'Friend status is unavailable'
       : !travelDestination(friend.mapId) ? 'This location is not a travel destination'
       : !current ? 'This friend’s location changed. Select them again.'
-      : travel?.unavailable() ?? (travel ? null : 'Travel is unavailable');
+      : travel?.unavailable(friend) ?? (travel ? null : 'Travel is unavailable');
   }
   /**
    * Travel and invite exists only with the Travel palette on: undefined hides it,

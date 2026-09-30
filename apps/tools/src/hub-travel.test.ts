@@ -13,7 +13,7 @@ describe('Hub travel recents', () => {
       host.state.value = { ...state, mapId: 449 };
       expect(travel.source.search('').filter(row => row.group === 'Continue')).toHaveLength(3);
       expect(travel.source.search('').some(row => row.id === 'place:449')).toBe(false);
-      expect(travel.source.search('kamadan').find(row => row.id === 'place:449')?.unavailable).toBe('Current location');
+      expect(travel.source.search('kamadan').find(row => row.id === 'place:449')?.unavailable).toBe('You are already in Kamadan, Jewel of Istan');
       host.state.value = { ...state, unlockedMapWords: Array.from({ length: 28 }, () => 0) };
       expect(travel.source.search('').filter(row => row.group === 'Continue')).toHaveLength(0);
       expect(travel.source.search('kamadan').find(row => row.id === 'place:449')?.unavailable).toBe('Not unlocked by this character');

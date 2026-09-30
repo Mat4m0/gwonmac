@@ -387,6 +387,24 @@ test('Resign sends once from its armed confirmation, and says before Enter why i
   await expect(row.locator('.hub-detail')).toHaveText('Resign is available with Tools enabled in a PvE area.');
 });
 
+test('a friend in your outpost offers no trip, and says so before Enter (HUB-068)', async ({ page }) => {
+  await page.goto('/?hub&party');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  const search = page.getByRole('combobox', { name: searchName });
+  await search.fill('zed delta'); await search.press('Enter');
+  await expect(page.locator('.hub-breadcrumbs')).toHaveText('Home›Zed Delta');
+  for (const id of ['person:travel', 'person:travel-invite']) {
+    const row = page.locator(`.hub-row[data-id="${id}"]`);
+    await expect(row).toHaveAttribute('aria-disabled', 'true');
+    await expect(row.locator('.hub-detail')).toHaveText('You are already in this outpost');
+  }
+  const selected = page.locator('.hub-row[aria-selected="true"]');
+  while (await selected.getAttribute('data-id') !== 'person:travel') await search.press('ArrowDown');
+  await expect(page.locator('#hub .hub-primary')).toBeDisabled();
+  await search.press('Enter');
+  await expect(page.locator('#app')).not.toHaveAttribute('data-action', /TRAVEL/);
+});
+
 test('while a map loads, the Travel rows say why before Enter and a fresh Home never starts on them (HUB-135)', async ({ page }) => {
   await page.goto('/?hub&lifecycle=map-loading');
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');

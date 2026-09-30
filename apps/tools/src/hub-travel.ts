@@ -62,7 +62,7 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
     return host.unavailable ?? travelContextRefusal(host.state.value, mapId)
       ?? (host.attempt.value.status !== 'idle' ? 'Travel is already in progress' : null)
       ?? (host.state.value.status !== 'ready' ? 'Waiting for Guild Wars' : null)
-      ?? (host.state.value.status === 'ready' && host.state.value.mapId === mapId ? 'Current location' : null)
+      ?? (host.state.value.status === 'ready' && host.state.value.mapId === mapId ? `You are already in ${travelDestination(mapId)?.name ?? 'this outpost'}` : null)
       ?? (availability === 'locked' ? 'Not unlocked by this character' : null);
   }
   /**

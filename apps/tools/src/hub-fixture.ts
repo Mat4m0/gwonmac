@@ -235,7 +235,7 @@ export function mountHubFixture(target: HTMLElement) {
     },
     travel: async friend => { await travel.travel(friend.mapId); record(`PARTY.TRAVEL ${friend.character}`); },
   });
-  const people = createHubPeople(hub, session, { unavailable: () => null,
+  const people = createHubPeople(hub, session, { unavailable: friend => { const region = lifecycle.region(); return region.status === 'ready' && region.mapId === friend.mapId ? 'You are already in this outpost' : null; },
     run: async friend => { await travel.travel(friend.mapId); record(`FRIEND.TRAVEL ${friend.character}`); } }, partyInvite);
   people.setEnabled(true);
   // Romi waits in the player's starting outpost, so `invite Romi` is ready to send there.

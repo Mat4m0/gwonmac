@@ -639,7 +639,12 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
     travel: travelToFriend,
   }) : null;
   if (hub) hubPeople = prepare(() => createHubPeople(hub, whisperSession, travelToFriend ? {
-    unavailable: () => { const command = travel?.command(); return command ? command.unavailable() : "Travel is unavailable"; },
+    unavailable: friend => {
+      const command = travel?.command();
+      if (!command) return "Travel is unavailable";
+      const region = playRegions.state;
+      return command.unavailable() ?? (region.status === "ready" && region.mapId === friend.mapId ? "You are already in this outpost" : null);
+    },
     run: travelToFriend,
   } : null, partyInvite));
   const storageCommand = storage?.command() ?? null;
