@@ -6,7 +6,7 @@ import { resumeSearchInput } from './search-input.js';
 import { installHubWindow } from './hub-window.js';
 import { attachClassicFrame } from '../shared/ui/frame.js';
 import { isHubBackKey, resolveShortcuts, shortcutKeycaps, type ShortcutAction } from '../shared/keyboard-shortcuts.js';
-import { FINDABLE_SETTINGS, openHubSettings } from "./hub-settings.js";
+import { FINDABLE_SETTINGS, focusHubSetting, openHubSettings, type HubSettingsFocus } from "./hub-settings.js";
 import { createHubAccounts } from './hub-accounts.js';
 import { hubIcon } from "./hub-icons.js";
 import { openHubMaps } from './hub-maps.js';
@@ -231,7 +231,7 @@ export function createHub(parent: HTMLElement) {
       ...tool('storage', 'Open Xunlai Storage', 'Open your storage chest', 'chest bank', settings?.gwonmacTools && settings.xunlaiStorage, 'gw:storage-open'),
       ...(settings?.gwonmacTools && settings.cartographyEnabled ? [{ id: 'maps', title: 'Maps', detail: 'Exploration grid, walkable terrain and compass ranges', keywords: 'grid terrain compass opacity', group: 'Tools', action: 'Adjust maps', run: () => openHubMaps(presenter) }] : []),
       { id: 'hub-preferences', title: 'Hub preferences', detail: 'Pins and exact search phrases', keywords: 'aliases vocabulary', group: 'Commands', action: 'Adjust Hub', run: () => manageHubShortcuts(presenter, shortcuts, lookup, saveShortcuts, hubWindow.reset) },
-      { id: 'settings', title: 'Settings', detail: 'Game, appearance, tools, shortcuts and maps', keywords: 'preferences graphics appearance memory hotkeys', group: 'Commands', action: 'Open Settings', run: () => openSettings() },
+      { id: 'settings', title: 'Settings', detail: 'Game, appearance, tools, shortcuts and maps', keywords: 'preferences graphics appearance hotkeys', group: 'Commands', action: 'Open Settings', run: () => openSettings() },
       { id: 'launcher', title: 'Show Launcher', detail: 'Accounts, updates and game files', keywords: 'launcher administration', group: 'Commands', action: 'Show Launcher', run: async () => { await window.gwNative.app.showLauncher(); close(); } },
       { id: 'commands', title: 'Commands', detail: 'Examples you can edit and run', keywords: 'help guide examples', group: 'Commands', action: 'Browse examples', run: () => presenter.showRows('Commands', commandExamples) },
       { id: 'help', title: 'Project website', detail: 'Documentation and latest changes', keywords: 'help documentation', group: 'Commands', action: 'Open website', run: async () => { await window.gwNative.app.openExternal('github'); close(); } },
@@ -239,10 +239,11 @@ export function createHub(parent: HTMLElement) {
         // Call Target stays on its own shortcut: it acts only while the game has focus (HUB-133).
         // Quit or Reload opens the account's confirmation sheet, never a direct quit (HUB-001).
         // The sheet waits for the press that asked for it, so its repeat or trailing click never answers it.
-        // Settings are found by their own words and open with their control focused (HUB-063).
-        ...FINDABLE_SETTINGS.map(setting => ({ id: `setting:${setting.label}`, title: setting.label, detail: `Settings › ${setting.section}`, keywords: `setting ${setting.keywords ?? ''}`, group: 'Settings', action: 'Open setting', run: () => openSettings({ section: setting.section, control: setting.label }) })),
         { id: 'reload', title: 'Quit or Reload Game…', detail: 'Opens confirmation for this account', keywords: 'restart reconnect', group: 'Commands', action: 'Review options', run: async () => { close(); await window.gwSurfaces.afterPress(); await window.gwNative.app.showQuitOrReload(); } },
         ...(settings?.gwonmacTools && settings.resignEnabled ? [{ id: 'resign', title: 'Resign…', detail: 'Opens the existing confirmation', group: 'Commands', action: 'Review resign', run: () => { dispatch('gw:resign-show'); close(); } }] : []),
+        // Settings are found by their own words and open with their control focused (HUB-063).
+        // They follow the commands, so a command's own word keeps its row first.
+        ...(normaliseHubQuery(input.value).length < 3 ? [] : FINDABLE_SETTINGS).filter(setting => !setting.shown || (settings && setting.shown(settings))).map(setting => ({ id: `setting:${setting.label}`, title: setting.label, detail: `Settings › ${setting.section}`, keywords: `setting ${setting.keywords ?? ''}`, group: 'Settings', action: 'Open setting', run: () => openSettings({ section: setting.section, control: setting.label }) })),
       ]),
     ];
   };
@@ -265,7 +266,11 @@ export function createHub(parent: HTMLElement) {
     return examples.filter(([tool]) => !tool || enabled.has(tool)).map(([, query, detail], index) => ({ id: `example:${index}`, title: query!, detail: detail!, group: 'Commands', action: 'Edit example', searchQuery: query!, run() {} }));
   }
   /** Settings, optionally at one section with one control focused (search, the memory warning). */
-  function openSettings(focus?: Parameters<typeof openHubSettings>[1]) { direct('settings', () => openHubSettings(presenter, focus)); }
+  function openSettings(focus?: HubSettingsFocus) {
+    direct('settings', () => openHubSettings(presenter, focus));
+    // A Settings page that was already open, suspended or lower in the path shows the target too.
+    if (focus) focusHubSetting(focus);
+  }
   function select(id: string | null, scroll = false) {
     selected = id;
     for (const row of list.querySelectorAll<HTMLElement>('[role="option"]')) {
@@ -510,7 +515,7 @@ export function createHub(parent: HTMLElement) {
     const ids = new Set([...extra, ...savedRows].map(row => row.id));
     rows = scope ? matchHubRows(extra, input.value) : [...savedRows, ...extra.filter(row => !savedRows.some(saved => saved.id === row.id)), ...(parsed.term && parsed.scope ? [] : matchHubRows(commands().filter(row => !ids.has(row.id)), input.value))];
     rows = [...rows].sort((a, b) => {
-      const groups = ["Pinned", "Calculator", "Teams", "Folders", "Builds", "Targets", "Current build", "Accounts", "Characters", "In your party", "Unlocked heroes", "Heroes", "People", "Places", "Continue", "Tools", "Commands", "Sources"];
+      const groups = ["Pinned", "Calculator", "Teams", "Folders", "Builds", "Targets", "Current build", "Accounts", "Characters", "In your party", "Unlocked heroes", "Heroes", "People", "Places", "Continue", "Tools", "Commands", "Settings", "Sources"];
       const groupOrder = groups.indexOf(a.group) - groups.indexOf(b.group);
       if (groupOrder || scope || a.group !== 'Tools') return groupOrder;
       // Keep everyday game actions ahead of account management, independent of provider order.

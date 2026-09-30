@@ -12,27 +12,39 @@ import { listIndexAfter, listKeyStep } from '../shared/ui/list-keys.js';
 import { createTrailingSave } from './trailing-save.js';
 import { extendedMemoryView } from './extended-memory-setting.js';
 import { CHARACTER_DETAILS, CHAT_FILTERS, CONTROLLER_SYMBOL_OPTIONS, GAME_SETTINGS, RENDER_SCALE_OPTIONS, settingDetail } from '../shared/setting-copy.js';
-import type { ExtendedMemoryRuntimeStatus } from '../shared/contracts.js';
+import type { AppSettings, ExtendedMemoryRuntimeStatus } from '../shared/contracts.js';
 import type { LauncherSettingsSection } from '../shared/launcher-contracts.js';
 import { DEFAULT_SHORTCUTS, HUB_BACK_SHORTCUT, isHubBackKey, SHORTCUT_CAPTURE_HINT, shortcutEquals, shortcutKeycaps, shortcutReserved, SHORTCUT_ACTIONS, SHORTCUT_LABELS, shortcutConflict, type ShortcutAction, type ShortcutBinding } from '../shared/keyboard-shortcuts.js';
 
 /** Hub Settings sections, in the order of the launcher's game settings (docs/settings.md). */
 export const HUB_SETTINGS_SECTIONS = ['Game', 'Appearance', 'Tools', 'Shortcuts', 'Maps'] as const;
 export type HubSettingsSection = typeof HUB_SETTINGS_SECTIONS[number];
-/** The section Settings opened on last in this game session. */
-let lastSection: HubSettingsSection = 'Game';
+/**
+ * The section Settings opened on last in this game session. It starts on Tools, the most
+ * frequent in-game change; Game settings are rarer and found by search.
+ */
+let lastSection: HubSettingsSection = 'Tools';
 
-/** Settings that Hub search finds by their own words; ↵ opens the section with the control focused (HUB-063). */
-export const FINDABLE_SETTINGS: readonly Readonly<{ label: string; section: HubSettingsSection; keywords?: string }>[] = [
+export type HubSettingsFocus = Readonly<{ section: HubSettingsSection; control?: string }>;
+/** The open Settings page's way to show a section and focus a control; null while none is mounted. */
+let showTarget: ((focus: HubSettingsFocus) => void) | null = null;
+/** Shows a section and control on a Settings page that is already open, resumed or restored. */
+export function focusHubSetting(focus: HubSettingsFocus) { showTarget?.(focus); }
+
+/**
+ * Settings that Hub search finds by their own words; ↵ opens the section with the control
+ * focused (HUB-063). A setting whose control shows only with its tool on is offered only then.
+ */
+export const FINDABLE_SETTINGS: readonly Readonly<{ label: string; section: HubSettingsSection; keywords?: string; shown?: (settings: Pick<AppSettings, 'gwonmacTools' | 'chatFiltersEnabled'>) => boolean }>[] = [
   ...Object.values(GAME_SETTINGS).map(copy => ({ label: copy.label, section: 'Game' as const, keywords: copy.keywords })),
   { label: 'Panel style', section: 'Appearance', keywords: 'theme modern classic look' },
   { label: 'Panel opacity', section: 'Appearance', keywords: 'transparency' },
   { label: 'Panel font', section: 'Appearance', keywords: 'text typeface' },
   { label: 'Enable Tools', section: 'Tools', keywords: 'features' },
-  ...CHAT_FILTERS.map(filter => ({ label: filter.label, section: 'Tools' as const, keywords: 'chat filter spam' })),
+  ...CHAT_FILTERS.map(filter => ({ label: filter.label, section: 'Tools' as const, keywords: 'chat filter spam', shown: (settings: Pick<AppSettings, 'gwonmacTools' | 'chatFiltersEnabled'>) => settings.gwonmacTools && settings.chatFiltersEnabled })),
 ];
 
-export function openHubSettings(hub: Hub, focus?: Readonly<{ section: HubSettingsSection; control?: string }>) {
+export function openHubSettings(hub: Hub, focus?: HubSettingsFocus) {
   let page: HubSettingsSection = focus?.section ?? lastSection;
   let scroll = 0;
   hub.showView('Settings', target => {
@@ -222,13 +234,23 @@ export function openHubSettings(hub: Hub, focus?: Readonly<{ section: HubSetting
       if (saver.pending) return;
       void api.get().then(next => { if (!disposed && !saver.pending) { snapshot = next; repaint(); } }, () => { /* The shown values stay. */ });
     });
+    /** Opened for one setting (from search or the memory warning): that control takes the keyboard. */
+    const applyFocus = () => {
+      const control = focus?.control; focus = undefined;
+      if (!control) return;
+      body.querySelector<HTMLElement>(`[aria-label="${CSS.escape(control)}"]`)?.scrollIntoView({ block: 'center' });
+      focusControl(control);
+    };
+    const show = (next: HubSettingsFocus) => {
+      focus = next; page = next.section; lastSection = page; status.textContent = '';
+      if (snapshot) { render(); applyFocus(); }
+    };
+    showTarget = show;
     status.textContent = 'Loading settings…'; buttons[sections.indexOf(page)]?.focus();
     void api.get().then(next => {
       if (disposed) return;
-      snapshot = next; status.textContent = ''; render(); body.scrollTop = scroll;
-      // Opened for one setting (from search or the memory warning): that control takes the keyboard.
-      if (focus?.control) { body.querySelector<HTMLElement>(`[aria-label="${CSS.escape(focus.control)}"]`)?.scrollIntoView({ block: 'center' }); focusControl(focus.control); focus = undefined; }
+      snapshot = next; status.textContent = ''; render(); body.scrollTop = scroll; applyFocus();
     }).catch(() => { if (!disposed) { status.textContent = 'Settings could not load. Go back and try again.'; } });
-    return () => { scroll = body.scrollTop; disposed = true; unsubscribe(); view.remove(); };
+    return () => { scroll = body.scrollTop; disposed = true; unsubscribe(); if (showTarget === show) showTarget = null; view.remove(); };
   }, () => true, 'settings');
 }

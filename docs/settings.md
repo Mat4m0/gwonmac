@@ -76,7 +76,7 @@ reset all settings).
 
 | From | Opens |
 |---|---|
-| Hub › Settings, macOS Settings… in a game window | Hub Settings, last section |
+| Hub › Settings, macOS Settings… in a game window | Hub Settings, last section in this session; Tools at first |
 | Hub search: a setting's name | Hub Settings at that section, control focused |
 | Memory warning › "Memory settings" | Hub Settings › Game, Extended memory focused |
 | Hub link "… in the launcher" | Launcher Settings at that section |

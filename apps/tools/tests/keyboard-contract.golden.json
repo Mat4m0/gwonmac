@@ -218,7 +218,7 @@
     "ArrowDown": "Settings | focus button.ui-button | sel settings | q \"settings\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "ArrowUp": "Settings | focus button.ui-button | sel settings | q \"settings\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Tab": "Settings | focus button.ui-button | sel settings | q \"settings\" | action - | life outpost | canvas down 0 up 0 pointer 0",
-    "Shift+Tab": "Settings | focus button[Close Hub] | sel settings | q \"settings\" | action - | life outpost | canvas down 0 up 0 pointer 0",
+    "Shift+Tab": "Settings | focus button.ui-button | sel settings | q \"settings\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Home": "Settings | focus button.ui-button | sel settings | q \"settings\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "End": "Settings | focus button.ui-button | sel settings | q \"settings\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "PageDown": "Settings | focus button.ui-button | sel settings | q \"settings\" | action - | life outpost | canvas down 0 up 0 pointer 0",

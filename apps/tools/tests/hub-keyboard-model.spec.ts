@@ -254,6 +254,8 @@ test('Settings arrows stay in their column: sections do not wrap, → enters a s
   await hubSearch(page).fill('settings'); await page.keyboard.press('Enter');
   const game = page.getByRole('button', { name: 'Game', exact: true });
   const tools = page.getByRole('button', { name: 'Tools', exact: true });
+  await expect(tools).toBeFocused();
+  await page.keyboard.press('Home');
   await expect(game).toBeFocused();
   await page.keyboard.press('ArrowUp');
   await expect(game).toBeFocused();

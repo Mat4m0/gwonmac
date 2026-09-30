@@ -92,4 +92,10 @@ test('a setting is found by its words, changes in game, follows the launcher, an
   await expect(memory).not.toBeChecked();
   await page.getByRole('button', { name: 'Updates, game files and texture packs' }).click();
   await expect(page.locator('#app')).toHaveAttribute('data-action', 'Settings general');
+  // The memory warning's link lands on Extended memory even when Settings was left on another section.
+  await page.getByRole('button', { name: 'Appearance', exact: true }).click();
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await page.evaluate(() => window.gwHub?.openSettings({ section: 'Game', control: 'Extended memory' }));
+  await expect(page.locator('.hub-settings-body h2')).toHaveText('Game');
+  await expect(memory).toBeFocused();
 });
