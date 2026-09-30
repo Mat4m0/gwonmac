@@ -44,8 +44,13 @@ test('explicit offers compare price per point without implying a market quote',(
   assert.match(calculateTitle('250 party points for 0p')![0]!.title,/greater than zero/);
 });
 test('title calculations stay offline and never change progress',async()=>{
-  let copied='';const source=createHubCalculator({copy:async value=>{copied=value;},marketEnabled:()=>false,quotes:async()=>{throw new Error('Network forbidden');}});
+  let copied='',reads=0;const source=createHubCalculator({copy:async value=>{copied=value;},marketEnabled:()=>false,quotes:async()=>{reads++;throw new Error('Network forbidden');}});
   source.setVisible(true);const row=source.search('250 cupcakes in sweet points')[0]!;
   assert.equal(row.group,'Titles');await row.run(task);assert.match(copied,/500 Sweet Tooth points/);
-  assert.equal(source.search('10 ecto in p').length,0);source.setVisible(false);
+  assert.equal(source.search('10 ecto in p')[0]?.id,'quote-disabled');assert.equal(reads,0);source.setVisible(false);
+});
+
+test('progress accepts the same short track names as entered point quantities', () => {
+  for (const [short, full] of [['sweet', 'sweet tooth'], ['drunk', 'drunkard'], ['party', 'party animal']] as const)
+    assert.deepEqual(calculateTitle(`${short} from 0`), calculateTitle(`${full} from 0`));
 });

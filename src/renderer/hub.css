@@ -108,7 +108,8 @@
 .hub-conversion-art-to { grid-column:3; }
 .hub-conversion:has(.hub-conversion-art) { min-height:205px; }
 .hub-conversion:has(.hub-conversion-art) .hub-title,.hub-conversion:has(.hub-conversion-art) .hub-conversion-input { padding-top:44px; }
-.hub-conversion-input { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.hub-conversion-input { overflow-wrap:anywhere; white-space:normal; }
+.hub-row:is([data-id="quote-state"],[data-id="quote-disabled"],[data-id="market-state"],[data-id="quote-missing"],[data-id="missing-manual-rate"],[data-id="market-unsupported"],[data-id="calculation-error"]) :is(.hub-title,.hub-detail) { white-space:normal; overflow-wrap:anywhere; }
 .hub-rate-controls { padding:0 24px 8px; }
 .hub-rate-controls label { display:flex; align-items:center; justify-content:flex-end; gap:12px; color:var(--ui-text-muted); font-size:12px; }
 .hub-rate-controls select { font:inherit; min-height:32px; }
@@ -392,3 +393,8 @@
 .hub-build-details p { color:var(--ui-text-muted); white-space:pre-wrap; }
 .hub-receipt { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); max-width:calc(100vw - 32px); z-index:var(--ui-z-toast); padding:10px 16px; color:var(--ui-text); pointer-events:none; }
 .hub-receipt[data-outcome=failed] { border-inline-start:2px solid var(--ui-warning); }
+
+/* Native input and measuring layer share the decided currency gap geometry. */
+.hub-search-glyphs { position:absolute; pointer-events:none; overflow:hidden; white-space:pre; color:transparent; text-shadow:none; font:var(--ui-type-window-size)/var(--ui-type-window-line) var(--ui-font-interface); letter-spacing:normal; padding:0; }
+.hub-search .hub-calculation-input { word-spacing:1.25em; padding-right:1.25em; }
+.hub-search-glyphs img { position:absolute; top:50%; height:1.15em; object-fit:contain; transform:translate(-50%,-50%); }

@@ -91,3 +91,15 @@ reset all settings).
 - Every label shared by both surfaces is byte-identical (unit test over the catalogue).
 - A change made in the launcher repaints an open Hub Settings page.
 - Check for Updates… opens the Updates section.
+
+## Calculator estimates
+
+Hub › Conversion rates saves the selected source and optional currency estimates
+through the existing settings file. Rates apply in every game window. They do
+not change the game or replace observed prices. Automatic keeps the saved
+estimates for a later switch to Your rates.
+
+Older builds ignore `calculatorRates` and can discard that field on their next
+settings write. Release planning must account for this existing reader behavior
+before a public Beta writes the new field. Developer Builds can verify the editor
+and persistence without publishing a new release.

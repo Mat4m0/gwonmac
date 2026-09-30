@@ -401,6 +401,7 @@ const candidateSettingsDomains = Array.from(
   (_, index): AppSettings => {
     const settings: AppSettings = {
       hubShortcuts: [],
+      calculatorRates: { mode: index % 2 ? 'manual' : 'automatic', ecto: '5000', armbrace: '30', zkey: '0.5' },
       renderScale: cycle(RENDER_SCALES, index),
       uiStyle: cycle(UI_STYLES, index),
       uiCustomTheme: cycle(customThemeValues, index),

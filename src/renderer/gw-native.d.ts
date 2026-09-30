@@ -312,6 +312,7 @@ declare global {
     gwToolsSettings(): Readonly<{
       shortcutOverrides?: ShortcutOverrides;
       hubShortcuts?: AppSettings['hubShortcuts'];
+      calculatorRates?: AppSettings['calculatorRates'];
       gwonmacTools: boolean;
       buildLibrary: boolean;
       tradeChat: boolean;
