@@ -64,3 +64,16 @@ test('saved phrases reject duplicates and private references in global settings'
   assert.throws(() => parseRendererSettingsPatch({ hubShortcuts: [{ id: 'build:private', phrase: 'my build', pinned: true }] }), /Invalid Hub/);
 });
 
+test('scope aliases preserve their canonical scope and typed argument (HUB-142)', () => {
+  for (const [alias, scope] of [['tp', 'travel'], ['builds', 'build'], ['teams', 'team'], ['character', 'char'], ['account', 'acc']]) {
+    assert.deepEqual(parseHubQuery(`${alias} Toefte`), { scope, term: 'toefte', text: 'Toefte' });
+    assert.deepEqual(parseHubQuery(`${alias} `), { scope, term: '', text: '' });
+  }
+});
+
+test('search folds typographic punctuation and matches parenthesised name words (HUB-143)', () => {
+  const rows = [row('place', "Lion's Arch"), row('pre', 'Ascalon City (pre-Searing)')];
+  for (const [query, expected] of [['lion’s arch', ['place']], ['pre–searing', ['pre']], ['pre-searing', ['pre']]] as const) {
+    assert.deepEqual(matchHubRows(rows, query).map(row => row.id), expected);
+  }
+});
