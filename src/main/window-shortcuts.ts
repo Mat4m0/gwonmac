@@ -4,7 +4,7 @@
  */
 import { isAppShortcutCaptureActive } from "./launcher-shortcut-capture.js";
 import type { BrowserWindow } from "electron";
-import type { AppSettings, GameTextEditCommand } from "../shared/contracts.js";
+import type { AppSettings, GameTextEditCommand, TextEditCommand } from "../shared/contracts.js";
 import { featureActivationRequested, type FeatureId } from "../shared/feature-contracts.js";
 import {
   resolveShortcuts,
@@ -34,7 +34,7 @@ const tracedKey = (key: string) => {
 
 interface ShortcutActions {
   run(action: ShortcutAction | "hub.toggle"): void | Promise<void>;
-  edit(command: GameTextEditCommand): void;
+  edit(command: TextEditCommand): void;
   quitOrReload(): void | Promise<void>;
   recordCommandQ?(
     phase: "claimed" | "repeat-contained" | "rearmed",
@@ -60,16 +60,22 @@ const isModifierCode = (code: string): boolean =>
 
 const commandChord = (key: string, shift = false): ShortcutBinding => ({ key, shift, option: false });
 /** The macOS Edit chords, matched like every app shortcut by the letter the layout types. */
-const TEXT_EDIT_CHORDS: readonly (readonly [ShortcutBinding, GameTextEditCommand])[] = [
+const TEXT_EDIT_CHORDS: readonly (readonly [ShortcutBinding, TextEditCommand])[] = [
   [commandChord("a"), "selectAll"],
   [commandChord("c"), "copy"],
   [commandChord("v"), "paste"],
   [commandChord("x"), "cut"],
+  [commandChord("z"), "undo"],
+  [commandChord("z", true), "redo"],
 ];
 const QUIT_CHORD = commandChord("q");
 
-const textEditCommand = (input: Electron.Input): GameTextEditCommand | null =>
+const textEditCommand = (input: Electron.Input): TextEditCommand | null =>
   TEXT_EDIT_CHORDS.find(([binding]) => shortcutMatches(binding, input))?.[1] ?? null;
+
+/** Undo and Redo stay in Chromium; only these reach Guild Wars as a translated Control chord. */
+const isGameTextEditCommand = (command: TextEditCommand): command is GameTextEditCommand =>
+  command !== "undo" && command !== "redo";
 
 /** The feature whose activation lets each shortcut action run. */
 const SHORTCUT_FEATURES = [
@@ -217,7 +223,7 @@ class WindowShortcuts {
           key: tracedKey(input.key), repeat: input.isAutoRepeat,
           decision: 'shortcut',
         });
-        this.#claimedCodes.set(input.code, edit);
+        this.#claimedCodes.set(input.code, isGameTextEditCommand(edit) ? edit : 'shortcut');
         this.#actions.edit(edit);
         return;
       }

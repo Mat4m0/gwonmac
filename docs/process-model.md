@@ -243,18 +243,20 @@ recycling so camera movement can continue. The host normalizes supported
 physical keyboard positions before the official client receives them. Text
 fields still use the active macOS input source.
 
-Main claims Command-A/C/X/V before the renderer can hold their base keys and
-runs the edit immediately. As with every app shortcut, a letter chord is the
-letter the active keyboard layout types: AZERTY Command-A selects all and
-Command-Q quits wherever those keys sit. An input source without Latin letters
-keeps the US letter position, as macOS does. Digits, punctuation and named keys
-stay physical, so Command-1…9 is the digit row on every layout. The claim
-contains the pressed key's repeats and releases while allowing the translated
-Control chord through. An assigned app shortcut whose tool is off stays
-claimed and does nothing, because Guild Wars acts on the base key whatever
-modifier is held. Edit menu clicks use the same semantic command and
-focused-window route. A hidden Guild Wars text proxy claims the command. An
-ordinary gwonmac input declines it so Chromium edits normally. Copy and Cut send only non-password proxy text to
+Main claims Command-A/C/X/V/Z and Shift-Command-Z before the renderer can hold
+their base keys and runs the edit immediately. As with every app shortcut, a
+letter chord is the letter the active keyboard layout types: AZERTY Command-A
+selects all and Command-Q quits wherever those keys sit. An input source
+without Latin letters keeps the US letter position, as macOS does. Digits,
+punctuation and named keys stay physical, so Command-1…9 is the digit row on
+every layout. The claim contains the pressed key's repeats and releases while
+allowing the translated Control chord through. An assigned app shortcut whose
+tool is off stays claimed and does nothing, because Guild Wars acts on the base
+key whatever modifier is held. Edit menu clicks use the same semantic command
+and focused-window route. A hidden Guild Wars text proxy claims the command. An
+ordinary gwonmac input declines it so Chromium edits normally. Undo and Redo
+edit only such an input: the game keeps its own text, so its proxy declines
+them, and outside a field the open Build Library undoes its last change. Copy and Cut send only non-password proxy text to
 main. Main writes Cut text to the pasteboard before it sends Guild Wars
 Control-X. Paste validates the clipboard in main and sends Guild Wars a
 Control-V chord, which also produces Chromium's trusted native Paste edit

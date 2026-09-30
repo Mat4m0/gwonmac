@@ -97,9 +97,16 @@ test('Hub list navigation preserves native editing shortcuts, Unicode and compos
       contents?.sendInputEvent({ type: 'keyUp', keyCode: 'V', modifiers: ['meta'] });
     }, page.url());
     await expect(search).toHaveValue('travel');
-    await search.press('ArrowDown'); await page.keyboard.press('Meta+z');
+    // Undo and Redo go through main's claim, not Playwright's injected editing commands (HUB-134).
+    const commandZ = (shift: boolean) => app.evaluate(({ BrowserWindow }, { url, shift }) => {
+      const contents = BrowserWindow.getAllWindows().find(win => win.webContents.getURL() === url)?.webContents;
+      const modifiers: ('meta' | 'shift')[] = shift ? ['meta', 'shift'] : ['meta'];
+      contents?.sendInputEvent({ type: 'keyDown', keyCode: 'Z', modifiers });
+      contents?.sendInputEvent({ type: 'keyUp', keyCode: 'Z', modifiers });
+    }, { url: page.url(), shift });
+    await search.press('ArrowDown'); await commandZ(false);
     await expect(search).toHaveValue('sw');
-    await search.press('ArrowDown'); await page.keyboard.press('Meta+Shift+z');
+    await search.press('ArrowDown'); await commandZ(true);
     await expect(search).toHaveValue('travel');
     await search.evaluate(input => { if (input instanceof HTMLInputElement) input.setSelectionRange(0, 1); });
     await search.press('ArrowDown'); await page.keyboard.press('Delete');

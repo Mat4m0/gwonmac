@@ -1046,7 +1046,7 @@ export type RendererCommand =
   | { type: "hub.settings" }
   | { type: "input.reset" }
   | { type: "input.release"; code: string }
-  | { type: "text.edit"; command: GameTextEditCommand }
+  | { type: "text.edit"; command: TextEditCommand }
   | { type: "accounts.settings.open" }
   | { type: "tools.toggle" }
   | { type: "trade.toggle" }
@@ -1242,6 +1242,11 @@ export type GameTextEditRequest =
   | { command: "selectAll" };
 
 export type GameTextEditCommand = GameTextEditRequest["command"];
+/**
+ * A macOS Edit command. Undo and Redo edit only an ordinary gwonmac field;
+ * the Guild Wars editor keeps its own text, so they never reach it.
+ */
+export type TextEditCommand = GameTextEditCommand | "undo" | "redo";
 
 export const GAME_RELOAD_CAUSES = [
   "memory-warning",

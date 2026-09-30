@@ -443,9 +443,11 @@ describe("window shortcut layout and ownership", () => {
     for (const [layout, code, key, expected] of [
       ["AZERTY Command-A", "KeyQ", "a", "edit:selectAll"],
       ["AZERTY Command-Q", "KeyA", "q", "quitOrReload"],
+      ["AZERTY Command-Z", "KeyW", "z", "edit:undo"],
       ["Dvorak Command-Q", "KeyX", "q", "quitOrReload"],
       ["Dvorak Command-X", "KeyB", "x", "edit:cut"],
       ["Colemak Command-R", "KeyS", "r", "hub.toggle"],
+      ["QWERTZ Command-Z", "KeyY", "z", "edit:undo"],
       // An input source without Latin letters keeps the US position, as macOS does.
       ["Russian Command-A", "KeyA", "ф", "edit:selectAll"],
     ] as const) {
@@ -453,6 +455,13 @@ describe("window shortcut layout and ownership", () => {
       assert.equal(press(code, key), true, layout);
       assert.deepEqual(calls, [expected], layout);
     }
+  });
+
+  it("claims Command-Z and Shift-Command-Z as Undo and Redo (HUB-134)", () => {
+    const { calls, press } = install();
+    assert.equal(press("KeyZ", "z"), true);
+    assert.equal(press("KeyZ", "Z", true), true);
+    assert.deepEqual(calls, ["edit:undo", "edit:redo"]);
   });
 
   it("keeps a disabled tool's chord from Guild Wars without running it (HUB-037)", () => {
