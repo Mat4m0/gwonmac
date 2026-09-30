@@ -36,11 +36,9 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
   function page(): HubViewMount<HTMLElement> {
     let resume: InstanceType<typeof TravelPalette>['$props']['resume'];
     return (target, back, footer) => {
-      // Travel names its trip in its own footer.
-      footer.own();
       active = true;
       const app = createApp({ setup: () => () => h(TravelPalette, {
-        host, preferences, ...(resume ? { resume } : {}), onRemember: state => { resume = state; }, inset: true, hubParent: !!hub.hasParent, visible: true, nativeDialog: true, onClose: back,
+        host, preferences, footer, ...(resume ? { resume } : {}), onRemember: state => { resume = state; }, inset: true, hubParent: !!hub.hasParent, visible: true, nativeDialog: true, onClose: back,
         // A trip ends the task: the Hub closes, whether Travel opened from Home or by Command-T (HUB-017).
         onTravelled: () => hub.close(),
       }) });
