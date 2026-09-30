@@ -37,9 +37,11 @@ test('Home separates current context, teaches commands, and shows resolved short
   await expect(page.locator('.hub-scope')).toHaveText('team');
   await expect(page.locator('.hub-legend')).toContainText('Esc Clear');
   await page.getByRole('button', { name: 'Actions', exact: true }).click();
-  // Footer slots never hide: with no details to show, the secondary is disabled in place.
-  await expect(page.locator('.hub-actions')).toBeVisible();
-  await expect(page.locator('.hub-actions')).toBeDisabled();
+  await expect(page.getByRole('menu', { name: 'Actions' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('menu', { name: 'Actions' })).toBeHidden();
+  await expect(search).toHaveValue('team gom afk');
+  await search.press('ArrowRight');
   await expect(page.locator('.hub-legend')).toContainText('Esc Back');
   await expect(page.getByRole('button', { name: 'Back', exact: true })).toHaveAttribute('title', 'Back (⌘⌫)');
   await expect(page.getByRole('button', { name: 'Back', exact: true })).toHaveAttribute('aria-description', 'Return to Home');

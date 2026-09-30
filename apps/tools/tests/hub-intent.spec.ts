@@ -155,16 +155,17 @@ test('held Enter on footer actions and Backspace in ordinary fields keep their s
   await page.getByRole('button', { name: 'Home', exact: true }).click();
   await search.fill('team gom afk');
   await page.getByRole('button', { name: 'Actions', exact: true }).click();
-  await page.getByRole('option', { name: /Set search phrase/ }).click();
+  await page.getByRole('menuitem', { name: /Set search phrase/ }).click();
   const phrase = page.getByRole('textbox', { name: 'Search phrase', exact: true });
   await phrase.fill(''); await phrase.press('Backspace');
   await expect(page.locator('.hub-caption')).toHaveText('Search phrase');
   await expect(phrase).toBeFocused();
   // Command-Backspace is Back from a form field too; the form keeps its draft for the session.
   await phrase.fill('keep me'); await phrase.press('Meta+Backspace');
-  await expect(page.locator('.hub-caption')).toHaveText('GOM AFK');
+  await expect(page.locator('.hub-caption')).toHaveText('Home');
   await expect(phrase).toHaveCount(0);
-  await page.getByRole('option', { name: /Set search phrase/ }).click();
+  await page.getByRole('button', { name: 'Actions', exact: true }).click();
+  await page.getByRole('menuitem', { name: /Set search phrase/ }).click();
   await expect(phrase).toHaveValue('keep me');
   await expect(phrase).toBeFocused();
   // A closed and reopened Hub still has it.
@@ -173,7 +174,7 @@ test('held Enter on footer actions and Backspace in ordinary fields keep their s
   await page.getByRole('button', { name: 'Open Hub', exact: true }).click();
   await search.fill('team gom afk');
   await page.getByRole('button', { name: 'Actions', exact: true }).click();
-  await page.getByRole('option', { name: /Set search phrase/ }).click();
+  await page.getByRole('menuitem', { name: /Set search phrase/ }).click();
   await expect(phrase).toHaveValue('keep me');
 });
 
@@ -198,7 +199,7 @@ test('the phrase editor refuses a new phrase that starts with a scope word', asy
   const search = page.getByRole('combobox', { name: searchName });
   await search.fill('team gom afk');
   await page.getByRole('button', { name: 'Actions', exact: true }).click();
-  await page.getByRole('option', { name: /Set search phrase/ }).click();
+  await page.getByRole('menuitem', { name: /Set search phrase/ }).click();
   const phrase = page.getByRole('textbox', { name: 'Search phrase', exact: true });
   await phrase.fill('invite x'); await phrase.press('Enter');
   await expect(page.locator('.hub-view [role="status"]')).toHaveText('Choose a unique phrase. Command words are reserved.');
@@ -496,7 +497,7 @@ test.describe('Characters: typing never switches', () => {
     await page.keyboard.press('7');
     await expect(card(page, 'warrior')).toBeFocused();
     await expect(card(page, 'warrior')).toHaveAttribute('aria-selected', 'true');
-    await expect(page.locator('.character-switch-action')).toHaveText(/^Switch to Fixture Warrior/u);
+    await expect(page.locator('#hub .hub-primary')).toHaveText(/^Switch to Fixture Warrior/u);
     await page.keyboard.press('3');
     await expect(card(page, 'mesmer')).toBeFocused();
     // A digit with no card types nothing and switches nothing.
@@ -508,7 +509,7 @@ test.describe('Characters: typing never switches', () => {
     await expect(card(page, 'ranger')).toBeFocused();
     await expect(page.locator('#character-switch-query')).toHaveValue('');
     expect(await action(page)).toBeNull();
-    await expect(page.locator('.character-switch-action')).toHaveText(/^Switch to Fixture Ranger/u);
+    await expect(page.locator('#hub .hub-primary')).toHaveText(/^Switch to Fixture Ranger/u);
     await page.keyboard.press('Enter');
     await expect(page.locator('#app')).toHaveAttribute('data-action', 'Character ranger');
   });
@@ -581,7 +582,7 @@ test.describe('Characters: typing never switches', () => {
       await expect(page.locator('#character-switch-title')).toHaveText('Leave this area and switch to Toefte?');
       const leave = page.getByRole('button', { name: 'Leave and switch to Toefte', exact: true });
       await expect(leave).toHaveAttribute('data-variant', 'danger');
-      await expect(page.getByRole('button', { name: 'Stay here' })).toBeFocused();
+      await expect(page.locator('#character-switch-stay')).toBeFocused();
       await page.keyboard.press('ArrowRight');
       await expect(leave).toBeFocused();
       await page.keyboard.press('ArrowLeft');
@@ -606,7 +607,7 @@ test('a Travel number key selects its favourite, a held one repeats nothing, and
   await page.keyboard.up('1');
   const favourite = page.locator('#travel-favorite-0');
   await expect(favourite).toHaveAttribute('aria-selected', 'true');
-  await expect(page.locator('.travel-primary')).toHaveText(/^Travel to Ascalon City/u);
+  await expect(page.locator('#hub .hub-primary')).toHaveText(/^Travel to Ascalon City/u);
   await expect(page.locator('.hub-caption')).toHaveText('Travel');
   await expect(travelSearch).toHaveValue('');
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', /TRAVEL/u);
