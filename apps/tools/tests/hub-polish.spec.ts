@@ -74,3 +74,22 @@ test('Maps follows external settings and recovers from a failed save', async ({ 
   await expect(grid).not.toBeChecked();
   await expect(page.locator('.hub-map-settings > p[role="status"]')).toBeHidden();
 });
+
+// docs/settings.md: every game setting is found by its words and changes in game; the rest is one link away.
+test('a setting is found by its words, changes in game, follows the launcher, and links to what the launcher keeps', async ({ page }) => {
+  await page.goto('/?hub');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  await search.fill('memory');
+  await expect(page.locator('.hub-primary')).toHaveText(/^Open setting/);
+  await search.press('Enter');
+  const memory = page.getByRole('checkbox', { name: 'Extended memory' });
+  await expect(page.locator('.hub-settings-body h2')).toHaveText('Game');
+  await expect(memory).toBeFocused();
+  await page.keyboard.press('Space');
+  await expect(memory).toBeChecked();
+  await expect(memory).toBeFocused();
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: { extendedMemoryEnabled: false } })));
+  await expect(memory).not.toBeChecked();
+  await page.getByRole('button', { name: 'Updates, game files and texture packs' }).click();
+  await expect(page.locator('#app')).toHaveAttribute('data-action', 'Settings general');
+});

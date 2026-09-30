@@ -10,10 +10,30 @@ import { GLOBAL_TOOLS } from '../shared/launcher-contracts.js';
 import { TOOL_PRESENTATION } from '../shared/tool-presentation.js';
 import { listIndexAfter, listKeyStep } from '../shared/ui/list-keys.js';
 import { createTrailingSave } from './trailing-save.js';
+import { extendedMemoryView } from './extended-memory-setting.js';
+import { CHARACTER_DETAILS, CHAT_FILTERS, CONTROLLER_SYMBOL_OPTIONS, GAME_SETTINGS, RENDER_SCALE_OPTIONS, settingDetail } from '../shared/setting-copy.js';
+import type { ExtendedMemoryRuntimeStatus } from '../shared/contracts.js';
+import type { LauncherSettingsSection } from '../shared/launcher-contracts.js';
 import { DEFAULT_SHORTCUTS, HUB_BACK_SHORTCUT, isHubBackKey, SHORTCUT_CAPTURE_HINT, shortcutEquals, shortcutKeycaps, shortcutReserved, SHORTCUT_ACTIONS, SHORTCUT_LABELS, shortcutConflict, type ShortcutAction, type ShortcutBinding } from '../shared/keyboard-shortcuts.js';
 
-export function openHubSettings(hub: Hub) {
-  let page = 'Tools';
+/** Hub Settings sections, in the order of the launcher's game settings (docs/settings.md). */
+export const HUB_SETTINGS_SECTIONS = ['Game', 'Appearance', 'Tools', 'Shortcuts', 'Maps'] as const;
+export type HubSettingsSection = typeof HUB_SETTINGS_SECTIONS[number];
+/** The section Settings opened on last in this game session. */
+let lastSection: HubSettingsSection = 'Game';
+
+/** Settings that Hub search finds by their own words; ↵ opens the section with the control focused (HUB-063). */
+export const FINDABLE_SETTINGS: readonly Readonly<{ label: string; section: HubSettingsSection; keywords?: string }>[] = [
+  ...Object.values(GAME_SETTINGS).map(copy => ({ label: copy.label, section: 'Game' as const, keywords: copy.keywords })),
+  { label: 'Panel style', section: 'Appearance', keywords: 'theme modern classic look' },
+  { label: 'Panel opacity', section: 'Appearance', keywords: 'transparency' },
+  { label: 'Panel font', section: 'Appearance', keywords: 'text typeface' },
+  { label: 'Enable Tools', section: 'Tools', keywords: 'features' },
+  ...CHAT_FILTERS.map(filter => ({ label: filter.label, section: 'Tools' as const, keywords: 'chat filter spam' })),
+];
+
+export function openHubSettings(hub: Hub, focus?: Readonly<{ section: HubSettingsSection; control?: string }>) {
+  let page: HubSettingsSection = focus?.section ?? lastSection;
   let scroll = 0;
   hub.showView('Settings', target => {
     const doc = target.ownerDocument;
@@ -30,12 +50,12 @@ export function openHubSettings(hub: Hub) {
     });
     let snapshot: HubSettingsSnapshot | null = null; let disposed = false;
     const api = window.gwNative.hubSettings;
-    const sections = ['Tools', 'Appearance', 'Shortcuts', 'Maps', 'Chat & characters'];
+    const sections = HUB_SETTINGS_SECTIONS;
     const buttons = sections.map(name => {
       const button = doc.createElement('button'); button.type = 'button'; button.textContent = name; button.className = 'ui-button'; button.dataset.section = name;
-      const icons: Record<string, string> = { Tools: 'settings', Appearance: 'appearance', Shortcuts: 'keyboard', Maps: 'maps', 'Chat & characters': 'whispers' };
-      button.prepend(hubIcon(doc, { id: icons[name] ?? 'settings', group: 'Settings' }));
-      button.onclick = () => { page = name; status.textContent = ''; render(); };
+      const icons: Record<HubSettingsSection, string> = { Game: 'game', Tools: 'settings', Appearance: 'appearance', Shortcuts: 'keyboard', Maps: 'maps' };
+      button.prepend(hubIcon(doc, { id: icons[name], group: 'Settings' }));
+      button.onclick = () => { page = name; lastSection = name; status.textContent = ''; render(); };
       // The sections are a list: the shared list keys choose one, without wrapping; → enters its first usable control.
       button.onkeydown = event => {
         if (event.key === 'ArrowRight' && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
@@ -49,10 +69,12 @@ export function openHubSettings(hub: Hub) {
       };
       nav.append(button); return button;
     });
-    function row(title: string, control: HTMLElement, detail = '') {
+    /** A setting's row; `state` says what the running game uses when that differs from the saved choice. */
+    function row(title: string, control: HTMLElement, detail = '', state?: Readonly<{ text: string; level: string }>) {
       const label = doc.createElement('label'); label.className = control.matches('input[type=checkbox]') ? 'hub-setting-row ui-check' : 'hub-setting-row';
       const copy = doc.createElement('span'); const name = doc.createElement('strong'); name.textContent = title; copy.append(name);
       if (detail) { const hint = doc.createElement('small'); hint.textContent = detail; copy.append(hint); }
+      if (state) { const note = doc.createElement('small'); note.className = 'hub-setting-state'; note.dataset.level = state.level; note.textContent = state.text; copy.append(note); }
       if (control.matches('input,select,button')) control.setAttribute('aria-label', title); label.append(copy, control); body.append(label);
     }
     /** The control that keeps the keyboard after the saves settle, by its label. */
@@ -80,11 +102,24 @@ export function openHubSettings(hub: Hub) {
       refocus = focus; view.setAttribute('aria-busy', 'true'); status.textContent = '';
       saver.save(change);
     }
-    function toggle(title: string, value: boolean, change: (value: boolean) => HubSettingsChange, detail = '', disabled = false) {
+    /** Repaints the section from the stored values; the focused control keeps the keyboard. */
+    function repaint() {
+      const active = doc.activeElement;
+      const label = active instanceof HTMLElement && body.contains(active) ? active.getAttribute('aria-label') : null;
+      render();
+      if (label) focusControl(label);
+    }
+    function toggle(title: string, value: boolean, change: (value: boolean) => HubSettingsChange, detail = '', disabled = false, state?: Parameters<typeof row>[3]) {
       const input = doc.createElement('input'); input.type = 'checkbox'; input.checked = value; input.disabled = disabled;
-      input.onchange = () => { save(change(input.checked), title); }; row(title, input, detail);
+      input.onchange = () => { save(change(input.checked), title); }; row(title, input, detail, state);
     }
     function settingToggle(title: string, key: keyof HubSettingsPatch, detail = '') { toggle(title, snapshot?.settings[key] === true, value => ({ kind: 'settings', patch: { [key]: value } }), detail); }
+    /** A row that opens the launcher at the section holding what this section does not show. */
+    function launcherLink(title: string, detail: string, section: LauncherSettingsSection) {
+      const open = doc.createElement('button'); open.type = 'button'; open.className = 'ui-button'; open.textContent = 'Open in launcher';
+      open.onclick = () => { void window.gwNative.app.openSettings(section).catch(() => { status.textContent = 'The launcher could not open. Use Window › Show Launcher.'; }); };
+      row(title, open, detail);
+    }
     function select<Key extends keyof HubSettingsPatch>(title: string, key: Key, options: readonly { label: string; value: NonNullable<HubSettingsPatch[Key]> }[], detail = '') {
       const input = doc.createElement('select'); input.className = 'ui-select';
       for (const choice of options) { const option = doc.createElement('option'); option.textContent = choice.label; option.value = String(choice.value); input.append(option); }
@@ -113,10 +148,29 @@ export function openHubSettings(hub: Hub) {
       if (disposed || !snapshot) return;
       body.replaceChildren(); buttons.forEach(button => button.setAttribute('aria-current', String(button.dataset.section === page)));
       const heading = doc.createElement('h2'); heading.textContent = page; body.append(heading);
-      if (page === 'Tools') {
+      if (page === 'Game') {
+        const game = GAME_SETTINGS;
+        select(game.renderScale.label, 'renderScale', RENDER_SCALE_OPTIONS, settingDetail(game.renderScale));
+        // The saved choice applies at the next start; the row also says what this session uses.
+        const memory = extendedMemoryView(snapshot.settings.extendedMemoryEnabled === true, memoryRuntime);
+        toggle(game.extendedMemoryEnabled.label, snapshot.settings.extendedMemoryEnabled === true, value => ({ kind: 'settings', patch: { extendedMemoryEnabled: value } }), settingDetail(game.extendedMemoryEnabled), false,
+          memoryRuntime ? { text: memory.level === 'warn' ? `${memory.label}. ${memory.detail}` : `${memory.label} now.`, level: memory.level } : undefined);
+        select(game.controllerPromptStyle.label, 'controllerPromptStyle', CONTROLLER_SYMBOL_OPTIONS, settingDetail(game.controllerPromptStyle));
+        settingToggle(game.autoRelogAfterReload.label, 'autoRelogAfterReload', settingDetail(game.autoRelogAfterReload));
+        settingToggle(game.showDiagnostics.label, 'showDiagnostics', settingDetail(game.showDiagnostics));
+        launcherLink('Updates, game files and texture packs', 'The launcher keeps what concerns the app, your accounts and your files.', 'general');
+      } else if (page === 'Tools') {
         toggle('Enable Tools', snapshot.tools.configured, enabled => ({ kind: 'master', enabled }), 'Optional features. Character Switch works independently.');
         if (snapshot.tools.restartRequired) { const note = doc.createElement('p'); note.className = 'hub-settings-note'; note.textContent = 'Saved. Close your game windows and restart gwonmac to finish loading or unloading Tools.'; body.append(note); }
-        for (const tool of GLOBAL_TOOLS) { const info = TOOL_PRESENTATION[tool]; toggle(info.label, snapshot.tools.features[tool].enabled, enabled => ({ kind: 'tool', tool, enabled }), info.description, tool !== 'character-switch' && !snapshot.tools.configured); }
+        for (const tool of GLOBAL_TOOLS) {
+          const info = TOOL_PRESENTATION[tool]; const on = (tool === 'character-switch' || snapshot.tools.configured) && snapshot.tools.features[tool].enabled;
+          toggle(info.label, snapshot.tools.features[tool].enabled, enabled => ({ kind: 'tool', tool, enabled }), info.description, tool !== 'character-switch' && !snapshot.tools.configured);
+          // A tool's own options follow it while it is on, as in the launcher.
+          if (on && tool === 'character-switch') for (const detail of CHARACTER_DETAILS) settingToggle(detail.label, detail.key);
+          if (on && tool === 'chat-filters') for (const filter of CHAT_FILTERS) settingToggle(filter.label, filter.key);
+        }
+        const note = doc.createElement('p'); note.textContent = 'Whisper sound and pop-out opacity are in Whispers › Chat options.'; body.append(note);
+        launcherLink('Skill key labels and timer color', 'What each skill key shows, the cooldown timer color and the Alcohol Timer position.', 'tools');
       } else if (page === 'Appearance') {
         const resetPosition = doc.createElement('button'); resetPosition.className = 'ui-button'; resetPosition.textContent = 'Reset';
         resetPosition.onclick = () => { hub.resetPosition(); status.textContent = 'Hub position and size reset. Window locked.'; };
@@ -124,7 +178,7 @@ export function openHubSettings(hub: Hub) {
         select('Panel style', 'uiStyle', [{ label: 'Guild Wars', value: 'guild-wars' }, { label: 'Modern', value: 'obsidian' }, { label: 'Your custom theme', value: 'custom' }]);
         range('Panel opacity', 'uiPanelOpacity', UI_PANEL_OPACITY_MIN);
         select('Panel font', 'uiFont', UI_FONTS.map(value => ({ label: value === 'guild-wars' ? 'Guild Wars' : value.charAt(0).toUpperCase() + value.slice(1), value })), 'Changes Hub and other in-game panels. Messages keep a readable text face.');
-        settingToggle('Relog after reload', 'autoRelogAfterReload');
+        launcherLink('Custom colors', 'Edit the colors of Your custom theme.', 'game');
       } else if (page === 'Shortcuts') {
         const hint = doc.createElement('p'); hint.textContent = 'Changes apply to every account.'; body.append(hint);
         for (const action of SHORTCUT_ACTIONS) {
@@ -157,14 +211,24 @@ export function openHubSettings(hub: Hub) {
       } else if (page === 'Maps') {
         settingToggle('Exploration grid', 'cartographyGridEnabled'); settingToggle('Walkable terrain', 'cartographyOverlayEnabled'); range('Grid opacity', 'cartographyGridOpacity'); range('Terrain opacity', 'cartographyWalkabilityOpacity');
         settingToggle('Compass ranges', 'compassRangeIndicatorsEnabled'); settingToggle('Earshot range', 'compassRangeEarshotEnabled'); settingToggle('Casting range', 'compassRangeCastEnabled'); settingToggle('Spirit range', 'compassRangeSpiritEnabled'); settingToggle('Extended spirit range', 'compassRangeSpiritExtendedEnabled');
-      } else {
-        settingToggle('Show character profession', 'characterSwitchProfession'); settingToggle('Show character level', 'characterSwitchLevel'); settingToggle('Show character location', 'characterSwitchLocation');
-        settingToggle('Hide other players’ item drops', 'chatFilterAllyDrops'); settingToggle('Hide Hall of Heroes announcements', 'chatFilterHallOfHeroes'); settingToggle('Hide title announcements', 'chatFilterTitleAchievements');
-        const note = doc.createElement('p'); note.textContent = 'Whisper sound and pop-out opacity are in Chat options. Drafts stay in this game session.'; body.append(note);
+        launcherLink('Map styles and range colors', 'Styles, colors, range opacity and the elite skill planner.', 'maps');
       }
     }
-    status.textContent = 'Loading settings…'; buttons[0]?.focus();
-    void api.get().then(next => { if (!disposed) { snapshot = next; status.textContent = ''; render(); body.scrollTop = scroll; } }).catch(() => { if (!disposed) { status.textContent = 'Settings could not load. Go back and try again.'; } });
-    return () => { scroll = body.scrollTop; disposed = true; view.remove(); };
+    /** What this session's memory module is, from the launch result; null until it is read. */
+    let memoryRuntime: ExtendedMemoryRuntimeStatus | null = null;
+    void window.gwNative.client.session().then(session => { memoryRuntime = session.extendedMemory; if (!saver.pending) repaint(); }, () => { /* The row shows the saved choice only. */ });
+    // A change from the launcher or another game window repaints the open section (docs/settings.md).
+    const unsubscribe = window.gwNative.settings.onChange(() => {
+      if (saver.pending) return;
+      void api.get().then(next => { if (!disposed && !saver.pending) { snapshot = next; repaint(); } }, () => { /* The shown values stay. */ });
+    });
+    status.textContent = 'Loading settings…'; buttons[sections.indexOf(page)]?.focus();
+    void api.get().then(next => {
+      if (disposed) return;
+      snapshot = next; status.textContent = ''; render(); body.scrollTop = scroll;
+      // Opened for one setting (from search or the memory warning): that control takes the keyboard.
+      if (focus?.control) { body.querySelector<HTMLElement>(`[aria-label="${CSS.escape(focus.control)}"]`)?.scrollIntoView({ block: 'center' }); focusControl(focus.control); focus = undefined; }
+    }).catch(() => { if (!disposed) { status.textContent = 'Settings could not load. Go back and try again.'; } });
+    return () => { scroll = body.scrollTop; disposed = true; unsubscribe(); view.remove(); };
   }, () => true, 'settings');
 }

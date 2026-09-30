@@ -6,7 +6,7 @@ import { resumeSearchInput } from './search-input.js';
 import { installHubWindow } from './hub-window.js';
 import { attachClassicFrame } from '../shared/ui/frame.js';
 import { isHubBackKey, resolveShortcuts, shortcutKeycaps, type ShortcutAction } from '../shared/keyboard-shortcuts.js';
-import { openHubSettings } from "./hub-settings.js";
+import { FINDABLE_SETTINGS, openHubSettings } from "./hub-settings.js";
 import { createHubAccounts } from './hub-accounts.js';
 import { hubIcon } from "./hub-icons.js";
 import { openHubMaps } from './hub-maps.js';
@@ -231,7 +231,7 @@ export function createHub(parent: HTMLElement) {
       ...tool('storage', 'Open Xunlai Storage', 'Open your storage chest', 'chest bank', settings?.gwonmacTools && settings.xunlaiStorage, 'gw:storage-open'),
       ...(settings?.gwonmacTools && settings.cartographyEnabled ? [{ id: 'maps', title: 'Maps', detail: 'Exploration grid, walkable terrain and compass ranges', keywords: 'grid terrain compass opacity', group: 'Tools', action: 'Adjust maps', run: () => openHubMaps(presenter) }] : []),
       { id: 'hub-preferences', title: 'Hub preferences', detail: 'Pins and exact search phrases', keywords: 'aliases vocabulary', group: 'Commands', action: 'Adjust Hub', run: () => manageHubShortcuts(presenter, shortcuts, lookup, saveShortcuts, hubWindow.reset) },
-      { id: 'settings', title: 'Settings', detail: 'In-game appearance, tools and shortcuts', keywords: 'preferences graphics appearance accounts hotkeys', group: 'Commands', action: 'Open Settings', run: openSettings },
+      { id: 'settings', title: 'Settings', detail: 'Game, appearance, tools, shortcuts and maps', keywords: 'preferences graphics appearance memory hotkeys', group: 'Commands', action: 'Open Settings', run: () => openSettings() },
       { id: 'launcher', title: 'Show Launcher', detail: 'Accounts, updates and game files', keywords: 'launcher administration', group: 'Commands', action: 'Show Launcher', run: async () => { await window.gwNative.app.showLauncher(); close(); } },
       { id: 'commands', title: 'Commands', detail: 'Examples you can edit and run', keywords: 'help guide examples', group: 'Commands', action: 'Browse examples', run: () => presenter.showRows('Commands', commandExamples) },
       { id: 'help', title: 'Project website', detail: 'Documentation and latest changes', keywords: 'help documentation', group: 'Commands', action: 'Open website', run: async () => { await window.gwNative.app.openExternal('github'); close(); } },
@@ -239,6 +239,8 @@ export function createHub(parent: HTMLElement) {
         // Call Target stays on its own shortcut: it acts only while the game has focus (HUB-133).
         // Quit or Reload opens the account's confirmation sheet, never a direct quit (HUB-001).
         // The sheet waits for the press that asked for it, so its repeat or trailing click never answers it.
+        // Settings are found by their own words and open with their control focused (HUB-063).
+        ...FINDABLE_SETTINGS.map(setting => ({ id: `setting:${setting.label}`, title: setting.label, detail: `Settings › ${setting.section}`, keywords: `setting ${setting.keywords ?? ''}`, group: 'Settings', action: 'Open setting', run: () => openSettings({ section: setting.section, control: setting.label }) })),
         { id: 'reload', title: 'Quit or Reload Game…', detail: 'Opens confirmation for this account', keywords: 'restart reconnect', group: 'Commands', action: 'Review options', run: async () => { close(); await window.gwSurfaces.afterPress(); await window.gwNative.app.showQuitOrReload(); } },
         ...(settings?.gwonmacTools && settings.resignEnabled ? [{ id: 'resign', title: 'Resign…', detail: 'Opens the existing confirmation', group: 'Commands', action: 'Review resign', run: () => { dispatch('gw:resign-show'); close(); } }] : []),
       ]),
@@ -262,7 +264,8 @@ export function createHub(parent: HTMLElement) {
     const examples = [ ['trade', 'trade arms', 'Find offers or a seller'], ['travel', 'travel kamadan', 'Find an outpost'], ['character', 'char Toefte', 'Find a character by name'], ['builds', 'build monk', 'Browse saved Monk builds'], ['builds', 'team gom afk', 'Find your saved team'], ['whispers', 'whisper Romi', 'Choose a person; write before sending'], ['whispers', 'invite Romi', 'Invite a person to your party from an outpost'], ['', '1p in g', 'Convert platinum to gold'], ['trade', '10e in p', 'Estimate ecto value'], ['', 'titles', 'Plan title points'], ['', 'acc second', 'Choose how to open a saved account'], ['builds', 'build folder:Monk monk', 'Monk builds in a folder and its descendants'], ['builds', 'build folder:"Team Builds/Farming" monk', 'Quotes keep spaces; paths match consecutive folder names'], ['builds', 'build folder:/Monk/ mesmer', 'Leading slash starts at Skills; trailing slash matches the complete folder name'], ['builds', 'build Mo/Me', 'Exact profession pair; use folder:Mo/Me to search that folder instead'], ['builds', 'build folder:/', 'Templates saved directly in the Skills root'] ];
     return examples.filter(([tool]) => !tool || enabled.has(tool)).map(([, query, detail], index) => ({ id: `example:${index}`, title: query!, detail: detail!, group: 'Commands', action: 'Edit example', searchQuery: query!, run() {} }));
   }
-  function openSettings() { direct('settings', () => openHubSettings(presenter)); }
+  /** Settings, optionally at one section with one control focused (search, the memory warning). */
+  function openSettings(focus?: Parameters<typeof openHubSettings>[1]) { direct('settings', () => openHubSettings(presenter, focus)); }
   function select(id: string | null, scroll = false) {
     selected = id;
     for (const row of list.querySelectorAll<HTMLElement>('[role="option"]')) {
