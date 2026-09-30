@@ -21,7 +21,8 @@ export function hubPhraseReserved(phrase: string): boolean {
   if (HUB_RESERVED_WORDS.includes(term.split(' ')[0]!) || HUB_CALCULATOR_UNITS.includes(term)) return true;
   try { return !!parseConversion(term) || !!calculate(term); } catch { return /^\d/u.test(term); }
 }
-export function editHubShortcut(hub: HubPresenter<HTMLElement>, row: HubRow, get: () => readonly HubShortcut[], save: (value: readonly HubShortcut[]) => Promise<void>) {
+/** `available` is whether the row still exists; the editor closes with the tool that owns it (HUB-231). */
+export function editHubShortcut(hub: HubPresenter<HTMLElement>, row: HubRow, get: () => readonly HubShortcut[], save: (value: readonly HubShortcut[]) => Promise<void>, available?: () => boolean) {
   hub.showView('Search phrase', (target, _back, footer) => {
     const doc = target.ownerDocument;
     const form = doc.createElement('form'); form.className = 'hub-detail';
@@ -44,7 +45,7 @@ export function editHubShortcut(hub: HubPresenter<HTMLElement>, row: HubRow, get
     form.onsubmit = event => { event.preventDefault(); void submit(); };
     footer.primary({ label: 'Save phrase', run: submit });
     input.focus(); return () => form.remove();
-  });
+  }, available);
 }
 
 /** Pins and phrases live in two storage owners: Build Library entries and global ones never trade places. */

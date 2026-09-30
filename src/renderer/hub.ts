@@ -921,7 +921,7 @@ export function createHub(parent: HTMLElement) {
         try { await saveShortcuts([...entries.filter(entry => entry.id !== row.id), { id: row.id, phrase: old?.phrase ?? '', pinned: !old?.pinned }]); report(pinned ? `Unpinned ${row.title}.` : `Pinned ${row.title}.`); }
         catch { report('Could not update the pin. Try again.', true); }
       } });
-      entries.push({ label: 'Set search phrase…', section: 'Personalize', run: () => editHubShortcut(presenter, row, shortcuts, saveShortcuts) });
+      entries.push({ label: 'Set search phrase…', section: 'Personalize', run: () => editHubShortcut(presenter, row, shortcuts, saveShortcuts, () => !!lookup(row.id)) });
     }
     return entries;
   }
@@ -1045,7 +1045,14 @@ export function createHub(parent: HTMLElement) {
       sources.set(next, next.subscribe(() => refresh())); next.setVisible(root.open && sourceEnabled(next)); refresh();
       return () => {
         sources.get(next)?.(); sources.delete(next); enabledSources.delete(next); next.setVisible(false);
-        if (root.open && (!disposeView || !viewAvailable || !viewAvailable())) home();
+        // A withdrawn source never costs Home its query or a surviving selection: Home refreshes in
+        // place (HUB-051). A list page or a view that is no longer available may be its own, so
+        // it goes Home, and a suspended one never resumes stale.
+        const live = (page: Pick<Page, 'scope' | 'view'>) => page.view ? !!page.view.available?.() : !page.scope;
+        if (suspended && !root.open && ![...history, suspended].every(live)) { suspended = null; history.length = 0; }
+        if (!root.open) return;
+        if (atHome()) refresh();
+        else if (!disposeView || !viewAvailable || !viewAvailable()) home();
       };
     },
     showRows(title: string, getRows: () => readonly HubRow[], summary?: HubSummary, destination?: HubDestination) {

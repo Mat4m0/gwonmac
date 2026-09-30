@@ -387,6 +387,55 @@ test('Resign sends once from its armed confirmation, and says before Enter why i
   await expect(row.locator('.hub-detail')).toHaveText('Resign is available with Tools enabled in a PvE area.');
 });
 
+test('while a map loads, the Travel rows say why before Enter and a fresh Home never starts on them (HUB-135)', async ({ page }) => {
+  await page.goto('/?hub&lifecycle=map-loading');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  const search = page.getByRole('combobox', { name: searchName });
+  const selected = page.locator('.hub-row[aria-selected="true"]');
+  await expect(selected).not.toHaveAttribute('aria-disabled', 'true');
+  await expect(selected).not.toHaveAttribute('data-id', 'travel');
+  await search.fill('travel');
+  const travel = page.locator('.hub-row[data-id="travel"]');
+  await expect(travel).toHaveAttribute('aria-disabled', 'true');
+  await expect(travel.locator('.hub-detail')).toHaveText('Travel is unavailable while a map is loading');
+  await search.fill('travel kamadan');
+  const kamadan = page.locator('.hub-row[data-id="place:449"]');
+  await expect(kamadan).toHaveAttribute('aria-disabled', 'true');
+  await expect(kamadan.locator('.hub-detail')).toHaveText('Travel is unavailable while a map is loading');
+  await expect(page.locator('#hub .hub-primary')).toBeDisabled();
+  await search.press('Enter');
+  await expect(page.locator('.hub-caption')).toHaveText('Home');
+  await expect(page.locator('#app')).not.toHaveAttribute('data-action', /TRAVEL/);
+  await expect(page.locator('#hub')).not.toContainText('Unavailable in the current game state.');
+});
+
+test('a tool that withdraws keeps the Home query and selection, and closes only its own phrase editor (HUB-051, HUB-231)', async ({ page }) => {
+  await page.goto('/?hub');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  const search = page.getByRole('combobox', { name: searchName });
+  await search.fill('team gom a');
+  const selected = page.locator('.hub-row[aria-selected="true"]');
+  await expect(selected).toContainText('GOM AFK');
+  // Turning off Travel and Whispers withdraws the People source while Home shows a search.
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: { travelPalette: false, whispersEnabled: false } })));
+  await expect(search).toHaveValue('team gom a');
+  await expect(selected).toContainText('GOM AFK');
+  await search.press('End'); await page.keyboard.type('fk');
+  await expect(search).toHaveValue('team gom afk');
+  await expect(selected).toContainText('GOM AFK');
+  // A phrase editor opened for a place closes with Travel; Settings stays whatever tool changes.
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: { travelPalette: true } })));
+  await search.fill('kamadan');
+  await expect(selected).toHaveAttribute('data-id', 'place:449');
+  await page.keyboard.press('Meta+j');
+  await page.getByRole('menuitem', { name: /Set search phrase/ }).click();
+  await expect(page.locator('.hub-caption')).toHaveText('Search phrase');
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: { buildLibrary: false } })));
+  await expect(page.locator('.hub-caption')).toHaveText('Search phrase');
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: { travelPalette: false } })));
+  await expect(page.locator('.hub-caption')).toHaveText('Home');
+});
+
 test('a Guild Hall is an outpost: no explorable label, no leaving line, and a fresh Home keeps Continue', async ({ page }) => {
   // The fixture reads the instance type as the runtime does; a Guild Hall is no Travel destination.
   await page.goto('/?hub&lifecycle=guild-hall');

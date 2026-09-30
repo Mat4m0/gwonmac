@@ -236,7 +236,9 @@ Option-Command-Up and Down to reorder it. **Remove …** in the footer asks firs
 The header shows your character and where you are, including a Guild Hall. In
 an explorable area, Hub opens on **Travel** instead of a recent place, so Enter
 never leaves the area by accident, and a quiet line explains that Travel leaves
-the area. While a map loads, the same line says when Travel returns.
+the area. While a map loads, the same line says when Travel returns. Rows that
+cannot act during a load, at character selection or in PvP stay in place and say
+why before Enter; what you typed and the page you are on stay through the load.
 
 With Travel enabled, search an outpost or your custom Travel phrase. Travel
 finds a destination by the start of its words (`kam`, `jewel istan`), an

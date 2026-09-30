@@ -111,7 +111,12 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
       }), ...matchHubRows(tools, query)];
     },
   };
-  return { source, open, page, travel, get active() { return active; },
+  /**
+   * The Travel row stays through a map load, character select or PvP and says why it waits, so a
+   * fresh Home never starts on it and Enter never runs a dead row (HUB-135).
+   */
+  const withReason = (row: HubRow): HubRow => row.id === 'travel' && host.unavailable ? { ...row, unavailable: host.unavailable } : row;
+  return { source: { ...source, search: (query: string) => source.search(query).map(withReason) }, open, page, travel, get active() { return active; },
     update: host.updateGameState, updateFriends: host.updateFriends,
     dispose() { disposed = true; stop(); stopNotice(); listeners.clear(); host.dispose(); },
   };
