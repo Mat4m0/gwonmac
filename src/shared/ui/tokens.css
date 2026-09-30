@@ -459,11 +459,12 @@
 }
 
 /* Accessibility changes the rendered material, never the player's saved
- * preference. Returning to the ordinary system setting restores their value. */
+ * preference. Returning to the ordinary system setting restores their value.
+ * A modal scrim is not a material: it keeps its value, so the game stays
+ * visible around an opaque panel. */
 @media (prefers-reduced-transparency: reduce) {
   :root {
     --ui-effective-panel-opacity: 1;
-    --ui-overlay-fill: #080807;
   }
 }
 

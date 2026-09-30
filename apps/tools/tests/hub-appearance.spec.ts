@@ -228,3 +228,40 @@ for (const [name, appearance, scene] of [
     expect(shadows[0]).toBe(shadows[1]);
   });
 }
+
+test('Reduce Transparency makes the Hub opaque without hiding the game or re-inking its text', async ({ page }) => {
+  const media = await page.context().newCDPSession(page);
+  const reduce = (value: 'reduce' | 'no-preference') => media.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-transparency', value }] });
+  await reduce('no-preference');
+  await page.goto('/?hub');
+  await page.addStyleTag({ content: CHECKERBOARD });
+  await expect(page.getByRole('combobox', { name: 'Search people, places, builds' })).toBeFocused();
+  const look = async () => {
+    const png = PNG.sync.read(await page.screenshot());
+    const outside = [...png.data.subarray((20 * png.width + 20) * 4, (20 * png.width + 20) * 4 + 3)];
+    return { outside, ...await page.evaluate(() => {
+      const hub = document.querySelector('#hub')!;
+      return {
+        backdrop: getComputedStyle(hub, '::backdrop').backgroundColor,
+        inks: ['.hub-row > .hub-detail', '.hub-row-type .ui-kbd', '.hub-group'].map(selector => getComputedStyle(hub.querySelector(selector)!).color),
+        placeholder: getComputedStyle(hub.querySelector('.hub-search input')!, '::placeholder').color,
+      };
+    }) };
+  };
+  for (const uiStyle of ['guild-wars', 'obsidian'] as const) {
+    await page.evaluate(value => window.gwApplyFixtureAppearance?.({ uiStyle: value, uiPanelOpacity: 100 }), uiStyle);
+    const opaque = await look();
+    await page.evaluate(value => window.gwApplyFixtureAppearance?.({ uiStyle: value, uiPanelOpacity: 65 }), uiStyle);
+    const translucent = await look();
+    await reduce('reduce');
+    await expect.poll(() => page.locator('.hub-panel').evaluate(element => getComputedStyle(element, '::before').backgroundColor), uiStyle).not.toMatch(/0\.65\)/);
+    const reduced = await look();
+    // The scrim is not a material: the game stays exactly as visible around the Hub.
+    expect(reduced.backdrop, uiStyle).toBe(translucent.backdrop);
+    expect(reduced.outside, uiStyle).toEqual(translucent.outside);
+    // The opaque panel keeps its designed inks, as at 100 %.
+    expect({ inks: reduced.inks, placeholder: reduced.placeholder }, uiStyle).toEqual({ inks: opaque.inks, placeholder: opaque.placeholder });
+    expect(await page.evaluate(() => document.documentElement.style.getPropertyValue('--ui-panel-opacity'))).toBe('0.65');
+    await reduce('no-preference');
+  }
+});
