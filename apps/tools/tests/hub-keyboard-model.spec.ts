@@ -317,6 +317,30 @@ test('closing the Hub with the mouse while a shortcut records gives the next key
   await expect(hubSearch(page)).toBeFocused();
 });
 
+test('Hub Back follows the named key and composition never navigates (KEY-24)', async ({ page }) => {
+  await openHub(page);
+  const search = hubSearch(page);
+  await search.fill('commands');
+  for (const input of [
+    { key: 'Enter', code: 'Enter' },
+    { key: 'Backspace', code: 'Backspace' },
+    { key: 'Backspace', code: 'Delete', metaKey: true },
+  ]) {
+    await search.evaluate((element, input) => element.dispatchEvent(new KeyboardEvent('keydown', {
+      ...input, isComposing: true, bubbles: true, cancelable: true,
+    })), input);
+    await expect(page.locator('.hub-caption')).toHaveText('Home');
+    await expect(search).toHaveValue('commands');
+  }
+  await search.press('Enter');
+  await expect(page.locator('.hub-caption')).toHaveText('Commands');
+  await search.evaluate(element => element.dispatchEvent(new KeyboardEvent('keydown', {
+    key: 'Backspace', code: 'Delete', metaKey: true, bubbles: true, cancelable: true,
+  })));
+  await expect(page.locator('.hub-caption')).toHaveText('Home');
+  await expect(search).toHaveValue('commands');
+});
+
 test('arrow keys scroll Build details and never jump to Back (HUB-088)', async ({ page }) => {
   await openHub(page);
   await hubSearch(page).fill('build smiter'); await page.keyboard.press('Enter');
