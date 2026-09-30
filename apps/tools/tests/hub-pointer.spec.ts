@@ -544,6 +544,35 @@ test('Hub preferences: Move up keeps focus and a double-click moves the same pin
   expect(await ledger(page)).toEqual([]);
 });
 
+test('Hub preferences group pins where they are kept, so no enabled Move is a no-op and Home keeps the order (HUB-090)', async ({ page }) => {
+  await page.goto('/?hub');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  await page.evaluate(() => localStorage.setItem('hub-fixture-shortcuts', JSON.stringify(['place:449', 'travel'].map(id => ({ id, phrase: '', pinned: true })))));
+  await open(page);
+  await search(page).fill('team gom afk');
+  await page.keyboard.press('Meta+j');
+  await page.getByRole('menuitem', { name: 'Pin to Hub' }).click();
+  await enter(page, 'hub preferences');
+  const places = page.getByRole('group', { name: 'Places and tools' }).getByRole('option');
+  const builds = page.getByRole('group', { name: 'Builds and teams' }).getByRole('option');
+  await expect(places).toHaveText([/^Kamadan/, /^Travel/]);
+  await expect(builds).toHaveText([/^GOM AFK/]);
+  const up = page.getByRole('button', { name: 'Move up', exact: true });
+  const down = page.getByRole('button', { name: 'Move down', exact: true });
+  // The team cannot pass the places and tools, and says so by disabling both moves.
+  await builds.first().click();
+  await expect(up).toHaveAttribute('aria-disabled', 'true');
+  await expect(down).toHaveAttribute('aria-disabled', 'true');
+  await places.nth(1).click();
+  await expect(down).toHaveAttribute('aria-disabled', 'true');
+  await expect(up).toHaveAttribute('aria-disabled', 'false');
+  await up.click();
+  await expect(places).toHaveText([/^Travel/, /^Kamadan/]);
+  await page.keyboard.press('Meta+Backspace'); await search(page).fill('');
+  const pinned = await page.locator('#hub .hub-row').evaluateAll(rows => rows.slice(0, 3).map(row => (row as HTMLElement).dataset.id));
+  expect(pinned).toEqual(['travel', 'place:449', 'team:hub-gom-afk']);
+});
+
 test('Remove all search phrases asks first, names the count and keeps the pins (HUB-092)', async ({ page }) => {
   await page.goto('/?hub');
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');

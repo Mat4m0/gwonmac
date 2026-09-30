@@ -82,6 +82,8 @@
 .hub-preference-option[aria-selected=true] { background:var(--ui-selection-fill); box-shadow:var(--ui-shadow-selected); color:var(--ui-selection-ink); }
 .hub-preference-option[aria-selected=true]::before { content:''; position:absolute; left:0; top:8px; bottom:8px; width:2px; background:var(--ui-selection-marker); }
 .hub-preference-tools { display:flex; gap:8px; }
+.hub-preference-group { display:grid; gap:2px; }
+.hub-preference-group + .hub-preference-group > .hub-group { padding-top:12px; }
 @media(max-width:600px) {
   .hub-panel { width:calc(100vw - 16px); }
   .hub-row { grid-template-columns:28px minmax(0,1fr); column-gap:8px; row-gap:2px; }

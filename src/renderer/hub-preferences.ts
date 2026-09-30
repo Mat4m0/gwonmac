@@ -52,8 +52,10 @@ const libraryOwned = (id: string) => /^(build|team):/u.test(id);
 
 /**
  * Edit only references currently resolvable under the active feature/account rules.
- * One selected entry, by identity; Move up and Move down stay where they are, so a double-click
- * moves the same entry twice and focus never leaves the button. ⌥⌘↑/↓ move it from the list.
+ * The list shows the two storage owners as two labelled groups in Home's order; an entry moves
+ * within its group only, so no enabled Move is ever a no-op (HUB-090). One selected entry, by
+ * identity; Move up and Move down stay where they are, so a double-click moves the same entry
+ * twice and focus never leaves the button. ⌥⌘↑/↓ move it from the list.
  * Removing an entry or every phrase names what goes and passes an armed confirmation (HUB-092).
  */
 export function manageHubShortcuts(hub: HubPresenter<HTMLElement>, get: () => readonly HubShortcut[], lookup: (id: string) => HubRow | undefined, save: (value: readonly HubShortcut[]) => Promise<void>, resetPosition: () => void) {
@@ -103,12 +105,20 @@ export function manageHubShortcuts(hub: HubPresenter<HTMLElement>, get: () => re
       const visible = entries();
       if (!visible.some(entry => entry.id === chosen)) chosen = visible[0]?.id ?? null;
       list.replaceChildren();
+      let group: HTMLElement | null = null;
       visible.forEach((entry, index) => {
+        // Home lists places and tools first, then this account's builds and teams.
+        if (!group || libraryOwned(entry.id) !== libraryOwned(visible[index - 1]!.id)) {
+          group = doc.createElement('div'); group.className = 'hub-preference-group'; group.setAttribute('role', 'group');
+          const name = doc.createElement('div'); name.className = 'hub-group'; name.setAttribute('role', 'presentation');
+          name.id = `hub-preference-group-${index}`; name.textContent = libraryOwned(entry.id) ? 'Builds and teams' : 'Places and tools';
+          group.setAttribute('aria-labelledby', name.id); group.append(name); list.append(group);
+        }
         const option = doc.createElement('div'); option.className = 'hub-preference-option'; option.id = `hub-preference-${index}`;
         option.setAttribute('role', 'option'); option.setAttribute('aria-selected', String(entry.id === chosen));
         option.textContent = `${title(entry)}${entry.phrase ? ` · ${entry.phrase}` : ''}${entry.pinned ? ' · Pinned' : ''}`;
         option.onclick = () => { chosen = entry.id; paint(); list.focus({ preventScroll: true }); };
-        list.append(option);
+        group.append(option);
         if (entry.id === chosen) { list.setAttribute('aria-activedescendant', option.id); option.scrollIntoView({ block: 'nearest' }); }
       });
       if (!chosen) list.removeAttribute('aria-activedescendant');

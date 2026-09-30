@@ -345,7 +345,10 @@ its alias target. Deleting it removes its searchable alias and invalidates flows
 
 Aliases change how an object is found, not its canonical label. Provide one
 confirmed action that removes every search phrase and keeps the pins. A pin or
-phrase shows the same row that search shows for its object.
+phrase shows the same row that search shows for its object. Pins keep their
+storage owner: places and tools in settings, builds and teams in the account's
+Build Library. Each owner is one labelled group with its own order, and Home
+lists places and tools first.
 Builds, teams, characters, and private contacts must not leak across account profiles.
 
 Start custom flows with saved searches and parameterized named actions:
