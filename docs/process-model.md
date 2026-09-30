@@ -253,7 +253,8 @@ every layout. The claim contains the pressed key's repeats and releases while
 allowing the translated Control chord through. An assigned app shortcut whose
 tool is off stays claimed and does nothing, because Guild Wars acts on the base
 key whatever modifier is held. Edit menu clicks use the same semantic command
-and focused-window route. A hidden Guild Wars text proxy claims the command. An
+and focused-window route. Leaving Hub Settings cancels only its window’s native
+shortcut capture. A hidden Guild Wars text proxy claims the command. An
 ordinary gwonmac input declines it so Chromium edits normally. Undo and Redo
 edit only such an input: the game keeps its own text, so its proxy declines
 them, and outside a field the open Build Library undoes its last change. Copy and Cut send only non-password proxy text to
