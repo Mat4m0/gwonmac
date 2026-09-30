@@ -318,6 +318,7 @@ test('compact armbrace conversions use explicit manual rates and original item a
   await search.fill('1p in a');
   await expect(page.locator('#hub .hub-row')).toContainText('~ 0.006667 armbrace');
   await page.getByRole('button',{name:'Actions',exact:true}).click();
+  await page.getByRole('menuitem',{name:'Show price details'}).click();
   await page.getByRole('button',{name:'Edit rates',exact:true}).click();
   await page.getByRole('combobox',{name:'Rate source'}).selectOption('manual');
   await page.getByRole('textbox',{name:'Gold per ectoplasm'}).fill('5000');

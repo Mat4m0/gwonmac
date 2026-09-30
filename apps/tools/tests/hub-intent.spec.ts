@@ -52,6 +52,14 @@ test('→ on the current account opens no actions, as Enter opens none (HUB-175)
   await expect(selected).toContainText('Main');
 });
 
+test('accounts that finish loading take the selection, so Enter acts on them (HUB-232)', async ({ page }) => {
+  await page.goto('/?hub&accounts-load-ms=600');
+  const search = page.getByRole('combobox', { name: searchName });
+  await search.fill('switch account'); await search.press('Enter');
+  await expect(page.locator('.hub-row[aria-selected="true"]')).toContainText('Second');
+  await expect(page.locator('#hub .hub-primary')).toBeEnabled();
+});
+
 test('a changed account list returns to one refreshed Accounts page (HUB-174)', async ({ page }) => {
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: searchName });

@@ -617,7 +617,10 @@ export function createHub(parent: HTMLElement) {
       : !scope && parsed.scope && !parsed.term ? rows.find(row => !row.consequential && !row.unavailable) : rows[0];
     const settling = reset || (awaitingResults && selected === null && rows.length > 0);
     if (settling) awaitingResults = !rows.length;
-    select((prior?.id === 'quote-state' || prior?.id === 'market-state') && !!rows[0]?.conversion ? rows[0].id : settling ? exactCount > 1 ? null : initial?.id ?? null : !revised && rows.some(row => row.id === selected) ? selected : null);
+    // A placeholder row that goes away (a loading or state row) hands its selection to what
+    // replaced it, as a fresh query would, so Enter acts without another key (HUB-232).
+    const replacedPlaceholder = !!prior?.unavailable && !rows.some(row => row.id === prior.id);
+    select((prior?.id === 'quote-state' || prior?.id === 'market-state') && !!rows[0]?.conversion ? rows[0].id : settling || replacedPlaceholder ? exactCount > 1 ? null : initial?.id ?? null : !revised && rows.some(row => row.id === selected) ? selected : null);
     if (!rows.length) {
       const empty = document.createElement('p'); empty.className = 'hub-empty'; empty.textContent = 'No matches'; list.append(empty);
     }
