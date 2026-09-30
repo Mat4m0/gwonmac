@@ -166,8 +166,8 @@ export function openHubSettings(hub: Hub, focus?: Readonly<{ section: HubSetting
           const info = TOOL_PRESENTATION[tool]; const on = (tool === 'character-switch' || snapshot.tools.configured) && snapshot.tools.features[tool].enabled;
           toggle(info.label, snapshot.tools.features[tool].enabled, enabled => ({ kind: 'tool', tool, enabled }), info.description, tool !== 'character-switch' && !snapshot.tools.configured);
           // A tool's own options follow it while it is on, as in the launcher.
-          if (on && tool === 'character-switch') for (const detail of CHARACTER_DETAILS) settingToggle(detail.label, detail.key);
-          if (on && tool === 'chat-filters') for (const filter of CHAT_FILTERS) settingToggle(filter.label, filter.key);
+          const options = on && tool === 'character-switch' ? CHARACTER_DETAILS : on && tool === 'chat-filters' ? CHAT_FILTERS : [];
+          for (const option of options) { settingToggle(option.label, option.key); body.lastElementChild?.classList.add('hub-setting-option'); }
         }
         const note = doc.createElement('p'); note.textContent = 'Whisper sound and pop-out opacity are in Whispers › Chat options.'; body.append(note);
         launcherLink('Skill key labels and timer color', 'What each skill key shows, the cooldown timer color and the Alcohol Timer position.', 'tools');
