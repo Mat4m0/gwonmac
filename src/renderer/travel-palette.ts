@@ -75,7 +75,7 @@ export function createTravelPalette(parent: HTMLElement, command: TravelCommand)
       };
       retry.onclick = attempt; attempt();
       return () => { active = false; message.remove(); retry.remove(); unmount(); };
-    }, toolOn, 'travel');
+    }, () => !disposed && toolOn(), 'travel');
   }
   const source: HubSource = {
     feature: 'travelPalette',
@@ -127,7 +127,7 @@ export function createTravelPalette(parent: HTMLElement, command: TravelCommand)
     updateFriends(next: TravelFriends) { friends = next; app?.updateFriends(next); },
     update(next: TravelGameState) { state = next; app?.update(next); },
     dispose() {
-      disposed = true; detach?.(); unsubscribe(); app?.dispose(); listeners.clear();
+      disposed = true; app?.dispose(); detach?.(); unsubscribe(); listeners.clear();
       window.removeEventListener('gw:travel-toggle', onCommand);
     },
   };

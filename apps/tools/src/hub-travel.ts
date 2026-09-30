@@ -1,8 +1,8 @@
 /** One Travel host serves both unified search and the existing detailed view. */
 import { createApp, h, watch } from 'vue';
 import type { HubPresenter, HubRow, HubSource, HubTask, HubViewMount } from '../../../src/shared/hub';
-import { matchHubRows, parseHubQuery, hubMatch } from '../../../src/shared/hub';
-import { TRAVEL_DESTINATIONS, isPvpTravelDestination, travelDestination } from '../../../src/shared/travel';
+import { matchHubRows, parseHubQuery } from '../../../src/shared/hub';
+import { searchTravelDestinations, isPvpTravelDestination, travelDestination } from '../../../src/shared/travel';
 import { guildWarsMapName } from '../../../src/shared/guild-wars-map-names';
 import { travelContextRefusal, travelDestinationAvailability } from '../../../src/shared/travel-command';
 import TravelPalette from './components/TravelPalette.vue';
@@ -53,7 +53,7 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
       return () => { active = false; app.unmount(); };
     };
   }
-  const available = () => !!window.gwToolsSettings?.().gwonmacTools && !!window.gwToolsSettings?.().travelPalette;
+  const available = () => !disposed && !!window.gwToolsSettings?.().gwonmacTools && !!window.gwToolsSettings?.().travelPalette;
   function open() { hub.showView('Travel', page(), available, 'travel'); }
   /** The certified instance type, never the catalogue: a Guild Hall or an uncatalogued outpost is no explorable area. */
   const explorable = () => host.state.value.status === 'ready' && host.state.value.explorable;
@@ -100,11 +100,12 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
       if (parsed.scope && parsed.scope !== 'travel') return [];
       query = parsed.term;
       const tools: HubRow[] = [{ id: 'travel', title: 'Travel', detail: loadError || 'Outposts, favourites, recent places and Guild Hall', group: 'Tools', keywords: 'tp teleport destination', action: 'Browse travel', navigate: open, run: open }];
-      const destinations = query.trim() ? TRAVEL_DESTINATIONS.filter(destination => hubMatch(destination.name, query, preferences.synonyms.value.filter(entry => entry.mapId === destination.mapId).map(entry => entry.term)) !== null).slice(0, 8)
+      const destinations = query.trim() ? searchTravelDestinations(query, preferences.synonyms.value, 8)
         : host.history.value.filter(id => !refusal(id)).slice(0, 3).flatMap(id => { const destination = travelDestination(id); return destination ? [destination] : []; });
       return [...destinations.map(destination => {
         const reason = refusal(destination.mapId);
         return { id: `place:${destination.mapId}`, title: destination.name,
+          aliases: [...destination.aliases, ...preferences.synonyms.value.filter(entry => entry.mapId === destination.mapId).map(entry => entry.term)],
           detail: query.trim() ? 'Outpost · Any district' : 'Recently visited · Any district',
           group: query.trim() ? 'Places' : 'Continue', action: `Travel to ${destination.name}`, consequential: true, leavesArea: explorable(),
           ...(reason ? { unavailable: reason } : {}), run: async (task: HubTask) => { await travel(destination.mapId); task.done(); } };

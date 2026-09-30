@@ -83,7 +83,8 @@ test('a friend opens explicit actions and an offline location cannot travel', as
   await search.fill('romi');
   await search.press('Enter');
   await expect(page.locator('#hub').getByRole('option').locator('.hub-title')).toHaveText(['Whisper', 'Travel to outpost', 'Invite to party', 'Travel and invite']);
-  await expect(page.locator('#hub').getByRole('option', { name: /Travel to outpost/ })).toContainText('Any district');
+  await expect(page.locator('#hub').getByRole('option', { name: /Travel to outpost/ })).toContainText('You are already in this outpost');
+  await expect(page.locator('#hub').getByRole('option', { name: /Travel to outpost/ })).toHaveAttribute('aria-disabled', 'true');
   await page.getByRole('button', { name: 'Back', exact: true }).click();
   await expect(search).toHaveValue('romi');
   await search.fill('offline');
@@ -567,7 +568,7 @@ test('character cards start at the left edge without leading empty slots', async
   const icon = page.locator('.character-switch-row img').first();
   expect(await icon.evaluate(el => getComputedStyle(el).outlineStyle)).toBe('none');
   expect((await icon.boundingBox())!.width).toBeGreaterThanOrEqual(40);
-  await expect(page.locator('.character-switch-meta').first()).toHaveText('Lv 20 · Kamadan');
+  await expect(page.locator('.character-switch-meta').first()).toHaveText('Mo · Lv 20 · Kamadan');
 });
 
 

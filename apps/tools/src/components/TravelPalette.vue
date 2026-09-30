@@ -24,6 +24,7 @@ import { guildWarsMapName } from "../../../../src/shared/guild-wars-map-names";
 import { isHubBackKey } from "../../../../src/shared/keyboard-shortcuts";
 import { createHoverSelection } from "../../../../src/shared/ui/hover-selection";
 import { listIndexAfter, listKeyStep, listPage } from "../../../../src/shared/ui/list-keys";
+import { hubMatch } from "../../../../src/shared/hub";
 import type { HubViewFooter } from "../../../../src/shared/hub";
 import { useTravelPreferences } from "../travel-preferences";
 import TravelDestinationPicker from "./TravelDestinationPicker.vue";
@@ -148,10 +149,9 @@ function friendDisabledReason(friend: TravelFriend, destination: TravelDestinati
 const friendResults = computed<FriendSearchResult[]>(() => {
   const observed = props.host.friends.value;
   if (!hasQuery.value || observed.status !== "ready") return [];
-  const tokens = normaliseTravelTerm(query.value).split(" ").filter(Boolean);
   return observed.friends.flatMap((friend) => {
     const names = normaliseTravelTerm(`${friend.alias} ${friend.character}`);
-    if (!tokens.every((token) => names.includes(token))) return [];
+    if (hubMatch(names, normaliseTravelTerm(query.value)) === null) return [];
     const destination = travelDestination(friend.mapId);
     return [{
       kind: "friend",
@@ -475,12 +475,18 @@ watch(selectableIds, (next, previous) => {
   const sameQuery = selectionQuery === query.value;
   selectionQuery = query.value;
   const key = activeKey.value;
-  if (!sameQuery || key === null || key === NO_SELECTION || !previous.includes(key)) return;
+  if (key === null) {
+    // Publish the initial choice as an identity too: it is already visible
+    // to the player, so an observation must not silently replace it.
+    activeKey.value = resultId(selectableDestinations.value.findIndex(selectable));
+    return;
+  }
+  if (!sameQuery || key === NO_SELECTION || !previous?.includes(key)) return;
   const index = next.indexOf(key);
   if (index >= 0 && selectable(selectableDestinations.value[index]!)) return;
   activeKey.value = NO_SELECTION;
   setFeedback("That destination is no longer available. Choose another destination.", "info");
-});
+}, { immediate: true });
 watch(results, (next) => {
   props.host.traceSearch(query.value, next.flatMap(
     (result) => result.kind === "guild-hall" ? [] : [result.mapId],
@@ -674,7 +680,7 @@ function cancelAddPhrase(): void {
 
 function phraseOutcomeMessage(outcome: "limit" | "invalid" | "unverified" | "busy"): string {
   if (outcome === "limit") return "You can save up to 64 search phrases.";
-  if (outcome === "unverified") return "GWonMac did not confirm that phrase was saved. Restart the app, then try again.";
+  if (outcome === "unverified") return "gwonmac did not confirm that phrase was saved. Restart the app, then try again.";
   if (outcome === "busy") return "Wait for the current preference change, then try again.";
   return "Use a unique phrase of 1–40 characters that does not name another destination.";
 }
@@ -867,7 +873,18 @@ function onKeydown(event: KeyboardEvent): void {
     : null;
   if (step !== null) {
     event.preventDefault();
-    void moveActive(step);
+    // Favourites are a painted grid. Vertical arrows retain the column;
+    // recents and search results keep the shared linear list movement.
+    const favourites = [...(palette.value?.querySelectorAll<HTMLElement>(".travel-favorite-grid .travel-favorite") ?? [])];
+    const leading = leadingDestinations.value.length;
+    if (!hasQuery.value && active.value >= leading && plainArrow
+      && (event.key === "ArrowDown" || event.key === "ArrowUp") && favourites.length) {
+      const columns = favourites.filter(button => button.offsetTop === favourites[0]!.offsetTop).length;
+      const column = (active.value - leading) % columns;
+      const next = listIndexAfter(active.value, selectableDestinations.value.length, step * columns,
+        index => index >= leading && (index - leading) % columns === column && selectable(selectableDestinations.value[index]!));
+      if (next >= 0) void reveal(next);
+    } else void moveActive(step);
     return;
   }
   // In the Hub, ⌘⌫ leaves Customize like Esc; an open picker closes first, and from the
@@ -890,7 +907,7 @@ function onKeydown(event: KeyboardEvent): void {
     return;
   }
   // Only a plain Enter travels; a modified Enter is never a second route to it.
-  if (mode.value === "travel" && event.target === input.value && event.key === "Enter" && !event.metaKey && !event.ctrlKey && !event.altKey) {
+  if (mode.value === "travel" && event.target === input.value && event.key === "Enter" && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
     if (event.repeat) { event.preventDefault(); return; }
     if (canRunActive.value) {
       event.preventDefault();
@@ -902,7 +919,7 @@ function onKeydown(event: KeyboardEvent): void {
     const destination = resultDestination(activeDestination.value);
     if (destination === null || !selectable(activeDestination.value)) return;
     event.preventDefault();
-    void saveShortcut(Number(event.code.slice(5)) - 1, destination);
+    if (!event.repeat) void saveShortcut(Number(event.code.slice(5)) - 1, destination);
     return;
   }
   if (/^Digit[1-9]$/u.test(event.code) && mode.value === "travel" && !hasQuery.value && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {

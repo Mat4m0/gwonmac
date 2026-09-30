@@ -585,26 +585,27 @@ describe("TravelPalette", () => {
   });
 
   it("keeps the selected destination when the game state reorders the places (HUB-011)", async () => {
-    const { wrapper, state, travel } = fixture({ history: [449, 194, 642, 857] });
-    await flushPromises();
-    const search = wrapper.get('[role="combobox"]');
-    await search.trigger("keydown", { key: "ArrowDown" });
-    await search.trigger("keydown", { key: "ArrowDown" });
-    expect(search.attributes("aria-activedescendant")).toBe("travel-recent-642");
-
-    // Arriving in Kamadan removes it from the recents; Eye of the North stays selected.
-    state.value = { ...state.value, mapId: 449 } as typeof state.value;
-    await flushPromises();
-    expect(search.attributes("aria-activedescendant")).toBe("travel-recent-642");
-
-    // Arriving in Eye of the North takes the selection away, and nothing else takes its place.
-    state.value = { ...state.value, mapId: 642 } as typeof state.value;
-    await flushPromises();
-    expect(search.attributes("aria-activedescendant")).toBeUndefined();
-    expect(wrapper.text()).toContain("That destination is no longer available.");
-    await search.trigger("keydown", { key: "Enter" });
-    expect(travel).not.toHaveBeenCalled();
-    wrapper.unmount();
+    for (const [arrows, selected, afterArrival, removedMap] of [
+      [0, "travel-recent-449", undefined, 449],
+      [2, "travel-recent-642", "travel-recent-642", 642],
+    ] as const) {
+      const { wrapper, state, travel } = fixture({ history: [449, 194, 642, 857] });
+      await flushPromises();
+      const search = wrapper.get('[role="combobox"]');
+      for (let move = 0; move < arrows; move++) await search.trigger("keydown", { key: "ArrowDown" });
+      expect(search.attributes("aria-activedescendant")).toBe(selected);
+      if (state.value.status !== "ready") throw new Error("Expected the outpost fixture");
+      state.value = { ...state.value, mapId: 449 };
+      await flushPromises();
+      expect(search.attributes("aria-activedescendant")).toBe(afterArrival);
+      state.value = { ...state.value, mapId: removedMap };
+      await flushPromises();
+      expect(search.attributes("aria-activedescendant")).toBeUndefined();
+      expect(wrapper.text()).toContain("That destination is no longer available.");
+      await search.trigger("keydown", { key: "Enter" });
+      expect(travel).not.toHaveBeenCalled();
+      wrapper.unmount();
+    }
   });
 
   it("puts an exact shortcut before Guild Hall, which leads only for its own words (HUB-066)", async () => {
@@ -743,6 +744,10 @@ describe("TravelPalette", () => {
         alias: "Romi", character: "Example Ranger" }],
     } });
     await flushPromises();
+    for (const query of ["omi", "ample", "rangre"]) {
+      await wrapper.get('[role="combobox"]').setValue(query);
+      expect(wrapper.find(".travel-player-icon").exists()).toBe(false);
+    }
     await wrapper.get('[role="combobox"]').setValue("rom ranger");
     expect(wrapper.text()).toContain("Romi");
     expect(wrapper.text()).toContain("Example Ranger");

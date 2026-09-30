@@ -821,7 +821,7 @@ export function createHub(parent: HTMLElement) {
     } else if (event.key === 'ArrowRight' && !event.repeat && input.selectionStart === input.value.length && input.selectionEnd === input.value.length) {
       const row = rows.find(row => row.id === selected);
       if (row?.navigate) { event.preventDefault(); row.navigate(startTask()); }
-    } else if (event.key === 'Enter' && !event.metaKey && !event.ctrlKey && !event.altKey) {
+    } else if (event.key === 'Enter' && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
       // Only a plain Enter runs the named primary; a modified Enter is never a second route to it.
       event.preventDefault(); if (!event.repeat) void run();
     }
@@ -867,7 +867,7 @@ export function createHub(parent: HTMLElement) {
       return;
     }
     // Enter in a view runs its named primary, except on a control that Enter activates itself.
-    if (event.key === 'Enter' && viewFooter?.primary && content.contains(target)
+    if (event.key === 'Enter' && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && viewFooter?.primary && content.contains(target)
       && !target.matches('button,a[href],summary,select,textarea,input[type=checkbox],input[type=radio],input[type=range]')) {
       event.preventDefault(); void runViewAction(viewFooter.primary, event); return;
     }

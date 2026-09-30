@@ -35,7 +35,7 @@ export function installResignCommand(exports: WebAssembly.Exports) {
       const reason = unavailable();
       return matchHubRows([{
         id: "resign", title: "Resign…", detail: "Asks before sending /resign · PvE only", keywords: "surrender give up",
-        group: "Commands", action: "Review resign", ...(reason ? { unavailable: reason } : {}),
+        group: "Commands", action: "Review resign", consequential: true, destructive: true, ...(reason ? { unavailable: reason } : {}),
         run() {
           const hub = window.gwHub;
           if (!hub) { showResignConfirmation(); return; }

@@ -162,7 +162,7 @@ test('a modified Enter never runs the primary; only a plain Enter does', async (
   const search = page.getByRole('combobox', { name: searchName });
   await search.fill('build smiter'); await search.press('Enter');
   await expect(page.locator('.hub-primary')).toHaveText(/^Apply Smiter to Fixture Monk/);
-  for (const chord of ['Meta+Enter', 'Control+Enter', 'Alt+Enter']) {
+  for (const chord of ['Meta+Enter', 'Control+Enter', 'Alt+Enter', 'Shift+Enter']) {
     await search.press(chord);
     await expect(page.locator('#hub')).toBeVisible();
     await expect(page.locator('#app')).not.toHaveAttribute('data-action', /command|apply/);
@@ -174,7 +174,7 @@ test('a modified Enter never runs the primary; only a plain Enter does', async (
   await page.keyboard.press('Meta+t');
   const travel = page.getByRole('combobox', { name: 'Destination, phrase, or friend' });
   await expect(travel).toBeFocused();
-  await travel.press('Meta+Enter');
+  for (const chord of ['Meta+Enter', 'Control+Enter', 'Alt+Enter', 'Shift+Enter']) await travel.press(chord);
   await page.waitForTimeout(700);
   await expect(page.locator('#hub')).toBeVisible();
   await expect(travel).toBeFocused();
@@ -350,6 +350,7 @@ test('Resign says what it does before Enter, reads as destructive, and Cancel re
   await search.fill('resign');
   await expect(row).toHaveAttribute('aria-selected', 'true');
   await expect(row.locator('.hub-detail')).toHaveText('Asks before sending /resign · PvE only');
+  await expect(page.locator('.hub-primary')).toHaveAttribute('data-variant', 'danger');
   const dialog = page.locator('#resign-dialog');
   const confirm = dialog.getByRole('button', { name: 'Resign', exact: true });
   for (const cancel of ['Escape', 'Cancel'] as const) {
@@ -367,6 +368,36 @@ test('Resign says what it does before Enter, reads as destructive, and Cancel re
     expect(await page.evaluate(() => window.gwFixtureCanvas?.events.filter(event => event.code === 'Escape').length)).toBe(0);
   }
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', 'RESIGN');
+});
+
+test('Resign rejects early confirmation and trailing multi-clicks before sending once (HUB-245)', async ({ page }) => {
+  const initial = new Date('2026-09-30T12:00:00Z');
+  await page.clock.install({ time: initial });
+  await page.goto('/?hub&lifecycle=pve-explorable');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  await page.clock.pauseAt(new Date('2026-09-30T12:01:00Z'));
+  const search = page.locator('.hub-search input');
+  await search.fill('resign'); await search.press('Enter');
+  const dialog = page.locator('#resign-dialog');
+  const confirm = dialog.getByRole('button', { name: 'Resign', exact: true });
+  for (const advance of [0, 100, 250]) {
+    await page.clock.runFor(advance);
+    for (const action of ['click', 'Enter']) {
+      if (action === 'click') await confirm.dispatchEvent('click', { detail: 1 });
+      else await confirm.press('Enter');
+      await expect(page.locator('#app')).not.toHaveAttribute('data-action', 'RESIGN');
+      await expect(dialog).toBeVisible();
+      await expect(confirm).not.toHaveAttribute('data-armed', '');
+    }
+  }
+  await page.clock.runFor(100);
+  await expect(confirm).toHaveAttribute('data-armed', '');
+  for (const detail of [2, 3]) await confirm.dispatchEvent('click', { detail });
+  await expect(dialog).toBeVisible();
+  await expect(page.locator('#app')).not.toHaveAttribute('data-action', 'RESIGN');
+  await confirm.dispatchEvent('click', { detail: 1 });
+  await expect(page.locator('#app')).toHaveAttribute('data-action', 'RESIGN');
+  await expect(dialog).toBeHidden();
 });
 
 test('Resign sends once from its armed confirmation, and says before Enter why it cannot while a map loads', async ({ page }) => {
@@ -890,6 +921,57 @@ test.describe('Characters: typing never switches', () => {
 });
 
 // D-5, HUB-003: a Travel digit selects its favourite; a held digit repeats nothing.
+test('Travel keeps selection under a still pointer and changes it only on real movement (HUB-012)', async ({ page }) => {
+  await page.goto('/?hub');
+  await page.mouse.move(0, 0);
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  await page.keyboard.press('Meta+t');
+  const search = page.locator('#travel-search-input');
+  const eye = page.locator('#travel-favorite-4');
+  await expect(search).toBeFocused();
+  const box = await eye.boundingBox();
+  if (!box) throw new Error('Expected a painted favourite');
+  await page.mouse.move(box.x + 10, box.y + 10);
+  await expect(search).toHaveAttribute('aria-activedescendant', 'travel-favorite-4');
+  await search.press('Home');
+  await expect(search).toHaveAttribute('aria-activedescendant', 'travel-recent-449');
+  await page.mouse.wheel(0, 120);
+  await page.mouse.move(box.x + 10, box.y + 10);
+  await expect(search).toHaveAttribute('aria-activedescendant', 'travel-recent-449');
+  await page.mouse.move(box.x + 11, box.y + 10);
+  await expect(search).toHaveAttribute('aria-activedescendant', 'travel-favorite-4');
+  await page.getByRole('button', { name: 'Close Hub', exact: true }).click();
+  await page.mouse.move(box.x + 11, box.y + 10);
+  await page.keyboard.press('Meta+t');
+  await expect(search).toHaveAttribute('aria-activedescendant', 'travel-recent-449');
+  await expect(page.locator('#app')).not.toHaveAttribute('data-action', /TRAVEL/);
+});
+
+test('Travel favourite arrows follow the painted columns and hold at the ends (HUB-069)', async ({ page }) => {
+  await page.goto('/?hub');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  await page.keyboard.press('Meta+t');
+  const search = page.locator('#travel-search-input');
+  await expect(search).toBeFocused();
+  for (const [width, destination] of [[1280, 'travel-favorite-3'], [500, 'travel-favorite-2']] as const) {
+    await page.setViewportSize({ width, height: 900 });
+    await search.press('1');
+    await expect(search).toHaveAttribute('aria-activedescendant', 'travel-favorite-0');
+    await search.press('ArrowDown');
+    await expect(search).toHaveAttribute('aria-activedescendant', destination);
+    await search.press('End');
+    await expect(search).toHaveAttribute('aria-activedescendant', 'travel-favorite-5');
+    await search.press('ArrowDown');
+    await expect(search).toHaveAttribute('aria-activedescendant', 'travel-favorite-5');
+    await search.press('Home');
+    const first = await search.getAttribute('aria-activedescendant');
+    await search.press('ArrowUp');
+    await expect(search).toHaveAttribute('aria-activedescendant', first!);
+    await expect(search).toBeFocused();
+    await expect(page.locator('#app')).not.toHaveAttribute('data-action', /TRAVEL/);
+  }
+});
+
 test('a Travel number key selects its favourite, a held one repeats nothing, and only Enter travels', async ({ page }) => {
   await page.goto('/?hub');
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');

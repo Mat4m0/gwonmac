@@ -20,6 +20,20 @@ describe('Hub travel recents', () => {
     } finally { travel.dispose(); }
   });
 
+  it('ranks official aliases and saved Travel phrases before limiting Home places', async () => {
+    const host = createDemoTravelHost();
+    await host.savePreferences({ synonyms: [{ term: 'fort', mapId: 857 }] });
+    const hub = { showView: vi.fn(), showRows: vi.fn(), attach: vi.fn(), close: vi.fn(), notify: vi.fn() };
+    const travel = createHubTravel(host, hub, async (_place, leave) => leave());
+    try {
+      travel.source.setVisible?.(true);
+      await vi.waitFor(() => expect(travel.source.search('fort')[0]?.id).toBe('place:857'));
+      expect(travel.source.search('la')[0]?.id).toBe('place:55');
+      expect(travel.source.search('kmaadan')).toEqual([]);
+      expect(travel.source.search('ada')).toEqual([]);
+    } finally { travel.dispose(); }
+  });
+
   it('marks places consequential, flags leaving an explorable area and names the game state', () => {
     const host = createDemoTravelHost();
     const hub = { showView: vi.fn(), showRows: vi.fn(), attach: vi.fn(), close: vi.fn(), notify: vi.fn() };
