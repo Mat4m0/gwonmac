@@ -269,7 +269,7 @@ test('a fresh Home in an explorable area starts on Travel, says why, and Enter n
   await expect(page.locator('.hub-row[aria-selected="true"]')).toHaveAttribute('data-id', 'travel');
   await expect(page.locator('.hub-primary')).toHaveText(/^Browse travel/);
   // D-26: the header names the area and one quiet line names what it holds back.
-  await expect(page.locator('.hub-context')).toHaveText('Fixture Monk · Explorable area');
+  await expect(page.locator('.hub-context')).toHaveText('Fixture Monk · North Kryta Province · Explorable area');
   await expect(page.locator('.hub-lifecycle')).toHaveText('Explorable area — Travel leaves this area');
   await search.press('Enter');
   await expect(page.locator('.hub-caption')).toHaveText('Travel');

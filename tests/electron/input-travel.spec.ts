@@ -139,7 +139,7 @@ test.describe("renderer Travel input", () => {
       );
       await expect(search).toHaveAccessibleName("Destination, phrase, or friend");
       await expect(palette.locator(".travel-results")).toBeHidden();
-      await expect(palette.getByRole("heading", { name: "Favorites" })).toBeVisible();
+      await expect(palette.getByRole("heading", { name: "Favourites" })).toBeVisible();
       await expect(palette.locator(".travel-favorite-grid .travel-favorite")).toHaveCount(6);
 
       // Every shortcut that shows a GWonMac interface is a toggle. A second

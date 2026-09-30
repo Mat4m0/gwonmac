@@ -45,7 +45,7 @@ describe('Hub travel recents', () => {
       host.state.value = { ...state, mapId: 58, explorable: true };
       expect(places().length).toBeGreaterThan(0);
       expect(places().every(row => row.leavesArea)).toBe(true);
-      expect(travel.source.context?.()).toBe('Explorable area');
+      expect(travel.source.context?.()).toBe('North Kryta Province · Explorable area');
       expect(travel.source.lifecycle?.()).toBe('Explorable area — Travel leaves this area');
       host.state.value = { status: 'waiting', reason: 'loading' };
       expect(travel.source.context?.()).toBe('Map loading');

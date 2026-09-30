@@ -130,7 +130,7 @@ A focused test and the browser conversion journey cover this distinction.
 
 Hub and its embedded controls share the system font token. Recent Travel
 destinations and characters use horizontal carousels; Travel retains a compact
-Favorites grid. Empty-query arrows browse without executing, Enter activates and
+Favourites grid. Empty-query arrows browse without executing, Enter activates and
 Escape returns. Search retains caret editing. Settings stay keyboard-accessible.
 Existing Travel and character tests retain refusal and preference coverage.
 

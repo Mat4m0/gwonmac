@@ -477,8 +477,9 @@ export function createHub(parent: HTMLElement) {
     }
     const currentTitle = activeView?.title ?? scope?.title ?? 'Home';
     caption.textContent = currentTitle;
-    const context = !scope && !disposeView && !input.value.trim()
-      ? [...sources.keys()].filter(sourceEnabled).flatMap(source => source.context?.() ?? []) : [];
+    // Home with an empty query, and the views about where you are and who you play (HUB-190).
+    const located = activeView ? activeView.destination === 'travel' || activeView.destination === 'characters' : !scope && !input.value.trim();
+    const context = located ? [...sources.keys()].filter(sourceEnabled).flatMap(source => source.context?.() ?? []) : [];
     required<HTMLElement>('.hub-context').textContent = context.join(' · ');
     // One quiet lifecycle line on list stages; a report in the status line takes its place.
     lifecycle.textContent = disposeView ? '' : [...sources.keys()].filter(sourceEnabled).map(source => source.lifecycle?.()).find(Boolean) ?? '';
@@ -515,7 +516,9 @@ export function createHub(parent: HTMLElement) {
     hint.hidden = !hint.textContent || !!disposeView;
   }
   function refresh(reset = false) {
-    if (!root.open || disposeView) return;
+    if (!root.open) return;
+    // A mounted view keeps its header facts current, e.g. where the player is.
+    if (disposeView) { paintNavigation(); return; }
     if (reset) hover.release();
     paintNavigation();
     const previousRows = rows;

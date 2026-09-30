@@ -2,7 +2,8 @@
 import { createApp, h, watch } from 'vue';
 import type { HubPresenter, HubRow, HubSource, HubTask, HubViewMount } from '../../../src/shared/hub';
 import { matchHubRows, parseHubQuery, hubMatch } from '../../../src/shared/hub';
-import { TRAVEL_DESTINATIONS, travelDestination } from '../../../src/shared/travel';
+import { TRAVEL_DESTINATIONS, isPvpTravelDestination, travelDestination } from '../../../src/shared/travel';
+import { guildWarsMapName } from '../../../src/shared/guild-wars-map-names';
 import { travelContextRefusal, travelDestinationAvailability } from '../../../src/shared/travel-command';
 import TravelPalette from './components/TravelPalette.vue';
 import type { TravelHost } from './travel-host';
@@ -70,7 +71,10 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
       const state = host.state.value;
       if (state.status !== 'ready') return state.reason === 'loading' ? 'Map loading' : null;
       if (state.guildHall) return 'Guild Hall';
-      return travelDestination(state.mapId)?.name ?? (state.explorable ? 'Explorable area' : null);
+      // An explorable area by its name when the game names it; a PvP outpost says so.
+      if (state.explorable) { const name = guildWarsMapName(state.mapId); return name.startsWith('Unknown map') ? 'Explorable area' : `${name} · Explorable area`; }
+      const outpost = travelDestination(state.mapId)?.name ?? null;
+      return outpost && isPvpTravelDestination(state.mapId) ? `${outpost} · PvP` : outpost;
     },
     lifecycle() {
       const state = host.state.value;

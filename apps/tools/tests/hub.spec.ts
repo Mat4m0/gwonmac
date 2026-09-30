@@ -421,6 +421,24 @@ test('Travel uses Hub typography and supports empty-query arrows, favorites and 
   await search.press('Escape');await expect(hubSearch).toBeVisible();
 });
 
+test('Travel names where you are, and Customize keeps Tab and a chosen number inside Travel (HUB-190, HUB-070)',async({page})=>{
+  await page.goto('/?hub');
+  await expect(page.getByRole('combobox',{name:'Search people, places, builds'})).toBeFocused();
+  await page.keyboard.press('Meta+t');
+  const search=page.getByRole('combobox',{name:'Destination, phrase, or friend'});
+  await expect(search).toBeFocused();
+  await expect(page.locator('.hub-context')).toHaveText("Fixture Monk · Lion's Arch");
+  await search.press('Tab');
+  await expect(page.getByRole('button',{name:'Customize Travel'})).toBeFocused();
+  await page.keyboard.press('Enter');
+  // The next Tab reaches the first number, not the Hub footer.
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('button',{name:/^Change shortcut 1,/})).toBeFocused();
+  await page.getByRole('button',{name:'Assign shortcut 7'}).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('summary[aria-label="Destination for shortcut 7"]')).toBeFocused();
+});
+
 test('Travel Enter from an empty search uses the selected recent destination',async({page})=>{
   await page.goto('/?hub');
   const hubSearch=page.getByRole('combobox',{name:'Search people, places, builds'});

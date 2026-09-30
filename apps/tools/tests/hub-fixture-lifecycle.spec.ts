@@ -15,7 +15,7 @@ test.describe('game lifecycle', () => {
     await open(page, '&lifecycle=pvp-outpost');
     const search = page.getByRole('combobox', { name: searchName });
     await expect(lifecycle(page)).toHaveValue('pvp-outpost');
-    await expect(page.locator('.hub-context')).toHaveText('Fixture Monk · Random Arenas');
+    await expect(page.locator('.hub-context')).toHaveText('Fixture Monk · Random Arenas · PvP');
     await lifecycle(page).selectOption('map-loading');
     await search.fill('char toefte'); await search.press('Enter');
     await expect(page.locator('#hub')).toContainText('Wait until Guild Wars finishes loading');

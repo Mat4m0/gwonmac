@@ -238,13 +238,20 @@ an explorable area, Hub opens on **Travel** instead of a recent place, so Enter
 never leaves the area by accident, and a quiet line explains that Travel leaves
 the area. While a map loads, the same line says when Travel returns.
 
-With Travel enabled, search an outpost or your custom Travel phrase. Travel,
-favourites, recent places, and Guild Hall stay in the same window. A click on a
+With Travel enabled, search an outpost or your custom Travel phrase. Travel
+finds a destination by the start of its words (`kam`, `jewel istan`), an
+official shortcut (`ha`, `eotn`) or your phrase; it never guesses from a typo or
+a campaign. Travel, favourites, recent places, and Guild Hall stay in the same
+window, and the header shows where you are. A click on a
 destination selects it; press Enter, click **Travel to …** in the footer, or
 double-click the destination to travel. With an empty search, the number keys
-1–9 select that favourite; press Enter to travel. A trip closes Hub. The favourite for
-the outpost you are in is shown but cannot be chosen. Command-T
-and `/tp` also open Travel inside Hub.
+1–9 select that favourite; press Enter to travel. A trip closes Hub. The outpost
+you are in and places this character has not unlocked stay in the list with the
+reason, and cannot be chosen. The selection stays on its destination while the
+game state changes; if that destination goes away, nothing else is selected.
+Command-1 to Command-9 saves the selected destination under that number; a
+destination has one number, and the note names what the number held before.
+Command-T and `/tp` also open Travel inside Hub.
 
 Search a friend's alias or character name and press Enter to choose an action.
 With Whispers enabled, people search also finds your conversations, recent
@@ -481,7 +488,7 @@ calculations from your entered numbers, not observed character progress.
 See [title calculators](hub-title-calculators.md) for supported items and syntax.
 
 
-Inside Hub, recent Travel destinations form a horizontal carousel and Favorites
+Inside Hub, recent Travel destinations form a horizontal carousel and Favourites
 stay in a compact grid. With an empty query, arrows choose and Enter travels;
 the selection stops at the first and last destination.
 Escape returns to Hub. While editing a query, Left/Right preserve caret movement;
