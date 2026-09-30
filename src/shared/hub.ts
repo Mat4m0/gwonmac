@@ -39,7 +39,7 @@ export type HubRow = Readonly<{
   unavailable?: string;
   /** Opens the canonical saved record in its existing authoring workspace. */
   workspace?(): void;
-  /** A second way into this row, listed in its Actions menu under `actionsLabel` (default "Show details"). */
+  /** A second way into this row; its Actions menu lists it when `actionsLabel` names it. */
   actions?(): void;
   actionsLabel?: string;
   /** How the footer and a repeated Enter name this row's action while it runs (HUB-083). */
