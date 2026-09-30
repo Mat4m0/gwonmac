@@ -41,6 +41,8 @@ type ModalDialog = Readonly<{
   priority: number;
   transient?: boolean;
   dismiss(): void;
+  /** What a click on the backdrop does; `dismiss` when absent. */
+  backdrop?(): void;
   restoreFocus(): HTMLElement | null;
 }>;
 
@@ -104,13 +106,24 @@ export function closeDisclosure(target: EventTarget | null, root: Element): bool
   return true;
 }
 
-function focusableElements(root: HTMLElement): HTMLElement[] {
-  return [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((element) =>
-    !element.hidden
+/**
+ * The one rule for a control the keyboard can use now: shown, enabled, not
+ * hidden or inert. Tab wrapping and every "first usable control" focus share it,
+ * so focus never goes to a disabled button, which refuses it and leaves <body>.
+ */
+export function focusable(element: Element): element is HTMLElement {
+  return element instanceof HTMLElement
+    && element.matches(FOCUSABLE)
+    && !element.matches(":disabled")
+    && !element.hidden
     && element.getAttribute("aria-hidden") !== "true"
     && element.closest("[hidden], [inert]") === null
-    && element.getClientRects().length > 0
-  );
+    && element.getClientRects().length > 0;
+}
+
+/** The usable controls in `root`, in document order. */
+export function focusableElements(root: ParentNode): HTMLElement[] {
+  return [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(focusable);
 }
 
 export function installSurfaceController(
@@ -423,11 +436,18 @@ export function installSurfaceController(
         event.preventDefault();
         dialog.dismiss();
       };
+      // A backdrop click is one whose press also began on the backdrop: a text
+      // selection or a drag that starts in the panel and ends outside it (Chromium
+      // sends that click to the dialog) never dismisses (HUB-052).
+      let pressedBackdrop = false;
+      const onPointerDown = (event: PointerEvent) => { pressedBackdrop = event.target === dialog.root; };
       const onClick = (event: MouseEvent) => {
         if (event.target !== dialog.root) return;
         event.preventDefault();
         event.stopPropagation();
-        dialog.dismiss();
+        const began = pressedBackdrop;
+        pressedBackdrop = false;
+        if (began) (dialog.backdrop ?? dialog.dismiss)();
       };
       const onClose = () => {
         // Chromium queues `close`. The dialog may already have reopened by
@@ -446,6 +466,7 @@ export function installSurfaceController(
         "mousedown", "mouseup", "mousemove", "click", "wheel", "contextmenu",
       ] as const;
       dialog.root.addEventListener("cancel", onCancel);
+      dialog.root.addEventListener("pointerdown", onPointerDown);
       dialog.root.addEventListener("click", onClick);
       dialog.root.addEventListener("close", onClose);
       for (const name of isolatedEvents) dialog.root.addEventListener(name, stop);
@@ -475,6 +496,7 @@ export function installSurfaceController(
           if (dialog.root.open) dialog.root.close();
           surface.dispose();
           dialog.root.removeEventListener("cancel", onCancel);
+          dialog.root.removeEventListener("pointerdown", onPointerDown);
           dialog.root.removeEventListener("click", onClick);
           dialog.root.removeEventListener("close", onClose);
           for (const name of isolatedEvents) dialog.root.removeEventListener(name, stop);

@@ -476,6 +476,13 @@ async function selectMode(next: PaletteMode, focus: "search" | "settings" = "sea
   }
 }
 
+/** Clearing from the empty state removes the focused button, so the keyboard returns to search (HUB-071). */
+async function clearSearch(): Promise<void> {
+  query.value = "";
+  await nextTick();
+  input.value?.focus();
+}
+
 function toggleCustomize(): void {
   const next = mode.value === "customize" ? "travel" : "customize";
   void selectMode(next, next === "customize" ? "settings" : "search");
@@ -836,7 +843,7 @@ function onKeydown(event: KeyboardEvent): void {
           <span class="travel-result-context"><span class="travel-match" :data-unavailable="result.disabledReason !== null || undefined">{{ searchResultContext(result) }}</span><small v-if="result.disabledReason !== null" class="travel-unavailable-reason">{{ result.disabledReason }}</small></span>
         </button>
       </div>
-      <div v-else class="ui-empty travel-empty"><strong>{{ emptySearchTitle }}</strong><p>{{ emptySearchHelp }}</p><button type="button" class="ui-button" @click="query = ''">Clear search</button></div>
+      <div v-else class="ui-empty travel-empty"><strong>{{ emptySearchTitle }}</strong><p>{{ emptySearchHelp }}</p><button type="button" class="ui-button" @click="clearSearch">Clear search</button></div>
     </section>
 
     <section v-else-if="mode === 'travel'" id="travel-panel" class="ui-scroll travel-body" :role="inset ? 'listbox' : 'region'" aria-label="Travel" @pointerleave="hover.release()">

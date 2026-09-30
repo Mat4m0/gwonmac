@@ -13,10 +13,10 @@ import { openHubMaps } from './hub-maps.js';
 import { editHubShortcut, hubPhraseReserved, manageHubShortcuts } from './hub-preferences.js';
 import { isHubShortcuts, type HubShortcut } from '../shared/hub-preferences.js';
 import { createHubCalculator } from './hub-calculator.js';
-import { armConfirmation, closeDisclosure } from './surface-controller.js';
+import { armConfirmation, closeDisclosure, focusable, focusableElements } from './surface-controller.js';
 import { listIndexAfter, listKeyStep } from '../shared/ui/list-keys.js';
 import { createHoverSelection } from '../shared/ui/hover-selection.js';
-import { matchHubRows, parseHubQuery, normaliseHubQuery, type HubRow, type HubSource, type HubSummary, type HubTask, type HubViewAction, type HubViewFooter, type HubViewMount } from '../shared/hub.js';
+import { matchHubRows, parseHubQuery, normaliseHubQuery, type HubDestination, type HubRow, type HubSource, type HubSummary, type HubTask, type HubViewAction, type HubViewFooter, type HubViewMount } from '../shared/hub.js';
 export function createHub(parent: HTMLElement) {
   const document = parent.ownerDocument;
   const root = document.createElement('dialog');
@@ -67,9 +67,9 @@ export function createHub(parent: HTMLElement) {
   let awaitingResults = false;
   const sources = new Map<HubSource, () => void>();
   const sourceEnabled = (source: HubSource) => !source.feature || ((source.feature === 'characterSwitchEnabled' || !!window.gwToolsSettings?.().gwonmacTools) && !!window.gwToolsSettings?.()[source.feature]);
-  type RowScope = Readonly<{ title: string; rows: () => readonly HubRow[]; summary?: HubSummary }>;
+  type RowScope = Readonly<{ title: string; rows: () => readonly HubRow[]; summary?: HubSummary; destination?: HubDestination }>;
   let scope: RowScope | null = null;
-  type MountedView = { title: string; mount: HubViewMount<HTMLElement>; available?: () => boolean };
+  type MountedView = { title: string; mount: HubViewMount<HTMLElement>; available?: () => boolean; destination?: HubDestination };
   let activeView: MountedView | null = null;
   /** The mounted view's footer: its named primary and secondary, or its own footer (Travel, Characters). */
   type ViewFooter = { primary: HubViewAction | null; secondary: HubViewAction | null; own: boolean };
@@ -83,6 +83,12 @@ export function createHub(parent: HTMLElement) {
   type Page = { scope: RowScope | null; query: string; selected: string | null; scroll: number; view: MountedView | null; focus: FocusPlace };
   const history: Page[] = [];
   let suspended: Page | null = null;
+  /**
+   * A suspended page resumes for this long (D-11): a quick trip to another window or a popout
+   * returns to it with the query selected; later, the Hub starts fresh at Home.
+   */
+  const RESUME_MS = 90_000;
+  let suspendedAt = 0;
   let restoringFocus: MutationObserver | null = null;
   const focusPlace = (): FocusPlace => {
     const active = document.activeElement;
@@ -104,13 +110,12 @@ export function createHub(parent: HTMLElement) {
   const searchField = () => !search.hidden ? input
     : [...content.querySelectorAll<HTMLInputElement>('input[type=search],input[role=combobox]')].find(field => field.getClientRects().length > 0 && !field.disabled) ?? null;
   /** A view's first usable control, else Back, so focus never falls to <body> (a disabled button refuses it). */
-  const firstControl = () => [...content.querySelectorAll<HTMLElement>('input,select,textarea,button,[tabindex="0"]')]
-    .find(control => control.getClientRects().length > 0 && !control.matches(':disabled')) ?? backButton;
+  const firstControl = () => focusableElements(content)[0] ?? backButton;
   function restoreFocus(place: FocusPlace) {
     restoringFocus?.disconnect();
     const attempt = () => {
       const control = root.querySelector<HTMLElement>(place.selector);
-      if (!control || !control.getClientRects().length || control.matches(':disabled')) return false;
+      if (!control || !focusable(control)) return false;
       control.focus({ preventScroll: true });
       if (place.range && control instanceof HTMLInputElement && control.selectionStart !== null) control.setSelectionRange(...place.range);
       restoringFocus?.disconnect(); restoringFocus = null;
@@ -123,7 +128,9 @@ export function createHub(parent: HTMLElement) {
       restoringFocus.observe(content, { childList: true, subtree: true });
     }
   }
-  const capture = (): Page => ({ scope, query: input.value, selected, scroll: list.scrollTop, view: activeView, focus: focusPlace() });
+  /** Where the keyboard was when the running view action started: a page it opens returns there (HUB-019). */
+  let actionFocus: FocusPlace | null = null;
+  const capture = (): Page => ({ scope, query: input.value, selected, scroll: list.scrollTop, view: activeView, focus: actionFocus ?? focusPlace() });
   const pageTitle = (page: Pick<Page, 'scope' | 'view'>) => page.view?.title ?? page.scope?.title ?? 'Home';
   /**
    * Form drafts last the session, keyed by page path and field name: leaving a form keeps what
@@ -157,7 +164,7 @@ export function createHub(parent: HTMLElement) {
     resetView(); scope = page.scope;
     if (page.view) {
       if (page.view.available && !page.view.available()) { restoreParent(); return; }
-      restoring = true; presenter.showView(page.view.title, page.view.mount, page.view.available); restoring = false;
+      mountView(page.view);
     } else {
       input.value = page.query; caption.textContent = scope?.title ?? 'Home'; root.dataset.page = scope ? 'section' : 'home';
       input.placeholder = scope ? 'Search actions…' : 'Search people, places, builds…'; report(''); refresh(true);
@@ -176,7 +183,6 @@ export function createHub(parent: HTMLElement) {
     if (!parent) { close(); return; }
     restorePage(parent);
   }
-  let restoring = false;
   let previousFocus: HTMLElement | null = null;
   /**
    * The page session a running action belongs to (HUB-004). Typing, any page change, closing and
@@ -256,7 +262,7 @@ export function createHub(parent: HTMLElement) {
     const examples = [ ['trade', 'trade arms', 'Find offers or a seller'], ['travel', 'travel kamadan', 'Find an outpost'], ['character', 'char Toefte', 'Find a character by name'], ['builds', 'build monk', 'Browse saved Monk builds'], ['builds', 'team gom afk', 'Find your saved team'], ['whispers', 'whisper Romi', 'Choose a person; write before sending'], ['whispers', 'invite Romi', 'Invite a person to your party from an outpost'], ['', '1p in g', 'Convert platinum to gold'], ['trade', '10e in p', 'Estimate ecto value'], ['', 'titles', 'Plan title points'], ['', 'acc second', 'Choose how to open a saved account'], ['builds', 'build folder:Monk monk', 'Monk builds in a folder and its descendants'], ['builds', 'build folder:"Team Builds/Farming" monk', 'Quotes keep spaces; paths match consecutive folder names'], ['builds', 'build folder:/Monk/ mesmer', 'Leading slash starts at Skills; trailing slash matches the complete folder name'], ['builds', 'build Mo/Me', 'Exact profession pair; use folder:Mo/Me to search that folder instead'], ['builds', 'build folder:/', 'Templates saved directly in the Skills root'] ];
     return examples.filter(([tool]) => !tool || enabled.has(tool)).map(([, query, detail], index) => ({ id: `example:${index}`, title: query!, detail: detail!, group: 'Commands', action: 'Edit example', searchQuery: query!, run() {} }));
   }
-  function openSettings() { openHubSettings(presenter); }
+  function openSettings() { direct('settings', () => openHubSettings(presenter)); }
   function select(id: string | null, scroll = false) {
     selected = id;
     for (const row of list.querySelectorAll<HTMLElement>('[role="option"]')) {
@@ -268,6 +274,8 @@ export function createHub(parent: HTMLElement) {
     }
     const row = rows.find(row => row.id === id);
     const rates = required<HTMLElement>('.hub-rate-controls'); rates.hidden = !row?.quoteBasis || !!disposeView;
+    // A card that vanished under a focused Price basis hands the keyboard back to search (HUB-223).
+    if (rates.hidden && rates.contains(document.activeElement)) focusResult();
     if (row?.quoteBasis) {
       const basis = row.quoteBasis;
       let picker = rates.querySelector('select');
@@ -290,19 +298,19 @@ export function createHub(parent: HTMLElement) {
     const working = busy() ? running : null;
     primary.replaceChildren(document.createTextNode(working ? working.label : row ? row.action : 'Select a result'));
     if (row && !working) { const key = document.createElement('kbd'); key.textContent = '↵'; primary.append(key); }
-    disablePrimary(!row || !!row.unavailable || !!working);
+    disableSlot(primary, !row || !!row.unavailable || !!working);
     primary.dataset.variant = row?.destructive ? 'danger' : 'primary';
     // Footer slots never hide, so nothing slides under a resting pointer; they disable instead.
     const actionsButton = required<HTMLButtonElement>('.hub-actions');
-    actionsButton.disabled = !row || (!!scope && !row.skills && !scope.summary?.skills);
+    disableSlot(actionsButton, !row || (!!scope && !row.skills && !scope.summary?.skills));
     actionsButton.textContent = scope ? 'Details' : 'Actions';
     paintLegend(row);
     paintBusy();
   }
-  /** The primary disables instead of hiding; under the focus it hands focus to search or the view, never to <body>. */
-  function disablePrimary(disabled: boolean) {
-    const focused = document.activeElement === primary;
-    primary.disabled = disabled;
+  /** A footer slot disables instead of hiding; under the focus it hands focus to search or the view, never to <body>. */
+  function disableSlot(button: HTMLButtonElement, disabled: boolean) {
+    const focused = document.activeElement === button;
+    button.disabled = disabled;
     if (disabled && focused) (search.hidden ? firstControl() : input).focus({ preventScroll: true });
   }
   /** `aria-busy` and the thin bar under the search while this page's action runs or the status line shows progress. */
@@ -336,7 +344,7 @@ export function createHub(parent: HTMLElement) {
     primary.replaceChildren(document.createTextNode(action.label));
     // Enter runs a named primary, so only that one carries the keycap, and not while it runs.
     if (viewFooter.primary && !viewRunning) { const key = document.createElement('kbd'); key.textContent = '↵'; primary.append(key); }
-    disablePrimary(!!action.disabled || viewRunning);
+    disableSlot(primary, !!action.disabled || viewRunning);
     primary.dataset.variant = action.destructive ? 'danger' : 'primary';
     if (!action.armed) { viewArming?.arming.disarm(); viewArming = null; }
     else if (viewArming?.label !== action.label) {
@@ -344,7 +352,7 @@ export function createHub(parent: HTMLElement) {
     }
     const secondary = required<HTMLButtonElement>('.hub-actions');
     secondary.textContent = viewFooter.secondary?.label ?? 'Actions';
-    secondary.disabled = !viewFooter.secondary || !!viewFooter.secondary.disabled || viewRunning;
+    disableSlot(secondary, !viewFooter.secondary || !!viewFooter.secondary.disabled || viewRunning);
     count.textContent = '';
     paintLegend(undefined);
     paintBusy();
@@ -355,10 +363,12 @@ export function createHub(parent: HTMLElement) {
     if (!state || !action || action.disabled || viewRunning) return;
     if (action.armed && !viewArming?.arming.accepts(event)) return;
     const task = startTask();
+    // The footer slot disables while its action runs; a page the action opens still returns to it.
+    actionFocus = focusPlace();
     viewRunning = true; report(''); paintViewFooter();
     try { await action.run(task); }
     catch (error) { task.fail(error); }
-    finally { task.end(); if (viewFooter === state) { viewRunning = false; paintViewFooter(); } }
+    finally { task.end(); if (viewFooter === state) { actionFocus = null; viewRunning = false; paintViewFooter(); } }
   }
   function renderSkillBar(skills: NonNullable<HubRow['skills']>) {
     const bar = document.createElement('span'); bar.className = 'hub-skill-bar';
@@ -636,7 +646,7 @@ export function createHub(parent: HTMLElement) {
   function resetView() {
     endSession(); restoringFocus?.disconnect(); restoringFocus = null; keepDrafts(); pressed = null; modal.pageChanged();
     disposeView?.(); disposeView = null; activeView = null; viewAvailable = null; content.replaceChildren(); content.hidden = true;
-    viewFooter = null; viewRunning = false; viewArming?.arming.disarm(); viewArming = null;
+    viewFooter = null; viewRunning = false; actionFocus = null; viewArming?.arming.disarm(); viewArming = null;
     search.hidden = false; list.hidden = false; footer.hidden = false;
   }
   function home() {
@@ -697,24 +707,73 @@ export function createHub(parent: HTMLElement) {
   function suspend() {
     if (!root.open) return;
     frame = required<HTMLElement>('.hub-panel').getBoundingClientRect();
-    suspended = capture(); suspendedSession = session; endSession(); modal.close();
+    suspended = capture(); suspendedAt = Date.now(); suspendedSession = session; endSession(); modal.close();
     for (const source of sources.keys()) source.setVisible(false);
+  }
+  const resumable = () => suspended !== null && Date.now() - suspendedAt <= RESUME_MS;
+  const pageDestination = (page: Pick<Page, 'scope' | 'view'>) => page.view ? page.view.destination : page.scope?.destination;
+  /** Whether the next opening resumes a suspended page whose path holds this destination. */
+  const suspendedOn = (destination: HubDestination) => !root.open && resumable() && [...history, suspended!].some(page => pageDestination(page) === destination);
+  /**
+   * Resumes a suspended page. Suspending hides the Hub without unmounting it, so the page is
+   * still mounted and keeps its drafts, its confirmation and its view state; only its facts
+   * refresh (HUB-050). A resumed Hub search is selected, so typing starts a new search (D-11).
+   */
+  function resumePage(page: Page) {
+    const mounted = page.view ? page.view === activeView : !disposeView && page.scope === scope;
+    if (!mounted) restorePage(page);
+    else if (page.view?.available && !page.view.available()) { restoreParent(); return; }
+    else { if (!page.view) refresh(); restoreFocus(page.focus); }
+    if (document.activeElement === input) input.select();
+  }
+  /** The page on top takes the keyboard unless it already holds it: its search, else its first control. */
+  function focusPage() {
+    const active = document.activeElement;
+    if (active === input) { input.select(); return; }
+    if (active instanceof HTMLElement && content.contains(active) && !content.hidden) return;
+    (searchField() ?? firstControl()).focus({ preventScroll: true });
+  }
+  /**
+   * The one direct-shortcut contract (⌘E, ⌘T, ⌘B, the Settings menu item). The destination on
+   * top takes focus; one lower on the open path is returned to, like its breadcrumb; a suspended
+   * Hub whose path holds it resumes; otherwise it opens, over the open Hub's page or as the only
+   * page of a fresh Hub, with no artificial parent. A repeated shortcut never stacks history and
+   * never closes the Hub (HUB-049, HUB-172).
+   */
+  function direct(destination: HubDestination, open: () => void) {
+    if (suspendedOn(destination)) { show(); return; }
+    if (root.open) {
+      if (pageDestination({ scope, view: activeView }) === destination) { focusPage(); return; }
+      const index = history.findIndex(page => pageDestination(page) === destination);
+      if (index >= 0) { history.splice(index + 1); restoreParent(); announceDestination(); return; }
+    }
+    open();
   }
   const modal = window.gwSurfaces.registerDialog({ root, priority: 6, transient: true,
     dismiss,
+    // A backdrop click keeps the task for the next ⌘R, like a trip to another window (HUB-052).
+    backdrop: suspend,
     // Focus never lands on <body>: without a visible opener it returns to the game.
     restoreFocus: () => previousFocus?.isConnected && previousFocus !== document.body && previousFocus.getClientRects().length > 0
       ? previousFocus : document.getElementById('canvas'),
   });
+  /**
+   * The Hub shortcut (⌘R). A closed Hub opens: a page suspended within the resume window
+   * resumes, otherwise Home starts fresh (D-11). An open Hub goes Home, keeping a query typed
+   * there selected, and never closes.
+   */
   function show() {
-    if (root.open) { home(); return; }
+    if (root.open) { if (atHome()) restoreQuery = input.value; home(); input.select(); return; }
     previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     clearTimeout(receiptTimer); receipt.hidden = true;
     window.dispatchEvent(new Event('gw:input-reset'));
     modal.show(); window.dispatchEvent(new Event('gw:hub-visible'));
-    const resume = suspended; suspended = null;
+    const resume = resumable() ? suspended : null;
+    // A task left longer than the resume window starts fresh at Home.
+    if (suspended && !resume) restoreQuery = '';
+    suspended = null;
     for (const source of sources.keys()) source.setVisible(sourceEnabled(source));
-    if (resume) restorePage(resume); else home();
+    if (resume) resumePage(resume); else home();
     if (carriedFailure) { report(carriedFailure, true); carriedFailure = ''; }
   }
   input.addEventListener('input', () => { endSession(); if (!receiptInStatus) report(''); refresh(true); });
@@ -771,7 +830,7 @@ export function createHub(parent: HTMLElement) {
     if (target.closest('.hub-heading')) {
       const controls = [...required<HTMLElement>('.hub-heading').querySelectorAll<HTMLButtonElement>('button')].filter(button => !button.hidden && button.getClientRects().length);
       const index = controls.indexOf(target as HTMLButtonElement);
-      if (event.key === 'ArrowDown') { event.preventDefault(); (search.hidden ? content.querySelector<HTMLElement>('input[type=search],input[type=text]') ?? firstControl() : input).focus(); }
+      if (event.key === 'ArrowDown') { event.preventDefault(); (searchField() ?? firstControl()).focus(); }
       else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); controls[Math.max(0, Math.min(controls.length - 1, index + (event.key === 'ArrowRight' ? 1 : -1)))]?.focus(); }
       return;
     }
@@ -787,7 +846,7 @@ export function createHub(parent: HTMLElement) {
       if (target.matches('select,input[type="range"],input[role=combobox],textarea') || target.isContentEditable) return;
       if (!target.matches('input,button,a[href],summary') && target.scrollHeight > target.clientHeight) return;
       const column = target.parentElement?.closest<HTMLElement>('nav,.ui-scroll') ?? content;
-      const controls = [...(content.contains(column) ? column : content).querySelectorAll<HTMLElement>('input,select,button,a[href],summary,[tabindex="0"]')].filter(control => control.getClientRects().length && !control.matches(':disabled')).sort((a, b) => { const left = a.getBoundingClientRect(), right = b.getBoundingClientRect(); return left.top - right.top || left.left - right.left; });
+      const controls = focusableElements(content.contains(column) ? column : content).sort((a, b) => { const left = a.getBoundingClientRect(), right = b.getBoundingClientRect(); return left.top - right.top || left.left - right.left; });
       const index = controls.indexOf(target);
       if (index < 0) return;
       event.preventDefault();
@@ -846,7 +905,7 @@ export function createHub(parent: HTMLElement) {
   // A view's own dialog root (Characters) parks focus the same way (HUB-246).
   let lastFocus: HTMLElement | null = null;
   const keepPlace = () => {
-    const usable = lastFocus?.isConnected && root.contains(lastFocus) && lastFocus.getClientRects().length > 0 && !lastFocus.matches(':disabled');
+    const usable = !!lastFocus?.isConnected && root.contains(lastFocus) && focusable(lastFocus);
     (usable ? lastFocus! : search.hidden ? firstControl() : input).focus({ preventScroll: true });
   };
   root.addEventListener('focusin', event => {
@@ -854,7 +913,6 @@ export function createHub(parent: HTMLElement) {
     else if (event.target !== root && event.target instanceof HTMLElement) lastFocus = event.target;
   });
   root.addEventListener('focus', keepPlace);
-  root.addEventListener('click', event => { if (event.target === root) { event.stopImmediatePropagation(); close(); } }, true);
   root.addEventListener('close', () => { if (!root.open && !suspended) close(); });
   const onBlur = () => suspend();
   let enabledSources = new Set<HubSource>();
@@ -866,8 +924,37 @@ export function createHub(parent: HTMLElement) {
     else refresh();
   };
   window.addEventListener('blur', onBlur); window.addEventListener('gw:tools-settings', onSettings);
+  /** A new page starts over the open Hub's page, which Back returns to, or as the only page of a fresh Hub. */
+  function enterPage() {
+    const fromOpenHub = root.open;
+    if (!fromOpenHub) { suspended = null; show(); }
+    if (!scope) restoreQuery = input.value;
+    if (fromOpenHub) remember();
+  }
+  /** Mounts a view page, a new one or one that Back restores, with its footer and drafts. */
+  function mountView(view: MountedView) {
+    resetView();
+    root.dataset.page = 'section'; caption.textContent = view.title;
+    required<HTMLElement>('.hub-preview').hidden = true; required<HTMLElement>('.hub-rate-controls').hidden = true;
+    search.hidden = true; list.hidden = true; content.hidden = false;
+    activeView = view;
+    viewAvailable = view.available ?? null;
+    const state: ViewFooter = { primary: null, secondary: null, own: false };
+    viewFooter = state;
+    // A disposed view's late update never repaints the next page's footer.
+    const shell: HubViewFooter = {
+      primary: next => { state.primary = next; if (viewFooter === state) paintViewFooter(); },
+      secondary: next => { state.secondary = next; if (viewFooter === state) paintViewFooter(); },
+      own: () => { state.own = true; if (viewFooter === state) paintViewFooter(); },
+    };
+    paintViewFooter();
+    disposeView = view.mount(content, restoreParent, shell);
+    restoreDrafts([...history.map(pageTitle), view.title].join(' › '));
+    paintNavigation();
+    if (!content.contains(document.activeElement)) firstControl().focus();
+  }
   const presenter = {
-    show, close: () => close(), suspend, openSettings, toggle: () => root.open ? close() : show(), actions,
+    show, close: () => close(), suspend, openSettings, direct, suspendedOn, actions,
     /** A mounted view replaced its own page (a confirmation): a click run from before it is cancelled. */
     pageChanged: () => modal.pageChanged(),
     get visible() { return root.open; },
@@ -881,40 +968,17 @@ export function createHub(parent: HTMLElement) {
         if (root.open && (!disposeView || !viewAvailable || !viewAvailable())) home();
       };
     },
-    showRows(title: string, getRows: () => readonly HubRow[], summary?: HubSummary) {
-      const fromOpenHub = root.open;
-      if (!fromOpenHub) { suspended = null; show(); }
-      if (!scope) restoreQuery = input.value;
-      if (fromOpenHub && !restoring) remember(); resetView(); scope = { title, rows: getRows, ...(summary ? { summary } : {}) }; root.dataset.page = 'section'; caption.textContent = title;
+    showRows(title: string, getRows: () => readonly HubRow[], summary?: HubSummary, destination?: HubDestination) {
+      enterPage();
+      resetView(); scope = { title, rows: getRows, ...(summary ? { summary } : {}), ...(destination ? { destination } : {}) }; root.dataset.page = 'section'; caption.textContent = title;
       input.placeholder = 'Search actions…'; input.value = ''; report(''); refresh(true); focusResult();
     },
-    showView(title: string, mount: HubViewMount<HTMLElement>, available?: () => boolean) {
-      const fromOpenHub = root.open;
-      if (!fromOpenHub) { suspended = null; show(); }
-      if (!scope) restoreQuery = input.value;
-      if (fromOpenHub && !restoring) remember();
-      resetView();
-      root.dataset.page = 'section'; caption.textContent = title;
-      required<HTMLElement>('.hub-preview').hidden = true; required<HTMLElement>('.hub-rate-controls').hidden = true;
-      search.hidden = true; list.hidden = true; content.hidden = false;
-      activeView = { title, mount, ...(available ? { available } : {}) };
-      viewAvailable = available ?? null;
-      const state: ViewFooter = { primary: null, secondary: null, own: false };
-      viewFooter = state;
-      // A disposed view's late update never repaints the next page's footer.
-      const shell: HubViewFooter = {
-        primary: next => { state.primary = next; if (viewFooter === state) paintViewFooter(); },
-        secondary: next => { state.secondary = next; if (viewFooter === state) paintViewFooter(); },
-        own: () => { state.own = true; if (viewFooter === state) paintViewFooter(); },
-      };
-      paintViewFooter();
-      disposeView = mount(content, restoreParent, shell);
-      restoreDrafts([...history.map(pageTitle), title].join(' › '));
-      paintNavigation();
-      if (!content.contains(document.activeElement)) firstControl().focus();
+    showView(title: string, mount: HubViewMount<HTMLElement>, available?: () => boolean, destination?: HubDestination) {
+      enterPage();
+      mountView({ title, mount, ...(available ? { available } : {}), ...(destination ? { destination } : {}) });
     },
     notify,
-    browseBuilds() { const row = lookup('builds'); if (row && !row.unavailable) void row.run(startTask()); else report('Build Library is loading. Try again.'); },
+    browseBuilds() { direct('builds', () => { const row = lookup('builds'); if (row && !row.unavailable) void row.run(startTask()); else report('Build Library is loading. Try again.'); }); },
     resetPosition: hubWindow.reset,
     dispose() { close(); clearTimeout(receiptTimer); receipt.remove(); hubWindow.dispose(); disposeFrame(); for (const unsubscribe of sources.values()) unsubscribe(); sources.clear(); modal.dispose(); root.remove(); window.removeEventListener('blur', onBlur); window.removeEventListener('gw:tools-settings', onSettings); },
   };

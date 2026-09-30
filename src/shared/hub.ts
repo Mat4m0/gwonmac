@@ -112,13 +112,16 @@ export type HubViewAction = Readonly<{ label: string; run(task: HubTask): void |
 export type HubViewFooter = Readonly<{ primary(action: HubViewAction | null): void; secondary(action: HubViewAction | null): void; own(): void }>;
 export type HubViewMount<Target> = (target: Target, back: () => void, footer: HubViewFooter) => () => void;
 
+/** A page a direct shortcut opens (⌘T, ⌘E, ⌘B, Settings); every route to it names it, so the shortcut finds it. */
+export type HubDestination = 'travel' | 'characters' | 'builds' | 'settings';
+
 export interface HubPresenter<Target> {
   close(): void;
   /** A named outcome with no running task behind it; a failure also waits in the status line of the next opening. */
   notify(message: string, outcome?: 'failed'): void;
   attach(source: HubSource): () => void;
-  showRows(title: string, rows: () => readonly HubRow[], summary?: HubSummary): void;
-  showView(title: string, mount: HubViewMount<Target>, available?: () => boolean): void;
+  showRows(title: string, rows: () => readonly HubRow[], summary?: HubSummary, destination?: HubDestination): void;
+  showView(title: string, mount: HubViewMount<Target>, available?: () => boolean, destination?: HubDestination): void;
   /** Whether Esc on an empty query goes back to a parent page rather than closing the Hub. */
   readonly hasParent?: boolean;
 }

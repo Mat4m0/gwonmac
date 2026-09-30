@@ -125,6 +125,8 @@ declare global {
       priority: number;
       transient?: boolean;
       dismiss(): void;
+      /** What a click on the backdrop does; `dismiss` when absent. */
+      backdrop?(): void;
       restoreFocus(): HTMLElement | null;
     }>): GwonmacDialogHandle;
     dismissTransient(): void;

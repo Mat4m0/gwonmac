@@ -76,7 +76,9 @@ export function mountHubFixture(target: HTMLElement) {
   let capturingShortcut = false;
   const hubSettings: HubSettingsApi = {
     get: async () => ({ settings, tools: { configured: settings.gwonmacTools, loaded: true, restartRequired: !settings.gwonmacTools, features: Object.fromEntries(GLOBAL_TOOLS.map(tool => [tool, { enabled: settings[FEATURE_SELECTION_POLICIES[GLOBAL_TOOL_FEATURES[tool]].activation.setting] }])) as GlobalToolSettings }, shortcuts: resolveShortcuts(settings.shortcutOverrides) }),
+    // `?settings-ms=` answers every settings write late, as a busy main process does.
     update: async raw => {
+      await delay('settings-ms');
       const change = parseHubSettingsChange(raw);
       if (change.kind === 'settings') settings = { ...settings, ...change.patch };
       else if (change.kind === 'master') settings = { ...settings, gwonmacTools: change.enabled };
@@ -111,7 +113,7 @@ export function mountHubFixture(target: HTMLElement) {
     // `?double-click-ms=` models a player's slower macOS Double-click speed, as main passes it.
     gwSurfaces: installSurfaceController(document, { doubleClickMs: Number(params.get('double-click-ms')) || null }),
     gwToolsSettings: () => settings,
-    gwNative: { ...window.gwNative, init: { enhancementSelection: { tools: true } }, hubSettings, accounts: { get: async () => ({ current: '9e1bd41c-cfc0-4ca8-a57f-2f0ca159c72d', profiles: [{ id: '9e1bd41c-cfc0-4ca8-a57f-2f0ca159c72d', name: 'Main', state: 'running' }, { id: 'e98a37bc-5211-4bc5-8094-0b1286b3c42d', name: 'Second', state: 'ready' }] }), open: async (request: { mode: string }) => { await delay('accounts-ms'); record(`Account Second ${request.mode}`); } }, settings: { get: async () => settings, onChange: (listener: (value: AppSettings) => void) => { settingsListeners.add(listener); return () => settingsListeners.delete(listener); }, set: async (patch: RendererSettingsPatch) => { settings = { ...settings, ...patch }; localStorage.setItem('hub-fixture-shortcuts', JSON.stringify(settings.hubShortcuts)); for (const listener of settingsListeners) listener(settings); window.dispatchEvent(new Event('gw:tools-settings')); return settings; } }, clipboard: { writeText: async (value: string) => record(`Copied ${value}`) }, trade: { getMarketRates: async () => ({ ...estimateMarketRates(new URLSearchParams(location.search).has('market-empty') ? [] : ['WTS armbraces 30e/ea','WTB armbraces 28e/ea','WTS zkeys 1.5e/ea','WTB zkeys 1.4e/ea','WTS 20 ectos for 100k','WTB 25 ectos for 100k'].flatMap((message,group)=>Array.from({length:6},(_,index)=>({source:'kamadan' as const,message,sender:`Sample ${group} ${index}`,timestamp:Date.now()-index*60_000})))), sample: true }), getTraderQuotes: async () => ({ updatedAt: Date.now(), quotes: [{ modelId: '0b03a2', side: 'buy', price: 6000, timestamp: Date.now() }, { modelId: '0b03a2', side: 'sell', price: 5000, timestamp: Date.now() }], sample: true }) }, app: { showLauncher: async () => record('Launcher'), openSettings: async () => record('Settings'), requestQuit: async () => quitFixtureGame(record), showQuitOrReload: () => fixtureMain.showQuitOrReload(), openExternal: async () => record('Website') } },
+    gwNative: { ...window.gwNative, init: { enhancementSelection: { tools: true } }, hubSettings, accounts: { get: async () => ({ current: '9e1bd41c-cfc0-4ca8-a57f-2f0ca159c72d', profiles: [{ id: '9e1bd41c-cfc0-4ca8-a57f-2f0ca159c72d', name: 'Main', state: 'running' }, { id: 'e98a37bc-5211-4bc5-8094-0b1286b3c42d', name: 'Second', state: 'ready' }] }), open: async (request: { mode: string }) => { await delay('accounts-ms'); record(`Account Second ${request.mode}`); } }, settings: { get: async () => settings, onChange: (listener: (value: AppSettings) => void) => { settingsListeners.add(listener); return () => settingsListeners.delete(listener); }, set: async (patch: RendererSettingsPatch) => { await delay('settings-ms'); settings = { ...settings, ...patch }; localStorage.setItem('hub-fixture-shortcuts', JSON.stringify(settings.hubShortcuts)); for (const listener of settingsListeners) listener(settings); window.dispatchEvent(new Event('gw:tools-settings')); return settings; } }, clipboard: { writeText: async (value: string) => record(`Copied ${value}`) }, trade: { getMarketRates: async () => ({ ...estimateMarketRates(new URLSearchParams(location.search).has('market-empty') ? [] : ['WTS armbraces 30e/ea','WTB armbraces 28e/ea','WTS zkeys 1.5e/ea','WTB zkeys 1.4e/ea','WTS 20 ectos for 100k','WTB 25 ectos for 100k'].flatMap((message,group)=>Array.from({length:6},(_,index)=>({source:'kamadan' as const,message,sender:`Sample ${group} ${index}`,timestamp:Date.now()-index*60_000})))), sample: true }), getTraderQuotes: async () => ({ updatedAt: Date.now(), quotes: [{ modelId: '0b03a2', side: 'buy', price: 6000, timestamp: Date.now() }, { modelId: '0b03a2', side: 'sell', price: 5000, timestamp: Date.now() }], sample: true }) }, app: { showLauncher: async () => record('Launcher'), openSettings: async () => record('Settings'), requestQuit: async () => quitFixtureGame(record), showQuitOrReload: () => fixtureMain.showQuitOrReload(), openExternal: async () => record('Website') } },
   });
   const hub = createHub(document.body);
   const librarySize = Number(params.get('library'));
@@ -146,12 +148,17 @@ export function mountHubFixture(target: HTMLElement) {
     }
     else { pendingCharacter = null; record(`Character ${key}`); hub.close(); publishCharacter({ status: 'idle' }); }
   };
-  const characterSource: CharacterSwitchSource = { characters: { status: 'ready', sequence: 1, selectedIndex: 0, characters: [
+  const characterList: CharacterSwitchSource['characters'] = { status: 'ready', sequence: 1, selectedIndex: 0, characters: [
     { name: 'Fixture Monk', characterKey: 'monk', primaryProfession: 3, secondaryProfession: 0, characterType: 'roleplaying', campaign: 1, level: 20, mapId: 449 },
     ...['Ranger', 'Mesmer', 'Ritualist', 'Elementalist'].map((name, index) => ({ name: `Fixture ${name}`, characterKey: name.toLowerCase(), primaryProfession: [2, 5, 8, 6][index]!, secondaryProfession: 0, characterType: 'roleplaying' as const, campaign: 1, level: 20, mapId: 449 })),
     { name: 'Toefte', characterKey: 'toefte', primaryProfession: 3, secondaryProfession: 5, characterType: 'roleplaying', campaign: 1, level: 20, mapId: 449 },
     { name: 'Fixture Warrior', characterKey: 'warrior', primaryProfession: 1, secondaryProfession: 0, characterType: 'roleplaying', campaign: 1, level: 20, mapId: 55 },
-  ] },
+  ] };
+  // `?characters-ms=` keeps the account's character list on its way for that long, as after a login.
+  let characters: CharacterSwitchSource['characters'] = params.has('characters-ms') ? { status: 'waiting', reason: 'snapshot' } : characterList;
+  if (params.has('characters-ms')) setTimeout(() => { characters = characterList; for (const listener of [...characterListeners]) listener(); }, Number(params.get('characters-ms')) || 0);
+  const characterSource: CharacterSwitchSource = {
+    get characters() { return characters; },
     get action() { return characterAction; },
     get context() { return lifecycle.context(); },
     request: key => switchTo(key, false),
@@ -242,7 +249,7 @@ export function mountHubFixture(target: HTMLElement) {
   window.addEventListener('gw:travel-toggle', event => {
     if (!settings.gwonmacTools || !settings.travelPalette) return;
     event.preventDefault();
-    if (travel.active && (!(event instanceof CustomEvent) || event.detail !== 'show')) hub.close(); else travel.open();
+    hub.direct('travel', travel.open);
   });
   window.addEventListener('gw:whispers-toggle', event => {
     if (!settings.gwonmacTools || !settings.whispersEnabled || !session.state.available) return;

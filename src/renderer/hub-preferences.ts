@@ -127,7 +127,13 @@ export function manageHubShortcuts(hub: HubPresenter<HTMLElement>, get: () => re
         const question = doc.createElement('h2'); question.textContent = `Remove ${name} from Hub?`; page.setAttribute('aria-label', question.textContent);
         const copy = doc.createElement('p'); copy.textContent = 'Its pin and search phrase go. The place, tool or build itself stays.';
         page.append(question, copy); confirmTarget.append(page);
-        confirmFooter.primary({ label: `Remove ${name}`, destructive: true, armed: true, run: async () => { await save(get().filter(value => value.id !== entry.id)); cancel(); } });
+        // Back on the list, the entry after the removed one is chosen, so the footer's Remove,
+        // which keeps the keyboard, names it (HUB-019).
+        confirmFooter.primary({ label: `Remove ${name}`, destructive: true, armed: true, run: async () => {
+          const visible = entries(); const at = visible.findIndex(value => value.id === entry.id);
+          await save(get().filter(value => value.id !== entry.id));
+          chosen = (visible[at + 1] ?? visible[at - 1])?.id ?? null; cancel();
+        } });
         confirmFooter.secondary({ label: 'Keep', run: cancel });
         return () => page.remove();
       });

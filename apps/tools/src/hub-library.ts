@@ -263,7 +263,7 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
       { id: 'game-templates', title: 'Guild Wars templates', detail: 'Your existing skill template files and folders', group: 'Builds', action: 'Browse templates', navigate: openTemplates, run: openTemplates },
       ...all().filter((item): item is Item & { kind: 'build' } => item.kind === 'build' && !String(item.value.id).startsWith('template:')).map(buildRow),
       ...templateStates(),
-    ]);
+    ], undefined, 'builds');
   }
   function review(item: Item) {
     if (item.kind === 'build') { chooseBuild(item); return; }
