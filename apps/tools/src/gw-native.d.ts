@@ -23,6 +23,8 @@ declare global {
     gwFixtureCanvas?: Readonly<{ events: readonly FixtureCanvasEvent[]; clear(): void }>;
     /** Hub fixture only: every recorded game or account action, oldest first. */
     gwFixtureActions?: readonly string[];
+    /** Hub fixture only: renames the saved account "Second" for every later read. */
+    gwFixtureAccounts?: Readonly<{ renameSecond(name: string): void }>;
   }
 }
 

@@ -39,6 +39,36 @@ test('account actions restore each visited account and command row', async ({ pa
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', /Account/);
 });
 
+test('→ on the current account opens no actions, as Enter opens none (HUB-175)', async ({ page }) => {
+  await page.goto('/?hub');
+  const search = page.getByRole('combobox', { name: searchName });
+  const selected = page.locator('.hub-row[aria-selected="true"]');
+  await search.fill('switch account'); await search.press('Enter');
+  await expect(selected).toContainText('Second');
+  await page.keyboard.press('ArrowUp');
+  await expect(selected).toContainText('Main');
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('.hub-breadcrumbs')).toHaveText('Home›Accounts');
+  await expect(selected).toContainText('Main');
+});
+
+test('a changed account list returns to one refreshed Accounts page (HUB-174)', async ({ page }) => {
+  await page.goto('/?hub');
+  const search = page.getByRole('combobox', { name: searchName });
+  await search.fill('switch account'); await search.press('Enter');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.hub-breadcrumbs')).toHaveText('Home›Accounts›Second');
+  await page.evaluate(() => window.gwFixtureAccounts?.renameSecond('Alt'));
+  await page.keyboard.press('Enter');
+  // The Accounts page it came from, not a second copy over the stale Second actions.
+  await expect(page.locator('.hub-breadcrumbs')).toHaveText('Home›Accounts');
+  await expect(page.locator('.hub-status')).toHaveText('Accounts changed. Choose from the refreshed list.');
+  await expect(page.locator('.hub-row[aria-selected="true"]')).toContainText('Alt');
+  await page.keyboard.press('Meta+Backspace');
+  await expect(page.locator('.hub-breadcrumbs')).toHaveText('Home');
+  await expect(page.locator('#app')).not.toHaveAttribute('data-action', /Account/);
+});
+
 test('temporary blur resumes the stage and focus while explicit close starts fresh', async ({ page }) => {
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: searchName });
