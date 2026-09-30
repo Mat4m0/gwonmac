@@ -773,6 +773,100 @@ test.describe('Characters: typing never switches', () => {
     await expect(page.locator('#app')).toHaveAttribute('data-action', 'Character toefte');
   });
 
+  // HUB-073: a state that refuses switching says so on open, in plain words, and Enter asks nothing.
+  test('while a map loads, Characters and char rows say so before Enter and switch nothing', async ({ page }) => {
+    await page.goto('/?hub&lifecycle=map-loading');
+    await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+    const search = page.getByRole('combobox', { name: searchName });
+    await search.fill('char toefte');
+    const row = page.locator('.hub-row[data-id="character:toefte"]');
+    await expect(row).toHaveAttribute('aria-disabled', 'true');
+    await expect(row.locator('.hub-detail')).toHaveText('Wait until Guild Wars finishes loading, then try again.');
+    await search.press('Escape');
+    await page.keyboard.press('Meta+e');
+    await expect(page.locator('.character-switch-status')).toHaveText('Wait until Guild Wars finishes loading, then try again.');
+    await expect(card(page, 'monk')).toBeFocused();
+    await page.keyboard.press('ArrowRight');
+    await expect(card(page, 'ranger')).toHaveAttribute('aria-disabled', 'true');
+    await expect(page.locator('#hub .hub-primary')).toBeDisabled();
+    await page.keyboard.press('Enter');
+    expect(await action(page)).toBeNull();
+    await expect(page.locator('#hub')).not.toContainText('(game-loading)');
+    await expect(page.locator('.character-switch-details')).toBeHidden();
+  });
+
+  // D-30, HUB-193: a running switch covers the game with one quiet line, absorbs clicks, and answers a second request.
+  test('a running switch shows its veil, keeps clicks from the game, and says a switch is running', async ({ page }) => {
+    await page.goto('/?hub&switch-fail=selector-timeout&switch-ms=4000');
+    await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+    const search = page.getByRole('combobox', { name: searchName });
+    await search.fill('char toefte'); await search.press('Enter');
+    const veil = page.locator('.character-switch-veil');
+    await expect(veil).toHaveText('Switching to Toefte…');
+    await expect(veil.locator('button, a, input, [tabindex]')).toHaveCount(0);
+    await page.evaluate(() => window.gwFixtureCanvas?.clear());
+    await page.mouse.click(300, 300);
+    expect(await page.evaluate(() => window.gwFixtureCanvas?.events.filter(event => event.type !== 'keydown' && event.type !== 'keyup').length)).toBe(0);
+    await page.keyboard.press('Meta+e');
+    await expect(page.locator('.hub-receipt')).toHaveText('A character switch is already running.');
+    await expect(veil).toBeHidden({ timeout: 10_000 });
+    await expect(page.locator('.hub-receipt')).toHaveText('Automatic switching stopped. Continue from the Guild Wars character selector.');
+    await expect(page.locator('#app')).toHaveAttribute('data-action', 'Character toefte');
+  });
+
+  // HUB-197, HUB-195, HUB-194: search keeps the chosen card; badges and profession pairs read true.
+  test('clearing, spacing or pasting in the search keeps the chosen card, and cards show their profession pair', async ({ page }) => {
+    await page.goto('/?hub');
+    await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Meta+e');
+    await page.keyboard.press('3');
+    await expect(card(page, 'mesmer')).toBeFocused();
+    await page.keyboard.type('fix');
+    const query = page.locator('#character-switch-query');
+    await expect(query).toHaveValue('fix');
+    await expect(card(page, 'mesmer')).toHaveAttribute('aria-selected', 'true');
+    await query.press('Space');
+    await expect(card(page, 'mesmer')).toHaveAttribute('aria-selected', 'true');
+    await query.fill('');
+    await expect(card(page, 'mesmer')).toHaveAttribute('aria-selected', 'true');
+    await query.fill('toe');
+    await expect(card(page, 'toefte')).toHaveAttribute('aria-selected', 'true');
+    // A search hides the number badges instead of drawing empty squares.
+    await expect(card(page, 'toefte').locator('.character-switch-key')).toBeHidden();
+    await expect(card(page, 'toefte').locator('.character-switch-meta')).toContainText('Mo/Me');
+    expect(await action(page)).toBeNull();
+  });
+
+  // HUB-076: a narrow Hub shows fewer, wider cards instead of five squeezed ones.
+  test('a narrow Hub shows at most three cards, each at least 100 px wide', async ({ page }) => {
+    await page.goto('/?hub');
+    await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+    await page.getByRole('button', { name: 'Unlock Hub position', exact: true }).click();
+    const grip = page.getByRole('button', { name: 'Resize Hub', exact: true });
+    const corner = (await grip.boundingBox())!;
+    await page.mouse.move(corner.x + 10, corner.y + 10);
+    await page.mouse.down(); await page.mouse.move(corner.x - 900, corner.y + 10, { steps: 4 }); await page.mouse.up();
+    await page.keyboard.press('Meta+e');
+    await expect(card(page, 'monk')).toBeFocused();
+    const widths = await page.locator('#character-switch-list button[data-row]').evaluateAll(cards => cards.map(card => card.getBoundingClientRect().width));
+    expect(widths.length).toBeGreaterThan(0);
+    expect(widths.length).toBeLessThanOrEqual(3);
+    for (const width of widths) expect(width).toBeGreaterThanOrEqual(100);
+  });
+
+  // HUB-198, HUB-199: one name, no unsaved search toggle.
+  test('Characters shows one name and keeps no unsaved search setting', async ({ page }) => {
+    await page.goto('/?hub');
+    await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Meta+e');
+    await expect(page.locator('.hub-caption')).toHaveText('Characters');
+    await expect(page.locator('#character-switch-title')).toHaveClass(/ui-sr-only/);
+    await page.getByRole('button', { name: 'Character Switch settings', exact: true }).click();
+    await expect(page.getByText('Show search bar')).toHaveCount(0);
+  });
+
   // HUB-034, HUB-075: the confirmation names the character; Stay returns to the row that asked.
   test('Leave this area names the character, and Stay returns to the search that asked', async ({ page }) => {
     await page.goto('/?hub&lifecycle=pve-explorable');

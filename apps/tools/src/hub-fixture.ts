@@ -53,7 +53,7 @@ export type FixtureCanvasEvent = Readonly<{ type: string; code?: string; repeat?
 export function mountHubFixture(target: HTMLElement) {
   const params = new URLSearchParams(location.search);
   // Slow and failing game answers for the session races (HUB-004): `?accounts-ms=`, `?invite-ms=`,
-  // `?invite-fail=<reason>`, `?switch-fail=<code>`, `?templates-ms=` and `?slow-apply` (the runner on the real clock).
+  // `?invite-fail=<reason>`, `?switch-fail=<code>` (after `?switch-ms=`), `?templates-ms=` and `?slow-apply` (the runner on the real clock).
   const delay = (name: string) => new Promise(resolve => setTimeout(resolve, Number(params.get(name)) || 0));
   // Every game or account action in order, so a test can count what one press ran.
   const actions: string[] = [];
@@ -153,7 +153,7 @@ export function mountHubFixture(target: HTMLElement) {
     else if (switchFailure) {
       // The palette withdraws while the switch runs; the failure arrives after the Hub closed (HUB-035).
       pendingCharacter = null; record(`Character ${key}`); publishCharacter({ status: 'switching', stage: 'logout' });
-      setTimeout(() => publishCharacter({ status: 'failed', code: switchFailure, retryable: true }), 1000);
+      setTimeout(() => publishCharacter({ status: 'failed', code: switchFailure, retryable: true }), Number(params.get('switch-ms')) || 1000);
     }
     else { pendingCharacter = null; record(`Character ${key}`); hub.close(); publishCharacter({ status: 'idle' }); }
   };

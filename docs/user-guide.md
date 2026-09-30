@@ -132,8 +132,8 @@ Skill labels only change the displayed labels, not Guild Wars key bindings.
 Character Switch has its own switch, shortcut, and display settings here.
 It is a Core feature and does not require **Enable Tools**.
 Inside Hub, Character Switch uses compact horizontal cards in character-selection
-order. Its settings control search, profession, level and known-location display.
-The search bar is shown by default and can be hidden for the current app session.
+order. Its settings control profession, level and known-location display; the
+search bar always shows.
 
 Build Library defaults to **Command-B**. **Control-Shift-Space** remains a
 Guild Wars control for calling the selected target without attacking.
@@ -366,17 +366,24 @@ the Guild Wars character-selection screen. You can also search for a character
 in Hub and select it to switch directly. On the character-selection screen,
 every character can be selected, and the switch enters it without a logout.
 The search bar is shown for every account size. Initial focus remains on the
-current character. Press Left or Up for the previous character. Press Right or
-Down for the next character. Control-N and Control-P step too, Page Up and Page
+current character. Press Left for the previous character and Right or Down for
+the next; Up moves to the search. Control-N and Control-P step too, Page Up and Page
 Down move by the visible cards, and Home and End jump to the first and last
 character; the carousel stops at both ends instead of wrapping. Start typing a character name or primary profession
-to move focus to search. Secondary professions are not searched. The number keys
+to move focus to search. Secondary professions are not searched. A search keeps
+the chosen card while it still matches, and clearing it returns to the card you
+chose before. Each card shows the profession pair, such as `Mo/Me`, and marks a
+PvP character. The number keys
 1–9 and 0 select one of the first ten characters and scroll its card into view;
 they never switch. A click on a card selects it; press Enter, click
 **Switch to …** in the footer, or double-click the card to switch. In an
 explorable area Hub asks "Leave this area and switch to …?" with the name.
 **Leave and switch to …** accepts a click only after a brief moment. Opening
-Switch Character again always starts on the current character. Use **View → Reload Guild Wars**
+Switch Character again always starts on the current character. While a map
+loads or in active PvP, Switch Character says so when it opens and on each
+`char` row, and Enter switches nothing. While a switch runs, a thin line
+"Switching to …" covers the game and ignores clicks; a second request says that
+a switch is already running. Use **View → Reload Guild Wars**
 to reload.
 
 Enable **Resign** in **Settings → Tools**. It is off by default and requires

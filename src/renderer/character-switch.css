@@ -17,3 +17,10 @@
 @media(prefers-reduced-motion:reduce){.character-switch-panel{animation:none}}
 @media(max-height:560px){.character-switch-panel{top:8px;max-height:calc(100vh - 16px);overflow:auto}.character-switch-panel[data-layout=horizontal] .character-switch-row{min-height:148px}.character-switch-panel[data-layout=horizontal] .character-switch-row img{width:38px;height:38px;margin-top:0}}
 .character-switch-action{display:flex;align-items:center;gap:10px;margin-left:auto}
+/* A running switch: one quiet line over the game that takes pointer presses and offers no control (D-30). */
+.character-switch-veil{position:fixed;inset:0;z-index:2147483000;display:flex;align-items:flex-end;justify-content:center;padding-bottom:18vh;background:oklch(0 0 0/.18);color:var(--ui-text-bright,#fff);font:500 var(--ui-font-size,14px)/1.4 var(--ui-font,system-ui);text-shadow:0 1px 2px oklch(0 0 0/.8);cursor:progress}
+.character-switch-veil[hidden]{display:none}
+/* A card without a number (past the tenth, or during a search) draws no empty badge (HUB-195). */
+.character-switch-key:empty{display:none}
+/* A card the game state refuses stays browsable and reads as unavailable (HUB-073). */
+.character-switch-row[aria-disabled=true]{opacity:.62}

@@ -524,7 +524,7 @@ test('Hub keeps its geometry across results and compact carousels', async ({ pag
       await expect(selected).toContainText('Fixture Ranger');
       await expect(page.locator('#app')).not.toHaveAttribute('data-action', /Character/);
       await page.getByRole('button', { name: 'Character Switch settings', exact: true }).click();
-      await expect(page.getByRole('checkbox', { name: /Show search bar/ })).toBeFocused();
+      await expect(page.getByRole('checkbox', { name: /Show profession/ })).toBeFocused();
       await page.keyboard.press('Escape');
     }
     if (['travel', 'switch character'].includes(query)) await page.getByRole('button', { name: 'Back', exact: true }).click();

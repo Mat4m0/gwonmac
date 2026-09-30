@@ -188,7 +188,11 @@
 .hub-view .character-switch-search svg { left:20px; width:20px; height:20px; }
 .hub-view .character-switch-search .ui-input { padding:8px 8px 8px 36px; font:var(--ui-type-window-size)/var(--ui-type-window-line) var(--ui-font-interface); }
 .hub-view .character-switch-carousel { padding:12px 16px; gap:8px; }
-.hub-view .character-switch-panel[data-layout=horizontal] .character-switch-list { grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px; }
+/* The cards sit in the middle of the page instead of above an empty band (HUB-199). */
+.hub-view .character-switch-panel { display:flex; flex-direction:column; }
+.hub-view .character-switch-panel > .character-switch-carousel { margin-block:auto; }
+/* As many cards as fit at 100 px or more in the carousel's width: 1, 3 or 5 (HUB-076, set by the palette). */
+.hub-view .character-switch-panel[data-layout=horizontal] .character-switch-list { grid-template-columns:repeat(var(--character-cards,5),minmax(0,1fr)); gap:8px; }
 .hub-view .character-switch-panel[data-layout=horizontal] .character-switch-row { min-height:138px; padding:10px 8px; border-radius:var(--ui-radius-sm); background:var(--ui-well-fill); box-shadow:none; }
 .hub-view .character-switch-panel[data-layout=horizontal] .character-switch-row[data-selected=true] { background:var(--ui-selection-fill); box-shadow:inset 0 0 0 1px var(--ui-line-soft); }
 .hub-view .character-switch-row[aria-current=true] { border-color:transparent; }
@@ -213,11 +217,11 @@
   .hub-view .travel-history .travel-recent { flex-basis:160px; }
 }
 
-@media(max-width:640px) { .hub-view .character-switch-panel[data-layout=horizontal] .character-switch-list { grid-template-columns:repeat(3,minmax(0,1fr)); } }
 
 /* Character identity: artwork first, compact metadata and aligned shortcut badges. */
 .hub-view .character-switch-panel[data-layout=horizontal] .character-switch-row img { width:42px; height:42px; outline:none; border:0; box-shadow:none; margin:5px 0 8px; }
 .hub-view .character-switch-panel[data-layout=horizontal] .character-switch-key { position:absolute; top:8px; left:8px; width:21px; height:21px; display:grid; place-items:center; border-radius:var(--ui-radius-sm); background:var(--ui-well-fill); font:500 11px/1 var(--ui-font-interface); }
+.hub-view .character-switch-panel[data-layout=horizontal] .character-switch-key:empty { display:none; }
 .hub-view .character-switch-panel[data-layout=horizontal] .character-switch-row { min-height:146px; padding-top:12px; }
 .hub-view .character-switch-panel[data-layout=horizontal] .character-switch-meta { margin-top:7px; display:block; text-align:center; width:100%; }
 .hub-view .character-switch-panel[data-layout=horizontal] .character-switch-row { display:grid; grid-template-columns:minmax(0,1fr); grid-template-rows:48px minmax(0,1fr); justify-items:center; align-items:start; gap:6px; height:154px; min-height:154px; padding:12px 8px; }

@@ -145,17 +145,10 @@ test("a 27-character account uses the Hub carousel and preserves search, identit
     await dialog.getByRole("button", { name: "Character Switch settings" }).click();
     const horizontalLayout = dialog.getByRole("radio", { name: /Horizontal/u });
     const verticalLayout = dialog.getByRole("radio", { name: /Vertical/u });
-    const searchSetting = dialog.getByRole("checkbox", { name: /Show search bar/u });
     await expect(horizontalLayout).toBeHidden();
     await expect(verticalLayout).toBeHidden();
-    await expect(searchSetting).toBeChecked();
-    await searchSetting.uncheck();
-    await page.keyboard.press("Escape");
-    await expect(search).toBeHidden();
-    await expect.poll(() => isDomActiveElement(selected)).toBe(true);
-
-    await dialog.getByRole("button", { name: "Character Switch settings" }).click();
-    await searchSetting.check();
+    // The search always shows; an unsaved toggle for it is gone (HUB-198).
+    await expect(dialog.getByRole("checkbox", { name: /Show search bar/u })).toHaveCount(0);
 
     await page.keyboard.press("Escape");
     await expect(search).toBeVisible();
