@@ -49,7 +49,10 @@ function matchesBuild(build: Build, query: string): boolean {
       return professionPair ? token === build.professions.filter(Boolean).join('/').toLowerCase() : folderMatches(folder, token);
     }
     const profession = Object.entries(PROFESSIONS).find(([code, facts]) => code.toLowerCase() === token || facts.name.toLowerCase() === token);
-    if (profession && !raw.startsWith('"')) return build.professions[0] === profession[0];
+    // A full profession name filters; a short code is also the start of a word while typing,
+    // so `air p` still finds "Air pressure" (D-17, HUB-059). Monk builds rank first by their code.
+    if (profession && !raw.startsWith('"')) return build.professions[0] === profession[0]
+      || (profession[1].name.toLowerCase() !== token && hubMatch(build.name, token, aliases) !== null);
     return hubMatch(build.name, token, aliases) !== null;
   });
 }

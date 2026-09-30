@@ -3,7 +3,7 @@
  * Market demand stays bounded to a complete visible query through Trade's owner.
  */
 import { calculate, currencyInfo, decimal, divide, evaluateConversion, formatFraction, fraction, multiply, parseConversion, type Currency, type Fraction } from '../shared/hub-calculator.js';
-import type { HubPresenter, HubRow, HubSource } from '../shared/hub.js';
+import { hubTier, type HubPresenter, type HubRow, type HubSource } from '../shared/hub.js';
 import type { TraderQuoteSnapshot } from '../shared/trade-chat.js';
 import { MARKET_CACHE_MS, MARKET_MAX_AGE_MS, type MarketSnapshot, type MarketQuote, type MarketSide } from '../shared/market-rates.js';
 import { calculateTitle } from '../shared/title-calculator.js';
@@ -55,6 +55,23 @@ export function createHubCalculator(options: {
     run:()=>options.copy(`${entry.title} · ${entry.detail}`),
     ...(entry.input&&entry.from&&entry.to?{conversion:{input:entry.input,from:entry.from,to:entry.to}}:{}),
   }));
+  /**
+   * `10 ecto` or `10 ecto in` is a conversion without its target: a fill row completes the
+   * grammar and runs nothing, so no result is ever guessed (HUB-102, D-6).
+   */
+  function partialConversion(term:string):HubRow[]{
+    const amount=term.replace(/\s+in$/u,'');
+    if(!/^\d/u.test(amount)||/\sin\s/u.test(amount))return [];
+    try{if(!parseConversion(`${amount} in g`))return [];}catch{return [];}
+    return [{id:'conversion:complete',title:`${amount} in …`,detail:'Add a target: in p for platinum, in g for gold, in e for ectos',group:'Calculator',action:'Add a target',searchQuery:`${amount} in `,run(){}}];
+  }
+  /** The calculator's own tools, found by their words (HUB-063). */
+  function calculatorCommands(term:string):HubRow[]{
+    return [
+      {id:'title:help',title:'Title calculator',detail:'Points, items needed and offer comparisons',keywords:'titles calc calculator points',group:'Commands',action:'Open calculator',searchQuery:'titles',run(){}},
+      {id:'currency-rates',title:'Conversion rates',detail:manual?'Your rates':'Automatic observed prices',keywords:'rate currency exchange calc ecto platinum gold',group:'Calculator',action:'Choose rates',run:()=>editRates()},
+    ].filter(row=>hubTier(row,term)!==null);
+  }
   return {
     subscribe(listener){listeners.add(listener);return()=>listeners.delete(listener);},
     setVisible(next){visible=next;if(!next)clear();},
@@ -66,7 +83,7 @@ export function createHubCalculator(options: {
       if(term==='rates'||term==='conversion rates')return [{id:'currency-rates',title:'Conversion rates',detail:manual?'Your rates':'Automatic observed prices',group:'Calculator',action:'Choose rates',run:()=>editRates()}];
       try{
         const conversion=parseConversion(term);
-        if(!conversion){clear();const value=calculate(term);return value?[result('calculation',formatFraction(value),term,formatFraction(value))]:[];}
+        if(!conversion){clear();const value=calculate(term);return value?[result('calculation',formatFraction(value),term,formatFraction(value))]:[...partialConversion(term),...calculatorCommands(term)];}
         const units=[...conversion.terms.map(entry=>entry.unit),conversion.to];
         const fixed=units.every(unit=>unit==='gold'||unit==='platinum')||units.every(unit=>unit===conversion.to);
         const card=(id:string,rate:(unit:Currency)=>Fraction,detail:string)=>{

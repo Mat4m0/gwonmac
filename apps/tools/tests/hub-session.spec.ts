@@ -8,8 +8,7 @@ import { expect, test, type Page } from '@playwright/test';
  * page; a late failure is a named failure receipt that also waits for the next opening.
  * `?slow-apply` lands each fixture command after half a second on the real confirmation clock.
  */
-const searchName = 'Search people, places, builds';
-const search = (page: Page) => page.getByRole('combobox', { name: searchName });
+const search = (page: Page) => page.locator('.hub-search input');
 const hub = (page: Page) => page.getByRole('dialog', { name: 'Hub', exact: true });
 const status = (page: Page) => page.locator('.hub-status');
 const receipt = (page: Page) => page.locator('.hub-receipt');

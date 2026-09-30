@@ -16,7 +16,7 @@ import { createHubCalculator } from './hub-calculator.js';
 import { armConfirmation, closeDisclosure, focusable, focusableElements } from './surface-controller.js';
 import { listIndexAfter, listKeyStep } from '../shared/ui/list-keys.js';
 import { createHoverSelection } from '../shared/ui/hover-selection.js';
-import { matchHubRows, parseHubQuery, normaliseHubQuery, type HubDestination, type HubRow, type HubSource, type HubSummary, type HubTask, type HubViewAction, type HubViewFooter, type HubViewMount } from '../shared/hub.js';
+import { matchHubRows, parseHubQuery, normaliseHubQuery, hubTier, type HubDestination, type HubRow, type HubSource, type HubSummary, type HubTask, type HubViewAction, type HubViewFooter, type HubViewMount } from '../shared/hub.js';
 export function createHub(parent: HTMLElement) {
   const document = parent.ownerDocument;
   const root = document.createElement('dialog');
@@ -27,7 +27,7 @@ export function createHub(parent: HTMLElement) {
   root.innerHTML = `<section class="hub-panel ui-frame">
     <header class="hub-heading ui-window-head"><button class="ui-button hub-back" data-variant="quiet" aria-label="Back" hidden>← Back</button><span class="hub-name">Hub</span><nav class="hub-breadcrumbs" aria-label="Hub breadcrumb"><span class="hub-caption">Home</span></nav><span class="hub-context"></span><button class="ui-window-lock hub-lock" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="lock-shackle" d="M7 11V7a5 5 0 0 1 10 0v4"/><rect x="5" y="11" width="14" height="10" rx="2"/></svg></button><button class="ui-window-close hub-close" aria-label="Close Hub" title="Close Hub">×</button></header>
     <section class="hub-summary" aria-label="Build to apply" hidden></section>
-    <div class="hub-search"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 8 10-8 10L4 12 12 2Zm0 5v10M8 12h8"/></svg><span class="hub-scope" hidden></span><input type="text" role="combobox" aria-label="Search people, places, builds" aria-autocomplete="list" aria-controls="hub-results" aria-expanded="true" placeholder="Search people, places, builds…" autocomplete="off" spellcheck="false" maxlength="120"><span class="hub-progress" aria-hidden="true"></span></div>
+    <div class="hub-search"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 8 10-8 10L4 12 12 2Zm0 5v10M8 12h8"/></svg><span class="hub-scope" hidden></span><input type="text" role="combobox" aria-label="Search people, places, builds" aria-describedby="hub-hint" aria-autocomplete="list" aria-controls="hub-results" aria-expanded="true" placeholder="Search people, places, builds…" autocomplete="off" spellcheck="false" maxlength="120"><span class="hub-progress" aria-hidden="true"></span></div>
     <p class="hub-hint" id="hub-hint" hidden></p><div class="hub-rate-controls" hidden></div><div class="hub-results ui-scroll" id="hub-results" role="listbox" aria-label="Results" tabindex="-1"></div>
     <pre class="hub-preview ui-scroll" hidden></pre><div class="hub-view" hidden></div><p class="hub-status" role="status" hidden></p><p class="hub-lifecycle" hidden></p><p class="hub-announce ui-sr-only" aria-live="polite" aria-atomic="true"></p>
     <footer class="hub-footer"><span class="hub-legend"></span><span class="hub-count"></span><button class="hub-primary ui-button" data-variant="primary"></button><button class="hub-actions ui-button" data-variant="quiet" aria-haspopup="menu" aria-expanded="false">Actions</button></footer>
@@ -111,6 +111,11 @@ export function createHub(parent: HTMLElement) {
   };
   // List stages keep DOM focus in search; the selection moves by aria-activedescendant (D-2).
   const focusResult = () => input.focus({ preventScroll: true });
+  /** The search names what it searches, as placeholder and accessible name alike (HUB-096). */
+  const nameSearch = (page: string | null) => {
+    const name = page ? `Search in ${page}…` : 'Search people, places, builds…';
+    input.placeholder = name; input.setAttribute('aria-label', name.replace('…', ''));
+  };
   /** Where typing goes: the Hub search on list stages, else a list view's own search (Travel, Characters). */
   const searchField = () => !search.hidden ? input
     : [...content.querySelectorAll<HTMLInputElement>('input[type=search],input[role=combobox]')].find(field => field.getClientRects().length > 0 && !field.disabled) ?? null;
@@ -172,7 +177,7 @@ export function createHub(parent: HTMLElement) {
       mountView(page.view);
     } else {
       input.value = page.query; caption.textContent = scope?.title ?? 'Home'; root.dataset.page = scope ? 'section' : 'home';
-      input.placeholder = scope ? 'Search actions…' : 'Search people, places, builds…'; report(''); refresh(true);
+      nameSearch(scope?.title ?? null); report(''); refresh(true);
       select(rows.some(row => row.id === page.selected) ? page.selected : null); list.scrollTop = page.scroll;
       if (page.selected && selected === null) report('The previous selection is no longer available. Choose a result.');
     }
@@ -221,7 +226,8 @@ export function createHub(parent: HTMLElement) {
       throw new Error('Unavailable in the current game state.');
     }
   };
-  const commands = (): HubRow[] => {
+  /** The command rows; `every` includes those an empty Home leaves out, so pins and phrases still resolve. */
+  const commands = (every = false): HubRow[] => {
     const settings = window.gwToolsSettings?.();
     const tool = (id: string, title: string, detail: string, keywords: string, enabled: boolean | undefined, event: string): HubRow[] => enabled ? [{
       id, title, keywords, detail, group: 'Tools', action: id === 'storage' ? 'Open Xunlai Storage' : `Open ${title}`,
@@ -230,17 +236,20 @@ export function createHub(parent: HTMLElement) {
     return [
       ...tool('travel', 'Travel', 'Outposts, favourites and recent places', 'outpost destination teleport tp', settings?.gwonmacTools && settings.travelPalette, 'gw:travel-toggle'),
       ...tool('builds', 'Build Library', 'Saved builds and teams', 'teams templates skills', settings?.gwonmacTools && settings.buildLibrary, 'gw:tools-toggle').map(row => ({ ...row, unavailable: 'Build Library is loading.' })),
-      ...tool('trade', 'Trade Chat', 'Find offers and contact sellers', 'kamadan prices trading market', settings?.gwonmacTools && settings.tradeChat, 'gw:trade-toggle'),
+      ...tool('trade', 'Trade Chat', 'Find offers and contact sellers', 'kamadan prices trading market trader', settings?.gwonmacTools && settings.tradeChat, 'gw:trade-toggle'),
       ...tool('whispers', 'Whispers', 'Conversations, friends and drafts', 'friends people message chat', settings?.gwonmacTools && settings.whispersEnabled, 'gw:whispers-toggle'),
       ...(settings?.characterSwitchEnabled ? [{ id: 'character', title: 'Switch Character', detail: 'Choose another character', keywords: 'relog profession', group: 'Tools', action: 'Choose character', navigate: () => dispatch('gw:character-toggle'), run: () => dispatch('gw:character-toggle') }] : []),
       ...tool('storage', 'Open Xunlai Storage', 'Open your storage chest', 'chest bank', settings?.gwonmacTools && settings.xunlaiStorage, 'gw:storage-open'),
       ...(settings?.gwonmacTools && settings.cartographyEnabled ? [{ id: 'maps', title: 'Maps', detail: 'Exploration grid, walkable terrain and compass ranges', keywords: 'grid terrain compass opacity', group: 'Tools', action: 'Adjust maps', run: () => openHubMaps(presenter) }] : []),
+      { id: 'commands', title: 'Commands', detail: 'Search words, calculator examples and keys', keywords: 'help guide examples cheatsheet shortcuts keys', group: 'Commands', action: 'Browse commands', run: () => presenter.showRows('Commands', commandExamples) },
       { id: 'hub-preferences', title: 'Hub preferences', detail: 'Pins and exact search phrases', keywords: 'aliases vocabulary', group: 'Commands', action: 'Adjust Hub', run: () => manageHubShortcuts(presenter, shortcuts, lookup, saveShortcuts, hubWindow.reset) },
       { id: 'settings', title: 'Settings', detail: 'Game, appearance, tools, shortcuts and maps', keywords: 'preferences graphics appearance hotkeys', group: 'Commands', action: 'Open Settings', run: () => openSettings() },
-      { id: 'launcher', title: 'Show Launcher', detail: 'Accounts, updates and game files', keywords: 'launcher administration', group: 'Commands', action: 'Show Launcher', run: async () => { await window.gwNative.app.showLauncher(); close(); } },
-      { id: 'commands', title: 'Commands', detail: 'Examples you can edit and run', keywords: 'help guide examples', group: 'Commands', action: 'Browse examples', run: () => presenter.showRows('Commands', commandExamples) },
-      { id: 'help', title: 'Project website', detail: 'Documentation and latest changes', keywords: 'help documentation', group: 'Commands', action: 'Open website', run: async () => { await window.gwNative.app.openExternal('github'); close(); } },
-      ...(!input.value.trim() ? [] : [
+      // Launcher and the website are for a typed search; the first screen stays on the game (HUB-185).
+      ...(!every && !input.value.trim() ? [] : [
+        { id: 'launcher', title: 'Show Launcher', detail: 'Accounts, updates and game files', keywords: 'launcher administration', group: 'Commands', action: 'Show Launcher', run: async () => { await window.gwNative.app.showLauncher(); close(); } },
+        { id: 'help', title: 'Project website', detail: 'Documentation and latest changes', keywords: 'help documentation', group: 'Commands', action: 'Open website', run: async () => { await window.gwNative.app.openExternal('github'); close(); } },
+      ]),
+      ...(!every && !input.value.trim() ? [] : [
         // Call Target stays on its own shortcut: it acts only while the game has focus (HUB-133).
         // Quit or Reload opens the account's confirmation sheet, never a direct quit (HUB-001).
         // The sheet waits for the press that asked for it, so its repeat or trailing click never answers it.
@@ -254,7 +263,7 @@ export function createHub(parent: HTMLElement) {
   };
   const shortcuts = () => [...(window.gwToolsSettings?.().hubShortcuts ?? []), ...[...sources.keys()].filter(sourceEnabled).flatMap(source => source.shortcuts?.get() ?? [])];
   const lookup = (id: string): HubRow | undefined => [...sources.keys()].filter(sourceEnabled).map(source => source.lookup?.(id)).find(Boolean)
-    ?? commands().find(row => row.id === id);
+    ?? commands(true).find(row => row.id === id);
   async function saveShortcuts(value: readonly HubShortcut[]) {
     if (!isHubShortcuts(value)) throw new Error('Invalid Hub shortcuts');
     const privateEntries = value.filter(entry => /^(build|team):/u.test(entry.id));
@@ -265,10 +274,38 @@ export function createHub(parent: HTMLElement) {
     if (JSON.stringify(globalEntries) !== JSON.stringify(window.gwToolsSettings?.().hubShortcuts ?? [])) await window.gwNative.settings.set({ hubShortcuts: globalEntries });
     refresh();
   }
+  /**
+   * The Commands page is the Hub's cheatsheet: search words with a place to type, calculator
+   * examples, and the keys (HUB-093, HUB-094). An example only fills the search; nothing runs.
+   */
   function commandExamples(): HubRow[] {
-    const enabled = new Set(commands().map(row => row.id));
-    const examples = [ ['trade', 'trade arms', 'Find offers or a seller'], ['travel', 'travel kamadan', 'Find an outpost'], ['character', 'char Toefte', 'Find a character by name'], ['builds', 'build monk', 'Browse saved Monk builds'], ['builds', 'team gom afk', 'Find your saved team'], ['whispers', 'whisper Romi', 'Choose a person; write before sending'], ['whispers', 'invite Romi', 'Invite a person to your party from an outpost'], ['', '1p in g', 'Convert platinum to gold'], ['trade', '10e in p', 'Estimate ecto value'], ['', 'titles', 'Plan title points'], ['', 'acc second', 'Choose how to open a saved account'], ['builds', 'build folder:Monk monk', 'Monk builds in a folder and its descendants'], ['builds', 'build folder:"Team Builds/Farming" monk', 'Quotes keep spaces; paths match consecutive folder names'], ['builds', 'build folder:/Monk/ mesmer', 'Leading slash starts at Skills; trailing slash matches the complete folder name'], ['builds', 'build Mo/Me', 'Exact profession pair; use folder:Mo/Me to search that folder instead'], ['builds', 'build folder:/', 'Templates saved directly in the Skills root'] ];
-    return examples.filter(([tool]) => !tool || enabled.has(tool)).map(([, query, detail], index) => ({ id: `example:${index}`, title: query!, detail: detail!, group: 'Commands', action: 'Edit example', searchQuery: query!, run() {} }));
+    const enabled = new Set(commands(true).map(row => row.id));
+    const example = (group: string, tool: string, title: string, fill: string, detail: string) => ({ group, tool, title, fill, detail });
+    const examples = [
+      example('Search', 'travel', 'travel <place>', 'travel ', 'Find an outpost by name or alias'),
+      example('Search', 'character', 'char <name>', 'char ', 'Find one of your characters'),
+      example('Search', 'builds', 'build <name or profession>', 'build ', 'Browse saved builds; build mo lists Monk builds'),
+      example('Search', 'builds', 'team <name>', 'team ', 'Find a saved team'),
+      example('Search', 'builds', 'build folder:<folder> <name>', 'build folder:', 'Builds in a folder and its subfolders; quotes keep spaces'),
+      example('Search', 'builds', 'build Mo/Me', 'build Mo/Me', 'An exact profession pair'),
+      example('Search', 'whispers', 'whisper <name>', 'whisper ', 'Write to a person; nothing is sent until you send it'),
+      example('Search', 'whispers', 'invite <name>', 'invite ', 'Invite a person to your party from an outpost'),
+      example('Search', 'trade', 'trade <item>', 'trade ', 'Find offers or a seller in Trade Chat'),
+      example('Search', '', 'acc <name>', 'acc ', 'Choose how to open a saved account'),
+      example('Calculate', '', '1p in g', '1p in g', 'Platinum to gold'),
+      example('Calculate', 'trade', '10e in p', '10e in p', 'Ectos at recent Kamadan prices'),
+      example('Calculate', '', '2 * 250 + 75', '2 * 250 + 75', 'Plain arithmetic'),
+      example('Calculate', '', 'titles', 'titles', 'Plan title points'),
+    ];
+    const rows: HubRow[] = examples.filter(entry => !entry.tool || enabled.has(entry.tool)).map((entry, index) => ({ id: `example:${index}`, title: entry.title, detail: entry.detail, group: entry.group, action: 'Fill search', searchQuery: entry.fill, run() {} }));
+    // Keys: a tool's shortcut can change in Settings; the Hub's own keys are fixed.
+    const bindings = resolveShortcuts(window.gwToolsSettings?.().shortcutOverrides ?? {});
+    const keys = (action: ShortcutAction) => shortcutKeycaps(bindings[action]).map(cap => cap.label).join('') || 'Not set';
+    const toolKeys: [string, ShortcutAction, string][] = [['travel', 'travel.open', 'Travel'], ['character', 'character.switch', 'Switch Character'], ['builds', 'tools.toggle', 'Build Library'], ['trade', 'trade.toggle', 'Trade Chat'], ['whispers', 'whispers.toggle', 'Whispers']];
+    rows.push(...toolKeys.filter(([tool]) => enabled.has(tool)).map(([tool, action, name]) => ({ id: `key:${tool}`, title: name, detail: keys(action), group: 'Keys', action: 'Change shortcut', run: () => openSettings({ section: 'Shortcuts' as const }) })));
+    for (const [id, name, detail] of [['actions', 'Actions for the selected row', '⌘J'], ['back', 'Back', '⌘⌫'], ['escape', 'Clear, back, then close', 'Esc'], ['open', 'Open a row with a page', '→']] as const)
+      rows.push({ id: `key:${id}`, title: name, detail, group: 'Keys', action: 'Fixed key', unavailable: 'The Hub’s own keys do not change.', run() {} });
+    return rows;
   }
   /** Settings, optionally at one section with one control focused (search, the memory warning). */
   function openSettings(focus?: HubSettingsFocus) {
@@ -529,16 +566,22 @@ export function createHub(parent: HTMLElement) {
       .filter(entry => !parsed.scope || entry.id.startsWith(`${parsed.scope}:`));
     const savedRows = saved.flatMap(entry => { const row = lookup(entry.id); return row ? [{ ...row, group: parsed.term ? row.group : 'Pinned' }] : []; });
     const ids = new Set([...extra, ...savedRows].map(row => row.id));
-    rows = scope ? matchHubRows(extra, input.value) : [...savedRows, ...extra.filter(row => !savedRows.some(saved => saved.id === row.id)), ...(parsed.term && parsed.scope ? [] : matchHubRows(commands().filter(row => !ids.has(row.id)), input.value))];
-    rows = [...rows].sort((a, b) => {
-      const groups = ["Pinned", "Calculator", "Teams", "Folders", "Builds", "Targets", "Current build", "Accounts", "Characters", "In your party", "Unlocked heroes", "Heroes", "People", "Places", "Continue", "Tools", "Commands", "Settings", "Sources"];
-      const groupOrder = groups.indexOf(a.group) - groups.indexOf(b.group);
-      if (groupOrder || scope || a.group !== 'Tools') return groupOrder;
-      // Keep everyday game actions ahead of account management, independent of provider order.
-      const tools = ['travel', 'character', 'whispers', 'builds', 'trade', 'storage', 'maps', 'accounts'];
-      const priority = (id: string) => { const index = tools.indexOf(id); return index < 0 ? tools.length : index; };
-      return priority(a.id) - priority(b.id);
-    });
+    rows = scope ? matchHubRows(extra, input.value) : [...savedRows, ...extra.filter(row => !savedRows.some(saved => saved.id === row.id)), ...(parsed.term && parsed.scope ? commands().filter(row => !ids.has(row.id) && normaliseHubQuery(row.title) === normaliseHubQuery(input.value)) : matchHubRows(commands().filter(row => !ids.has(row.id)), input.value))];
+    // A typed root search orders sections by their best answer, then by the usual group order,
+    // and rows by the same tier (HUB-008, HUB-058). A saved phrase is the best answer of all;
+    // the calculator's card answers its own grammar. Scoped lists keep their source's order.
+    const phraseIds = new Set(parsed.term ? savedRows.map(row => row.id) : []);
+    const ranked = !scope && !parsed.scope && !!parsed.term;
+    const tierOf = (row: HubRow) => phraseIds.has(row.id) ? -1 : row.conversion || row.group === 'Calculator' ? 0 : hubTier(row, parsed.term) ?? 3;
+    const best = new Map<string, number>();
+    if (ranked) for (const row of rows) best.set(row.group, Math.min(best.get(row.group) ?? Infinity, tierOf(row)));
+    const groups = ["Pinned", "Calculator", "Teams", "Folders", "Builds", "Targets", "Current build", "Accounts", "Characters", "In your party", "Unlocked heroes", "Heroes", "People", "Places", "Continue", "Tools", "Commands", "Settings", "Sources"];
+    const groupIndex = (group: string) => { const index = groups.indexOf(group); return index < 0 ? groups.length : index; };
+    // Keep everyday game actions ahead of account management, independent of provider order.
+    const tools = ['travel', 'character', 'whispers', 'builds', 'trade', 'storage', 'maps', 'accounts'];
+    const priority = (row: HubRow) => { if (scope || row.group !== 'Tools') return 0; const index = tools.indexOf(row.id); return index < 0 ? tools.length : index; };
+    rows = [...rows].sort((a, b) => (ranked ? best.get(a.group)! - best.get(b.group)! : 0) || groupIndex(a.group) - groupIndex(b.group)
+      || (ranked ? tierOf(a) - tierOf(b) : 0) || priority(a) - priority(b));
     const bindings = resolveShortcuts(window.gwToolsSettings?.().shortcutOverrides ?? {});
     const nextShortcutRevision = JSON.stringify(bindings);
     const shortcutsChanged = shortcutRevision !== nextShortcutRevision;
@@ -607,20 +650,26 @@ export function createHub(parent: HTMLElement) {
       list.append(option);
     });
     count.textContent = `${rows.length} result${rows.length === 1 ? '' : 's'}`;
-    const exactCount = rows.filter(row => normaliseHubQuery(row.title) === parsed.term || savedRows.some(saved => saved.id === row.id)).length;
+    // Two rows with the typed name are a tie, so nothing is chosen for the player; a saved phrase
+    // is their own name for one row and always wins. Pins on an empty Home are no tie (HUB-060).
+    // A query that is a row's whole name, `trade chat` included, answers with that row (HUB-008).
+    const phraseHit = rows.find(row => phraseIds.has(row.id)) ?? (parsed.scope ? rows.find(row => normaliseHubQuery(row.title) === normaliseHubQuery(input.value)) : undefined);
+    const exactCount = parsed.term ? rows.filter(row => normaliseHubQuery(row.title) === parsed.term).length : 0;
     const prior = previousRows.find(row => row.id === selected);
     const revised = prior && rows.find(row => row.id === selected)?.preview !== prior.preview;
     // A bare scope (`travel `) lists without a term, so nothing in it is an explicit result:
     // Enter never travels, invites, applies, switches or opens an account on a guess.
     // A fresh Home in an explorable area never starts on a row that leaves it (D-13).
     const initial = !input.value.trim() ? rows.find(row => row.preferred && !row.unavailable) ?? rows.find(row => !row.unavailable && !row.leavesArea) ?? rows.find(row => !row.leavesArea)
-      : !scope && parsed.scope && !parsed.term ? rows.find(row => !row.consequential && !row.unavailable) : rows[0];
+      : !scope && parsed.scope && !parsed.term ? rows.find(row => !row.consequential && !row.unavailable)
+      // A typed query starts on its best available answer, never on a disabled one (HUB-056).
+      : phraseHit ?? rows.find(row => !row.unavailable) ?? rows[0];
     const settling = reset || (awaitingResults && selected === null && rows.length > 0);
     if (settling) awaitingResults = !rows.length;
     // A placeholder row that goes away (a loading or state row) hands its selection to what
     // replaced it, as a fresh query would, so Enter acts without another key (HUB-232).
     const replacedPlaceholder = !!prior?.unavailable && !rows.some(row => row.id === prior.id);
-    select((prior?.id === 'quote-state' || prior?.id === 'market-state') && !!rows[0]?.conversion ? rows[0].id : settling || replacedPlaceholder ? exactCount > 1 ? null : initial?.id ?? null : !revised && rows.some(row => row.id === selected) ? selected : null);
+    select((prior?.id === 'quote-state' || prior?.id === 'market-state') && !!rows[0]?.conversion ? rows[0].id : settling || replacedPlaceholder ? exactCount > 1 && !phraseHit ? null : initial?.id ?? null : !revised && rows.some(row => row.id === selected) ? selected : null);
     if (!rows.length) {
       const empty = document.createElement('p'); empty.className = 'hub-empty'; empty.textContent = 'No matches'; list.append(empty);
     }
@@ -678,7 +727,7 @@ export function createHub(parent: HTMLElement) {
   }
   function home() {
     history.length = 0; resetView(); scope = null; input.value = restoreQuery;
-    root.dataset.page = 'home'; caption.textContent = 'Home'; input.placeholder = 'Search people, places, builds…'; report(''); refresh(true); input.focus();
+    root.dataset.page = 'home'; caption.textContent = 'Home'; nameSearch(null); report(''); refresh(true); input.focus();
   }
   function atHome() { return !scope && !activeView; }
   /**
@@ -1046,7 +1095,7 @@ export function createHub(parent: HTMLElement) {
     showRows(title: string, getRows: () => readonly HubRow[], summary?: HubSummary, destination?: HubDestination) {
       enterPage();
       resetView(); scope = { title, rows: getRows, ...(summary ? { summary } : {}), ...(destination ? { destination } : {}) }; root.dataset.page = 'section'; caption.textContent = title;
-      input.placeholder = 'Search actions…'; input.value = ''; report(''); refresh(true); focusResult();
+      nameSearch(title); input.value = ''; report(''); refresh(true); focusResult();
     },
     showView(title: string, mount: HubViewMount<HTMLElement>, available?: () => boolean, destination?: HubDestination) {
       enterPage();

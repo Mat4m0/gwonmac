@@ -1,12 +1,15 @@
 /** One Travel host serves both unified search and the existing detailed view. */
 import { createApp, h, watch } from 'vue';
 import type { HubPresenter, HubRow, HubSource, HubTask, HubViewMount } from '../../../src/shared/hub';
-import { matchHubRows, parseHubQuery, hubMatch } from '../../../src/shared/hub';
-import { TRAVEL_DESTINATIONS, travelDestination } from '../../../src/shared/travel';
+import { matchHubRows, parseHubQuery, hubTier } from '../../../src/shared/hub';
+import { TRAVEL_DESTINATIONS, travelDestination, type TravelDestination } from '../../../src/shared/travel';
 import { travelContextRefusal, travelDestinationAvailability } from '../../../src/shared/travel-command';
 import TravelPalette from './components/TravelPalette.vue';
 import type { TravelHost } from './travel-host';
 import { useTravelPreferences } from './travel-preferences';
+
+/** Home shows the best few places; the rest are one row away, in Travel. */
+const PLACES_SHOWN = 8;
 
 export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>) {
   const preferences = useTravelPreferences(host);
@@ -33,8 +36,10 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
    * or a resume restores it; a new Travel page starts fresh. Core's lazy loader mounts it into
    * the page it already shows.
    */
-  function page(): HubViewMount<HTMLElement> {
-    let resume: InstanceType<typeof TravelPalette>['$props']['resume'];
+  function page(query = ''): HubViewMount<HTMLElement> {
+    // A page opened with a search starts on it, e.g. from Home's "show all places" row.
+    let resume: InstanceType<typeof TravelPalette>['$props']['resume'] = query
+      ? { query, selected: null, mode: 'travel', editingSlot: null, addingPhrase: false, phrase: '', mapId: null, scroll: 0 } : undefined;
     return (target, back, footer) => {
       active = true;
       const app = createApp({ setup: () => () => h(TravelPalette, {
@@ -85,15 +90,33 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
       if (parsed.scope && parsed.scope !== 'travel') return [];
       query = parsed.term;
       const tools: HubRow[] = [{ id: 'travel', title: 'Travel', detail: loadError || 'Outposts, favourites, recent places and Guild Hall', group: 'Tools', keywords: 'tp teleport destination', action: 'Browse travel', navigate: open, run: open }];
-      const destinations = query.trim() ? TRAVEL_DESTINATIONS.filter(destination => hubMatch(destination.name, query, preferences.synonyms.value.filter(entry => entry.mapId === destination.mapId).map(entry => entry.term)) !== null).slice(0, 8)
+      // Home ranks every matching place by the shared tier (its catalogue aliases and the
+      // player's Travel phrases count as names) before it keeps the best eight (HUB-010, HUB-057).
+      const aliasesOf = (destination: TravelDestination) => [...destination.aliases, ...preferences.synonyms.value.filter(entry => entry.mapId === destination.mapId).map(entry => entry.term)];
+      const matches = query.trim() ? TRAVEL_DESTINATIONS.flatMap(destination => {
+        const tier = hubTier({ title: destination.name, aliases: aliasesOf(destination) }, query);
+        return tier === null ? [] : [{ destination, tier }];
+      }).sort((a, b) => a.tier - b.tier || a.destination.name.localeCompare(b.destination.name)) : [];
+      const destinations = query.trim() ? matches.slice(0, PLACES_SHOWN).map(match => match.destination)
         : host.history.value.filter(id => !refusal(id)).slice(0, 3).flatMap(id => { const destination = travelDestination(id); return destination ? [destination] : []; });
-      return [...destinations.map(destination => {
+      const state = host.state.value;
+      const inHall = state.status === 'ready' && state.guildHall;
+      const guildHall: HubRow[] = query.trim() && hubTier({ title: 'Guild Hall', aliases: ['gh'] }, query) !== null ? [{
+        id: 'place:guild-hall', title: inHall ? 'Leave Guild Hall' : 'Guild Hall', detail: inHall ? 'Return to the outpost you came from' : 'Your guild’s hall',
+        group: 'Places', action: inHall ? 'Leave Guild Hall' : 'Travel to Guild Hall', consequential: true, leavesArea: explorable(),
+        ...(host.guildHallUnavailable ? { unavailable: host.guildHallUnavailable } : {}), run: async (task: HubTask) => { await host.guildHall(); task.done(); },
+      }] : [];
+      // The rest stay one step away, in Travel with the same search.
+      const more: HubRow[] = matches.length > PLACES_SHOWN ? [{ id: 'places:more', title: `All ${matches.length} places`, detail: 'Open Travel with this search', group: 'Places', action: 'Show in Travel',
+        navigate: () => hub.showView('Travel', page(parsed.text), available, 'travel'), run: () => hub.showView('Travel', page(parsed.text), available, 'travel') }] : [];
+      return [...guildHall, ...destinations.map(destination => {
         const reason = refusal(destination.mapId);
-        return { id: `place:${destination.mapId}`, title: destination.name,
+        // The aliases travel with the row, so Home ranks it by them as this list did.
+        return { id: `place:${destination.mapId}`, title: destination.name, aliases: aliasesOf(destination),
           detail: query.trim() ? 'Outpost · Any district' : 'Recently visited · Any district',
           group: query.trim() ? 'Places' : 'Continue', action: `Travel to ${destination.name}`, consequential: true, leavesArea: explorable(),
           ...(reason ? { unavailable: reason } : {}), run: async (task: HubTask) => { await travel(destination.mapId); task.done(); } };
-      }), ...matchHubRows(tools, query)];
+      }), ...more, ...matchHubRows(tools, query)];
     },
   };
   return { source, open, page, travel, get active() { return active; },
