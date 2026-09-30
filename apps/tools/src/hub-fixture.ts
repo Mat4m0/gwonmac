@@ -102,7 +102,7 @@ export function mountHubFixture(target: HTMLElement) {
         if (['Meta','Shift','Alt','Control'].includes(event.key)) return;
         if (event.key === 'Escape' && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) { finish({ status: 'cancelled' }); return; }
         if ((event.key === 'Backspace' || event.key === 'Delete') && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) { finish({ status: 'cleared' }); return; }
-        const binding = shortcutFromInput({code:event.code, meta:event.metaKey, control:event.ctrlKey, shift:event.shiftKey, alt:event.altKey});
+        const binding = shortcutFromInput({code:event.code, key:event.key, meta:event.metaKey, control:event.ctrlKey, shift:event.shiftKey, alt:event.altKey});
         // Main's window capture reports what was pressed; the recorder refuses reserved chords.
         finish(!binding ? {status:'invalid'} : {status:'captured',binding});
       };

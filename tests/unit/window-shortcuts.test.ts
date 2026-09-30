@@ -414,3 +414,42 @@ it("decides a fresh press again when Chromium dropped the claimed key-up, but ho
   assert.equal(down("KeyQ"), true);
   assert.deepEqual(actions, ["quit-or-reload", "quit-or-reload"]);
 });
+
+describe("window shortcut layout and ownership", () => {
+  const install = (settings = DEFAULT_SETTINGS) => {
+    let dispatch!: (event: { preventDefault(): void }, input: ShortcutInput) => void;
+    const win = { webContents: { on: (_name: string, listener: typeof dispatch) => { dispatch = listener; } }, on() { return win; } } as unknown as BrowserWindow;
+    const calls: string[] = [];
+    installWindowShortcuts(win, {
+      run: action => { calls.push(action); },
+      edit: command => { calls.push(`edit:${command}`); },
+      quitOrReload: () => { calls.push("quitOrReload"); },
+    });
+    updateWindowShortcuts(win, settings);
+    const press = (code: string, key: string, shift = false) => {
+      let claimed = false;
+      const input: ShortcutInput = { type: "keyDown", code, key, meta: true, control: false, shift, alt: false, isAutoRepeat: false };
+      dispatch({ preventDefault() { claimed = true; } }, input);
+      dispatch({ preventDefault() {} }, { ...input, type: "keyUp" });
+      return claimed;
+    };
+    return { calls, press };
+  };
+
+  it("names a chord by the letter the layout types, not the key position (HUB-014)", () => {
+    const settings = { ...DEFAULT_SETTINGS, gwonmacTools: true };
+    for (const [layout, code, key, expected] of [
+      ["AZERTY Command-A", "KeyQ", "a", "edit:selectAll"],
+      ["AZERTY Command-Q", "KeyA", "q", "quitOrReload"],
+      ["Dvorak Command-Q", "KeyX", "q", "quitOrReload"],
+      ["Dvorak Command-X", "KeyB", "x", "edit:cut"],
+      ["Colemak Command-R", "KeyS", "r", "hub.toggle"],
+      // An input source without Latin letters keeps the US position, as macOS does.
+      ["Russian Command-A", "KeyA", "ф", "edit:selectAll"],
+    ] as const) {
+      const { calls, press } = install(settings);
+      assert.equal(press(code, key), true, layout);
+      assert.deepEqual(calls, [expected], layout);
+    }
+  });
+});

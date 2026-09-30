@@ -10,6 +10,7 @@ import type { AppSettings, RendererCommand } from '../../../src/shared/contracts
 import { featureActivationRequested, type FeatureId } from '../../../src/shared/feature-contracts';
 import { HUB_SHORTCUT, hubShortcutAvailable, resolveShortcuts, shortcutMatches, type ShortcutAction } from '../../../src/shared/keyboard-shortcuts';
 
+const QUIT_CHORD = { key: 'q', shift: false, option: false } as const;
 type CommandHandler = (command: RendererCommand) => void | 'unhandled' | Promise<void | 'unhandled'>;
 let handler: CommandHandler | null = null;
 const transport = { handle(next: CommandHandler) {
@@ -57,9 +58,9 @@ export function installFixtureMain(options: FixtureMainOptions) {
     // a fresh press of the same key is decided again, as main does when Chromium drops the key-up.
     if (claimed.has(event.code) && event.repeat) { event.preventDefault(); event.stopImmediatePropagation(); return; }
     claimed.delete(event.code);
-    const input = { code: event.code, meta: event.metaKey, control: event.ctrlKey, shift: event.shiftKey, alt: event.altKey };
+    const input = { code: event.code, key: event.key, meta: event.metaKey, control: event.ctrlKey, shift: event.shiftKey, alt: event.altKey };
     const settings = options.settings();
-    if (input.meta && !input.control && !input.shift && !input.alt && input.code === 'KeyQ') {
+    if (shortcutMatches(QUIT_CHORD, input)) {
       claim(event); if (!event.repeat) void sheet.show(); return;
     }
     if (hubShortcutAvailable(settings.shortcutOverrides) && shortcutMatches(HUB_SHORTCUT, input)) {

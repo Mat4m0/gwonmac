@@ -13,6 +13,7 @@ import {
   shortcutFromInput,
   shortcutMatches,
   type ShortcutAction,
+  type ShortcutBinding,
   type ShortcutCaptureResult,
 } from "../shared/keyboard-shortcuts.js";
 import { recordMainInput } from './input-trace.js';
@@ -41,26 +42,34 @@ interface ShortcutActions {
   ): void;
 }
 
-/** `sheet` holds a key while a native sheet it opened is up (Command-Q, Resign). */
-type ClaimedKey = 'capture' | 'skill-capture' | 'shortcut' | 'sheet' | GameTextEditCommand;
+/**
+ * `quit` and `sheet` hold a key while the native sheet it opened is up
+ * (Command-Q, Resign). A Guild Wars edit command names the edit whose
+ * translated Control chord may reuse the key.
+ */
+type ClaimedKey = 'capture' | 'skill-capture' | 'shortcut' | 'quit' | 'sheet' | GameTextEditCommand;
 
 const claimedDecision = (claim: ClaimedKey): 'capture' | 'shortcut' =>
   claim === 'capture' || claim === 'skill-capture' ? 'capture' : 'shortcut';
 
 const isTextEditClaim = (claim: ClaimedKey): claim is GameTextEditCommand =>
-  claim !== 'capture' && claim !== 'skill-capture' && claim !== 'shortcut' && claim !== 'sheet';
+  claim !== 'capture' && claim !== 'skill-capture' && claim !== 'shortcut' && claim !== 'quit' && claim !== 'sheet';
 
 const isModifierCode = (code: string): boolean =>
   /^(?:Meta|Control|Shift|Alt)(?:Left|Right)$/u.test(code);
 
-const textEditCommand = (input: Electron.Input): GameTextEditCommand | null => {
-  if (!input.meta || input.control || input.shift || input.alt) return null;
-  if (input.code === 'KeyA') return 'selectAll';
-  if (input.code === 'KeyC') return 'copy';
-  if (input.code === 'KeyV') return 'paste';
-  if (input.code === 'KeyX') return 'cut';
-  return null;
-};
+const commandChord = (key: string, shift = false): ShortcutBinding => ({ key, shift, option: false });
+/** The macOS Edit chords, matched like every app shortcut by the letter the layout types. */
+const TEXT_EDIT_CHORDS: readonly (readonly [ShortcutBinding, GameTextEditCommand])[] = [
+  [commandChord("a"), "selectAll"],
+  [commandChord("c"), "copy"],
+  [commandChord("v"), "paste"],
+  [commandChord("x"), "cut"],
+];
+const QUIT_CHORD = commandChord("q");
+
+const textEditCommand = (input: Electron.Input): GameTextEditCommand | null =>
+  TEXT_EDIT_CHORDS.find(([binding]) => shortcutMatches(binding, input))?.[1] ?? null;
 
 class WindowShortcuts {
   #hubAvailable = true;
@@ -105,7 +114,7 @@ class WindowShortcuts {
         });
         if (decision) {
           this.#claimedCodes.delete(input.code);
-          if (input.code === "KeyQ") this.#recordCommandQ("rearmed", "keyup");
+          if (decision === 'quit') this.#recordCommandQ("rearmed", "keyup");
           event.preventDefault();
         }
         return;
@@ -116,7 +125,7 @@ class WindowShortcuts {
       // release monitor sees only Command chords, so a claim can outlive its
       // press. A fresh press of the same key is a new press and is decided
       // again. Only a native sheet keeps its key until the sheet settles.
-      if (claimed && !input.isAutoRepeat && claimed !== 'sheet'
+      if (claimed && !input.isAutoRepeat && claimed !== 'sheet' && claimed !== 'quit'
         && !(isTextEditClaim(claimed) && input.control && !input.meta)) {
         this.#claimedCodes.delete(input.code);
         claimed = undefined;
@@ -139,7 +148,7 @@ class WindowShortcuts {
           decision: claimedDecision(claimed),
         });
         event.preventDefault();
-        if (input.code === "KeyQ") {
+        if (claimed === 'quit') {
           this.#recordCommandQ("repeat-contained", "none");
         }
         return;
@@ -203,20 +212,14 @@ class WindowShortcuts {
         this.#actions.edit(edit);
         return;
       }
-      if (
-        input.meta &&
-        !input.control &&
-        !input.shift &&
-        !input.alt &&
-        input.code === "KeyQ"
-      ) {
+      if (shortcutMatches(QUIT_CHORD, input)) {
         event.preventDefault();
         recordMainInput(win, {
           source: 'main', kind: 'native-key', phase: 'down',
           key: tracedKey(input.key), repeat: input.isAutoRepeat,
           decision: 'shortcut',
         });
-        this.#claimedCodes.set(input.code, 'sheet');
+        this.#claimedCodes.set(input.code, 'quit');
         this.#recordCommandQ("claimed", "none");
         if (!input.isAutoRepeat) {
           // AppKit gives the native sheet ownership before the physical Q-up
@@ -352,8 +355,9 @@ class WindowShortcuts {
   }
 
   release(code: string): void {
-    const claimed = this.#claimedCodes.delete(code);
-    if (claimed && code === "KeyQ") {
+    const claimed = this.#claimedCodes.get(code);
+    this.#claimedCodes.delete(code);
+    if (claimed === 'quit') {
       this.#recordCommandQ("rearmed", "appkit-release");
     }
   }
