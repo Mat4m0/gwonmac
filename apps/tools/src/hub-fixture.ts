@@ -73,7 +73,7 @@ export function mountHubFixture(target: HTMLElement) {
   let settings: AppSettings = { ...DEFAULT_SETTINGS, gwonmacTools: true, travelPalette: true, whispersEnabled: true, buildLibrary: true, tradeChat: true, xunlaiStorage: true };
   try { settings.hubShortcuts = JSON.parse(localStorage.getItem('hub-fixture-shortcuts') ?? '[]'); } catch { /* Disposable fixture data. */ }
   const settingsListeners = new Set<(value: AppSettings) => void>();
-  let capturingShortcut = false;
+  let capturingShortcut = false; let cancelShortcutCapture = () => {};
   const hubSettings: HubSettingsApi = {
     get: async () => ({ settings, tools: { configured: settings.gwonmacTools, loaded: true, restartRequired: !settings.gwonmacTools, features: Object.fromEntries(GLOBAL_TOOLS.map(tool => [tool, { enabled: settings[FEATURE_SELECTION_POLICIES[GLOBAL_TOOL_FEATURES[tool]].activation.setting] }])) as GlobalToolSettings }, shortcuts: resolveShortcuts(settings.shortcutOverrides) }),
     // `?settings-ms=` answers every settings write late, as a busy main process does.
@@ -93,19 +93,24 @@ export function mountHubFixture(target: HTMLElement) {
       window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: settings }));
     },
     capture: () => new Promise(resolve => {
-      capturingShortcut = true;
+      cancelShortcutCapture();
+      const finish = (result: Awaited<ReturnType<HubSettingsApi['capture']>>) => {
+        window.removeEventListener('keydown', onKey, true); capturingShortcut = false; cancelShortcutCapture = () => {}; resolve(result);
+      };
       const onKey = (event: KeyboardEvent) => {
         event.preventDefault(); event.stopImmediatePropagation();
         if (['Meta','Shift','Alt','Control'].includes(event.key)) return;
-        window.removeEventListener('keydown', onKey, true); capturingShortcut = false;
-        if (event.key === 'Escape' && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) { resolve({ status: 'cancelled' }); return; }
-        if ((event.key === 'Backspace' || event.key === 'Delete') && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) { resolve({ status: 'cleared' }); return; }
+        if (event.key === 'Escape' && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) { finish({ status: 'cancelled' }); return; }
+        if ((event.key === 'Backspace' || event.key === 'Delete') && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) { finish({ status: 'cleared' }); return; }
         const binding = shortcutFromInput({code:event.code, meta:event.metaKey, control:event.ctrlKey, shift:event.shiftKey, alt:event.altKey});
         // Main's window capture reports what was pressed; the recorder refuses reserved chords.
-        resolve(!binding ? {status:'invalid'} : {status:'captured',binding});
+        finish(!binding ? {status:'invalid'} : {status:'captured',binding});
       };
+      capturingShortcut = true; cancelShortcutCapture = () => finish({ status: 'cancelled' });
       window.addEventListener('keydown', onKey, true);
     }),
+    // Main's `cancelAppShortcutCapture`: the capture ends as cancelled and takes no further key.
+    cancelCapture: async () => cancelShortcutCapture(),
   };
   const fixtureMain = installFixtureMain({ settings: () => settings, capturing: () => capturingShortcut, record,
     updateSettings: patch => window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: patch })) });

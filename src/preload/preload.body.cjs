@@ -238,6 +238,7 @@ const api = {
     get: () => ipcRenderer.invoke(IPC.hubSettingsGet),
     update: change => ipcRenderer.invoke(IPC.hubSettingsUpdate, change),
     capture: action => ipcRenderer.invoke(IPC.hubShortcutCapture, action),
+    cancelCapture: () => ipcRenderer.invoke(IPC.hubShortcutCaptureCancel),
   },
   accounts: {
     get: () => ipcRenderer.invoke(IPC.hubAccountsGet),

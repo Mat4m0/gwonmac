@@ -1150,6 +1150,7 @@ export const CORE_IPC = {
   hubSettingsGet: "gw:hub:settings:get",
   hubSettingsUpdate: "gw:hub:settings:update",
   hubShortcutCapture: "gw:hub:shortcut:capture",
+  hubShortcutCaptureCancel: "gw:hub:shortcut:captureCancel",
   appRequestQuit: "gw:app:requestQuit",
   appShowQuitOrReload: "gw:app:showQuitOrReload",
   appReloadGame: "gw:app:reloadGame",

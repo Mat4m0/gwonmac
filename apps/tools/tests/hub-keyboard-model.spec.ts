@@ -301,6 +301,22 @@ test('Escape at a shortcut conflict clears the prompt and returns to its shortcu
   await expect(record).toBeFocused();
 });
 
+test('closing the Hub with the mouse while a shortcut records gives the next keys back to the game (HUB-038)', async ({ page }) => {
+  await openHub(page);
+  await hubSearch(page).fill('settings'); await page.keyboard.press('Enter');
+  await page.getByRole('button', { name: 'Shortcuts', exact: true }).click();
+  const record = page.locator('.hub-shortcut-record[aria-label="Travel"]');
+  await record.click();
+  await expect(record).toHaveText('Press keys…');
+  await page.getByRole('button', { name: 'Close Hub', exact: true }).click();
+  await expect(page.locator('#hub')).toBeHidden();
+  await page.evaluate(() => window.gwFixtureCanvas?.clear());
+  await page.keyboard.press('w');
+  expect(await canvasKeys(page)).toBe(2);
+  await page.keyboard.press('Meta+r');
+  await expect(hubSearch(page)).toBeFocused();
+});
+
 test('arrow keys scroll Build details and never jump to Back (HUB-088)', async ({ page }) => {
   await openHub(page);
   await hubSearch(page).fill('build smiter'); await page.keyboard.press('Enter');

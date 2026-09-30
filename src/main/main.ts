@@ -163,7 +163,7 @@ import {
   allGlobalToolsPatch,
   globalToolPatch,
 } from "./core/launcher-tools.js";
-import { captureLauncherShortcut } from "./launcher-shortcut-capture.js";
+import { cancelAppShortcutCapture, captureLauncherShortcut } from "./launcher-shortcut-capture.js";
 import { TexturePackManager } from "./core/texture-pack-manager.js";
 import { createTexturePackActions } from "./texture-pack-actions.js";
 
@@ -1065,6 +1065,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
         else await preferences.replaceShortcut(change.action, change.binding);
       },
       capture: (win, action) => captureLauncherShortcut(win, action, () => currentSettings ?? settings),
+      cancelCapture: win => cancelAppShortcutCapture(win),
     },
     showLauncher: () => host.revealLauncher(),
     openSettings: (section) => host.revealLauncher(`settings/${section}`),

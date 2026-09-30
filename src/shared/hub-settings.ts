@@ -12,6 +12,8 @@ export interface HubSettingsApi {
   get(): Promise<HubSettingsSnapshot>;
   update(change: HubSettingsChange): Promise<void>;
   capture(action: ShortcutAction): Promise<LauncherShortcutCaptureResult>;
+  /** Ends this window's capture, if any; it resolves `cancelled`. */
+  cancelCapture(): Promise<void>;
 }
 export function hubSettingsSnapshot(snapshot: LauncherSnapshot): HubSettingsSnapshot {
   const settings: HubSettingsPatch = {};
