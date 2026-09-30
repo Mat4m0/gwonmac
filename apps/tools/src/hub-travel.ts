@@ -64,6 +64,7 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
     if (reason) throw new Error(reason);
     await host.travel({ mapId });
   }
+  const toolRow = (): HubRow => ({ id: 'travel', title: 'Travel', detail: loadError || 'Outposts, favourites, recent places and Guild Hall', group: 'Tools', keywords: 'tp teleport destination', action: 'Browse travel', navigate: open, run: open });
   const source: HubSource = {
     feature: 'travelPalette',
     context() {
@@ -77,14 +78,18 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
       if (state.status !== 'ready') return state.reason === 'loading' ? 'Map loading — Travel returns when the map has loaded' : 'Waiting for Guild Wars — Travel returns in game';
       return explorable() ? 'Explorable area — Travel leaves this area' : null;
     },
-    lookup(id) { const place = travelDestination(Number(id.replace('place:', ''))); return place ? source.search(place.name).find(row => row.id === id) : undefined; },
+    // A pin or phrase shows the row search shows: its detail, its › and its → (HUB-177).
+    lookup(id) {
+      if (id === 'travel') return toolRow();
+      const place = travelDestination(Number(id.replace('place:', '')));
+      return place ? source.search(place.name).find(row => row.id === id) : undefined;
+    },
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
     setVisible(next) { if (next && !visible) void load(); visible = next; },
     search(query) {
       const parsed = parseHubQuery(query);
       if (parsed.scope && parsed.scope !== 'travel') return [];
       query = parsed.term;
-      const tools: HubRow[] = [{ id: 'travel', title: 'Travel', detail: loadError || 'Outposts, favourites, recent places and Guild Hall', group: 'Tools', keywords: 'tp teleport destination', action: 'Browse travel', navigate: open, run: open }];
       const destinations = query.trim() ? TRAVEL_DESTINATIONS.filter(destination => hubMatch(destination.name, query, preferences.synonyms.value.filter(entry => entry.mapId === destination.mapId).map(entry => entry.term)) !== null).slice(0, 8)
         : host.history.value.filter(id => !refusal(id)).slice(0, 3).flatMap(id => { const destination = travelDestination(id); return destination ? [destination] : []; });
       return [...destinations.map(destination => {
@@ -93,7 +98,7 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
           detail: query.trim() ? 'Outpost · Any district' : 'Recently visited · Any district',
           group: query.trim() ? 'Places' : 'Continue', action: `Travel to ${destination.name}`, consequential: true, leavesArea: explorable(),
           ...(reason ? { unavailable: reason } : {}), run: async (task: HubTask) => { await travel(destination.mapId); task.done(); } };
-      }), ...matchHubRows(tools, query)];
+      }), ...matchHubRows([toolRow()], query)];
     },
   };
   return { source, open, page, travel, get active() { return active; },

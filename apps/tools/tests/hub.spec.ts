@@ -225,8 +225,39 @@ test('a saved search phrase and pin survive reload and resolve the original item
   await expect(page.locator('#hub').getByRole('option', { name: /GOM AFK/ })).toBeVisible();
   await search.fill('evening team');
   await expect(page.locator('#hub').getByRole('option')).toContainText('GOM AFK');
+  // A phrase finds the team in its own group, not a false "Pinned" one (HUB-062, HUB-177).
+  await expect(page.locator('#hub .hub-group')).toHaveText(['Teams']);
   await search.press('Enter');
   await expect(page.getByRole('heading', { name: 'GOM AFK' })).toBeVisible();
+});
+
+test('a pinned Travel or team row is the row search shows, and → opens it (HUB-177)', async ({ page }) => {
+  await page.goto('/?hub');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const row = (id: string) => page.locator(`#hub .hub-row[data-id="${id}"]`).first();
+  const found: Record<string, string | null> = {};
+  for (const [query, id] of [['travel', 'travel'], ['team gom afk', 'team:hub-gom-afk']] as const) {
+    await search.fill(query);
+    await expect(row(id)).toBeVisible();
+    found[id] = await row(id).textContent();
+    await page.keyboard.press('Meta+j');
+    await page.getByRole('menuitem', { name: 'Pin to Hub' }).click();
+  }
+  await search.fill('');
+  await expect(page.locator('#hub .hub-group').first()).toHaveText('Pinned');
+  for (const [index, [id, caption]] of ([['travel', 'Travel'], ['team:hub-gom-afk', 'GOM AFK']] as const).entries()) {
+    // Same detail and the same › cue as its search row.
+    expect(await row(id).textContent()).toBe(found[id]);
+    await expect(row(id).locator('.hub-child-cue')).toHaveText('›');
+    await search.press('Home');
+    for (let step = 0; step < index; step++) await search.press('ArrowDown');
+    await expect(row(id)).toHaveAttribute('aria-selected', 'true');
+    await search.press('ArrowRight');
+    await expect(page.locator('.hub-caption')).toHaveText(caption);
+    await page.keyboard.press('Meta+Backspace');
+    await expect(page.locator('.hub-caption')).toHaveText('Home');
+  }
 });
 
 test('Build shortcut browses inside Hub and opens the authoring window outside Hub', async ({ page }) => {

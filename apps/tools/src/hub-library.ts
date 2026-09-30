@@ -309,6 +309,15 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
       return () => { listeners.delete(update); view.remove(); };
     });
   }
+  /** A team's row; `direct` for the one exact `team` result, whose Enter applies it with its preview in view. */
+  const teamRow = (item: Item & { kind: 'team' }, direct: boolean): HubRow => {
+    const expected = revision(item);
+    const refusal = direct ? assess(item, null) : null;
+    return { id: `team:${item.value.id}`, title: item.value.name, detail: teamDetail(item),
+      group: 'Teams', preview: preview(item), action: direct ? `Apply team ${item.value.name}` : `Review ${item.value.name}`, consequential: direct, navigate: () => review(item),
+      ...(refusal ? { unavailable: refusal } : {}), ...(direct ? { pending: applyPending(item.value.name) } : {}), actions: () => review(item),
+      run: task => direct ? apply(item, expected, null, task) : review(item) };
+  };
   const source: HubSource = {
     feature: 'buildLibrary',
     shortcuts: { get: () => controller.library.value?.hubShortcuts ?? [], save: controller.saveHubShortcuts },
@@ -316,9 +325,8 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
       if (id === 'builds') return libraryRow();
       const item = all().find(item => `${item.kind}:${item.value.id}` === id);
       if (!item) return undefined;
-      if (item.kind === 'build') return { ...buildRow(item), group: 'Pinned' };
-      return { id, title: item.value.name, detail: teamDetail(item), group: 'Pinned',
-        preview: preview(item), action: `Review ${item.value.name}`, run: () => review(item), actions: () => review(item) };
+      // A pin or phrase shows the row search shows, in its own group (HUB-177).
+      return item.kind === 'build' ? buildRow(item) : teamRow(item, false);
     },
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
     setVisible(next) {
@@ -336,13 +344,7 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
       return [...matches.sort((a, b) => Number(hubMatch(b.value.name, parsed.term) === 'exact') - Number(hubMatch(a.value.name, parsed.term) === 'exact')
         || a.value.name.localeCompare(b.value.name) || a.value.id.localeCompare(b.value.id)).map(item => {
         if (item.kind === 'build') return buildRow(item);
-        const direct = parsed.scope === 'team' && exacts.length === 1 && exacts[0] === item;
-        const expected = revision(item);
-        const refusal = direct ? assess(item, null) : null;
-        return { id: `team:${item.value.id}`, title: item.value.name, detail: teamDetail(item),
-          group: 'Teams', preview: preview(item), action: direct ? `Apply team ${item.value.name}` : `Review ${item.value.name}`, consequential: direct, navigate: () => review(item),
-          ...(refusal ? { unavailable: refusal } : {}), ...(direct ? { pending: applyPending(item.value.name) } : {}), actions: () => review(item),
-          run: task => direct ? apply(item, expected, null, task) : review(item) } satisfies HubRow;
+        return teamRow(item, parsed.scope === 'team' && exacts.length === 1 && exacts[0] === item);
       }), ...(parsed.scope === 'build' ? templateStates() : [])];
     },
   };
