@@ -70,16 +70,9 @@ export function characterSwitchRefusal(source: Pick<CharacterSwitchSource, "cont
   }
 }
 
-export function orderCharacters(
-  characters: readonly CharacterSummary[],
-): readonly Readonly<{ character: CharacterSummary; index: number }>[] {
-  return Object.freeze(characters
-    .map((character, index) => Object.freeze({ character, index }))
-    .sort((left, right) => left.character.name.localeCompare(
-      right.character.name,
-      undefined,
-      { sensitivity: "base" },
-    )));
+/** Keeps the observed character order and each account index together. */
+export function characterRows(characters: readonly CharacterSummary[]) {
+  return Object.freeze(characters.map((character, index) => Object.freeze({ character, index })));
 }
 
 export const CHARACTER_SEARCH_LIMIT = 40;
@@ -90,9 +83,9 @@ const CARD_GAP = 8;
 const normaliseCharacterQuery = normaliseHubQuery;
 
 export function searchCharacters(
-  rows: ReturnType<typeof orderCharacters>,
+  rows: ReturnType<typeof characterRows>,
   query: string,
-): ReturnType<typeof orderCharacters> {
+): ReturnType<typeof characterRows> {
   if (query.length > CHARACTER_SEARCH_LIMIT) return Object.freeze([]);
   const term = normaliseCharacterQuery(query);
   if (term === "") return rows;
@@ -128,13 +121,15 @@ export function createCharacterSwitchPalette(
   source: CharacterSwitchSource,
 ) {
   const document = parent.ownerDocument;
+  const hub = window.gwHub;
+  if (!hub) throw new Error("Hub is not installed");
   const canvas = document.getElementById("canvas");
   if (!(canvas instanceof HTMLCanvasElement)) throw new Error("game canvas is missing");
   const root = document.createElement("dialog");
   root.id = "character-switch-root";
   root.className = "ui-modal ui-modal-layer";
   root.setAttribute("aria-labelledby", "character-switch-title");
-  root.innerHTML = `<div class="ui-frame character-switch-panel"><header class="character-switch-head"><h2 id="character-switch-title">Switch Character</h2><span class="character-switch-count" aria-live="polite" aria-atomic="true"></span><button class="ui-button character-switch-head-action character-switch-settings-toggle" type="button" aria-label="Character Switch settings" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="ui-button character-switch-head-action character-switch-close" type="button" aria-label="Close Switch Character"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 3 10 10M13 3 3 13" /></svg></button></header><div class="character-switch-carousel"><button class="ui-button character-switch-arrow character-switch-previous" type="button" aria-label="Previous character"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m10.5 2.5-5 5 5 5"/></svg></button><ul id="character-switch-list" class="character-switch-list" aria-label="Characters"></ul><button class="ui-button character-switch-arrow character-switch-next" type="button" aria-label="Next character"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m5.5 2.5 5 5-5 5"/></svg></button></div><section class="character-switch-settings" aria-label="Character Switch settings" hidden><fieldset class="character-switch-layout-setting"><legend>Layout</legend><div><label class="ui-choice-row"><input type="radio" name="character-switch-layout" value="horizontal"><span><strong>Horizontal</strong><small>Selection-screen order</small></span></label><label class="ui-choice-row"><input type="radio" name="character-switch-layout" value="vertical"><span><strong>Vertical</strong><small>Alphabetical list</small></span></label></div></fieldset><label class="character-switch-setting" for="character-switch-show-profession"><span><strong>Show profession</strong><small>Icon, primary, and secondary profession</small></span><input id="character-switch-show-profession" type="checkbox"></label><label class="character-switch-setting" for="character-switch-show-level"><span><strong>Show level</strong><small>Character level</small></span><input id="character-switch-show-level" type="checkbox"></label><label class="character-switch-setting" for="character-switch-show-location"><span><strong>Show known location</strong><small>Locations from the reviewed Travel catalogue</small></span><input id="character-switch-show-location" type="checkbox"></label></section><section class="character-switch-confirm" aria-describedby="character-switch-confirm-copy" hidden><p id="character-switch-confirm-copy">Switching characters will leave this explorable area. You may lose progress in this instance.</p><div class="character-switch-confirm-actions"><button type="button" id="character-switch-stay" class="ui-button character-switch-stay">Stay here</button><button type="button" id="character-switch-leave" class="ui-button character-switch-leave" data-variant="danger">Leave and switch</button></div></section><p class="character-switch-status" role="status" aria-live="polite" aria-atomic="true"></p><details class="character-switch-details"><summary>Technical details</summary><pre></pre><button type="button" class="ui-button character-switch-copy">Copy diagnostics</button></details><footer class="character-switch-footer"><span class="character-switch-hints character-switch-list-hints"></span><span class="character-switch-hints character-switch-settings-hints" hidden><kbd class="ui-kbd">esc</kbd> back</span><span class="character-switch-hints character-switch-confirm-hints" hidden><kbd class="ui-kbd">esc</kbd> back</span><button type="button" class="ui-button character-switch-action" data-variant="primary" disabled></button></footer></div>`;
+  root.innerHTML = `<div class="ui-frame character-switch-panel"><header class="character-switch-head"><h2 id="character-switch-title">Switch Character</h2><span class="character-switch-count" aria-live="polite" aria-atomic="true"></span><button class="ui-button character-switch-head-action character-switch-settings-toggle" type="button" aria-label="Character Switch settings" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="ui-button character-switch-head-action character-switch-close" type="button" aria-label="Close Switch Character"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 3 10 10M13 3 3 13" /></svg></button></header><div class="character-switch-carousel"><button class="ui-button character-switch-arrow character-switch-previous" type="button" aria-label="Previous character"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m10.5 2.5-5 5 5 5"/></svg></button><ul id="character-switch-list" class="character-switch-list" aria-label="Characters"></ul><button class="ui-button character-switch-arrow character-switch-next" type="button" aria-label="Next character"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m5.5 2.5 5 5-5 5"/></svg></button></div><section class="character-switch-settings" aria-label="Character Switch settings" hidden><label class="character-switch-setting" for="character-switch-show-profession"><span><strong>Show profession</strong><small>Icon, primary, and secondary profession</small></span><input id="character-switch-show-profession" type="checkbox"></label><label class="character-switch-setting" for="character-switch-show-level"><span><strong>Show level</strong><small>Character level</small></span><input id="character-switch-show-level" type="checkbox"></label><label class="character-switch-setting" for="character-switch-show-location"><span><strong>Show known location</strong><small>Locations from the reviewed Travel catalogue</small></span><input id="character-switch-show-location" type="checkbox"></label></section><section class="character-switch-confirm" aria-describedby="character-switch-confirm-copy" hidden><p id="character-switch-confirm-copy">Switching characters will leave this explorable area. You may lose progress in this instance.</p><div class="character-switch-confirm-actions"><button type="button" id="character-switch-stay" class="ui-button character-switch-stay">Stay here</button><button type="button" id="character-switch-leave" class="ui-button character-switch-leave" data-variant="danger">Leave and switch</button></div></section><p class="character-switch-status" role="status" aria-live="polite" aria-atomic="true"></p><details class="character-switch-details"><summary>Technical details</summary><pre></pre><button type="button" class="ui-button character-switch-copy">Copy diagnostics</button></details></div>`;
   parent.append(root);
   const panel = root.querySelector<HTMLElement>(".character-switch-panel")!;
   const carousel = root.querySelector<HTMLElement>(".character-switch-carousel")!;
@@ -157,19 +152,13 @@ export function createCharacterSwitchPalette(
   const leaveButton = root.querySelector<HTMLButtonElement>(".character-switch-leave")!;
   // The shared leave-area step: its words, its arming and its ← → between the two choices (D-27).
   const leaveChoice = bindLeaveAreaChoice(stayButton, leaveButton);
-  const primaryButton = root.querySelector<HTMLButtonElement>(".character-switch-action")!;
-  const footerElement = root.querySelector<HTMLElement>(".character-switch-footer")!;
   const settingsToggle = root.querySelector<HTMLButtonElement>(".character-switch-settings-toggle")!;
   const professionCheckbox = root.querySelector<HTMLInputElement>("#character-switch-show-profession")!;
   const levelCheckbox = root.querySelector<HTMLInputElement>("#character-switch-show-level")!;
   const locationCheckbox = root.querySelector<HTMLInputElement>("#character-switch-show-location")!;
-  const layoutInputs = [...root.querySelectorAll<HTMLInputElement>('input[name="character-switch-layout"]')];
   const previousButton = root.querySelector<HTMLButtonElement>(".character-switch-previous")!;
   const nextButton = root.querySelector<HTMLButtonElement>(".character-switch-next")!;
-  const listHints = root.querySelector<HTMLElement>(".character-switch-list-hints")!;
   const disposeSearchEditing = installSearchEditing(list, queryInput);
-  const settingsHints = root.querySelector<HTMLElement>(".character-switch-settings-hints")!;
-  const confirmHints = root.querySelector<HTMLElement>(".character-switch-confirm-hints")!;
   const details = root.querySelector<HTMLDetailsElement>(".character-switch-details")!;
   const diagnostic = root.querySelector<HTMLElement>("pre")!;
   type ViewState =
@@ -187,7 +176,6 @@ export function createCharacterSwitchPalette(
   let confirmingTarget: Readonly<{ name: string; fromRow: boolean }> | null = null;
   let selected = 0;
   let query = "";
-  let layout: "horizontal" | "vertical" = "horizontal";
   /** The card chosen before a search began; clearing the search returns to it (HUB-197). */
   let preSearchKey: string | undefined;
   type DisplayPreferences = Readonly<{
@@ -208,7 +196,7 @@ export function createCharacterSwitchPalette(
   let preferencePending = false;
   let preferenceFailure = false;
   let enabled = false;
-  let rows: ReturnType<typeof orderCharacters> = [];
+  let rows: ReturnType<typeof characterRows> = [];
   let withdrawnForSwitch = false;
   /** The character the last switch asked for; after a failure the next opening starts on it (HUB-035). */
   let requestedKey: string | undefined;
@@ -219,32 +207,29 @@ export function createCharacterSwitchPalette(
    * or five, whatever the window or the Hub's size (HUB-076).
    */
   const carouselRadius = () => {
-    if (!window.gwHub) return window.innerWidth <= 680 ? 1 : window.innerWidth <= 1050 ? 2 : 3;
     const width = list.clientWidth;
     if (!width) return 2;
     const fit = Math.floor((width + CARD_GAP) / (CARD_MIN_WIDTH + CARD_GAP));
     return fit >= 5 ? 2 : fit >= 3 ? 1 : 0;
   };
-  const hub = window.gwHub;
   // In the Hub the search leads the view, so it leads the Tab order too (HUB-138).
-  if (hub) panel.prepend(search);
+  panel.prepend(search);
   let hubBack: (() => void) | undefined;
-  /** In the Hub, its footer names the switch; the palette's own footer stays hidden (HUB-042). */
+  /** The Hub footer names the switch; Characters has no separate footer. */
   let hubFooter: HubViewFooter | undefined;
-  const modal = hub ? {
+  const modal = {
     show() { hub.showView('Characters', (target, back, footer) => {
-      hubFooter = footer; footerElement.hidden = true;
+      hubFooter = footer;
       hubBack = back;
       target.append(root); root.open = true;
       if (view.kind === "closed") { view = Object.freeze({ kind: "characters" }); render(); }
       focusSelected();
-      return () => { hubBack = undefined; hubFooter = undefined; footerElement.hidden = false; root.open = false; parent.append(root); if (view.kind === 'confirming') source.cancelConfirmation(); view = { kind: 'closed' }; };
+      return () => { hubBack = undefined; hubFooter = undefined; root.open = false; parent.append(root); if (view.kind === 'confirming') source.cancelConfirmation(); view = { kind: 'closed' }; };
     }, () => !!window.gwToolsSettings?.().characterSwitchEnabled, "characters"); },
     close() { hub.close(); },
     pageChanged() { hub.pageChanged(); },
     dispose() { if (root.open) hub.close(); },
-  } : window.gwSurfaces.registerDialog({ root, priority: 7, transient: true,
-    dismiss: () => closePalette(true), restoreFocus: () => canvas });
+  };
   /**
    * While an accepted switch runs, one quiet line covers the game: it names the character and
    * absorbs pointer presses, so no click can reach the selector and redirect Play (D-30, HUB-247).
@@ -289,14 +274,7 @@ export function createCharacterSwitchPalette(
     // The footer names what Enter does; it disables instead of hiding, so nothing slides under the pointer.
     const row = view.kind === "characters" && source.characters.status === "ready" ? rows[selected] : undefined;
     const current = row !== undefined && row.index === currentCharacterIndex(source);
-    primaryButton.replaceChildren(row ? current ? "Current character" : `Switch to ${row.character.name}` : "Switch character");
-    if (row && !current) {
-      const key = document.createElement("kbd");
-      key.textContent = "↵";
-      primaryButton.append(" ", key);
-    }
     const refused = characterSwitchRefusal(source) !== null;
-    primaryButton.disabled = !row || current || busy() || refused;
     // The Hub footer: the switch on the cards, Done in the settings, and the safe Stay here while
     // a confirmation asks; the armed Leave and switch stays in the confirmation itself.
     hubFooter?.primary(view.kind === "settings" ? { label: "Done", run: () => settingsToggle.click() }
@@ -338,7 +316,7 @@ export function createCharacterSwitchPalette(
     // only inside the closed palette; the next opening starts on the attempted card (HUB-035).
     if (!busy() && withdrawnForSwitch && view.kind === "closed" && source.action.status === "failed") {
       attemptedKey = requestedKey;
-      hub?.notify(failureMessage(source.action.code), "failed");
+      hub.notify(failureMessage(source.action.code), "failed");
     }
     if (!busy()) withdrawnForSwitch = false;
     else if (!withdrawnForSwitch) {
@@ -351,8 +329,7 @@ export function createCharacterSwitchPalette(
     paintVeil();
     const state = source.characters;
     const searching = state.status === "ready" && normaliseCharacterQuery(query) !== "";
-    const horizontal = !!hub || layout === "horizontal";
-    root.dataset.layout = horizontal ? "horizontal" : "vertical";
+    root.dataset.layout = "horizontal";
     panel.dataset.layout = root.dataset.layout;
     const focusedCharacterKey = preserveCharacterFocus
       && document.activeElement instanceof HTMLButtonElement
@@ -373,11 +350,8 @@ export function createCharacterSwitchPalette(
     const refusal = characterSwitchRefusal(source);
     if (state.status === "ready") {
       const selectedKey = rows[selected]?.character.characterKey;
-      const orderedRows = horizontal
-        ? state.characters.map((character, index) => Object.freeze({ character, index }))
-        : orderCharacters(state.characters);
-      if (horizontal || searching) list.setAttribute("role", "listbox");
-      else list.removeAttribute("role");
+      const orderedRows = characterRows(state.characters);
+      list.setAttribute("role", "listbox");
       rows = searchCharacters(orderedRows, query);
       const preserved = selectedKey === undefined
         ? -1
@@ -394,9 +368,7 @@ export function createCharacterSwitchPalette(
       selected = Math.min(selected, Math.max(0, rows.length - 1));
       const radius = carouselRadius();
       list.style.setProperty("--character-cards", String(radius * 2 + 1));
-      const renderedRows = horizontal
-        ? characterCarouselRows(selected, rows.length, radius)
-        : rows.map((_row, rowIndex) => rowIndex);
+      const renderedRows = characterCarouselRows(selected, rows.length, radius);
       renderedRows.forEach((rowIndex) => {
         const item = document.createElement("li");
         item.setAttribute("role", "presentation");
@@ -420,12 +392,12 @@ export function createCharacterSwitchPalette(
         button.type = "button";
         button.id = `character-switch-option-${index}`;
         button.className = "character-switch-row";
-        if (horizontal || searching) button.setAttribute("role", "option");
+        button.setAttribute("role", "option");
         button.dataset.index = String(index);
         button.dataset.row = String(rowIndex);
         button.dataset.characterKey = character.characterKey;
         button.dataset.selected = String(rowIndex === selected);
-        if (horizontal || searching) button.setAttribute("aria-selected", String(rowIndex === selected));
+        button.setAttribute("aria-selected", String(rowIndex === selected));
         button.disabled = busy();
         if (refusal !== null) button.setAttribute("aria-disabled", "true");
         if (current) {
@@ -482,11 +454,9 @@ export function createCharacterSwitchPalette(
           const meta = document.createElement("span");
           meta.className = "character-switch-meta";
           // In the Hub the card names the profession pair, "Mo/Me", and a PvP character (HUB-194).
-          meta.textContent = hub
-            ? [displayPreferences.characterSwitchProfession && profession
+          meta.textContent = [displayPreferences.characterSwitchProfession && profession
                 ? `${profession.code}${secondaryProfession ? `/${secondaryProfession.code}` : ""}${character.characterType === "pvp" ? " · PvP" : ""}` : '',
-              displayPreferences.characterSwitchLevel ? `Lv ${character.level}` : '', destination?.name.split(',')[0]].filter(Boolean).join(' · ')
-            : metaParts.join(" · ");
+              displayPreferences.characterSwitchLevel ? `Lv ${character.level}` : '', destination?.name.split(',')[0]].filter(Boolean).join(' · ');
           meta.title = meta.textContent;
           copy.append(meta);
         }
@@ -506,43 +476,33 @@ export function createCharacterSwitchPalette(
     const copy = leaveAreaCopy("switch", pending?.name ?? "this character");
     title.textContent = confirming ? copy.question : "Switch Character";
     // In the Hub the breadcrumb names the page; the heading shows only the question it asks (HUB-199).
-    title.classList.toggle("ui-sr-only", !!hub && !confirming);
+    title.classList.toggle("ui-sr-only", !confirming);
     confirmCopy.textContent = copy.detail;
     leaveButton.textContent = copy.leave;
     if (confirming) root.setAttribute("aria-describedby", "character-switch-confirm-copy");
     else root.removeAttribute("aria-describedby");
     list.hidden = settingsMode || confirming;
     carousel.hidden = settingsMode || confirming;
-    previousButton.hidden = !horizontal || settingsMode || confirming;
-    nextButton.hidden = !horizontal || settingsMode || confirming;
+    previousButton.hidden = settingsMode || confirming;
+    nextButton.hidden = settingsMode || confirming;
     search.hidden = settingsMode || confirming || busy();
     settingsPanel.hidden = !settingsMode;
     confirmPanel.hidden = !confirming;
     count.hidden = confirming;
     settingsToggle.hidden = confirming;
     // No switch hints while the list is still on its way: there is nothing to choose yet (HUB-074).
-    listHints.hidden = settingsMode || confirming || state.status !== "ready";
-    settingsHints.hidden = !settingsMode;
-    confirmHints.hidden = !confirming;
     settingsToggle.setAttribute("aria-pressed", String(settingsMode));
     settingsToggle.disabled = busy();
     professionCheckbox.checked = displayPreferences.characterSwitchProfession;
     levelCheckbox.checked = displayPreferences.characterSwitchLevel;
     locationCheckbox.checked = displayPreferences.characterSwitchLocation;
     for (const input of [
-      ...layoutInputs,
       professionCheckbox,
       levelCheckbox,
       locationCheckbox,
     ]) {
       input.disabled = preferencePending;
     }
-    for (const input of layoutInputs) input.checked = input.value === layout;
-    const searchHint = ' <kbd class="ui-kbd">type</kbd> search';
-    // The hints name what the keys do now: ↑ reaches the search, Esc clears a query before it
-    // leaves, and in the Hub ⌘⌫ always has a level to return to.
-    const escape = normaliseCharacterQuery(query) !== "" ? "clear" : hub?.hasParent ? "back" : "close";
-    listHints.innerHTML = `<kbd class="ui-kbd">${hub ? "← →" : "←↑ →↓"}</kbd> choose${hub ? ' <kbd class="ui-kbd">↑</kbd> search' : searchHint} <kbd class="ui-kbd">return</kbd> switch <kbd class="ui-kbd">esc</kbd> ${escape}${hub ? ' <kbd class="ui-kbd">⌘</kbd><kbd class="ui-kbd">⌫</kbd> back' : ""}`;
     queryInput.setAttribute("aria-expanded", String(searching && rows.length > 0));
     if (searching) queryInput.setAttribute("aria-controls", "character-switch-list");
     else queryInput.removeAttribute("aria-controls");
@@ -590,9 +550,7 @@ export function createCharacterSwitchPalette(
     view = Object.freeze({ kind: "characters" });
     const state = source.characters;
     if (state.status === "ready") {
-      rows = hub || layout === "horizontal"
-        ? state.characters.map((character, index) => Object.freeze({ character, index }))
-        : orderCharacters(state.characters);
+      rows = characterRows(state.characters);
       const wanted = characterKey ?? attemptedKey;
       attemptedKey = undefined;
       const opening = rows.findIndex(({ character, index }) => wanted === undefined
@@ -647,7 +605,7 @@ export function createCharacterSwitchPalette(
     // Escape during composition cancels the composition, never the query (HUB-140).
     if (event.isComposing || event.defaultPrevented) return;
     // From the cards ⌘⌫ is the Hub's own Back; one level per physical press.
-    if (hub && isHubBackKey(event) && (view.kind === "confirming" || view.kind === "settings")) {
+    if (isHubBackKey(event) && (view.kind === "confirming" || view.kind === "settings")) {
       event.preventDefault();
       if (!event.repeat) leaveInnerView();
       return;
@@ -716,7 +674,7 @@ export function createCharacterSwitchPalette(
     const button = (event.target as Element).closest<HTMLButtonElement>("button[data-row]");
     if (!button || view.kind !== "characters") return;
     selected = Number(button.dataset.row);
-    if (hub && event.key === 'ArrowUp') {
+    if (event.key === 'ArrowUp') {
       event.preventDefault(); event.stopPropagation(); queryInput.focus({ preventScroll: true }); return;
     }
     // The shared list move: arrows, ⌃N/⌃P, PgUp/PgDn by a visible page, Home/End; the carousel never wraps.
@@ -768,9 +726,6 @@ export function createCharacterSwitchPalette(
     updateRowSelection();
     button.focus({ preventScroll: true });
   });
-  primaryButton.addEventListener("click", (event) => {
-    if (event.detail <= 1 && view.kind === "characters") requestSelected();
-  });
   previousButton.addEventListener("click", () => {
     selected = listIndexAfter(selected, rows.length, -1);
     render();
@@ -788,16 +743,9 @@ export function createCharacterSwitchPalette(
     preferenceFailure = false;
     render();
     if (view.kind === "settings") {
-      (hub ? professionCheckbox : layoutInputs.find((input) => input.checked))?.focus({ preventScroll: true });
+      professionCheckbox.focus({ preventScroll: true });
     }
     else focusSelected();
-  });
-  for (const input of layoutInputs) input.addEventListener("change", () => {
-    if (!input.checked) return;
-    layout = input.value === "vertical" ? "vertical" : "horizontal";
-    preferenceFailure = false;
-    render();
-    input.focus({ preventScroll: true });
   });
   const preferenceFields = [
     {
@@ -853,12 +801,10 @@ export function createCharacterSwitchPalette(
     if (!enabled) return;
     event.preventDefault();
     // A second request while one runs is answered, never silent (HUB-193).
-    if (source.action.status === "switching") { hub?.notify(failureMessage("busy")); return; }
+    if (source.action.status === "switching") { hub.notify(failureMessage("busy")); return; }
     // In the Hub, ⌘E follows the Hub's direct-shortcut contract: it focuses or resumes
     // Characters and never closes the Hub (HUB-049).
-    if (hub) hub.direct("characters", () => openPalette());
-    else if (root.open) closePalette(true);
-    else openPalette();
+    hub.direct("characters", () => openPalette());
   };
   window.addEventListener("gw:character-toggle", onToggle);
   const unsubscribeSettings = window.gwNative.settings.onChange((settings) => {
@@ -873,14 +819,14 @@ export function createCharacterSwitchPalette(
   }).catch(() => { /* Keep the surface closed until its enable setting is known. */ });
   const unsubscribe = source.subscribe(render);
   const resize = () => {
-    if (!root.open || layout !== "horizontal" || view.kind !== "characters") return;
+    if (!root.open || view.kind !== "characters") return;
     render(false);
     focusSelected();
   };
   window.addEventListener("resize", resize);
   // The Hub can be resized without a window resize; the card count follows the carousel's width.
   let observedRadius = -1;
-  const resizeObserver = hub && typeof ResizeObserver === "function" ? new ResizeObserver(() => {
+  const resizeObserver = typeof ResizeObserver === "function" ? new ResizeObserver(() => {
     const radius = carouselRadius();
     if (radius !== observedRadius) { observedRadius = radius; if (root.open && view.kind === "characters") render(); }
   }) : null;

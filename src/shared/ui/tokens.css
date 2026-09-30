@@ -184,6 +184,9 @@
   --ui-warning: #e3a94a;
   --ui-danger: #e0574e;
   --ui-success: #4ad84a;
+  /* The switch veil preserves the game while it contains pointer presses. */
+  --ui-character-switch-veil-fill: oklch(0 0 0 / 18%);
+  --ui-character-switch-veil-text-shadow: 0 1px 2px oklch(0 0 0 / 80%);
   --ui-overlay-fill: color-mix(in srgb, var(--ui-outline) 78%, transparent);
   --ui-well-strong-fill: color-mix(in srgb, var(--ui-well-fill) 95%, var(--ui-outline));
   --ui-well-overlay-fill: color-mix(in srgb, var(--ui-outline) 72%, var(--ui-well-fill));

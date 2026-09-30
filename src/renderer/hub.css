@@ -199,7 +199,6 @@
 .hub-view .character-switch-panel[data-layout=horizontal] .character-switch-row img { width:28px; height:28px; margin:4px 0; }
 .hub-view .character-switch-panel[data-layout=horizontal] .character-switch-name { font:500 13px/1.3 var(--ui-font-interface); white-space:normal; }
 .hub-view .character-switch-panel[data-layout=horizontal] .character-switch-meta { font:11px/1.35 var(--ui-font-interface); white-space:normal; }
-.hub-view .character-switch-footer { margin-top:auto; border-top:1px solid var(--ui-line-soft); font:12px/1.4 var(--ui-font-interface); padding:14px 20px; }
 .hub-view .character-switch-settings fieldset:has(input[name=character-switch-layout]) { display:none; }
 .hub-view .travel-history .travel-recent-grid { display:flex; gap:10px; overflow-x:auto; padding:2px 1px 10px; scroll-snap-type:x proximity; }
 .hub-view .travel-history .travel-recent { flex:0 0 190px; min-height:124px; display:flex; flex-direction:column; align-items:flex-start; justify-content:center; gap:10px; padding:14px; background:var(--ui-well-fill); scroll-snap-align:start; }
