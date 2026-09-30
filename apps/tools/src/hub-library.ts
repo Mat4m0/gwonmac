@@ -336,7 +336,10 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
       const matches = all().filter(item => (!parsed.scope || item.kind === parsed.scope)
         && (item.kind === 'build' ? matchesBuild(item.value, query) : hubMatch(item.value.name, parsed.term, item.value.tags) !== null));
       const exacts = matches.filter(item => hubMatch(item.value.name, parsed.term) === 'exact');
+      // A short profession query remains additive, but actual primary-profession matches lead it (HUB-059).
+      const profession = Object.keys(PROFESSIONS).find(code => code.toLowerCase() === parsed.term);
       return [...matches.sort((a, b) => Number(hubMatch(b.value.name, parsed.term) === 'exact') - Number(hubMatch(a.value.name, parsed.term) === 'exact')
+        || (profession ? Number(b.kind === 'build' && b.value.professions[0] === profession) - Number(a.kind === 'build' && a.value.professions[0] === profession) : 0)
         || a.value.name.localeCompare(b.value.name) || a.value.id.localeCompare(b.value.id)).map(item => {
         if (item.kind === 'build') return buildRow(item);
         const direct = parsed.scope === 'team' && exacts.length === 1 && exacts[0] === item;
