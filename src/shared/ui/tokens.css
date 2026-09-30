@@ -169,6 +169,9 @@
   --ui-text-faint: #948e7e;
   --ui-display-text: var(--ui-text-bright);
   --ui-accent: #e6c882;
+  /* The accent used as text. appearance.ts re-inks only this role when the
+   * accent would read below 4.5:1; fills, rails and icons keep --ui-accent. */
+  --ui-accent-text: var(--ui-accent);
   --ui-accent-hover: var(--gw-gold-bright);
   --ui-accent-strong: #8a7433;
   --ui-accent-ink: #171613;
