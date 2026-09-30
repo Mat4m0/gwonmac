@@ -126,7 +126,7 @@ export function createHubPeople(hub: Pick<Hub, 'attach' | 'showRows' | 'notify'>
       const typed = normaliseCharacterName(parsed.text);
       const typedRow: HubRow | null = addressed && session.state.available && isCharacterName(typed) && !people.some(person => person.exact)
         ? { id: `person:typed:${whisperPersonKey(typed)}`, title: typed, detail: 'Character name', group: 'People',
-          action: 'View actions', actions: () => person(typed), run: () => person(typed) } : null;
+          action: 'View actions', run: () => person(typed) } : null;
       if (parsed.scope === 'invite' && party) {
         // Only an exact name invites, and it comes first. A prefix or chat match
         // opens the person page instead, so Enter never invites a similar name.
@@ -170,13 +170,13 @@ export function createHubPeople(hub: Pick<Hub, 'attach' | 'showRows' | 'notify'>
       const name = friend.character || friend.alias;
       return { id: `friend:${friend.key}`, title: friend.alias || name,
         detail: `${friend.character && friend.character !== friend.alias ? `${friend.character} · ` : ''}${friend.status}${friend.status !== 'offline' ? ` · ${travelDestination(friend.mapId)?.name ?? 'Location unavailable'}` : ''}`,
-        keywords: name, group: 'People', action: 'View actions', actions: () => person(name, friend.key), run: () => person(name, friend.key) };
+        keywords: name, group: 'People', action: 'View actions', run: () => person(name, friend.key) };
     }
     const unread = conversation ? whisperUnread(conversation) : 0;
     const detail = conversation ? (unread ? `${unread} unread · Whisper` : conversation.draft ? 'Continue draft' : 'Conversation')
       : entry.source === 'recent' ? 'Recent conversation' : 'Seen in chat';
     return { id: `person:${entry.key}`, title: entry.name, detail, group: 'People', action: 'View actions',
-      actions: () => person(entry.name), run: () => person(entry.name) };
+      run: () => person(entry.name) };
   }
   return {
     setEnabled(next: boolean) {
