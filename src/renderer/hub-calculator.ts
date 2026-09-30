@@ -45,7 +45,7 @@ export function createHubCalculator(options: {
       mode.focus();return()=>form.remove();
     });
   }
-  const result=(id:string,title:string,detail:string,value:string):HubRow=>({id,title,detail,group:'Calculator',action:'Copy result',run:()=>options.copy(value),actions:editRates});
+  const result=(id:string,title:string,detail:string,value:string):HubRow=>({id,title,detail,group:'Calculator',action:'Copy result',run:()=>options.copy(value)});
   const titleRows=(entries:NonNullable<ReturnType<typeof calculateTitle>>):HubRow[]=>entries.map((entry,index)=>({
     id:`title:${index}`,title:entry.title,detail:entry.example?`${entry.detail} · ${entry.example}`:entry.detail,group:'Titles',
     ...(entry.problem?{unavailable:entry.title}:{}),
@@ -76,7 +76,8 @@ export function createHubCalculator(options: {
           const fractional=currencyInfo(unit).stack!==null&&amount.n%amount.d!==0n;
           const iconFrom=conversion.terms.length===1?currencyIcon(conversion.from):undefined,iconTo=currencyIcon(unit);
           const copied=id.startsWith('quote:')?`${id==='quote:buy'?'Buy from trader':'Sell to trader'}: ${value}`:id==='manual-conversion'?`Your rates: ${value}`:id.startsWith('market:')?`${value} · ${detail}`:value;
-          return {...result(id,value,`${detail}${fractional?' · Equivalent value':''}`,copied),conversion:{input:conversion.input,from:conversion.terms.length>1?'Combined value':currencyInfo(conversion.from).name,to:currencyInfo(unit).name,...(iconFrom?{iconFrom}:{}),...(iconTo?{iconTo}:{})}};
+          // Only a result that depends on a rate the player can choose offers the rates editor (HUB-100).
+          return {...result(id,value,`${detail}${fractional?' · Equivalent value':''}`,copied),...(fixed?{}:{actions:editRates}),conversion:{input:conversion.input,from:conversion.terms.length>1?'Combined value':currencyInfo(conversion.from).name,to:currencyInfo(unit).name,...(iconFrom?{iconFrom}:{}),...(iconTo?{iconTo}:{})}};
         };
         if(fixed){clear();return [card('conversion',unit=>fraction(unit==='gold'?1n:1000n),'Fixed conversion · 1 platinum = 1,000 gold')];}
         if(!visible){clear();return [];}
