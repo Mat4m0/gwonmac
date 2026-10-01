@@ -37,6 +37,10 @@ test('a typed search selects its best answer', async ({ page }) => {
     await expect(primary(page), finding).toHaveText(expected);
     await expect(primary(page), finding).toBeEnabled();
   }
+  for (const [query, title] of [['title', 'Title calculator'], ['calc', 'Title calculator'], ['party', 'Title calculator'], ['rate', 'Conversion rates'], ['currency', 'Conversion rates']] as const) {
+    await search(page).fill(query);
+    await expect(page.locator('.hub-title', { hasText: title }).filter({ hasText: new RegExp(`^${title}$`) })).toHaveCount(1);
+  }
   expect(await page.locator('#app').getAttribute('data-action')).toBeNull();
 });
 

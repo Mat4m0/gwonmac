@@ -88,7 +88,7 @@ export function createHubCalculator(options: {
       const term=query.toLowerCase().trim().replace(/\s+/gu,' ');
       if(!term){clear();return [{id:'title:help',title:'Title calculator',detail:'Points, items needed and offer comparisons',group:'Commands',action:'Open calculator',searchQuery:'titles',run(){}}];}
       const titleResults=calculateTitle(term);
-      if(titleResults){clear();return titleRows(titleResults);}
+      if(titleResults){clear();return [...titleRows(titleResults),...(term==='titles'||term==='title calculator'?[]:calculatorCommands(term))];}
       if(term==='rates'||term==='conversion rates')return [{id:'currency-rates',title:'Conversion rates',detail:settings().mode==='manual'?'Your rates':'Automatic observed prices',group:'Calculator',action:'Choose rates',run:()=>editRates()}];
       try{
         const explicit=parseConversion(term);
