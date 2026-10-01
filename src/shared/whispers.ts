@@ -30,10 +30,10 @@ function hasControl(value: string): boolean {
   return Array.from(value).some(unit => unit.charCodeAt(0) < 32 || unit.charCodeAt(0) === 127);
 }
 
-/** Whether Guild Wars can address this exact text as a character name. */
+/** Character names refuse every surrogate unit, including a paired emoji, as native does. */
 export function isCharacterName(value: string): boolean {
   return !!value.trim() && value.length <= WHISPER_NAME_UNITS
-    && !/[,"]/u.test(value) && !hasControl(value) && !/[\ud800-\udfff]/u.test(value);
+    && !/[,"]/u.test(value) && !hasControl(value) && !/[\ud800-\udfff]/.test(value);
 }
 
 /**

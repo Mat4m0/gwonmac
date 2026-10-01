@@ -38,7 +38,7 @@ export function createHub(parent: HTMLElement) {
     <button class="ui-window-resize hub-resize" aria-label="Resize Hub" title="Drag to resize, or use arrow keys" hidden></button>
   </section>`;
   parent.append(root);
-  const receipt = document.createElement('output'); receipt.className = 'hub-receipt ui-well'; receipt.setAttribute('role', 'status'); receipt.hidden = true; parent.append(receipt);
+  const receipt = document.createElement('output'); receipt.className = 'hub-receipt ui-toast'; receipt.popover = 'manual'; receipt.setAttribute('role', 'status'); receipt.hidden = true; parent.append(receipt);
   let receiptTimer: ReturnType<typeof setTimeout> | undefined;
   // Where the Hub frame last stood: a receipt after closing appears in its footprint, not as a window toast.
   let frame: DOMRect | null = null;
@@ -112,9 +112,9 @@ export function createHub(parent: HTMLElement) {
   let awaitingResults = false;
   const sources = new Map<HubSource, () => void>();
   const sourceEnabled = (source: HubSource) => !source.feature || ((source.feature === 'characterSwitchEnabled' || !!window.gwToolsSettings?.().gwonmacTools) && !!window.gwToolsSettings?.()[source.feature]);
-  type RowScope = Readonly<{ title: string; rows: () => readonly HubRow[]; summary?: HubSummary; destination?: HubDestination }>;
+  type RowScope = Readonly<{ title: string; rows: () => readonly HubRow[]; summary?: HubSummary; destination?: HubDestination; owner?: HubSource }>;
   let scope: RowScope | null = null;
-  type MountedView = { title: string; mount: HubViewMount<HTMLElement>; available?: () => boolean; destination?: HubDestination };
+  type MountedView = { title: string; mount: HubViewMount<HTMLElement>; available?: () => boolean; destination?: HubDestination; owner?: HubSource };
   let activeView: MountedView | null = null;
   /** The mounted view's footer: its named primary and secondary, or its own footer (Travel, Characters). */
   type ViewFooter = { primary: HubViewAction | null; secondary: HubViewAction | null; own: boolean };
@@ -122,7 +122,6 @@ export function createHub(parent: HTMLElement) {
   let viewRunning = false;
   let viewArming: { label: string; arming: ReturnType<typeof armConfirmation> } | null = null;
   let disposeView: (() => void) | null = null;
-  let viewAvailable: (() => boolean) | null = null;
   let restoreQuery = '';
   type FocusPlace = { selector: string; range?: readonly [number, number] };
   type Page = { scope: RowScope | null; query: string; selected: string | null; scroll: number; view: MountedView | null; focus: FocusPlace };
@@ -183,6 +182,22 @@ export function createHub(parent: HTMLElement) {
   let actionFocus: FocusPlace | null = null;
   const capture = (): Page => ({ scope, query: input.value, selected, scroll: list.scrollTop, view: activeView, focus: actionFocus ?? focusPlace() });
   const pageTitle = (page: Pick<Page, 'scope' | 'view'>) => page.view?.title ?? page.scope?.title ?? 'Home';
+  const sourceLive = (owner: HubSource) => sources.has(owner) && sourceEnabled(owner);
+  const pageLive = (page: Pick<Page, 'scope' | 'view'>) =>
+    (!page.scope?.owner || sourceLive(page.scope.owner))
+    && (!page.view?.owner || sourceLive(page.view.owner))
+    && (!page.view?.available || page.view.available());
+  /** Withdraw only pages whose actual source is unavailable; other drafts and searches stay. */
+  function withdrawPages() {
+    const live = history.filter(pageLive);
+    history.splice(0, history.length, ...live);
+    if (suspended && !pageLive(suspended)) suspended = history.pop() ?? null;
+    if (!root.open) return;
+    if (!pageLive({ scope, view: activeView })) {
+      if (history.length) restoreParent(); else home();
+    } else refresh();
+  }
+
   /**
    * Form drafts last the session, keyed by page path and field name: leaving a form keeps what
    * was typed and returning restores it, unless the stored value the field started from changed.
@@ -212,6 +227,7 @@ export function createHub(parent: HTMLElement) {
   }
   function remember() { history.push(capture()); }
   function restorePage(page: Page) {
+    if (!pageLive(page)) { if (history.length) restoreParent(); else home(); return; }
     resetView(); scope = page.scope;
     if (page.view) {
       if (page.view.available && !page.view.available()) { restoreParent(); return; }
@@ -277,7 +293,6 @@ export function createHub(parent: HTMLElement) {
     }] : [];
     return [
       ...tool('travel', 'Travel', 'Outposts, favourites and recent places', 'outpost destination teleport tp', settings?.gwonmacTools && settings.travelPalette, 'gw:travel-toggle'),
-      ...tool('builds', 'Build Library', 'Saved builds and teams', 'teams templates skills', settings?.gwonmacTools && settings.buildLibrary, 'gw:tools-toggle').map(row => ({ ...row, unavailable: 'Build Library is loading.' })),
       ...tool('trade', 'Trade Chat', 'Find offers and contact sellers', 'kamadan prices trading market trader', settings?.gwonmacTools && settings.tradeChat, 'gw:trade-toggle'),
       ...tool('whispers', 'Whispers', 'Conversations, friends and drafts', 'friends people message chat', settings?.gwonmacTools && settings.whispersEnabled, 'gw:whispers-toggle'),
       ...(settings?.characterSwitchEnabled ? [{ id: 'character', title: 'Switch Character', detail: 'Choose another character', keywords: 'relog profession characters alts', group: 'Tools', action: 'Choose character', navigate: () => dispatch('gw:character-toggle'), run: () => dispatch('gw:character-toggle') }] : []),
@@ -455,8 +470,10 @@ export function createHub(parent: HTMLElement) {
     else if (viewArming?.label !== action.label) {
       viewArming?.arming.disarm(); viewArming = { label: action.label, arming: armConfirmation(primary) }; viewArming.arming.arm();
     }
-    slotLabel(actionsButton, viewFooter.secondary?.label ?? 'Actions');
-    disableSlot(actionsButton, !viewFooter.secondary || !!viewFooter.secondary.disabled || viewRunning);
+    // A footer update invalidates menu snapshots before their actions can be activated.
+    closeMenu(false);
+    slotLabel(actionsButton, 'Actions', ['⌘', 'J']);
+    disableSlot(actionsButton, !viewFooter.secondary || viewRunning);
     count.textContent = '';
     paintLegend(undefined);
     paintBusy();
@@ -636,7 +653,7 @@ export function createHub(parent: HTMLElement) {
       const previous = previousRows[index];
       return previous && row.id === previous.id && row.title === previous.title
         && row.detail === previous.detail && row.group === previous.group
-        && row.action === previous.action && row.destructive === previous.destructive && row.unavailable === previous.unavailable && row.preview === previous.preview && row.folder === previous.folder && row.attributeStatus === previous.attributeStatus && JSON.stringify([row.skills, row.attributes, row.professions]) === JSON.stringify([previous.skills, previous.attributes, previous.professions]);
+        && row.action === previous.action && row.destructive === previous.destructive && row.unavailable === previous.unavailable && row.readOnly === previous.readOnly && row.preview === previous.preview && row.folder === previous.folder && row.attributeStatus === previous.attributeStatus && JSON.stringify([row.skills, row.attributes, row.professions]) === JSON.stringify([previous.skills, previous.attributes, previous.professions]);
     })) { select(selected); return; }
     list.replaceChildren();
     let group = '';
@@ -651,6 +668,7 @@ export function createHub(parent: HTMLElement) {
       option.id = `hub-result-${index}`; option.dataset.id = row.id; option.className = 'hub-row';
       option.setAttribute('role', 'option'); option.setAttribute('aria-disabled', String(!!row.unavailable));
       if (row.destructive) option.dataset.destructive = 'true';
+      if (row.readOnly) option.dataset.readOnly = 'true';
       const title = document.createElement('span'); title.className = 'hub-title'; title.textContent = row.title;
       appendProfessionLabel(title, row.professions);
       appendFolderLabel(title, row.folder);
@@ -705,7 +723,7 @@ export function createHub(parent: HTMLElement) {
     // A bare scope (`travel `) lists without a term, so nothing in it is an explicit result:
     // Enter never travels, invites, applies, switches or opens an account on a guess.
     // A fresh Home in an explorable area never starts on a row that leaves it (D-13).
-    const initial = !input.value.trim() ? rows.find(row => row.preferred && !row.unavailable) ?? rows.find(row => !row.unavailable && !row.leavesArea) ?? rows.find(row => !row.leavesArea)
+    const initial = !input.value.trim() ? rows.find(row => row.preferred && !row.unavailable) ?? rows.find(row => row.preferred !== false && !row.unavailable && !row.leavesArea) ?? rows.find(row => row.preferred !== false && !row.leavesArea)
       : !scope && parsed.scope && !parsed.term ? rows.find(row => !row.consequential && !row.unavailable)
       // A typed query starts on its best available answer, never on a disabled one (HUB-056).
       : phraseHit ?? rows.find(row => !row.unavailable) ?? rows[0];
@@ -717,6 +735,7 @@ export function createHub(parent: HTMLElement) {
     // Clear only this loading refusal when its answer settles; unrelated failures stay.
     if (prior?.unavailable && status.textContent === prior.unavailable && rows.some(row => row.conversion && !row.unavailable)) report('');
     select((prior?.id === 'quote-state' || prior?.id === 'market-state') && !!rows[0]?.conversion ? rows[0].id : settling || replacedPlaceholder ? exactCount > 1 && !phraseHit ? null : initial?.id ?? null : !revised && rows.some(row => row.id === selected) ? selected : null);
+    if (!settling && prior && !replacedPlaceholder && !rows.some(row => row.id === prior.id) && !receiptInStatus) report('The previous selection is no longer available. Choose a result.');
     if (!rows.length) {
       const empty = document.createElement('p'); empty.className = 'hub-empty'; empty.textContent = 'No matches'; list.append(empty);
     }
@@ -750,8 +769,8 @@ export function createHub(parent: HTMLElement) {
       end: () => { if (progress?.owner !== token) return; progress = null; if (progressInStatus) report(''); },
     };
   }
-  async function run() {
-    const row = rows.find(row => row.id === selected);
+  async function run(action?: HubRow) {
+    const row = action ?? rows.find(row => row.id === selected);
     if (!row) return;
     // One action at a time per page: Enter names the running one instead of starting another.
     if (busy()) { report(running!.again); return; }
@@ -768,7 +787,7 @@ export function createHub(parent: HTMLElement) {
   }
   function resetView() {
     endSession(); restoringFocus?.disconnect(); restoringFocus = null; keepDrafts(); pressed = null; modal.pageChanged(); closeMenu(false);
-    disposeView?.(); disposeView = null; activeView = null; viewAvailable = null; content.replaceChildren(); content.hidden = true;
+    disposeView?.(); disposeView = null; activeView = null; content.replaceChildren(); content.hidden = true;
     viewFooter = null; viewRunning = false; actionFocus = null; viewArming?.arming.disarm(); viewArming = null;
     search.hidden = false; list.hidden = false; footer.hidden = false;
   }
@@ -820,12 +839,14 @@ export function createHub(parent: HTMLElement) {
   function notify(message: string, outcome?: 'failed') {
     if (root.open) { report(message, true); return; }
     if (outcome === 'failed') carriedFailure = message;
-    clearTimeout(receiptTimer); receipt.textContent = message; receipt.hidden = false; receiptTimer = setTimeout(() => { receipt.hidden = true; }, 8000);
-    receipt.dataset.outcome = outcome ?? 'done';
+    clearTimeout(receiptTimer); receipt.textContent = message; receipt.hidden = false; receiptTimer = setTimeout(() => { receipt.hidePopover(); receipt.hidden = true; }, 8000);
+    receipt.dataset.outcome = outcome ?? 'done'; receipt.dataset.tone = outcome === 'failed' ? 'error' : 'success';
     if (frame?.width) {
       receipt.style.left = `${frame.left + frame.width / 2}px`; receipt.style.bottom = `${Math.max(8, window.innerHeight - frame.bottom + 12)}px`;
       receipt.style.maxWidth = `${Math.max(0, frame.width - 24)}px`;
     }
+    // A passive top-layer receipt stays above popouts without taking focus or intercepting game input.
+    receipt.showPopover();
   }
   function suspend() {
     if (!root.open) return;
@@ -833,7 +854,7 @@ export function createHub(parent: HTMLElement) {
     suspended = capture(); suspendedAt = Date.now(); suspendedSession = session; endSession(); modal.close();
     for (const source of sources.keys()) source.setVisible(false);
   }
-  const resumable = () => suspended !== null && Date.now() - suspendedAt <= RESUME_MS;
+  const resumable = () => suspended !== null && pageLive(suspended) && Date.now() - suspendedAt <= RESUME_MS;
   const pageDestination = (page: Pick<Page, 'scope' | 'view'>) => page.view ? page.view.destination : page.scope?.destination;
   /** Whether the next opening resumes a suspended page whose path holds this destination. */
   const suspendedOn = (destination: HubDestination) => !root.open && resumable() && [...history, suspended!].some(page => pageDestination(page) === destination);
@@ -843,6 +864,7 @@ export function createHub(parent: HTMLElement) {
    * refresh (HUB-050). A resumed Hub search is selected, so typing starts a new search (D-11).
    */
   function resumePage(page: Page) {
+    if (!pageLive(page)) { if (history.length) restoreParent(); else home(); return; }
     const mounted = page.view ? page.view === activeView : !disposeView && page.scope === scope;
     if (!mounted) restorePage(page);
     else if (page.view?.available && !page.view.available()) { restoreParent(); return; }
@@ -888,7 +910,7 @@ export function createHub(parent: HTMLElement) {
   function show() {
     if (root.open) { if (atHome()) restoreQuery = input.value; home(); input.select(); return; }
     previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    clearTimeout(receiptTimer); receipt.hidden = true;
+    clearTimeout(receiptTimer); receipt.hidePopover(); receipt.hidden = true;
     window.dispatchEvent(new Event('gw:input-reset'));
     modal.show(); window.dispatchEvent(new Event('gw:hub-visible'));
     const resume = resumable() ? suspended : null;
@@ -981,6 +1003,7 @@ export function createHub(parent: HTMLElement) {
     presenter.showView('Build details', target => {
       const view = document.createElement('section'); view.className = 'hub-build-details ui-scroll';
       for (const build of [...(incoming ? [incoming] : []), row]) {
+        if (!build.skills) continue;
         const heading = document.createElement('h2'); heading.textContent = 'label' in build ? `${build.label}: ${build.title}` : `${build.title} · ${build.detail}`; view.append(heading);
         if (build.workspace) { const open = document.createElement('button'); open.className = 'ui-button'; open.textContent = 'Open in Build Library'; open.onclick = build.workspace; view.append(open); }
         if (build.skills) {
@@ -996,15 +1019,25 @@ export function createHub(parent: HTMLElement) {
       return () => view.remove();
     });
   }
-  type MenuEntry = Readonly<{ label: string; section: 'Primary' | 'Details' | 'Personalize'; keys?: readonly string[]; destructive?: boolean; disabled?: boolean; run(): void | Promise<void> }>;
+  type MenuEntry = Readonly<{ label: string; section: 'Primary' | 'Details' | 'Personalize'; keys?: readonly string[]; destructive?: boolean; disabled?: boolean; reason?: string; run(): void | Promise<void> }>;
   /**
    * A row's Actions, verb first: its primary (↵), a second way into it (build details, rates),
    * then pinning and a search phrase for rows the Hub can keep (HUB-040, HUB-184).
    */
   function menuEntries(row: HubRow): MenuEntry[] {
-    const entries: MenuEntry[] = [{ label: row.action, section: 'Primary', keys: ['↵'], ...(row.destructive ? { destructive: true } : {}), disabled: !!row.unavailable, run: () => run() }];
+    const entries: MenuEntry[] = [{ label: row.action, section: 'Primary', keys: ['↵'], ...(row.destructive ? { destructive: true } : {}), disabled: !!row.unavailable, ...(row.unavailable ? { reason: row.unavailable } : {}), run: () => run() }];
+    for (const action of row.menuActions?.() ?? []) entries.push({
+      label: action.action, section: 'Details', disabled: !!action.unavailable,
+      ...(action.unavailable ? { reason: action.unavailable } : {}),
+      ...(action.destructive ? { destructive: true } : {}),
+      run: () => {
+        if (selected !== row.id || !rows.some(current => current.id === row.id)) { report('This person is no longer selected. Choose a result.'); return; }
+        return run(action);
+      },
+    });
     if (row.skills || scope?.summary?.skills) entries.push({ label: 'Show build details', section: 'Details', run: () => showBuildDetails(row) });
-    else if (row.actions && row.actionsLabel) entries.push({ label: row.actionsLabel, section: 'Details', run: () => row.actions?.() });
+    else if (!row.menuActions && row.actions && row.actionsLabel) entries.push({ label: row.actionsLabel, section: 'Details', run: () => row.actions?.() });
+    if (row.workspace) entries.push({ label: 'Open in Build Library', section: 'Details', run: row.workspace });
     if (!scope && isHubShortcuts([{ id: row.id, phrase: '', pinned: false }])) {
       const pinned = shortcuts().some(entry => entry.id === row.id && entry.pinned);
       entries.push({ label: pinned ? 'Unpin from Hub' : 'Pin to Hub', section: 'Personalize', run: async () => {
@@ -1012,21 +1045,32 @@ export function createHub(parent: HTMLElement) {
         try { await saveShortcuts([...entries.filter(entry => entry.id !== row.id), { id: row.id, phrase: old?.phrase ?? '', pinned: !old?.pinned }]); report(pinned ? `Unpinned ${row.title}.` : `Pinned ${row.title}.`); }
         catch { report('Could not update the pin. Try again.', true); }
       } });
-      entries.push({ label: 'Set search phrase…', section: 'Personalize', run: () => editHubShortcut(presenter, row, shortcuts, saveShortcuts) });
+      entries.push({ label: 'Set search phrase…', section: 'Personalize', run: () => editHubShortcut(presenter, row, shortcuts, saveShortcuts, () => !!lookup(row.id)) });
     }
     return entries;
   }
-  /** Opens the selected row's Actions over the footer; the page, query and selection stay. */
+  /** A view names its actions through the same menu; its live footer owns activation and confirmation. */
+  function viewMenuEntries(state: ViewFooter): MenuEntry[] {
+    const entry = (action: HubViewAction, section: MenuEntry['section'], primary: boolean): MenuEntry => ({
+      label: action.label, section, disabled: !!action.disabled,
+      ...(primary && state.primary ? { keys: ['↵'] } : {}),
+      ...(action.destructive ? { destructive: true } : {}),
+      run: () => { if (viewFooter === state) return runViewAction(action); },
+    });
+    return [entry(state.primary ?? done, 'Primary', true), ...(state.secondary ? [entry(state.secondary, 'Details', false)] : [])];
+  }
+  /** Opens the current page's Actions over the footer; the page, query and selection stay. */
   function openMenu() {
     const row = rows.find(row => row.id === selected);
-    if (viewFooter || busy() || !row) return;
-    const entries = menuEntries(row);
+    if (busy() || viewRunning || (!viewFooter && !row)) return;
+    const entries = viewFooter ? viewMenuEntries(viewFooter) : menuEntries(row!);
     if (entries.length < 2) return;
-    menu.replaceChildren(); menuRow = row.id;
+    menu.replaceChildren(); menuRow = viewFooter ? null : row!.id;
     let section = '';
     for (const entry of entries) {
       if (entry.section !== section) { section = entry.section; const heading = document.createElement('p'); heading.className = 'hub-menu-section'; heading.setAttribute('role', 'presentation'); heading.textContent = section; menu.append(heading); }
       const item = document.createElement('button'); item.type = 'button'; item.className = 'hub-menu-item'; item.setAttribute('role', 'menuitem'); item.disabled = !!entry.disabled;
+      if (entry.reason) { item.title = entry.reason; item.setAttribute('aria-description', entry.reason); }
       if (entry.destructive) item.dataset.variant = 'danger';
       const label = document.createElement('span'); label.textContent = entry.label; item.append(label);
       if (entry.keys) { const keys = document.createElement('span'); keys.className = 'hub-menu-keys'; for (const cap of entry.keys) { const key = document.createElement('kbd'); key.className = 'ui-kbd'; key.textContent = cap; keys.append(key); } item.append(keys); }
@@ -1063,9 +1107,9 @@ export function createHub(parent: HTMLElement) {
     event.preventDefault(); event.stopPropagation();
     if (!event.repeat && !closeMenu()) openMenu();
   });
-  // In a view the Actions slot is the view's named secondary.
+  // Every page uses the same Actions menu.
   // A double-click's second press never toggles the menu shut or runs anything (PTR-17).
-  actionsButton.onclick = event => { if (event.detail > 1) return; if (viewFooter) void runViewAction(viewFooter.secondary, event); else if (!closeMenu()) openMenu(); };
+  actionsButton.onclick = event => { if (event.detail > 1) return; if (!closeMenu()) openMenu(); };
   required<HTMLButtonElement>('.hub-close').onclick = () => close();
   // The primary acts once per click run, so a double-click on it runs its action once.
   backButton.onclick = back;
@@ -1086,13 +1130,9 @@ export function createHub(parent: HTMLElement) {
   root.addEventListener('focus', keepPlace);
   root.addEventListener('close', () => { if (!root.open && !suspended) close(); });
   const onBlur = () => suspend();
-  let enabledSources = new Set<HubSource>();
   const onSettings = () => {
-    const disabled = [...enabledSources].some(source => !sourceEnabled(source));
-    enabledSources = new Set([...sources.keys()].filter(sourceEnabled));
     for (const source of sources.keys()) source.setVisible(root.open && sourceEnabled(source));
-    if ((disposeView && (viewAvailable ? !viewAvailable() : disabled)) || (scope && disabled)) { suspended = null; home(); }
-    else refresh();
+    withdrawPages();
   };
   window.addEventListener('blur', onBlur); window.addEventListener('gw:tools-settings', onSettings);
   /** A new page starts over the open Hub's page, which Back returns to, or as the only page of a fresh Hub. */
@@ -1104,12 +1144,11 @@ export function createHub(parent: HTMLElement) {
   }
   /** Mounts a view page, a new one or one that Back restores, with its footer and drafts. */
   function mountView(view: MountedView) {
-    resetView();
+    resetView(); report('');
     root.dataset.page = 'section'; caption.textContent = view.title;
     required<HTMLElement>('.hub-preview').hidden = true; required<HTMLElement>('.hub-rate-controls').hidden = true;
     search.hidden = true; list.hidden = true; content.hidden = false;
     activeView = view;
-    viewAvailable = view.available ?? null;
     const state: ViewFooter = { primary: null, secondary: null, own: false };
     viewFooter = state;
     // A disposed view's late update never repaints the next page's footer.
@@ -1132,26 +1171,25 @@ export function createHub(parent: HTMLElement) {
     /** Whether Esc on an empty query goes back to a parent page rather than closing the Hub. */
     get hasParent() { return history.length > 0; },
     attach(next: HubSource) {
-      if (sourceEnabled(next)) enabledSources.add(next);
       sources.set(next, next.subscribe(() => refresh())); next.setVisible(root.open && sourceEnabled(next)); refresh();
       return () => {
-        sources.get(next)?.(); sources.delete(next); enabledSources.delete(next); next.setVisible(false);
-        if (root.open && (!disposeView || !viewAvailable || !viewAvailable())) home();
+        sources.get(next)?.(); sources.delete(next); next.setVisible(false);
+        withdrawPages();
       };
     },
-    showRows(title: string, getRows: () => readonly HubRow[], summary?: HubSummary, destination?: HubDestination) {
+    showRows(title: string, getRows: () => readonly HubRow[], summary?: HubSummary, destination?: HubDestination, owner?: HubSource) {
       enterPage();
-      resetView(); scope = { title, rows: getRows, ...(summary ? { summary } : {}), ...(destination ? { destination } : {}) }; root.dataset.page = 'section'; caption.textContent = title;
+      resetView(); scope = { title, rows: getRows, ...(summary ? { summary } : {}), ...(destination ? { destination } : {}), ...(owner ? { owner } : {}) }; root.dataset.page = 'section'; caption.textContent = title;
       nameSearch(title); input.value = ''; report(''); refresh(true); focusResult();
     },
-    showView(title: string, mount: HubViewMount<HTMLElement>, available?: () => boolean, destination?: HubDestination) {
+    showView(title: string, mount: HubViewMount<HTMLElement>, available?: () => boolean, destination?: HubDestination, owner?: HubSource) {
       enterPage();
-      mountView({ title, mount, ...(available ? { available } : {}), ...(destination ? { destination } : {}) });
+      mountView({ title, mount, ...(available ? { available } : {}), ...(destination ? { destination } : {}), ...(owner ? { owner } : {}) });
     },
     notify,
-    browseBuilds() { direct('builds', () => { const row = lookup('builds'); if (row && !row.unavailable) void row.run(startTask()); else report('Build Library is loading. Try again.'); }); },
+    browseBuilds() { direct('builds', () => { const row = lookup('builds'); if (row && !row.unavailable) void row.run(startTask()); else report('Build Library is unavailable.'); }); },
     resetPosition: hubWindow.reset,
-    dispose() { close(); glyphResize.disconnect(); cancelAnimationFrame(glyphFrame); clearTimeout(receiptTimer); receipt.remove(); hubWindow.dispose(); disposeFrame(); for (const unsubscribe of sources.values()) unsubscribe(); sources.clear(); modal.dispose(); root.remove(); window.removeEventListener('blur', onBlur); window.removeEventListener('gw:tools-settings', onSettings); },
+    dispose() { close(); glyphResize.disconnect(); cancelAnimationFrame(glyphFrame); clearTimeout(receiptTimer); receipt.hidePopover(); receipt.remove(); hubWindow.dispose(); disposeFrame(); for (const unsubscribe of sources.values()) unsubscribe(); sources.clear(); modal.dispose(); root.remove(); window.removeEventListener('blur', onBlur); window.removeEventListener('gw:tools-settings', onSettings); },
   };
   presenter.attach(createHubAccounts(presenter, { get: () => window.gwNative.accounts.get(), open: request => window.gwNative.accounts.open(request), manage: () => window.gwNative.app.showLauncher() }));
   presenter.attach(createHubCalculator({

@@ -42,10 +42,10 @@
 .hub-row[data-destructive=true] .hub-title { color:var(--ui-danger); }
 .hub-row[data-destructive=true][aria-selected=true] .hub-title { color:inherit; }
 .hub-row[data-destructive=true][aria-selected=true]::before { background:var(--ui-danger); }
-.hub-row[aria-disabled=true] .hub-title { color:var(--ui-text-muted); }
+.hub-row:is([aria-disabled=true],[data-read-only=true]) .hub-title { color:var(--ui-text-muted); }
 .hub-footer { display:flex; align-items:center; justify-content:flex-end; gap:8px; padding:8px; min-height:48px; flex-shrink:0; border-top:1px solid var(--ui-line-soft); }
 .hub-primary { display:flex; align-items:center; gap:10px; }
-/* The Actions slot keeps one width on every page (its label and ⌘J, or a view's secondary), so the
+/* The Actions slot keeps one width on every page (its label and ⌘J), so the
    primary beside it never shifts under a resting pointer. */
 .hub-actions { min-width:9em; justify-content:center; gap:6px; }
 /* Actions: a compact menu over the footer's right edge; the page under it stays put (D-1, HUB-040). */
@@ -391,8 +391,9 @@
 .hub-build-details ol { padding-left:24px; }
 .hub-build-details li { margin:10px 0; }
 .hub-build-details p { color:var(--ui-text-muted); white-space:pre-wrap; }
-.hub-receipt { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); max-width:calc(100vw - 32px); z-index:var(--ui-z-toast); padding:10px 16px; color:var(--ui-text); pointer-events:none; }
-.hub-receipt[data-outcome=failed] { border-inline-start:2px solid var(--ui-warning); }
+.hub-receipt { --ui-panel-fill:var(--ui-well); inset:auto; margin:0; font:var(--ui-type-body-size)/var(--ui-type-body-line) var(--ui-font-interface); position:fixed; bottom:24px; left:50%; transform:translateX(-50%); max-width:calc(100vw - 32px); z-index:var(--ui-z-toast); padding:10px 16px; pointer-events:none; }
+
+.hub-receipt[hidden] { display:none; }
 
 /* Native input and measuring layer share the decided currency gap geometry. */
 .hub-search-glyphs { position:absolute; pointer-events:none; overflow:hidden; white-space:pre; color:transparent; text-shadow:none; font:var(--ui-type-window-size)/var(--ui-type-window-line) var(--ui-font-interface); letter-spacing:normal; padding:0; }

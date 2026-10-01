@@ -1,5 +1,5 @@
 /**
- * Defines the pointer-free, session-local friend view used by Quick Travel.
+ * Owns the pointer-free friend view and presence labels shared by People and Whispers.
  * It is transient renderer state and never crosses IPC or reaches disk.
  */
 export type FriendPresence = "offline" | "online" | "away" | "do-not-disturb" | "unknown";
@@ -26,3 +26,9 @@ export function currentTravelFriend(
   return current && current.mapId === selected.mapId && current.character === selected.character
     && current.status !== 'offline' && current.status !== 'unknown' ? current : null;
 }
+
+/** One readable label for each observed presence; protocol values remain unchanged. */
+export const presenceLabel = (status: FriendPresence): string => ({
+  online: "Online", away: "Away", "do-not-disturb": "Do not disturb",
+  offline: "Offline", unknown: "Status unknown",
+})[status];

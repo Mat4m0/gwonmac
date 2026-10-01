@@ -303,14 +303,14 @@ export function preflightTeamApply(
 ): TeamApplyPreflight {
   const blockers: TeamApplyRuntimeProblem[] = [];
   const changes: TeamApplyChange[] = [];
-  if (party.status !== "ready") {
-    return { ready: false, blockers: [{ rule: "party-unavailable" }] };
-  }
   // Permanent policy facts stay authoritative even when the roster projection
   // is incomplete. A player in PvP or outside an outpost should not be told to
   // wait for observation that cannot make Apply legal there.
   if (party.playRegion === "pvp") {
     return { ready: false, blockers: [{ rule: "pvp" }] };
+  }
+  if (party.status !== "ready") {
+    return { ready: false, blockers: [{ rule: "party-unavailable" }] };
   }
   if (party.inOutpost === false) {
     return { ready: false, blockers: [{ rule: "not-outpost" }] };

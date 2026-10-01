@@ -192,7 +192,12 @@ export function observeCompanion(
       readout?.update(state);
       if (state.status === "ready") firstObservation("target");
     }
-    if (toolbox && toolbox.enabled?.() !== false) {
+    if (toolbox?.enabled?.() === false) {
+      // A withdrawn host projection needs a fresh publication on resumption,
+      // even when the kernel's two generation headers did not change.
+      previousToolbox = null; toolboxSequence = null;
+      previousParty = null; partySequence = null;
+    } else if (toolbox) {
       if (!readers) throw new Error("Tools party readers are unavailable");
       // Both regions are watched, because each carries facts the other does
       // not. The toolbox summary moves when a hero joins or the panel opens;

@@ -179,6 +179,10 @@ test("known permanent policy blockers outrank an incomplete roster", () => {
     playRegion: "pvp",
   });
   assert.deepEqual(pvp.ready ? [] : pvp.blockers, [{ rule: "pvp" }]);
+  const withdrawnPvp = preflightTeamApply(assigned, {
+    ...partial, status: "unavailable", playRegion: "pvp",
+  });
+  assert.deepEqual(withdrawnPvp.ready ? [] : withdrawnPvp.blockers, [{ rule: "pvp" }]);
 
   const explorable = preflightTeamApply(assigned, {
     ...partial,

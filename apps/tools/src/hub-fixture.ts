@@ -184,6 +184,7 @@ export function mountHubFixture(target: HTMLElement) {
   const foundation = createToolboxFoundation(document.body, {
     async mountTool(element, onVisibilityChange) {
       const app = mountToolsApp(element, { host: game.host, hub, mode: 'embedded', initiallyVisible: false, onVisibilityChange });
+      window.addEventListener('hub-fixture-withdraw-library', app.dispose, { once: true });
       return { setVisible: visible => visible ? app.show() : app.hide(), setActive: app.setActive, requestClose: app.requestClose, update() {}, dispose: app.dispose };
     },
     async mountTrade(element, onVisibilityChange) {

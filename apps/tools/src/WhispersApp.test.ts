@@ -82,7 +82,7 @@ it("keeps recipient, input DOM, draft and focus across incoming updates", async 
   expect(document.activeElement).toBe(field.element);
   expect(session.state.selected).toBe("test friend");
   expect(wrapper.get('input[id="draft-test friend"]').element).toBe(field.element);
-  await wrapper.get('[aria-label="Collapse whispers"]').trigger("click");
+  await wrapper.get('[aria-label="Hide Whispers"]').trigger("click");
   expect(session.state.visible).toBe(false);
   session.setVisible(true); await nextTick();
   expect((field.element as HTMLInputElement).value).toBe("A draft");

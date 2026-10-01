@@ -313,7 +313,7 @@ export function createNativeHost(
       } catch (cause) {
         const reportedCause = cause instanceof TeamApplyPreflightRefusal
           ? new Error(
-              `${teamApplyRuntimeProblemMessage(cause.problem)} 0 changes were confirmed.`,
+              `${teamApplyRuntimeProblemMessage(cause.problem, id => skills.get(id).name, single ? 'build' : 'team')} 0 changes were confirmed.`,
               { cause },
             )
           : cause;
