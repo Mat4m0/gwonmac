@@ -24,3 +24,17 @@ test('Characters has only a Hub-owned entry and the guide describes that keyboar
   assert.match(guide, /click the red \*\*Resign\*\* button/u);
   assert.match(guide, /Resign is available only in a PvE outpost or explorable area/u);
 });
+
+test('Hub companion instructions keep the floating-window model (HUB-139)', () => {
+  for (const [file, section] of [
+    ['user-guide.md', /Build Library and Characters open inside Hub\.[\s\S]*?Storage opens quietly/u],
+    ['whispers.md', /The default \*\*Command-D\*\*[\s\S]*?## Acceptance criteria/u],
+    ['trade-discovery.md', /- Escape and Command-Backspace[\s\S]*?Closing a level returns focus/u],
+  ] as const) {
+    const text = readFileSync(new URL(`../../docs/${file}`, import.meta.url), 'utf8');
+    assert.doesNotMatch(text, /\bDetach\b/u, file);
+    const instructions = text.match(section)?.[0];
+    assert.ok(instructions, `${file}: companion instructions exist`);
+    assert.doesNotMatch(instructions, /Back (?:to|returns? to) Hub|Back closes (?:Trade|Whispers)|(?:Trade Chat|Whispers) opens? inside Hub/u, file);
+  }
+});

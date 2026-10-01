@@ -313,12 +313,17 @@ test('a team apply that fails after the player moved on names the team and keeps
   const commands: string[] = [];
   const fixture = createHubGameFixture(command => commands.push(command));
   fixture.setScenario('partial');
+  let refuse = false;
+  const fixtureHost = { ...fixture.host, async applyTeam(...args: Parameters<typeof fixture.host.applyTeam>) {
+    if (refuse) fixture.host.party.value = { ...fixture.host.party.value, inOutpost: false };
+    return fixture.host.applyTeam(...args);
+  } };
   let source: import('../../../src/shared/hub').HubSource | undefined;
   let controller: import('./use-library').LibraryController | undefined;
   let review: import('../../../src/shared/hub').HubViewMount<HTMLElement> | undefined;
   const app = createApp({ setup() {
-    controller = useLibrary(fixture.host);
-    createHubLibrary(controller, fixture.host, { attach(next) { source = next; return () => {}; }, close() {}, notify() {}, showRows() {}, showView(_title, mount) { review = mount; } });
+    controller = useLibrary(fixtureHost);
+    createHubLibrary(controller, fixtureHost, { attach(next) { source = next; return () => {}; }, close() {}, notify() {}, showRows() {}, showView(_title, mount) { review = mount; } });
     return () => h('div');
   } });
   app.mount(document.createElement('div')); await nextTick(); await nextTick();
@@ -351,6 +356,19 @@ test('a team apply that fails after the player moved on names the team and keeps
   expect(done).toEqual(['GOM AFK already matches.']);
   expect(commands).toHaveLength(sent);
   expect(source!.search('team gom afk')[0]!.detail).toBe('Saved team · Hard Mode · 7 heroes');
+  fixture.host.party.value = { ...fixture.host.party.value, hardMode: false };
+  const beforeRefusal = JSON.parse(JSON.stringify({ player: fixture.host.party.value.player, heroes: fixture.host.party.value.heroes, hardMode: fixture.host.party.value.hardMode }));
+  const beforeCommands = commands.filter(command => command.startsWith('command:')).length;
+  refuse = true;
+  await expect(source!.search('team gom afk')[0]!.run(task)).rejects.toThrow('team apply preflight refused');
+  expect(commands.filter(command => command.startsWith('command:'))).toHaveLength(beforeCommands);
+  expect({ player: fixture.host.party.value.player, heroes: fixture.host.party.value.heroes, hardMode: fixture.host.party.value.hardMode }).toEqual(beforeRefusal);
+  expect(source!.search('team gom afk')[0]!.detail).toBe('Not applied · Review');
+  source!.search('team gom')[0]!.navigate!(task);
+  const refused = document.createElement('div');
+  review!(refused, () => {}, { primary() {}, secondary() {}, openActions() {} });
+  expect(refused.textContent).not.toContain('partly');
+  expect(refused.textContent).not.toContain('Completed');
   app.unmount();
 });
 

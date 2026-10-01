@@ -245,6 +245,7 @@ test('mixed hero professions default to the eligible hero and keep blocked heroe
   await search.fill('hero'); await search.press('Enter');
   await expect(page.locator('.hub-row[aria-selected="true"]')).toContainText('Tahlkora');
   const blocked = page.locator('.hub-row').filter({ hasText: "Gwen's assigned build is for Monk, but the observed primary is Mesmer." });
+  await expect(blocked).toHaveAccessibleDescription("Slot 5 · Gwen's assigned build is for Monk, but the observed primary is Mesmer.. Mesmer / Monk. Skills: Patient Spirit, Guardian, Resurrection Chant, Protective Spirit, Word of Healing, Aegis, Dismiss Condition, Spirit Bond. Right Arrow opens the child page.");
   const ink = await blocked.evaluate(row => ({ title: getComputedStyle(row.querySelector('.hub-title')!).color, detail: getComputedStyle(row.querySelector('.hub-detail')!).color }));
   expect(ink.title).toBe(ink.detail);
   await blocked.click();
@@ -454,6 +455,10 @@ test('a new details view clears the previous page pin receipt', async ({ page })
   await page.keyboard.press('Meta+j');
   await page.getByRole('menuitem', { name: 'Show build details', exact: true }).click();
   await expect(page.locator('.hub-build-details')).toBeVisible();
+  await expect(page.locator('.hub-status')).toBeEmpty();
+  await page.keyboard.press('Meta+Backspace');
+  await expect(page.locator('.hub-search input')).toHaveValue('build Word of Healing');
+  await expect(page.locator('.hub-caption')).toHaveText('Home');
   await expect(page.locator('.hub-status')).toBeEmpty();
 });
 
