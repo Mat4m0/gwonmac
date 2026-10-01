@@ -828,3 +828,25 @@ to 200%. It does not zoom the game. Regression backouts and verification counts
 are recorded in [the visual ledger](../internals/hub-polish-visual-ledger.md).
 
 These fixture checks do not verify the live game, input feel, VoiceOver, or AZERTY.
+
+
+## Hub polish integration verification
+
+The [integration review](../internals/hub-polish-review.md) accounts for all 255
+plan findings and links every draft. The
+[integration ledger](../internals/hub-polish-integration-ledger.md) records merge
+resolutions, red/green proofs, mistakes and unresolved limits.
+
+The full Tools browser suite ran once with two workers. It passed 708 cases
+initially; all 40 failed cases passed individually after fixes and assertion
+reconciliation. The touched Electron specs passed 17 cases initially; all 23
+failed cases passed individually. New owner regressions passed separately.
+
+The repository gate, build, kernel integrity checks, integration tests and
+release tests pass. Hosted application verification remains blocked by the
+existing dependency audit. Consult the integration draft's current checks.
+
+Live game, input feel, VoiceOver, physical AZERTY and signed exact-draft QA remain
+Matthias's checks. Custom-palette contrast, full Library entry cost and the
+explicit design decisions remain open. Do not use offline closure as release
+acceptance.
