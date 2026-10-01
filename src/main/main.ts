@@ -1067,7 +1067,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
       capture: (win, action) => captureLauncherShortcut(win, action, () => currentSettings ?? settings),
     },
     showLauncher: () => host.revealLauncher(),
-    openSettings: () => host.revealLauncher("settings"),
+    openSettings: (section) => host.revealLauncher(`settings/${section}`),
     reloadGame: (win, cause) => host.reloadGame(win, cause),
     claimRelogIntent: (win) => host.claimRelogIntent(win),
   });

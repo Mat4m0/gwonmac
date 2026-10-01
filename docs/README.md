@@ -7,6 +7,7 @@ its rules.
 | Question | Current document |
 | --- | --- |
 | How does a player use or recover the app? | [User guide](user-guide.md) |
+| Where does each setting live, and when does a change apply? | [Settings](settings.md) |
 | Which process owns this work? | [Process model](process-model.md) |
 | How do account profiles adopt and isolate player data? | [Account profiles](multiple-accounts.md) |
 | How do ArenaNet client files and game data update? | [Content pipeline](content-pipeline.md) |

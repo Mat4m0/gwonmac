@@ -229,6 +229,8 @@
 .hub-setting-row > span:first-child { flex:1; min-width:0; }
 .hub-setting-row strong { display:block; font-size:13px; font-weight:500; }
 .hub-setting-row small { display:block; margin-top:4px; font:12px/1.5 var(--ui-font-reading); color:var(--ui-text-muted); }
+/* What the running game uses when it differs from the saved choice. */
+.hub-setting-row .hub-setting-state[data-level="warn"] { color:var(--ui-warning); }
 
 .hub-setting-row select { max-width:190px; }
 .hub-setting-range { display:flex; gap:8px; align-items:center; width:180px; }
@@ -270,6 +272,9 @@
 .hub-settings nav .hub-icon svg { width:18px; height:18px; }
 .hub-settings nav { background:var(--ui-well-fill); }
 .hub-settings .hub-setting-row { padding:14px 12px; background:var(--ui-hover); border-bottom-color:var(--ui-line-soft); }
+/* A tool's own options sit under it, indented, with a quieter label. */
+.hub-settings .hub-setting-row.hub-setting-option { padding:9px 12px 9px 32px; }
+.hub-settings .hub-setting-option strong { font-weight:400; color:var(--ui-text-muted); }
 .hub-settings .hub-setting-row:first-of-type { border-radius:var(--ui-radius-sm) var(--ui-radius-sm) 0 0; }
 .hub-settings .hub-setting-row:last-of-type { border-radius:0 0 var(--ui-radius-sm) var(--ui-radius-sm); border-bottom:0; }
 

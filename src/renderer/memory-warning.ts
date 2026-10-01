@@ -4,6 +4,7 @@
  */
 import type { AppSettings } from "../shared/contracts.js";
 import { memoryWarningCopy } from "./failure-messages.js";
+import { GAME_SETTINGS } from "../shared/setting-copy.js";
 
 export type MemoryWarningLevel = "low" | "critical";
 
@@ -21,6 +22,8 @@ export type MemoryWarningActions = Readonly<{
   autoRelogAfterReload: boolean;
   saveAutoRelog(enabled: boolean): Promise<void>;
   reload(): void | Promise<void>;
+  /** Opens Hub Settings at a control; the warning uses it for Extended memory. */
+  openSettings?(focus: Readonly<{ section: "Game"; control: string }>): void;
 }>;
 
 /** One non-modal warning surface. The estimator owns urgency; this owns DOM. */
@@ -45,6 +48,12 @@ export function bindMemoryWarning(
     !root || !live || !label || !detail || !explanation || !details
     || !reloadButton || !laterButton || !autoRelog
   ) return null;
+  const settingsButton = document.getElementById("memory-notice-settings");
+  // The explanation names the 4 GB option, so the setting is one click away.
+  if (settingsButton && actions.openSettings) {
+    settingsButton.hidden = false;
+    settingsButton.addEventListener("click", () => actions.openSettings?.({ section: "Game", control: GAME_SETTINGS.extendedMemoryEnabled.label }));
+  }
   let savedAutoRelog = actions.autoRelogAfterReload;
   let pendingPreferenceSave = Promise.resolve();
   autoRelog.checked = savedAutoRelog;

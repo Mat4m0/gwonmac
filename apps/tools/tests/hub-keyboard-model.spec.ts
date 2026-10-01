@@ -252,9 +252,14 @@ test('Characters: Escape during composition keeps the query (HUB-140)', async ({
 test('Settings arrows stay in their column: sections do not wrap, → enters a section, ← returns (HUB-054)', async ({ page }) => {
   await openHub(page);
   await hubSearch(page).fill('settings'); await page.keyboard.press('Enter');
+  const game = page.getByRole('button', { name: 'Game', exact: true });
   const tools = page.getByRole('button', { name: 'Tools', exact: true });
   await expect(tools).toBeFocused();
+  await page.keyboard.press('Home');
+  await expect(game).toBeFocused();
   await page.keyboard.press('ArrowUp');
+  await expect(game).toBeFocused();
+  await page.keyboard.press('ArrowDown'); await page.keyboard.press('ArrowDown');
   await expect(tools).toBeFocused();
   await page.keyboard.press('ArrowRight');
   const enable = page.getByRole('checkbox', { name: 'Enable Tools' });
@@ -268,9 +273,9 @@ test('Settings arrows stay in their column: sections do not wrap, → enters a s
   await page.keyboard.press('ArrowLeft');
   await expect(tools).toBeFocused();
   await page.keyboard.press('End');
-  await expect(heading).toHaveText('Chat & characters');
+  await expect(heading).toHaveText('Maps');
   await page.keyboard.press('ArrowDown');
-  await expect(heading).toHaveText('Chat & characters');
+  await expect(heading).toHaveText('Maps');
   // → enters the first usable control even where the first one is disabled.
   await page.getByRole('button', { name: 'Shortcuts', exact: true }).focus();
   await page.keyboard.press('Enter');

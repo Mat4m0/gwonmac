@@ -1,2 +1,4 @@
 export type LauncherRoute = "home" | "accounts" | "issues" | "feedback" | "settings";
-export type SettingsRoute = "general" | "content" | "advanced" | "game" | "tools" | "maps" | "texture-packs" | "game-files";
+import type { LauncherSettingsSection } from "@shared/launcher-contracts";
+
+export type SettingsRoute = LauncherSettingsSection;

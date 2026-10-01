@@ -402,7 +402,7 @@ export function installApplicationMenu(actions: ApplicationMenuActions, settings
               {
                 id: "check-for-updates",
                 label: "Check for Updates…",
-                click: () => revealLauncher("settings"),
+                click: () => revealLauncher("settings/general"),
               },
               {
                 id: "show-settings",

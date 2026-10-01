@@ -456,6 +456,7 @@ function requestHeapCap() {
               throw error;
             }
           },
+          openSettings: (focus) => window.gwHub?.openSettings(focus),
         },
       );
       disposeMemoryWarningSettings();

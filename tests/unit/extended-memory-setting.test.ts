@@ -22,7 +22,7 @@ describe("extended memory Settings projection", () => {
       fallbackReason: null,
     });
     assert.equal(view.label, "Restart required");
-    assert.match(view.detail, /still using 4 GB/);
+    assert.match(view.detail, /still uses 4 GB/);
   });
 
   it("keeps unsupported and preparation failures visibly distinct", () => {

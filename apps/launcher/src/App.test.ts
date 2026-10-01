@@ -271,7 +271,7 @@ describe("unified launcher shell", () => {
     await wrapper.findAll(".settings-page aside button")
       .find((button) => button.text() === "Tools")!.trigger("click");
     const allyDrop = wrapper.findAll(".chat-filter-details label")
-      .find((label) => label.text().includes("Other party members' item drops"));
+      .find((label) => label.text().includes("Hide other party members' item drops"));
     expect(allyDrop).toBeDefined();
     await allyDrop!.get('input[type="checkbox"]').setValue(false);
     await flushPromises();

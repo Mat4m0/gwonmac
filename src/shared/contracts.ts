@@ -20,6 +20,7 @@ import type { EliteWikiRequest } from "./elite-wiki.js";
 import type { EliteMissionMapMarkers } from "./elite-map-settings.js";
 import type { EliteTracking, EliteUpdate } from "./elite-skills.js";
 import type { HubSettingsApi } from "./hub-settings.js";
+import type { LauncherSettingsSection } from "./launcher-contracts.js";
 import type { MarketSnapshot } from "./market-rates.js";
 import type { HubShortcut } from './hub-preferences.js';
 import type {
@@ -1362,7 +1363,8 @@ export interface CoreGwNativeApiBase {
     openExternal(kind: ExternalLinkKind): Promise<void>;
     /** Reveal a named app directory in Finder. */
     reveal(kind: RevealKind): Promise<void>;
-    openSettings(): Promise<void>;
+    /** Opens the launcher at a Settings section, for settings the Hub links to. */
+    openSettings(section: LauncherSettingsSection): Promise<void>;
     requestQuit(): Promise<void>;
     /** The account's Quit-or-Reload confirmation sheet, the same one Command-Q opens. */
     showQuitOrReload(): Promise<void>;

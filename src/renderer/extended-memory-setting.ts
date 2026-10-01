@@ -31,7 +31,7 @@ export function extendedMemoryView(
     return {
       label: "Restart required",
       level: "warn",
-      detail: `This session is still using ${runtime.effectiveCapBytes > 3_000_000_000 ? "4 GB" : "2 GB"}. Restart GWonMac to apply the saved choice.`,
+      detail: `This session still uses ${runtime.effectiveCapBytes > 3_000_000_000 ? "4 GB" : "2 GB"}.`,
     };
   }
   if (runtime.status === "active") {

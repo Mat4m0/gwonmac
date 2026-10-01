@@ -11,6 +11,8 @@ button { border: 0; cursor: pointer; background: transparent; }
 button:active { transform: scale(.985); filter: brightness(.95); }
 button:disabled { transform: none; filter: none; cursor: default; }
 button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, summary:focus-visible { outline: 2px solid #f1c875; outline-offset: 2px; }
+/* A heading focused to announce a new settings page is not a control: no focus ring. */
+[tabindex="-1"]:focus { outline: none; }
 ::selection { color: #17120b; background: #e8b75c; }
 * { scrollbar-color: rgba(232, 183, 92, .52) rgba(255, 255, 255, .045); scrollbar-width: thin; }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
