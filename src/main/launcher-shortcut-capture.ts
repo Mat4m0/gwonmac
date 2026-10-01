@@ -12,6 +12,15 @@ const activeCaptures = new WeakMap<BrowserWindow, () => void>();
 
 export const isAppShortcutCaptureActive = (win: BrowserWindow) => activeCaptures.has(win);
 
+/**
+ * Ends a capture whose page went away without a key: the player closed the Hub
+ * or went Back with the mouse. Otherwise the capture would take the next game
+ * key and hold every window shortcut until its timeout.
+ */
+export function cancelAppShortcutCapture(win: BrowserWindow): void {
+  activeCaptures.get(win)?.();
+}
+
 export function captureLauncherShortcut(
   win: BrowserWindow,
   action: ShortcutAction,

@@ -4,7 +4,7 @@ import { EventEmitter } from "node:events";
 import { test } from "node:test";
 import type { BrowserWindow, Input } from "electron";
 import { DEFAULT_SETTINGS } from "../../src/shared/contracts.ts";
-import { captureLauncherShortcut } from "../../src/main/launcher-shortcut-capture.ts";
+import { cancelAppShortcutCapture, captureLauncherShortcut, isAppShortcutCaptureActive } from "../../src/main/launcher-shortcut-capture.ts";
 
 function fixture() {
   const events = Object.assign(new EventEmitter(), { webContents: new EventEmitter() });
@@ -34,14 +34,23 @@ test("clears, rejects reserved shortcuts, and cancels on blur without leaking li
     f.send(key, code, { meta: status === "reserved" });
     assert.deepEqual(await result, { status });
   }
-  const f = fixture();
-  const first = captureLauncherShortcut(f.win, "travel.open", () => DEFAULT_SETTINGS);
-  const second = captureLauncherShortcut(f.win, "cartography.grid.toggle", () => DEFAULT_SETTINGS);
-  assert.deepEqual(await first, { status: "cancelled" });
-  assert.equal(f.events.webContents.listenerCount("before-input-event"), 1);
-  f.events.emit("blur");
-  assert.deepEqual(await second, { status: "cancelled" });
-  assert.equal(f.events.webContents.listenerCount("before-input-event"), 0);
+  for (const cancel of ["blur", "page close"] as const) {
+    const f = fixture();
+    const first = captureLauncherShortcut(f.win, "travel.open", () => DEFAULT_SETTINGS);
+    const second = captureLauncherShortcut(f.win, "cartography.grid.toggle", () => DEFAULT_SETTINGS);
+    assert.deepEqual(await first, { status: "cancelled" });
+    assert.equal(f.events.webContents.listenerCount("before-input-event"), 1);
+    cancelAppShortcutCapture(fixture().win);
+    assert.equal(isAppShortcutCaptureActive(f.win), true, "another window cannot cancel this capture");
+    if (cancel === "blur") f.events.emit("blur");
+    else { cancelAppShortcutCapture(f.win); cancelAppShortcutCapture(f.win); }
+    assert.equal(isAppShortcutCaptureActive(f.win), false, cancel);
+    assert.deepEqual(await second, { status: "cancelled" });
+    assert.equal(f.events.webContents.listenerCount("before-input-event"), 0);
+    assert.equal(f.events.listenerCount("blur"), 0);
+    assert.equal(f.events.listenerCount("closed"), 0);
+    assert.equal(f.send("w", "KeyW", { meta: false }), false, `${cancel} gives W back`);
+  }
 });
 
 

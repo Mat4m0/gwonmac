@@ -243,12 +243,21 @@ recycling so camera movement can continue. The host normalizes supported
 physical keyboard positions before the official client receives them. Text
 fields still use the active macOS input source.
 
-Main claims physical Command-A/C/X/V before the renderer can hold their base
-keys and runs the edit immediately. The claim contains physical repeats and
-releases while allowing the translated Control chord through. Edit menu clicks
-use the same semantic command and focused-window route. A hidden Guild Wars
-text proxy claims the command. An ordinary gwonmac input declines it so
-Chromium edits normally. Copy and Cut send only non-password proxy text to
+Main claims Command-A/C/X/V/Z and Shift-Command-Z before the renderer can hold
+their base keys and runs the edit immediately. As with every app shortcut, a
+letter chord is the letter the active keyboard layout types: AZERTY Command-A
+selects all and Command-Q quits wherever those keys sit. An input source
+without Latin letters keeps the US letter position, as macOS does. Digits,
+punctuation and named keys stay physical, so Command-1…9 is the digit row on
+every layout. The claim contains the pressed key's repeats and releases while
+allowing the translated Control chord through. An assigned app shortcut whose
+tool is off stays claimed and does nothing, because Guild Wars acts on the base
+key whatever modifier is held. Edit menu clicks use the same semantic command
+and focused-window route. Leaving Hub Settings cancels only its window’s native
+shortcut capture. A hidden Guild Wars text proxy claims the command. An
+ordinary gwonmac input declines it so Chromium edits normally. Undo and Redo
+edit only such an input: the game keeps its own text, so its proxy declines
+them, and outside a field the open Build Library undoes its last change. Copy and Cut send only non-password proxy text to
 main. Main writes Cut text to the pasteboard before it sends Guild Wars
 Control-X. Paste validates the clipboard in main and sends Guild Wars a
 Control-V chord, which also produces Chromium's trusted native Paste edit
@@ -305,7 +314,8 @@ candidate in the packaged app on macOS:
    in a Guild Wars text field.
 3. Confirm native repeated keydowns, trusted proxy edits, and visible Guild Wars
    changes at the macOS repeat cadence.
-4. Use physical Command-A/C/X/V and each matching Edit menu item.
+4. Use physical Command-A/C/X/V and each matching Edit menu item; on a
+   non-US layout, use the keys whose keycaps show those letters.
 5. Confirm Copy and Cut update the pasteboard, Paste preserves Unicode and
    multiline text, and Select All changes the visible Guild Wars editor.
 6. Release Command before the editing key. Repeat with the editing key released
@@ -424,7 +434,7 @@ work, flushes diagnostics, and exits through one bounded cleanup path.
 Command-Q opens an account-owned native dialog while a game window is active.
 Reload and Quit Game affect that account only. The launcher keeps the
 ordinary application Quit command because it has no game account to reload.
-The physical Q claim lasts only until that dialog settles; Cancel re-arms the
+The Q claim lasts only until that dialog settles; Cancel re-arms the
 shortcut even when AppKit consumed the original key-up. Other claims end at the
 key-up, or at the next fresh press of the same key: Chromium never delivers the
 key-up of a key-down that main prevented, so a non-repeat press is decided

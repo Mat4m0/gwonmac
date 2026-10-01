@@ -226,15 +226,16 @@ const startBlankBuild = async () => {
   mobileView.value = "detail";
 };
 
+const isEditable = (target: EventTarget | null) =>
+  target instanceof HTMLInputElement
+  || target instanceof HTMLTextAreaElement
+  || target instanceof HTMLSelectElement
+  || (target instanceof HTMLElement && target.isContentEditable);
+
 const onKeydown = (event: KeyboardEvent) => {
   if (!props.visible || !props.active) return;
-  const editable =
-    event.target instanceof HTMLInputElement
-    || event.target instanceof HTMLTextAreaElement
-    || event.target instanceof HTMLSelectElement
-    || (event.target instanceof HTMLElement && event.target.isContentEditable);
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {
-    if (editable) return;
+    if (isEditable(event.target)) return;
     event.preventDefault();
     void controller.undo();
   }
@@ -248,11 +249,24 @@ const onKeydown = (event: KeyboardEvent) => {
   }
 };
 
+/**
+ * In the app, main claims Command-Z before the page sees it and sends the Edit
+ * menu's Undo instead (`gw:text-edit`); a field keeps Chromium's own undo.
+ */
+const onTextEdit = (event: Event) => {
+  if (!props.visible || !props.active || !(event instanceof CustomEvent)) return;
+  if (event.detail?.command !== "undo" || isEditable(document.activeElement)) return;
+  event.preventDefault();
+  void controller.undo();
+};
+
 onMounted(() => {
   window.addEventListener("keydown", onKeydown);
+  window.addEventListener("gw:text-edit", onTextEdit);
 });
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKeydown);
+  window.removeEventListener("gw:text-edit", onTextEdit);
 });
 useClassicFrame(panel);
 </script>

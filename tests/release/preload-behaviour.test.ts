@@ -383,7 +383,8 @@ const INVOCATIONS: Invocation[] = [
   { path: "hubSettings.get", args: [], channel: IPC.hubSettingsGet },
   { path: "hubSettings.update", args: [{ kind: "tool", tool: "whispers", enabled: false }], channel: IPC.hubSettingsUpdate },
   { path: "hubSettings.capture", args: ["character.switch"], channel: IPC.hubShortcutCapture },
-  { path: "app.openSettings", args: [], channel: IPC.appOpenSettings },
+  { path: "hubSettings.cancelCapture", args: [], channel: IPC.hubShortcutCaptureCancel },
+  { path: "app.openSettings", args: ["game"], channel: IPC.appOpenSettings },
   { path: "app.requestQuit", args: [], channel: IPC.appRequestQuit },
   { path: "app.showQuitOrReload", args: [], channel: IPC.appShowQuitOrReload },
   {

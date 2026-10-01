@@ -1,13 +1,13 @@
 /**
  * Semantic macOS editing for the game's hidden text proxies.
  *
- * The application menu owns Command-A/C/X/V. This module decides whether its
- * focused renderer target belongs to Guild Wars, ordinary Chromium editing,
+ * Main owns Command-A/C/X/V/Z and the Edit menu. This module decides whether
+ * the focused renderer target belongs to Guild Wars, ordinary Chromium editing,
  * or no editor, and sends only bounded non-secret game requests to main.
  */
 import type {
-  GameTextEditCommand,
   GameTextEditRequest,
+  TextEditCommand,
 } from '../shared/contracts.js';
 import type {
   InputTrace,
@@ -18,7 +18,7 @@ import type {
 type GameTextField = HTMLInputElement | HTMLTextAreaElement;
 
 export type TextEditEventDetail = {
-  command: GameTextEditCommand;
+  command: TextEditCommand;
   done?: Promise<void>;
 };
 
@@ -135,6 +135,8 @@ export const installTextEditing = ({
       'cut',
       'paste',
       'selectAll',
+      'undo',
+      'redo',
     ].includes(detail.command)) return;
 
     const active = document.activeElement;
@@ -146,6 +148,9 @@ export const installTextEditing = ({
     }
 
     event.preventDefault();
+    // Guild Wars keeps its own text and history; a Chromium undo on the hidden
+    // proxy would only split the two. The game field declines Undo and Redo.
+    if (detail.command === 'undo' || detail.command === 'redo') return;
     let request: GameTextEditRequest | null = null;
     if (detail.command === 'selectAll') {
       // Guild Wars keeps its visible selection internally. Mirror this one

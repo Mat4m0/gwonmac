@@ -10,6 +10,7 @@ import type { AppSettings, RendererCommand } from '../../../src/shared/contracts
 import { featureActivationRequested, type FeatureId } from '../../../src/shared/feature-contracts';
 import { HUB_SHORTCUT, hubShortcutAvailable, resolveShortcuts, shortcutMatches, type ShortcutAction } from '../../../src/shared/keyboard-shortcuts';
 
+const QUIT_CHORD = { key: 'q', shift: false, option: false } as const;
 type CommandHandler = (command: RendererCommand) => void | 'unhandled' | Promise<void | 'unhandled'>;
 let handler: CommandHandler | null = null;
 const transport = { handle(next: CommandHandler) {
@@ -57,9 +58,9 @@ export function installFixtureMain(options: FixtureMainOptions) {
     // a fresh press of the same key is decided again, as main does when Chromium drops the key-up.
     if (claimed.has(event.code) && event.repeat) { event.preventDefault(); event.stopImmediatePropagation(); return; }
     claimed.delete(event.code);
-    const input = { code: event.code, meta: event.metaKey, control: event.ctrlKey, shift: event.shiftKey, alt: event.altKey };
+    const input = { code: event.code, key: event.key, meta: event.metaKey, control: event.ctrlKey, shift: event.shiftKey, alt: event.altKey };
     const settings = options.settings();
-    if (input.meta && !input.control && !input.shift && !input.alt && input.code === 'KeyQ') {
+    if (shortcutMatches(QUIT_CHORD, input)) {
       claim(event); if (!event.repeat) void sheet.show(); return;
     }
     if (hubShortcutAvailable(settings.shortcutOverrides) && shortcutMatches(HUB_SHORTCUT, input)) {
@@ -68,16 +69,17 @@ export function installFixtureMain(options: FixtureMainOptions) {
     const shortcuts = resolveShortcuts(settings.shortcutOverrides);
     for (const [action, binding] of Object.entries(shortcuts) as [ShortcutAction, typeof shortcuts[ShortcutAction]][]) {
       if (!binding || !shortcutMatches(binding, input)) continue;
+      // A disabled tool's chord stays claimed and does nothing, as in main.
+      claim(event);
+      if (event.repeat) return;
       if (action in MAP_LAYERS) {
-        if (!featureActivationRequested('cartography', settings)) continue;
-        claim(event);
         const key = MAP_LAYERS[action as keyof typeof MAP_LAYERS];
-        if (!event.repeat) options.updateSettings({ [key]: !settings[key] });
+        if (featureActivationRequested('cartography', settings)) options.updateSettings({ [key]: !settings[key] });
         return;
       }
       const [feature, commands] = ACTIONS[action as keyof typeof ACTIONS];
-      if (!featureActivationRequested(feature, settings)) continue;
-      claim(event); if (!event.repeat) void run(commands); return;
+      if (featureActivationRequested(feature, settings)) void run(commands);
+      return;
     }
   };
   const onKeyUp = (event: KeyboardEvent) => {

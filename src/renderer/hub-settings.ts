@@ -60,7 +60,7 @@ export function openHubSettings(hub: Hub, focus?: HubSettingsFocus) {
         || event.target.matches('select,textarea,input:not([type=checkbox]):not([type=radio])')) return;
       event.preventDefault(); nav.querySelector<HTMLElement>('[aria-current="true"]')?.focus();
     });
-    let snapshot: HubSettingsSnapshot | null = null; let disposed = false;
+    let snapshot: HubSettingsSnapshot | null = null; let disposed = false; let capturing = false;
     const api = window.gwNative.hubSettings;
     const sections = HUB_SETTINGS_SECTIONS;
     const buttons = sections.map(name => {
@@ -207,7 +207,8 @@ export function openHubSettings(hub: Hub, focus?: HubSettingsFocus) {
           change.onclick = async () => {
             if (change.dataset.capturing) return;
             status.textContent = SHORTCUT_CAPTURE_HINT; change.dataset.capturing = 'true'; change.setAttribute('aria-busy', 'true'); change.textContent = 'Press keys…';
-            try { const result = await api.capture(action); if (disposed) return; status.textContent = '';
+            capturing = true;
+            try { const result = await api.capture(action).finally(() => { capturing = false; }); if (disposed) return; status.textContent = '';
               if ((result.status === 'captured' || result.status === 'conflict') && shortcutReserved(result.binding)) status.textContent = shortcutEquals(result.binding, HUB_BACK_SHORTCUT) ? 'Reserved for Back' : 'That shortcut is unavailable. Choose another combination.';
               else if (result.status === 'captured' || result.status === 'conflict') chooseShortcut(action, result.binding);
               else if (result.status === 'cleared') chooseShortcut(action, null);
@@ -251,6 +252,10 @@ export function openHubSettings(hub: Hub, focus?: HubSettingsFocus) {
       if (disposed) return;
       snapshot = next; status.textContent = ''; render(); body.scrollTop = scroll; applyFocus();
     }).catch(() => { if (!disposed) { status.textContent = 'Settings could not load. Go back and try again.'; } });
-    return () => { scroll = body.scrollTop; disposed = true; unsubscribe(); if (showTarget === show) showTarget = null; view.remove(); };
+    return () => {
+      scroll = body.scrollTop; disposed = true; unsubscribe(); if (showTarget === show) showTarget = null; view.remove();
+      // Leaving with the mouse mid-capture must not leave main listening for the next game key (HUB-038).
+      if (capturing) void api.cancelCapture().catch(() => { /* The capture still ends at blur or its timeout. */ });
+    };
   }, () => true, 'settings');
 }

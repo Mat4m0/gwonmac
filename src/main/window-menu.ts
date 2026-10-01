@@ -22,7 +22,7 @@ import type { LauncherDestination, LauncherProfileSummary } from "../shared/laun
 import {
   EXTERNAL_URLS,
   type AppSettings,
-  type GameTextEditCommand,
+  type TextEditCommand,
 } from "../shared/contracts.js";
 import { errorCode } from "../shared/errors.js";
 import { featureActivationRequested, type FeatureId } from "../shared/feature-contracts.js";
@@ -151,7 +151,7 @@ export function updateToolsMenuItems(settings: ToolMenuSettings): void {
 
 async function editFocusedText(
   suppliedWindow: BaseWindow | undefined,
-  command: GameTextEditCommand,
+  command: TextEditCommand,
 ): Promise<void> {
   const win = suppliedWindow
     ? BrowserWindow.fromId(suppliedWindow.id)
@@ -166,7 +166,7 @@ function editMenuItem(
   id: string,
   label: string,
   accelerator: string,
-  command: GameTextEditCommand,
+  command: TextEditCommand,
 ): MenuItemConstructorOptions {
   return {
     id,
@@ -431,6 +431,9 @@ export function installApplicationMenu(actions: ApplicationMenuActions, settings
     {
       label: "Edit",
       submenu: [
+        editMenuItem("edit-undo", "Undo", "CmdOrCtrl+Z", "undo"),
+        editMenuItem("edit-redo", "Redo", "Shift+CmdOrCtrl+Z", "redo"),
+        { type: "separator" as const },
         editMenuItem("edit-cut", "Cut", "CmdOrCtrl+X", "cut"),
         editMenuItem("edit-copy", "Copy", "CmdOrCtrl+C", "copy"),
         editMenuItem("edit-paste", "Paste", "CmdOrCtrl+V", "paste"),

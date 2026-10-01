@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { launchPlayableClient, closeOffline, isDomActiveElement } from './fixtures.mjs';
+import { launchPlayableClient, closeOffline, isDomActiveElement, root } from './fixtures.mjs';
 import { startGameInput } from './input-helpers.js';
 
 test('Command-R opens Core Hub, keeps editing local and restores game focus', async () => {
@@ -97,9 +97,16 @@ test('Hub list navigation preserves native editing shortcuts, Unicode and compos
       contents?.sendInputEvent({ type: 'keyUp', keyCode: 'V', modifiers: ['meta'] });
     }, page.url());
     await expect(search).toHaveValue('travel');
-    await search.press('ArrowDown'); await page.keyboard.press('Meta+z');
+    // Undo and Redo go through main's claim, not Playwright's injected editing commands (HUB-134).
+    const commandZ = (shift: boolean) => app.evaluate(({ BrowserWindow }, { url, shift }) => {
+      const contents = BrowserWindow.getAllWindows().find(win => win.webContents.getURL() === url)?.webContents;
+      const modifiers: ('meta' | 'shift')[] = shift ? ['meta', 'shift'] : ['meta'];
+      contents?.sendInputEvent({ type: 'keyDown', keyCode: 'Z', modifiers });
+      contents?.sendInputEvent({ type: 'keyUp', keyCode: 'Z', modifiers });
+    }, { url: page.url(), shift });
+    await search.press('ArrowDown'); await commandZ(false);
     await expect(search).toHaveValue('sw');
-    await search.press('ArrowDown'); await page.keyboard.press('Meta+Shift+z');
+    await search.press('ArrowDown'); await commandZ(true);
     await expect(search).toHaveValue('travel');
     await search.evaluate(input => { if (input instanceof HTMLInputElement) input.setSelectionRange(0, 1); });
     await search.press('ArrowDown'); await page.keyboard.press('Delete');
@@ -269,5 +276,30 @@ test('native click runs that close the Hub leave no later press for the game', a
     await page.waitForTimeout(400);
     await nativeClickRun(8, 8, 1);
     await expect.poll(trace).toContain('press left canvas run=1');
+  } finally { await closeOffline(fixture); }
+});
+
+
+test('Hub capture cancellation releases only its owning window (HUB-038)', async () => {
+  const fixture = await launchPlayableClient('gw-hub-capture-owner-e2e-');
+  const { app, page } = fixture;
+  const captures = (start: boolean) => app.evaluate(({ BrowserWindow }, { url, modulePath, start }) => {
+    const load = process.getBuiltinModule('node:module').createRequire(modulePath);
+    const owner: typeof import('../../src/main/launcher-shortcut-capture.js') = load(modulePath);
+    const game = BrowserWindow.getAllWindows().find(win => win.webContents.getURL() === url);
+    const launcher = BrowserWindow.getAllWindows().find(win => win.webContents.getURL() === 'gw://app/launcher/index.html');
+    if (!game || !launcher) throw new Error('Offline fixture windows are missing');
+    if (start) {
+      const noKey = () => { throw new Error('No capture key is expected'); };
+      void owner.captureLauncherShortcut(game, 'travel.open', noKey);
+      void owner.captureLauncherShortcut(launcher, 'travel.open', noKey);
+    }
+    return [owner.isAppShortcutCaptureActive(game), owner.isAppShortcutCaptureActive(launcher)];
+  }, { url: page.url(), modulePath: path.join(root, 'build/main/launcher-shortcut-capture.js'), start });
+  try {
+    expect(await captures(true)).toEqual([true, true]);
+    await page.evaluate(() => window.gwNative.hubSettings.cancelCapture());
+    // The renderer cannot name or cancel another window's native capture.
+    expect(await captures(false)).toEqual([false, true]);
   } finally { await closeOffline(fixture); }
 });

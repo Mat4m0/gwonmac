@@ -28,12 +28,14 @@ describe("window shortcut input", () => {
       dispatch({ preventDefault() { claimed = true; } }, { type, code, key: code.slice(3), meta: true, control: false, shift: false, alt: false, isAutoRepeat: repeat });
       return claimed;
     };
+    // Off, the chord stays claimed and does nothing (HUB-037).
     updateWindowShortcuts(win, DEFAULT_SETTINGS);
-    assert.equal(send("keyDown"), false);
+    assert.equal(send("keyDown"), true);
     updateWindowShortcuts(win, { ...DEFAULT_SETTINGS, gwonmacTools: true });
-    assert.equal(send("keyDown"), false);
+    assert.equal(send("keyDown"), true);
     updateWindowShortcuts(win, { ...DEFAULT_SETTINGS, callTargetEnabled: true });
-    assert.equal(send("keyDown"), false);
+    assert.equal(send("keyDown"), true);
+    assert.deepEqual(actions, []);
     const enabled = { ...DEFAULT_SETTINGS, gwonmacTools: true, callTargetEnabled: true };
     updateWindowShortcuts(win, enabled);
     assert.equal(send("keyDown"), true);
@@ -47,7 +49,7 @@ describe("window shortcut input", () => {
     assert.equal(send("keyDown", "KeyJ"), true);
     assert.equal(send("keyUp", "KeyJ"), true);
     updateWindowShortcuts(win, { ...enabled, callTargetEnabled: false });
-    assert.equal(send("keyDown"), false);
+    assert.equal(send("keyDown"), true);
     assert.deepEqual(actions, ["game.call-target", "game.call-target"]);
   });
 
@@ -70,9 +72,9 @@ describe("window shortcut input", () => {
     updateWindowShortcuts(win, assigned);
     assert.equal(press(), true);
     updateWindowShortcuts(win, { ...assigned, whispersEnabled: false });
-    assert.equal(press(), false);
+    assert.equal(press(), true);
     updateWindowShortcuts(win, { ...assigned, gwonmacTools: false });
-    assert.equal(press(), false);
+    assert.equal(press(), true);
     updateWindowShortcuts(win, { ...enabled, shortcutOverrides: { "whispers.toggle": { key: "j", shift: true, option: false } } });
     assert.equal(press(), false);
     assert.equal(press("KeyJ"), true);
@@ -125,15 +127,15 @@ describe("window shortcut input", () => {
       return prevented;
     };
     updateWindowShortcuts(win, settings);
-    assert.equal(press("KeyG"), false);
+    assert.equal(press("KeyG"), true);
     assert.equal(press("KeyR"), true);
     updateWindowShortcuts(win, { ...settings, gwonmacTools: true, characterSwitchEnabled: false });
     assert.equal(press("KeyR"), true);
     assert.equal(press("KeyG"), true);
     assert.equal(press("KeyL"), true);
     updateWindowShortcuts(win, { ...settings, gwonmacTools: true, cartographyEnabled: false });
-    assert.equal(press("KeyG"), false);
-    assert.equal(press("KeyL"), false);
+    assert.equal(press("KeyG"), true);
+    assert.equal(press("KeyL"), true);
     assert.deepEqual(actions, ["hub.toggle", "hub.toggle", "cartography.grid.toggle", "cartography.walkability.toggle"]);
   });
   it("runs one Command action, preserves Control, and contains capture repeats", async () => {
@@ -360,7 +362,7 @@ describe("window shortcut input", () => {
       gwonmacTools: true,
       buildLibrary: false,
     });
-    assert.equal(dispatch(keyDown("KeyB", "b")), false);
+    assert.equal(dispatch(keyDown("KeyB", "b")), true);
     assert.deepEqual(actions, ["tools.toggle"]);
   });
 });
@@ -413,4 +415,62 @@ it("decides a fresh press again when Chromium dropped the claimed key-up, but ho
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(down("KeyQ"), true);
   assert.deepEqual(actions, ["quit-or-reload", "quit-or-reload"]);
+});
+
+describe("window shortcut layout and ownership", () => {
+  const install = (settings = DEFAULT_SETTINGS) => {
+    let dispatch!: (event: { preventDefault(): void }, input: ShortcutInput) => void;
+    const win = { webContents: { on: (_name: string, listener: typeof dispatch) => { dispatch = listener; } }, on() { return win; } } as unknown as BrowserWindow;
+    const calls: string[] = [];
+    installWindowShortcuts(win, {
+      run: action => { calls.push(action); },
+      edit: command => { calls.push(`edit:${command}`); },
+      quitOrReload: () => { calls.push("quitOrReload"); },
+    });
+    updateWindowShortcuts(win, settings);
+    const press = (code: string, key: string, shift = false) => {
+      let claimed = false;
+      const input: ShortcutInput = { type: "keyDown", code, key, meta: true, control: false, shift, alt: false, isAutoRepeat: false };
+      dispatch({ preventDefault() { claimed = true; } }, input);
+      dispatch({ preventDefault() {} }, { ...input, type: "keyUp" });
+      return claimed;
+    };
+    return { calls, press };
+  };
+
+  it("names a chord by the letter the layout types, not the key position (HUB-014)", () => {
+    const settings = { ...DEFAULT_SETTINGS, gwonmacTools: true };
+    for (const [layout, code, key, expected] of [
+      ["AZERTY Command-A", "KeyQ", "a", "edit:selectAll"],
+      ["AZERTY Command-Q", "KeyA", "q", "quitOrReload"],
+      ["AZERTY Command-Z", "KeyW", "z", "edit:undo"],
+      ["Dvorak Command-Q", "KeyX", "q", "quitOrReload"],
+      ["Dvorak Command-X", "KeyB", "x", "edit:cut"],
+      ["Colemak Command-R", "KeyS", "r", "hub.toggle"],
+      ["QWERTZ Command-Z", "KeyY", "z", "edit:undo"],
+      // An input source without Latin letters keeps the US position, as macOS does.
+      ["Russian Command-A", "KeyA", "ф", "edit:selectAll"],
+    ] as const) {
+      const { calls, press } = install(settings);
+      assert.equal(press(code, key), true, layout);
+      assert.deepEqual(calls, [expected], layout);
+    }
+  });
+
+  it("claims Command-Z and Shift-Command-Z as Undo and Redo (HUB-134)", () => {
+    const { calls, press } = install();
+    assert.equal(press("KeyZ", "z"), true);
+    assert.equal(press("KeyZ", "Z", true), true);
+    assert.deepEqual(calls, ["edit:undo", "edit:redo"]);
+  });
+
+  it("keeps a disabled tool's chord from Guild Wars without running it (HUB-037)", () => {
+    const { calls, press } = install({ ...DEFAULT_SETTINGS, gwonmacTools: false });
+    for (const [code, key] of [["KeyS", "s"], ["KeyD", "d"], ["KeyT", "t"], ["KeyB", "b"]] as const) {
+      assert.equal(press(code, key), true, key);
+    }
+    assert.deepEqual(calls, []);
+    // A key no shortcut names still reaches the game.
+    assert.equal(press("KeyJ", "j"), false);
+  });
 });

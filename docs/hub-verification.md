@@ -744,7 +744,9 @@ Verification on the final runtime source:
   (`/tmp/gwonmac-refinement-final-electron.log`,
   `/tmp/gwonmac-refinement-character-final.log`).
 - Native editing exercises physical Meta+A/Meta+V through Electron's input owner,
-  clipboard isolation, query selection, undo/redo and Delete. Chromium composition
+  clipboard isolation, query selection, undo/redo and Delete. (Until HUB-134 the
+  undo/redo step used Playwright's injected editing commands, which bypass main;
+  it now sends Command-Z through `sendInputEvent`.) Chromium composition
   is exercised with dead-key/IME events; this does not test the macOS input-source
   chooser or certify every physical keyboard layout.
 - Computer-use inspection covered Classic/Modern presentation, mixed-profession

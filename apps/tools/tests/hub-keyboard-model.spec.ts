@@ -300,6 +300,46 @@ test('Escape at a shortcut conflict clears the prompt and returns to its shortcu
   await expect(record).toBeFocused();
 });
 
+test('closing the Hub with the mouse while a shortcut records gives the next keys back to the game (HUB-038)', async ({ page }) => {
+  await openHub(page);
+  await hubSearch(page).fill('settings'); await page.keyboard.press('Enter');
+  await page.getByRole('button', { name: 'Shortcuts', exact: true }).click();
+  const record = page.locator('.hub-shortcut-record[aria-label="Travel"]');
+  await record.click();
+  await expect(record).toHaveText('Press keys…');
+  await page.getByRole('button', { name: 'Close Hub', exact: true }).click();
+  await expect(page.locator('#hub')).toBeHidden();
+  await page.evaluate(() => window.gwFixtureCanvas?.clear());
+  await page.keyboard.press('w');
+  expect(await canvasKeys(page)).toBe(2);
+  await page.keyboard.press('Meta+r');
+  await expect(hubSearch(page)).toBeFocused();
+});
+
+test('Hub Back follows the named key and composition never navigates (KEY-24)', async ({ page }) => {
+  await openHub(page);
+  const search = hubSearch(page);
+  await search.fill('commands');
+  for (const input of [
+    { key: 'Enter', code: 'Enter' },
+    { key: 'Backspace', code: 'Backspace' },
+    { key: 'Backspace', code: 'Delete', metaKey: true },
+  ]) {
+    await search.evaluate((element, input) => element.dispatchEvent(new KeyboardEvent('keydown', {
+      ...input, isComposing: true, bubbles: true, cancelable: true,
+    })), input);
+    await expect(page.locator('.hub-caption')).toHaveText('Home');
+    await expect(search).toHaveValue('commands');
+  }
+  await search.press('Enter');
+  await expect(page.locator('.hub-caption')).toHaveText('Commands');
+  await search.evaluate(element => element.dispatchEvent(new KeyboardEvent('keydown', {
+    key: 'Backspace', code: 'Delete', metaKey: true, bubbles: true, cancelable: true,
+  })));
+  await expect(page.locator('.hub-caption')).toHaveText('Home');
+  await expect(search).toHaveValue('commands');
+});
+
 test('arrow keys scroll Build details and never jump to Back (HUB-088)', async ({ page }) => {
   await openHub(page);
   await hubSearch(page).fill('build smiter'); await page.keyboard.press('Enter');
