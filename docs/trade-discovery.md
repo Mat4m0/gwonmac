@@ -2,11 +2,12 @@
 
 Status: Accepted
 
-This document owns the product and interaction specification for the Hub Trade section and its detachable
-Trade Chat window in GWonMac.
+This document owns the product and interaction specification
+for the floating Trade Chat window in gwonmac.
 
-Hub opens this same mounted tool with Command-K or `trade <query>`. Detaching
-preserves its query and state. Hub currency conversions reuse its NPC quote source;
+Hub opens this floating tool with Command-K or `trade <query>`. Opening it
+suspends Hub. Reopening Hub resumes its page. Trade keeps its query and state.
+Hub currency conversions reuse its NPC quote source;
 observations older than five minutes are labelled Last observed.
 Hub also infers currency estimates from recent player advertisements as described below.
 
@@ -56,7 +57,7 @@ The first release does not include:
 - creating, editing, saving, scheduling, or posting listings;
 - sending, repeating, or automating chat messages;
 - automatic whispers or trade actions;
-- a GWonMac marketplace, account, database, or backend;
+- a gwonmac marketplace, account, database, or backend;
 - item recognition from game state or inventory integration;
 - saved searches, notifications, alerts, notes, tags, or ignored players;
 - regular expressions or a query language;
@@ -83,7 +84,7 @@ Keep these parts of the Toolbox++ model:
 
 Improve these parts:
 
-- use the existing GWonMac interface system and master-detail layout;
+- use the existing gwonmac interface system and master-detail layout;
 - distinguish players who sell from players who buy;
 - preserve the reader's position when new messages arrive;
 - show clear connection and stale-data states;
@@ -123,8 +124,8 @@ Do not copy these Toolbox++ implementation choices:
 
 ## Window and entry point
 
-Trade has its own mounted view, opened in Hub or detached into a non-modal
-window. It keeps its state independently of Builds and Teams. The player opens
+Trade has its own mounted view in a floating, non-modal window.
+It keeps its state independently of Builds and Teams. The player opens
 it from Hub search or its direct shortcut.
 
 The window title is **Kamadan Trade** or **Pre-Searing Trade**, matching the
@@ -202,7 +203,7 @@ results** or **Back to offers** restores the prior query, intent filter,
 selection, progressive reveal count, and scroll position. The player view uses
 the same bounded ledger and does not create or persist a player profile.
 
-The original wording is canonical. GWonMac does not rewrite a message into a
+The original wording is canonical. gwonmac does not rewrite a message into a
 structured listing.
 
 Matching search text is highlighted visually without changing copyable text.
@@ -216,7 +217,7 @@ when the player scrolls fully back to the top.
 
 ## Trade intent filter
 
-The intent filter is a local convenience, not a claim that GWonMac understands
+The intent filter is a local convenience, not a claim that gwonmac understands
 the item or offer.
 
 - **Selling** includes messages with a case-insensitive, whole-word `WTS`.
@@ -251,7 +252,7 @@ it is not evidence that the trade remains available.
 
 ### Optional certified whisper action
 
-Toolbox++ can prepare a whisper to the selected character. GWonMac may add
+Toolbox++ can prepare a whisper to the selected character. gwonmac may add
 **Whisper** later only when the official client host provides a separately
 certified, explicit capability for the active game window.
 
@@ -320,7 +321,7 @@ The core Trade feature must not depend on this enhancement.
 | No results | State that no recent messages matched; keep query and filters editable |
 | Reconnecting | Keep existing rows visible, mark them as possibly stale, and retry |
 | Offline | Keep existing rows visible with their real times and offer **Retry** |
-| Source failure | Explain which source is unavailable; other GWonMac windows remain usable |
+| Source failure | Explain which source is unavailable; other gwonmac windows remain usable |
 | Invalid response | Ignore the unsafe response, preserve valid rows, and retry safely |
 | No selection | Prompt the player to select a message; do not fill the pane with help text |
 | Narrow detail | Show **Back to results** and preserve list state |
@@ -364,7 +365,7 @@ keeps normal pointer and keyboard input everywhere else.
 
 The public Kamadan and Ascalon services remain the only sources of truth for
 trade messages. Kamadan remains the source of truth for NPC trader quotes and
-quote history. GWonMac does not persist public feed or price history. It stores
+quote history. gwonmac does not persist public feed or price history. It stores
 only offers the player explicitly saves and player names the player explicitly
 follows.
 
@@ -400,7 +401,7 @@ Search responses belong to the submitted request that produced them. A late
 response from an older query cannot replace newer results. The renderer reveals
 the bounded response 25 messages at a time and reveals the next 25 when the
 reader reaches the bottom, up to 200. This is local progressive reveal: the
-upstream WebSocket protocol has no cursor pagination and GWonMac makes no extra
+upstream WebSocket protocol has no cursor pagination and gwonmac makes no extra
 network request while scrolling.
 
 Multiple game accounts share the same public network connection and in-memory
@@ -428,7 +429,7 @@ reconnecting, response rejected, duration, and result count.
 
 Before release, maintainers must confirm that the public Kamadan and Ascalon
 operator permits this client use and document required attribution, rate
-limits, and protocol expectations. GWonMac must identify itself honestly where
+limits, and protocol expectations. gwonmac must identify itself honestly where
 the protocol permits it. The app must degrade safely when either unofficial
 service changes or becomes unavailable.
 

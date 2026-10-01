@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { BrowserWindow } from "electron";
+import { setInputTraceEnabled } from "../../src/main/input-trace.js";
 import { DEFAULT_SETTINGS } from "../../src/shared/contracts.js";
 import {
   captureWindowShortcut,
@@ -413,4 +414,25 @@ it("decides a fresh press again when Chromium dropped the claimed key-up, but ho
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(down("KeyQ"), true);
   assert.deepEqual(actions, ["quit-or-reload", "quit-or-reload"]);
+});
+
+
+it("records Hub shortcut down, repeats and release without exposing typed keys (HUB-240)", () => {
+  let dispatch!: (event: { preventDefault(): void }, input: ShortcutInput) => void;
+  const sent: unknown[][] = [];
+  const win = { isDestroyed: () => false, webContents: { isDestroyed: () => false, send: (...args: unknown[]) => sent.push(args), on: (_name: string, listener: typeof dispatch) => { dispatch = listener; } }, on() { return win; } } as unknown as BrowserWindow;
+  const actions: string[] = [];
+  installWindowShortcuts(win, { run: action => { actions.push(action); }, edit() {}, quitOrReload() {} });
+  updateWindowShortcuts(win, DEFAULT_SETTINGS);
+  setInputTraceEnabled(win, true);
+  const input: ShortcutInput = { type: "keyDown", code: "KeyR", key: "r", meta: true, control: false, shift: false, alt: false, isAutoRepeat: false };
+  dispatch({ preventDefault() {} }, input);
+  dispatch({ preventDefault() {} }, { ...input, isAutoRepeat: true });
+  dispatch({ preventDefault() {} }, { ...input, type: "keyUp" });
+  assert.deepEqual(actions, ["hub.toggle"]);
+  assert.deepEqual(sent.map(args => args[1]), [
+    { source: "main", kind: "native-key", phase: "down", key: "printable", repeat: false, decision: "shortcut" },
+    { source: "main", kind: "native-key", phase: "down", key: "printable", repeat: true, decision: "shortcut" },
+    { source: "main", kind: "native-key", phase: "up", key: "printable", repeat: false, decision: "shortcut" },
+  ]);
 });
