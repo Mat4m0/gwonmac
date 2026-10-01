@@ -199,6 +199,8 @@ for (const [name, appearance, scene] of [
   ['Classic 94% over snow', { uiStyle: 'guild-wars', uiPanelOpacity: 94 }, CHECKERBOARD],
   ['Classic 65% over snow', { uiStyle: 'guild-wars', uiPanelOpacity: 65 }, CHECKERBOARD],
   ['a blue custom accent at 94% over night', { uiStyle: 'custom', uiPanelOpacity: 94, uiCustomTheme: BLUE_ACCENT }, NIGHT],
+  // A light window with otherwise default colours: its controls follow the window.
+  ['a white custom window at 100% over night', { uiStyle: 'custom', uiPanelOpacity: 100, uiCustomTheme: { ...BLUE_ACCENT, accent: '#E6C882', selected: '#1B3554', window: '#FFFFFF' } }, NIGHT],
 ] as const) {
   test(`every Hub text role reads at 4.5:1 in ${name}`, async ({ page }) => {
     const media = await page.context().newCDPSession(page);

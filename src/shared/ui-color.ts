@@ -1,6 +1,6 @@
 /** Color contrast and readable foregrounds shared by game panels and their
  * launcher preview. These projections never change the saved palette. */
-import type { UiThemeColor } from "./ui-theme.js";
+import { defaultCustomUiTheme, type CustomUiTheme, type UiThemeColor } from "./ui-theme.js";
 
 export const parseRgb = (color: UiThemeColor): readonly [number, number, number] => [
   Number.parseInt(color.slice(1, 3), 16),
@@ -153,4 +153,34 @@ export function accessibleTint(
     }
   }
   return accessibleForeground(preferred, backgrounds, minimum);
+}
+
+/**
+ * A light custom window cannot share one ink with the default dark controls, so the
+ * controls the player left unchanged follow the window: slightly darker title,
+ * raised and recessed paint and a light selection. Dark windows keep their designed
+ * controls. Only the rendered theme changes; the saved palette stays as chosen.
+ */
+export function renderedCustomTheme(theme: CustomUiTheme): CustomUiTheme {
+  const baseline = defaultCustomUiTheme(theme.material);
+  const light = contrastRatio(theme.window, "#000000") > contrastRatio(theme.window, "#FFFFFF");
+  if (theme.window === baseline.window || !light) return theme;
+  const unchanged = (field: "titlebar" | "surface" | "recessed" | "selected", derived: UiThemeColor) =>
+    theme[field] === baseline[field] ? derived : theme[field];
+  return {
+    ...theme,
+    titlebar: unchanged("titlebar", compositeColor("#000000", theme.window, 0.08)),
+    surface: unchanged("surface", compositeColor("#000000", theme.window, 0.06)),
+    recessed: unchanged("recessed", compositeColor("#000000", theme.window, 0.04)),
+    selected: unchanged("selected", compositeColor(baseline.selected, theme.window, 0.22)),
+  };
+}
+
+/** Whether one ink can read at 4.5:1 on every surface this palette paints; the
+ * launcher's editor warns when the player's own colours oppose each other. */
+export function customThemeReadable(theme: CustomUiTheme): boolean {
+  const rendered = renderedCustomTheme(theme);
+  const surfaces = [rendered.window, rendered.titlebar, rendered.surface, rendered.recessed];
+  const ink = readableSharedForeground(surfaces);
+  return surfaces.every((surface) => contrastRatio(surface, ink) >= 4.5);
 }

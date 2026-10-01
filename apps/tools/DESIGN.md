@@ -259,10 +259,12 @@ title, raised and recessed paint, unchanged controls, and translucent wells.
 Tests pin default paint to `tokens.css`. Reduce Transparency makes the
 effective opacity 1; the saved opacity stays unchanged.
 
-Opposing custom surfaces can make 4.5:1 impossible for one shared ink. The
-existing neutral fallback maximises the minimum contrast; it does not guarantee
-AA for those palettes. Separate surface inks or palette limits need a design
-decision. The saved palette remains unchanged.
+A light custom window cannot share one ink with the default dark controls, so
+the controls the player left unchanged (title bar, panel surface, input
+background, selection) follow the window's lightness when it is rendered. A
+dark window keeps its designed controls. Colours the player chose themselves
+stay exact; when they oppose each other so that no ink reaches 4.5:1, the
+launcher's colour editor says so. The saved palette never changes.
 
 - Text, bright, muted, faint and the accent used as text move separately and
   only as far as they must. One opacity step never re-inks a whole role, and

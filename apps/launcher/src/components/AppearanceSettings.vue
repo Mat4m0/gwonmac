@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 import { UI_FONTS, UI_PANEL_OPACITY_MIN, UI_PANEL_OPACITY_MAX, UI_TEXT_SIZE_MIN, UI_TEXT_SIZE_MAX, type UiFont, type UiStyle } from "@shared/contracts";
 import type { LauncherSettings, LauncherSettingsPatch } from "@shared/launcher-contracts";
 import { UI_THEME_COLOR_FIELDS, decodeCustomUiTheme, encodeCustomUiTheme, defaultCustomUiTheme, type CustomUiTheme, type UiThemeColorField } from "@shared/ui-theme";
+import { customThemeReadable } from "@shared/ui-color";
 import ColorControl from "./ColorControl.vue";
 import RangeControl from "./RangeControl.vue";
 import PanelStylePreview from "./PanelStylePreview.vue";
@@ -11,6 +12,7 @@ const props = defineProps<{ settings: LauncherSettings; save: (patch: LauncherSe
 const message = ref("");
 const imported = ref("");
 const shared = computed(() => encodeCustomUiTheme(props.settings.uiCustomTheme));
+const readable = computed(() => customThemeReadable(props.settings.uiCustomTheme));
 const fonts: Record<UiFont, string> = { "guild-wars": "Guild Wars", inter: "Inter", system: "System", avenir: "Avenir", georgia: "Georgia", palatino: "Palatino" };
 const colors: Record<UiThemeColorField, string> = {
   window: "Window background", titlebar: "Title bar", surface: "Panel surface",
@@ -45,6 +47,7 @@ async function importTheme() {
       <label><span><strong>Window gradient</strong></span><input type="checkbox" :checked="settings.uiCustomTheme.windowGradient" @change="updateTheme({ windowGradient: ($event.currentTarget as HTMLInputElement).checked })" /></label>
       <div class="setting-row"><span><strong>Custom colors</strong><small>Restore this palette without changing other settings.</small></span><button class="secondary" @click="persist({ uiCustomTheme: defaultCustomUiTheme(settings.uiCustomTheme.material) })">Restore default colors</button></div>
       <div v-for="field in UI_THEME_COLOR_FIELDS" :key="field" class="setting-row"><span>{{ colors[field] }}</span><ColorControl :label="colors[field]" :value="settings.uiCustomTheme[field]" @change="updateTheme({ [field]: $event })" /></div>
+      <p v-if="!readable" role="status" class="inline-message">Some text will be hard to read on these colors. Choose a title bar, panel surface and input background closer in lightness to the window background.</p>
       <details class="theme-sharing">
         <summary>Import or share a theme</summary>
         <label>Current theme<textarea :value="shared" readonly rows="3" /></label>

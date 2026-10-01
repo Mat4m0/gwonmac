@@ -10,7 +10,7 @@
  */
 import type { AppSettings } from "../shared/contracts.js";
 import { defaultCustomUiTheme, type UiThemeColor, type UiThemeMaterial } from "../shared/ui-theme.js";
-import { parseRgb, compositeColor, accessibleForeground, accessibleTint, readableForeground } from "../shared/ui-color.js";
+import { parseRgb, compositeColor, accessibleForeground, accessibleTint, readableForeground, renderedCustomTheme } from "../shared/ui-color.js";
 
 const fontChoices = new WeakMap<HTMLElement, AppSettings["uiFont"]>();
 const fontLoads = new Map<string, Promise<boolean>>();
@@ -104,7 +104,7 @@ export const appearanceVariables = (
   };
   if (settings.uiTextSize !== 100) variables["--ui-text-scale"] = String(settings.uiTextSize / 100);
   const theme = settings.uiStyle === "custom"
-    ? settings.uiCustomTheme
+    ? renderedCustomTheme(settings.uiCustomTheme)
     : defaultCustomUiTheme(settings.uiStyle === "obsidian" ? "modern" : "classic");
   const baseline = defaultCustomUiTheme(theme.material);
   const painted = PAINTED_INKS[theme.material];
@@ -141,8 +141,11 @@ export const appearanceVariables = (
       compositeColor("#FFFFFF", panel, 0.04), compositeColor("#000000", panel, 0.08),
     ]);
   const recessed = theme.recessed !== baseline.recessed;
+  // A recoloured selection carries row titles too, so its paint joins the model.
+  const selection = theme.selected !== baseline.selected
+    ? panels.map((panel) => compositeColor(theme.selected, panel, 0.84)) : [];
   const textBackgrounds = [
-    ...panels,
+    ...panels, ...selection,
     ...panels.map((panel) => compositeColor(painted.accent, panel, 0.1)),
     ...title, ...raised,
     recessed ? theme.recessed : surfaces.well,
