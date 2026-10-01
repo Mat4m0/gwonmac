@@ -140,6 +140,8 @@ export function mountHubFixture(target: HTMLElement) {
   // Every trip is a game action, whichever row, page or view started it.
   const demoTravel = travelHost.travel;
   travelHost.travel = async request => { record(`TRAVEL ${travelDestination(request.mapId)?.name ?? request.mapId}`); await demoTravel(request); };
+  const demoGuildHall = travelHost.guildHall;
+  travelHost.guildHall = async () => { record('TRAVEL Guild Hall'); await demoGuildHall(); };
   const lifecycle = createFixtureLifecycle(travelHost);
   const initialLifecycle = params.get('lifecycle');
   if (isFixtureLifecycle(initialLifecycle)) lifecycle.set(initialLifecycle);
@@ -169,15 +171,18 @@ export function mountHubFixture(target: HTMLElement) {
     ...['Ranger', 'Mesmer', 'Ritualist', 'Elementalist'].map((name, index) => ({ name: `Fixture ${name}`, characterKey: name.toLowerCase(), primaryProfession: [2, 5, 8, 6][index]!, secondaryProfession: 0, characterType: 'roleplaying' as const, campaign: 1, level: 20, mapId: 449 })),
     { name: 'Toefte', characterKey: 'toefte', primaryProfession: 3, secondaryProfession: 5, characterType: 'roleplaying', campaign: 1, level: 20, mapId: 449 },
     { name: 'Fixture Warrior', characterKey: 'warrior', primaryProfession: 1, secondaryProfession: 0, characterType: 'roleplaying', campaign: 1, level: 20, mapId: 55 },
+    ...(params.has('characters-extra') ? Array.from({ length: 5 }, (_, index) => ({ name: `Extra Character ${index + 1}`, characterKey: `extra-${index + 1}`, primaryProfession: 3, secondaryProfession: 5, characterType: 'pvp' as const, campaign: 1, level: 20, mapId: 449 })) : []),
   ] };
   // `?characters-ms=` keeps the account's character list on its way for that long, as after a login.
   let characters: CharacterSwitchSource['characters'] = params.has('characters-ms') ? { status: 'waiting', reason: 'snapshot' } : characterList;
   if (params.has('characters-ms')) setTimeout(() => { characters = characterList; for (const listener of [...characterListeners]) listener(); }, Number(params.get('characters-ms')) || 0);
+  let characterRequests = 0;
+  target.dataset.characterRequests = '0';
   const characterSource: CharacterSwitchSource = {
     get characters() { return characters; },
     get action() { return characterAction; },
     get context() { return lifecycle.context(); },
-    request: key => switchTo(key, false),
+    request: key => { target.dataset.characterRequests = String(++characterRequests); switchTo(key, false); },
     confirm() { if (characterAction.status === 'confirming' && pendingCharacter) switchTo(pendingCharacter, true); },
     cancelConfirmation() { if (characterAction.status === 'confirming') { pendingCharacter = null; publishCharacter({ status: 'idle' }); } },
     reset() { pendingCharacter = null; publishCharacter({ status: 'idle' }); },
@@ -188,6 +193,7 @@ export function mountHubFixture(target: HTMLElement) {
       return () => { characterListeners.delete(listener); stop(); };
     },
   };
+  window.addEventListener('hub-fixture-character-refusal', () => publishCharacter({ status: 'failed', code: 'current-target', retryable: false }));
   window.gwCharacterSwitch = characterSource;
   installCharacterSwitchHost(document.body).attach(characterSource);
   // The production Resign owner over a synthetic command queue: /resign is a recorded game action.

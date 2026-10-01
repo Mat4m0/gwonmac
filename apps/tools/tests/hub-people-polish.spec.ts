@@ -1,18 +1,25 @@
 import { expect, test } from '@playwright/test';
 
-test('a friend page never guesses a game action when Whispers is off', async ({ page }) => {
-  await page.goto('/?hub&party');
-  const search = page.locator('.hub-search input');
-  await expect(search).toBeVisible();
-  await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: { whispersEnabled: false } })));
-  await search.fill('Romi'); await search.press('Enter');
-  await expect(page.locator('.hub-caption')).toHaveText('Romi Ranger');
-  await expect(search).not.toHaveAttribute('aria-activedescendant', /.+/u);
-  await search.press('Enter');
-  await expect(page.locator('#app')).not.toHaveAttribute('data-action', /TRAVEL|INVITE/u);
-  await expect(page.locator('#hub')).toBeVisible();
-  await search.press('ArrowDown');
-  await expect(page.locator('.hub-primary')).toContainText('Travel');
+test('a friend page never guesses a game action when Whispers is off or its session is waiting (HUB-201)', async ({ page }) => {
+  for (const [unavailable, query, person] of [['off', 'Romi', 'Romi Ranger'], ['waiting', 'Zed Alpha', 'Zed Alpha']] as const) {
+    await page.goto('/?hub&party');
+    const search = page.locator('.hub-search input');
+    await expect(search).toBeVisible();
+    if (unavailable === 'off') await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: { whispersEnabled: false } })));
+    else await page.evaluate(() => window.dispatchEvent(new Event('hub-fixture-unavailable')));
+    await search.fill(query); await search.press('Enter');
+    await expect(page.locator('.hub-caption')).toHaveText(person);
+    if (unavailable === 'off') await expect(search).not.toHaveAttribute('aria-activedescendant', /.+/u);
+    else {
+      await expect(page.locator('.hub-row[aria-selected=true]')).toHaveAttribute('data-id', 'person:whisper');
+      await expect(page.locator('.hub-row[aria-selected=true]')).toHaveAttribute('aria-disabled', 'true');
+    }
+    await search.press('Enter');
+    await expect(page.locator('#app')).not.toHaveAttribute('data-action', /TRAVEL|INVITE/u);
+    await expect(page.locator('#hub')).toBeVisible();
+    await search.press('ArrowDown');
+    await expect(page.locator('.hub-primary')).toContainText('Travel');
+  }
 });
 
 test('a friend root Actions menu exposes the same four explicit person actions', async ({ page }) => {

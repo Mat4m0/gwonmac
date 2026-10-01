@@ -404,6 +404,20 @@ test('an unrelated source toggle keeps the build target page, query and selectio
   await expect(page.locator('.hub-caption')).toHaveText('Heroes');
   await expect(search).toHaveValue('Tahlkora');
   await expect(page.locator('.hub-row[aria-selected=true]')).toContainText('Tahlkora');
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-lifecycle', { detail: 'map-loading' })));
+  await expect(page.locator('.hub-caption')).toHaveText('Heroes');
+  await expect(search).toHaveValue('Tahlkora');
+  await expect(page.locator('.hub-row[aria-selected=true]')).toContainText('Tahlkora');
+
+  await page.goto('/?hub');
+  await search.fill('accounts'); await search.press('Enter');
+  await expect(page.locator('.hub-caption')).toHaveText('Accounts');
+  await page.evaluate(() => window.gwHub?.openSettings({ section: 'Tools' }));
+  await page.getByRole('button', { name: 'Tools', exact: true }).click();
+  await page.getByRole('checkbox', { name: 'Travel', exact: true }).uncheck();
+  await expect(page.locator('.hub-caption')).toHaveText('Settings');
+  await expect(page.getByRole('button', { name: 'Tools', exact: true })).toHaveAttribute('aria-current', 'true');
+  await expect(page.getByRole('checkbox', { name: 'Travel', exact: true })).not.toBeChecked();
 });
 
 test('a suspended build page cannot resume its withdrawn source or execute stale Apply', async ({ page }) => {
