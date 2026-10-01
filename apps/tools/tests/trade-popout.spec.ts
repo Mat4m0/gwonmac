@@ -509,6 +509,8 @@ test('beside the game Trade shows at least four offers, and a short window keeps
       await page.keyboard.press('Escape');
       await trade.getByRole('button',{name:'Trader prices',exact:true}).click();
     }
+    // Closing Saved keeps its moving controls mounted until the leave transition completes.
+    await expect(trade.locator('.saved-drawer-leave-active')).toHaveCount(0);
     const controls = trade.locator('button:visible, input:visible, select:visible, summary:visible, a:visible, [role^=menuitem]:visible, [role=option]:visible');
     const bounds = await controls.evaluateAll(nodes => nodes.map(node => {
       // Capture nodes once: scrolling can hide a row's quick buttons and change :visible indexes.
