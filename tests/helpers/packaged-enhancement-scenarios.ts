@@ -118,6 +118,18 @@ async function installTargetReadout(
     region.setUint32(20, 0, true);
     region.setUint32(24, 1, true);
     region.setUint32(8, 2, true);
+    // Keep the synthetic region live like the native tick producer. A single
+    // publication expires after 500 ms and can invalidate this presentation
+    // scenario while the packaged checker is busy with another assertion.
+    let regionSequence = 2;
+    const regionHeartbeat = globalThis.setInterval(() => {
+      region.setUint32(8, regionSequence + 1, true);
+      regionSequence += 2;
+      region.setUint32(8, regionSequence, true);
+    }, 100);
+    globalThis.addEventListener("pagehide", () => {
+      globalThis.clearInterval(regionHeartbeat);
+    }, { once: true });
     if (capabilities.targetObservation) {
       await new Promise<void>((resolve, reject) => {
         const deadline = performance.now() + 2_000;

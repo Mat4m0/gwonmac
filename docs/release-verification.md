@@ -74,7 +74,7 @@ Gatekeeper globally.
 
 Complete this checklist:
 
-- [ ] The release commit is on `main`.
+- [ ] The release commit is on `release/YYYY.M.PATCH`.
 - [ ] `package.json` contains the intended new version.
 - [ ] The version stage matches Stable, Beta, or RC intent.
 - [ ] The release workflow's exact ArenaNet qualification is green. A recent
@@ -94,10 +94,12 @@ Do not publish a new version only to test the release system. Use the dry run.
 
 ## Safe dry run
 
-Manually run **Versioned release** on `main` with `dry_run` set to `true`.
+Wait for **Application verification** to pass on the release branch. Then run
+**Versioned release** on that branch with `dry_run` set to `true`.
 
-This path runs the real verification, build, signing, notarization, stapling,
-and package checks. It skips the GitHub mutation jobs.
+This path reuses Application verification for the exact source commit. It then
+runs the release-only current-client qualification, build, signing,
+notarization, stapling, and package checks. It skips the GitHub mutation jobs.
 
 Immediately before packaging, the workflow downloads the current verified
 ArenaNet JS/WASM pair. It runs the runtime feature verifier, every transform
@@ -120,7 +122,8 @@ Do not change secrets or add another signing path to bypass the failure.
 
 ## Real release flow
 
-Run **Versioned release** on `main` with `dry_run` set to `false`.
+Run **Versioned release** on the exact branch whose dry run passed, with
+`dry_run` set to `false`.
 
 The workflow has two decisions:
 
@@ -169,6 +172,10 @@ Close the installed application, then run:
 ```bash
 pnpm release:test <tag>
 ```
+
+The command can run from any local branch. It verifies the draft's exact target
+commit, assets, signatures, and Verification record. It does not use the local
+checkout as release authority.
 
 The command downloads every exact draft asset, verifies its checksums, GitHub
 attestations, versions, Release identity, signature, entitlements,

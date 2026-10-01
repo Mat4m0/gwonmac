@@ -33,7 +33,9 @@ import {
 const sha256 = (bytes: Uint8Array): string =>
   createHash("sha256").update(bytes).digest("hex");
 
-test("every shipped runtime profile reproduces the real client chain", async () => {
+test("every shipped runtime profile reproduces the real client chain", {
+  timeout: 120_000,
+}, async () => {
   const artifact = process.env.GW_CLIENT_WASM;
   const glue = process.env.GW_CLIENT_JS;
   assert.ok(artifact, "GW_CLIENT_WASM must name the real Gw.jspi.wasm artifact");

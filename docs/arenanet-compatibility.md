@@ -136,10 +136,11 @@ function-index and static-data relocation without weakening input binding.
 ## Current implementation limits
 
 The rules above are the required design, not a promise that every existing
-locator already meets the final relocation-resistant bar. At verifier ABI 7:
+locator already meets the final relocation-resistant bar. At verifier ABI 9:
 
-- parts of file/template certification still depend on fixed instruction spans
-  and exact static-role baselines;
+- Template-saving proof binds relocated helper calls to their decoded sites,
+  signatures, and reviewed complete callee bodies. Other instruction spans and
+  static-role baselines remain exact;
 - parts of Core and Tools certification still use raw body digests or common
   relocation checks while selecting a candidate; and
 - native double-click verifies the complete known route, but exact body binding

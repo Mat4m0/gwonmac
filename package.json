@@ -1,7 +1,7 @@
 {
   "name": "guild-wars",
   "productName": "Guild Wars Reforged",
-  "version": "2026.8.10",
+  "version": "2026.8.11",
   "private": true,
   "packageManager": "pnpm@11.13.1",
   "type": "module",
@@ -78,7 +78,7 @@
     "@types/node": "^24.13.3",
     "@types/pngjs": "^6.0.5",
     "@types/ws": "^8.18.1",
-    "electron": "^43.4.1",
+    "electron": "^43.5.0",
     "eslint": "^10.7.0",
     "eslint-plugin-vue": "^10.10.0",
     "node-api-headers": "1.9.0",

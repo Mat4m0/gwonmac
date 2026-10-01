@@ -322,7 +322,10 @@ test("application verification routes conservatively through one required result
   const classifier = read("scripts/ci-impact.ts");
 
   assert.match(workflow, /name: Application verification/);
-  assert.match(workflow, /pull_request:\n {2}push:\n {4}branches: \[main\]/);
+  assert.match(
+    workflow,
+    /pull_request:\n {2}push:\n {4}branches:\n {6}- main\n {6}- "release\/\*\*"/,
+  );
   assert.match(workflow, /workflow_dispatch:[\s\S]*checkout_ref:[\s\S]*pr_number:/);
   assert.doesNotMatch(workflow, /paths:|paths-ignore:/);
   assert.match(workflow, /permissions:\n {2}contents: read/);
@@ -398,8 +401,9 @@ test("developer builds are exact, ad-hoc, bounded, and isolated from releases", 
     ".github/ISSUE_TEMPLATE/developer-build-feedback.yml",
   );
 
-  // One read-only verification path owns PR, manual developer, and release
-  // gates. No publishing permission reaches that reusable workflow.
+  // One read-only verification path owns PR and manual developer gates. The
+  // release workflow reuses its exact-commit result. No publishing permission
+  // reaches the reusable workflow.
   assert.match(verification, /workflow_call:/);
   assert.match(verification, /permissions:\n {2}contents: read/);
   assert.doesNotMatch(
@@ -458,8 +462,9 @@ test("developer builds are exact, ad-hoc, bounded, and isolated from releases", 
   assert.doesNotMatch(release, /pull_request:|push:/);
   assert.match(
     release,
-    /release-build:\n {4}if: github\.ref == 'refs\/heads\/main'\n {4}needs: verify/,
+    /name: Resolve and validate the release source[\s\S]*\^release\/\[0-9\]\{4\}[\s\S]*name: Require green Application verification for this commit[\s\S]*release-build:\n {4}needs: source/,
   );
+  assert.doesNotMatch(release, /uses: \.\/\.github\/workflows\/macos-verify\.yml/);
 
   // Developer dispatch is possible only from the trusted main workflow. The
   // selected source is an exact commit, and the workflow stops at an ad-hoc

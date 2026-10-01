@@ -12,6 +12,9 @@ import { ENHANCEMENT_CAPABILITY_FIELDS } from
 import { LOCAL_FEATURE_INVARIANTS } from
   "../../src/main/certification/local-client-verification-contract.js";
 
+import { SEMANTIC_VERIFIER_ABI } from
+  "../../src/main/certification/semantic-proof.js";
+
 const sha256 = (value: Uint8Array | string): string =>
   createHash("sha256").update(value).digest("hex");
 
@@ -105,11 +108,11 @@ test("retains bounded generation evidence without paths or raw addresses", async
       writeFile(files.js, js),
       writeFile(files.runtime, JSON.stringify({
         officialSha256: wasmDigest,
-        verifierAbi: 7,
+        verifierAbi: SEMANTIC_VERIFIER_ABI,
         fileVerdict: {
           status: "proved",
           inputSha256: wasmDigest,
-          verifierAbi: 7,
+          verifierAbi: SEMANTIC_VERIFIER_ABI,
           outputSha256: fileOutputDigest,
           rawAddress: 0x5a0ee0,
         },
@@ -280,18 +283,18 @@ test("retains bounded generation evidence without paths or raw addresses", async
     for (const fileVerdict of [{
       status: "refused",
       inputSha256: wasmDigest,
-      verifierAbi: 7,
+      verifierAbi: SEMANTIC_VERIFIER_ABI,
       reason: "template-shape-changed",
     }, {
       status: "proved",
       inputSha256: sha256("wrong-input"),
       outputSha256: outputDigest,
-      verifierAbi: 7,
+      verifierAbi: SEMANTIC_VERIFIER_ABI,
     }, {
       status: "proved",
       inputSha256: wasmDigest,
       outputSha256: outputDigest,
-      verifierAbi: 8,
+      verifierAbi: SEMANTIC_VERIFIER_ABI + 1,
     }]) {
       await Promise.all([
         writeFile(files.runtime, JSON.stringify({
@@ -311,10 +314,10 @@ test("retains bounded generation evidence without paths or raw addresses", async
     }
     await writeFile(files.runtime, JSON.stringify({
       ...record(evidence.runtime),
-      verifierAbi: 8,
+      verifierAbi: SEMANTIC_VERIFIER_ABI + 1,
       fileVerdict: {
         ...record(record(evidence.runtime).fileVerdict),
-        verifierAbi: 8,
+        verifierAbi: SEMANTIC_VERIFIER_ABI + 1,
       },
     }));
     const wrongSourceAbi = await createClientRecertificationEvidence(args, environment);
@@ -349,7 +352,7 @@ test("rejects poison strings and contradictory proved states", async () => {
       writeFile(files.js, js),
       writeFile(files.runtime, JSON.stringify({
         officialSha256: wasmDigest,
-        verifierAbi: 7,
+        verifierAbi: SEMANTIC_VERIFIER_ABI,
         fileVerdict: null,
         templateSaving: false,
         features: {

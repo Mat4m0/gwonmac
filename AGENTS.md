@@ -28,6 +28,34 @@ registry, or compatibility path, answer these questions:
 4. Which requirement needs the new concept?
 5. Which executable test proves that requirement?
 
+## Agent-first operating model
+
+Matthias coordinates the project. Agents execute repository work. Do not make
+him reconstruct repository state or guess the next command.
+
+For every task, an agent must:
+
+1. Inspect the current branch, worktree, recent commits, and applicable CI.
+2. Classify the task as normal development, release stabilization, or an
+   emergency Stable patch.
+3. Read the owning document and existing tests.
+4. State any assumption that changes scope or release risk.
+5. Implement the smallest complete outcome.
+6. Run focused checks, then the applicable local repository gate.
+7. Review the complete diff for unrelated changes and missing cleanup.
+8. Report the outcome, evidence, remaining risk, and one clear next action.
+
+Agents own investigation, implementation, automated verification, diff review,
+pull-request preparation, and CI diagnosis. Matthias owns product priority,
+live game QA, signing approval, publication approval, and release announcements.
+
+An agent must not claim that gameplay, graphics, input feel, or another live
+observation passed unless Matthias performed that check. Automation can report
+only the boundary it executed.
+
+See [Development and rollout](docs/development-workflow.md) for the complete
+branch and release model.
+
 ## Sources of truth
 
 Code and tests own exact schemas, values, hashes, limits, and accepted states.
@@ -155,6 +183,61 @@ Use offline fixtures for automated tests. Run a live ArenaNet check only when a
 local proof cannot establish the invariant. Keep the live check narrow and
 record what it proves.
 
+## Git and delivery
+
+Use one topic branch for one pull-request outcome. Match the existing prefixes,
+such as `feat/`, `fix/`, `refactor/`, `test/`, `docs/`, and `release/`.
+
+Normal feature and maintenance branches start from `main` and target `main`.
+Keep unfinished work on its branch. Do not merge incomplete code behind a
+hidden flag.
+
+Use `release/YYYY.M.PATCH` only for a planned release or emergency Stable patch.
+A planned release branch starts from one selected green `main` commit. An
+emergency release branch starts from the latest signed Stable tag. After the
+branch exists:
+
+- add no new feature;
+- accept only version changes and release blockers;
+- forward-port every release-only fix to `main`;
+- also forward-port an emergency fix to any active planned release branch; and
+- delete the release branch after publication and forward-porting.
+
+Do not create permanent `develop`, `next`, `beta`, or `stable` branches. The
+signed Stable tag is the production source. `main` can continue with completed
+future work while a release branch stabilizes.
+
+Use Conventional Commits. Keep commits atomic. Review staged changes before a
+commit and the complete branch diff before a pull request.
+
+Do not merge a pull request, delete a remote branch, create a tag, approve a
+protected environment, publish a release, deploy update feeds, or announce a
+release unless Matthias explicitly requests that action.
+
+When an agent prepares a pull request, it must:
+
+- update remote references;
+- compare the complete branch against its intended base;
+- confirm that the base matches the development or release path;
+- remove unrelated changes;
+- run the applicable verification;
+- use a concise Conventional Commit title; and
+- explain the outcome, invariant, tests, and rollout risk.
+
+### Rollout choice
+
+Do not publish a Beta for each feature. Use Developer Builds for individual
+feature testing. Use one Beta train for a risky group of completed changes.
+
+Require Beta consideration for persistence, migrations, accounts, Keychain,
+updates, signing, packaging, client certification, native transforms, input,
+controllers, rendering, reload, live observations, default-on behavior, or a
+multi-feature release. A narrow emergency compatibility fix can go directly to
+Stable after exact signed-draft QA.
+
+Only Matthias can accept the exact draft and choose Beta or Stable. An agent
+must present the risk and recommend one path.
+
 ## Verification
 
 Run the narrowest relevant proof while you work. Then run the repository gate
@@ -167,7 +250,12 @@ pnpm run check
 `pnpm run check` runs type checks, lint, Markdown links, unit tests, policy tests,
 and Tools unit tests. It does not build or open a window.
 
-Run the complete local application gate before a pull request:
+GitHub **Application verification** owns the complete macOS gate for a pull
+request. Wait for it, diagnose every failure, and require it to pass before
+merge.
+
+Run the complete gate locally when the change modifies CI, packaging, signing,
+or release behavior, or when CI cannot provide the required evidence:
 
 ```bash
 pnpm verify

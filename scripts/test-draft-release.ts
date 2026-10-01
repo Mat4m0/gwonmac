@@ -199,17 +199,14 @@ function readDraft(
 export function assertDraftMetadata(
   tag: string,
   draft: DraftRelease,
-  mainCommit: string,
   releaseTag: ReleaseTag,
 ): void {
   if (!draft.isDraft) throw new Error(`${tag} is not a draft release`);
   if (draft.isPrerelease !== releaseTag.prerelease) {
     throw new Error(`${tag} has inconsistent GitHub prerelease metadata`);
   }
-  if (draft.targetCommitish !== mainCommit) {
-    throw new Error(
-      `${tag} targets ${draft.targetCommitish}, not current main ${mainCommit}`,
-    );
+  if (!/^[0-9a-f]{40}$/u.test(draft.targetCommitish)) {
+    throw new Error(`${tag} does not target one exact commit`);
   }
   const actual = draft.assets.map(({ name }) => name).sort();
   const expected = expectedAssets(releaseTag.version);
@@ -232,13 +229,8 @@ export async function runDraftReleaseTest(
     throw new Error(`${dependencies.installedApp} is not installed`);
   }
   dependencies.run("gh", ["auth", "status"]);
-  if (dependencies.run("git", ["branch", "--show-current"]) !== "main") {
-    throw new Error("release:test must run from the main branch");
-  }
-
-  const mainCommit = dependencies.run("git", ["rev-parse", "HEAD"]);
   const draft = readDraft(dependencies, tag);
-  assertDraftMetadata(tag, draft, mainCommit, releaseTag);
+  assertDraftMetadata(tag, draft, releaseTag);
   const expectedBundle = macOSBundleVersions(releaseTag.version);
   const installedBundle = plist(
     dependencies,
@@ -309,7 +301,7 @@ export async function runDraftReleaseTest(
     }
 
     const latest = readDraft(dependencies, tag);
-    assertDraftMetadata(tag, latest, mainCommit, releaseTag);
+    assertDraftMetadata(tag, latest, releaseTag);
     const record = parseVerificationRecord(latest.body);
     const downloadedChecksums = readFileSync(
       path.join(temporary, "SHA256SUMS.txt"),

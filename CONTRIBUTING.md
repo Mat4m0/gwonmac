@@ -32,6 +32,17 @@ services with other players.
 
 Do not start a rewrite without agreement on the problem and scope.
 
+## Choose the correct branch
+
+Normal feature and maintenance pull requests target `main`. Keep incomplete
+work on its topic branch. A merge to `main` does not require an immediate app
+release.
+
+Only release stabilization and emergency Stable patches target a canonical
+`release/YYYY.M.PATCH` branch. Do not add a feature after a release branch is
+created. Read [Development and rollout](docs/development-workflow.md) before you
+prepare, fix, or publish a release.
+
 ## Report a bug
 
 In the app, select **Help → Report a Problem…**. Attach the exported diagnostics
@@ -86,7 +97,11 @@ Use `pnpm run check` while you work:
 pnpm run check
 ```
 
-Run the complete local gate before you open the pull request:
+GitHub **Application verification** runs the complete macOS gate for the pull
+request. Require it to pass before merge.
+
+Run the complete gate locally when you change CI, packaging, signing, or
+release behavior, or when CI cannot provide the required evidence:
 
 ```bash
 pnpm verify
