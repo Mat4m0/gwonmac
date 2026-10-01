@@ -1,5 +1,6 @@
 import { writeFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
+import { timeBudget } from './performance-budget.js';
 import type { HubSource } from '../../../src/shared/hub.js';
 
 test('root caps matching builds and carries the complete query to Build Library (HUB-110)', async ({ page }) => {
@@ -258,11 +259,11 @@ test('root typing and complete library entry stay within the scale budget (HUB-1
   });
   await writeFile(info.outputPath('scale-timings.json'), JSON.stringify(timings, null, 2));
   await info.attach('scale-timings.json', { body: JSON.stringify(timings, null, 2), contentType: 'application/json' });
-  expect(Math.max(...timings.typing)).toBeLessThan(32);
-  expect(Math.max(...timings.paints)).toBeLessThanOrEqual(32);
-  expect(timings.rootLongTasks.filter(duration => duration > 50)).toEqual([]);
-  expect(timings.entry).toBeLessThan(100);
-  expect(timings.libraryLongTasks.filter(duration => duration > 50)).toEqual([]);
+  expect(Math.max(...timings.typing)).toBeLessThan(timeBudget(32));
+  expect(Math.max(...timings.paints)).toBeLessThanOrEqual(timeBudget(32));
+  expect(timings.rootLongTasks.filter(duration => duration > timeBudget(50))).toEqual([]);
+  expect(timings.entry).toBeLessThan(timeBudget(100));
+  expect(timings.libraryLongTasks.filter(duration => duration > timeBudget(50))).toEqual([]);
 });
 
 test('End and Back reach rows the 1000-build Library has not painted yet (HUB-112)', async ({ page }) => {
@@ -459,9 +460,9 @@ test('twenty opens and resumes search once per transition without accumulating D
   await info.attach('twenty-open-timings.json', { body: JSON.stringify(result, null, 2), contentType: 'application/json' });
   expect(result.passes).toEqual(Array(40).fill(1));
   expect(result.remaining).toBe(0);
-  expect(Math.max(...result.opens)).toBeLessThanOrEqual(16);
-  expect(Math.max(...result.paints)).toBeLessThanOrEqual(32);
-  expect(Math.max(...result.resumes)).toBeLessThanOrEqual(32);
+  expect(Math.max(...result.opens)).toBeLessThanOrEqual(timeBudget(16));
+  expect(Math.max(...result.paints)).toBeLessThanOrEqual(timeBudget(32));
+  expect(Math.max(...result.resumes)).toBeLessThanOrEqual(timeBudget(32));
 });
 
 
@@ -499,5 +500,5 @@ test('incoming bursts keep a deep build selection and bounded arrow mutations (H
   expect(result.selected).toBe('build:scale-500');
   expect(result.scroll).toBeGreaterThan(0);
   expect(Math.max(...result.mutations)).toBeLessThanOrEqual(4);
-  expect(result.tasks.filter(duration => duration > 50)).toEqual([]);
+  expect(result.tasks.filter(duration => duration > timeBudget(50))).toEqual([]);
 });
