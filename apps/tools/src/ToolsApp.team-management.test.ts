@@ -111,10 +111,10 @@ describe("ToolsApp team management", () => {
       .find((button) => button.text().includes("Apply team"))!;
     expect(apply.attributes("disabled")).toBeDefined();
     expect(wrapper.get(".apply-readiness").text()).toContain(
-      "Your assigned build is for Mo, but the observed primary is Me.",
+      "Your assigned build is for Monk, but the observed primary is Mesmer.",
     );
     expect(wrapper.get(".apply-readiness").text()).toContain(
-      "Ghost Of Althea's assigned build is for Me, but the observed primary is Mo.",
+      "Ghost Of Althea's assigned build is for Mesmer, but the observed primary is Monk.",
     );
     expect(wrapper.findAll(".team-slots > li[data-invalid]")).toHaveLength(2);
 

@@ -202,7 +202,8 @@ export function findPeople(state: WhisperSessionState, query: string,
     people.set(key, { key, name: normaliseCharacterName(name), source, activity, exact: rank === 0, rank, ...extra });
   };
   if (state.suggest.friends && friends.status === "ready") for (const friend of friends.friends) {
-    add(friend.character || friend.alias, "friend", 0, { friend }, friend.alias);
+    const conversation = state.conversations.find(conversation => conversation.key === whisperPersonKey(friend.character || friend.alias));
+    add(friend.character || friend.alias, "friend", 0, { friend, ...(conversation ? { conversation } : {}) }, friend.alias);
   }
   for (const conversation of state.conversations) {
     add(conversation.name, "conversation", conversation.activity, { conversation });
@@ -211,6 +212,6 @@ export function findPeople(state: WhisperSessionState, query: string,
   if (state.suggest.chat) for (const person of state.participants) add(person.name, "chat", person.activity);
   return [...people.values()]
     .sort((a, b) => a.rank - b.rank || SOURCE_ORDER.indexOf(a.source) - SOURCE_ORDER.indexOf(b.source)
-      || b.activity - a.activity || a.name.localeCompare(b.name))
+      || a.name.localeCompare(b.name) || a.key.localeCompare(b.key))
     .map(({ rank: _rank, ...person }) => person);
 }

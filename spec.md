@@ -216,6 +216,14 @@ Retry requires a new assessment against observed state. Dismissal does not claim
 cancellation of commands already accepted; reopening shows the existing operation.
 Use the runner's existing stop conditions on client or session changes.
 
+The preview names removed heroes, roster rebuilding and difficulty changes.
+A matching team shows **Already matches**. Repeating Apply sends no changes and
+reports the named team already matches. A partial outcome remains attached to
+that team when Hub or Review closes. Reopening offers Review before another Apply.
+Completed lists confirmed runner steps; Remaining uses the current canonical plan.
+Invalid saved assignments name their slots. **Open in Build Library** opens the
+same saved team in its existing editor.
+
 ## 7. Build and template application
 
 `build smiter` searches the existing saved library and account template owner.
@@ -327,6 +335,12 @@ Disabled is different from temporarily unavailable. Disabled features have no ro
 An enabled saved team may remain readable when live Apply is unavailable. Explain
 that restriction only inside its selected preview. Keep host authoring available
 where existing policy permits. Revalidate feature flags at execution, not only search.
+
+Selected saved-library authoring remains available when live observation is withdrawn.
+Apply still refuses unsupported regions. Do not present PvP refusal as temporary loading.
+List and review pages bind to their actual source. Source withdrawal removes only
+its unavailable pages, including suspended pages. Unrelated source changes preserve
+queries, selection and drafts. Recheck the source before restoring a page.
 
 When a feature is disabled while selected, remove its view and return quietly to
 the nearest available parent. Cancel unsubmitted work; use existing domain rules

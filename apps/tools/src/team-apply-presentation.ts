@@ -1,7 +1,31 @@
 /** Renderer-owned copy for canonical Team Apply runtime facts. */
-import { heroLabel } from "../../../src/shared/builds/heroes.js";
+import { heroLabel, PROFESSIONS } from "../../../src/shared/builds/heroes.js";
 import type { SkillId } from "../../../src/shared/builds/library.js";
-import type { TeamApplyRuntimeProblem } from "../../../src/shared/builds/team-apply.js";
+import type { TeamApplyProblem, TeamApplyRuntimeProblem } from "../../../src/shared/builds/team-apply.js";
+
+export const teamApplyStoredProblemMessage = (problem: TeamApplyProblem): string => {
+  switch (problem.rule) {
+    case "player-slot": return "The player slot contains hero-only settings.";
+    case "missing-hero": return `Choose a hero for slot ${problem.slot + 1}.`;
+    case "missing-behaviour": return `Choose a behavior for slot ${problem.slot + 1}.`;
+    case "unknown-hero": return `Slot ${problem.slot + 1} names an unknown hero.`;
+    case "duplicate-hero": return "The same hero is assigned more than once.";
+    case "party-gap": return "Move configured heroes above empty party slots.";
+    case "invalid-build": return `Slot ${problem.slot + 1} has an invalid build.`;
+  }
+};
+
+export const teamApplyStoredProblemGuidance = (problem: TeamApplyProblem): string | null => {
+  switch (problem.rule) {
+    case "player-slot": return "Clear the hero-only settings from the player slot.";
+    case "missing-hero": return "Choose a hero or clear the build from this slot.";
+    case "missing-behaviour": return "Choose Fight, Guard, or Avoid.";
+    case "unknown-hero": return "Replace the unknown hero in this slot.";
+    case "duplicate-hero": return "Choose a different hero for one of these slots.";
+    case "party-gap": return "Move this hero above the first empty hero slot.";
+    case "invalid-build": return "Open the build to repair it, or choose another build.";
+  }
+};
 
 export type TeamApplyRuntimePresentation = Readonly<{
   message: string;
@@ -11,6 +35,7 @@ export type TeamApplyRuntimePresentation = Readonly<{
 export function teamApplyRuntimePresentation(
   problem: TeamApplyRuntimeProblem,
   skillName?: (skill: SkillId) => string,
+  subject: 'team' | 'build' = 'team',
 ): TeamApplyRuntimePresentation {
   const guidance = (() => {
     switch (problem.rule) {
@@ -32,9 +57,9 @@ export function teamApplyRuntimePresentation(
   let message = "";
   switch (problem.rule) {
     case "party-unavailable": message = "Waiting for a playable character and party observation."; break;
-    case "pvp": message = "Apply team is unavailable during PvP play."; break;
-    case "region-unknown": message = "Apply team is unavailable until GWonMac identifies the current region."; break;
-    case "not-outpost": message = "Enter an outpost to apply this team."; break;
+    case "pvp": message = `Apply ${subject} is unavailable during PvP play.`; break;
+    case "region-unknown": message = `Apply ${subject} is unavailable until GWonMac identifies the current region.`; break;
+    case "not-outpost": message = `Enter an outpost to apply this ${subject}.`; break;
     case "outpost-unknown": message = "Waiting to confirm that this is an outpost."; break;
     case "partial-roster": message = "Waiting until the complete party roster is observed."; break;
     case "mode-unobserved": message = "Waiting for the current Normal or Hard Mode observation."; break;
@@ -43,7 +68,7 @@ export function teamApplyRuntimePresentation(
       ? "Your professions have not been observed yet."
       : `${heroLabel(problem.hero)}'s professions have not been observed yet.`; break;
     case "primary-mismatch": message = `${problem.hero === null ? "Your" : `${heroLabel(problem.hero)}'s`} `
-      + `assigned build is for ${problem.wanted}, but the observed primary is ${problem.observed}.`; break;
+      + `assigned build is for ${PROFESSIONS[problem.wanted].name}, but the observed primary is ${PROFESSIONS[problem.observed].name}.`; break;
     case "hero-locked": message = `${heroLabel(problem.hero)} is not unlocked on this account.`; break;
     case "hero-availability-unknown": message = `${heroLabel(problem.hero)} could not be verified on this account. Add the hero manually first.`; break;
     case "skill-locked": {
@@ -63,6 +88,8 @@ export function teamApplyRuntimePresentation(
 
 export function teamApplyRuntimeProblemMessage(
   problem: TeamApplyRuntimeProblem,
+  skillName?: (skill: SkillId) => string,
+  subject: 'team' | 'build' = 'team',
 ): string {
-  return teamApplyRuntimePresentation(problem).message;
+  return teamApplyRuntimePresentation(problem, skillName, subject).message;
 }

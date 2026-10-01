@@ -3,11 +3,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createHubPeople } from '../../src/renderer/hub-people.ts';
 import { createPartyInvite, type PartyInvite } from '../../src/renderer/party-invite.ts';
+import type { CompanionPlayRegionState } from '../../src/renderer/companion-play-region-snapshot.ts';
 import type { TravelFriend } from '../../src/shared/friends.ts';
-import type { HubRow, HubSource, HubTask } from '../../src/shared/hub.ts';
+import { hubTier, type HubRow, type HubSource, type HubTask } from '../../src/shared/hub.ts';
 import { createWhisperSession } from '../../src/shared/whisper-session.ts';
 
-const KAISER = 'Kai Account|Mo Kaiser · online · Kamadan, Jewel of Istan';
+const KAISER = 'Kai Account|Mo Kaiser · Online · Kamadan, Jewel of Istan';
 
 type Harness = {
   search(query: string): string[]; source: HubSource; session: ReturnType<typeof createWhisperSession>;
@@ -52,8 +53,9 @@ function withPeople(settings: Record<string, boolean>, run: (people: Harness) =>
 }
 const ALL_TOOLS = { gwonmacTools: true, whispersEnabled: true, travelPalette: true };
 
-test('Hub finds names seen in chat beside friends', () => withPeople(ALL_TOOLS, ({ search }) => {
+test('Hub finds names seen in chat beside friends', () => withPeople(ALL_TOOLS, ({ search, source }) => {
   assert.deepEqual(search('mo'), [KAISER, 'Moira Chatter|Seen in chat']);
+  assert.equal(hubTier(source.search('mo kaiser')[0]!, 'mo kaiser'), 0, 'canonical character names rank as exact answers even when the row shows an account alias');
 }));
 
 test('Hub keeps an addressed full name reachable and spelled as typed', () => withPeople(ALL_TOOLS, ({ search, source, session }) => {
@@ -79,6 +81,7 @@ test('Hub without Whispers keeps friend search only', () => withPeople({ gwonmac
 const invitePort = (overrides: Partial<PartyInvite> = {}) => {
   const calls: string[] = [];
   const party: PartyInvite = {
+    pending: null, subscribe: () => () => {}, cancel() {},
     unavailable: () => null, travelUnavailable: () => null,
     invite: async name => { calls.push(`invite:${name}`); },
     travelAndInvite: async (friend) => { calls.push(`travel:${friend.character}`); return { invited: Promise.resolve() }; },
@@ -230,4 +233,77 @@ test('`invite ` lists the online friends as named invites, those invitable now f
   await withPeople(ALL_TOOLS, ({ source }) => {
     assert.deepEqual(source.search('invite '), [], 'no invite scope without the certified invite');
   });
+});
+
+
+// Wrong behavior: an unavailable scope hides a typed recipient or opens an invisible draft.
+test('unavailable whisper names remain visible and cannot create a conversation', async () => {
+  await withPeople(ALL_TOOLS, ({ source, session, page }) => {
+    session.setAvailable(false);
+    for (const query of ['whisper Foo', 'whisper Mo Kaiser']) {
+      const rows = source.search(query);
+      assert.equal(rows.length, 1, query);
+      assert.equal(rows[0]!.unavailable, 'Whispers is waiting for Guild Wars chat…');
+      assert.throws(() => rows[0]!.run(task), /Whispers is waiting/);
+    }
+    source.search('mo kaiser')[0]!.run(task);
+    assert.equal(page().find(row => row.id === 'person:whisper')!.unavailable, 'Whispers is waiting for Guild Wars chat…');
+    assert.deepEqual(session.state.conversations, []);
+  });
+});
+
+
+// Wrong behavior: protocol presence enums appear as player-facing copy.
+test('friend presence reuses the readable labels in every state', () => withPeople(ALL_TOOLS, ({ source, setFriends }) => {
+  for (const [status, label] of [['online','Online'],['away','Away'],['do-not-disturb','Do not disturb'],['offline','Offline'],['unknown','Status unknown']] as const) {
+    setFriends([{ key: 'f', character: 'Mo Kaiser', alias: 'Kai Account', status, mapId: 449 }]);
+    assert.equal(source.search('mo kaiser')[0]!.detail, `Mo Kaiser · ${label}${status === 'offline' ? '' : ' · Kamadan, Jewel of Istan'}`);
+  }
+}));
+
+
+// Wrong behavior: a known friend loses their conversation badge during search,
+// and the Home unread row opens a reduced action page instead of the reply.
+test('friend conversation state survives search and Home opens the same reply identity', async () => {
+  const { party } = invitePort();
+  await withPeople(ALL_TOOLS, ({ source, session, page }) => {
+    session.observe([{ id: 2, sender: 'Mo Kaiser', message: 'Ready?', direction: 'incoming' }]);
+    assert.match(source.search('mo kaiser')[0]!.detail, /1 unread/);
+    const home = source.search('')[0]!;
+    assert.equal(home.action, 'Reply to Mo Kaiser');
+    home.actions!();
+    assert.deepEqual(actions(page()), ['Whisper', 'Travel to outpost', 'Invite to party', 'Travel and invite']);
+    home.run(task);
+    assert.equal(session.state.selected, 'mo kaiser');
+    session.markRead('mo kaiser', 2);
+    session.setDraft('mo kaiser', 'Yes');
+    assert.match(source.search('mo kaiser')[0]!.detail, /Continue draft/);
+  }, party);
+});
+
+
+test('Home retains the named pending invite and Cancel never invites after arrival', async context => {
+  context.mock.timers.enable({ apis: ['setTimeout'] });
+  let region: CompanionPlayRegionState = { status: 'ready', sequence: 1, mapId: 55, instanceType: 0, playRegion: 'pve', travelContext: 'world', characterKey: 'a', unlockedMapWords: null, guildHall: false, hasGuildHall: false };
+  const listeners = new Set<() => void>();
+  const sent: string[] = [];
+  const party = createPartyInvite({ region: () => region, subscribeRegion: listener => { listeners.add(listener); return () => listeners.delete(listener); }, chatReady: () => true,
+    invite: async name => { sent.push(name); }, travel: async () => {} });
+  await withPeople(ALL_TOOLS, async ({ source }) => {
+    const { invited } = await party.travelAndInvite({ key: 'kai', character: 'Mo Kaiser', alias: 'Kai', status: 'online', mapId: 449 }, 1);
+    const pending = source.search('').find(row => row.id === 'pending-invite');
+    assert.ok(pending);
+    assert.equal(pending.title, 'Invite Mo Kaiser after arrival');
+    assert.equal(pending.detail, 'Travelling to Kamadan, Jewel of Istan');
+    assert.equal(pending.action, 'Cancel invite to Mo Kaiser');
+    await pending.run(task);
+    await assert.rejects(invited, /The invite was not sent/);
+    assert.ok(region.status === 'ready');
+    region = { ...region, mapId: 449 };
+    for (const listener of listeners) listener();
+    context.mock.timers.tick(2_000);
+    assert.deepEqual(sent, []);
+    assert.equal(source.search('').some(row => row.id === 'pending-invite'), false);
+  }, party);
+  party.dispose();
 });

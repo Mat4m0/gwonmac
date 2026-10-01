@@ -3,7 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch 
 import { findPeople, whisperPersonKey, whisperUnread, type Person, type WhisperSession, type WhisperSound } from "../../../src/shared/whisper-session";
 import { TRAVEL_DESTINATIONS } from "../../../src/shared/travel-destinations";
 import { WHISPER_LINE_UNITS, WHISPER_MESSAGE_UNITS } from "../../../src/shared/whispers";
-import type { FriendPresence, TravelFriend } from "../../../src/shared/friends";
+import { presenceLabel, type TravelFriend } from "../../../src/shared/friends";
 import { useClassicFrame } from "./ui/use-classic-frame";
 import { isHubBackKey } from "../../../src/shared/keyboard-shortcuts";
 import { listIndexAfter, listKeyStep, listPage } from "../../../src/shared/ui/list-keys";
@@ -44,7 +44,6 @@ const optionsMenu = ref<HTMLDetailsElement | null>(null);
 function dismissOptions(event: Event) {
   if (optionsMenu.value?.open && !optionsMenu.value.contains(event.target as Node)) optionsMenu.value.open = false;
 }
-function collapse() { props.session.setVisible(false); }
 /**
  * Esc and ⌘⌫ close the options menu first. ⌘⌫ then steps from a conversation back to the
  * picker, one level per physical press and nothing at the picker; in the message field it
@@ -107,10 +106,6 @@ function friendFor(name: string): TravelFriend | undefined {
 const selectedFriend = computed(() => selected.value ? friendFor(selected.value.name) : undefined);
 const selectedLocation = computed(() => selectedFriend.value && selectedFriend.value.status !== "offline"
   ? TRAVEL_DESTINATIONS.find(place => place.mapId === selectedFriend.value?.mapId)?.name.split(",")[0] : undefined);
-const presenceLabel = (status: FriendPresence) => ({
-  online: "Online", away: "Away", "do-not-disturb": "Do not disturb",
-  offline: "Offline", unknown: "Status unknown",
-})[status];
 const firstUnreadFor = (key: string) => firstUnreadByConversation.get(key) ?? null;
 watch(() => state.value.conversations.map(conversation => conversation.key), keys => {
   const active = new Set(keys);
@@ -466,7 +461,6 @@ useClassicFrame(panel);
           <button v-if="state.recent.length" data-variant="quiet" class="ui-button whisper-control" @click="session.clearRecent()">Clear recent people</button>
         </div>
       </details>
-      <button data-variant="quiet" class="ui-button whisper-control whisper-icon" aria-label="Collapse whispers" title="Minimize" @click="collapse"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg></button>
     </header>
     <p v-if="!state.available" class="whisper-notice" role="status">Waiting for Guild Wars. Your drafts are kept.</p>
     <p v-if="state.missed" class="whisper-notice" role="status">{{ state.missed }} messages could not be kept. Check original chat.</p>
@@ -493,7 +487,7 @@ useClassicFrame(panel);
     </div>
     </div>
     <div class="whisper-hints" aria-hidden="true"><span>{{ selected ? 'Enter sends' : '↑ ↓ choose · Enter opens' }}</span><span>Esc hides</span></div>
-    <button ref="resizeGrip" class="ui-window-resize whisper-resize" aria-label="Resize whispers"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 19 7-7m-1 7 1-1"/></svg></button>
+    <button ref="resizeGrip" class="ui-window-resize whisper-resize" tabindex="-1" aria-label="Resize whispers"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 19 7-7m-1 7 1-1"/></svg></button>
   </section>
 </template>
 

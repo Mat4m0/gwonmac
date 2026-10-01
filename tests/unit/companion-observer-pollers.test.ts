@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import * as readers from "../../src/renderer/companion-tools-observer-readers.js";
+import { COMPANION_TOOLBOX_ABI, COMPANION_TOOLBOX_BYTES, COMPANION_PARTY_ABI, COMPANION_PARTY_BYTES } from "../../src/renderer/companion-snapshot.js";
 import { observeCompanion } from "../../src/renderer/companion-observer.js";
 
 test("frame pollers run on every observer frame without an observation change", () => {
@@ -93,4 +95,37 @@ test("a disabled optional poller stops before touching its implementation", () =
     globalThis.requestAnimationFrame = previousRequest;
     globalThis.cancelAnimationFrame = previousCancel;
   }
+});
+
+
+test("Tools observation republishes an unchanged generation after policy withdrawal", () => {
+  const previousRequest = globalThis.requestAnimationFrame;
+  const previousCancel = globalThis.cancelAnimationFrame;
+  const scheduled: FrameRequestCallback[] = [];
+  globalThis.requestAnimationFrame = callback => { scheduled.push(callback); return 11; };
+  globalThis.cancelAnimationFrame = () => {};
+  try {
+    const memory = new WebAssembly.Memory({ initial: 1 });
+    const view = new DataView(memory.buffer);
+    view.setUint32(256, 0x58545747, true);
+    view.setUint16(260, COMPANION_TOOLBOX_ABI, true);
+    view.setUint16(262, COMPANION_TOOLBOX_BYTES, true);
+    view.setUint32(264, 2, true);
+    view.setUint32(512, 0x50545747, true);
+    view.setUint32(516, (COMPANION_PARTY_BYTES << 16) | COMPANION_PARTY_ABI, true);
+    view.setUint32(520, 2, true);
+    const firstParty = readers.readChangedCompanionParty(memory.buffer, 512, null);
+    assert.equal(firstParty.changed && firstParty.state.status, 'ready');
+    let enabled = true;
+    const observed: string[] = [];
+    const stop = observeCompanion({ memory, snapshotPointer: 0, toolboxPointer: 256, partyPointer: 512,
+      snapshotReads: 0, rejectedSnapshots: 0, hertz: 0, lastRenderUs: 0, renderSamples: [] }, [], null,
+      { enabled: () => enabled, update: state => { observed.push(state.status); } }, false, false,
+      null, null, null, readers);
+    scheduled.shift()?.(0);
+    enabled = false; scheduled.shift()?.(16);
+    enabled = true; scheduled.shift()?.(32);
+    assert.deepEqual(observed, ['ready', 'ready']);
+    stop();
+  } finally { globalThis.requestAnimationFrame = previousRequest; globalThis.cancelAnimationFrame = previousCancel; }
 });

@@ -22,16 +22,20 @@ available in PvE while Tools is enabled. `pnpm tools:dev` with `?whispers` opens
 the same Vue surface with local scenario controls; those controls never send
 game messages.
 
-The default **Command-D** shortcut opens Whispers inside Hub. Existing custom
-bindings and cleared shortcuts are preserved. Person search, the shortcut and the
-unread launcher use the same mounted Vue conversation component. Hub reuses the
-session and transcript owner; there is no separate quick-whisper composer.
+The default **Command-D** shortcut opens the floating Whispers surface. Existing
+custom bindings and cleared shortcuts are preserved. Person search, the shortcut
+and the unread launcher use the same mounted Vue conversation component.
+Opening it from Hub suspends the Hub page. Returning to Hub resumes that page.
+The session and transcript have one owner; there is no separate quick composer.
 
-In Hub, the people picker supports Up/Down and Enter/Right. Escape or Left at the
-start of the composer returns to people without discarding the draft. Normal text
-editing and outgoing-message history remain available. Chat options retain mute,
-sound and guarded conversation closing. Hub owns the window geometry and background;
-the standalone fixture retains floating-window placement and opacity controls.
+In Hub, the people picker uses the shared list keys. Enter opens the named primary;
+Right opens the person page. Root Actions reuses that person's named actions.
+Game actions require explicit selection when no whisper action is available.
+Unavailable chat keeps a disabled result with its waiting reason.
+
+The Whispers surface retains its saved geometry. Its single **Hide Whispers**
+control preserves conversations and drafts. Its resize grip stays outside normal
+Tab navigation. Chat options retain mute, sound and guarded conversation closing.
 
 ## Acceptance criteria
 
@@ -106,6 +110,10 @@ change, a refused trip, a non-PvE arrival or 60 seconds without arrival withdraw
 invite; a non-PvE arrival withdraws it at once. Disposing Tools withdraws a
 pending arrival. The friend feed has no district, so an arrival in another
 district can fail in Guild Wars.
+
+While Travel and invite waits, Home names the pending friend and destination.
+The player can cancel the pending invite. Cancellation prevents the later invite,
+including after the arrival timer settles. It does not undo an accepted Travel.
 
 `invite ` with an empty name lists the online friends, those invitable from
 here first. No name was typed, so none is preselected and Enter alone sends

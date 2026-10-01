@@ -48,7 +48,7 @@ test('Travel and invite waits for a settled arrival in the friend outpost, then 
   assert.equal(h.party.travelUnavailable({ ...friend, mapId: 55 }), 'You are already in this outpost');
   await assert.rejects(h.party.travelAndInvite({ ...friend, mapId: 55 }, 1), /already in this outpost/);
   const { invited } = await h.party.travelAndInvite(friend, 1);
-  assert.equal(h.party.unavailable(), 'Travelling. The invite follows on arrival.');
+  assert.equal(h.party.unavailable(), 'Travelling to Kamadan, Jewel of Istan. The invite to Mo Kaiser follows on arrival.');
   await assert.rejects(h.party.travelAndInvite(friend, 1), /Travelling/);
   h.move(loading);
   h.move(outpost(449));
@@ -184,4 +184,20 @@ test('dispose withdraws a pending arrival, so no invite is sent after Tools leav
   context.mock.timers.tick(2_000);
   assert.deepEqual(h.invited, []);
   assert.equal(h.listeners.size, 0);
+});
+
+
+test('a named pending arrival can cancel only the invite, even after the arrival timer settles', async context => {
+  context.mock.timers.enable({ apis: ['setTimeout'] });
+  const h = harness();
+  const { invited } = await h.party.travelAndInvite(friend, 1);
+  assert.deepEqual(h.party.pending, { name: 'Mo Kaiser', place: 'Kamadan, Jewel of Istan' });
+  assert.equal(h.party.unavailable(), 'Travelling to Kamadan, Jewel of Istan. The invite to Mo Kaiser follows on arrival.');
+  h.move(outpost(449));
+  context.mock.timers.tick(2_000);
+  h.party.cancel();
+  await assert.rejects(invited, /The invite was not sent/);
+  assert.equal(h.party.pending, null);
+  assert.equal(h.trips(), 1, 'cancelling the invite does not pretend to undo accepted Travel');
+  assert.deepEqual(h.invited, []);
 });

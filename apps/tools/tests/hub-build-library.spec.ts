@@ -27,7 +27,7 @@ test('hero search includes unlocked heroes and applies only to an existing party
   await search.fill('build monk'); await search.press('Enter');
   await search.fill('hero'); await search.press('Enter');
   await search.fill('Dunkoro');
-  await expect(page.locator('#hub').getByRole('option')).toContainText('Add this hero to your party first.');
+  await expect(page.locator('#hub').getByRole('option')).toContainText('Add Dunkoro to your party first.');
   await expect(page.getByRole('button', { name: 'Review availability ↵', exact: true })).toBeEnabled();
   await search.press('Enter');
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', /command|apply/);
@@ -244,9 +244,202 @@ test('mixed hero professions default to the eligible hero and keep blocked heroe
   await search.fill('build monk'); await search.press('Enter');
   await search.fill('hero'); await search.press('Enter');
   await expect(page.locator('.hub-row[aria-selected="true"]')).toContainText('Tahlkora');
-  const blocked = page.locator('.hub-row').filter({ hasText: "Gwen's assigned build is for Mo, but the observed primary is Me." });
+  const blocked = page.locator('.hub-row').filter({ hasText: "Gwen's assigned build is for Monk, but the observed primary is Mesmer." });
+  const ink = await blocked.evaluate(row => ({ title: getComputedStyle(row.querySelector('.hub-title')!).color, detail: getComputedStyle(row.querySelector('.hub-detail')!).color }));
+  expect(ink.title).toBe(ink.detail);
   await blocked.click();
   await expect(page.locator('.hub-primary')).toBeDisabled();
   await expect(page.locator('.hub-summary')).toContainText('Protection');
+  await expect(page.locator('#app')).not.toHaveAttribute('data-action', /command|apply/);
+  await search.fill('library');
+  await expect(page.locator('.hub-row')).toHaveCount(0);
+  await expect(page.locator('#hub')).not.toContainText('Build Library is loading');
+});
+
+
+test('self application has one comparison page and Right never adds another', async ({ page }) => {
+  await page.goto('/?hub');
+  const search = page.locator('.hub-search input');
+  await search.fill('build monk'); await search.press('ArrowRight');
+  const crumbs = page.locator('.hub-breadcrumbs');
+  await search.press('ArrowRight');
+  await expect(crumbs).toHaveText('Home›Protection');
+  await expect(page.locator('#app')).not.toHaveAttribute('data-action', /command|apply/u);
+});
+
+test('details from Choose hero show the incoming build without an empty second card', async ({ page }) => {
+  await page.goto('/?hub');
+  const search = page.locator('.hub-search input');
+  await search.fill('build monk'); await search.press('Enter');
+  await search.fill('hero'); await search.press('Meta+j');
+  await page.getByRole('menuitem', { name: 'Show build details', exact: true }).click();
+  await expect(page.locator('.hub-build-details h2')).toHaveCount(1);
+  await expect(page.locator('.hub-build-details')).toContainText('Protective Spirit');
+  await expect(page.locator('#app')).not.toHaveAttribute('data-action', /command|apply/u);
+});
+
+
+test('library words open the loaded Library and its teams stay review-only when browsing', async ({ page }) => {
+  await page.goto('/?hub');
+  const search = page.locator('.hub-search input');
+  for (const query of ['library', 'lib', 'bu', 'team', 'teams', 'skills']) {
+    await search.fill(query);
+    const entry = page.locator('.hub-row[data-id="builds"]');
+    await expect(entry).toContainText('Browse saved builds and teams');
+    await expect(entry).toHaveAttribute('aria-disabled', 'false');
+    await expect(page.locator('.hub-primary')).toBeEnabled();
+  }
+  await search.press('Enter');
+  await expect(page.locator('.hub-breadcrumbs')).toHaveText('Home›Build Library');
+  const teams = page.locator('.hub-row[data-id^="team:"]');
+  await expect(teams).toHaveCount(4);
+  await expect(teams).toContainText(['GOM AFK', 'Balanced vanquish', 'Classic Discordway', 'Story and missions']);
+  await page.getByRole('button', { name: 'Home', exact: true }).click();
+  for (const query of ['teams ', 'team gom']) {
+    await search.fill(query);
+    await expect(page.locator('.hub-primary')).toHaveText(/^Review /u);
+    await search.press('Enter');
+    await expect(page.locator('.hub-build-review')).toBeVisible();
+    await expect(page.locator('#app')).not.toHaveAttribute('data-action', /command|apply/u);
+    await page.keyboard.press('Meta+Backspace');
+    await expect(search).toHaveValue(query);
+  }
+  await search.fill('team gom afk');
+  await expect(page.locator('.hub-primary')).toHaveText('Apply team GOM AFK↵');
+});
+
+test('team review names planned changes and repeat Apply reports that the party already matches', async ({ page }) => {
+  await page.setViewportSize({ width: 940, height: 500 });
+  await page.goto('/?hub');
+  const search = page.locator('.hub-search input');
+  await search.fill('team gom afk'); await search.press('ArrowRight');
+  await expect(page.locator('.hub-build-review')).toContainText('Switches to Hard Mode');
+  await expect(page.locator('.hub-review-roster .hub-skill-bar').first()).toBeInViewport({ ratio: 1 });
+  await page.getByRole('button', { name: 'Apply team GOM AFK ↵', exact: true }).click();
+  await expect(page.locator('#hub')).toBeHidden();
+  await page.getByRole('button', { name: 'Open Hub', exact: true }).click();
+  await search.fill('team gom afk');
+  await expect(page.locator('.hub-preview')).toContainText('Already matches');
+  await search.press('Enter');
+  await expect(page.locator('.hub-receipt')).toHaveText('GOM AFK already matches.');
+  const receipt = page.locator('.hub-receipt');
+  await expect(receipt).toHaveClass(/ui-toast/u);
+  expect(await receipt.evaluate(el => getComputedStyle(el).fontFamily)).toBe(await search.evaluate(el => getComputedStyle(el).fontFamily));
+  await expect(receipt).toHaveAttribute('data-tone', 'success');
+  expect(await receipt.evaluate(el => el.matches(':popover-open'))).toBe(true);
+  for (const style of ['guild-wars', 'obsidian'] as const) {
+    for (const font of ['guild-wars', 'inter', 'system', 'avenir', 'georgia', 'palatino'] as const) {
+      await page.evaluate(({ style, font }) => window.gwApplyFixtureAppearance?.({ uiStyle: style, uiFont: font, uiPanelOpacity: 65 }), { style, font });
+      expect(await receipt.evaluate(el => getComputedStyle(el).fontFamily)).toBe(await search.evaluate(el => getComputedStyle(el).fontFamily));
+      const ratio = await receipt.evaluate(el => {
+        const context = document.createElement('canvas').getContext('2d')!;
+        const rgba = (color: string) => { context.clearRect(0, 0, 1, 1); context.fillStyle = color; context.fillRect(0, 0, 1, 1); return [...context.getImageData(0, 0, 1, 1).data]; };
+        const css = getComputedStyle(el), ink = rgba(css.color), fill = rgba(css.backgroundColor);
+        const background = fill.slice(0, 3).map(channel => channel * fill[3]! / 255 + 255 - fill[3]!);
+        const foreground = ink.slice(0, 3).map((channel, index) => channel * ink[3]! / 255 + background[index]! * (1 - ink[3]! / 255));
+        const luminance = (rgb: number[]) => { const linear = rgb.map(channel => { const value = channel / 255; return value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4; }); return .2126 * linear[0]! + .7152 * linear[1]! + .0722 * linear[2]!; };
+        const back = luminance(background), text = luminance(foreground);
+        return (Math.max(back, text) + .05) / (Math.min(back, text) + .05);
+      });
+      expect(ratio, `${style}/${font} receipt over white`).toBeGreaterThanOrEqual(4.5);
+    }
+  }
+  await page.evaluate(() => window.gwFixtureCanvas?.clear());
+  const receiptBox = (await receipt.boundingBox())!;
+  expect(await receipt.evaluate((el, box) => el.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)), receiptBox)).toBe(false);
+  expect(await page.evaluate(() => document.elementFromPoint(24, 300)?.id)).toBe('canvas');
+  await page.mouse.click(24, 300);
+  expect(await page.evaluate(() => window.gwFixtureCanvas?.events.map(event => event.type))).toEqual(['pointerdown', 'mousedown', 'mouseup', 'click']);
+  await page.keyboard.press('Meta+b');
+  await expect(page.locator('.tools-window')).toBeVisible();
+  expect(await receipt.evaluate(el => el.matches(':popover-open'))).toBe(true);
+  expect(await receipt.evaluate(el => el.contains(document.activeElement))).toBe(false);
+  await page.keyboard.press('Meta+r');
+  await expect(receipt).toBeHidden();
+  expect(await receipt.evaluate(el => el.matches(':popover-open'))).toBe(false);
+});
+
+test('interrupted team Apply reopens a review with completed and remaining changes and an editor action', async ({ page }) => {
+  await page.goto('/?hub');
+  await page.getByRole('button', { name: 'Close Hub', exact: true }).click();
+  await page.getByLabel('Fixture scenario', { exact: true }).selectOption('partial');
+  const search = page.locator('.hub-search input');
+  await search.fill('team gom afk'); await search.press('Enter');
+  await expect(page.locator('.hub-row')).toContainText('Partly applied · Review');
+  await search.press('ArrowDown');
+  await expect(page.getByRole('button', { name: 'Review GOM AFK ↵', exact: true })).toBeEnabled();
+  await search.press('Enter');
+  const review = page.locator('.hub-build-review');
+  await expect(review.getByRole('status')).toContainText('Team partly applied. Synthetic interruption');
+  await expect(page.locator('.hub-status')).toBeHidden();
+  await expect(review).toContainText('Completed');
+  await expect(review).toContainText('Enabling Hard Mode confirmed.');
+  await expect(review).toContainText('Remaining');
+  await expect(review).toContainText('Update your build');
+  await page.keyboard.press('Meta+j');
+  const actions = page.getByRole('menu', { name: 'Actions', exact: true });
+  await expect(actions).toBeVisible();
+  await expect(actions.getByRole('menuitem')).toContainText(['Apply team GOM AFK', 'Open in Build Library']);
+  await page.keyboard.press('Escape');
+  await expect(actions).toBeHidden();
+  await expect.poll(() => review.evaluate(view => view.contains(document.activeElement))).toBe(true);
+  await page.getByRole('button', { name: 'Actions', exact: true }).click();
+  await actions.getByRole('menuitem', { name: 'Open in Build Library', exact: true }).click();
+  await expect(page.locator('#hub')).toBeHidden();
+  await expect(page.getByRole('textbox', { name: 'Team name', exact: true })).toHaveValue('GOM AFK');
+});
+
+
+test('an unrelated source toggle keeps the build target page, query and selection', async ({ page }) => {
+  await page.goto('/?hub');
+  const search = page.locator('.hub-search input');
+  await search.fill('build monk'); await search.press('Enter');
+  await search.fill('hero'); await search.press('Enter'); await search.fill('Tahlkora');
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: { travelPalette: false } })));
+  await expect(page.locator('.hub-caption')).toHaveText('Heroes');
+  await expect(search).toHaveValue('Tahlkora');
+  await expect(page.locator('.hub-row[aria-selected=true]')).toContainText('Tahlkora');
+});
+
+test('a suspended build page cannot resume its withdrawn source or execute stale Apply', async ({ page }) => {
+  await page.goto('/?hub');
+  const search = page.locator('.hub-search input');
+  await search.fill('build monk'); await search.press('Enter');
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await page.evaluate(() => window.dispatchEvent(new Event('hub-fixture-withdraw-library')));
+  await page.getByRole('button', { name: 'Open Hub', exact: true }).click();
+  await expect(page.locator('.hub-caption')).toHaveText('Home');
+  await expect(page.locator('.hub-row')).not.toContainText(['Apply to me', 'Apply to hero']);
+  await expect(page.locator('#app')).not.toHaveAttribute('data-action', /command|apply/);
+  await search.fill('library');
+  await expect(page.locator('.hub-row')).toHaveCount(0);
+  await expect(page.locator('#hub')).not.toContainText('Build Library is loading');
+});
+
+
+test('a new details view clears the previous page pin receipt', async ({ page }) => {
+  await page.goto('/?hub');
+  await page.locator('.hub-search input').fill('build Word of Healing');
+  await page.keyboard.press('Meta+j');
+  await page.getByRole('menuitem', { name: 'Pin to Hub', exact: true }).click();
+  await expect(page.locator('.hub-status')).toHaveText('Pinned Word of Healing.');
+  await page.keyboard.press('Meta+j');
+  await page.getByRole('menuitem', { name: 'Show build details', exact: true }).click();
+  await expect(page.locator('.hub-build-details')).toBeVisible();
+  await expect(page.locator('.hub-status')).toBeHidden();
+});
+
+
+test('a suspended saved-build phrase editor cannot resume after its Library withdraws', async ({ page }) => {
+  await page.goto('/?hub');
+  await page.locator('.hub-search input').fill('build Word of Healing');
+  await page.keyboard.press('Meta+j');
+  await page.getByRole('menuitem', { name: 'Set search phrase…', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Search phrase', exact: true }).fill('unfinished healing phrase');
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await page.evaluate(() => window.dispatchEvent(new Event('hub-fixture-withdraw-library')));
+  await page.getByRole('button', { name: 'Open Hub', exact: true }).click();
+  await expect(page.getByRole('textbox', { name: 'Search phrase', exact: true })).toHaveCount(0);
+  await expect(page.locator('.hub-caption')).toHaveText('Home');
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', /command|apply/);
 });

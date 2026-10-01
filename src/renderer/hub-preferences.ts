@@ -159,7 +159,7 @@ export function manageHubShortcuts(hub: HubPresenter<HTMLElement>, store: HubSho
       reset.disabled = !phrased().length;
       const selected = visible.find(entry => entry.id === chosen);
       const row = selected && lookup(selected.id);
-      footer.primary(row ? { label: `Set phrase for ${row.title}`, run: () => editHubShortcut(hub, row, store) } : null);
+      footer.primary(row ? { label: `Set phrase for ${row.title}`, run: () => editHubShortcut(hub, row, store, () => !!lookup(row.id)) } : null);
       footer.secondary(selected ? { label: `Remove ${title(selected)}…`, run: () => confirmRemove(selected) } : null);
     }
     /** One confirmation page for both removals: it names what goes and what stays, and Keep is the way out. */

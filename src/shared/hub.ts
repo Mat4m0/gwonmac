@@ -13,7 +13,7 @@ export type HubRow = Readonly<{
   /** A domain-specific matcher shared by global search and scoped browsing. */
   matches?(query: string): boolean;
   action: string;
-  /** Preferred initial browse focus, without affecting explicit user selection. */
+  /** Preferred initial browse focus; false requires explicit selection. */
   preferred?: boolean;
   /** The primary changes the game or the account: travel, invite, apply, switch or account (D-24). Never selected on a guess. */
   consequential?: boolean;
@@ -37,11 +37,15 @@ export type HubRow = Readonly<{
   quoteBasis?: Readonly<{ value:string; options:readonly {value:string;label:string}[]; choose(value:string):void }>;
   conversion?: Readonly<{ input: string; from: string; to: string; iconFrom?: string; iconTo?: string }>;
   unavailable?: string;
+  /** Inspection remains available, but this row cannot apply its game action. */
+  readOnly?: true;
   /** Opens the canonical saved record in its existing authoring workspace. */
   workspace?(): void;
   /** A second way into this row; its Actions menu lists it when `actionsLabel` names it. */
   actions?(): void;
   actionsLabel?: string;
+  /** Named person actions, shared with its child page and run through the Hub task owner. */
+  menuActions?(): readonly HubRow[];
   /** How the footer and a repeated Enter name this row's action while it runs (HUB-083). */
   pending?: Readonly<{ label: string; again: string }>;
   run(task: HubTask): void | Promise<void>;
@@ -133,9 +137,9 @@ export type HubSummary = Readonly<Pick<HubRow, 'title' | 'detail' | 'skills' | '
 export type HubViewAction = Readonly<{ label: string; run(task: HubTask): void | Promise<void>; disabled?: boolean; destructive?: boolean; armed?: boolean }>;
 /**
  * The Hub footer stays in every view and names what Enter does there. A view sets its named
- * primary (Enter outside a control) and a secondary in Actions; without a primary it reads "Done" and goes
- * back. A view opens the shared Actions menu for its selected item with `openActions()`.
- * Legacy embedded footers remain until their owning branch completes the cutover.
+ * primary (Enter outside a control) and a secondary in Actions (⌘J); without one the primary reads "Done" and goes
+ * back. Travel and Characters keep their own footer and say so with `own()`.
+ * A view can open that same menu for its selected item through openActions().
  */
 export type HubViewFooter = Readonly<{ primary(action: HubViewAction | null): void; secondary(action: HubViewAction | null): void; openActions(): void; own(): void }>;
 export type HubViewMount<Target> = (target: Target, back: () => void, footer: HubViewFooter) => () => void;
@@ -151,8 +155,9 @@ export interface HubPresenter<Target> {
   /** A named outcome with no running task behind it; a failure also waits in the status line of the next opening. */
   notify(message: string, outcome?: 'failed'): void;
   attach(source: HubSource): () => void;
-  showRows(title: string, rows: () => readonly HubRow[], summary?: HubSummary, destination?: HubDestination): void;
-  showView(title: string, mount: HubViewMount<Target>, available?: () => boolean, destination?: HubDestination): void;
+  /** An optional owner binds navigation lifetime to the one attached source, without storing another availability flag. */
+  showRows(title: string, rows: () => readonly HubRow[], summary?: HubSummary, destination?: HubDestination, owner?: HubSource): void;
+  showView(title: string, mount: HubViewMount<Target>, available?: () => boolean, destination?: HubDestination, owner?: HubSource): void;
   /** Whether Esc on an empty query goes back to a parent page rather than closing the Hub. */
   readonly hasParent?: boolean;
 }

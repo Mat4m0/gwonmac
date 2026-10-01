@@ -90,7 +90,7 @@ test("native whisper boundary refuses invalid pointers, commands, names and leng
 });
 
 test("typed whisper entry rejects delimiters and malformed Unicode without truncation", () => {
-  for (const recipient of ['', 'Romi,Kai', 'Romi\n', '\ud800']) {
+  for (const recipient of ['', 'Romi,Kai', 'Romi\n', '\ud800', 'Mo 🌿']) {
     assert.throws(() => whisperLine(recipient, 'hello'));
   }
   for (const message of ['', '\n', '\udfff', 'x'.repeat(121)]) {
@@ -170,4 +170,5 @@ test("the invite boundary refuses every other line shape and each enqueue keeps 
   assert.deepEqual(f.sent, [], "policy refuses at the drain and the request never replays");
   assert.throws(() => partyInviteLine(" Mo Kai"));
   assert.throws(() => partyInviteLine("Mo,Kai"));
+  assert.throws(() => partyInviteLine("Mo 🌿"));
 });

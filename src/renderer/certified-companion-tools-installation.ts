@@ -12,6 +12,7 @@ import {
   type EnhancementCapabilities,
   type EnhancementProgram,
 } from "../shared/enhancement-contracts.js";
+import { featureActivationRequested } from "../shared/feature-contracts.js";
 import type { AppSettings } from "../shared/contracts.js";
 import { featureActivationRequested } from "../shared/feature-contracts.js";
 import type { ToolboxObservation } from "../shared/builds/live-party.js";
@@ -567,9 +568,17 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
     playRegion: playRegion(),
     state: tools.travelGameState(snapshot().playRegionState),
   });
+  const observingParty = () => policy().buildLibrary || policy().cartography || program === "effect-observer";
   const syncToolbox = () => {
-    toolbox?.setEnabled(policy().tools);
-    toolbox?.setAvailable({ builds: policy().buildLibrary, trade: policy().tradeChat });
+    // Saved authoring stays available; native observation and Apply keep their
+    // region gates. This is the same saved selection as the host-only Library.
+    const authoring = featureActivationRequested("buildLibrary", snapshot().settings);
+    toolbox?.setEnabled(policy().tools || authoring);
+    toolbox?.setAvailable({ builds: policy().buildLibrary || authoring, trade: policy().tradeChat });
+    if (!observingParty()) {
+      party = { status: "waiting", party: { status: "waiting", playRegion: playRegion() } };
+      toolbox?.update(party);
+    }
   };
   const tracePolicy = (reason: "launch" | "region" | "settings") => {
     if (!window.gwNative.init.development) return;
@@ -686,7 +695,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
           syncStorage();
         },
       } : null,
-      toolbox: foundation ? { enabled: () => policy().buildLibrary || policy().cartography || program === "effect-observer",
+      toolbox: foundation ? { enabled: observingParty,
         update: (state) => { party = state; professionTrace?.poll(state); toolbox?.update(state); } } : null,
       observeState,
       publishState: program === "target-observer",
