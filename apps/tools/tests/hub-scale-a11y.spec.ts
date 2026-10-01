@@ -102,24 +102,31 @@ test('an owned list ignores unrelated observations and still follows its own sou
   const result = await page.evaluate(async () => {
     const hub = window.gwHub!;
     let notifyOwner = () => {}, notifyOther = () => {};
-    let title = 'Original', reads = 0;
+    let title = 'Original', reads = 0, lifecycle = '';
     const owner: HubSource = { search: () => [], setVisible() {}, subscribe(listener) { notifyOwner = listener; return () => {}; } };
     const detachOwner = hub.attach(owner);
-    const detachOther = hub.attach({ search: () => [], setVisible() {}, subscribe(listener) { notifyOther = listener; return () => {}; } });
+    const detachOther = hub.attach({ search: () => [], lifecycle: () => lifecycle, setVisible() {}, subscribe(listener) { notifyOther = listener; return () => {}; } });
     hub.showRows('Owned list', () => { reads++; return [{ id: 'owned', title, detail: '', group: 'Builds', action: 'Choose', run() {} }]; }, undefined, undefined, owner);
     await new Promise(requestAnimationFrame);
     reads = 0;
+    const changes: MutationRecord[] = [];
+    const observer = new MutationObserver(records => changes.push(...records));
+    observer.observe(document.querySelector('#hub')!, { subtree: true, childList: true, attributes: true });
     for (let update = 0; update < 20; update++) notifyOther();
     await new Promise(requestAnimationFrame);
     const unrelatedReads = reads;
+    changes.push(...observer.takeRecords()); observer.disconnect();
+    const unrelatedMutations = changes.length;
+    lifecycle = 'Updating'; notifyOther();
+    const updatedLifecycle = document.querySelector('.hub-lifecycle')?.textContent;
     title = 'Updated'; notifyOwner();
     await new Promise(requestAnimationFrame);
     const updated = document.querySelector('#hub .hub-title')?.textContent;
     const ownReads = reads - unrelatedReads;
     detachOther(); detachOwner();
-    return { unrelatedReads, ownReads, updated, withdrawn: document.querySelector('.hub-caption')?.textContent };
+    return { unrelatedReads, unrelatedMutations, updatedLifecycle, ownReads, updated, withdrawn: document.querySelector('.hub-caption')?.textContent };
   });
-  expect(result).toEqual({ unrelatedReads: 0, ownReads: 1, updated: 'Updated', withdrawn: 'Home' });
+  expect(result).toEqual({ unrelatedReads: 0, unrelatedMutations: 0, updatedLifecycle: 'Updating', ownReads: 1, updated: 'Updated', withdrawn: 'Home' });
 });
 
 test('the unopened Build workspace stays small and only a focused slot loads choices (HUB-254)', async ({ page }) => {

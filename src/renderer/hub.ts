@@ -597,6 +597,18 @@ export function createHub(parent: HTMLElement) {
     event.preventDefault(); if (busy()) return;
     hover.hold(); select(row.id); focusResult(); openMenu();
   });
+  // Source notifications change context and lifecycle facts, not the current page or search.
+  function paintSourceFacts() {
+    const located = activeView ? activeView.destination === 'travel' || activeView.destination === 'characters' : !scope && !input.value.trim();
+    const context = located ? [...sources.keys()].filter(sourceEnabled).flatMap(source => source.context?.() ?? []) : [];
+    const contextLine = required<HTMLElement>('.hub-context');
+    const contextText = context.join(' · ');
+    if (contextLine.textContent !== contextText) contextLine.textContent = contextText;
+    const lifecycleText = disposeView ? '' : [...sources.keys()].filter(sourceEnabled).map(source => source.lifecycle?.()).find(Boolean) ?? '';
+    if (lifecycle.textContent !== lifecycleText) lifecycle.textContent = lifecycleText;
+    if (lifecycle.title !== lifecycleText) lifecycle.title = lifecycleText;
+    if (lifecycle.hidden !== !lifecycleText) lifecycle.hidden = !lifecycleText;
+  }
   function paintNavigation() {
     const summary = disposeView ? undefined : scope?.summary;
     const summaryPanel = required<HTMLElement>('.hub-summary');
@@ -618,13 +630,7 @@ export function createHub(parent: HTMLElement) {
     }
     const currentTitle = activeView?.title ?? scope?.title ?? 'Home';
     caption.textContent = currentTitle;
-    // Home with an empty query, and the views about where you are and who you play (HUB-190).
-    const located = activeView ? activeView.destination === 'travel' || activeView.destination === 'characters' : !scope && !input.value.trim();
-    const context = located ? [...sources.keys()].filter(sourceEnabled).flatMap(source => source.context?.() ?? []) : [];
-    required<HTMLElement>('.hub-context').textContent = context.join(' · ');
-    // One quiet lifecycle line on list stages; a report in the status line takes its place.
-    lifecycle.textContent = disposeView ? '' : [...sources.keys()].filter(sourceEnabled).map(source => source.lifecycle?.()).find(Boolean) ?? '';
-    lifecycle.title = lifecycle.textContent; lifecycle.hidden = !lifecycle.textContent;
+    paintSourceFacts();
     const trail = history.map((page, index) => ({ title: pageTitle(page), index }));
     const nextNavigation = JSON.stringify([trail, currentTitle]);
     if (navigationRevision !== nextNavigation) {
@@ -1275,7 +1281,7 @@ export function createHub(parent: HTMLElement) {
     attach(next: HubSource) {
       sources.set(next, next.subscribe(() => {
         // A scoped list belongs to its source; peer observations only update navigation facts.
-        if (scope?.owner && scope.owner !== next) { if (root.open) paintNavigation(); return; }
+        if (scope?.owner && scope.owner !== next) { if (root.open) paintSourceFacts(); return; }
         scheduleRefresh();
       })); next.setVisible(root.open && sourceEnabled(next)); refresh();
       return () => {
