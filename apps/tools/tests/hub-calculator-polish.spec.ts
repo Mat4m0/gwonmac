@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { timeBudget } from './performance-budget.js';
 
 test.use({ locale: 'en-US', timezoneId: 'UTC' });
 test.beforeEach(async ({ page }) => {
@@ -206,6 +207,6 @@ test('resumed and rates-saved quotes retain selection, empty status and Enter co
     return {payload,elapsed};
   });
   expect(copied.payload).toBe('10005 e = 60,030 platinum (sample) · Buy from trader · Current observation 9/30/2026, 12:00:00 PM · Kamadan · Estimate');
-  expect(copied.elapsed).toBeLessThanOrEqual(10);
+  expect(copied.elapsed).toBeLessThanOrEqual(timeBudget(10));
   await expect(page.locator('html')).toHaveAttribute('data-quote-reads','1');
 });

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { timeBudget } from './performance-budget.js';
 
 /**
  * Async actions belong to the Hub page that started them (HUB-004, HUB-016, HUB-083,
@@ -339,7 +340,7 @@ test('an account open that focuses another window still ends the task, so the ne
     while (document.querySelector('.hub-caption')?.textContent !== 'Travel') await new Promise(requestAnimationFrame);
     return performance.now() - start;
   });
-  expect(elapsed).toBeLessThanOrEqual(100);
+  expect(elapsed).toBeLessThanOrEqual(timeBudget(100));
   await page.getByRole('combobox', { name: 'Destination, phrase, or friend' }).fill('kam');
   await page.evaluate(() => window.dispatchEvent(new Event('finish-account')));
   await expect.poll(() => actions(page)).toEqual(['Account Second open', 'Account Second open']);
