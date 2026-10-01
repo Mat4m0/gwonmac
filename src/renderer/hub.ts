@@ -16,7 +16,7 @@ import { createHubCalculator } from './hub-calculator.js';
 import { armConfirmation } from './surface-controller.js';
 import { listIndexAfter, listKeyStep } from './list-keys.js';
 import { createHoverSelection } from '../shared/ui/hover-selection.js';
-import { matchHubRows, parseHubQuery, normaliseHubQuery, type HubRow, type HubSource, type HubSummary, type HubViewAction, type HubViewFooter, type HubViewMount } from '../shared/hub.js';
+import { matchHubRows, parseHubQuery, normaliseHubQuery, type HubRow, type HubSource, type HubSummary, type HubTask, type HubViewAction, type HubViewFooter, type HubViewMount } from '../shared/hub.js';
 export function createHub(parent: HTMLElement) {
   const document = parent.ownerDocument;
   const root = document.createElement('dialog');
@@ -27,7 +27,7 @@ export function createHub(parent: HTMLElement) {
   root.innerHTML = `<section class="hub-panel ui-frame">
     <header class="hub-heading ui-window-head"><button class="ui-button hub-back" data-variant="quiet" aria-label="Back" hidden>← Back</button><span class="hub-name">Hub</span><nav class="hub-breadcrumbs" aria-label="Hub breadcrumb"><span class="hub-caption">Home</span></nav><span class="hub-context"></span><button class="ui-window-lock hub-lock" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="lock-shackle" d="M7 11V7a5 5 0 0 1 10 0v4"/><rect x="5" y="11" width="14" height="10" rx="2"/></svg></button><button class="ui-window-close hub-close" aria-label="Close Hub" title="Close Hub">×</button></header>
     <section class="hub-summary" aria-label="Build to apply" hidden></section>
-    <div class="hub-search"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 8 10-8 10L4 12 12 2Zm0 5v10M8 12h8"/></svg><span class="hub-scope" hidden></span><input type="text" role="combobox" aria-label="Search people, places, builds" aria-autocomplete="list" aria-controls="hub-results" aria-expanded="true" placeholder="Search people, places, builds…" autocomplete="off" spellcheck="false" maxlength="120"></div>
+    <div class="hub-search"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 8 10-8 10L4 12 12 2Zm0 5v10M8 12h8"/></svg><span class="hub-scope" hidden></span><input type="text" role="combobox" aria-label="Search people, places, builds" aria-autocomplete="list" aria-controls="hub-results" aria-expanded="true" placeholder="Search people, places, builds…" autocomplete="off" spellcheck="false" maxlength="120"><span class="hub-progress" aria-hidden="true"></span></div>
     <p class="hub-hint" id="hub-hint" hidden></p><div class="hub-rate-controls" hidden></div><div class="hub-results ui-scroll" id="hub-results" role="listbox" aria-label="Results" tabindex="-1"></div>
     <pre class="hub-preview ui-scroll" hidden></pre><div class="hub-view" hidden></div><p class="hub-status" role="status" hidden></p><p class="hub-lifecycle" hidden></p>
     <footer class="hub-footer"><span class="hub-legend"></span><span class="hub-count"></span><button class="hub-primary ui-button" data-variant="primary"></button><button class="hub-actions ui-button" data-variant="quiet">Actions</button></footer>
@@ -62,6 +62,8 @@ export function createHub(parent: HTMLElement) {
   let shortcutRevision = '';
   let navigationRevision = '';
   let selected: string | null = null;
+  /** The query found no results yet; results that arrive for it later, e.g. from a loading source, get its initial selection. */
+  let awaitingResults = false;
   const sources = new Map<HubSource, () => void>();
   const sourceEnabled = (source: HubSource) => !source.feature || ((source.feature === 'characterSwitchEnabled' || !!window.gwToolsSettings?.().gwonmacTools) && !!window.gwToolsSettings?.()[source.feature]);
   type RowScope = Readonly<{ title: string; rows: () => readonly HubRow[]; summary?: HubSummary }>;
@@ -168,9 +170,22 @@ export function createHub(parent: HTMLElement) {
   }
   let restoring = false;
   let previousFocus: HTMLElement | null = null;
-  let pending = false;
-  let epoch = 0;
-  const report = (message: string) => { status.textContent = message; status.hidden = !message; };
+  /**
+   * The page session a running action belongs to (HUB-004). Typing, any page change, closing and
+   * suspending end it, so a late completion reports instead of closing or navigating a newer page.
+   */
+  let session = 0;
+  const endSession = () => { session++; };
+  /** The session a blur suspended; only that suspension, not a later page, belongs to its task. */
+  let suspendedSession = -1;
+  /** The row action running on this page; the footer and status name it until it ends (HUB-083). */
+  let running: { session: number; label: string; again: string } | null = null;
+  const busy = () => running !== null && running.session === session;
+  /** A failure reported while the Hub was closed waits in the status line of the next opening. */
+  let carriedFailure = '';
+  /** A late task's receipt outlives the typing that ended its session; any other report replaces it. */
+  let receiptInStatus = false;
+  const report = (message: string, receipt = false) => { status.textContent = message; status.hidden = !message; receiptInStatus = receipt && !!message; };
   const dispatch = (name: string, detail?: unknown) => {
     if (window.dispatchEvent(new CustomEvent(name, { cancelable: true, detail }))) {
       throw new Error('Unavailable in the current game state.');
@@ -252,20 +267,35 @@ export function createHub(parent: HTMLElement) {
     preview.textContent = row?.preview ?? ''; preview.hidden = !row?.preview || !!disposeView;
     // A row action that opened a view ends here: the view names the footer now.
     if (viewFooter) { paintViewFooter(); return; }
-    primary.replaceChildren(document.createTextNode(row ? row.action : 'Select a result'));
-    if (row) { const key = document.createElement('kbd'); key.textContent = '↵'; primary.append(key); }
-    primary.disabled = !row || !!row.unavailable || pending;
+    // A running action keeps the footer: it names what runs, disabled, until it ends (HUB-083).
+    const working = busy() ? running : null;
+    primary.replaceChildren(document.createTextNode(working ? working.label : row ? row.action : 'Select a result'));
+    if (row && !working) { const key = document.createElement('kbd'); key.textContent = '↵'; primary.append(key); }
+    disablePrimary(!row || !!row.unavailable || !!working);
     primary.dataset.variant = row?.destructive ? 'danger' : 'primary';
     // Footer slots never hide, so nothing slides under a resting pointer; they disable instead.
     const actionsButton = required<HTMLButtonElement>('.hub-actions');
     actionsButton.disabled = !row || (!!scope && !row.skills && !scope.summary?.skills);
     actionsButton.textContent = scope ? 'Details' : 'Actions';
     paintLegend(row);
+    paintBusy();
+  }
+  /** The primary disables instead of hiding; under the focus it hands focus to search or the view, never to <body>. */
+  function disablePrimary(disabled: boolean) {
+    const focused = document.activeElement === primary;
+    primary.disabled = disabled;
+    if (disabled && focused) (search.hidden ? firstControl() : input).focus({ preventScroll: true });
+  }
+  /** `aria-busy` and the thin bar under the search while this page's action runs. */
+  function paintBusy() {
+    const working = busy() || (viewRunning && !!viewFooter);
+    list.setAttribute('aria-busy', String(busy())); content.setAttribute('aria-busy', String(viewRunning && !!viewFooter));
+    required<HTMLElement>('.hub-panel').dataset.busy = String(working);
   }
   /** The footer's key legend names only keys that act here and now. */
   function paintLegend(row: HubRow | undefined) {
     const keys: [string[], string][] = [];
-    if (!viewFooter && rows.length > 1) keys.push([['↑', '↓'], 'Select']);
+    if (!viewFooter && rows.length > 1 && !busy()) keys.push([['↑', '↓'], 'Select']);
     if (!viewFooter && row?.navigate) keys.push([['→'], 'Open']);
     keys.push([['Esc'], !viewFooter && input.value ? 'Clear' : history.length ? 'Back' : 'Close']);
     if (!atHome()) keys.push([['⌘', '⌫'], 'Back']);
@@ -285,9 +315,9 @@ export function createHub(parent: HTMLElement) {
     footer.hidden = viewFooter.own;
     const action = viewFooter.primary ?? done;
     primary.replaceChildren(document.createTextNode(action.label));
-    // Enter runs a named primary, so only that one carries the keycap.
-    if (viewFooter.primary) { const key = document.createElement('kbd'); key.textContent = '↵'; primary.append(key); }
-    primary.disabled = !!action.disabled || viewRunning;
+    // Enter runs a named primary, so only that one carries the keycap, and not while it runs.
+    if (viewFooter.primary && !viewRunning) { const key = document.createElement('kbd'); key.textContent = '↵'; primary.append(key); }
+    disablePrimary(!!action.disabled || viewRunning);
     primary.dataset.variant = action.destructive ? 'danger' : 'primary';
     if (!action.armed) { viewArming?.arming.disarm(); viewArming = null; }
     else if (viewArming?.label !== action.label) {
@@ -298,17 +328,18 @@ export function createHub(parent: HTMLElement) {
     secondary.disabled = !viewFooter.secondary || !!viewFooter.secondary.disabled || viewRunning;
     count.textContent = '';
     paintLegend(undefined);
+    paintBusy();
   }
   /** Runs a view's footer action once; an armed primary refuses anything before it arms and any multi-click. */
   async function runViewAction(action: HubViewAction | null, event?: Event) {
     const state = viewFooter;
     if (!state || !action || action.disabled || viewRunning) return;
     if (action.armed && !viewArming?.arming.accepts(event)) return;
-    const generation = epoch;
+    const task = startTask();
     viewRunning = true; report(''); paintViewFooter();
-    try { await action.run(); }
-    catch (error) { if (generation === epoch) report(error instanceof Error ? error.message : 'The action could not complete. Try again.'); }
-    finally { viewRunning = false; if (viewFooter === state) paintViewFooter(); }
+    try { await action.run(task); }
+    catch (error) { task.fail(error); }
+    finally { task.end(); if (viewFooter === state) { viewRunning = false; paintViewFooter(); } }
   }
   function renderSkillBar(skills: NonNullable<HubRow['skills']>) {
     const bar = document.createElement('span'); bar.className = 'hub-skill-bar';
@@ -507,17 +538,19 @@ export function createHub(parent: HTMLElement) {
           option.append(renderBuildInfo(row));
         }
       }
-      option.addEventListener('pointermove', event => { if (hover.selects(event)) select(row.id); });
+      // While this page's action runs, the pointer never moves the selection off it (HUB-083).
+      option.addEventListener('pointermove', event => { if (!busy() && hover.selects(event)) select(row.id); });
       // A click opens a navigational row but only selects one that changes the game or the
       // account; the footer primary or a double-click that started on this row runs it (D-24).
       // A page change between the clicks cancels the run in the surface controller (HUB-242).
       // The click holds its selection while the pointer crosses other rows to the footer.
       option.addEventListener('click', event => {
+        if (busy()) return;
         if (event.detail <= 1) { pressed = row.id; hover.hold(); select(row.id); focusResult(); if (!row.consequential) void run(); }
         else if (event.detail === 2 && row.consequential && pressed === row.id && selected === row.id) void run();
       });
       // Right-click selects the row and opens its Actions (HUB-248).
-      option.addEventListener('contextmenu', event => { event.preventDefault(); hover.hold(); select(row.id); focusResult(); actions(); });
+      option.addEventListener('contextmenu', event => { event.preventDefault(); if (busy()) return; hover.hold(); select(row.id); focusResult(); actions(); });
       list.append(option);
     });
     count.textContent = `${rows.length} result${rows.length === 1 ? '' : 's'}`;
@@ -529,26 +562,57 @@ export function createHub(parent: HTMLElement) {
     // A fresh Home in an explorable area never starts on a row that leaves it (D-13).
     const initial = !input.value.trim() ? rows.find(row => row.preferred && !row.unavailable) ?? rows.find(row => !row.unavailable && !row.leavesArea) ?? rows.find(row => !row.leavesArea)
       : !scope && parsed.scope && !parsed.term ? rows.find(row => !row.consequential && !row.unavailable) : rows[0];
-    select((prior?.id === 'quote-state' || prior?.id === 'market-state') && !!rows[0]?.conversion ? rows[0].id : reset ? exactCount > 1 ? null : initial?.id ?? null : !revised && rows.some(row => row.id === selected) ? selected : null);
+    const settling = reset || (awaitingResults && selected === null && rows.length > 0);
+    if (settling) awaitingResults = !rows.length;
+    select((prior?.id === 'quote-state' || prior?.id === 'market-state') && !!rows[0]?.conversion ? rows[0].id : settling ? exactCount > 1 ? null : initial?.id ?? null : !revised && rows.some(row => row.id === selected) ? selected : null);
     if (!rows.length) {
       const empty = document.createElement('p'); empty.className = 'hub-empty'; empty.textContent = 'No matches'; list.append(empty);
     }
   }
+  /**
+   * Binds an action to the page session that starts it (HUB-004). While that page shows, the
+   * action reports progress and failures in the status line and its success closes the Hub with
+   * the receipt. After the player moved on, it only reports: a receipt, or a failure receipt.
+   * An action that focuses another window (Open an account, Show Launcher) suspends its own
+   * page; its success still ends the task, so the next opening starts at Home.
+   */
+  function startTask(): HubTask & { fail(error: unknown): void; end(): void } {
+    const started = session;
+    const live = () => root.open && session === started;
+    let shown = '';
+    return {
+      live,
+      progress: message => { if (live()) { report(message); shown = message; } },
+      done: receipt => {
+        if (live() || (!root.open && suspended && suspendedSession === started)) close(receipt);
+        else if (receipt) notify(receipt);
+      },
+      fail: error => {
+        const message = error instanceof Error ? error.message : 'The action could not complete. Try again.';
+        if (live()) report(message); else notify(message, 'failed');
+      },
+      // An action that ended without a receipt, e.g. one whose view shows its own outcome, never leaves its progress behind.
+      end: () => { if (live() && shown && status.textContent === shown) report(''); },
+    };
+  }
   async function run() {
     const row = rows.find(row => row.id === selected);
-    if (!row || pending) return;
+    if (!row) return;
+    // One action at a time per page: Enter names the running one instead of starting another.
+    if (busy()) { report(running!.again); return; }
     if (row.unavailable) { report(row.unavailable); return; }
-    const generation = epoch;
-    pending = true; select(selected); report('');
+    const task = startTask();
+    const mine = { session, label: row.pending?.label ?? row.action, again: row.pending?.again ?? `${row.action} is still running.` };
+    running = mine; select(selected); report(''); if (row.pending) task.progress(row.pending.label);
     try {
       if(row.searchQuery!==undefined){remember();resetView();scope=null;caption.textContent='Home';input.value=row.searchQuery;refresh(true);input.focus();input.select();}
-      else await row.run();
+      else await row.run(task);
     }
-    catch (error) { if (generation === epoch) report(error instanceof Error ? error.message : 'The action could not complete. Try again.'); }
-    finally { pending = false; select(selected); }
+    catch (error) { task.fail(error); }
+    finally { task.end(); if (running === mine) { running = null; if (root.open) select(selected); } }
   }
   function resetView() {
-    restoringFocus?.disconnect(); restoringFocus = null; keepDrafts(); pressed = null; modal.pageChanged();
+    endSession(); restoringFocus?.disconnect(); restoringFocus = null; keepDrafts(); pressed = null; modal.pageChanged();
     disposeView?.(); disposeView = null; activeView = null; viewAvailable = null; returnFromView = null; content.replaceChildren(); content.hidden = true;
     viewFooter = null; viewRunning = false; viewArming?.arming.disarm(); viewArming = null;
     search.hidden = false; list.hidden = false; footer.hidden = false;
@@ -572,22 +636,25 @@ export function createHub(parent: HTMLElement) {
   }
   /** Esc: clear a typed query, then go back one level, then close (D-4). */
   function dismiss() {
-    if (!search.hidden && input.value) { input.value = ''; report(''); refresh(true); input.focus(); return; }
+    if (!search.hidden && input.value) { endSession(); input.value = ''; report(''); refresh(true); input.focus(); return; }
     if (history.length) back(); else close();
   }
   function close(message?: string) {
     if (root.open) frame = required<HTMLElement>('.hub-panel').getBoundingClientRect();
-    suspended = null; epoch++; history.length = 0; resetView(); modal.close(); for (const source of sources.keys()) source.setVisible(false); scope = null;
+    suspended = null; history.length = 0; resetView(); modal.close(); for (const source of sources.keys()) source.setVisible(false); scope = null;
     input.value = ''; restoreQuery = ''; report(''); selected = null;
     if (typeof message === 'string' && message) notify(message);
   }
   /**
    * A named outcome. An open Hub reports it in its status line; after the Hub closed
    * it shows briefly where the frame's footer stood, and never outlives the next opening.
+   * A failure also waits in the status line of that next opening, so it is never dropped.
    */
-  function notify(message: string) {
-    if (root.open) { report(message); return; }
+  function notify(message: string, outcome?: 'failed') {
+    if (root.open) { report(message, true); return; }
+    if (outcome === 'failed') carriedFailure = message;
     clearTimeout(receiptTimer); receipt.textContent = message; receipt.hidden = false; receiptTimer = setTimeout(() => { receipt.hidden = true; }, 8000);
+    receipt.dataset.outcome = outcome ?? 'done';
     if (frame?.width) {
       receipt.style.left = `${frame.left + frame.width / 2}px`; receipt.style.bottom = `${Math.max(8, window.innerHeight - frame.bottom + 12)}px`;
       receipt.style.maxWidth = `${Math.max(0, frame.width - 24)}px`;
@@ -596,7 +663,7 @@ export function createHub(parent: HTMLElement) {
   function suspend() {
     if (!root.open) return;
     frame = required<HTMLElement>('.hub-panel').getBoundingClientRect();
-    suspended = capture(); epoch++; modal.close();
+    suspended = capture(); suspendedSession = session; endSession(); modal.close();
     for (const source of sources.keys()) source.setVisible(false);
   }
   const modal = window.gwSurfaces.registerDialog({ root, priority: 6, transient: true,
@@ -614,20 +681,21 @@ export function createHub(parent: HTMLElement) {
     const resume = suspended; suspended = null;
     for (const source of sources.keys()) source.setVisible(sourceEnabled(source));
     if (resume) restorePage(resume); else home();
+    if (carriedFailure) { report(carriedFailure, true); carriedFailure = ''; }
   }
-  input.addEventListener('input', () => { report(''); refresh(true); });
+  input.addEventListener('input', () => { endSession(); if (!receiptInStatus) report(''); refresh(true); });
   input.addEventListener('keydown', event => {
     if (event.isComposing) return;
     const step = listKeyStep(event, Math.max(1, Math.floor(list.clientHeight / (list.querySelector<HTMLElement>('.hub-row')?.offsetHeight || 40)) - 1));
     if (step !== null) {
       // The list owns these keys even without results, so they never move the caret or drop a text selection.
       event.preventDefault();
-      if (!rows.length) return;
+      if (!rows.length || busy()) return;
       hover.release();
       select(rows[listIndexAfter(rows.findIndex(row => row.id === selected), rows.length, step)]!.id, true);
     } else if (event.key === 'ArrowRight' && !event.repeat && input.selectionStart === input.value.length && input.selectionEnd === input.value.length) {
       const row = rows.find(row => row.id === selected);
-      if (row?.navigate) { event.preventDefault(); row.navigate(); }
+      if (row?.navigate) { event.preventDefault(); row.navigate(startTask()); }
     } else if (event.key === 'Enter' && !event.metaKey && !event.ctrlKey && !event.altKey) {
       // Only a plain Enter runs the named primary; a modified Enter is never a second route to it.
       event.preventDefault(); if (!event.repeat) void run();
@@ -764,7 +832,7 @@ export function createHub(parent: HTMLElement) {
   };
   window.addEventListener('blur', onBlur); window.addEventListener('gw:tools-settings', onSettings);
   const presenter = {
-    show, close, suspend, openSettings, toggle: () => root.open ? close() : show(), actions,
+    show, close: () => close(), suspend, openSettings, toggle: () => root.open ? close() : show(), actions,
     /** A mounted view replaced its own page (a confirmation): a click run from before it is cancelled. */
     pageChanged: () => modal.pageChanged(),
     get visible() { return root.open; },
@@ -810,7 +878,7 @@ export function createHub(parent: HTMLElement) {
       if (!content.contains(document.activeElement)) firstControl().focus();
     },
     notify,
-    browseBuilds() { const row = lookup('builds'); if (row && !row.unavailable) void row.run(); else report('Build Library is loading. Try again.'); },
+    browseBuilds() { const row = lookup('builds'); if (row && !row.unavailable) void row.run(startTask()); else report('Build Library is loading. Try again.'); },
     resetPosition: hubWindow.reset,
     dispose() { close(); clearTimeout(receiptTimer); receipt.remove(); hubWindow.dispose(); disposeFrame(); for (const unsubscribe of sources.values()) unsubscribe(); sources.clear(); modal.dispose(); root.remove(); window.removeEventListener('blur', onBlur); window.removeEventListener('gw:tools-settings', onSettings); },
   };

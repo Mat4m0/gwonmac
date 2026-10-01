@@ -221,20 +221,47 @@ function sameAttributes(
   return [...names].every((name) => (left[name] ?? 0) === (right[name] ?? 0));
 }
 
-function memberBuildDiffers(
+/** The member's build commands the live member still needs: secondary, skill bar, attributes. */
+function memberBuildChanges(
   member: TeamApplyMember,
   live: {
     professions: Build["professions"] | null;
     skills: Build["skills"] | null;
     attributes: Build["attributes"] | null;
   },
-): boolean {
-  if (member.build === null) return false;
-  return live.professions === null
-    || live.professions[1] !== member.build.professions[1]
-    || live.skills === null
-    || live.skills.some((skill, index) => skill !== member.build?.skills[index])
-    || !sameAttributes(live.attributes, member.build.attributes);
+): number {
+  if (member.build === null) return 0;
+  const build = member.build;
+  return Number(live.professions === null || live.professions[1] !== build.professions[1])
+    + Number(live.skills === null || live.skills.some((skill, index) => skill !== build.skills[index]))
+    + Number(!sameAttributes(live.attributes, build.attributes));
+}
+
+/**
+ * The confirmed changes a ready plan should take from this party, for counted progress
+ * ("5/16"). A hero Apply has to add counts every build command, since its bar is not
+ * observed yet; the runner's own count stays the evidence.
+ */
+export function plannedTeamApplyChanges(plan: TeamApplyPlan, party: LiveParty, reconcileRoster = true): number {
+  const player = plan.members[0];
+  const wanted = plan.members.filter(
+    (member): member is TeamApplyMember & { hero: HeroId } => member.hero !== null,
+  );
+  const wantedIds = new Set(wanted.map(({ hero }) => hero));
+  const currentOrder = party.heroes.map(({ hero }) => hero);
+  const rebuild = reconcileRoster && !canReconcileTeamRoster(currentOrder, wanted.map(({ hero }) => hero));
+  const kept = (hero: HeroId) => !rebuild && party.heroes.find((live) => live.hero === hero);
+  const roster = !reconcileRoster ? 0 : rebuild ? currentOrder.length + wanted.length
+    : currentOrder.filter((hero) => !wantedIds.has(hero)).length + wanted.filter(({ hero }) => !kept(hero)).length;
+  return Number(plan.mode !== "none" && party.hardMode !== null && party.hardMode !== (plan.mode === "hard"))
+    + (player?.build && party.player ? memberBuildChanges(player, party.player) : 0)
+    + roster
+    + wanted.reduce((sum, member) => {
+      const live = kept(member.hero);
+      const unseen = { professions: null, skills: null, attributes: null };
+      return sum + memberBuildChanges(member, live || unseen)
+        + Number(member.behaviour !== null && (!live || live.behaviour !== member.behaviour));
+    }, 0);
 }
 
 function lockedSkills(
@@ -321,7 +348,7 @@ export function preflightTeamApply(
         observed: observedPlayer.professions[0],
         wanted: player.build.professions[0],
       });
-    } else if (memberBuildDiffers(player, observedPlayer)) {
+    } else if (memberBuildChanges(player, observedPlayer) > 0) {
       changes.push({ kind: "player-build" });
     }
   }
@@ -372,7 +399,7 @@ export function preflightTeamApply(
           observed: professions[0],
           wanted: member.build.professions[0],
         });
-      } else if (!live || memberBuildDiffers(member, live)) {
+      } else if (!live || memberBuildChanges(member, live) > 0) {
         changes.push({ kind: "hero-build", hero: member.hero });
       }
     }

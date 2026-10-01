@@ -27,7 +27,12 @@ export function scaleLibrary(library: BuildLibrary, size: number): BuildLibrary 
   return { ...library, builds: [...library.builds, ...builds], teams: [...library.teams, ...teams] };
 }
 
-export function createHubGameFixture(record: (action: string) => void, options: { librarySize?: number } = {}) {
+/**
+ * `realTime` is the slowed runner: each command lands half a second after it was sent and the
+ * production confirmation clock waits for it, so a team apply takes seconds, as in the game.
+ * `templatesMs` delays each read of the Guild Wars template files.
+ */
+export function createHubGameFixture(record: (action: string) => void, options: { librarySize?: number; realTime?: boolean; templatesMs?: number } = {}) {
   const base = createDemoHost();
   const first = demoLibrary.builds.find(build => build.professions[0] === 'Mo')!;
   const smiter: Build = { ...first, id: buildId('hub-smiter'), name: 'Smiter', origin: 'Templates/Skills/Smiter.txt' };
@@ -54,43 +59,47 @@ export function createHubGameFixture(record: (action: string) => void, options: 
     player: party.value.player ? { ...party.value.player, skills: skillBarOf(index => first.skills[(index + 1) % 8]!), attributes: first.attributes } : null,
     heroes: party.value.heroes.map((member, offset) => ({ ...member, skills: skillBarOf(index => first.skills[(index + offset + 2) % 8]!), attributes: first.attributes })),
   };
+  const land = (update: () => void) => { if (options.realTime) setTimeout(update, 500); else update(); };
   const change = () => { sent++; record(`command:${sent}`); if (partial && sent > 1) throw new Error('Synthetic interruption. 1 change was confirmed before Apply stopped.'); };
   const professions = (previous: ProfessionPair | null, secondary: number): ProfessionPair => [previous?.[0] ?? 'Mo', Object.entries(PROFESSIONS).find(([, value]) => value.id === secondary)?.[0] as ProfessionPair[1] ?? null];
   const attributes = (ranks: readonly (readonly [number, number])[]) => Object.fromEntries(ranks.map(([id, rank]) => [Object.entries(ATTRIBUTES).find(([, value]) => value.id === id)?.[0] ?? '', rank]));
-  const player = (patch: Partial<NonNullable<LiveParty['player']>>) => { change(); party.value = { ...party.value, player: party.value.player ? { ...party.value.player, ...patch } : null }; };
-  const hero = (id: HeroId, patch: Partial<LiveParty['heroes'][number]>) => { change(); party.value = { ...party.value, heroes: party.value.heroes.map(member => member.hero === id ? { ...member, ...patch } : member) }; };
+  const player = (patch: Partial<NonNullable<LiveParty['player']>>) => { change(); land(() => { party.value = { ...party.value, player: party.value.player ? { ...party.value.player, ...patch } : null }; }); };
+  const hero = (id: HeroId, patch: Partial<LiveParty['heroes'][number]>) => { change(); land(() => { party.value = { ...party.value, heroes: party.value.heroes.map(member => member.hero === id ? { ...member, ...patch } : member) }; }); };
   const commands: TeamApplyCommands = {
     cancelPending() {},
-    setHardMode(value) { change(); party.value = { ...party.value, hardMode: value }; },
+    setHardMode(value) { change(); land(() => { party.value = { ...party.value, hardMode: value }; }); },
     setPlayerSecondary(value) { player({ professions: professions(party.value.player?.professions ?? null, value) }); },
     setPlayerSkills(value) { player({ skills: skillBarOf(index => value[index] ? skillId(value[index]!) : null) }); },
     setPlayerAttributes(value) { player({ attributes: attributes(value) }); },
     addHero(id) {
       change(); const slot = library.teams[0]!.slots.find(slot => slot.hero === id);
       const build = library.builds.find(build => build.id === slot?.build);
-      party.value = { ...party.value, heroes: [...party.value.heroes, { hero: id, agentId: Number(id) + 100,
-        slot: null, professions: build?.professions ?? ['Mo', null], skills: skillBarOf(() => null), attributes: {}, behaviour: 'guard', level: 20 }] };
+      land(() => { party.value = { ...party.value, heroes: [...party.value.heroes, { hero: id, agentId: Number(id) + 100,
+        slot: null, professions: build?.professions ?? ['Mo', null], skills: skillBarOf(() => null), attributes: {}, behaviour: 'guard', level: 20 }] }; });
     },
-    kickHero(id) { change(); party.value = { ...party.value, heroes: party.value.heroes.filter(member => member.hero !== id) }; },
+    kickHero(id) { change(); land(() => { party.value = { ...party.value, heroes: party.value.heroes.filter(member => member.hero !== id) }; }); },
     setHeroSecondary(id, value) { hero(id, { professions: professions(party.value.heroes.find(member => member.hero === id)?.professions ?? null, value) }); },
     setHeroSkills(id, value) { hero(id, { skills: skillBarOf(index => value[index] ? skillId(value[index]!) : null) }); },
     setHeroAttributes(id, value) { hero(id, { attributes: attributes(value) }); },
     setHeroBehaviour(id, value) { hero(id, { behaviour: value === 0 ? 'fight' : value === 1 ? 'guard' : 'avoid' }); },
   };
   const environment = (): TeamApplyEnvironment => ({ commands, party: () => party.value,
-    confirmationTime: { now: () => clock, sleep: async milliseconds => { clock += milliseconds; } } });
+    ...(options.realTime ? {} : { confirmationTime: { now: () => clock, sleep: async (milliseconds: number) => { clock += milliseconds; } } }) });
   const host: ToolsHost = { ...base, party,
     async loadLibrary() { return { library, recovered: false }; },
     async saveLibrary(value) { library = value; if (!scaled) localStorage.setItem("hub-fixture-library", JSON.stringify(value)); return value; },
-    async loadTemplates() { return [
-      { path: 'Skills/Monk/Protection.txt', contents: encodeSkillTemplate(first) ?? '' },
-      { path: 'Skills/Mesmer/Panic.txt', contents: encodeSkillTemplate(demoLibrary.builds.find(build => build.professions[0] === 'Me')!) ?? '' },
-      ...(folders ? [
-        { path: 'Skills/Team Builds/Farming/Protection.txt', contents: encodeSkillTemplate(first) ?? '' },
-        { path: 'Skills/Team Builds/Dungeons/Protection.txt', contents: encodeSkillTemplate(first) ?? '' },
-      ] : []),
-      ...(duplicate ? [{ path: 'Other/Smiter.txt', contents: encodeSkillTemplate(smiter) ?? '' }] : []),
-    ]; },
+    async loadTemplates() {
+      if (options.templatesMs) await new Promise(resolve => setTimeout(resolve, options.templatesMs));
+      return [
+        { path: 'Skills/Monk/Protection.txt', contents: encodeSkillTemplate(first) ?? '' },
+        { path: 'Skills/Mesmer/Panic.txt', contents: encodeSkillTemplate(demoLibrary.builds.find(build => build.professions[0] === 'Me')!) ?? '' },
+        ...(folders ? [
+          { path: 'Skills/Team Builds/Farming/Protection.txt', contents: encodeSkillTemplate(first) ?? '' },
+          { path: 'Skills/Team Builds/Dungeons/Protection.txt', contents: encodeSkillTemplate(first) ?? '' },
+        ] : []),
+        ...(duplicate ? [{ path: 'Other/Smiter.txt', contents: encodeSkillTemplate(smiter) ?? '' }] : []),
+      ];
+    },
     async applyTeam(plan, onEvent) { record('apply-team'); return runTeamApply(plan, { ...environment(), ...(onEvent ? { onEvent } : {}) }, 1); },
     async applyBuild(build, id, onEvent) { record('apply-build'); return runBuildApply(build, id, { ...environment(), ...(onEvent ? { onEvent } : {}) }, 2); },
     async openStorage() { throw new Error('Synthetic storage refusal'); },

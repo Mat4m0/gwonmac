@@ -1,6 +1,6 @@
 /** One Travel host serves both unified search and the existing detailed view. */
 import { createApp, h, watch } from 'vue';
-import type { HubPresenter, HubRow, HubSource } from '../../../src/shared/hub';
+import type { HubPresenter, HubRow, HubSource, HubTask } from '../../../src/shared/hub';
 import { matchHubRows, parseHubQuery, hubMatch } from '../../../src/shared/hub';
 import { TRAVEL_DESTINATIONS, travelDestination } from '../../../src/shared/travel';
 import { travelContextRefusal, travelDestinationAvailability } from '../../../src/shared/travel-command';
@@ -17,6 +17,12 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
   const listeners = new Set<() => void>();
   const refresh = () => { for (const listener of listeners) listener(); };
   const stop = watch([host.state, host.attempt, host.history, preferences.synonyms], refresh, { flush: 'sync' });
+  // A trip that fails after the quiet close ("did not start", "did not confirm arrival") is
+  // reported once through the Hub's receipt; success stays quiet, and the open Travel view
+  // shows its own notice (HUB-072).
+  const stopNotice = watch(host.notice, notice => {
+    if (notice && (notice.level === 'warning' || notice.level === 'danger') && !active) hub.notify(notice.message, 'failed');
+  }, { flush: 'sync' });
   const load = async () => {
     try { await Promise.all([preferences.load(), host.loadHistory()]); loadError = ''; }
     catch { loadError = 'Travel preferences could not load. Open Travel to retry.'; }
@@ -47,11 +53,11 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
       ?? (host.state.value.status === 'ready' && host.state.value.mapId === mapId ? 'Current location' : null)
       ?? (availability === 'locked' ? 'Not unlocked by this character' : null);
   }
+  /** Starts one trip; the Hub task that asked for it ends the Hub session. */
   async function travel(mapId: number) {
     const reason = refusal(mapId);
     if (reason) throw new Error(reason);
     await host.travel({ mapId });
-    hub.close();
   }
   const source: HubSource = {
     feature: 'travelPalette',
@@ -81,12 +87,12 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
         return { id: `place:${destination.mapId}`, title: destination.name,
           detail: query.trim() ? 'Outpost · Any district' : 'Recently visited · Any district',
           group: query.trim() ? 'Places' : 'Continue', action: `Travel to ${destination.name}`, consequential: true, leavesArea: explorable(),
-          ...(reason ? { unavailable: reason } : {}), run: () => travel(destination.mapId) };
+          ...(reason ? { unavailable: reason } : {}), run: async (task: HubTask) => { await travel(destination.mapId); task.done(); } };
       }), ...matchHubRows(tools, query)];
     },
   };
   return { source, open, travel, get active() { return active; },
     update: host.updateGameState, updateFriends: host.updateFriends,
-    dispose() { disposed = true; stop(); listeners.clear(); host.dispose(); },
+    dispose() { disposed = true; stop(); stopNotice(); listeners.clear(); host.dispose(); },
   };
 }

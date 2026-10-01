@@ -279,7 +279,23 @@ Use `team gom afk` to review and apply that saved team, or `build smiter` to loa
 an exact saved build on your character. Prefixes open a review first; duplicate
 names require selection. Builds can also target an existing hero without replacing
 your team. The footer names the build and its target before Enter, for example
-**Apply Smiter to Fixture Monk** or **Review GOM AFK**. `10 ecto in p` shows labelled NPC trader buy and sell estimates with
+**Apply Smiter to Fixture Monk** or **Review GOM AFK**. While an apply,
+invite or account opening runs, the footer names it (**Applying GOM AFK…**),
+the status line counts the changes (**Applying GOM AFK… 5/16**) and a thin bar
+runs under the search; a click or another Enter never starts a second action.
+When it ends on the page that started it, Hub closes with a receipt such as
+"GOM AFK applied." If you typed, went back or closed Hub meanwhile, the action
+keeps running and never closes or changes the page you are on: its receipt
+appears in the status line, or where Hub stood if it is closed. An account that
+opens in its own window still finishes the task: the next Command-R starts at
+Home. A failure after
+Hub closed names what stopped, such as "GOM AFK partly applied. Open Hub to
+review.", and waits in the status line of the next opening; the team's row then
+reads **Partly applied · Review**. A team apply that fails on its open review
+shows the cause under the review's title and clears the progress from the status
+line. A Travel trip that did not start or arrive and
+a character switch that failed are reported the same way, and Command-E then
+opens on the character you tried. `10 ecto in p` shows labelled NPC trader buy and sell estimates with
 observation times. Fixed gold/platinum conversions work offline. Amounts accept attached or spaced
 units: `1p`, `1 p`, `100k`, `.5e`, `2a`, and `10zkeys`. Use `in` or `to`.
 Stacks, mixed sums and multiplication work too: `1 stack ecto in p`,

@@ -27,8 +27,11 @@ export type HubRow = Readonly<{
   attributeStatus?: string;
   folder?: string | null;
   professions?: readonly Readonly<{ name: string; icon: string; code: string }>[];
-  /** Opens a read-only child page; Right Arrow must never apply a build. */
-  navigate?(): void;
+  /**
+   * Opens a read-only child page; Right Arrow must never apply a build. The task binds a child
+   * page that loads first to the page that asked for it, so a late read never opens it (HUB-004).
+   */
+  navigate?(task: HubTask): void;
   searchQuery?: string;
   icon?: string;
   quoteBasis?: Readonly<{ value:string; options:readonly {value:string;label:string}[]; choose(value:string):void }>;
@@ -37,7 +40,23 @@ export type HubRow = Readonly<{
   /** Opens the canonical saved record in its existing authoring workspace. */
   workspace?(): void;
   actions?(): void;
-  run(): void | Promise<void>;
+  /** How the footer and a repeated Enter name this row's action while it runs (HUB-083). */
+  pending?: Readonly<{ label: string; again: string }>;
+  run(task: HubTask): void | Promise<void>;
+}>;
+/**
+ * A running row or view action's link to the Hub page that started it (HUB-004). That page's
+ * session ends when the player types, navigates, closes or suspends the Hub. The action keeps
+ * running, but from then on it never navigates or closes the Hub: its outcome becomes a receipt.
+ * A thrown error is the named failure; after the session ended it is a failure receipt (HUB-016).
+ */
+export type HubTask = Readonly<{
+  /** The page and query the action started from are still showing. */
+  live(): boolean;
+  /** Named progress in the status line while the page is live, e.g. "Applying GOM AFK… 5/16". */
+  progress(message: string): void;
+  /** The task ended: a live page closes the Hub with the receipt; otherwise the receipt reports it. */
+  done(receipt?: string): void;
 }>;
 export type HubSource = Readonly<{
   feature?: 'characterSwitchEnabled' | 'buildLibrary' | 'travelPalette' | 'tradeChat' | 'whispersEnabled';
@@ -84,7 +103,7 @@ export function matchHubRows(rows: readonly HubRow[], query: string, ordered = f
 export type HubSummary = Readonly<Pick<HubRow, 'title' | 'detail' | 'skills' | 'attributes' | 'professions' | 'attributeStatus' | 'folder' | 'workspace'> & { label: string }>;
 
 /** One footer action of a mounted view. `armed` holds a destructive primary until it has armed (~400 ms). */
-export type HubViewAction = Readonly<{ label: string; run(): void | Promise<void>; disabled?: boolean; destructive?: boolean; armed?: boolean }>;
+export type HubViewAction = Readonly<{ label: string; run(task: HubTask): void | Promise<void>; disabled?: boolean; destructive?: boolean; armed?: boolean }>;
 /**
  * The Hub footer stays in every view and names what Enter does there. A view sets its named
  * primary (Enter outside a control) and secondary; without one the primary reads "Done" and goes
@@ -94,7 +113,9 @@ export type HubViewFooter = Readonly<{ primary(action: HubViewAction | null): vo
 export type HubViewMount<Target> = (target: Target, back: () => void, footer: HubViewFooter) => () => void;
 
 export interface HubPresenter<Target> {
-  close(message?: string): void;
+  close(): void;
+  /** A named outcome with no running task behind it; a failure also waits in the status line of the next opening. */
+  notify(message: string, outcome?: 'failed'): void;
   attach(source: HubSource): () => void;
   showRows(title: string, rows: () => readonly HubRow[], summary?: HubSummary): void;
   showView(title: string, mount: HubViewMount<Target>, available?: () => boolean): void;

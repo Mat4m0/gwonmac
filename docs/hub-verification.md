@@ -38,7 +38,14 @@ The fixture controls are:
 
 URL switches set the same state at load: `?hub&lifecycle=pve-explorable`,
 `?hub&party` and `?hub&library=1000` (a deterministic library of 1,000 builds and
-50 teams that is kept in memory only). Tests can also dispatch
+50 teams that is kept in memory only). Slow and failing game answers exercise the
+Hub session races: `?slow-apply` lands each apply command half a second after it
+was sent on the real confirmation clock (a GOM AFK apply takes about 16 seconds),
+`?accounts-ms=1500` and `?invite-ms=4000` delay opening an account and sending an
+invite, `?templates-ms=1200` delays each read of the Guild Wars template files,
+`?travel-load-ms=800` attaches Travel late, as the game loads its lazy bundle, `?invite-fail=<reason>` makes the invite fail with that reason, and
+`?switch-fail=<code>` makes a character switch run for a second and then fail
+with that failure code. Tests can also dispatch
 `hub-fixture-lifecycle`, `hub-fixture-party` and `hub-fixture-scenario` events.
 
 Shortcuts follow the production path. The fixture claims keys the way the main

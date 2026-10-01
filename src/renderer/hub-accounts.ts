@@ -3,7 +3,7 @@
  * Search never opens or closes a game window; each operation is explicit, and
  * closing the running game passes an armed confirmation first.
  */
-import { hubMatch, normaliseHubQuery, parseHubQuery, type HubPresenter, type HubRow, type HubSource } from '../shared/hub.js';
+import { hubMatch, normaliseHubQuery, parseHubQuery, type HubPresenter, type HubRow, type HubSource, type HubTask } from '../shared/hub.js';
 import type { HubAccountsSnapshot, HubAccountRequest } from '../shared/accounts-contracts.js';
 export function createHubAccounts(hub: HubPresenter<HTMLElement>, api: { get(): Promise<HubAccountsSnapshot>; open(request: HubAccountRequest): Promise<void>; manage?(): Promise<void> }): HubSource {
   let snapshot: HubAccountsSnapshot | null = null;
@@ -22,14 +22,21 @@ export function createHubAccounts(hub: HubPresenter<HTMLElement>, api: { get(): 
   const listeners = new Set<() => void>();
   const refresh = () => { for (const listener of listeners) listener(); };
   type Profile = HubAccountsSnapshot['profiles'][number];
-  /** Every operation first proves the list it was chosen from is still current. */
-  async function verify(profile: Profile) {
+  /**
+   * Every operation first proves the list it was chosen from is still current. A stale list
+   * reopens Accounts only while the page that asked still shows; a late check never navigates.
+   */
+  async function verify(profile: Profile, task: HubTask) {
     const latest = await api.get();
     const target = latest.profiles.find(item => item.id === profile.id);
-    if (!target || target.name !== profile.name || latest.current !== snapshot?.current || target.state !== profile.state) { snapshot = latest; refresh(); hub.showRows('Accounts', rows); throw new Error('Accounts changed. Choose from the refreshed list.'); }
+    if (!target || target.name !== profile.name || latest.current !== snapshot?.current || target.state !== profile.state) {
+      snapshot = latest; refresh();
+      if (task.live()) hub.showRows('Accounts', rows);
+      throw new Error('Accounts changed. Choose from the refreshed list.');
+    }
   }
-  async function open(profile: Profile, mode: HubAccountRequest['mode']) {
-    await verify(profile); await api.open({ id: profile.id, mode }); hub.close();
+  async function open(profile: Profile, mode: HubAccountRequest['mode'], task: HubTask) {
+    await verify(profile, task); await api.open({ id: profile.id, mode }); task.done();
   }
   /**
    * Replacing ends the running game, so it asks first. Its footer primary arms after a moment and
@@ -44,7 +51,7 @@ export function createHubAccounts(hub: HubPresenter<HTMLElement>, api: { get(): 
       view.setAttribute('aria-label', heading.textContent);
       const copy = doc.createElement('p'); copy.textContent = `${profile.name} opens first. Then ${current} saves and closes.`;
       view.append(heading, copy); target.append(view);
-      footer.primary({ label: title, destructive: true, armed: true, run: () => open(profile, 'replace') });
+      footer.primary({ label: title, destructive: true, armed: true, run: task => open(profile, 'replace', task) });
       footer.secondary({ label: `Keep ${current}`, run: back });
       return () => view.remove();
     });
@@ -60,10 +67,13 @@ export function createHubAccounts(hub: HubPresenter<HTMLElement>, api: { get(): 
       return { id: `account:${profile.id}:${mode}`, title,
         detail: mode === 'replace' ? 'Save and close the current game after this account opens' : `Keep ${current} running`,
         group: 'Accounts', action: title, consequential: true, ...(mode === 'replace' ? { destructive: true } : {}),
-        run: mode === 'replace' ? async () => { await verify(profile); confirmReplace(profile, title, current); } : () => open(profile, mode) };
+        // Opening waits until the new window runs; the footer and status name it meanwhile (HUB-083).
+        pending: mode === 'replace' ? { label: `Checking ${profile.name}…`, again: `${profile.name} is still being checked.` }
+          : { label: `${profile.state === 'running' ? 'Showing' : 'Opening'} ${profile.name}…`, again: `${profile.name} is still opening.` },
+        run: mode === 'replace' ? async task => { await verify(profile, task); if (task.live()) confirmReplace(profile, title, current); } : task => open(profile, mode, task) };
     });
   };
-  const rows = (): HubRow[] => problem ? [{ id: 'accounts-retry', title: 'Retry accounts', detail: problem, group: 'Accounts', action: 'Retry', run: load }] : !snapshot || snapshot.profiles.length < 2 ? [{ id: 'accounts-manage', title: 'Manage accounts', detail: snapshot ? 'Add another account in the launcher.' : 'Loading accounts…', group: 'Accounts', action: 'Show Launcher', ...(!api.manage ? { unavailable: 'Open the launcher to manage accounts.' } : {}), run: async () => { await api.manage?.(); hub.close(); } }] : snapshot.profiles.map(profile => ({
+  const rows = (): HubRow[] => problem ? [{ id: 'accounts-retry', title: 'Retry accounts', detail: problem, group: 'Accounts', action: 'Retry', run: load }] : !snapshot || snapshot.profiles.length < 2 ? [{ id: 'accounts-manage', title: 'Manage accounts', detail: snapshot ? 'Add another account in the launcher.' : 'Loading accounts…', group: 'Accounts', action: 'Show Launcher', ...(!api.manage ? { unavailable: 'Open the launcher to manage accounts.' } : {}), run: async task => { await api.manage?.(); task.done(); } }] : snapshot.profiles.map(profile => ({
     id: `account:${profile.id}`, title: profile.name, detail: profile.id === snapshot?.current ? 'Current account' : profile.state === 'running' ? 'Open' : profile.state === 'ready' ? 'Saved account' : profile.state === 'failed' ? 'Retry opening' : 'Opening…',
     group: 'Accounts', action: 'Choose account action',
     ...(profile.id === snapshot?.current || !['ready', 'failed', 'running'].includes(profile.state) ? { unavailable: profile.id === snapshot?.current ? 'Current account' : 'This account is still opening.' } : {}),

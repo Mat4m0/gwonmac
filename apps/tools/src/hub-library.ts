@@ -2,11 +2,12 @@
 import { watch } from 'vue';
 import { diffBuilds, diffSummary } from '../../../src/shared/builds/diff';
 import { buildAttributes, buildProfessions } from '../../../src/shared/builds/presentation';
-import { hubMatch, parseHubQuery, type HubPresenter, type HubRow, type HubSource } from '../../../src/shared/hub';
+import { hubMatch, parseHubQuery, type HubPresenter, type HubRow, type HubSource, type HubTask } from '../../../src/shared/hub';
 import { buildId, skillId, type Build, type Team, type HeroId } from '../../../src/shared/builds/library';
 import { heroLabel, PROFESSIONS } from '../../../src/shared/builds/heroes';
 import { decodeSkillTemplate } from '../../../src/shared/builds/skill-template';
 import { preflightTeamApply, resolveTeamApplyPlan, type TeamApplyPlan } from '../../../src/shared/builds/team-apply';
+import type { TeamApplyEvent } from '../../../src/shared/builds/team-apply-runner';
 import { teamApplyRuntimeProblemMessage } from './team-apply-presentation';
 import type { LibraryController } from './use-library';
 import type { ToolsHost } from './host';
@@ -62,8 +63,16 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
   let visible = false;
   let disposed = false;
   let applying = false;
-  let operation = '';
-  let operationTarget: { build: Build['id']; hero: HeroId | null } | null = null;
+  /** The running apply's named, counted progress: "Applying GOM AFK… 5/16". */
+  let progress = '';
+  /** The last failed apply per team or build target; it outlives the Hub and its review (HUB-016). */
+  const outcomes = new Map<string, Readonly<{ partial: boolean; message: string }>>();
+  const outcomeKey = (item: Item, hero: HeroId | null) => item.kind === 'team' ? `team:${item.value.id}` : `build:${item.value.id}:${hero ?? 'me'}`;
+  const teamDetail = (item: Item) => { const outcome = outcomes.get(outcomeKey(item, null)); return !outcome ? 'Saved team' : `${outcome.partial ? 'Partly applied' : 'Not applied'} · Review`; };
+  /** While an apply runs, its footer and a repeated Enter name it (HUB-083). */
+  const applyPending = (name: string) => ({ label: `Applying ${name}…`, again: `${name} is still being applied.` });
+  /** The outcome key of the running apply, so only its own rows and review show its progress. */
+  let runningKey = '';
   const listeners = new Set<() => void>();
   const refresh = () => { for (const listener of listeners) listener(); };
   const stop = watch([controller.library, host.party, controller.applying, controller.applyStatus, controller.recentBuilds], refresh, { flush: 'sync' });
@@ -97,7 +106,7 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
     }
     const nextRanks = new Map(incoming ? buildAttributes(incoming.attributes).flatMap(group => group.attributes.map(attribute => [attribute.name, attribute.rank] as const)) : []);
     return {
-      detail: (applying && operationTarget?.build === incoming?.id && operationTarget?.hero === hero ? operation : '') || (!member?.skills ? 'Current build not available' : comparison?.total === 0 ? 'Already equipped' : comparison ? `Current build · ${diffSummary(comparison)}` : 'Current build'),
+      detail: (applying && incoming && runningKey === outcomeKey({ kind: 'build', value: incoming }, hero) ? progress : '') || (!member?.skills ? 'Current build not available' : comparison?.total === 0 ? 'Already equipped' : comparison ? `Current build · ${diffSummary(comparison)}` : 'Current build'),
       professions: buildProfessions(member?.professions ?? []),
       ...(member?.skills ? { skills: skillPreview({ skills: member.skills }).map((skill, index) => ({ ...skill, changed: !!incoming && member.skills?.[index] !== incoming.skills[index] })),
         attributes: attributes.map(group => ({ ...group, attributes: group.attributes.map(attribute => ({ ...attribute, ...(incoming && member.attributes ? { nextRank: nextRanks.get(attribute.name) ?? 0 } : {}) })) })),
@@ -112,7 +121,8 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
     }).join('\n');
   function assess(item: Item, hero: HeroId | null): string | null {
     if (host.applyUnavailable) return host.applyUnavailable;
-    if (applying || controller.applying.value) return 'An application is in progress.';
+    // The running item names its own progress; every other item waits for it.
+    if (applying || controller.applying.value) return applying && runningKey === outcomeKey(item, hero) && progress ? progress : 'An application is in progress.';
     let plan: TeamApplyPlan;
     if (item.kind === 'team') {
       const library = controller.library.value;
@@ -145,29 +155,44 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
         origin: entry.path, tags: [], notes: '', favourite: false, lastUsed: null, parent: null }];
     });
   }
-  async function apply(item: Item, expected: string, hero: HeroId | null) {
+  /**
+   * Applies once and names the outcome. The Hub page that started it closes with the receipt;
+   * after the player moved on, a success is a receipt and a failure names the item (HUB-004, HUB-016).
+   */
+  async function apply(item: Item, expected: string, hero: HeroId | null, task: HubTask) {
     if (item.kind === 'build' && String(item.value.id).startsWith('template:')) await readTemplates();
     const next = current(item);
     if (!next || revision(next) !== expected) throw new Error('This saved configuration changed. Review it again.');
     const refusal = assess(next, hero);
     if (refusal) throw new Error(refusal);
-    operationTarget = next.kind === 'build' ? { build: next.value.id, hero } : null;
-    applying = true; operation = 'Applying…'; refresh();
+    const name = next.value.name;
+    const key = outcomeKey(next, hero);
+    let landed = 0;
+    const step = (event?: TeamApplyEvent) => {
+      const changes = event?.changes;
+      if (changes) landed = changes.done;
+      // The change being worked on, out of those the party needed; it reaches N/N as the last one lands.
+      const current = changes && Math.min(changes.planned, changes.done + (event?.state === 'confirmed' || event?.state === 'stable' ? 0 : 1));
+      progress = `Applying ${name}…${changes ? ` ${current}/${changes.planned}` : ''}`;
+      task.progress(progress); refresh();
+    };
+    runningKey = key; applying = true; outcomes.delete(key); step();
     try {
-      const result = next.kind === 'team' ? await controller.applyTeam(next.value)
-        : await host.applyBuild(next.value, hero, event => { operation = event.message; refresh(); });
+      const result = next.kind === 'team' ? await controller.applyTeam(next.value, step) : await host.applyBuild(next.value, hero, step);
       if (!result) throw new Error(controller.applyStatus.value?.message ?? 'Application stopped.');
       if (result.skippedSkills.length) throw new Error(`Partly applied. Not equipped: ${result.skippedSkills.map(id => host.skills.get(skillId(id)).name).join(', ')}. Review before retrying.`);
       const saved = next.kind === 'build' ? await controller.recordBuildUse(next.value.id, hero) : true;
-      operation = ''; hub.close(`${next.value.name} applied${next.kind === 'build' ? ` to ${targetName(hero)}` : ''}.${saved ? '' : ' Recent use could not be saved.'}`);
+      task.done(`${name} applied${next.kind === 'build' ? ` to ${targetName(hero)}` : ''}.${saved ? '' : ' Recent use could not be saved.'}`);
     } catch (error) {
-      operation = error instanceof Error ? error.message : 'Application stopped.';
-      throw error;
-    } finally { applying = false; refresh(); }
+      const message = error instanceof Error ? error.message : 'Application stopped.';
+      const partial = landed > 0;
+      outcomes.set(key, { partial, message });
+      if (task.live()) throw error;
+      throw new Error(partial ? `${name} partly applied. Open Hub to review.` : `${name} was not applied. ${message}`, { cause: error });
+    } finally { applying = false; progress = ''; refresh(); }
   }
   const workspace = (build: Build) => templateFolder(build) === null && openWorkspace ? { workspace: () => openWorkspace(build) } : {};
   function chooseBuild(item: Item & { kind: 'build' }, recentHero?: HeroId | null) {
-    operation = '';
     const expected = revision(item);
     const summary = { ...workspace(item.value), label: 'Build to apply', title: item.value.name, detail: '', folder: templateFolder(item.value), skills: skillPreview(item.value), attributes: buildAttributes(item.value.attributes), professions: buildProfessions(item.value.professions) };
     const unavailable = (hero: HeroId | null) => {
@@ -177,8 +202,8 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
     const applyRow = (hero: HeroId | null, title: string): HubRow => {
       const refusal = unavailable(hero);
       return { id: `apply:${hero ?? 'me'}`, title, ...equipped(hero, item.value), group: 'Current build',
-        action: applyAction(item.value, hero), consequential: true,
-        ...(refusal ? { unavailable: refusal } : {}), run: () => apply(item, expected, hero) };
+        action: applyAction(item.value, hero), consequential: true, pending: applyPending(item.value.name),
+        ...(refusal ? { unavailable: refusal } : {}), run: task => apply(item, expected, hero, task) };
     };
     function compareTarget(hero: HeroId | null) {
       hub.showRows(targetName(hero), () => [applyRow(hero, hero === null ? 'Apply to me' : `Apply to ${targetName(hero)}`)], summary);
@@ -194,8 +219,8 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
           const refusal = member ? unavailable(id) : 'Add this hero to your party first.';
           return { id: `hero:${id}`, title: heroLabel(id), ...equipped(id, item.value), group: member ? 'In your party' : 'Unlocked heroes',
             keywords: professions?.flatMap(value => value ? [PROFESSIONS[value].name] : []).join(' ') ?? '',
-            preferred: !refusal, consequential: !refusal, action: refusal ? 'Review availability' : applyAction(item.value, id), ...(refusal ? { detail: refusal } : {}),
-            navigate: () => compareTarget(id), run: () => refusal ? compareTarget(id) : apply(item, expected, id) };
+            preferred: !refusal, consequential: !refusal, action: refusal ? 'Review availability' : applyAction(item.value, id), ...(refusal ? { detail: refusal } : { pending: applyPending(item.value.name) }),
+            navigate: () => compareTarget(id), run: (task: HubTask) => refusal ? compareTarget(id) : apply(item, expected, id, task) };
         }).sort((a, b) => Number(a.group !== 'In your party') - Number(b.group !== 'In your party') || a.title.localeCompare(b.title));
         return rows.length ? rows : [{ id: 'heroes-unavailable', title: 'No heroes observed', detail: 'Enter a PvE outpost to read your heroes.', group: 'Heroes', action: 'Choose hero', unavailable: 'Hero information is not available yet.', run() {} }];
       }, summary);
@@ -230,17 +255,18 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
       return [...folderRows, ...files, ...templateStates(), ...(!folderRows.length && !files.length && !reading && !templateProblem ? [{ id: 'templates-empty', title: 'No skill templates here', detail: 'Save a skill template in Guild Wars, then retry.', group: 'Sources', action: 'Refresh templates', run: async () => { await readTemplates(); refresh(); } }] : [])];
     });
   }
-  async function openTemplates() { try { await readTemplates(); } catch { templateProblem = 'Could not read templates.'; } browseTemplates(); }
-  const libraryRow = (): HubRow => ({ id: 'builds', title: 'Build Library', detail: 'Browse saved builds and Guild Wars template folders', keywords: 'templates skills folders builds', group: 'Tools', action: 'Browse builds', navigate() { void libraryRow().run(); }, run() {
+  /** Reads the template files, then opens them, unless the player moved on or closed the Hub meanwhile (HUB-004). */
+  async function openTemplates(task: HubTask) { try { await readTemplates(); } catch { templateProblem = 'Could not read templates.'; } if (task.live()) browseTemplates(); }
+  const libraryRow = (): HubRow => ({ id: 'builds', title: 'Build Library', detail: 'Browse saved builds and Guild Wars template folders', keywords: 'templates skills folders builds', group: 'Tools', action: 'Browse builds', navigate() { browseLibrary(); }, run: () => browseLibrary() });
+  function browseLibrary() {
     hub.showRows('Build Library', () => [
       { id: 'game-templates', title: 'Guild Wars templates', detail: 'Your existing skill template files and folders', group: 'Builds', action: 'Browse templates', navigate: openTemplates, run: openTemplates },
       ...all().filter((item): item is Item & { kind: 'build' } => item.kind === 'build' && !String(item.value.id).startsWith('template:')).map(buildRow),
       ...templateStates(),
     ]);
-  } });
+  }
   function review(item: Item) {
     if (item.kind === 'build') { chooseBuild(item); return; }
-    operation = "";
     const expected = revision(item);
     hub.showView(item.value.name, (target, _back, footer) => {
       const doc = target.ownerDocument;
@@ -264,15 +290,18 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
           const label = `${index === 0 ? playerName() : slot.hero === null ? 'Unassigned hero' : heroLabel(slot.hero)} · ${build?.name ?? 'Keep build'}${slot.behaviour ? ` · ${slot.behaviour}` : ''}`;
           if (build) showBuild(build, label); else { const text = doc.createElement('p'); text.textContent = label; description.append(text); }
         });
-      // A refusal or the running apply shows under the title, before the roster, never below the fold.
+      // A refusal or the stored outcome shows under the title, before the roster, never below the fold.
+      // The running apply's progress has one owner, the Hub status line (HUB-083).
       const status = doc.createElement('p'); status.setAttribute('role', 'status');
       const update = () => {
         const latest = current(item);
         const changed = !latest || revision(latest) !== expected;
-        const refusal = changed ? 'This configuration changed. Go back and review it again.' : assess(item, null);
-        footer.primary({ label: applying ? 'Applying…' : `Apply team ${item.value.name}`, disabled: !!refusal || applying,
-          run: () => apply(item, expected, null).catch(error => { operation = error instanceof Error ? error.message : 'Application stopped.'; update(); }) });
-        status.textContent = operation || refusal || '';
+        const mine = applying && runningKey === outcomeKey(item, null);
+        const refusal = changed ? 'This configuration changed. Go back and review it again.' : mine ? null : assess(item, null);
+        footer.primary({ label: mine ? `Applying ${item.value.name}…` : `Apply team ${item.value.name}`, disabled: !!refusal || applying,
+          // A failure on this page shows under the title, and the task clears its progress; after the player left, the Hub reports it.
+          run: task => apply(item, expected, null, task).catch(error => { if (!task.live()) throw error; update(); }) });
+        status.textContent = outcomes.get(outcomeKey(item, null))?.message || refusal || '';
         status.hidden = !status.textContent;
       };
       view.append(title, status, description); target.append(view);
@@ -288,7 +317,7 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
       const item = all().find(item => `${item.kind}:${item.value.id}` === id);
       if (!item) return undefined;
       if (item.kind === 'build') return { ...buildRow(item), group: 'Pinned' };
-      return { id, title: item.value.name, detail: 'Saved team', group: 'Pinned',
+      return { id, title: item.value.name, detail: teamDetail(item), group: 'Pinned',
         preview: preview(item), action: `Review ${item.value.name}`, run: () => review(item), actions: () => review(item) };
     },
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
@@ -310,10 +339,10 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
         const direct = parsed.scope === 'team' && exacts.length === 1 && exacts[0] === item;
         const expected = revision(item);
         const refusal = direct ? assess(item, null) : null;
-        return { id: `team:${item.value.id}`, title: item.value.name, detail: 'Saved team',
+        return { id: `team:${item.value.id}`, title: item.value.name, detail: teamDetail(item),
           group: 'Teams', preview: preview(item), action: direct ? `Apply team ${item.value.name}` : `Review ${item.value.name}`, consequential: direct, navigate: () => review(item),
-          ...(refusal ? { unavailable: refusal } : {}), actions: () => review(item),
-          run: () => direct ? apply(item, expected, null) : review(item) } satisfies HubRow;
+          ...(refusal ? { unavailable: refusal } : {}), ...(direct ? { pending: applyPending(item.value.name) } : {}), actions: () => review(item),
+          run: task => direct ? apply(item, expected, null, task) : review(item) } satisfies HubRow;
       }), ...(parsed.scope === 'build' ? templateStates() : [])];
     },
   };

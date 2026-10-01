@@ -23,7 +23,7 @@ import { createHubPeople } from '../../../src/renderer/hub-people';
 // eslint-disable-next-line no-restricted-imports
 import { createPartyInvite } from '../../../src/renderer/party-invite';
 // eslint-disable-next-line no-restricted-imports
-import type { CharacterSwitchActionState, CharacterSwitchSource } from '../../../src/renderer/character-switch-model';
+import type { CharacterSwitchActionState, CharacterSwitchFailureCode, CharacterSwitchSource } from '../../../src/renderer/character-switch-model';
 import { createFixtureLifecycle, FIXTURE_LIFECYCLES, isFixtureLifecycle } from './hub-fixture-lifecycle';
 // eslint-disable-next-line no-restricted-imports
 import { installCharacterSwitchHost } from '../../../src/renderer/character-switch-host';
@@ -48,6 +48,9 @@ export type FixtureCanvasEvent = Readonly<{ type: string; code?: string; repeat?
 
 export function mountHubFixture(target: HTMLElement) {
   const params = new URLSearchParams(location.search);
+  // Slow and failing game answers for the session races (HUB-004): `?accounts-ms=`, `?invite-ms=`,
+  // `?invite-fail=<reason>`, `?switch-fail=<code>`, `?templates-ms=` and `?slow-apply` (the runner on the real clock).
+  const delay = (name: string) => new Promise(resolve => setTimeout(resolve, Number(params.get(name)) || 0));
   // Every game or account action in order, so a test can count what one press ran.
   const actions: string[] = [];
   window.gwFixtureActions = actions;
@@ -108,11 +111,11 @@ export function mountHubFixture(target: HTMLElement) {
     // `?double-click-ms=` models a player's slower macOS Double-click speed, as main passes it.
     gwSurfaces: installSurfaceController(document, { doubleClickMs: Number(params.get('double-click-ms')) || null }),
     gwToolsSettings: () => settings,
-    gwNative: { ...window.gwNative, init: { enhancementSelection: { tools: true } }, hubSettings, accounts: { get: async () => ({ current: '9e1bd41c-cfc0-4ca8-a57f-2f0ca159c72d', profiles: [{ id: '9e1bd41c-cfc0-4ca8-a57f-2f0ca159c72d', name: 'Main', state: 'running' }, { id: 'e98a37bc-5211-4bc5-8094-0b1286b3c42d', name: 'Second', state: 'ready' }] }), open: async (request: { mode: string }) => { record(`Account Second ${request.mode}`); } }, settings: { get: async () => settings, onChange: (listener: (value: AppSettings) => void) => { settingsListeners.add(listener); return () => settingsListeners.delete(listener); }, set: async (patch: RendererSettingsPatch) => { settings = { ...settings, ...patch }; localStorage.setItem('hub-fixture-shortcuts', JSON.stringify(settings.hubShortcuts)); for (const listener of settingsListeners) listener(settings); window.dispatchEvent(new Event('gw:tools-settings')); return settings; } }, clipboard: { writeText: async (value: string) => record(`Copied ${value}`) }, trade: { getMarketRates: async () => ({ ...estimateMarketRates(new URLSearchParams(location.search).has('market-empty') ? [] : ['WTS armbraces 30e/ea','WTB armbraces 28e/ea','WTS zkeys 1.5e/ea','WTB zkeys 1.4e/ea','WTS 20 ectos for 100k','WTB 25 ectos for 100k'].flatMap((message,group)=>Array.from({length:6},(_,index)=>({source:'kamadan' as const,message,sender:`Sample ${group} ${index}`,timestamp:Date.now()-index*60_000})))), sample: true }), getTraderQuotes: async () => ({ updatedAt: Date.now(), quotes: [{ modelId: '0b03a2', side: 'buy', price: 6000, timestamp: Date.now() }, { modelId: '0b03a2', side: 'sell', price: 5000, timestamp: Date.now() }], sample: true }) }, app: { showLauncher: async () => record('Launcher'), openSettings: async () => record('Settings'), requestQuit: async () => quitFixtureGame(record), showQuitOrReload: () => fixtureMain.showQuitOrReload(), openExternal: async () => record('Website') } },
+    gwNative: { ...window.gwNative, init: { enhancementSelection: { tools: true } }, hubSettings, accounts: { get: async () => ({ current: '9e1bd41c-cfc0-4ca8-a57f-2f0ca159c72d', profiles: [{ id: '9e1bd41c-cfc0-4ca8-a57f-2f0ca159c72d', name: 'Main', state: 'running' }, { id: 'e98a37bc-5211-4bc5-8094-0b1286b3c42d', name: 'Second', state: 'ready' }] }), open: async (request: { mode: string }) => { await delay('accounts-ms'); record(`Account Second ${request.mode}`); } }, settings: { get: async () => settings, onChange: (listener: (value: AppSettings) => void) => { settingsListeners.add(listener); return () => settingsListeners.delete(listener); }, set: async (patch: RendererSettingsPatch) => { settings = { ...settings, ...patch }; localStorage.setItem('hub-fixture-shortcuts', JSON.stringify(settings.hubShortcuts)); for (const listener of settingsListeners) listener(settings); window.dispatchEvent(new Event('gw:tools-settings')); return settings; } }, clipboard: { writeText: async (value: string) => record(`Copied ${value}`) }, trade: { getMarketRates: async () => ({ ...estimateMarketRates(new URLSearchParams(location.search).has('market-empty') ? [] : ['WTS armbraces 30e/ea','WTB armbraces 28e/ea','WTS zkeys 1.5e/ea','WTB zkeys 1.4e/ea','WTS 20 ectos for 100k','WTB 25 ectos for 100k'].flatMap((message,group)=>Array.from({length:6},(_,index)=>({source:'kamadan' as const,message,sender:`Sample ${group} ${index}`,timestamp:Date.now()-index*60_000})))), sample: true }), getTraderQuotes: async () => ({ updatedAt: Date.now(), quotes: [{ modelId: '0b03a2', side: 'buy', price: 6000, timestamp: Date.now() }, { modelId: '0b03a2', side: 'sell', price: 5000, timestamp: Date.now() }], sample: true }) }, app: { showLauncher: async () => record('Launcher'), openSettings: async () => record('Settings'), requestQuit: async () => quitFixtureGame(record), showQuitOrReload: () => fixtureMain.showQuitOrReload(), openExternal: async () => record('Website') } },
   });
   const hub = createHub(document.body);
   const librarySize = Number(params.get('library'));
-  const game = createHubGameFixture(record, Number.isSafeInteger(librarySize) && librarySize > 0 ? { librarySize } : {});
+  const game = createHubGameFixture(record, { ...(Number.isSafeInteger(librarySize) && librarySize > 0 ? { librarySize } : {}), realTime: params.has('slow-apply'), templatesMs: Number(params.get('templates-ms')) || 0 });
   window.gwHub = hub;
   // One synthetic lifecycle feeds Travel, the play region, Characters and the party (`?lifecycle=`).
   const travelHost = createDemoTravelHost();
@@ -127,6 +130,7 @@ export function mountHubFixture(target: HTMLElement) {
   // The controller's refusals and explorable confirmation, without its native selector.
   let characterAction: CharacterSwitchActionState = { status: 'idle' };
   let pendingCharacter: string | null = null;
+  const switchFailure = params.get('switch-fail') as CharacterSwitchFailureCode | null;
   const characterListeners = new Set<() => void>();
   const publishCharacter = (next: CharacterSwitchActionState) => { characterAction = next; for (const listener of [...characterListeners]) listener(); };
   const switchTo = (key: string, confirmed: boolean) => {
@@ -135,6 +139,11 @@ export function mountHubFixture(target: HTMLElement) {
     else if (context === 'loading') publishCharacter({ status: 'failed', code: 'game-loading', retryable: true });
     else if (context === 'unavailable') publishCharacter({ status: 'failed', code: 'state-unavailable', retryable: true });
     else if (context === 'pve-explorable' && !confirmed) { pendingCharacter = key; publishCharacter({ status: 'confirming' }); }
+    else if (switchFailure) {
+      // The palette withdraws while the switch runs; the failure arrives after the Hub closed (HUB-035).
+      pendingCharacter = null; record(`Character ${key}`); publishCharacter({ status: 'switching', stage: 'logout' });
+      setTimeout(() => publishCharacter({ status: 'failed', code: switchFailure, retryable: true }), 1000);
+    }
     else { pendingCharacter = null; record(`Character ${key}`); hub.close(); publishCharacter({ status: 'idle' }); }
   };
   const characterSource: CharacterSwitchSource = { characters: { status: 'ready', sequence: 1, selectedIndex: 0, characters: [
@@ -169,7 +178,9 @@ export function mountHubFixture(target: HTMLElement) {
     },
   });
   const travel = createHubTravel(travelHost, hub);
-  hub.attach(travel.source);
+  // `?travel-load-ms=` attaches Travel late, as the game loads its lazy bundle after the Hub opened.
+  const travelLoadMs = Number(params.get('travel-load-ms')) || 0;
+  if (travelLoadMs) setTimeout(() => hub.attach(travel.source), travelLoadMs); else hub.attach(travel.source);
   let id = 0;
   let failSend = false;
   let sends = 0;
@@ -195,7 +206,11 @@ export function mountHubFixture(target: HTMLElement) {
   const invites: string[] = [];
   const partyInvite = createPartyInvite({ region: lifecycle.region, chatReady: () => session.state.available, settleMs: 400,
     subscribeRegion: lifecycle.subscribe,
-    invite: async name => { invites.push(name); target.dataset.invites = invites.join('|'); record(`PARTY.INVITE ${name}`); },
+    invite: async name => {
+      await delay('invite-ms');
+      if (params.has('invite-fail')) throw new Error(params.get('invite-fail') || 'Guild Wars chat is not ready');
+      invites.push(name); target.dataset.invites = invites.join('|'); record(`PARTY.INVITE ${name}`);
+    },
     travel: async friend => { await travel.travel(friend.mapId); record(`PARTY.TRAVEL ${friend.character}`); },
   });
   const people = createHubPeople(hub, session, { unavailable: () => null,
