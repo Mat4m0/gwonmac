@@ -1,12 +1,13 @@
 /**
  * Returns native text entry from browse controls to their existing search input.
- * Keyboard and semantic Edit commands share the same Chromium-owned editing.
+ * Keyboard and semantic Edit commands share the same Chromium-owned editing;
+ * Backspace on a browse control edits the search too, and never navigates.
  */
 export function resumeSearchInput(event: KeyboardEvent, input: HTMLInputElement): boolean {
   const editingShortcut = (event.metaKey || event.ctrlKey) && !event.altKey
     && ['a', 'c', 'v', 'x', 'z', 'y'].includes(event.key.toLowerCase());
   const text = !(event.metaKey || event.ctrlKey)
-    && (event.key.length === 1 || ['Delete', 'Dead', 'Process', 'Unidentified'].includes(event.key) || event.isComposing);
+    && (event.key.length === 1 || ['Backspace', 'Delete', 'Dead', 'Process', 'Unidentified'].includes(event.key) || event.isComposing);
   if (!editingShortcut && !text) return false;
   // Do not synthesize characters: the browser owns paste, composition, selection and undo.
   input.focus({ preventScroll: true });

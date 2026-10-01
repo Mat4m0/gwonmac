@@ -8,8 +8,26 @@ import { buildId, teamId, mapTeamSlots, type BuildLibrary, skillBarOf, skillId, 
 import { ATTRIBUTES, PROFESSIONS, heroLabel } from '../../../src/shared/builds/heroes';
 import { runBuildApply, runTeamApply, type TeamApplyCommands, type TeamApplyEnvironment } from '../../../src/shared/builds/team-apply-runner';
 import { encodeSkillTemplate } from '../../../src/shared/builds/skill-template';
+// eslint-disable-next-line no-restricted-imports
+import type { CompanionPlayRegionState } from '../../../src/renderer/companion-play-region-snapshot';
 
-export function createHubGameFixture(record: (action: string) => void) {
+const SCALE_WORDS = ['Swift', 'Iron', 'Quiet', 'Bright', 'Grim', 'Holy', 'Wild', 'Deep', 'Storm', 'Ember'] as const;
+const SCALE_ROLES = ['Healer', 'Smiter', 'Bonder', 'Nuker', 'Tank', 'Runner', 'Farmer', 'Interrupter', 'Minion Master', 'Spiker'] as const;
+
+/** Grows a library to `size` builds and one team per twenty builds, deterministically, for scale checks. */
+export function scaleLibrary(library: BuildLibrary, size: number): BuildLibrary {
+  const builds = Array.from({ length: Math.max(0, size - library.builds.length) }, (_, index): Build => ({
+    ...library.builds[index % library.builds.length]!, id: buildId(`scale-${index + 1}`), parent: null, favourite: false, origin: null,
+    name: `${SCALE_WORDS[index % 10]} ${SCALE_ROLES[Math.floor(index / 10) % 10]} ${String(index + 1).padStart(4, '0')}`,
+  }));
+  const template = library.teams[0]!;
+  const teams = builds.length ? Array.from({ length: Math.floor(size / 20) }, (_, index) => ({ ...template, id: teamId(`scale-team-${index + 1}`),
+    name: `${SCALE_WORDS[index % 10]} team ${String(index + 1).padStart(3, '0')}`, favourite: false,
+    slots: mapTeamSlots(template.slots, (slot, position) => ({ ...slot, build: slot.build && builds[(index * 8 + position) % builds.length]!.id })) })) : [];
+  return { ...library, builds: [...library.builds, ...builds], teams: [...library.teams, ...teams] };
+}
+
+export function createHubGameFixture(record: (action: string) => void, options: { librarySize?: number } = {}) {
   const base = createDemoHost();
   const first = demoLibrary.builds.find(build => build.professions[0] === 'Mo')!;
   const smiter: Build = { ...first, id: buildId('hub-smiter'), name: 'Smiter', origin: 'Templates/Skills/Smiter.txt' };
@@ -17,7 +35,10 @@ export function createHubGameFixture(record: (action: string) => void) {
   let library: BuildLibrary = { ...demoLibrary, builds: [...demoLibrary.builds, smiter], teams: [
     { ...original, id: teamId('hub-gom-afk'), name: 'GOM AFK', slots: mapTeamSlots(original.slots, slot => ({ ...slot, build: smiter.id })) }, ...demoLibrary.teams,
   ] };
-  try { const saved = localStorage.getItem("hub-fixture-library"); if (saved) library = parseBuildLibrary(JSON.parse(saved)); } catch { /* Disposable fixture only. */ }
+  // A scaled library stays in memory so a later plain fixture keeps its saved data.
+  const scaled = !!options.librarySize;
+  if (scaled) library = scaleLibrary(library, options.librarySize!);
+  else try { const saved = localStorage.getItem("hub-fixture-library"); if (saved) library = parseBuildLibrary(JSON.parse(saved)); } catch { /* Disposable fixture only. */ }
   let folders = false;
   let partial = false;
   let duplicate = false;
@@ -60,7 +81,7 @@ export function createHubGameFixture(record: (action: string) => void) {
     confirmationTime: { now: () => clock, sleep: async milliseconds => { clock += milliseconds; } } });
   const host: ToolsHost = { ...base, party,
     async loadLibrary() { return { library, recovered: false }; },
-    async saveLibrary(value) { library = value; localStorage.setItem("hub-fixture-library", JSON.stringify(value)); return value; },
+    async saveLibrary(value) { library = value; if (!scaled) localStorage.setItem("hub-fixture-library", JSON.stringify(value)); return value; },
     async loadTemplates() { return [
       { path: 'Skills/Monk/Protection.txt', contents: encodeSkillTemplate(first) ?? '' },
       { path: 'Skills/Mesmer/Panic.txt', contents: encodeSkillTemplate(demoLibrary.builds.find(build => build.professions[0] === 'Me')!) ?? '' },
@@ -74,9 +95,23 @@ export function createHubGameFixture(record: (action: string) => void) {
     async applyBuild(build, id, onEvent) { record('apply-build'); return runBuildApply(build, id, { ...environment(), ...(onEvent ? { onEvent } : {}) }, 2); },
     async openStorage() { throw new Error('Synthetic storage refusal'); },
   };
-  return { host, setScenario(value: string) {
-    folders = value === 'folders'; partial = value === 'partial'; duplicate = value === 'duplicate'; sent = 0;
-    if (value === 'mixed-professions') party.value = { ...party.value, heroes: party.value.heroes.map(member => ({ ...member, professions: heroLabel(member.hero) === 'Tahlkora' ? ['Mo', null] : ['Me', 'Mo'] })) };
-    party.value = { ...party.value, status: value === 'unobserved-builds' ? 'unavailable' : 'ready', inOutpost: value !== 'explorable' };
-  } };
+  let unobserved = false;
+  let region: CompanionPlayRegionState = { status: 'ready', sequence: 1, mapId: 55, instanceType: 0, playRegion: 'pve', travelContext: 'world',
+    characterKey: null, unlockedMapWords: null, guildHall: false, hasGuildHall: false };
+  // The party is observed only in a loaded map; an outpost is instance 0.
+  const observe = () => {
+    const ready = region.status === 'ready' ? region : null;
+    party.value = { ...party.value, status: unobserved || !ready ? 'unavailable' : 'ready',
+      inOutpost: ready ? ready.instanceType === 0 : null, playRegion: ready?.playRegion ?? 'unknown' };
+  };
+  return { host,
+    /** The build count of a `?library=` scale library, or 0 for the standard one. */
+    librarySize: scaled ? library.builds.length : 0,
+    setScenario(value: string) {
+      folders = value === 'folders'; partial = value === 'partial'; duplicate = value === 'duplicate'; unobserved = value === 'unobserved-builds'; sent = 0;
+      if (value === 'mixed-professions') party.value = { ...party.value, heroes: party.value.heroes.map(member => ({ ...member, professions: heroLabel(member.hero) === 'Tahlkora' ? ['Mo', null] : ['Me', 'Mo'] })) };
+      observe();
+    },
+    setPlayRegion(next: CompanionPlayRegionState) { region = next; observe(); },
+  };
 }

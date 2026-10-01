@@ -15,6 +15,10 @@ export type HubRow = Readonly<{
   action: string;
   /** Preferred initial browse focus, without affecting explicit user selection. */
   preferred?: boolean;
+  /** The primary changes the game or the account: travel, invite, apply, switch or account (D-24). Never selected on a guess. */
+  consequential?: boolean;
+  /** The primary travels out of an explorable area; a fresh Home never preselects it (D-13). */
+  leavesArea?: boolean;
   preview?: string;
   skills?: readonly Readonly<{ name: string; iconUrl: string | null; elite: boolean; description?: string | null; changed?: boolean }>[];
   attributes?: readonly Readonly<{ name: string; icon: string; attributes: readonly Readonly<{ name: string; label: string; rank: number; nextRank?: number }>[] }>[];
@@ -38,6 +42,8 @@ export type HubSource = Readonly<{
   search(query: string): readonly HubRow[];
   /** Read-only current context for Home; never an executable result. */
   context?(): string | null;
+  /** One quiet line on what the game state holds back, e.g. "Map loading — …" (D-26); never an executable result. */
+  lifecycle?(): string | null;
   shortcuts?: Readonly<{ get(): readonly HubShortcut[]; save(value: readonly HubShortcut[]): Promise<void> }>;
   lookup?(id: string): HubRow | undefined;
   setVisible(visible: boolean): void;

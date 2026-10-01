@@ -3,6 +3,7 @@ import type {
   GwNativeApi,
 } from "../../../src/shared/contracts";
 import type { CustomUiTheme } from "../../../src/shared/ui-theme";
+import type { FixtureCanvasEvent } from "./hub-fixture";
 
 export type StandaloneAppearanceFixture = Readonly<{
   uiStyle: AppSettings["uiStyle"];
@@ -18,6 +19,8 @@ declare global {
     gwTeamApplyProbe?: unknown;
     /** Test-only bridge exposed by the standalone Vite workbench. */
     gwApplyFixtureAppearance?: (fixture: StandaloneAppearanceFixture) => void;
+    /** Hub fixture only: every input event that reached the synthetic game canvas. */
+    gwFixtureCanvas?: Readonly<{ events: readonly FixtureCanvasEvent[]; clear(): void }>;
   }
 }
 

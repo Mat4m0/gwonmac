@@ -252,9 +252,17 @@ places with their reason. User pins keep their existing order and availability.
 Tool rows show meaningful descriptions and resolved shortcut keycaps.
 
 The top bar shows clickable ancestor breadcrumbs and an understated Back arrow.
-Backspace returns to the previous page when no text is being edited; an empty
-search can also go Back. History restores query, selection, scroll and the actual
-focused row/control. First entry and restoration are separate: character cards,
+Command-Backspace returns to the previous page from any focus in Hub, one page per
+physical press; a page opened directly by its shortcut returns to Home, and Home
+ignores it. The press bubbles to Hub, so a mounted view with its own inner level
+(a confirmation, Character Switch settings, Travel Customize) steps out of it first,
+the way Esc does, and marks the press handled. Backspace only edits text and never
+navigates; on a list-stage button it edits the search like typing. History restores
+query, selection, scroll and the focused control. The search field's description
+leads with the page title, so a screen reader that stays in search after Back
+hears where it landed. Form fields keep their draft for
+the session by page path and field name, unless the stored value they started from
+changed meanwhile. Hub lists keep focus in search and move the active descendant. First entry and restoration are separate: character cards,
 account choices and action lists start on their useful item; search stays optional.
 Fresh Home starts in search. Temporary app blur and popout handoffs retain the
 session task; explicit closure starts a fresh task next time. Resume refreshes
@@ -350,10 +358,10 @@ typing. Unknown folders return no results. Imported build provenance is not a
 current template folder. File identities and the reread-before-apply guard stay
 unchanged; folder searches never apply a build automatically.
 
-Typing a printable character while a Hub result has keyboard focus resumes the
-search at its saved caret or selection. This also applies on target-selection
+Typing a printable character or Backspace while a Hub result has keyboard focus
+resumes the search at its saved caret or selection. This also applies on target-selection
 pages. Arrows still navigate results; Enter activates the selected result;
-Backspace from a result still goes back in Hub history.
+Command-Backspace from a result goes back in Hub history.
 
 ### Build continuity and completion
 
@@ -370,6 +378,9 @@ build's Details can open its canonical record in the authoring workspace.
 
 Apply shows progress and explicit partial failures through the existing runner.
 Confirmed completion closes Hub with a brief receipt naming the build and target.
+The receipt stands where the Hub's footer was, not as a window toast, and ends
+when Hub opens again. An outcome that arrives while Hub is open, such as the
+invite after Travel and invite, goes to the status line instead.
 The library controller retains up to three recent build/hero references for this
 renderer session; Continue reopens the named target for review. Native files and
 live targets are revalidated before applying again. Saved build usage updates the

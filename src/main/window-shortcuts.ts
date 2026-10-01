@@ -41,13 +41,14 @@ interface ShortcutActions {
   ): void;
 }
 
-type ClaimedKey = 'capture' | 'skill-capture' | 'shortcut' | GameTextEditCommand;
+/** `sheet` holds a key while a native sheet it opened is up (Command-Q, Resign). */
+type ClaimedKey = 'capture' | 'skill-capture' | 'shortcut' | 'sheet' | GameTextEditCommand;
 
 const claimedDecision = (claim: ClaimedKey): 'capture' | 'shortcut' =>
   claim === 'capture' || claim === 'skill-capture' ? 'capture' : 'shortcut';
 
 const isTextEditClaim = (claim: ClaimedKey): claim is GameTextEditCommand =>
-  claim !== 'capture' && claim !== 'skill-capture' && claim !== 'shortcut';
+  claim !== 'capture' && claim !== 'skill-capture' && claim !== 'shortcut' && claim !== 'sheet';
 
 const isModifierCode = (code: string): boolean =>
   /^(?:Meta|Control|Shift|Alt)(?:Left|Right)$/u.test(code);
@@ -110,7 +111,16 @@ class WindowShortcuts {
         return;
       }
       if (input.type !== "keyDown") return;
-      const claimed = this.#claimedCodes.get(input.code);
+      let claimed = this.#claimedCodes.get(input.code);
+      // Chromium drops the key-up of a key-down main prevented, and the AppKit
+      // release monitor sees only Command chords, so a claim can outlive its
+      // press. A fresh press of the same key is a new press and is decided
+      // again. Only a native sheet keeps its key until the sheet settles.
+      if (claimed && !input.isAutoRepeat && claimed !== 'sheet'
+        && !(isTextEditClaim(claimed) && input.control && !input.meta)) {
+        this.#claimedCodes.delete(input.code);
+        claimed = undefined;
+      }
       if (claimed) {
         // The translated Guild Wars chord deliberately reuses A or X while
         // the physical Command shortcut remains claimed. Let only that exact
@@ -206,7 +216,7 @@ class WindowShortcuts {
           key: tracedKey(input.key), repeat: input.isAutoRepeat,
           decision: 'shortcut',
         });
-        this.#claimedCodes.set(input.code, 'shortcut');
+        this.#claimedCodes.set(input.code, 'sheet');
         this.#recordCommandQ("claimed", "none");
         if (!input.isAutoRepeat) {
           // AppKit gives the native sheet ownership before the physical Q-up
@@ -246,7 +256,7 @@ class WindowShortcuts {
             key: tracedKey(input.key), repeat: input.isAutoRepeat, decision: 'shortcut',
           });
           event.preventDefault();
-          this.#claimedCodes.set(input.code, 'shortcut');
+          this.#claimedCodes.set(input.code, action === "game.resign" ? 'sheet' : 'shortcut');
           if (!input.isAutoRepeat) {
             const operation = this.#actions.run(action as ShortcutAction);
             if (action === "game.resign") {

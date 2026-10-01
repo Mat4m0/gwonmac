@@ -3,6 +3,7 @@
  * It renders one bounded source and never reads game memory or native exports.
  */
 import { installSearchEditing, resumeSearchInput } from "./search-input.js";
+import { isHubBackKey } from "../shared/keyboard-shortcuts.js";
 import { hubMatch, normaliseHubQuery } from "../shared/hub.js";
 import type {
   CharacterSummary,
@@ -479,16 +480,25 @@ export function createCharacterSwitchPalette(
     if (state.status !== "ready" || !row || row.index === currentCharacterIndex(source)) return;
     beginRequest(row.character.characterKey);
   };
+  /** Esc, and ⌘⌫ in the Hub: a confirmation cancels and the settings close, back to the cards. */
+  const leaveInnerView = () => {
+    if (view.kind === "confirming") source.cancelConfirmation();
+    view = Object.freeze({ kind: "characters" });
+    render();
+    focusSelected();
+  };
   root.addEventListener("keydown", (event) => {
     if (event.isComposing || event.defaultPrevented) return;
+    // From the cards ⌘⌫ is the Hub's own Back; one level per physical press.
+    if (hub && isHubBackKey(event) && (view.kind === "confirming" || view.kind === "settings")) {
+      event.preventDefault();
+      if (!event.repeat) leaveInnerView();
+      return;
+    }
     if (event.key === "Escape") {
       event.preventDefault();
-      if (view.kind === "confirming" || view.kind === "settings") {
-        if (view.kind === "confirming") source.cancelConfirmation();
-        view = Object.freeze({ kind: "characters" });
-        render();
-        focusSelected();
-      } else if (normaliseCharacterQuery(query) !== "") {
+      if (view.kind === "confirming" || view.kind === "settings") leaveInnerView();
+      else if (normaliseCharacterQuery(query) !== "") {
         query = "";
         queryInput.value = "";
         selected = 0;

@@ -26,7 +26,7 @@ export function createHubAccounts(hub: HubPresenter<HTMLElement>, api: { get(): 
     return (['replace', 'open'] as const).map(mode => ({
       id: `account:${profile.id}:${mode}`, title: mode === 'replace' ? `Close ${current?.name ?? 'current account'} and open ${profile.name}` : `${profile.state === 'running' ? 'Show' : 'Open'} ${profile.name}`,
       detail: mode === 'replace' ? 'Save and close the current game after this account opens' : `Keep ${current?.name ?? 'current account'} running`,
-      group: 'Accounts', action: mode === 'replace' ? 'Switch account' : profile.state === 'running' ? 'Show account' : 'Open account',
+      group: 'Accounts', action: mode === 'replace' ? 'Switch account' : profile.state === 'running' ? 'Show account' : 'Open account', consequential: true,
       run: async () => {
         const latest = await api.get();
         const target = latest.profiles.find(item => item.id === profile.id);

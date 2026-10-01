@@ -194,6 +194,13 @@ Command modifier, so pressing or releasing Command cannot interrupt another
 key that is still physically held. A real focus loss remains the final cleanup
 for interrupted input.
 
+A press that starts on a GWonMac surface (the Hub, a popout or a dialog) owns
+its repeats and its release. When that press closes the surface and focus
+returns to the canvas, the surface controller keeps the remaining repeats and
+the key-up out of the game, because Guild Wars never saw the key-down. A fresh
+press after the close reaches the game normally. The buffered character-select
+Enter accepts only a fresh press, never a repeat.
+
 When Guild Wars moves focus from the canvas into one of its hidden text proxies,
 the renderer releases canvas-owned W, A, S, and D at that boundary. This keeps
 movement state out of chat without changing later text input or releasing any
@@ -411,7 +418,10 @@ Command-Q opens an account-owned native dialog while a game window is active.
 Reload and Quit Game affect that account only. The launcher keeps the
 ordinary application Quit command because it has no game account to reload.
 The physical Q claim lasts only until that dialog settles; Cancel re-arms the
-shortcut even when AppKit consumed the original key-up.
+shortcut even when AppKit consumed the original key-up. Other claims end at the
+key-up, or at the next fresh press of the same key: Chromium never delivers the
+key-up of a key-down that main prevented, so a non-repeat press is decided
+again instead of being contained as a repeat.
 
 Main-to-renderer events stop after the window or its `webContents` is destroyed.
 The app attempts renderer recovery only after unexpected renderer loss. It does

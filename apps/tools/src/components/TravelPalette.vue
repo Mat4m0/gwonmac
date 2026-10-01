@@ -20,6 +20,7 @@ import {
 } from "../../../../src/shared/travel-command";
 import { TRAVEL_HISTORY_VISIBLE_LIMIT } from "../../../../src/shared/travel-history";
 import { guildWarsMapName } from "../../../../src/shared/guild-wars-map-names";
+import { isHubBackKey } from "../../../../src/shared/keyboard-shortcuts";
 import { useTravelPreferences } from "../travel-preferences";
 import TravelDestinationPicker from "./TravelDestinationPicker.vue";
 
@@ -663,6 +664,14 @@ function onKeydown(event: KeyboardEvent): void {
   if (props.inset && mode.value === 'travel' && !hasQuery.value && event.target === input.value && plainArrow && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
     event.preventDefault(); void moveActive(event.key === 'ArrowRight' ? 1 : -1); return;
   }
+  // In the Hub, ⌘⌫ leaves Customize like Esc; an open picker closes first, and from the
+  // destination list the press is the Hub's own Back.
+  if (props.inset && mode.value === "customize" && isHubBackKey(event)
+    && !(event.target instanceof Element && event.target.closest("details[open]"))) {
+    event.preventDefault();
+    if (!event.repeat) void selectMode("travel");
+    return;
+  }
   if (event.key === "Escape" || (event.key === "ArrowLeft" && plainArrow && atStart && !hasQuery.value)) {
     event.preventDefault();
     if (mode.value === "customize") void selectMode("travel");
@@ -678,7 +687,8 @@ function onKeydown(event: KeyboardEvent): void {
     void moveActive(event.key === "ArrowDown" ? 1 : -1);
     return;
   }
-  if (mode.value === "travel" && event.target === input.value && event.key === "Enter") {
+  // Only a plain Enter travels; a modified Enter is never a second route to it.
+  if (mode.value === "travel" && event.target === input.value && event.key === "Enter" && !event.metaKey && !event.ctrlKey && !event.altKey) {
     if (event.repeat) { event.preventDefault(); return; }
     if (activeDestination.value !== null
       && selectable(activeDestination.value)
@@ -703,6 +713,8 @@ function onKeydown(event: KeyboardEvent): void {
   }
   if (/^Digit[1-9]$/u.test(event.code) && mode.value === "travel" && !hasQuery.value && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
     event.preventDefault();
+    // One trip per physical press; a held digit never repeats it (HUB-003).
+    if (event.repeat) return;
     const slot = Number(event.code.slice(5)) - 1;
     const shortcut = shortcuts.value[slot];
     if (shortcut && isAvailable(shortcut.mapId)) void travel(shortcut);

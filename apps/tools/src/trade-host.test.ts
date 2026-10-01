@@ -2,7 +2,7 @@ import { isProxy, reactive } from "vue";
 import { describe, expect, it, vi } from "vitest";
 import type { GwNativeApi } from "../../../src/shared/contracts";
 import type { TradeSavedState } from "../../../src/shared/trade-chat";
-import { createNativeTradeHost } from "./trade-host";
+import { createDemoTradeHost, createNativeTradeHost } from "./trade-host";
 
 describe("native trade host", () => {
   it("normalizes reactive saved state before crossing IPC", async () => {
@@ -43,5 +43,20 @@ describe("native trade host", () => {
     expect(isProxy(sent)).toBe(false);
     expect(isProxy(sent?.offers)).toBe(false);
     expect(isProxy(sent?.offers[0])).toBe(false);
+  });
+});
+
+describe("demo trade host", () => {
+  it("dates a live arrival now, like a real Kamadan message", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-26T12:00:00Z"));
+    try {
+      const host = createDemoTradeHost();
+      const arrivals: number[] = [];
+      host.onEvent((event) => { if (event.type === "message") arrivals.push(event.message.timestamp); });
+      await host.subscribe("kamadan");
+      vi.advanceTimersByTime(18_000);
+      expect(arrivals).toEqual([Date.parse("2026-09-26T12:00:18Z")]);
+    } finally { vi.useRealTimers(); }
   });
 });

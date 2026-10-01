@@ -33,6 +33,8 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
       return () => { active = false; app.unmount(); };
     }, () => !!window.gwToolsSettings?.().gwonmacTools && !!window.gwToolsSettings?.().travelPalette);
   }
+  /** The certified instance type, never the catalogue: a Guild Hall or an uncatalogued outpost is no explorable area. */
+  const explorable = () => host.state.value.status === 'ready' && host.state.value.explorable;
   function refusal(mapId: number) {
     const availability = travelDestinationAvailability(host.state.value, mapId);
     return host.unavailable ?? travelContextRefusal(host.state.value, mapId)
@@ -49,7 +51,17 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
   }
   const source: HubSource = {
     feature: 'travelPalette',
-    context: () => host.state.value.status === 'ready' ? travelDestination(host.state.value.mapId)?.name ?? null : null,
+    context() {
+      const state = host.state.value;
+      if (state.status !== 'ready') return state.reason === 'loading' ? 'Map loading' : null;
+      if (state.guildHall) return 'Guild Hall';
+      return travelDestination(state.mapId)?.name ?? (state.explorable ? 'Explorable area' : null);
+    },
+    lifecycle() {
+      const state = host.state.value;
+      if (state.status !== 'ready') return state.reason === 'loading' ? 'Map loading — Travel returns when the map has loaded' : 'Waiting for Guild Wars — Travel returns in game';
+      return explorable() ? 'Explorable area — Travel leaves this area' : null;
+    },
     lookup(id) { const place = travelDestination(Number(id.replace('place:', ''))); return place ? source.search(place.name).find(row => row.id === id) : undefined; },
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
     setVisible(next) { if (next && !visible) void load(); visible = next; },
@@ -64,7 +76,7 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
         const reason = refusal(destination.mapId);
         return { id: `place:${destination.mapId}`, title: destination.name,
           detail: query.trim() ? 'Outpost · Any district' : 'Recently visited · Any district',
-          group: query.trim() ? 'Places' : 'Continue', action: `Travel to ${destination.name}`,
+          group: query.trim() ? 'Places' : 'Continue', action: `Travel to ${destination.name}`, consequential: true, leavesArea: explorable(),
           ...(reason ? { unavailable: reason } : {}), run: () => travel(destination.mapId) };
       }), ...matchHubRows(tools, query)];
     },

@@ -88,15 +88,27 @@ content inside it. Respect reduced motion and text scaling.
 
 Home contains a focused search field, a short Pinned section, existing relevant
 recents, and enabled sections. Do not show dangerous actions in empty-query recents.
+In an explorable area (the certified instance type, not the Travel catalogue, so a
+Guild Hall is an outpost) a fresh Home never starts on a place, because Enter would
+leave the area; it starts on the first pin, else **Travel**. The header names the
+character and area, and one quiet lifecycle line under the results says what the
+game state holds back, for example "Map loading — Travel returns when the map has
+loaded". A task report in the status line takes its place.
 Use the placeholder **Search people, places, builds…**. Use Guild Wars names for
 objects: Xunlai Storage, Guild Hall, outpost, hero, profession, skill template,
 Globs of Ectoplasm, and platinum. Prefer clear action verbs over invented lore.
 
 Every row has a stable identity, full name, type, and an explicit primary action.
 The footer names what Enter will do. Do not rely on colour or icons alone.
+Its left side is a key legend that names only keys that act in the current view,
+such as ↑↓ Select, → Open and Esc Clear, Back or Close. Footer buttons never hide;
+a secondary action that does not apply is disabled, so nothing moves under the
+pointer.
 
 - Up/Down selects rows. Enter performs the displayed action.
-- Escape closes an action menu, then goes back one level, then dismisses Hub.
+- Escape closes an action menu, then clears a non-empty query, then goes back
+  one level, then dismisses Hub. Focus then returns to the previous control or
+  the game, never to the page body.
 - A direct shortcut has no artificial Home step when Escape closes its section.
 - A visible Actions button exposes secondary actions. Tab reaches it; its menu
   supports normal arrow navigation. Do not consume text-editing arrow keys.
@@ -120,6 +132,10 @@ Recognize a closed set of leading words: `team`, `build`, `travel`, `char`, `acc
 The rest of the input is a name query, not executable instructions. A leading word
 followed by a space enters its scope with an empty query, so `invite ` lists the
 online friends and `team ` lists the saved teams; a lone word is still a search.
+An empty query resolves nothing: a row whose primary changes the game or the
+account (travel, invite, apply, switch, account) never starts selected, so
+`travel ` then Enter opens **Travel** and `invite ` then Enter invites nobody,
+while `whisper ` and `trade ` still start on their first row.
 
 Recognize conversions only when the entire input matches a supported numeric
 expression or `<amount> <unit> in <unit>`. Parse with a bounded grammar, never eval.

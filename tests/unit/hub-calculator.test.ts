@@ -53,6 +53,20 @@ test('market rows distinguish buy, sell, and stale observation', async () => {
   source.setVisible(false);
 });
 
+test('sample trader quotes keep the sample marker that sample market rates carry', async () => {
+  const { createHubCalculator } = await import('../../src/renderer/hub-calculator.ts');
+  const quotes = [{ modelId: '0b03a2', side: 'buy' as const, price: 6000, timestamp: Date.now() }];
+  for (const sample of [true, false]) {
+    const source = createHubCalculator({ copy: async () => {}, marketEnabled: () => true,
+      quotes: async () => ({ updatedAt: Date.now(), quotes, ...(sample ? { sample: true as const } : {}) }) });
+    source.setVisible(true);
+    try {
+      source.search('10 ecto in p'); await Promise.resolve();
+      assert.equal(source.search('10 ecto in p')[0]?.title, sample ? '60 platinum (sample)' : '60 platinum');
+    } finally { source.setVisible(false); }
+  }
+});
+
 test('trading shorthand accepts compact quantities, stacks and mixed sums without guesses', async () => {
   const { evaluateConversion, fraction } = await import('../../src/shared/hub-calculator.ts');
   for(const input of ['1p in a','1 p in armbraces','1 platinum to arms']) assert.equal(parseConversion(input)?.to,'armbrace');

@@ -6,6 +6,8 @@
  * controller keeps one ordered list of visible host surfaces. Escape dismisses
  * the topmost one and Tab enters or wraps within it. Dialogs use the platform's
  * modal behavior, with one shared backdrop, dismissal, and focus lifecycle.
+ * A press that starts on a surface owns its repeats and release, so a key that
+ * closes a surface never continues into the game.
  */
 
 type Surface = Readonly<{
@@ -49,6 +51,12 @@ export function installSurfaceController(
 ): GwonmacSurfaceController {
   const surfaces = new Map<symbol, OpenSurface>();
   const suppressedKeyUps = new Set<string>();
+  // Physical keys whose press began on a surface (HUB-003). The game never saw
+  // the key-down, so a repeat or release that lands off the surface after it
+  // closed must not reach the game either.
+  const ownedPresses = new Set<string>();
+  const onSurface = (target: EventTarget | null) =>
+    target instanceof Element && target.closest("[data-gwonmac-surface]") !== null;
   let order = 0;
 
   const topmost = () => [...surfaces.values()].sort((left, right) =>
@@ -75,6 +83,14 @@ export function installSurfaceController(
   };
 
   const onKeyDown = (event: KeyboardEvent) => {
+    if (!event.repeat) {
+      if (onSurface(event.target)) ownedPresses.add(event.code);
+      else ownedPresses.delete(event.code);
+    } else if (ownedPresses.has(event.code) && !onSurface(event.target)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
     const nativeModal = document.querySelector("dialog:modal");
     const surface = topmost();
     if (!surface || (nativeModal !== null && nativeModal !== surface.root)) return;
@@ -117,7 +133,8 @@ export function installSurfaceController(
   };
 
   const onKeyUp = (event: KeyboardEvent) => {
-    if (!suppressedKeyUps.delete(event.code)) return;
+    const owned = ownedPresses.delete(event.code) && !onSurface(event.target);
+    if (!suppressedKeyUps.delete(event.code) && !owned) return;
     event.preventDefault();
     event.stopImmediatePropagation();
   };
@@ -127,14 +144,18 @@ export function installSurfaceController(
   window.addEventListener("gw:input-release", (event) => {
     if (event instanceof CustomEvent && typeof event.detail === "string") {
       suppressedKeyUps.delete(event.detail);
+      ownedPresses.delete(event.detail);
     }
   });
   const clearSuppressedKeyUps = () => suppressedKeyUps.clear();
-  window.addEventListener("blur", clearSuppressedKeyUps);
-  window.addEventListener("pagehide", clearSuppressedKeyUps);
+  // An input reset releases the game's keys; a surface press stays owned
+  // through it, because the action it runs may reset input before release.
+  const clearPresses = () => { clearSuppressedKeyUps(); ownedPresses.clear(); };
+  window.addEventListener("blur", clearPresses);
+  window.addEventListener("pagehide", clearPresses);
   window.addEventListener("gw:input-reset", clearSuppressedKeyUps);
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "hidden") clearSuppressedKeyUps();
+    if (document.visibilityState === "hidden") clearPresses();
   });
 
   const register = (surface: Surface): GwonmacSurfaceHandle => {

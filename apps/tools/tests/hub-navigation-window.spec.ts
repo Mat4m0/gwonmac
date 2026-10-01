@@ -32,18 +32,38 @@ test('Hub has a locked frame, invisible corner hit area and bounded movable geom
   await page.screenshot({ path: info.outputPath('hub-maps-breadcrumb.png') });
 });
 
-test('Backspace and breadcrumb ancestors restore history without deleting typed text', async ({ page }) => {
+test('Command-Backspace and breadcrumb ancestors restore history; Backspace only edits text', async ({ page }) => {
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const back = page.locator('.hub-back');
+  await expect(back).toBeHidden();
   await search.fill('accounts'); await search.press('Enter');
   await search.fill('second'); await search.press('Enter');
   await expect(page.locator('.hub-breadcrumbs')).toHaveText('Home›Accounts›Second');
+  await expect(back).toHaveAttribute('title', 'Back (⌘⌫)');
+  await expect(back).toHaveAttribute('aria-keyshortcuts', 'Meta+Backspace');
+  await expect(back).toHaveAttribute('aria-description', 'Return to Accounts');
+  await expect(page.locator('.hub-legend')).toContainText('⌘⌫ Back');
   await search.fill('keep'); await search.press('Backspace');
   await expect(search).toHaveValue('kee');
   await expect(page.locator('.hub-caption')).toHaveText('Second');
-  await search.fill(''); await search.press('Backspace');
+  // An empty query is a no-op for Backspace, held or not: it never leaves the page.
+  await search.fill('');
+  for (let press = 0; press < 4; press++) await page.keyboard.down('Backspace');
+  await page.keyboard.up('Backspace');
+  await expect(page.locator('.hub-caption')).toHaveText('Second');
+  // Command-Backspace goes back exactly one level, without clearing the child query first,
+  // and a held one never goes further.
+  await search.fill('child');
+  await page.keyboard.down('Meta');
+  for (let press = 0; press < 4; press++) await page.keyboard.down('Backspace');
+  await page.keyboard.up('Backspace'); await page.keyboard.up('Meta');
   await expect(search).toHaveValue('second');
   await expect(page.locator('.hub-caption')).toHaveText('Accounts');
+  // Focus stays in search, so its description names the page a screen reader has returned to.
+  await expect(search).toHaveAttribute('aria-description', 'Accounts: search actions');
+  await page.keyboard.press('Meta+Backspace');
+  await expect(search).toHaveAttribute('aria-description', 'Home: search tools or use a command example');
   await search.press('Enter');
   await page.getByRole('navigation', { name: 'Hub breadcrumb' }).getByRole('button', { name: 'Home', exact: true }).click();
   await expect(search).toHaveValue('accounts');
@@ -55,8 +75,10 @@ test('arrows connect Hub results, character carousel, search and Back', async ({
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
   await search.fill('switch character'); await search.press('ArrowDown');
-  await expect(page.locator('.hub-row[aria-selected=true]')).toBeFocused();
+  // D-2: arrows move the selection while focus stays in search; no wrap at the top.
+  await expect(page.locator('.hub-row[aria-selected=true]')).toContainText('Switch Character');
   await page.keyboard.press('ArrowUp'); await expect(search).toBeFocused();
+  await expect(page.locator('.hub-row[aria-selected=true]')).toContainText('Switch Character');
   await search.press('Enter');
   const selected = page.locator('.character-switch-row[data-selected=true]');
   await expect(selected).toBeFocused();
@@ -71,7 +93,10 @@ test('arrows connect Hub results, character carousel, search and Back', async ({
   await expect(back).toBeFocused();
   await page.keyboard.press('ArrowDown'); await expect(picker).toBeFocused();
   await page.keyboard.press('ArrowDown'); await expect(selected).toBeFocused();
+  // Backspace never navigates; Command-Backspace returns from the card to Home.
   await page.keyboard.press('Backspace');
+  await expect(page.locator('.hub-caption')).toHaveText('Characters');
+  await page.keyboard.press('Meta+Backspace');
   await expect(search).toHaveValue('switch character');
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', /Character/);
 });
@@ -102,4 +127,167 @@ for (const material of ['Guild Wars', 'Modern']) test(`floating Whispers paints 
   expect(geometry.boxSizing).toBe('border-box'); expect(geometry.fill).not.toBe('rgba(0, 0, 0, 0)'); expect(geometry.delta).toBeLessThan(2);
   expect(geometry.mask).toBe('none'); expect(Number(geometry.z)).toBeLessThan(0);
   await page.screenshot({ path: info.outputPath('whisper-floating.png') });
+});
+
+test('one list move keeps focus in search: arrows, Control-N/P, pages and ends never wrap', async ({ page }) => {
+  await page.goto('/?hub');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const rows = page.locator('.hub-row');
+  const selected = page.locator('.hub-row[aria-selected="true"]');
+  await expect(rows.first()).toBeVisible();
+  const count = await rows.count();
+  expect(count).toBeGreaterThan(8);
+  await expect(rows.nth(0)).toHaveAttribute('aria-selected', 'true');
+  await search.press('ArrowUp'); await expect(rows.nth(0)).toHaveAttribute('aria-selected', 'true');
+  await search.press('Control+n'); await expect(rows.nth(1)).toHaveAttribute('aria-selected', 'true');
+  await search.press('Control+p'); await expect(rows.nth(0)).toHaveAttribute('aria-selected', 'true');
+  await search.press('PageDown');
+  expect(await selected.getAttribute('id')).not.toBe('hub-result-0');
+  await search.press('End');
+  await expect(rows.nth(count - 1)).toHaveAttribute('aria-selected', 'true');
+  await expect(rows.nth(count - 1)).toBeInViewport();
+  await search.press('ArrowDown'); await expect(rows.nth(count - 1)).toHaveAttribute('aria-selected', 'true');
+  await search.press('Home'); await expect(rows.nth(0)).toHaveAttribute('aria-selected', 'true');
+  await expect(search).toBeFocused();
+  await expect(search).toHaveAttribute('aria-activedescendant', 'hub-result-0');
+  // The results scroller is no Tab stop (HUB-045).
+  await expect(page.locator('#hub-results')).toHaveAttribute('tabindex', '-1');
+  // A click on a navigational row opens it and leaves the keyboard in search.
+  await page.locator('.hub-row[data-id="commands"]').click();
+  await expect(page.locator('.hub-caption')).toHaveText('Commands');
+  await expect(search).toBeFocused();
+});
+
+test('one list move from no selection: End lands on the last result, every other move on the first', async ({ page }) => {
+  await page.goto('/?hub&party');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const rows = page.locator('.hub-row');
+  const selected = page.locator('.hub-row[aria-selected="true"]');
+  // A bare consequential scope preselects nothing, so Enter can never invite on a guess.
+  for (const [key, last] of [['End', true], ['Home', false], ['PageUp', false], ['ArrowUp', false], ['ArrowDown', false], ['Control+n', false], ['PageDown', false]] as const) {
+    await search.fill('invite ');
+    await expect(rows.nth(2)).toBeVisible();
+    await expect(selected).toHaveCount(0);
+    const count = await rows.count();
+    await search.press(key);
+    await expect(rows.nth(last ? count - 1 : 0), key).toHaveAttribute('aria-selected', 'true');
+    await expect(search).toBeFocused();
+  }
+});
+
+test('list keys without results keep the caret and the text selection in search', async ({ page }) => {
+  await page.goto('/?hub');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  await search.fill('qqqzzz');
+  await expect(page.locator('.hub-empty')).toBeVisible();
+  for (const key of ['ArrowDown', 'ArrowUp', 'End', 'Home', 'PageDown', 'Control+n']) {
+    await search.evaluate(input => (input as HTMLInputElement).setSelectionRange(1, 3));
+    await search.press(key);
+    expect(await search.evaluate(input => [(input as HTMLInputElement).selectionStart, (input as HTMLInputElement).selectionEnd]), key).toEqual([1, 3]);
+  }
+  await page.keyboard.press('Delete');
+  await expect(search).toHaveValue('qzzz');
+});
+
+test('a view whose first buttons are disabled still takes focus, and Command-Backspace leaves it', async ({ page }) => {
+  await page.goto('/?hub');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  await search.fill('hub preferences'); await page.keyboard.down('Enter');
+  await expect(page.locator('.hub-caption')).toHaveText('Hub preferences');
+  // Nothing is pinned, so Reset aliases is disabled; focus goes to the first usable control.
+  await expect(page.getByRole('button', { name: 'Reset aliases', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Reset Hub position', exact: true })).toBeFocused();
+  await page.keyboard.up('Enter');
+  expect(await page.evaluate(() => document.activeElement === document.body)).toBe(false);
+  await page.keyboard.press('Meta+Backspace');
+  await expect(page.locator('.hub-caption')).toHaveText('Home');
+  await expect(search).toHaveValue('hub preferences');
+  await expect(search).toBeFocused();
+});
+
+test('a page opened directly returns to the real Home, and Home ignores Command-Backspace', async ({ page }) => {
+  await page.goto('/?hub');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  await search.fill('kam');
+  await page.keyboard.press('Meta+Backspace');
+  await expect(page.locator('#hub')).toBeVisible();
+  await expect(search).toHaveValue('kam');
+  await expect(page.locator('.hub-legend')).not.toContainText('⌘⌫');
+  await page.keyboard.press('Escape'); await page.keyboard.press('Escape');
+  await expect(page.locator('#hub')).toBeHidden();
+  // Command-E opens Characters with no parent page; Back from its focused card goes to Home.
+  await page.keyboard.press('Meta+e');
+  await expect(page.locator('.hub-caption')).toHaveText('Characters');
+  await expect(page.locator('.character-switch-row[data-selected=true]')).toBeFocused();
+  await expect(page.locator('.hub-back')).toBeVisible();
+  await page.keyboard.press('Meta+Backspace');
+  await expect(page.locator('.hub-caption')).toHaveText('Home');
+  await expect(page.locator('#hub')).toBeVisible();
+  await expect(search).toBeFocused();
+});
+
+test('Command-Backspace steps out of a view\'s own inner level before it leaves the view', async ({ page }) => {
+  await page.goto('/?hub&lifecycle=pve-explorable');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const caption = page.locator('.hub-caption');
+  // On a confirmation it acts as Cancel, like Esc and Stay here.
+  await search.fill('char toefte'); await search.press('Enter');
+  await expect(page.locator('#character-switch-title')).toHaveText('Leave this area?');
+  await page.keyboard.press('Meta+Backspace');
+  await expect(page.locator('#character-switch-title')).toHaveText('Switch Character');
+  await expect(caption).toHaveText('Characters');
+  await expect(page.locator('.character-switch-row[data-selected=true]')).toBeFocused();
+  await expect(page.locator('#app')).not.toHaveAttribute('data-action', /Character/);
+  // Characters settings return to the cards; the next press leaves Characters.
+  await page.getByRole('button', { name: 'Character Switch settings', exact: true }).click();
+  await expect(page.locator('.character-switch-settings')).toBeVisible();
+  await page.keyboard.press('Meta+Backspace');
+  await expect(page.locator('.character-switch-settings')).toBeHidden();
+  await expect(caption).toHaveText('Characters');
+  await page.keyboard.press('Meta+Backspace');
+  await expect(caption).toHaveText('Home');
+  await expect(search).toHaveValue('char toefte');
+  // Travel Customize returns to the destination list; an open picker closes first.
+  await page.keyboard.press('Meta+t');
+  await page.getByRole('button', { name: 'Customize Travel', exact: true }).click();
+  const customize = page.locator('#travel-customize-panel');
+  await expect(customize).toBeVisible();
+  await customize.getByRole('button', { name: /shortcut 1\b/ }).click();
+  const picker = customize.locator('details.travel-destination-picker');
+  await picker.locator('summary').click();
+  await expect(picker).toHaveAttribute('open', '');
+  await page.keyboard.press('Meta+Backspace');
+  await expect(picker).not.toHaveAttribute('open', '');
+  await expect(customize).toBeVisible();
+  await page.keyboard.press('Meta+Backspace');
+  await expect(customize).toBeHidden();
+  await expect(caption).toHaveText('Travel');
+  await expect(page.locator('#travel-search-input')).toBeFocused();
+  await page.keyboard.press('Meta+Backspace');
+  await expect(caption).toHaveText('Home');
+});
+
+test('Backspace on a focused footer button edits the search and returns focus to it', async ({ page }) => {
+  await page.goto('/?hub');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  await search.fill('kam'); await page.keyboard.press('Tab');
+  await expect(page.locator('.hub-primary')).toBeFocused();
+  await page.keyboard.press('Backspace');
+  await expect(search).toBeFocused();
+  await expect(search).toHaveValue('ka');
+  await expect(page.locator('.hub-caption')).toHaveText('Home');
+});
+
+test('the mouse back button goes back one level and never closes the Hub', async ({ page }) => {
+  await page.goto('/?hub');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  await search.fill('accounts'); await search.press('Enter');
+  await expect(page.locator('.hub-caption')).toHaveText('Accounts');
+  const back = () => page.locator('.hub-panel').dispatchEvent('mouseup', { button: 3 });
+  await back();
+  await expect(page.locator('.hub-caption')).toHaveText('Home');
+  await expect(search).toHaveValue('accounts');
+  await back();
+  await expect(page.locator('#hub')).toBeVisible();
 });

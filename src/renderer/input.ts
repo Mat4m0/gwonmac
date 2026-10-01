@@ -559,9 +559,12 @@ export const installGameInput = ({
     ) {
       cancelAutomaticEnter('physical');
     }
+    // Only a fresh press on the canvas is buffered. A repeat belongs to a press
+    // already under way, possibly one a GWonMac surface owned (HUB-003).
     if (
       event.target === canvas &&
       event.key === 'Enter' &&
+      !event.repeat &&
       performance.now() < characterSelectionUntil
     ) {
       characterSelectionUntil = 0;

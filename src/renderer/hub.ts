@@ -2,10 +2,10 @@
  * Owns the Core command palette, its search focus and transient modal lifetime.
  * Optional Tools contributes local results and views without entering Core's imports.
  */
-import { installSearchEditing, resumeSearchInput } from './search-input.js';
+import { resumeSearchInput } from './search-input.js';
 import { installHubWindow } from './hub-window.js';
 import { attachClassicFrame } from '../shared/ui/frame.js';
-import { resolveShortcuts, shortcutKeycaps, type ShortcutAction } from '../shared/keyboard-shortcuts.js';
+import { isHubBackKey, resolveShortcuts, shortcutKeycaps, type ShortcutAction } from '../shared/keyboard-shortcuts.js';
 import { openHubSettings } from "./hub-settings.js";
 import { createHubAccounts } from './hub-accounts.js';
 import { hubIcon } from "./hub-icons.js";
@@ -25,14 +25,16 @@ export function createHub(parent: HTMLElement) {
     <header class="hub-heading ui-window-head"><button class="ui-button hub-back" data-variant="quiet" aria-label="Back" hidden>← Back</button><span class="hub-name">Hub</span><nav class="hub-breadcrumbs" aria-label="Hub breadcrumb"><span class="hub-caption">Home</span></nav><span class="hub-context"></span><button class="ui-window-lock hub-lock" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="lock-shackle" d="M7 11V7a5 5 0 0 1 10 0v4"/><rect x="5" y="11" width="14" height="10" rx="2"/></svg></button><button class="ui-window-close hub-close" aria-label="Close Hub" title="Close Hub">×</button></header>
     <section class="hub-summary" aria-label="Build to apply" hidden></section>
     <div class="hub-search"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 8 10-8 10L4 12 12 2Zm0 5v10M8 12h8"/></svg><span class="hub-scope" hidden></span><input type="text" role="combobox" aria-label="Search people, places, builds" aria-autocomplete="list" aria-controls="hub-results" aria-expanded="true" placeholder="Search people, places, builds…" autocomplete="off" spellcheck="false" maxlength="120"></div>
-    <p class="hub-hint" id="hub-hint" hidden></p><div class="hub-rate-controls" hidden></div><div class="hub-results ui-scroll" id="hub-results" role="listbox" aria-label="Results"></div>
-    <pre class="hub-preview ui-scroll" hidden></pre><div class="hub-view" hidden></div><p class="hub-status" role="status" hidden></p>
-    <footer class="hub-footer"><button class="hub-primary ui-button" data-variant="primary"></button><span class="hub-count"></span><button class="hub-actions ui-button" data-variant="quiet">Actions</button></footer>
+    <p class="hub-hint" id="hub-hint" hidden></p><div class="hub-rate-controls" hidden></div><div class="hub-results ui-scroll" id="hub-results" role="listbox" aria-label="Results" tabindex="-1"></div>
+    <pre class="hub-preview ui-scroll" hidden></pre><div class="hub-view" hidden></div><p class="hub-status" role="status" hidden></p><p class="hub-lifecycle" hidden></p>
+    <footer class="hub-footer"><span class="hub-legend"></span><span class="hub-count"></span><button class="hub-primary ui-button" data-variant="primary"></button><button class="hub-actions ui-button" data-variant="quiet">Actions</button></footer>
     <button class="ui-window-resize hub-resize" aria-label="Resize Hub" title="Drag to resize, or use arrow keys" hidden></button>
   </section>`;
   parent.append(root);
   const receipt = document.createElement('output'); receipt.className = 'hub-receipt ui-well'; receipt.setAttribute('role', 'status'); receipt.hidden = true; parent.append(receipt);
   let receiptTimer: ReturnType<typeof setTimeout> | undefined;
+  // Where the Hub frame last stood: a receipt after closing appears in its footprint, not as a window toast.
+  let frame: DOMRect | null = null;
   const required = <T extends Element>(selector: string) => {
     const element = root.querySelector<T>(selector);
     if (!element) throw new Error(`Hub control missing: ${selector}`);
@@ -43,7 +45,6 @@ export function createHub(parent: HTMLElement) {
   const input = required<HTMLInputElement>('input');
   const search = required<HTMLElement>('.hub-search');
   const list = required<HTMLElement>('.hub-results');
-  const disposeSearchEditing = installSearchEditing(list, input);
   const content = required<HTMLElement>('.hub-view');
   const backButton = required<HTMLButtonElement>('[aria-label="Back"]');
   const caption = required<HTMLElement>('.hub-caption');
@@ -52,6 +53,8 @@ export function createHub(parent: HTMLElement) {
   const footer = required<HTMLElement>('footer');
   const primary = required<HTMLButtonElement>('.hub-primary');
   const count = required<HTMLElement>('.hub-count');
+  const legend = required<HTMLElement>('.hub-legend');
+  const lifecycle = required<HTMLElement>('.hub-lifecycle');
   let rows: readonly HubRow[] = [];
   let shortcutRevision = '';
   let navigationRevision = '';
@@ -73,10 +76,8 @@ export function createHub(parent: HTMLElement) {
   let restoringFocus: MutationObserver | null = null;
   const focusPlace = (): FocusPlace => {
     const active = document.activeElement;
-    const row = active instanceof Element ? active.closest<HTMLElement>('.hub-row') : null;
     let selector = '.hub-search input';
-    if (row?.dataset.id) selector = `.hub-row[data-id="${CSS.escape(row.dataset.id)}"]`;
-    else if (active instanceof HTMLElement && root.contains(active)) {
+    if (active instanceof HTMLElement && root.contains(active) && active !== input) {
       for (const attribute of ['id', 'data-character-key', 'data-section', 'aria-label']) {
         const value = active.getAttribute(attribute);
         if (value) { selector = `[${attribute}="${CSS.escape(value)}"]`; break; }
@@ -87,7 +88,11 @@ export function createHub(parent: HTMLElement) {
     return { selector, ...(active instanceof HTMLInputElement && active.selectionStart !== null
       ? { range: [active.selectionStart, active.selectionEnd ?? active.selectionStart] as const } : {}) };
   };
-  const focusResult = () => (list.querySelector<HTMLElement>('[aria-selected="true"]') ?? input).focus({ preventScroll: true });
+  // List stages keep DOM focus in search; the selection moves by aria-activedescendant (D-2).
+  const focusResult = () => input.focus({ preventScroll: true });
+  /** A view's first usable control, else Back, so focus never falls to <body> (a disabled button refuses it). */
+  const firstControl = () => [...content.querySelectorAll<HTMLElement>('input,select,textarea,button,[tabindex="0"]')]
+    .find(control => control.getClientRects().length > 0 && !control.matches(':disabled')) ?? backButton;
   function restoreFocus(place: FocusPlace) {
     restoringFocus?.disconnect();
     const attempt = () => {
@@ -99,13 +104,41 @@ export function createHub(parent: HTMLElement) {
       return true;
     };
     if (!attempt()) {
-      if (!content.hidden) (content.querySelector<HTMLElement>('input,button,select,[tabindex="0"]') ?? backButton).focus();
+      if (!content.hidden) firstControl().focus();
       else focusResult();
       restoringFocus = new MutationObserver(attempt);
       restoringFocus.observe(content, { childList: true, subtree: true });
     }
   }
   const capture = (): Page => ({ scope, query: input.value, selected, scroll: list.scrollTop, view: activeView, focus: focusPlace() });
+  const pageTitle = (page: Pick<Page, 'scope' | 'view'>) => page.view?.title ?? page.scope?.title ?? 'Home';
+  /**
+   * Form drafts last the session, keyed by page path and field name: leaving a form keeps what
+   * was typed and returning restores it, unless the stored value the field started from changed.
+   */
+  const drafts = new Map<string, { initial: string; value: string }>();
+  const draftInitials = new Map<string, string>();
+  let draftPage: string | null = null;
+  const draftFields = () => [...content.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
+    'form input:not([type]), form input[type=text], form input[type=search], form textarea, form select')]
+    .flatMap(field => { const name = field.getAttribute('aria-label') || field.name || field.id; return name ? [[`${draftPage} › ${name}`, field] as const] : []; });
+  function restoreDrafts(path: string) {
+    draftPage = path; draftInitials.clear();
+    for (const [key, field] of draftFields()) {
+      draftInitials.set(key, field.value);
+      const draft = drafts.get(key);
+      if (draft && draft.initial !== field.value) drafts.delete(key);
+      else if (draft) { field.value = draft.value; field.dispatchEvent(new Event(field instanceof HTMLSelectElement ? 'change' : 'input', { bubbles: true })); }
+    }
+  }
+  function keepDrafts() {
+    if (draftPage === null) return;
+    for (const [key, field] of draftFields()) {
+      const initial = draftInitials.get(key) ?? field.value;
+      if (field.value === initial) drafts.delete(key); else drafts.set(key, { initial, value: field.value });
+    }
+    draftPage = null;
+  }
   function remember() { history.push(capture()); }
   function restorePage(page: Page) {
     resetView(); scope = page.scope;
@@ -118,7 +151,6 @@ export function createHub(parent: HTMLElement) {
       select(rows.some(row => row.id === page.selected) ? page.selected : null); list.scrollTop = page.scroll;
       if (page.selected && selected === null) report('The previous selection is no longer available. Choose a result.');
     }
-    backButton.hidden = history.length === 0;
     restoreFocus(page.focus);
   }
   function restoreParent() {
@@ -212,10 +244,27 @@ export function createHub(parent: HTMLElement) {
     primary.replaceChildren(document.createTextNode(row ? row.action : 'Select a result'));
     if (row) { const key = document.createElement('kbd'); key.textContent = '↵'; primary.append(key); }
     primary.disabled = !row || !!row.unavailable || pending;
+    // Footer slots never hide, so nothing slides under a resting pointer; they disable instead.
     const actionsButton = required<HTMLButtonElement>('.hub-actions');
-    actionsButton.disabled = !row;
-    actionsButton.hidden = !!scope && !row?.skills && !scope.summary?.skills;
+    actionsButton.disabled = !row || (!!scope && !row.skills && !scope.summary?.skills);
     actionsButton.textContent = scope ? 'Details' : 'Actions';
+    paintLegend(row);
+  }
+  /** The footer's key legend names only keys that act here and now. */
+  function paintLegend(row: HubRow | undefined) {
+    const keys: [string[], string][] = [];
+    if (rows.length > 1) keys.push([['↑', '↓'], 'Select']);
+    if (row?.navigate) keys.push([['→'], 'Open']);
+    keys.push([['Esc'], input.value ? 'Clear' : history.length ? 'Back' : 'Close']);
+    if (!atHome()) keys.push([['⌘', '⌫'], 'Back']);
+    const next = JSON.stringify(keys);
+    if (legend.dataset.keys === next) return;
+    legend.dataset.keys = next; legend.replaceChildren();
+    for (const [caps, label] of keys) {
+      const entry = document.createElement('span');
+      for (const cap of caps) { const key = document.createElement('kbd'); key.className = 'ui-kbd'; key.textContent = cap; entry.append(key); }
+      entry.append(` ${label}`); legend.append(entry);
+    }
   }
   function renderSkillBar(skills: NonNullable<HubRow['skills']>) {
     const bar = document.createElement('span'); bar.className = 'hub-skill-bar';
@@ -300,7 +349,10 @@ export function createHub(parent: HTMLElement) {
     const context = !scope && !disposeView && !input.value.trim()
       ? [...sources.keys()].filter(sourceEnabled).flatMap(source => source.context?.() ?? []) : [];
     required<HTMLElement>('.hub-context').textContent = context.join(' · ');
-    const trail = history.map((page, index) => ({ title: page.view?.title ?? page.scope?.title ?? 'Home', index }));
+    // One quiet lifecycle line on list stages; a report in the status line takes its place.
+    lifecycle.textContent = disposeView ? '' : [...sources.keys()].filter(sourceEnabled).map(source => source.lifecycle?.()).find(Boolean) ?? '';
+    lifecycle.hidden = !lifecycle.textContent;
+    const trail = history.map((page, index) => ({ title: pageTitle(page), index }));
     const nextNavigation = JSON.stringify([trail, currentTitle]);
     if (navigationRevision !== nextNavigation) {
       navigationRevision = nextNavigation;
@@ -314,19 +366,18 @@ export function createHub(parent: HTMLElement) {
       caption.setAttribute('aria-current', 'page'); breadcrumbs.append(caption);
     }
     const parent = history.at(-1);
-    const destination = parent?.view?.title ?? parent?.scope?.title ?? 'Home';
-    backButton.hidden = !parent;
+    const destination = parent ? pageTitle(parent) : 'Home';
+    backButton.hidden = atHome();
     backButton.textContent = '←';
-    backButton.title = `Back to ${destination}`;
+    backButton.title = 'Back (⌘⌫)';
+    backButton.setAttribute('aria-keyshortcuts', 'Meta+Backspace');
     backButton.setAttribute('aria-description', `Return to ${destination}`);
-    const actionsButton = required<HTMLButtonElement>('.hub-actions');
-    actionsButton.hidden = !!scope && !scope.summary?.skills && !rows.find(row => row.id === selected)?.skills;
-    actionsButton.disabled = !selected;
     const query = parseHubQuery(input.value);
     const scopeLabel = required<HTMLElement>('.hub-scope');
     scopeLabel.textContent = query.scope ?? '';
     scopeLabel.hidden = !!scope || !query.scope || !!disposeView;
-    input.setAttribute('aria-description', scope ? `Search actions for ${scope.title}` : query.scope ? `Search ${query.scope}` : 'Search tools or use a command example');
+    // The page title leads, so a screen reader that lands in search after Back hears where it is.
+    input.setAttribute('aria-description', `${currentTitle}: ${scope ? 'search actions' : query.scope ? `search ${query.scope}` : 'search tools or use a command example'}`);
     const hint = required<HTMLElement>('.hub-hint');
     const example = commandExamples().find(row => normaliseHubQuery(row.title).startsWith(`${normaliseHubQuery(input.value)} `));
     hint.textContent = !scope && !query.scope && input.value.trim() && example ? `Try “${example.title}” · ${example.detail}` : '';
@@ -368,7 +419,6 @@ export function createHub(parent: HTMLElement) {
         && row.detail === previous.detail && row.group === previous.group
         && row.action === previous.action && row.unavailable === previous.unavailable && row.preview === previous.preview && row.folder === previous.folder && row.attributeStatus === previous.attributeStatus && JSON.stringify([row.skills, row.attributes, row.professions]) === JSON.stringify([previous.skills, previous.attributes, previous.professions]);
     })) { select(selected); return; }
-    const hadRowFocus = list.contains(document.activeElement);
     list.replaceChildren();
     let group = '';
     rows.forEach((row, index) => {
@@ -378,7 +428,7 @@ export function createHub(parent: HTMLElement) {
         heading.className = 'hub-group'; heading.setAttribute('role', 'presentation'); heading.textContent = group;
         list.append(heading);
       }
-      const option = document.createElement('div'); option.tabIndex = -1;
+      const option = document.createElement('div');
       option.id = `hub-result-${index}`; option.dataset.id = row.id; option.className = 'hub-row';
       option.setAttribute('role', 'option'); option.setAttribute('aria-disabled', String(!!row.unavailable));
       const title = document.createElement('span'); title.className = 'hub-title'; title.textContent = row.title;
@@ -409,16 +459,19 @@ export function createHub(parent: HTMLElement) {
         }
       }
       option.addEventListener('pointermove', event => { if (event.movementX || event.movementY) select(row.id); });
-      option.addEventListener('click', () => { select(row.id); option.focus({ preventScroll: true }); void run(); });
+      option.addEventListener('click', () => { select(row.id); focusResult(); void run(); });
       list.append(option);
     });
     count.textContent = `${rows.length} result${rows.length === 1 ? '' : 's'}`;
     const exactCount = rows.filter(row => normaliseHubQuery(row.title) === parsed.term || savedRows.some(saved => saved.id === row.id)).length;
     const prior = previousRows.find(row => row.id === selected);
     const revised = prior && rows.find(row => row.id === selected)?.preview !== prior.preview;
-    const initial = !input.value.trim() ? rows.find(row => row.preferred && !row.unavailable) ?? rows.find(row => !row.unavailable) ?? rows[0] : rows[0];
+    // A bare scope (`travel `) lists without a term, so nothing in it is an explicit result:
+    // Enter never travels, invites, applies, switches or opens an account on a guess.
+    // A fresh Home in an explorable area never starts on a row that leaves it (D-13).
+    const initial = !input.value.trim() ? rows.find(row => row.preferred && !row.unavailable) ?? rows.find(row => !row.unavailable && !row.leavesArea) ?? rows.find(row => !row.leavesArea)
+      : !scope && parsed.scope && !parsed.term ? rows.find(row => !row.consequential && !row.unavailable) : rows[0];
     select((prior?.id === 'quote-state' || prior?.id === 'market-state') && !!rows[0]?.conversion ? rows[0].id : reset ? exactCount > 1 ? null : initial?.id ?? null : !revised && rows.some(row => row.id === selected) ? selected : null);
-    if (hadRowFocus) (list.querySelector<HTMLElement>('[aria-selected="true"]') ?? input).focus();
     if (!rows.length) {
       const empty = document.createElement('p'); empty.className = 'hub-empty'; empty.textContent = 'No matches'; list.append(empty);
     }
@@ -430,46 +483,73 @@ export function createHub(parent: HTMLElement) {
     const generation = epoch;
     pending = true; select(selected); report('');
     try {
-      if(row.searchQuery!==undefined){remember();resetView();scope=null;backButton.hidden=true;caption.textContent='Home';input.value=row.searchQuery;refresh(true);input.focus();input.select();}
+      if(row.searchQuery!==undefined){remember();resetView();scope=null;caption.textContent='Home';input.value=row.searchQuery;refresh(true);input.focus();input.select();}
       else await row.run();
     }
     catch (error) { if (generation === epoch) report(error instanceof Error ? error.message : 'The action could not complete. Try again.'); }
     finally { pending = false; select(selected); }
   }
   function resetView() {
-    restoringFocus?.disconnect(); restoringFocus = null;
+    restoringFocus?.disconnect(); restoringFocus = null; keepDrafts();
     disposeView?.(); disposeView = null; activeView = null; viewAvailable = null; returnFromView = null; content.replaceChildren(); content.hidden = true;
     search.hidden = false; list.hidden = false; footer.hidden = false;
   }
   function home() {
-    history.length = 0; resetView(); scope = null; input.value = restoreQuery; backButton.hidden = true;
+    history.length = 0; resetView(); scope = null; input.value = restoreQuery;
     root.dataset.page = 'home'; caption.textContent = 'Home'; input.placeholder = 'Search people, places, builds…'; report(''); refresh(true); input.focus();
   }
   function back() {
     if (returnFromView) returnFromView();
     else restoreParent();
   }
+  function atHome() { return !scope && !activeView; }
+  /**
+   * ⌘⌫, the Back button and the mouse back button: exactly one level up, never a close.
+   * A page opened directly (⌘T, ⌘E, ⌘B) has no parent and returns to the real Home.
+   */
+  function backOneLevel() {
+    if (history.length) back();
+    else if (!atHome()) home();
+  }
+  /** Esc: clear a typed query, then go back one level, then close (D-4). */
+  function dismiss() {
+    if (!search.hidden && input.value) { input.value = ''; report(''); refresh(true); input.focus(); return; }
+    if (history.length) back(); else close();
+  }
   function close(message?: string) {
+    if (root.open) frame = required<HTMLElement>('.hub-panel').getBoundingClientRect();
     suspended = null; epoch++; history.length = 0; resetView(); modal.close(); for (const source of sources.keys()) source.setVisible(false); scope = null;
     input.value = ''; restoreQuery = ''; report(''); selected = null;
     if (typeof message === 'string' && message) notify(message);
   }
-  /** Shows a short outcome receipt without changing what Hub shows. */
+  /**
+   * A named outcome. An open Hub reports it in its status line; after the Hub closed
+   * it shows briefly where the frame's footer stood, and never outlives the next opening.
+   */
   function notify(message: string) {
+    if (root.open) { report(message); return; }
     clearTimeout(receiptTimer); receipt.textContent = message; receipt.hidden = false; receiptTimer = setTimeout(() => { receipt.hidden = true; }, 8000);
+    if (frame?.width) {
+      receipt.style.left = `${frame.left + frame.width / 2}px`; receipt.style.bottom = `${Math.max(8, window.innerHeight - frame.bottom + 12)}px`;
+      receipt.style.maxWidth = `${Math.max(0, frame.width - 24)}px`;
+    }
   }
   function suspend() {
     if (!root.open) return;
+    frame = required<HTMLElement>('.hub-panel').getBoundingClientRect();
     suspended = capture(); epoch++; modal.close();
     for (const source of sources.keys()) source.setVisible(false);
   }
   const modal = window.gwSurfaces.registerDialog({ root, priority: 6, transient: true,
-    dismiss: () => history.length ? back() : close(),
-    restoreFocus: () => previousFocus?.isConnected && previousFocus.getClientRects().length > 0 ? previousFocus : document.getElementById('canvas'),
+    dismiss,
+    // Focus never lands on <body>: without a visible opener it returns to the game.
+    restoreFocus: () => previousFocus?.isConnected && previousFocus !== document.body && previousFocus.getClientRects().length > 0
+      ? previousFocus : document.getElementById('canvas'),
   });
   function show() {
     if (root.open) { home(); return; }
     previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    clearTimeout(receiptTimer); receipt.hidden = true;
     window.dispatchEvent(new Event('gw:input-reset'));
     modal.show(); window.dispatchEvent(new Event('gw:hub-visible'));
     const resume = suspended; suspended = null;
@@ -477,52 +557,69 @@ export function createHub(parent: HTMLElement) {
     if (resume) restorePage(resume); else home();
   }
   input.addEventListener('input', () => { report(''); refresh(true); });
+  /** The one list move: ↑ ↓ ⌃P ⌃N step, PgUp PgDn page, Home End jump; no wrap. */
+  function listStep(event: KeyboardEvent): number | null {
+    if (event.altKey || event.metaKey || event.shiftKey) return null;
+    const key = event.ctrlKey ? ({ n: 'ArrowDown', p: 'ArrowUp' } as Record<string, string>)[event.key.toLowerCase()] : event.key;
+    const page = Math.max(1, Math.floor(list.clientHeight / (list.querySelector<HTMLElement>('.hub-row')?.offsetHeight || 40)) - 1);
+    return ({ ArrowDown: 1, ArrowUp: -1, PageDown: page, PageUp: -page, End: Infinity, Home: -Infinity } as Record<string, number>)[key ?? ''] ?? null;
+  }
   input.addEventListener('keydown', event => {
     if (event.isComposing) return;
-    if (event.key === 'ArrowDown') {
+    const step = listStep(event);
+    if (step !== null) {
+      // The list owns these keys even without results, so they never move the caret or drop a text selection.
       event.preventDefault();
-      const id = selected ?? rows[0]?.id ?? null; select(id, true);
-      list.querySelector<HTMLElement>('[aria-selected="true"]')?.focus();
-    } else if (event.key === 'ArrowUp') {
-      event.preventDefault(); (backButton.hidden ? required<HTMLButtonElement>('.hub-lock') : backButton).focus();
-    } else if (event.key === 'Enter') { event.preventDefault(); if (!event.repeat) void run(); }
+      if (!rows.length) return;
+      const index = rows.findIndex(row => row.id === selected);
+      // From no selection, End lands on the last result and every other move on the first.
+      const next = index < 0 ? (step === Infinity ? rows.length - 1 : 0) : Math.max(0, Math.min(rows.length - 1, index + step));
+      select(rows[next]!.id, true);
+    } else if (event.key === 'ArrowRight' && !event.repeat && input.selectionStart === input.value.length && input.selectionEnd === input.value.length) {
+      const row = rows.find(row => row.id === selected);
+      if (row?.navigate) { event.preventDefault(); row.navigate(); }
+    } else if (event.key === 'Enter' && !event.metaKey && !event.ctrlKey && !event.altKey) {
+      // Only a plain Enter runs the named primary; a modified Enter is never a second route to it.
+      event.preventDefault(); if (!event.repeat) void run();
+    }
   });
+  // A press on a result keeps the keyboard in search.
+  list.addEventListener('mousedown', event => event.preventDefault());
+  // ⌘⌫ is Back from any focus inside the Hub, text fields included; ⌫ alone only edits text.
+  // It bubbles here, so a mounted view first steps out of its own inner level (a confirmation,
+  // its settings) and marks the press handled; the Hub still owns the press either way.
+  root.addEventListener('keydown', event => {
+    if (!isHubBackKey(event)) return;
+    event.stopPropagation();
+    if (event.defaultPrevented) return;
+    event.preventDefault();
+    if (event.repeat) return;
+    const expanded = event.target instanceof Element ? event.target.closest<HTMLDetailsElement>('details[open]') : null;
+    if (expanded && root.contains(expanded)) { expanded.open = false; expanded.querySelector('summary')?.focus(); return; }
+    backOneLevel();
+  });
+  root.addEventListener('mouseup', event => { if (event.button === 3) { event.preventDefault(); backOneLevel(); } });
   root.addEventListener('keydown', event => {
     restoringFocus?.disconnect(); restoringFocus = null;
-    if (!event.defaultPrevented && event.target instanceof Element && event.target.closest('.hub-row') && resumeSearchInput(event, input)) return;
+    // Typing on a list-stage button returns to search; Space still presses the button.
+    if (!event.defaultPrevented && !search.hidden && event.target instanceof HTMLElement && event.target !== input && !content.contains(event.target)
+      && !event.target.matches('input,textarea,select') && !(event.key === ' ' && event.target.matches('button')) && resumeSearchInput(event, input)) return;
     if (event.defaultPrevented || event.isComposing || event.metaKey || event.ctrlKey || event.altKey) return;
     if (event.key === 'Enter' && event.repeat) { event.preventDefault(); return; }
+    // Hub owns Esc before the native cancel: one step per physical press.
+    if (event.key === 'Escape') { event.preventDefault(); if (!event.repeat) dismiss(); return; }
     const target = event.target instanceof HTMLElement ? event.target : null;
     if (!target || target === required<HTMLElement>('.hub-resize')) return;
-    const editing = target.matches('input,textarea,select,[contenteditable="true"]');
-    if (event.key === 'Backspace' && (!editing || target instanceof HTMLInputElement && (target === input || target.getAttribute('role') === 'combobox') && !target.value)) {
-      if (history.length) { event.preventDefault(); event.stopPropagation(); back(); }
-      return;
-    }
-    const row = target.closest<HTMLElement>('.hub-row');
-    if (row && ['ArrowUp', 'ArrowDown', 'ArrowRight', 'Enter'].includes(event.key)) {
-      event.preventDefault();
-      const index = rows.findIndex(item => item.id === row.dataset.id);
-      if (event.key === 'ArrowRight') { if (!event.repeat) rows[index]?.navigate?.(); }
-      else if (event.key === 'Enter') { if (!event.repeat) void run(); }
-      else if (event.key === 'ArrowUp' && index <= 0) input.focus();
-      else if (event.key === 'ArrowDown' && index === rows.length - 1) primary.focus();
-      else {
-        const next = Math.max(0, Math.min(rows.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)));
-        select(rows[next]?.id ?? null, true); list.querySelector<HTMLElement>('[aria-selected="true"]')?.focus();
-      }
-      return;
-    }
     if (target.closest('.hub-footer')) {
       const controls = [primary, required<HTMLButtonElement>('.hub-actions')].filter(button => !button.hidden && !button.disabled);
-      if (event.key === 'ArrowUp') { event.preventDefault(); list.querySelector<HTMLElement>('[aria-selected="true"]')?.focus(); }
+      if (event.key === 'ArrowUp') { event.preventDefault(); input.focus(); }
       else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); controls[Math.max(0, Math.min(controls.length - 1, controls.indexOf(target as HTMLButtonElement) + (event.key === 'ArrowRight' ? 1 : -1)))]?.focus(); }
       return;
     }
     if (target.closest('.hub-heading')) {
       const controls = [...required<HTMLElement>('.hub-heading').querySelectorAll<HTMLButtonElement>('button')].filter(button => !button.hidden && button.getClientRects().length);
       const index = controls.indexOf(target as HTMLButtonElement);
-      if (event.key === 'ArrowDown') { event.preventDefault(); (search.hidden ? content.querySelector<HTMLElement>('input[type=search],input[type=text]') ?? content.querySelector<HTMLElement>('input,select,button,[tabindex="0"]') : input)?.focus(); }
+      if (event.key === 'ArrowDown') { event.preventDefault(); (search.hidden ? content.querySelector<HTMLElement>('input[type=search],input[type=text]') ?? firstControl() : input).focus(); }
       else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); controls[Math.max(0, Math.min(controls.length - 1, index + (event.key === 'ArrowRight' ? 1 : -1)))]?.focus(); }
       return;
     }
@@ -581,8 +678,16 @@ export function createHub(parent: HTMLElement) {
   };
   required<HTMLButtonElement>('.hub-actions').onclick = actions;
   required<HTMLButtonElement>('.hub-close').onclick = () => close();
-  backButton.onclick = back; primary.onclick = () => { void run(); };
+  backButton.onclick = backOneLevel; primary.onclick = () => { void run(); };
   root.addEventListener('pointerdown', () => { restoringFocus?.disconnect(); restoringFocus = null; });
+  // A press on blank panel space or a disabled control parks focus on the dialog
+  // itself; return it to the last control so the keyboard keeps its place.
+  let lastFocus: HTMLElement | null = null;
+  root.addEventListener('focusin', event => { if (event.target !== root && event.target instanceof HTMLElement) lastFocus = event.target; });
+  root.addEventListener('focus', () => {
+    const usable = lastFocus?.isConnected && root.contains(lastFocus) && lastFocus.getClientRects().length > 0 && !lastFocus.matches(':disabled');
+    (usable ? lastFocus! : search.hidden ? firstControl() : input).focus({ preventScroll: true });
+  });
   root.addEventListener('click', event => { if (event.target === root) { event.stopImmediatePropagation(); close(); } }, true);
   root.addEventListener('close', () => { if (!root.open && !suspended) close(); });
   const onBlur = () => suspend();
@@ -611,7 +716,7 @@ export function createHub(parent: HTMLElement) {
       if (!fromOpenHub) { suspended = null; show(); }
       if (!scope) restoreQuery = input.value;
       if (fromOpenHub && !restoring) remember(); resetView(); scope = { title, rows: getRows, ...(summary ? { summary } : {}) }; root.dataset.page = 'section'; caption.textContent = title;
-      backButton.hidden = history.length === 0; input.placeholder = 'Search actions…'; input.value = ''; report(''); refresh(true); focusResult();
+      input.placeholder = 'Search actions…'; input.value = ''; report(''); refresh(true); focusResult();
     },
     showView(title: string, mount: (target: HTMLElement, back: () => void) => () => void, available?: () => boolean) {
       const fromOpenHub = root.open;
@@ -620,19 +725,20 @@ export function createHub(parent: HTMLElement) {
       if (fromOpenHub && !restoring) remember();
       resetView();
       returnFromView = restoreParent;
-      root.dataset.page = 'section'; caption.textContent = title; backButton.hidden = history.length === 0;
+      root.dataset.page = 'section'; caption.textContent = title;
       required<HTMLElement>('.hub-preview').hidden = true; required<HTMLElement>('.hub-rate-controls').hidden = true;
       search.hidden = true; list.hidden = true; footer.hidden = true; content.hidden = false;
       activeView = { title, mount, ...(available ? { available } : {}) };
       viewAvailable = available ?? null;
       disposeView = mount(content, back);
+      restoreDrafts([...history.map(pageTitle), title].join(' › '));
       paintNavigation();
-      if (!content.contains(document.activeElement)) content.querySelector<HTMLElement>('input,select,button,[tabindex="0"]')?.focus();
+      if (!content.contains(document.activeElement)) firstControl().focus();
     },
     notify,
     browseBuilds() { const row = lookup('builds'); if (row && !row.unavailable) void row.run(); else report('Build Library is loading. Try again.'); },
     resetPosition: hubWindow.reset,
-    dispose() { close(); disposeSearchEditing(); clearTimeout(receiptTimer); receipt.remove(); hubWindow.dispose(); disposeFrame(); for (const unsubscribe of sources.values()) unsubscribe(); sources.clear(); modal.dispose(); root.remove(); window.removeEventListener('blur', onBlur); window.removeEventListener('gw:tools-settings', onSettings); },
+    dispose() { close(); clearTimeout(receiptTimer); receipt.remove(); hubWindow.dispose(); disposeFrame(); for (const unsubscribe of sources.values()) unsubscribe(); sources.clear(); modal.dispose(); root.remove(); window.removeEventListener('blur', onBlur); window.removeEventListener('gw:tools-settings', onSettings); },
   };
   presenter.attach(createHubAccounts(presenter, { get: () => window.gwNative.accounts.get(), open: request => window.gwNative.accounts.open(request), manage: () => window.gwNative.app.showLauncher() }));
   presenter.attach(createHubCalculator({

@@ -199,8 +199,21 @@ styles. Deleting a custom style requires confirmation.
 ## Hub command palette
 
 Press **Command-R** to search people, outposts, tools, and commands. Type a name, use Up and Down,
-and press Enter for the action shown in the footer. The **Actions** button opens secondary actions. **Command-K** opens Trade. Escape goes back or
-closes the palette. The game keeps running while Hub is open.
+and press Enter for the action shown in the footer. The **Actions** button opens secondary actions. **Command-K** opens Trade. Escape clears typed text first, then goes back, then
+closes the palette. **Command-Backspace** goes back one level from anywhere in
+Hub, including a text field, and never closes it; the Back arrow and the mouse
+back button do the same. Inside a page it first leaves that page's own level:
+it cancels a "Leave this area?" confirmation and closes Character Switch
+settings or Travel's Customize view. A form you leave keeps what you typed until
+you quit the game. Backspace alone only deletes text; on a focused result or
+footer button it deletes from the search and returns you there. The game keeps
+running while Hub is open. The footer's left side lists the keys that work in
+the current view.
+
+The header shows your character and where you are, including a Guild Hall. In
+an explorable area, Hub opens on **Travel** instead of a recent place, so Enter
+never leaves the area by accident, and a quiet line explains that Travel leaves
+the area. While a map loads, the same line says when Travel returns.
 
 With Travel enabled, search an outpost or your custom Travel phrase. Travel,
 favourites, recent places, and Guild Hall stay in the same window. Command-T
@@ -234,6 +247,7 @@ Character names have at least two words, so a single typed word stays below
 known people and says **Type the full character name**. The
 footer names who is invited, for example **Invite Mo Kai**. Type `invite `
 with a space to list your online friends, those you can invite from here first.
+None is selected until you choose one, so Enter alone invites nobody.
 Guild Wars answers the invite in chat.
 For a friend elsewhere, **Invite to party** says where they are. For a PvE
 outpost, when the Travel tool is on, use **Travel and invite**: it travels there (Any district) and invites them once you

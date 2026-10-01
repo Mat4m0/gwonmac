@@ -90,6 +90,9 @@ describe("keyboard shortcuts", () => {
     assert.equal(shortcutReserved({ key: "c", shift: true, option: false }), false);
     assert.equal(shortcutReserved({ key: "1", shift: false, option: false }), true);
     assert.equal(shortcutReserved({ key: "0", shift: false, option: false }), false);
+    // The Hub owns Command-Backspace as Back.
+    assert.equal(shortcutReserved({ key: "backspace", shift: false, option: false }), true);
+    assert.equal(shortcutReserved({ key: "backspace", shift: false, option: false, command: false, control: true }), false);
     assert.equal(shortcutReserved({ key: "r", shift: false, option: false }), false);
     assert.equal(shortcutReserved({ key: "r", shift: true, option: false }), false);
     assert.equal(shortcutConflict(

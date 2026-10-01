@@ -40,11 +40,34 @@ test('no results, editing shortcuts, dismissal and narrow layout', async ({ page
   expect(panel).not.toBeNull();
   expect(panel!.x).toBeGreaterThanOrEqual(0);
   expect(panel!.x + panel!.width).toBeLessThanOrEqual(390);
+  // D-4: the first Esc clears the typed query, the next one closes.
+  await search.press('Escape');
+  await expect(search).toHaveValue(''); await expect(search).toBeFocused();
   await search.press('Escape');
   await expect(page.getByRole('dialog', { name: 'Hub', exact: true })).not.toBeVisible();
   await page.getByRole('button', { name: 'Open Hub', exact: true }).click();
   await expect(search).toHaveValue('');
   await expect(search).toBeFocused();
+});
+
+test('Esc clears the query, then goes back, then closes onto the game, never <body>', async ({ page }) => {
+  await page.goto('/?hub');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const dialog = page.getByRole('dialog', { name: 'Hub', exact: true });
+  for (const query of ['invite mo', 'travel kam', 'kamadan', 'invite ']) {
+    await search.fill(query); await search.press('Escape');
+    await expect(dialog).toBeVisible(); await expect(search).toHaveValue(''); await expect(search).toBeFocused();
+  }
+  await search.fill('settings');
+  await page.getByRole('button', { name: 'Actions' }).click();
+  await search.fill('pin'); await search.press('Escape');
+  await expect(search).toHaveValue(''); await expect(page.locator('.hub-caption')).toHaveText('Settings');
+  await search.press('Escape');
+  await expect(page.locator('.hub-caption')).toHaveText('Home'); await expect(search).toHaveValue('settings');
+  await search.press('Escape'); await search.press('Escape');
+  await expect(dialog).not.toBeVisible();
+  // The fixture opens Hub on load, so no opener was focused: focus returns to the game canvas.
+  await expect(page.locator('#canvas')).toBeFocused();
 });
 
 test('outpost travel closes Hub quietly after acceptance', async ({ page }) => {
@@ -158,12 +181,13 @@ test('exact build has a visible target and does not apply while typing', async (
 test('team preflight is inline and an interruption is not reported as success', async ({ page }) => {
   await page.goto('/?hub');
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
-  await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-scenario', { detail: 'explorable' })));
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-lifecycle', { detail: 'pve-explorable' })));
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
   await search.fill('team gom afk');
   await expect(page.getByRole('button', { name: 'Apply team GOM AFK ↵' })).toBeDisabled();
   await expect(page.locator('#hub').getByRole('option')).toContainText('outpost');
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-lifecycle', { detail: 'outpost' })));
   await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-scenario', { detail: 'partial' })));
   await expect(page.getByRole('button', { name: 'Apply team GOM AFK ↵' })).toBeEnabled();
   await search.press('Enter');
@@ -485,7 +509,7 @@ test('account search offers explicit keep-open and replacement choices', async (
   await expect(rows.nth(0)).toContainText('Close Main and open Second');
   await expect(rows.nth(1)).toContainText('Open Second');
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', /Account/);
-  await search.press('ArrowDown'); await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter');
+  await search.press('ArrowDown'); await page.keyboard.press('Enter');
   await expect(page.locator('#app')).toHaveAttribute('data-action', 'Account Second open');
   await page.getByRole('button', { name: 'Open Hub', exact: true }).click();
   await search.fill('acc second'); await search.press('Enter');
@@ -649,6 +673,11 @@ test('shortcut recorder presents each modifier and captures without opening anot
   await record.click(); await page.keyboard.press('Escape');
   await expect(record.locator('kbd')).toHaveText(['⌃', '⌥', '⇧', 'F12']);
   await expect(page.locator('.hub-caption')).toHaveText('Settings');
+  // The recorder takes Command-Backspace instead of going Back, and refuses it by name.
+  await record.click(); await page.keyboard.press('Meta+Backspace');
+  await expect(page.locator('.hub-view').getByText('Reserved for Back', { exact: true })).toBeVisible();
+  await expect(record.locator('kbd')).toHaveText(['⌃', '⌥', '⇧', 'F12']);
+  await expect(page.locator('.hub-caption')).toHaveText('Settings');
   await page.getByRole('button', { name: 'Back', exact: true }).click();
   await search.fill('switch character');
   await expect(page.locator('.hub-row')).toContainText('⌃⌥⇧F12');
@@ -661,7 +690,7 @@ test('Hub text arrows cannot execute an action or clear a query', async ({ page 
   await search.fill('kamadan');
   await search.press('ArrowRight');
   await expect(page.locator('#hub')).toBeVisible();
-  await expect(page.locator('#app')).not.toHaveAttribute('data-action', /Travel/);
+  await expect(page.locator('#app')).not.toHaveAttribute('data-action', /travel/i);
   await search.press('Home'); await search.press('ArrowLeft');
   await expect(search).toHaveValue('kamadan');
 });
@@ -671,18 +700,20 @@ test('typing after result navigation resumes the search at its caret without run
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
   await search.press('ArrowDown');
-  await expect(page.locator('.hub-row[aria-selected="true"]')).toBeFocused();
+  await expect(page.locator('.hub-row[aria-selected="true"]')).toHaveCount(1);
+  await expect(search).toBeFocused();
   await page.keyboard.type('build monk');
   await expect(search).toBeFocused();
   await expect(search).toHaveValue('build monk');
   await expect(page.locator('.hub-build-row')).toHaveCount(4);
   await search.press('ArrowDown'); await page.keyboard.press('ArrowDown');
+  await expect(search).toHaveAttribute('aria-activedescendant', 'hub-result-2');
   await page.keyboard.type(' Protection');
   await expect(search).toHaveValue('build monk Protection');
   await expect(page.locator('.hub-build-row')).toHaveCount(1);
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', /command|apply/);
   // A selection in the existing query is replaced, rather than appending twice.
-  await search.press('Home'); await search.press('Shift+End'); await search.press('ArrowDown');
+  await search.press('ControlOrMeta+a'); await search.press('ArrowDown');
   await page.keyboard.type('build smiter');
   await expect(search).toHaveValue('build smiter');
   await search.press('ArrowDown'); await page.keyboard.press('Enter');
@@ -690,6 +721,8 @@ test('typing after result navigation resumes the search at its caret without run
   await search.press('ArrowDown'); await page.keyboard.type('hero');
   await expect(search).toHaveValue('hero');
   await expect(page.locator('.hub-row')).toContainText('Apply to hero');
+  // Focus never left search, so Backspace edits the query instead of leaving the page.
   await search.press('ArrowDown'); await page.keyboard.press('Backspace');
-  await expect(search).toHaveValue('build smiter');
+  await expect(search).toHaveValue('her');
+  await expect(page.locator('.hub-summary')).toContainText('Smiter');
 });

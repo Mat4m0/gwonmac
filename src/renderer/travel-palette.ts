@@ -57,6 +57,8 @@ export function createTravelPalette(parent: HTMLElement, command: TravelCommand)
   const source: HubSource = {
     feature: 'travelPalette',
     lookup: id => app?.source.lookup?.(id),
+    context: () => app?.source.context?.() ?? null,
+    lifecycle: () => app?.source.lifecycle?.() ?? null,
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
     setVisible(visible) {
       if (!visible) visibilityGeneration++;

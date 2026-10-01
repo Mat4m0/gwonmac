@@ -10,22 +10,47 @@ Run `pnpm hub:dev` from the repository root. Open
 
 This uses the production Hub shell, Builds, Trade, Travel, Characters and Whispers
 presentation. Only the game/native/network boundary is synthetic. Prices are sample
-NPC quotes and synthetic player advertisements, never live prices. The scenario selector exposes an outpost,
-an explorable area, interrupted application, duplicate names, and **People to
-invite**. Reset fixture clears only fixture data. The fixture is excluded from
-the embedded entry point.
+NPC quotes and synthetic player advertisements, never live prices; calculator cards
+built from either say "(sample)". Reset fixture clears only fixture data. The fixture is excluded
+from the embedded entry point.
 
-The fixture wires the production party invite to a synthetic play region that
-follows the demo Travel host. A trip reads as the game's unavailable state, which
-the live game can publish for a moment during a zone change. The player starts in Lion's Arch; Romi Ranger is
-in Kamadan. **People to invite** adds the chat names Mo Kaiser and Kai Mo Bearer,
-four online friends named Zed (Kamadan, Ascalon City, Lion's Arch, Kaineng
-Center), and Arena Ace in Random Arenas. The app element records each sent
-invite in `data-invites` and the last action in `data-action`, such as
-`PARTY.INVITE Mo Kai`, `PARTY.TRAVEL Romi Ranger` or `FRIEND.TRAVEL Zed Beta`.
+The fixture controls are:
+
+- **Fixture scenario** for build data: standard builds, interrupted application,
+  duplicate names, nested template folders and mixed hero professions.
+- **Lifecycle state**: `outpost` (Lion's Arch), `pve-explorable` (North Kryta
+  Province), `pvp-outpost` (Random Arenas), `guild-hall` (Warrior's Isle, an
+  outpost outside the Travel catalogue), `map-loading` and `character-select`.
+  One synthetic Travel game state feeds the play region, the party, Travel and the
+  character-switch context, the way the game does. A zone change first reads as
+  the game's unavailable state for a moment, as the live game can publish it, so
+  Travel and invite must survive it. A Travel arrival moves it to the destination
+  outpost. Characters asks "Leave this area?" in an explorable area
+  and refuses while a map loads.
+- **Injected party**: the production party invite with the chat names Mo Kaiser
+  and Kai Mo Bearer, four online friends named Zed (Kamadan, Ascalon City, Lion's
+  Arch, Kaineng Center) and Arena Ace in Random Arenas. Romi Ranger is always a
+  friend in Lion's Arch, so `invite Romi` is ready to send from the starting
+  outpost; Zed Alpha in Kamadan covers Travel and invite.
+- **Canvas input** counts every key and pointer event that reached the synthetic
+  game canvas, which fills the window as in production. The events themselves are in
+  `window.gwFixtureCanvas.events`.
+
+URL switches set the same state at load: `?hub&lifecycle=pve-explorable`,
+`?hub&party` and `?hub&library=1000` (a deterministic library of 1,000 builds and
+50 teams that is kept in memory only). Tests can also dispatch
+`hub-fixture-lifecycle`, `hub-fixture-party` and `hub-fixture-scenario` events.
+
+Shortcuts follow the production path. The fixture claims keys the way the main
+process does, including repeats and key-ups, and delivers them as renderer commands
+through `commands.ts`. Command-Q opens a model of the native Quit-or-Reload sheet;
+its Quit closes the synthetic game window, as does the Hub's `requestQuit`. The app
+element records each sent invite in `data-invites` and the last action in
+`data-action`, such as `PARTY.INVITE Mo Kai`, `PARTY.TRAVEL Zed Alpha`,
+`Character toefte` or `Game quit`.
 
 Try `team gom afk`, `build smiter`, `10 ecto in p`, `trade ecto`, `char war`,
-and `invite Mo Kai`.
+`invite Romi` and `invite Mo Kai`.
 Build and team previews use the existing planner and observed execution runner.
 
 ## Verified behavior

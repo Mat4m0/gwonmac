@@ -381,3 +381,36 @@ it("routes Command-K directly to Trade and contains repeats", async () => {
   await new Promise(resolve => setImmediate(resolve));
   assert.deepEqual(actions, ["trade.toggle", "trade.toggle"]);
 });
+
+it("decides a fresh press again when Chromium dropped the claimed key-up, but holds a native sheet's key", async () => {
+  let dispatch!: (event: { preventDefault(): void }, input: ShortcutInput) => void;
+  const win = { webContents: { on: (_name: string, listener: typeof dispatch) => { dispatch = listener; } }, on() { return win; } } as unknown as BrowserWindow;
+  const actions: string[] = [];
+  const sheets: Array<() => void> = [];
+  installWindowShortcuts(win, {
+    run: action => { actions.push(action); },
+    edit: command => { actions.push(command); },
+    quitOrReload: () => new Promise<void>(resolve => { actions.push("quit-or-reload"); sheets.push(resolve); }),
+  });
+  updateWindowShortcuts(win, { ...DEFAULT_SETTINGS, gwonmacTools: true, whispersEnabled: true });
+  const down = (code: string, repeat = false) => {
+    let claimed = false;
+    dispatch({ preventDefault() { claimed = true; } }, { type: "keyDown", code, key: code.slice(3).toLowerCase(), meta: true, control: false, shift: false, alt: false, isAutoRepeat: repeat });
+    return claimed;
+  };
+  // Chromium never delivers the key-up of a prevented key-down, so none is sent here.
+  for (const code of ["KeyR", "KeyD", "KeyA"]) {
+    assert.equal(down(code), true);
+    assert.equal(down(code, true), true);
+    assert.equal(down(code), true);
+  }
+  assert.deepEqual(actions, ["hub.toggle", "hub.toggle", "whispers.toggle", "whispers.toggle", "selectAll", "selectAll"]);
+  actions.length = 0;
+  assert.equal(down("KeyQ"), true);
+  assert.equal(down("KeyQ"), true);
+  assert.deepEqual(actions, ["quit-or-reload"], "a second Command-Q never stacks a second sheet");
+  sheets.shift()?.();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(down("KeyQ"), true);
+  assert.deepEqual(actions, ["quit-or-reload", "quit-or-reload"]);
+});

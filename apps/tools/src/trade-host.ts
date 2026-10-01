@@ -80,7 +80,7 @@ export function createDemoTradeHost(): TradeHost {
     timer = setInterval(() => {
       const message = fixture(
         source,
-        Math.floor(Date.now() / 1000),
+        0,
         source === "kamadan" ? "Demo Trader" : "Ascalon Collector",
         source === "kamadan" ? "WTS ectos 7e each" : "WTB black dyes, pm offer",
       );

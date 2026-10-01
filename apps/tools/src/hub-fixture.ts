@@ -1,3 +1,7 @@
+// The main-process model installs the command transport before `commands.ts` registers with it.
+import { installFixtureMain, quitFixtureGame } from './hub-fixture-main';
+// eslint-disable-next-line no-restricted-imports
+import '../../../src/renderer/commands';
 import { GLOBAL_TOOLS, GLOBAL_TOOL_FEATURES, type GlobalToolSettings } from '../../../src/shared/launcher-contracts';
 import { FEATURE_SELECTION_POLICIES } from '../../../src/shared/feature-contracts';
 import { parseHubSettingsChange, type HubSettingsApi } from '../../../src/shared/hub-settings';
@@ -19,9 +23,8 @@ import { createHubPeople } from '../../../src/renderer/hub-people';
 // eslint-disable-next-line no-restricted-imports
 import { createPartyInvite } from '../../../src/renderer/party-invite';
 // eslint-disable-next-line no-restricted-imports
-import type { CompanionPlayRegionState } from '../../../src/renderer/companion-play-region-snapshot';
-import { isPvpTravelDestination } from '../../../src/shared/travel';
-import { watch } from 'vue';
+import type { CharacterSwitchActionState, CharacterSwitchSource } from '../../../src/renderer/character-switch-model';
+import { createFixtureLifecycle, FIXTURE_LIFECYCLES, isFixtureLifecycle } from './hub-fixture-lifecycle';
 // eslint-disable-next-line no-restricted-imports
 import { installCharacterSwitchHost } from '../../../src/renderer/character-switch-host';
 // eslint-disable-next-line no-restricted-imports
@@ -36,12 +39,31 @@ import { mountWhispers } from './whispers-mount';
 import { createWhisperSession } from '../../../src/shared/whisper-session';
 import { createHubTravel } from './hub-travel';
 import { createDemoTravelHost } from './travel-host';
+import { travelDestination } from '../../../src/shared/travel';
 import { estimateMarketRates } from '../../../src/shared/market-rates';
 import { DEFAULT_SETTINGS, type AppSettings, type RendererSettingsPatch } from '../../../src/shared/contracts';
 
+/** One input event that reached the synthetic game canvas. */
+export type FixtureCanvasEvent = Readonly<{ type: string; code?: string; repeat?: boolean; detail?: number; button?: number }>;
+
 export function mountHubFixture(target: HTMLElement) {
-  const canvas = document.createElement('canvas'); canvas.id = 'canvas'; canvas.tabIndex = 0; target.append(canvas);
+  const params = new URLSearchParams(location.search);
   const record = (message: string) => { target.dataset.action = message; };
+  // The game canvas fills the window as in production; anything that reaches it would reach Guild Wars.
+  const canvas = document.createElement('canvas'); canvas.id = 'canvas'; canvas.tabIndex = 0;
+  canvas.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;z-index:0;outline:none';
+  target.append(canvas);
+  const canvasEvents: FixtureCanvasEvent[] = [];
+  const canvasCount = document.createElement('span'); canvasCount.className = 'hub-fixture-canvas-count';
+  const countCanvas = () => { canvasCount.textContent = `Canvas input: ${canvasEvents.length}`; target.dataset.canvasEvents = String(canvasEvents.length); };
+  for (const type of ['keydown', 'keyup', 'pointerdown', 'mousedown', 'mouseup', 'click', 'dblclick', 'auxclick', 'contextmenu']) {
+    canvas.addEventListener(type, event => {
+      canvasEvents.push(event instanceof KeyboardEvent ? { type, code: event.code, repeat: event.repeat } : { type, detail: (event as MouseEvent).detail, button: (event as MouseEvent).button });
+      countCanvas();
+    });
+  }
+  window.gwFixtureCanvas = { events: canvasEvents, clear() { canvasEvents.length = 0; countCanvas(); } };
+  countCanvas();
   let settings: AppSettings = { ...DEFAULT_SETTINGS, gwonmacTools: true, travelPalette: true, whispersEnabled: true, buildLibrary: true, tradeChat: true, xunlaiStorage: true };
   try { settings.hubShortcuts = JSON.parse(localStorage.getItem('hub-fixture-shortcuts') ?? '[]'); } catch { /* Disposable fixture data. */ }
   const settingsListeners = new Set<(value: AppSettings) => void>();
@@ -71,28 +93,67 @@ export function mountHubFixture(target: HTMLElement) {
         if (event.key === 'Escape' && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) { resolve({ status: 'cancelled' }); return; }
         if ((event.key === 'Backspace' || event.key === 'Delete') && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) { resolve({ status: 'cleared' }); return; }
         const binding = shortcutFromInput({code:event.code, meta:event.metaKey, control:event.ctrlKey, shift:event.shiftKey, alt:event.altKey});
-        resolve(!binding ? {status:'invalid'} : shortcutReserved(binding) ? {status:'reserved'} : {status:'captured',binding});
+        // Main's window capture reports what was pressed; the recorder refuses reserved chords.
+        resolve(!binding ? {status:'invalid'} : {status:'captured',binding});
       };
       window.addEventListener('keydown', onKey, true);
     }),
   };
+  installFixtureMain({ settings: () => settings, capturing: () => capturingShortcut, record,
+    updateSettings: patch => window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: patch })) });
   Object.assign(window, {
     gwSurfaces: installSurfaceController(document),
     gwToolsSettings: () => settings,
-    gwNative: { hubSettings, accounts: { get: async () => ({ current: '9e1bd41c-cfc0-4ca8-a57f-2f0ca159c72d', profiles: [{ id: '9e1bd41c-cfc0-4ca8-a57f-2f0ca159c72d', name: 'Main', state: 'running' }, { id: 'e98a37bc-5211-4bc5-8094-0b1286b3c42d', name: 'Second', state: 'ready' }] }), open: async (request: { mode: string }) => { record(`Account Second ${request.mode}`); } }, settings: { get: async () => settings, onChange: (listener: (value: AppSettings) => void) => { settingsListeners.add(listener); return () => settingsListeners.delete(listener); }, set: async (patch: RendererSettingsPatch) => { settings = { ...settings, ...patch }; localStorage.setItem('hub-fixture-shortcuts', JSON.stringify(settings.hubShortcuts)); for (const listener of settingsListeners) listener(settings); window.dispatchEvent(new Event('gw:tools-settings')); return settings; } }, clipboard: { writeText: async (value: string) => record(`Copied ${value}`) }, trade: { getMarketRates: async () => ({ ...estimateMarketRates(new URLSearchParams(location.search).has('market-empty') ? [] : ['WTS armbraces 30e/ea','WTB armbraces 28e/ea','WTS zkeys 1.5e/ea','WTB zkeys 1.4e/ea','WTS 20 ectos for 100k','WTB 25 ectos for 100k'].flatMap((message,group)=>Array.from({length:6},(_,index)=>({source:'kamadan' as const,message,sender:`Sample ${group} ${index}`,timestamp:Date.now()-index*60_000})))), sample: true }), getTraderQuotes: async () => ({ updatedAt: Date.now(), quotes: [{ modelId: '0b03a2', side: 'buy', price: 6000, timestamp: Date.now() }, { modelId: '0b03a2', side: 'sell', price: 5000, timestamp: Date.now() }] }) }, app: { showLauncher: async () => record('Launcher'), openSettings: async () => record('Settings'), requestQuit: async () => record('Quit or Reload'), openExternal: async () => record('Website') } },
+    gwNative: { ...window.gwNative, init: { enhancementSelection: { tools: true } }, hubSettings, accounts: { get: async () => ({ current: '9e1bd41c-cfc0-4ca8-a57f-2f0ca159c72d', profiles: [{ id: '9e1bd41c-cfc0-4ca8-a57f-2f0ca159c72d', name: 'Main', state: 'running' }, { id: 'e98a37bc-5211-4bc5-8094-0b1286b3c42d', name: 'Second', state: 'ready' }] }), open: async (request: { mode: string }) => { record(`Account Second ${request.mode}`); } }, settings: { get: async () => settings, onChange: (listener: (value: AppSettings) => void) => { settingsListeners.add(listener); return () => settingsListeners.delete(listener); }, set: async (patch: RendererSettingsPatch) => { settings = { ...settings, ...patch }; localStorage.setItem('hub-fixture-shortcuts', JSON.stringify(settings.hubShortcuts)); for (const listener of settingsListeners) listener(settings); window.dispatchEvent(new Event('gw:tools-settings')); return settings; } }, clipboard: { writeText: async (value: string) => record(`Copied ${value}`) }, trade: { getMarketRates: async () => ({ ...estimateMarketRates(new URLSearchParams(location.search).has('market-empty') ? [] : ['WTS armbraces 30e/ea','WTB armbraces 28e/ea','WTS zkeys 1.5e/ea','WTB zkeys 1.4e/ea','WTS 20 ectos for 100k','WTB 25 ectos for 100k'].flatMap((message,group)=>Array.from({length:6},(_,index)=>({source:'kamadan' as const,message,sender:`Sample ${group} ${index}`,timestamp:Date.now()-index*60_000})))), sample: true }), getTraderQuotes: async () => ({ updatedAt: Date.now(), quotes: [{ modelId: '0b03a2', side: 'buy', price: 6000, timestamp: Date.now() }, { modelId: '0b03a2', side: 'sell', price: 5000, timestamp: Date.now() }], sample: true }) }, app: { showLauncher: async () => record('Launcher'), openSettings: async () => record('Settings'), requestQuit: async () => quitFixtureGame(record), openExternal: async () => record('Website') } },
   });
   const hub = createHub(document.body);
-  const game = createHubGameFixture(record);
+  const librarySize = Number(params.get('library'));
+  const game = createHubGameFixture(record, Number.isSafeInteger(librarySize) && librarySize > 0 ? { librarySize } : {});
   window.gwHub = hub;
-  const characters = installCharacterSwitchHost(document.body);
-  characters.attach({ characters: { status: 'ready', sequence: 1, selectedIndex: 0, characters: [
+  // One synthetic lifecycle feeds Travel, the play region, Characters and the party (`?lifecycle=`).
+  const travelHost = createDemoTravelHost();
+  // Every trip is a game action, whichever row, page or view started it.
+  const demoTravel = travelHost.travel;
+  travelHost.travel = async request => { record(`TRAVEL ${travelDestination(request.mapId)?.name ?? request.mapId}`); await demoTravel(request); };
+  const lifecycle = createFixtureLifecycle(travelHost);
+  const initialLifecycle = params.get('lifecycle');
+  if (isFixtureLifecycle(initialLifecycle)) lifecycle.set(initialLifecycle);
+  game.setPlayRegion(lifecycle.region());
+  lifecycle.subscribe(() => game.setPlayRegion(lifecycle.region()));
+  // The controller's refusals and explorable confirmation, without its native selector.
+  let characterAction: CharacterSwitchActionState = { status: 'idle' };
+  let pendingCharacter: string | null = null;
+  const characterListeners = new Set<() => void>();
+  const publishCharacter = (next: CharacterSwitchActionState) => { characterAction = next; for (const listener of [...characterListeners]) listener(); };
+  const switchTo = (key: string, confirmed: boolean) => {
+    const context = lifecycle.context();
+    if (context === 'pvp-explorable') publishCharacter({ status: 'failed', code: 'active-pvp', retryable: false });
+    else if (context === 'loading') publishCharacter({ status: 'failed', code: 'game-loading', retryable: true });
+    else if (context === 'unavailable') publishCharacter({ status: 'failed', code: 'state-unavailable', retryable: true });
+    else if (context === 'pve-explorable' && !confirmed) { pendingCharacter = key; publishCharacter({ status: 'confirming' }); }
+    else { pendingCharacter = null; record(`Character ${key}`); hub.close(); publishCharacter({ status: 'idle' }); }
+  };
+  const characterSource: CharacterSwitchSource = { characters: { status: 'ready', sequence: 1, selectedIndex: 0, characters: [
     { name: 'Fixture Monk', characterKey: 'monk', primaryProfession: 3, secondaryProfession: 0, characterType: 'roleplaying', campaign: 1, level: 20, mapId: 449 },
     ...['Ranger', 'Mesmer', 'Ritualist', 'Elementalist'].map((name, index) => ({ name: `Fixture ${name}`, characterKey: name.toLowerCase(), primaryProfession: [2, 5, 8, 6][index]!, secondaryProfession: 0, characterType: 'roleplaying' as const, campaign: 1, level: 20, mapId: 449 })),
     { name: 'Toefte', characterKey: 'toefte', primaryProfession: 3, secondaryProfession: 5, characterType: 'roleplaying', campaign: 1, level: 20, mapId: 449 },
     { name: 'Fixture Warrior', characterKey: 'warrior', primaryProfession: 1, secondaryProfession: 0, characterType: 'roleplaying', campaign: 1, level: 20, mapId: 55 },
-  ] }, action: { status: 'idle' }, context: 'outpost', request(key) { record(`Character ${key}`); hub.close(); }, confirm() {}, cancelConfirmation() {}, reset() {},
-    diagnostics: () => ({ version: 1, stage: 'unavailable', lastCode: 'play-path-unproved' }), subscribe() { return () => {}; },
-  });
+  ] },
+    get action() { return characterAction; },
+    get context() { return lifecycle.context(); },
+    request: key => switchTo(key, false),
+    confirm() { if (characterAction.status === 'confirming' && pendingCharacter) switchTo(pendingCharacter, true); },
+    cancelConfirmation() { if (characterAction.status === 'confirming') { pendingCharacter = null; publishCharacter({ status: 'idle' }); } },
+    reset() { pendingCharacter = null; publishCharacter({ status: 'idle' }); },
+    diagnostics: () => ({ version: 1, stage: 'unavailable', lastCode: 'play-path-unproved' }),
+    subscribe(listener) {
+      characterListeners.add(listener);
+      const stop = lifecycle.subscribe(listener);
+      return () => { characterListeners.delete(listener); stop(); };
+    },
+  };
+  window.gwCharacterSwitch = characterSource;
+  installCharacterSwitchHost(document.body).attach(characterSource);
   const foundation = createToolboxFoundation(document.body, {
     async mountTool(element, onVisibilityChange) {
       const app = mountToolsApp(element, { host: game.host, hub, mode: 'embedded', initiallyVisible: false, onVisibilityChange });
@@ -103,7 +164,6 @@ export function mountHubFixture(target: HTMLElement) {
       return { setVisible: visible => visible ? app.show() : app.hide(), setActive: app.setActive, requestClose: app.hide, search: app.search, update() {}, dispose: app.dispose };
     },
   });
-  const travelHost = createDemoTravelHost();
   const travel = createHubTravel(travelHost, hub);
   hub.attach(travel.source);
   let id = 0;
@@ -128,50 +188,45 @@ export function mountHubFixture(target: HTMLElement) {
   window.addEventListener('hub-fixture-incoming', () => session.observe([{ id: ++id, sender: 'Romi Ranger', message: 'Ready for another mission?', direction: 'incoming' }]));
   window.addEventListener('hub-fixture-unavailable', () => session.setAvailable(false));
   session.setAvailable(true);
-  // The synthetic play region follows the demo Travel host; the scenario select adds an explorable area.
-  // A zone change reads as the kernel's unavailable game state, which it can publish for a moment mid-trip.
-  let explorable = false;
-  const regionListeners = new Set<() => void>();
-  const region = (): CompanionPlayRegionState => {
-    const state = travelHost.state.value;
-    return state.status !== 'ready' ? { status: 'waiting', reason: 'game' } : { status: 'ready', sequence: 1, mapId: state.mapId,
-      instanceType: explorable ? 1 : 0, playRegion: isPvpTravelDestination(state.mapId) ? 'pvp' : 'pve', travelContext: state.travelContext,
-      characterKey: state.characterKey, unlockedMapWords: null, guildHall: state.guildHall, hasGuildHall: state.hasGuildHall };
-  };
-  watch(travelHost.state, () => { for (const listener of [...regionListeners]) listener(); }, { flush: 'sync' });
   const invites: string[] = [];
-  const party = createPartyInvite({ region, chatReady: () => session.state.available, settleMs: 400,
-    subscribeRegion: listener => { regionListeners.add(listener); return () => { regionListeners.delete(listener); }; },
+  const partyInvite = createPartyInvite({ region: lifecycle.region, chatReady: () => session.state.available, settleMs: 400,
+    subscribeRegion: lifecycle.subscribe,
     invite: async name => { invites.push(name); target.dataset.invites = invites.join('|'); record(`PARTY.INVITE ${name}`); },
     travel: async friend => { await travel.travel(friend.mapId); record(`PARTY.TRAVEL ${friend.character}`); },
   });
   const people = createHubPeople(hub, session, { unavailable: () => null,
-    run: async friend => { await travel.travel(friend.mapId); record(`FRIEND.TRAVEL ${friend.character}`); } }, party);
+    run: async friend => { await travel.travel(friend.mapId); record(`FRIEND.TRAVEL ${friend.character}`); } }, partyInvite);
   people.setEnabled(true);
-  const friendsFor = (invitable: boolean) => ({ status: 'ready' as const, sequence: 1, generation: 1, friends: [
-    { key: 'romi', alias: 'Romi', character: 'Romi Ranger', status: 'online' as const, mapId: 449 },
+  // Romi waits in the player's starting outpost, so `invite Romi` is ready to send there.
+  // The injected party (`?party`): chat participants, four online Zed friends and a friend in a PvP outpost.
+  const friendsFor = (injected: boolean) => ({ status: 'ready' as const, sequence: 1, generation: 1, friends: [
+    { key: 'romi', alias: 'Romi', character: 'Romi Ranger', status: 'online' as const, mapId: 55 },
     { key: 'offline', alias: 'Offline Friend', character: '', status: 'offline' as const, mapId: 55 },
     // Four online friends whose person pages offer Travel, Invite and Travel and invite on rows 1-3.
-    ...(invitable ? ([['alpha', 449], ['beta', 81], ['delta', 55], ['gamma', 194]] as const).map(([key, mapId]) => {
+    ...(injected ? ([['alpha', 449], ['beta', 81], ['delta', 55], ['gamma', 194]] as const).map(([key, mapId]) => {
       const name = `Zed ${key[0]!.toUpperCase()}${key.slice(1)}`;
       return { key, alias: name, character: name, status: 'online' as const, mapId };
     }) : []),
-    ...(invitable ? [{ key: 'arena', alias: 'Arena Ace', character: 'Arena Ace', status: 'online' as const, mapId: 188 }] : []),
+    ...(injected ? [{ key: 'arena', alias: 'Arena Ace', character: 'Arena Ace', status: 'online' as const, mapId: 188 }] : []),
   ] });
-  const updateFriends = (invitable: boolean) => { const friends = friendsFor(invitable); session.updateFriends(friends); people.updateFriends(friends); };
-  updateFriends(false);
-  const setScenario = (value: string) => {
-    game.setScenario(value);
-    explorable = value === 'explorable';
-    updateFriends(value === 'party');
-    if (value === 'party') session.observe([{ id: ++id, sender: 'Mo Kaiser', direction: 'participant' }, { id: ++id, sender: 'Kai Mo Bearer', direction: 'participant' }]);
-    for (const listener of [...regionListeners]) listener();
+  let participantsSeen = false;
+  const setParty = (injected: boolean) => {
+    const friends = friendsFor(injected); session.updateFriends(friends); people.updateFriends(friends);
+    if (injected && !participantsSeen) { participantsSeen = true; session.observe([{ id: ++id, sender: 'Mo Kaiser', direction: 'participant' }, { id: ++id, sender: 'Kai Mo Bearer', direction: 'participant' }]); }
   };
-  window.addEventListener('hub-fixture-scenario', event => { if (event instanceof CustomEvent) setScenario(String(event.detail)); });
+  setParty(params.has('party'));
+  window.addEventListener('hub-fixture-scenario', event => { if (event instanceof CustomEvent) game.setScenario(String(event.detail)); });
+  window.addEventListener('hub-fixture-lifecycle', event => { if (event instanceof CustomEvent && isFixtureLifecycle(event.detail)) lifecycle.set(event.detail); });
+  window.addEventListener('hub-fixture-party', event => { if (event instanceof CustomEvent) setParty(event.detail !== false); });
   window.addEventListener('hub-fixture-withdraw', () => people.updateFriends({ status: 'waiting', reason: 'unavailable' }));
-  window.addEventListener('gw:travel-toggle', event => { event.preventDefault(); travel.open(); });
-  window.addEventListener('gw:whispers-toggle', event => {
+  // The Travel and Whispers owners' command listeners (`travel-palette.ts`, `whisper-surface.ts`), over the fixture's hosts.
+  window.addEventListener('gw:travel-toggle', event => {
+    if (!settings.gwonmacTools || !settings.travelPalette) return;
     event.preventDefault();
+    if (travel.active && (!(event instanceof CustomEvent) || event.detail !== 'show')) hub.close(); else travel.open();
+  });
+  window.addEventListener('gw:whispers-toggle', event => {
+    if (!settings.gwonmacTools || !settings.whispersEnabled || !session.state.available) return;
     toggleHubWhispers(event, hub, messenger, session);
     if (session.state.visible) whisperSurface.raise();
   });
@@ -181,26 +236,30 @@ export function mountHubFixture(target: HTMLElement) {
     people.setEnabled(settings.gwonmacTools && (settings.travelPalette || settings.whispersEnabled));
     window.dispatchEvent(new Event('gw:tools-settings'));
   } });
-  const controls = document.createElement('div'); controls.className = 'hub-fixture-controls'; controls.style.cssText = 'position:fixed;bottom:8px;left:8px;display:flex;gap:8px';
-  const open = document.createElement('button'); open.textContent = 'Open Hub'; open.className = 'ui-button'; open.onclick = () => hub.show(); controls.append(open);
+  const controls = document.createElement('div'); controls.className = 'hub-fixture-controls';
+  controls.style.cssText = 'position:fixed;bottom:8px;left:8px;z-index:10;display:flex;flex-wrap:wrap;align-items:center;gap:8px';
+  const open = document.createElement('button'); open.textContent = 'Open Hub'; open.className = 'ui-button'; open.onclick = () => hub.show();
   const theme = document.createElement('button'); theme.textContent = 'Change theme'; theme.className = 'ui-button';
   let modern = false;
   theme.onclick = () => { modern = !modern; window.gwApplyFixtureAppearance?.({ uiStyle: modern ? 'obsidian' : 'guild-wars', uiPanelOpacity: 100 }); };
-  const scenario = document.createElement('select'); scenario.className = 'ui-select'; scenario.setAttribute('aria-label', 'Fixture scenario');
-  for (const [value, label] of [['ready', 'Ready in outpost'], ['explorable', 'Explorable area'], ['partial', 'Interrupted apply'], ['duplicate', 'Duplicate build names'], ['folders', 'Nested build folders'], ['mixed-professions', 'Mixed hero professions'], ['party', 'People to invite']] as const) {
-    const option = document.createElement('option'); option.value = value; option.textContent = label; scenario.append(option);
-  }
-  scenario.onchange = () => { setScenario(scenario.value); hub.show(); };
+  const select = (label: string, options: readonly (readonly [string, string])[], value: string, change: (value: string) => void) => {
+    const element = document.createElement('select'); element.className = 'ui-select'; element.setAttribute('aria-label', label);
+    for (const [id, text] of options) { const option = document.createElement('option'); option.value = id; option.textContent = text; element.append(option); }
+    element.value = value;
+    element.onchange = () => { change(element.value); hub.show(); };
+    return element;
+  };
+  const scenario = select('Fixture scenario', [['ready', 'Standard builds'], ['partial', 'Interrupted apply'], ['duplicate', 'Duplicate build names'], ['folders', 'Nested build folders'], ['mixed-professions', 'Mixed hero professions']], 'ready', game.setScenario);
+  const lifecycleSelect = select('Lifecycle state', FIXTURE_LIFECYCLES, lifecycle.phase, value => { if (isFixtureLifecycle(value)) lifecycle.set(value); });
+  lifecycle.subscribe(() => { lifecycleSelect.value = lifecycle.phase; });
+  const partyToggle = document.createElement('label'); partyToggle.style.cssText = 'display:flex;gap:4px;align-items:center';
+  const partyBox = document.createElement('input'); partyBox.type = 'checkbox'; partyBox.checked = params.has('party');
+  partyBox.onchange = () => { setParty(partyBox.checked); hub.show(); };
+  partyToggle.append(partyBox, 'Injected party');
   const reset = document.createElement('button'); reset.className = 'ui-button'; reset.textContent = 'Reset fixture'; reset.onclick = () => { localStorage.removeItem('hub-fixture-shortcuts'); localStorage.removeItem('hub-fixture-library'); location.reload(); };
-  const label = document.createElement('span'); label.textContent = 'Synthetic game · sample prices';
-  controls.style.flexWrap = 'wrap'; controls.append(theme, scenario, reset, label); target.append(controls);
-  window.addEventListener('keydown', event => {
-    if (capturingShortcut) return;
-    if (!event.metaKey || event.shiftKey || event.altKey || event.repeat) return;
-    if (event.code === 'KeyR') { event.preventDefault(); hub.toggle(); return; }
-    const command = ({ KeyB: 'tools', KeyT: 'travel', KeyD: 'whispers', KeyK: 'trade', KeyE: 'character' } as Record<string, string>)[event.code];
-    if (command) { event.preventDefault(); window.dispatchEvent(new CustomEvent(`gw:${command}-toggle`, { cancelable: true, detail: 'show' })); }
-  }, true);
-  hub.show(); target.dataset.ready = 'true';
+  const label = document.createElement('span'); label.textContent = `Synthetic game · sample prices${game.librarySize ? ` · ${game.librarySize} builds` : ''}`;
+  controls.append(open, theme, scenario, lifecycleSelect, partyToggle, reset, canvasCount, label); target.append(controls);
+  // The game has keyboard focus before the player summons the Hub.
+  canvas.focus(); hub.show(); target.dataset.ready = 'true';
   return hub;
 }

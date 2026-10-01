@@ -52,6 +52,7 @@ test.describe("renderer Travel input", () => {
             unlockedMapWords: Array.from({ length: 28 }, () => 0xffff_ffff),
             guildHall: false,
             hasGuildHall: false,
+            explorable: false,
           },
         });
         installation.poll();

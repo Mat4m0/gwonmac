@@ -26,6 +26,8 @@ export type TravelGameState =
     unlockedMapWords: readonly number[] | null;
     guildHall: boolean;
     hasGuildHall: boolean;
+    /** The certified instance type is an explorable area; an outpost or Guild Hall is not. */
+    explorable: boolean;
   }>;
 
 export const TRAVEL_UNLOCK_WORDS = 28;
@@ -85,6 +87,7 @@ export function travelGameState(value: unknown): TravelGameState {
         unlockedMapWords,
         guildHall: input.guildHall === true,
         hasGuildHall: input.hasGuildHall === true,
+        explorable: input.instanceType === 1,
       });
     }
     if (

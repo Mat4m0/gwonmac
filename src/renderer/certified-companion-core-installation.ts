@@ -9,6 +9,7 @@ import {
 } from "../shared/enhancement-contracts.js";
 import { COMPANION_ABI, COMPANION_FEATURE_BITS } from "../shared/companion-abi.js";
 import { CHARACTER_SWITCH_ACTION_ABI } from "../shared/character-switch-action-abi.js";
+import { characterSwitchContext } from "./character-switch-model.js";
 import type {
   EnhancementObserverConsumer,
   RendererMilestone,
@@ -493,16 +494,7 @@ export async function installCoreCertifiedCompanion(
       };
       installedPreGameControls = Object.freeze({
         state: readPreGameState,
-        switchContext() {
-          const preGame = readPreGameState();
-          if (preGame === "character-select") return "character-select";
-          if (preGame === "reconnect" || preGame === "loading") return "loading";
-          const state = playRegions.state;
-          if (state.status !== "ready") return "unavailable";
-          if (state.instanceType === 0) return "outpost";
-          if (state.instanceType !== 1) return "unavailable";
-          return state.playRegion === "pve" ? "pve-explorable" : "pvp-explorable";
-        },
+        switchContext: () => characterSwitchContext(readPreGameState(), playRegions.state),
         diagnosticMask() {
           try {
             return Number(preGameDiagnosticReader!()) >>> 0;
