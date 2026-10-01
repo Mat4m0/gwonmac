@@ -42,7 +42,7 @@ for (const ratio of [1, 2]) {
       await page.screenshot({ path: info.outputPath('modern-home.png') });
       await page.evaluate(() => window.gwApplyFixtureAppearance?.({ uiStyle: 'guild-wars', uiPanelOpacity: 94 }));
       await expect(frame).toBeVisible();
-      const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+      const search = page.locator('.hub-search input');
       await search.fill('travel'); await search.press('Enter');
       expect(await page.locator('.hub-panel').boundingBox()).toEqual(box);
       await page.screenshot({ path: info.outputPath('classic-travel.png') });
@@ -57,7 +57,7 @@ for (const ratio of [1, 2]) {
 
 test('saved font and custom title material apply to the real Hub without losing query', async ({ page }, info) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('settings'); await search.press('Enter');
   await page.getByRole('button', { name: 'Appearance', exact: true }).click();
   await page.getByLabel('Panel font', { exact: true }).selectOption('inter');
@@ -83,7 +83,7 @@ test('compact Hub keeps navigation reachable with reduced motion over a bright b
   await page.goto('/?hub');
   await page.addStyleTag({ content: 'body { background: repeating-conic-gradient(#fff 0% 25%, #ddd 0% 50%) 0 / 32px 32px !important; }' });
   await page.evaluate(() => window.gwApplyFixtureAppearance?.({ uiStyle: 'guild-wars', uiPanelOpacity: 65 }));
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('travel'); await search.press('Enter');
   await expect(page.getByRole('button', { name: 'Back', exact: true })).toBeInViewport();
   await expect(page.getByRole('combobox', { name: 'Destination, phrase, or friend' })).toBeInViewport();

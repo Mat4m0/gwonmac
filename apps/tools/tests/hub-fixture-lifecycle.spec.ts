@@ -2,7 +2,6 @@ import { expect, test, type Page } from '@playwright/test';
 
 // The fixture's game lifecycle, shortcut routing and main-process models must
 // match production, or fixture journeys hide production defects (HUB-239).
-const searchName = 'Search people, places, builds';
 const lifecycle = (page: Page) => page.getByLabel('Lifecycle state', { exact: true });
 const open = async (page: Page, query = '') => {
   await page.goto(`/?hub${query}`);
@@ -13,7 +12,7 @@ const canvasEvents = (page: Page) => page.evaluate(() => window.gwFixtureCanvas?
 test.describe('game lifecycle', () => {
   test('one lifecycle state names the place and gates character switching', async ({ page }) => {
     await open(page, '&lifecycle=pvp-outpost');
-    const search = page.getByRole('combobox', { name: searchName });
+    const search = page.locator('.hub-search input');
     await expect(lifecycle(page)).toHaveValue('pvp-outpost');
     await expect(page.locator('.hub-context')).toHaveText('Fixture Monk · Random Arenas');
     await lifecycle(page).selectOption('map-loading');
@@ -33,7 +32,7 @@ test.describe('game lifecycle', () => {
 
   test('a Travel arrival moves the lifecycle to the destination outpost', async ({ page }) => {
     await open(page, '&lifecycle=pve-explorable');
-    const search = page.getByRole('combobox', { name: searchName });
+    const search = page.locator('.hub-search input');
     await search.fill('kamadan');
     await expect(page.locator('.hub-primary')).toHaveText(/^Travel to Kamadan/);
     await search.press('Enter');
@@ -62,7 +61,7 @@ test.describe('shortcuts through commands.ts', () => {
   test('Command-T finds a Travel page opened from Home, and a closed Hub starts Travel fresh', async ({ page }) => {
     await open(page);
     const travelSearch = page.getByRole('combobox', { name: 'Destination, phrase, or friend' });
-    await page.getByRole('combobox', { name: searchName }).fill('travel');
+    await page.locator('.hub-search input').fill('travel');
     await expect(page.locator('.hub-primary')).toHaveText(/^Browse travel/);
     await page.keyboard.press('Enter');
     await travelSearch.fill('kamadan');
@@ -85,7 +84,7 @@ test.describe('shortcuts through commands.ts', () => {
     for (let press = 0; press < 4; press++) await page.keyboard.down('r');
     await page.keyboard.up('r'); await page.keyboard.up('Meta');
     await expect(hub).toBeVisible();
-    await expect(page.getByRole('combobox', { name: searchName })).toHaveValue('');
+    await expect(page.locator('.hub-search input')).toHaveValue('');
     expect((await canvasEvents(page)).filter(event => event.endsWith('KeyR'))).toEqual([]);
   });
 
@@ -107,7 +106,7 @@ test.describe('shortcuts through commands.ts', () => {
   // HUB-001: the row promises the confirmation sheet, so it opens it and quits nothing.
   test('the Quit or Reload row opens the confirmation sheet', async ({ page }) => {
     await open(page);
-    const search = page.getByRole('combobox', { name: searchName });
+    const search = page.locator('.hub-search input');
     const sheet = page.getByRole('dialog', { name: 'Quit or reload Guild Wars?' });
     for (const word of ['reload', 'quit', 'restart']) {
       if (!await page.locator('#hub').isVisible()) await page.keyboard.press('Meta+r');
@@ -131,7 +130,7 @@ test.describe('shortcuts through commands.ts', () => {
   ] as const) {
     test(`a ${gesture} opens the Quit or Reload sheet once and quits nothing`, async ({ page }) => {
       await open(page);
-      const search = page.getByRole('combobox', { name: searchName });
+      const search = page.locator('.hub-search input');
       const sheet = page.getByRole('dialog', { name: 'Quit or reload Guild Wars?' });
       await search.fill('reload');
       await expect(page.locator('#hub .hub-primary')).toContainText('Review options');
@@ -153,7 +152,7 @@ test.describe('shortcuts through commands.ts', () => {
   // a held Enter never answers "Reload Guild Wars" with its auto-repeat.
   test('a held Enter on the Quit or Reload row opens the sheet only after release', async ({ page }) => {
     await open(page);
-    const search = page.getByRole('combobox', { name: searchName });
+    const search = page.locator('.hub-search input');
     const sheet = page.getByRole('dialog', { name: 'Quit or reload Guild Wars?' });
     await search.fill('reload');
     for (let press = 0; press < 6; press++) { await page.keyboard.down('Enter'); await page.waitForTimeout(60); }
@@ -170,7 +169,7 @@ test.describe('shortcuts through commands.ts', () => {
 
 test('the canvas ledger records only input that reaches the game', async ({ page }) => {
   await open(page);
-  const search = page.getByRole('combobox', { name: searchName });
+  const search = page.locator('.hub-search input');
   await search.fill('kam');
   expect(await canvasEvents(page)).toEqual([]);
   await search.fill(''); await search.press('Escape');
@@ -184,7 +183,7 @@ test('the canvas ledger records only input that reaches the game', async ({ page
 test('the library switch loads 1000 builds without replacing saved fixture data', async ({ page }) => {
   await open(page, '&library=1000');
   await expect(page.locator('.hub-fixture-controls')).toContainText('1000 builds');
-  const search = page.getByRole('combobox', { name: searchName });
+  const search = page.locator('.hub-search input');
   await search.fill('build swift healer 0001');
   await expect(page.locator('.hub-row').first()).toContainText('Swift Healer 0001');
   expect(await page.evaluate(() => localStorage.getItem('hub-fixture-library'))).toBeNull();
@@ -192,6 +191,6 @@ test('the library switch loads 1000 builds without replacing saved fixture data'
 
 test('sample trader quotes carry the sample marker', async ({ page }) => {
   await open(page);
-  await page.getByRole('combobox', { name: searchName }).fill('10 ecto in p');
+  await page.locator('.hub-search input').fill('10 ecto in p');
   await expect(page.locator('#hub').getByRole('option', { name: /60 platinum \(sample\).*Buy from trader/ })).toBeVisible();
 });

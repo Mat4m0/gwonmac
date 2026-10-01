@@ -25,7 +25,7 @@ test('Hub has a locked frame, invisible corner hit area and bounded movable geom
   await page.getByRole('button', { name: 'Lock Hub position', exact: true }).click();
   const placement = await panel.boundingBox();
   await expect(grip).toBeHidden();
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('maps'); await search.press('Enter');
   expect(await panel.boundingBox()).toEqual(placement);
   await expect(page.getByRole('navigation', { name: 'Hub breadcrumb' })).toContainText('Home');
@@ -34,7 +34,7 @@ test('Hub has a locked frame, invisible corner hit area and bounded movable geom
 
 test('Command-Backspace and breadcrumb ancestors restore history; Backspace only edits text', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   const back = page.locator('.hub-back');
   await expect(back).toBeHidden();
   await search.fill('accounts'); await search.press('Enter');
@@ -73,7 +73,7 @@ test('Command-Backspace and breadcrumb ancestors restore history; Backspace only
 
 test('arrows connect Hub results, character carousel, search and Back', async ({ page }, info) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('switch character'); await search.press('ArrowDown');
   // D-2: arrows move the selection while focus stays in search; no wrap at the top.
   await expect(page.locator('.hub-row[aria-selected=true]')).toContainText('Switch Character');
@@ -101,7 +101,7 @@ test('arrows connect Hub results, character carousel, search and Back', async ({
 
 for (const material of ['Guild Wars', 'Modern']) test(`floating Whispers paints one complete ${material} frame and preserves a draft across hide/show`, async ({ page }, info) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('settings'); await search.press('Enter');
   await page.getByRole('button', { name: 'Appearance', exact: true }).click();
   await page.getByLabel('Panel style', { exact: true }).selectOption({ label: material });
@@ -129,7 +129,7 @@ for (const material of ['Guild Wars', 'Modern']) test(`floating Whispers paints 
 
 test('one list move keeps focus in search: arrows, Control-N/P, pages and ends never wrap', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   const rows = page.locator('.hub-row');
   const selected = page.locator('.hub-row[aria-selected="true"]');
   await expect(rows.first()).toBeVisible();
@@ -183,7 +183,7 @@ test('the Characters carousel takes the same list move and never wraps', async (
 
 test('one list move from no selection: End lands on the last result, every other move on the first', async ({ page }) => {
   await page.goto('/?hub&party');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   const rows = page.locator('.hub-row');
   const selected = page.locator('.hub-row[aria-selected="true"]');
   // A bare consequential scope preselects nothing, so Enter can never invite on a guess.
@@ -200,7 +200,7 @@ test('one list move from no selection: End lands on the last result, every other
 
 test('list keys without results keep the caret and the text selection in search', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('qqqzzz');
   await expect(page.locator('.hub-empty')).toBeVisible();
   for (const key of ['ArrowDown', 'ArrowUp', 'End', 'Home', 'PageDown', 'Control+n']) {
@@ -214,7 +214,7 @@ test('list keys without results keep the caret and the text selection in search'
 
 test('a view whose first buttons are disabled still takes focus, and Command-Backspace leaves it', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('hub preferences'); await page.keyboard.down('Enter');
   await expect(page.locator('.hub-caption')).toHaveText('Hub preferences');
   // Nothing is pinned, so Reset aliases is disabled; focus goes to the first usable control.
@@ -231,7 +231,7 @@ test('a view whose first buttons are disabled still takes focus, and Command-Bac
 test('Command-Backspace goes back one Build Library level, restores the parent and speaks its title (BLD-24)', async ({ page }) => {
   await page.goto('/?hub');
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   const announced = page.locator('#hub .hub-announce');
   await expect(announced).toHaveAttribute('aria-live', 'polite');
   await expect(announced).toHaveText('');
@@ -268,7 +268,7 @@ test('Command-Backspace goes back one Build Library level, restores the parent a
 
 test('a page opened directly returns to the real Home, and Home ignores Command-Backspace', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('kam');
   await page.keyboard.press('Meta+Backspace');
   await expect(page.locator('#hub')).toBeVisible();
@@ -290,7 +290,7 @@ test('a page opened directly returns to the real Home, and Home ignores Command-
 test('Command-Backspace steps out of a view\'s own inner level before it leaves the view', async ({ page }) => {
   await page.goto('/?hub&lifecycle=pve-explorable');
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   const caption = page.locator('.hub-caption');
   // On a confirmation it acts as Cancel, like Esc and Stay here. One a Hub row asked for
   // returns to that row (HUB-075); one a card asked for returns to the cards.
@@ -339,7 +339,7 @@ test('Command-Backspace steps out of a view\'s own inner level before it leaves 
 
 test('Backspace on a focused footer button edits the search and returns focus to it', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('kam'); await page.keyboard.press('Tab');
   await expect(page.locator('.hub-primary')).toBeFocused();
   await page.keyboard.press('Backspace');
@@ -371,7 +371,7 @@ const mouseLedger = (page: Page) => page.evaluate(() => (window.gwFixtureCanvas?
 test('the mouse back button goes back one level, restores the parent exactly and never runs a row (PTR-33, KEY-26)', async ({ page }) => {
   await page.goto('/?hub');
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   const caption = page.locator('.hub-caption');
   const announced = page.locator('#hub .hub-announce');
   // An account page: the parent's query, caret and selection come back, and the pointer's row is not taken.
@@ -420,7 +420,7 @@ test('the mouse back button goes back one level, restores the parent exactly and
 test('the mouse back button at Home does nothing and never closes the Hub (PTR-34)', async ({ page }) => {
   await page.goto('/?hub');
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('kam');
   await restPointer(page, page.locator('#hub .hub-row').first());
   const selection = await selectedRow(page).getAttribute('data-id');
@@ -441,9 +441,13 @@ test('the mouse back button at Home does nothing and never closes the Hub (PTR-3
 test('a held Command-Backspace on a person page goes back one level to the people list (PPL-29)', async ({ page }) => {
   await page.goto('/?hub&party');
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('mo');
   while (await selectedRow(page).getAttribute('data-id') !== 'person:kai mo bearer') await search.press('ArrowDown');
+  // Ranking now places People first; explicitly scroll rather than assuming the selected row is below the fold.
+  await page.locator('#hub-results').hover({ position: { x: 2, y: 2 } });
+  await page.mouse.wheel(0, 400);
+  await expect.poll(() => page.locator('#hub-results').evaluate(list => list.scrollTop)).toBeGreaterThan(0);
   const scroll = await page.locator('#hub-results').evaluate(list => list.scrollTop);
   expect(scroll).toBeGreaterThan(0);
   await search.press('Enter');
@@ -467,7 +471,7 @@ test('a held Command-Backspace on a person page goes back one level to the peopl
 test('a held Backspace on a person page or an empty Build Library folder never leaves it or removes anything (PPL-30, BLD-25)', async ({ page }) => {
   await page.goto('/?hub&party');
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   const crumbs = page.locator('.hub-breadcrumbs');
   const holdBackspace = async (repeats: number) => {
     for (let press = 0; press <= repeats; press++) await page.keyboard.down('Backspace');
@@ -503,7 +507,7 @@ test('Backspace on a selected pinned build only edits the search and keeps the p
   await page.goto('/?hub');
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
   await page.evaluate(() => localStorage.removeItem('hub-fixture-library'));
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('build smiter');
   await page.getByRole('button', { name: 'Actions', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Pin to Hub' }).click();
@@ -533,7 +537,7 @@ test('Backspace on a selected pinned build only edits the search and keeps the p
 test('a held Backspace empties Travel\'s search and leaves Travel, its picker and Home\'s query alone', async ({ page }) => {
   await page.goto('/?hub');
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   const caption = page.locator('.hub-caption');
   await search.fill('trav');
   await expect(page.locator('.hub-row[aria-selected="true"]')).toHaveAttribute('data-id', 'travel');

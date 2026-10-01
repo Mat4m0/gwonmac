@@ -21,31 +21,30 @@ const updating = process.env.KEYBOARD_GOLDEN === 'update';
 const golden: Record<string, Record<string, string>> = JSON.parse(readFileSync(GOLDEN, 'utf8'));
 const observed: Record<string, Record<string, string>> = {};
 
-const searchName = 'Search people, places, builds';
 const enterHub = async (page: Page, query: string) => {
-  const search = page.getByRole('combobox', { name: searchName });
+  const search = page.locator('.hub-search input');
   await search.fill(query); await search.press('Enter');
 };
 const VIEWS: Record<string, { query?: string; open(page: Page): Promise<void> }> = {
   'closed': { open: page => page.keyboard.press('Escape') },
   'home': { open: async () => {} },
-  'home-query': { open: page => page.getByRole('combobox', { name: searchName }).fill('kam') },
-  'home-row': { open: async page => { await page.getByRole('combobox', { name: searchName }).fill('sw'); await page.keyboard.press('ArrowDown'); } },
+  'home-query': { open: page => page.locator('.hub-search input').fill('kam') },
+  'home-row': { open: async page => { await page.locator('.hub-search input').fill('sw'); await page.keyboard.press('ArrowDown'); } },
   'explorable-home': { query: '&lifecycle=pve-explorable', open: async () => {} },
   'travel': { open: page => page.keyboard.press('Meta+t') },
   'characters': { open: page => page.keyboard.press('Meta+e') },
   'build-library': { open: page => page.keyboard.press('Meta+b') },
   'build-page': { open: page => enterHub(page, 'build smiter') },
   'person': { open: page => enterHub(page, 'romi') },
-  'accounts': { open: async page => { await page.getByRole('combobox', { name: searchName }).fill('switch account'); await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter'); } },
+  'accounts': { open: async page => { await page.locator('.hub-search input').fill('switch account'); await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter'); } },
   'settings': { open: page => enterHub(page, 'settings') },
-  'calculator': { open: page => page.getByRole('combobox', { name: searchName }).fill('10 ecto in p') },
+  'calculator': { open: page => page.locator('.hub-search input').fill('10 ecto in p') },
   'trade': { open: async page => { await page.keyboard.press('Escape'); await page.keyboard.press('Meta+k'); } },
   'whispers': { open: page => page.keyboard.press('Meta+d') },
   // The innermost levels answer first: a text in the Whispers picker, an open disclosure, a Settings section body.
   'whispers-query': { open: async page => { await page.keyboard.press('Meta+d'); await page.keyboard.type('ro'); } },
   'review-details': { open: async page => {
-    await page.getByRole('combobox', { name: searchName }).fill('team gom afk'); await page.keyboard.press('ArrowRight');
+    await page.locator('.hub-search input').fill('team gom afk'); await page.keyboard.press('ArrowRight');
     await page.locator('#hub details summary').first().click();
   } },
   'settings-body': { open: async page => { await enterHub(page, 'settings'); await page.getByRole('checkbox', { name: 'Enable Tools' }).focus(); } },
@@ -122,7 +121,7 @@ test.describe('owned press (HUB-003)', () => {
     await settle(page);
     return canvasKeys(page);
   };
-  const search = (page: Page) => page.getByRole('combobox', { name: searchName });
+  const search = (page: Page) => page.locator('.hub-search input');
   const open = async (page: Page, query = '') => {
     await page.goto(`/?hub${query}`);
     await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');

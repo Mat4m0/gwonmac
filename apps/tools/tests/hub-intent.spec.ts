@@ -1,9 +1,8 @@
 import { expect, test } from '@playwright/test';
 
-const searchName = 'Search people, places, builds';
 test('character entry is card-first and Back restores the launching result', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: searchName });
+  const search = page.locator('.hub-search input');
   await search.fill('sw'); await search.press('Enter');
   const card = page.locator('#character-switch-list button:focus');
   await expect(card).toHaveCount(1);
@@ -23,7 +22,7 @@ test('character entry is card-first and Back restores the launching result', asy
 
 test('account actions restore each visited account and command row', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: searchName });
+  const search = page.locator('.hub-search input');
   await search.fill('switch account'); await search.press('Enter');
   const account = page.locator('.hub-row[aria-selected="true"]');
   await expect(account).toContainText('Second');
@@ -41,7 +40,7 @@ test('account actions restore each visited account and command row', async ({ pa
 
 test('→ on the current account opens no actions, as Enter opens none (HUB-175)', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: searchName });
+  const search = page.locator('.hub-search input');
   const selected = page.locator('.hub-row[aria-selected="true"]');
   await search.fill('switch account'); await search.press('Enter');
   await expect(selected).toContainText('Second');
@@ -54,7 +53,7 @@ test('→ on the current account opens no actions, as Enter opens none (HUB-175)
 
 test('accounts that finish loading take the selection, so Enter acts on them (HUB-232)', async ({ page }) => {
   await page.goto('/?hub&accounts-load-ms=600');
-  const search = page.getByRole('combobox', { name: searchName });
+  const search = page.locator('.hub-search input');
   await search.fill('switch account'); await search.press('Enter');
   await expect(page.locator('.hub-row[aria-selected="true"]')).toContainText('Second');
   await expect(page.locator('#hub .hub-primary')).toBeEnabled();
@@ -62,7 +61,7 @@ test('accounts that finish loading take the selection, so Enter acts on them (HU
 
 test('a changed account list returns to one refreshed Accounts page (HUB-174)', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: searchName });
+  const search = page.locator('.hub-search input');
   await search.fill('switch account'); await search.press('Enter');
   await page.keyboard.press('Enter');
   await expect(page.locator('.hub-breadcrumbs')).toHaveText('Home›Accounts›Second');
@@ -79,7 +78,7 @@ test('a changed account list returns to one refreshed Accounts page (HUB-174)', 
 
 test('temporary blur resumes the stage and focus while explicit close starts fresh', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: searchName });
+  const search = page.locator('.hub-search input');
   await search.fill('build monk'); await search.press('Enter');
   const selected = await page.locator('.hub-row[aria-selected="true"]').getAttribute('data-id');
   await page.evaluate(() => window.dispatchEvent(new Event('blur')));
@@ -98,7 +97,7 @@ test('temporary blur resumes the stage and focus while explicit close starts fre
 
 test('native editing shortcuts from results return to the same search', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: searchName });
+  const search = page.locator('.hub-search input');
   await search.fill('build monk'); await search.press('ArrowDown');
   await page.keyboard.press('Meta+a'); await expect(search).toBeFocused();
   await page.keyboard.type('sw'); await expect(search).toHaveValue('sw');
@@ -108,7 +107,7 @@ test('native editing shortcuts from results return to the same search', async ({
 
 test('Travel and Settings restore their own state after a temporary hide', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: searchName });
+  const search = page.locator('.hub-search input');
   await search.fill('travel'); await search.press('Enter');
   const travel = page.getByRole('combobox', { name: 'Destination, phrase, or friend' });
   await travel.fill('kam');
@@ -140,7 +139,7 @@ test('Hub placement survives reload, stays locked, and resets durably', async ({
   await expect(panel).toHaveAttribute('data-locked', 'true');
   await page.setViewportSize({ width: 360, height: 500 });
   await expect(page.getByRole('button', { name: 'Close Hub', exact: true })).toBeInViewport();
-  const search = page.getByRole('combobox', { name: searchName });
+  const search = page.locator('.hub-search input');
   await search.fill('settings'); await search.press('Enter');
   await page.getByRole('button', { name: 'Appearance', exact: true }).click();
   await page.getByRole('button', { name: 'Reset Hub position', exact: true }).click();
@@ -150,7 +149,7 @@ test('Hub placement survives reload, stays locked, and resets durably', async ({
 
 test('held Enter cannot activate a newly entered target page', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: searchName });
+  const search = page.locator('.hub-search input');
   await search.fill('build monk');
   await page.keyboard.down('Enter'); await page.keyboard.down('Enter'); await page.keyboard.up('Enter');
   await expect(page.locator('.hub-row[aria-selected="true"]')).toContainText('Apply to me');
@@ -159,7 +158,7 @@ test('held Enter cannot activate a newly entered target page', async ({ page }) 
 
 test('a modified Enter never runs the primary; only a plain Enter does', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: searchName });
+  const search = page.locator('.hub-search input');
   await search.fill('build smiter'); await search.press('Enter');
   await expect(page.locator('.hub-primary')).toHaveText(/^Apply Smiter to Fixture Monk/);
   for (const chord of ['Meta+Enter', 'Control+Enter', 'Alt+Enter']) {
@@ -184,7 +183,7 @@ test('a modified Enter never runs the primary; only a plain Enter does', async (
 
 test('held Enter on footer actions and Backspace in ordinary fields keep their scope', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: searchName });
+  const search = page.locator('.hub-search input');
   await search.fill('build monk'); await search.press('Enter');
   const apply = page.getByRole('button', { name: /^Apply .+ to Fixture Monk ↵$/ });
   await apply.focus();
@@ -221,7 +220,7 @@ test('a legacy phrase that is now a scope word keeps its pins and only stops mat
   const legacy = JSON.stringify([{ id: 'whispers', phrase: 'invite', pinned: true }, { id: 'travel', phrase: '', pinned: true }]);
   await page.evaluate(value => localStorage.setItem('hub-fixture-shortcuts', value), legacy);
   await page.reload();
-  const search = page.getByRole('combobox', { name: searchName });
+  const search = page.locator('.hub-search input');
   await expect(page.locator('.hub-group').first()).toHaveText('Pinned');
   await expect(page.locator('.hub-row').nth(0)).toContainText('Whispers');
   await expect(page.locator('.hub-row').nth(1)).toContainText('Travel');
@@ -234,7 +233,7 @@ test('a legacy phrase that is now a scope word keeps its pins and only stops mat
 
 test('the phrase editor refuses a new phrase that starts with a scope word', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: searchName });
+  const search = page.locator('.hub-search input');
   await search.fill('team gom afk');
   await page.getByRole('button', { name: 'Actions', exact: true }).click();
   await page.getByRole('menuitem', { name: /Set search phrase/ }).click();
@@ -248,7 +247,7 @@ test('the phrase editor refuses a new phrase that starts with a scope word', asy
 test('a bare travel scope in an explorable area selects Browse travel, so Enter never leaves the area', async ({ page }) => {
   await page.goto('/?hub&lifecycle=pve-explorable');
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
-  const search = page.getByRole('combobox', { name: searchName });
+  const search = page.locator('.hub-search input');
   await search.pressSequentially('travel ');
   await expect(page.locator('.hub-scope')).toHaveText('travel');
   // Recent places are listed first, yet none is a result the player asked for.
@@ -263,7 +262,7 @@ test('a bare travel scope in an explorable area selects Browse travel, so Enter 
 test('a fresh Home in an explorable area starts on Travel, says why, and Enter never leaves the area', async ({ page }) => {
   await page.goto('/?hub&lifecycle=pve-explorable');
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
-  const search = page.getByRole('combobox', { name: searchName });
+  const search = page.locator('.hub-search input');
   // D-13: recent places stay listed, but none is the default.
   await expect(page.locator('.hub-row[data-id^="place:"]').first()).toBeVisible();
   await expect(page.locator('.hub-row[aria-selected="true"]')).toHaveAttribute('data-id', 'travel');
@@ -299,7 +298,7 @@ test('a Guild Hall is an outpost: no explorable label, no leaving line, and a fr
   await expect(page.locator('.hub-context')).toHaveText('Fixture Monk · Guild Hall');
   await expect(page.locator('.hub-lifecycle')).toBeHidden();
   await expect(page.locator('.hub-row[aria-selected="true"]')).toHaveAttribute('data-id', /^place:/);
-  await page.getByRole('combobox', { name: searchName }).fill('kamadan');
+  await page.locator('.hub-search input').fill('kamadan');
   await expect(page.locator('.hub-primary')).toHaveText(/^Travel to Kamadan/);
 });
 
@@ -307,7 +306,7 @@ test('bare whisper and trade scopes start on their first row; nothing consequent
   await page.goto('/?hub&party');
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
   await page.evaluate(() => window.dispatchEvent(new Event('hub-fixture-incoming')));
-  const search = page.getByRole('combobox', { name: searchName });
+  const search = page.locator('.hub-search input');
   const selected = page.locator('.hub-row[aria-selected="true"]');
   const primary = page.locator('.hub-primary');
   await search.pressSequentially('whisper ');
@@ -334,7 +333,7 @@ test.describe('party invite', () => {
   });
 
   test('the fixture wires PartyInvite, and the explorable reason shows before Enter', async ({ page }) => {
-    const search = page.getByRole('combobox', { name: searchName });
+    const search = page.locator('.hub-search input');
     const primary = page.locator('.hub-primary');
     const selected = page.locator('.hub-row[aria-selected="true"]');
     // Romi waits in the player's outpost: the shipped example is ready to send.
@@ -365,7 +364,7 @@ test.describe('party invite', () => {
   });
 
   test('the invite scope invites only an exact name and names it before Enter', async ({ page }) => {
-    const search = page.getByRole('combobox', { name: searchName });
+    const search = page.locator('.hub-search input');
     const primary = page.locator('.hub-primary');
     await search.fill('invite Mo Kai');
     await expect(page.locator('.hub-row').nth(0)).toContainText('Mo Kai');
@@ -404,7 +403,7 @@ test.describe('party invite', () => {
   });
 
   test('a bare invite scope lists online friends, the ones invitable here first, and invites only a chosen one', async ({ page }) => {
-    const search = page.getByRole('combobox', { name: searchName });
+    const search = page.locator('.hub-search input');
     await search.pressSequentially('invite ');
     await expect(page.locator('.hub-scope')).toHaveText('invite');
     const primary = page.locator('.hub-primary');
@@ -428,7 +427,7 @@ test.describe('party invite', () => {
   });
 
   test('Invite to a friend in another map says why before Enter and sends nothing', async ({ page }) => {
-    const search = page.getByRole('combobox', { name: searchName });
+    const search = page.locator('.hub-search input');
     await search.fill('zed alpha'); await search.press('Enter');
     // D-2: the person page keeps focus in search and moves the active descendant.
     await expect(page.locator('.hub-caption')).toHaveText('Zed Alpha');
@@ -456,7 +455,7 @@ test.describe('party invite', () => {
   });
 
   test('Travel and invite travels, then sends one invite on arrival', async ({ page }) => {
-    const search = page.getByRole('combobox', { name: searchName });
+    const search = page.locator('.hub-search input');
     await search.fill('zed alpha'); await search.press('Enter');
     await expect(page.locator('.hub-caption')).toHaveText('Zed Alpha');
     for (let step = 0; step < 3; step++) await page.keyboard.press('ArrowDown');
@@ -468,7 +467,7 @@ test.describe('party invite', () => {
   });
 
   test('a PvP outpost and an explorable area refuse invites before Enter', async ({ page }) => {
-    const search = page.getByRole('combobox', { name: searchName });
+    const search = page.locator('.hub-search input');
     await search.fill('arena ace'); await search.press('Enter');
     await expect(page.locator('.hub-row[data-id="person:travel-invite"]')).toContainText('Invites from Hub need a PvE outpost');
     await page.getByLabel('Lifecycle state', { exact: true }).selectOption('pve-explorable');
@@ -479,7 +478,7 @@ test.describe('party invite', () => {
 
   // HUB-242: a double-click never runs the action that its first click revealed.
   test('double-clicking a friend opens the person page and runs nothing', async ({ page }) => {
-    const search = page.getByRole('combobox', { name: searchName });
+    const search = page.locator('.hub-search input');
     for (const [index, name] of ['Zed Beta', 'Zed Delta', 'Zed Gamma'].entries()) {
       await search.fill('zed');
       await page.locator('.hub-row').nth(index + 1).dblclick();
@@ -498,7 +497,7 @@ test.describe('party invite', () => {
 
   // D-24: a row that changes the game only selects on a click.
   test('a click only selects an invite; the footer or a double-click on it sends one', async ({ page }) => {
-    const search = page.getByRole('combobox', { name: searchName });
+    const search = page.locator('.hub-search input');
     await search.fill('invite Mo Kai');
     const typed = page.locator('.hub-row').first();
     await expect(typed).toContainText('Character name');
@@ -595,7 +594,7 @@ test.describe('Characters: typing never switches', () => {
   // HUB-033: a prefix that names several characters opens the cards on the top hit.
   test('an ambiguous char prefix opens Characters on the top hit and switches nothing', async ({ page }) => {
     await page.goto('/?hub');
-    const search = page.getByRole('combobox', { name: searchName });
+    const search = page.locator('.hub-search input');
     await search.fill('char fixture r');
     await expect(page.locator('.hub-primary')).toHaveText(/^Show Fixture Ranger in Characters/u);
     await search.press('Enter');
@@ -614,7 +613,7 @@ test.describe('Characters: typing never switches', () => {
   // HUB-034, HUB-075: the confirmation names the character; Stay returns to the row that asked.
   test('Leave this area names the character, and Stay returns to the search that asked', async ({ page }) => {
     await page.goto('/?hub&lifecycle=pve-explorable');
-    const search = page.getByRole('combobox', { name: searchName });
+    const search = page.locator('.hub-search input');
     for (const cancel of ['Stay here', 'Escape'] as const) {
       await search.fill('char toefte'); await search.press('Enter');
       await expect(page.locator('#character-switch-title')).toHaveText('Leave this area and switch to Toefte?');

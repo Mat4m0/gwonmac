@@ -5,8 +5,7 @@ import { expect, test, type Page } from '@playwright/test';
  * wrap, ↑ at the top of a list stays, and Escape and ⌘⌫ leave the innermost level
  * first (a disclosure, a prompt, a drawer, a typed query) before a page or a popout.
  */
-const searchName = 'Search people, places, builds';
-const hubSearch = (page: Page) => page.getByRole('combobox', { name: searchName });
+const hubSearch = (page: Page) => page.locator('.hub-search input');
 const openHub = async (page: Page, query = '') => {
   await page.goto(`/?hub${query}`);
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');

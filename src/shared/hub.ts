@@ -73,33 +73,58 @@ export type HubSource = Readonly<{
   subscribe(refresh: () => void): () => void;
 }>;
 
-export const normaliseHubQuery = (value: string): string => value.toLowerCase().trim().replace(/\s+/gu, ' ');
+/**
+ * Lower case, single spaces, and typographic apostrophes and dashes folded to their plain
+ * forms, so `Lion’s Arch` and `Lion's Arch` are one name (HUB-143). Diacritics stay.
+ */
+export const normaliseHubQuery = (value: string): string => value.toLowerCase().replace(/[’‘ʼ]/gu, "'").replace(/[‐‑‒–—]/gu, '-').trim().replace(/\s+/gu, ' ');
 export const HUB_SCOPES = ['team', 'build', 'travel', 'char', 'whisper', 'invite', 'trade', 'acc'] as const;
 export type HubScope = typeof HUB_SCOPES[number];
+/** The other words players use for a scope (HUB-142); a closed list, so no phrase becomes a scope by accident. */
+const HUB_SCOPE_ALIASES: Readonly<Record<string, HubScope>> = { teams: 'team', builds: 'build', tp: 'travel', character: 'char', characters: 'char', account: 'acc', accounts: 'acc' };
 /**
  * `term` is normalised for matching; `text` keeps the typed capitalisation, e.g. for a character name.
  * A scope word followed by a space enters its scope with an empty term; a lone word is still a search.
  */
 export function parseHubQuery(value: string): { scope: HubScope | null; term: string; text: string } {
   const words = value.trim().split(/\s+/u);
-  const scopes: readonly string[] = HUB_SCOPES;
-  const scoped = (words.length > 1 || /\S\s+$/u.test(value)) && scopes.includes(words[0]!.toLowerCase());
+  const first = words[0]!.toLowerCase();
+  const scope = HUB_SCOPES.find(candidate => candidate === first) ?? HUB_SCOPE_ALIASES[first] ?? null;
+  const scoped = (words.length > 1 || /\S\s+$/u.test(value)) && scope !== null;
   const text = (scoped ? words.slice(1) : words).join(' ');
-  return { scope: scoped ? words[0]!.toLowerCase() as HubScope : null, term: normaliseHubQuery(text), text };
+  return { scope: scoped ? scope : null, term: normaliseHubQuery(text), text };
 }
-export function hubMatch(name: string, query: string, aliases: readonly string[] = []): 'exact' | 'prefix' | null {
+/** A name's words for matching, with punctuation trimmed from their edges: `(pre-Searing)` is `pre-searing` (HUB-143). */
+const hubWords = (name: string) => name.split(' ').map(word => word.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '')).filter(Boolean);
+/**
+ * How well a row answers a query, best first: 0 its name or an alias is the query, 1 its name
+ * starts with the query, 2 every query word starts one of its words, 3 only its keywords match.
+ * null is no match. Hub search orders sections and rows by this one tier (HUB-008, HUB-058).
+ */
+export type HubTier = 0 | 1 | 2 | 3;
+export function hubTier(row: Readonly<{ title: string; aliases?: readonly string[] | undefined; keywords?: string | undefined }>, query: string): HubTier | null {
   const term = normaliseHubQuery(query);
-  const names = [name, ...aliases].map(normaliseHubQuery);
-  if (names.includes(term)) return 'exact';
-  if (!term || term.split(' ').every(token => names.some(name => name.split(' ').some(word => word.startsWith(token))))) return 'prefix';
+  const names = [row.title, ...(row.aliases ?? [])].map(normaliseHubQuery);
+  if (!term) return 3;
+  if (names.includes(term)) return 0;
+  if (names.some(name => name.startsWith(term))) return 1;
+  const tokens = term.split(' ');
+  const words = (candidates: readonly string[]) => candidates.flatMap(hubWords);
+  const everyStarts = (candidates: readonly string[]) => { const all = words(candidates); return tokens.every(token => all.some(word => word.startsWith(token))); };
+  if (everyStarts(names)) return 2;
+  if (row.keywords && everyStarts([...names, normaliseHubQuery(row.keywords)])) return 3;
   return null;
 }
-/** `ordered` keeps a meaningful source order, such as the character selector, after exact matches. */
+export function hubMatch(name: string, query: string, aliases: readonly string[] = []): 'exact' | 'prefix' | null {
+  const tier = hubTier({ title: name, aliases }, query);
+  return tier === 0 ? 'exact' : tier === null ? null : 'prefix';
+}
+/** Best tier first; `ordered` keeps a meaningful source order, such as the character selector, within a tier. */
 export function matchHubRows(rows: readonly HubRow[], query: string, ordered = false): readonly HubRow[] {
   if (!normaliseHubQuery(query)) return rows;
-  const rank = (row: HubRow) => hubMatch(row.title, query, row.aliases) === 'exact' ? 0 : 1;
-  return rows.filter(row => row.matches ? row.matches(query) : hubMatch(row.title, query, [...(row.aliases ?? []), row.keywords ?? '']) !== null)
-    .sort((a, b) => rank(a) - rank(b) || (ordered ? 0 : a.title.localeCompare(b.title) || a.id.localeCompare(b.id)));
+  const tiers = new Map(rows.map(row => [row, row.matches ? row.matches(query) ? hubTier(row, query) ?? 3 : null : hubTier(row, query)]));
+  return rows.filter(row => tiers.get(row) !== null)
+    .sort((a, b) => tiers.get(a)! - tiers.get(b)! || (ordered ? 0 : a.title.localeCompare(b.title) || a.id.localeCompare(b.id)));
 }
 
 export type HubSummary = Readonly<Pick<HubRow, 'title' | 'detail' | 'skills' | 'attributes' | 'professions' | 'attributeStatus' | 'folder' | 'workspace'> & { label: string }>;

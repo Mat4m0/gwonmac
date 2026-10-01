@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 test('calculator retains labelled values when optional currency artwork fails', async ({ page }) => {
   await page.route('**/images/currency/*.png*', route => route.abort());
   await page.goto('/?hub');
-  await page.getByRole('combobox', { name: 'Search people, places, builds' }).fill('1250 gold in p');
+  await page.locator('.hub-search input').fill('1250 gold in p');
   const result = page.locator('#hub').getByRole('option');
   await expect(result).toContainText('1.25 platinum');
   await expect(result.locator('.hub-conversion-art')).toHaveCount(0);
@@ -13,7 +13,7 @@ test('calculator retains labelled values when optional currency artwork fails', 
 test('Hub searches, restores the query after actions, and hands off explicitly', async ({ page }) => {
   await page.goto('/?hub');
   const dialog = page.getByRole('dialog', { name: 'Hub', exact: true });
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await expect(search).toBeFocused();
   await search.fill('settings');
   await expect(page.locator('#hub').getByRole('option')).toHaveCount(1);
@@ -28,7 +28,7 @@ test('Hub searches, restores the query after actions, and hands off explicitly',
 test('no results, editing shortcuts, dismissal and narrow layout', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 650 });
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('no such tool');
   await expect(page.getByText('No matches')).toBeVisible();
   await search.press('Meta+a');
@@ -50,7 +50,7 @@ test('no results, editing shortcuts, dismissal and narrow layout', async ({ page
 
 test('Esc clears the query, then goes back, then closes onto the game, never <body>', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   const dialog = page.getByRole('dialog', { name: 'Hub', exact: true });
   for (const query of ['invite mo', 'travel kam', 'kamadan', 'invite ']) {
     await search.fill(query); await search.press('Escape');
@@ -70,7 +70,7 @@ test('Esc clears the query, then goes back, then closes onto the game, never <bo
 
 test('outpost travel closes Hub quietly after acceptance', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('embark');
   await expect(page.locator('#hub').getByRole('option')).toContainText('Embark Beach');
   await search.press('Enter');
@@ -79,7 +79,7 @@ test('outpost travel closes Hub quietly after acceptance', async ({ page }) => {
 
 test('a friend opens explicit actions and an offline location cannot travel', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('romi');
   await search.press('Enter');
   await expect(page.locator('#hub').getByRole('option').locator('.hub-title')).toHaveText(['Whisper', 'Travel to outpost', 'Invite to party', 'Travel and invite']);
@@ -94,7 +94,7 @@ test('a friend opens explicit actions and an offline location cannot travel', as
 
 test('one floating whisper view keeps drafts through dismissal and failures', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('romi'); await search.press('Enter'); await search.press('Enter');
   const draft = page.getByRole('textbox', { name: 'Message Romi Ranger', exact: true });
   await expect(draft).toBeFocused();
@@ -119,7 +119,7 @@ test('one floating whisper view keeps drafts through dismissal and failures', as
 
 test('sending uses observed messages, and session reset clears the shared view', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('whisper Romi Ranger'); await search.press('Enter');
   const draft = page.getByRole('textbox', { name: 'Message Romi Ranger', exact: true });
   await draft.fill('Hello'); await draft.press('Enter');
@@ -134,7 +134,7 @@ test('sending uses observed messages, and session reset clears the shared view',
 
 test('a withdrawn friend cannot act through an already open action view', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('romi'); await search.press('Enter');
   await page.evaluate(() => window.dispatchEvent(new Event('hub-fixture-withdraw')));
   await expect(page.locator('#hub').getByRole('option', { name: /Travel to outpost/ })).toHaveAttribute('aria-disabled', 'true');
@@ -145,7 +145,7 @@ test('a withdrawn friend cannot act through an already open action view', async 
 
 test('exact team applies through the observed runner, prefixes only review', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('team gom af');
   await expect(page.getByRole('button', { name: 'Review GOM AFK ↵', exact: true })).toBeEnabled();
   await search.press('Enter');
@@ -161,7 +161,7 @@ test('exact team applies through the observed runner, prefixes only review', asy
 
 test('exact build has a visible target and does not apply while typing', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('build smiter');
   await expect(page.getByRole('button', { name: 'Choose target ↵' })).toBeEnabled();
   await expect(page.locator('.hub-preview')).toBeHidden();
@@ -181,7 +181,7 @@ test('team preflight is inline and an interruption is not reported as success', 
   await page.goto('/?hub');
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
   await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-lifecycle', { detail: 'pve-explorable' })));
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('team gom afk');
   await expect(page.getByRole('button', { name: 'Apply team GOM AFK ↵' })).toBeDisabled();
   await expect(page.locator('#hub').getByRole('option')).toContainText('outpost');
@@ -196,7 +196,7 @@ test('team preflight is inline and an interruption is not reported as success', 
 
 test('calculator shows both observed trader rates and fixed conversions', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('10 ecto in p');
   await expect(page.locator('#hub').getByRole('option', { name: /60 platinum.*Buy from trader/ })).toBeVisible();
   await page.getByRole('combobox', { name: 'Price basis' }).selectOption('sell');
@@ -212,7 +212,7 @@ test('calculator shows both observed trader rates and fixed conversions', async 
 
 test('a saved search phrase and pin survive reload and resolve the original item', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('team gom afk');
   await page.getByRole('button', { name: 'Actions', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Pin to Hub' }).click();
@@ -231,7 +231,7 @@ test('a saved search phrase and pin survive reload and resolve the original item
 
 test('Build shortcut browses inside Hub and opens the authoring window outside Hub', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await expect(search).toBeFocused();
   await search.press('Meta+b');
   await expect(page.locator('.hub-caption')).toHaveText('Build Library');
@@ -249,7 +249,7 @@ test('duplicate exact names require a deliberate selection', async ({ page }) =>
   await page.goto('/?hub');
   await page.getByRole('button', { name: 'Close Hub' }).click();
   await page.getByRole('combobox', { name: 'Fixture scenario' }).selectOption('duplicate');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('build smiter');
   await expect(page.locator('#hub').getByRole('option')).toHaveCount(2);
   await expect(page.getByRole('button', { name: 'Select a result' })).toBeDisabled();
@@ -261,7 +261,7 @@ test('duplicate exact names require a deliberate selection', async ({ page }) =>
 
 test('disabled capabilities disappear including friend child actions', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await expect(search).toBeVisible();
   await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: { buildLibrary: false, tradeChat: false, whispersEnabled: false } })));
   await search.fill('build smiter'); await expect(page.locator('#hub').getByRole('option')).toHaveCount(0);
@@ -273,7 +273,7 @@ test('disabled capabilities disappear including friend child actions', async ({ 
 
 test('storage refusal stays silent', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('storage'); await search.press('Enter');
   await expect(page.getByRole('dialog', { name: 'Hub', exact: true })).not.toBeVisible();
   await expect(page.getByRole('alert')).toHaveCount(0);
@@ -281,7 +281,7 @@ test('storage refusal stays silent', async ({ page }) => {
 
 test('character search switches the explicitly selected observed character', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('char Toefte');
   await expect(page.locator('#hub').getByRole('option')).toContainText('Toefte');
   await expect(page.getByRole('button', { name: 'Switch to Toefte ↵' })).toBeVisible();
@@ -293,7 +293,7 @@ test('character search switches the explicitly selected observed character', asy
 
 test('trade query opens the same floating searchable tool', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('trade ecto'); await search.press('Enter');
   await expect(page.locator('#toolbox-trade .trade-search input')).toHaveValue('ecto');
   await expect(page.locator('#hub')).not.toBeVisible();
@@ -304,7 +304,7 @@ test('trade query opens the same floating searchable tool', async ({ page }) => 
 test('Maps controls save inline without navigating away', async ({ page }) => {
   await page.goto('/?hub');
   await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: { cartographyEnabled: true } })));
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('maps'); await search.press('Enter');
   await page.getByRole('switch', { name: 'Exploration grid' }).check();
   await expect(page.getByRole('slider', { name: 'Grid opacity' })).toBeVisible();
@@ -314,7 +314,7 @@ test('Maps controls save inline without navigating away', async ({ page }) => {
 
 test('compact armbrace conversions use explicit manual rates and original item art', async ({page})=>{
   await page.goto('/?hub');
-  const search=page.getByRole('combobox',{name:'Search people, places, builds'});
+  const search=page.locator('.hub-search input');
   await search.fill('1p in a');
   await expect(page.locator('#hub .hub-row')).toContainText('~ 0.006667 armbrace');
   await page.getByRole('button',{name:'Actions',exact:true}).click();
@@ -338,7 +338,7 @@ test('compact armbrace conversions use explicit manual rates and original item a
 
 test('market conversions show inferred medians, sides, provenance and original currency art',async({page})=>{
   await page.goto('/?hub');
-  const search=page.getByRole('combobox',{name:'Search people, places, builds'});
+  const search=page.locator('.hub-search input');
   await search.fill('1p in a');
   const card=page.locator('#hub .hub-row');
   await expect(card).toContainText('~ 0.006667 armbrace');
@@ -361,7 +361,7 @@ test('market conversions show inferred medians, sides, provenance and original c
 
 test('insufficient market evidence stays inline without a setup prompt',async({page})=>{
   await page.goto('/?hub&market-empty');
-  await page.getByRole('combobox',{name:'Search people, places, builds'}).fill('1p in a');
+  await page.locator('.hub-search input').fill('1p in a');
   await expect(page.locator('#hub .hub-row')).toContainText('Not enough recent prices');
   await expect(page.locator('.hub-view')).toBeHidden();
   await expect(page.locator('#hub')).not.toContainText('Set Armbrace');
@@ -369,7 +369,7 @@ test('insufficient market evidence stays inline without a setup prompt',async({p
 
 test('title progress leads into editable shopping quantities without changing game state',async({page})=>{
   await page.goto('/?hub');
-  const search=page.getByRole('combobox',{name:'Search people, places, builds'});
+  const search=page.locator('.hub-search input');
   await search.fill('sweet tooth from 7350');
   await expect(page.locator('.hub-conversion')).toContainText('2,650 points remaining');
   await expect(page.locator('.hub-conversion')).toContainText('entered points');
@@ -385,7 +385,7 @@ test('title progress leads into editable shopping quantities without changing ga
 
 test('title examples are editable, exact, and reject the wrong point track',async({page})=>{
   await page.goto('/?hub');
-  const search=page.getByRole('combobox',{name:'Search people, places, builds'});
+  const search=page.locator('.hub-search input');
   await search.fill('titles');await search.press('Enter');
   await expect(search).toHaveValue('sweet tooth from 7350');
   await search.fill('1 stack grog in drunk points');
@@ -399,7 +399,7 @@ test('title examples are editable, exact, and reject the wrong point track',asyn
 
 test('Travel uses Hub typography and supports empty-query arrows, favorites and settings by keyboard',async({page})=>{
   await page.goto('/?hub');
-  const hubSearch=page.getByRole('combobox',{name:'Search people, places, builds'});
+  const hubSearch=page.locator('.hub-search input');
   const font=await hubSearch.evaluate(element=>getComputedStyle(element).fontFamily);
   await hubSearch.fill('travel');await hubSearch.press('Enter');
   const search=page.getByRole('combobox',{name:'Destination, phrase, or friend'});
@@ -423,7 +423,7 @@ test('Travel uses Hub typography and supports empty-query arrows, favorites and 
 
 test('Travel Enter from an empty search uses the selected recent destination',async({page})=>{
   await page.goto('/?hub');
-  const hubSearch=page.getByRole('combobox',{name:'Search people, places, builds'});
+  const hubSearch=page.locator('.hub-search input');
   await hubSearch.fill('travel');await hubSearch.press('Enter');
   const search=page.getByRole('combobox',{name:'Destination, phrase, or friend'});
   await search.press('ArrowDown');await search.press('Enter');
@@ -443,7 +443,7 @@ test('Travel Enter from an empty search uses the selected recent destination',as
 
 test('Travel carousel arrows browse without executing and preserve query caret editing',async({page})=>{
   await page.goto('/?hub');
-  const root=page.getByRole('combobox',{name:'Search people, places, builds'});
+  const root=page.locator('.hub-search input');
   await root.fill('travel');await root.press('Enter');
   const search=page.getByRole('combobox',{name:'Destination, phrase, or friend'});
   await expect(search).toBeFocused();
@@ -468,7 +468,7 @@ test('Travel carousel arrows browse without executing and preserve query caret e
 
 test('profession build search previews eight skills and reviews without applying', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   const builds = page.locator('.hub-build-row');
   await search.fill('build monk');
   await expect(builds).toHaveCount(4);
@@ -491,7 +491,7 @@ test('profession build search previews eight skills and reviews without applying
 
 test('Hub keeps its geometry across results and compact carousels', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   const panel = page.locator('.hub-panel');
   const size = await panel.boundingBox();
   for (const query of ['10 ecto in p', 'build monk', 'travel', 'switch character']) {
@@ -517,7 +517,7 @@ test('Hub keeps its geometry across results and compact carousels', async ({ pag
 
 test('account search offers explicit keep-open and replacement choices', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('acc second');
   const rows = page.locator('#hub').getByRole('option');
   await expect(rows).toHaveCount(2);
@@ -543,7 +543,7 @@ test('account search offers explicit keep-open and replacement choices', async (
 
 test('character cards start at the left edge without leading empty slots', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('switch character'); await search.press('Enter');
   await expect(page.locator('.character-switch-list > li').first().locator('button')).toContainText('Fixture Monk');
   const icon = page.locator('.character-switch-row img').first();
@@ -555,7 +555,7 @@ test('character cards start at the left edge without leading empty slots', async
 
 test('in-game settings stay in Hub and Show Launcher remains explicit', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('settings'); await search.press('Enter');
   await page.getByRole('checkbox', { name: 'Whispers', exact: true }).uncheck();
   await expect(page.getByRole('navigation', { name: 'Settings sections' })).toBeVisible();
@@ -576,7 +576,7 @@ test('in-game settings stay in Hub and Show Launcher remains explicit', async ({
 
 test('floating chat keeps its draft and appearance when reopened', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('whisper Foo'); await search.press('Enter');
   const draft = page.getByRole('textbox', { name: 'Message Foo', exact: true });
   await expect(draft).toBeFocused(); await draft.fill('Keep my draft');
@@ -597,7 +597,7 @@ test('floating chat keeps its draft and appearance when reopened', async ({ page
 
 test('floating icon and shortcut toggle the same chat window', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('whisper Romi'); await search.press('Enter');
   await expect(page.locator('#hub')).not.toBeVisible();
   const icon = page.getByRole('button', { name: /^Whispers, \d+ unread/ });
@@ -615,7 +615,7 @@ test('floating icon and shortcut toggle the same chat window', async ({ page }) 
 
 test('switch search prioritizes characters and Back restores the selected account', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('switch');
   await expect(page.locator('.hub-row').first()).toContainText('Switch Character');
   await search.fill('switch account'); await search.press('Enter');
@@ -630,7 +630,7 @@ test('switch search prioritizes characters and Back restores the selected accoun
 
 test('price updates preserve focus and disabled Maps closes only its own view', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('1zkey in a');
   const basis = page.getByRole('combobox', { name: 'Price basis' }); await basis.focus();
   await page.evaluate(() => window.dispatchEvent(new Event('hub-fixture-incoming')));
@@ -645,7 +645,7 @@ test('price updates preserve focus and disabled Maps closes only its own view', 
 
 test('disabled tool shortcuts are visible but cannot be edited; command examples respect availability', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('settings'); await search.press('Enter');
   await page.getByRole('checkbox', { name: 'Whispers', exact: true }).uncheck();
   await page.getByRole('button', { name: 'Shortcuts', exact: true }).click();
@@ -654,15 +654,15 @@ test('disabled tool shortcuts are visible but cannot be edited; command examples
   await expect(page.getByRole('button', { name: 'Reset Whispers', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: 'Back', exact: true }).click();
   await search.fill('commands'); await search.press('Enter');
-  await expect(page.locator('.hub-results')).toContainText('build monk');
-  await expect(page.locator('.hub-results')).not.toContainText('whisper Romi');
+  await expect(page.locator('.hub-results')).toContainText('build <name or profession>');
+  await expect(page.locator('.hub-results')).not.toContainText('whisper <name>');
   await search.fill('1p in g'); await search.press('Enter');
   await expect(search).toHaveValue('1p in g');
 });
 
 test('Trade opens a floating addressed composer and retains its offer and filter', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('trade arms'); await search.press('Enter');
   const contact = page.getByRole('button', { name: /^Whisper Tyria/ });
   await expect(contact).toBeVisible(); await contact.click();
@@ -677,7 +677,7 @@ test('Trade opens a floating addressed composer and retains its offer and filter
 test('character hint follows custom and cleared bindings', async ({ page }) => {
   await page.goto('/?hub');
   await page.getByRole('button', { name: 'Open Hub', exact: true }).waitFor();
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: { shortcutOverrides: { 'character.switch': { key: 'j', shift: false, option: false } } } })));
   await search.fill('switch character'); await expect(page.locator('.hub-row')).toContainText('⌘J');
   await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: { shortcutOverrides: { 'character.switch': null } } })));
@@ -686,7 +686,7 @@ test('character hint follows custom and cleared bindings', async ({ page }) => {
 
 test('shortcut recorder presents each modifier and captures without opening another tool', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('settings'); await search.press('Enter');
   await page.getByRole('button', { name: 'Shortcuts', exact: true }).click();
   const record = page.getByRole('button', { name: 'Switch Character', exact: true });
@@ -708,7 +708,7 @@ test('shortcut recorder presents each modifier and captures without opening anot
 
 test('Hub text arrows cannot execute an action or clear a query', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('kamadan');
   await search.press('ArrowRight');
   await expect(page.locator('#hub')).toBeVisible();
@@ -720,7 +720,7 @@ test('Hub text arrows cannot execute an action or clear a query', async ({ page 
 
 test('typing after result navigation resumes the search at its caret without running a command', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.press('ArrowDown');
   await expect(page.locator('.hub-row[aria-selected="true"]')).toHaveCount(1);
   await expect(search).toBeFocused();

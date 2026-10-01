@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 test('template folders and explicit self application stay inside Hub', async ({ page }, info) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   const hub = page.locator('#hub');
   await search.fill('build library'); await search.press('Enter');
   await search.fill('Guild Wars templates'); await search.press('Enter');
@@ -23,7 +23,7 @@ test('template folders and explicit self application stay inside Hub', async ({ 
 
 test('hero search includes unlocked heroes and applies only to an existing party member', async ({ page }, info) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('build monk'); await search.press('Enter');
   await search.fill('hero'); await search.press('Enter');
   await search.fill('Dunkoro');
@@ -50,7 +50,7 @@ test('only Hub locks, reset restores its default frame, and popouts have visible
   await page.getByRole('button', { name: 'Lock Hub position', exact: true }).press('Alt+ArrowLeft');
   await page.getByRole('button', { name: 'Resize Hub', exact: true }).press('ArrowLeft');
   expect(await panel.boundingBox()).not.toEqual(initial);
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('settings'); await search.press('Enter');
   await page.getByRole('button', { name: 'Appearance', exact: true }).click();
   await page.getByRole('button', { name: 'Reset Hub position', exact: true }).click();
@@ -77,7 +77,7 @@ test('only Hub locks, reset restores its default frame, and popouts have visible
 
 test('Right Arrow compares current builds without applying, and Back restores the comparison', async ({ page }, info) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   const incoming = page.getByRole('region', { name: 'Build to apply', exact: true });
   await search.fill('build monk'); await search.press('ArrowRight');
   await expect(incoming).toContainText('Protection');
@@ -113,7 +113,7 @@ test('Right Arrow compares current builds without applying, and Back restores th
 for (const viewport of [{ width: 320, height: 800 }, { width: 640, height: 500 }]) {
   test(`build comparison remains usable at ${viewport.width}x${viewport.height}`, async ({ page }, info) => {
     await page.setViewportSize(viewport); await page.goto('/?hub');
-    const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+    const search = page.locator('.hub-search input');
     await search.fill('build monk'); await search.press('ArrowRight');
     const summary = page.locator('.hub-summary');
     await expect(summary.getByRole('img').last()).toBeInViewport();
@@ -129,7 +129,7 @@ for (const viewport of [{ width: 320, height: 800 }, { width: 640, height: 500 }
 for (const viewport of [{ width: 1280, height: 900 }, { width: 320, height: 800 }]) {
   test(`compact build results keep inline metadata at ${viewport.width}px`, async ({ page }, info) => {
     await page.setViewportSize(viewport); await page.goto('/?hub');
-    const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+    const search = page.locator('.hub-search input');
     await search.fill('build monk');
     await expect(page.locator('.hub-preview')).toBeHidden();
     const rows = page.locator('.hub-build-row');
@@ -153,7 +153,7 @@ test('folder-qualified builds show a subtle path and preserve it through review 
   await page.goto('/?hub');
   await page.getByRole('button', { name: 'Close Hub', exact: true }).click();
   await page.getByLabel('Fixture scenario', { exact: true }).selectOption('folders');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   for (const query of ['build team builds farming monk', 'build "Team Builds/Farming" monk', 'build folder:"Team Builds/Farming" mo']) {
     await search.fill(query);
     const row = page.locator('.hub-build-row');
@@ -180,7 +180,7 @@ test('nested folders browse one level at a time and use the same build filters',
   await page.goto('/?hub');
   await page.getByRole('button', { name: 'Close Hub', exact: true }).click();
   await page.getByLabel('Fixture scenario', { exact: true }).selectOption('folders');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('build'); await search.press('Enter');
   await search.fill('Guild Wars templates'); await search.press('Enter');
   await search.fill('Team Builds'); await search.press('Enter');
@@ -194,7 +194,7 @@ test('nested folders browse one level at a time and use the same build filters',
 
 test('comparison details are keyboard accessible without applying a build', async ({ page }) => {
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('build monk'); await search.press('Enter');
   await expect(page.locator('.hub-row [data-changed=true]').first()).toBeVisible();
   await page.keyboard.press('Meta+j');
@@ -211,7 +211,7 @@ for (const width of [390, 1280]) {
 test(`recent build targets and editor handoff retain their place at ${width}px`, async ({ page }) => {
   await page.setViewportSize({ width, height: 720 });
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('build monk'); await search.press('Enter');
   await search.fill('hero'); await search.press('Enter');
   await search.fill('Tahlkora'); await search.press('Enter');
@@ -240,7 +240,7 @@ test('mixed hero professions default to the eligible hero and keep blocked heroe
   await page.goto('/?hub');
   await page.getByRole('button', { name: 'Close Hub', exact: true }).click();
   await page.getByLabel('Fixture scenario', { exact: true }).selectOption('mixed-professions');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('build monk'); await search.press('Enter');
   await search.fill('hero'); await search.press('Enter');
   await expect(page.locator('.hub-row[aria-selected="true"]')).toContainText('Tahlkora');

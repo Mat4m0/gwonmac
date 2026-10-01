@@ -8,7 +8,6 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
  * the rest of the click run dies with the page it started on. Trailing clicks
  * of a run that closed the Hub never reach the game canvas.
  */
-const searchName = 'Search people, places, builds';
 const GAPS = [0, 120, 450] as const;
 
 async function open(page: Page, query = '') {
@@ -30,7 +29,7 @@ async function open(page: Page, query = '') {
 }
 const ledger = (page: Page) => page.evaluate(() => (window as unknown as { ledger: string[] }).ledger);
 const canvas = (page: Page) => page.evaluate(() => window.gwFixtureCanvas?.events.filter(event => event.type !== 'keyup' || event.code).map(event => `${event.type}:${event.code ?? event.detail}`) ?? []);
-const search = (page: Page) => page.getByRole('combobox', { name: searchName });
+const search = (page: Page) => page.locator('.hub-search input');
 const row = (page: Page, text: string | RegExp) => page.locator('#hub .hub-row', { hasText: text }).first();
 const primary = (page: Page) => page.locator('.hub-primary');
 const caption = (page: Page) => page.locator('.hub-caption');
@@ -128,6 +127,8 @@ test.describe('a row that changes the game', () => {
   test('pressing on one row and releasing on another activates neither', async ({ page }) => {
     await open(page);
     for (const [from, to] of [['Kamadan', 'Kaineng Center'], ['Settings', 'Show Launcher']] as const) {
+      // Launcher is available through typed search, rather than empty Home (HUB-185).
+      await search(page).fill(from === 'Settings' ? 's' : '');
       const start = row(page, from); await start.scrollIntoViewIfNeeded();
       const a = (await start.boundingBox())!;
       const b = (await row(page, to).boundingBox())!;
