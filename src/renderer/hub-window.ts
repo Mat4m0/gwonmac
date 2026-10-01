@@ -35,7 +35,8 @@ export function installHubWindow(panel: HTMLElement, heading: HTMLElement, lock:
       top: `${Math.max(8, Math.min(top, window.innerHeight - height - 8))}px`,
       width: `${width}px`, height: `${height}px` });
   };
-  const minimum = { width: 340, height: 300 };
+  // Three full result rows stay visible at the smallest size (HUB-238); a saved smaller box is clamped on read.
+  const minimum = { width: 340, height: 380 };
   /** Only the player's own moves and resizes are saved, never a box a small window squeezed. */
   const save = () => {
     if (!placed) return;
@@ -80,7 +81,7 @@ export function installHubWindow(panel: HTMLElement, heading: HTMLElement, lock:
   const disposeResize = installResizeGrip(grip, {
     setActive: active => { if (!active) save(); },
     size: () => panel.getBoundingClientRect(),
-    limits: () => { const box = panel.getBoundingClientRect(); return { minWidth: 340, minHeight: 300, maxWidth: window.innerWidth - box.left - 8, maxHeight: window.innerHeight - box.top - 8 }; },
+    limits: () => { const box = panel.getBoundingClientRect(); return { minWidth: minimum.width, minHeight: minimum.height, maxWidth: window.innerWidth - box.left - 8, maxHeight: window.innerHeight - box.top - 8 }; },
     resize: (width, height) => { if (!locked) { const box = panel.getBoundingClientRect(); place(box.left, box.top, width, height); } },
   });
   const saveResize = () => save();

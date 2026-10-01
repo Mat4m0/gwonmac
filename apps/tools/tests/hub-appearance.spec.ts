@@ -269,7 +269,7 @@ test('Reduce Transparency makes the Hub opaque without hiding the game or re-ink
 
 const PANEL_FONTS = ['guild-wars', 'inter', 'system', 'georgia', 'avenir', 'palatino'] as const;
 
-for (const [name, viewport, hub] of [['a narrow window', { width: 390, height: 800 }, null], ['the smallest Hub', { width: 1280, height: 800 }, { width: 340, height: 300 }]] as const) {
+for (const [name, viewport, hub] of [['a narrow window', { width: 390, height: 800 }, null], ['the smallest Hub', { width: 1280, height: 800 }, { width: 340, height: 380 }]] as const) {
   test(`the footer stays one line while arrowing in ${name}`, async ({ page }) => {
     await page.setViewportSize(viewport);
     await page.goto('/?hub');
@@ -289,6 +289,9 @@ for (const [name, viewport, hub] of [['a narrow window', { width: 390, height: 8
       expect([...heights][0], `${uiFont} footer`).toBeLessThanOrEqual(52);
       // The full label stays the primary's name even where it ends in an ellipsis.
       expect(await primary.getAttribute('title')).toBe(await primary.locator('.hub-primary-label').textContent());
+      // The smallest Hub still shows three whole results (HUB-238).
+      if (hub) expect(await page.locator('#hub-results').evaluate(list => { const box = list.getBoundingClientRect();
+        return [...list.querySelectorAll('.hub-row')].filter(row => { const rect = row.getBoundingClientRect(); return rect.top >= box.top - 1 && rect.bottom <= box.bottom + 1; }).length; }), `${uiFont} rows`).toBeGreaterThanOrEqual(3);
     }
   });
 }

@@ -97,7 +97,7 @@ test("Core browser persistence is limited to validated Hub geometry", () => {
   assert.equal([...hubPlacement.matchAll(placementCalls)].length, 3);
   // Only a serialized placement is written, and a stored one is used only after validation.
   assert.match(hubPlacement, /intent = serializeFloatingWindowPlacement\(panel\.getBoundingClientRect\(\), viewport\(\)\);/);
-  assert.match(hubPlacement, /const minimum = \{ width: 340, height: 300 \};/);
+  assert.match(hubPlacement, /const minimum = \{ width: 340, height: 380 \};/);
   assert.match(hubPlacement, /if \(restoreFloatingWindowPlacement\(intent, viewport\(\), minimum\)\) \{ placed = true; fit\(\); \} else intent = null;/);
   assert.doesNotMatch(read("src/shared/ui/window-placement.ts"), /password|credential|sessionStorage|localStorage/iu);
 });
