@@ -595,6 +595,13 @@ test('account search offers explicit keep-open and replacement choices', async (
   // Keeping the running game open is row 0 and the default (D-23).
   await expect(rows.nth(0)).toContainText('Open Second');
   await expect(rows.nth(1)).toContainText('Close Main and open Second');
+  await expect(rows.nth(1).locator('.hub-detail')).toHaveText('Closes Main');
+  await expect(rows.nth(1)).toHaveAttribute('data-destructive', 'true');
+  await expect(page.locator('.hub-primary')).toHaveText('Open Second↵');
+  await search.press('ArrowDown');
+  await expect(page.locator('.hub-primary')).toHaveText('Close Main and open Second↵');
+  await expect(page.locator('.hub-primary')).toHaveAttribute('data-variant', 'danger');
+  await search.press('ArrowUp');
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', /Account/);
   await page.keyboard.press('Enter');
   await expect(page.locator('#app')).toHaveAttribute('data-action', 'Account Second open');
