@@ -3,6 +3,7 @@ import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { closeOffline, isDomActiveElement, launchPlayableClient, type OfflineFixture } from './fixtures.mjs';
 import { startGameInput } from './input-helpers.js';
+import { teamId, teamSlotsOf } from '../../src/shared/builds/library.js';
 
 /**
  * The Hub input contract at the native boundary (spec §13): physical shortcut
@@ -10,8 +11,7 @@ import { startGameInput } from './input-helpers.js';
  * native-dialog priority. A canvas key recorder stands in for Guild Wars' canvas
  * listeners. A key can reach the game only while the canvas has focus, so each
  * release check sends the key-up after the press has moved focus back to the
- * canvas. Cases marked `fixme` document a current leak and change when the
- * owning fix lands; the browser fixture's golden matrix
+ * canvas. The browser fixture's golden matrix
  * (`apps/tools/tests/hub-keyboard-contract.spec.ts`) covers the same keys
  * without the main process.
  */
@@ -121,7 +121,7 @@ async function installReadyTravel(page: Page) {
 const trips = (page: Page) => page.evaluate(() => [...(window as RecordingWindow).__hubContractTrips ?? []]);
 
 const hubOf = (page: Page) => page.getByRole('dialog', { name: /^Hub(?: — .+)?$/u });
-const searchOf = (page: Page) => page.getByRole('combobox', { name: /^Search .*…$/u });
+const searchOf = (page: Page) => page.locator('.hub-search input');
 
 test('Command-R and typed search stay in the Hub, and the game gets the next key after it closes', async () => {
   const fixture = await launch();
@@ -463,6 +463,29 @@ test('a held Escape that Travel answers, then the one that closes the Hub, never
     await page.waitForTimeout(200);
     expect(await canvasKeys(page)).toEqual([]);
     expect(await trips(page)).toEqual([]);
+    // A held direct shortcut does not toggle or reset Travel, and its release stays owned.
+    await sendKey(fixture, 'keyDown', 'T', ['meta']);
+    await expect(hub.locator('.hub-caption')).toHaveText('Travel');
+    for (let repeat = 0; repeat < 3; repeat++) await sendKey(fixture, 'keyDown', 'T', ['meta', 'isautorepeat']);
+    await sendKey(fixture, 'keyDown', '1');
+    await expect(page.locator('#travel-search-input')).toHaveAttribute('aria-activedescendant', 'travel-favorite-0');
+    // The digit selects only; travelling with another press must not hand the held digit to the canvas.
+    expect(await trips(page)).toEqual([]);
+    await page.getByRole('button', { name: 'Close Hub', exact: true }).click();
+    await expect(hub).toBeHidden(); await expect.poll(() => isDomActiveElement(page.locator('#canvas'))).toBe(true);
+    for (let repeat = 0; repeat < 3; repeat++) {
+      await sendKey(fixture, 'keyDown', '1', ['isautorepeat']);
+      await sendKey(fixture, 'keyDown', 'T', ['meta', 'isautorepeat']);
+    }
+    await sendKey(fixture, 'keyUp', '1'); await sendKey(fixture, 'keyUp', 'T', ['meta']);
+    expect(await canvasKeys(page)).toEqual([]);
+    // The same held digit on Travel entered from Home remains selection, with no history pop or text.
+    await chord(fixture, 'R', ['meta']); await searchOf(page).fill('travel'); await chord(fixture, 'Enter');
+    await hold(fixture, '1', async () => { await expect(hub.locator('.hub-caption')).toHaveText('Travel'); });
+    await expect(page.locator('#travel-search-input')).toHaveValue('');
+    await expect(page.locator('#travel-search-input')).toHaveAttribute('aria-activedescendant', 'travel-favorite-0');
+    await page.getByRole('button', { name: 'Close Hub', exact: true }).click();
+    expect(await trips(page)).toEqual([]); expect(await canvasKeys(page)).toEqual([]);
     await page.keyboard.press('w');
     expect(await canvasKeys(page)).toEqual(['keydown:KeyW', 'keyup:KeyW']);
   } finally { await closeOffline(fixture); }
@@ -565,6 +588,24 @@ test('a held Enter at character selection never becomes a fresh Enter', async ()
     };
     const enterReached = async () => (await canvasKeys(page)).filter(key => key.includes(':Enter'));
 
+    // Enter on the current card is a no-op, even inside the character-selection window.
+    await expectCharacterSelection(); await chord(fixture, 'E', ['meta']);
+    await expect(page.locator('#character-switch-list button[aria-current=true]')).toBeFocused();
+    await clearCanvasKeys(page);
+    for (let press = 0; press < 4; press++) await page.keyboard.down('Enter');
+    await page.keyboard.up('Enter');
+    await expect(hub).toBeVisible(); expect(await switches()).toEqual([]); expect(await canvasKeys(page)).toEqual([]);
+    await hold(fixture, 'Escape', closedOnCanvas);
+    expect(await canvasKeys(page)).toEqual([]);
+    // Digit1 held on the current card is selection, not Play; closing must own its later repeats.
+    await expectCharacterSelection(); await chord(fixture, 'E', ['meta']);
+    await expect(hub).toBeVisible(); await clearCanvasKeys(page);
+    await sendKey(fixture, 'keyDown', '1');
+    await page.getByRole('button', { name: 'Close Hub', exact: true }).click();
+    await closedOnCanvas();
+    for (let repeat = 0; repeat < 3; repeat++) await sendKey(fixture, 'keyDown', '1', ['isautorepeat']);
+    await sendKey(fixture, 'keyUp', '1');
+    expect(await canvasKeys(page)).toEqual([]); expect(await switches()).toEqual([]);
     // Command-E, move to the other card, hold Enter: the switch closes the Hub while Enter is down.
     // A card is a button, which Enter activates through the keypress of a key-down that
     // carries text. sendInputEvent's key-down carries none, so this press and its
@@ -600,6 +641,10 @@ test('a held Enter at character selection never becomes a fresh Enter', async ()
     await expect.poll(enterReached).toEqual(['keydown:Enter:synthetic', 'keyup:Enter:synthetic']);
     await page.waitForTimeout(420);
     expect(await enterReached()).toEqual(['keydown:Enter:synthetic', 'keyup:Enter:synthetic']);
+    await clearCanvasKeys(page);
+    await expectCharacterSelection();
+    await chord(fixture, 'Enter');
+    await expect.poll(enterReached).toEqual(['keydown:Enter:synthetic', 'keyup:Enter:synthetic']);
   } finally { await closeOffline(fixture); }
 });
 
@@ -625,7 +670,11 @@ test('Trade focuses search on its shortcut, keeps slash inside its controls, and
     await expect(trade).toBeVisible();
     const search = trade.getByRole('searchbox', { name: 'Search offers or character names' });
     await expect(search).toBeFocused();
+    await clearCanvasKeys(page); await page.keyboard.type('ecto seller');
+    await expect(search).toHaveValue('ecto seller'); expect(await canvasKeys(page)).toEqual([]);
+    await search.fill('');
     await trade.getByRole('button', { name: /Saved 0/u }).focus();
+    await expect(trade.getByRole('button', { name: /Saved 0/u })).toBeFocused();
     await clearCanvasKeys(page);
     await page.keyboard.press('/');
     await expect(search).toBeFocused();
@@ -644,5 +693,92 @@ test('Trade focuses search on its shortcut, keeps slash inside its controls, and
     expect(await canvasKeys(page)).toEqual(['keydown:Tab', 'keyup:Tab', 'keydown:Space', 'keyup:Space']);
     expect(await isDomActiveElement(page.locator('#canvas'))).toBe(true);
     await expect(trade).toBeVisible();
+    await chord(fixture, 'R', ['meta']);
+    await searchOf(page).fill('build library');
+    await expect(page.locator('.hub-row[data-id="builds"]')).toHaveAttribute('aria-disabled', 'false');
+    await chord(fixture, 'B', ['meta']); await searchOf(page).fill('native draft');
+    await expect(page.locator('.hub-caption')).toHaveText('Build Library');
+    await chord(fixture, 'K', ['meta']);
+    await expect(trade).toBeVisible(); await expect(search).toBeFocused(); await expect(hubOf(page)).toBeHidden();
+    await chord(fixture, 'R', ['meta']);
+    await expect(page.locator('.hub-caption')).toHaveText('Build Library');
+    await expect(searchOf(page)).toHaveValue('native draft'); await expect(searchOf(page)).toBeFocused();
+    await page.getByRole('button', { name: 'Close Hub', exact: true }).click();
+  } finally { await closeOffline(fixture); }
+});
+
+test('native nested Escapes pop template browsing and Build Library before closing Hub (HUB-005)', async () => {
+  const fixture = await launch();
+  try {
+    const { page } = fixture;
+    await chord(fixture, 'R', ['meta']); await searchOf(page).fill('build library');
+    await expect(page.locator('.hub-row[data-id="builds"]')).toHaveAttribute('aria-disabled', 'false');
+    await chord(fixture, 'Enter');
+    await expect(page.locator('.hub-caption')).toHaveText('Build Library');
+    await page.locator('.hub-row[data-id="game-templates"]').click();
+    await expect(page.locator('.hub-caption')).toHaveText('Guild Wars templates');
+    await clearCanvasKeys(page);
+    await chord(fixture, 'Escape'); await chord(fixture, 'Escape');
+    await expect(page.locator('.hub-caption')).toHaveText('Home');
+    await expect(searchOf(page)).toHaveValue('build library');
+    await chord(fixture, 'Escape'); await chord(fixture, 'Escape');
+    await expect(hubOf(page)).toBeHidden(); expect(await canvasKeys(page)).toEqual([]);
+  } finally { await closeOffline(fixture); }
+});
+
+test('a native held Enter sends one invite and owns its repeats and release (HUB-239)', async () => {
+  const fixture = await launch({ whispersEnabled: true });
+  try {
+    const { page } = fixture;
+    await page.evaluate(async () => {
+      const sessionPath = './shared/whisper-session.js', peoplePath = './hub-people.js', invitePath = './party-invite.js';
+      const { createWhisperSession } = await import(sessionPath) as typeof import('../../src/shared/whisper-session.js');
+      const { createHubPeople } = await import(peoplePath) as typeof import('../../src/renderer/hub-people.js');
+      const { createPartyInvite } = await import(invitePath) as typeof import('../../src/renderer/party-invite.js');
+      const sent: string[] = []; Object.assign(window, { acceptanceInvites: sent });
+      const session = createWhisperSession(async () => {}); session.setAvailable(true);
+      const party = createPartyInvite({ region: () => ({ status: 'ready', sequence: 1, mapId: 55, instanceType: 0, playRegion: 'pve', travelContext: 'world', characterKey: null, guildHall: false, hasGuildHall: false, unlockedMapWords: null }),
+        subscribeRegion: () => () => {}, chatReady: () => true, invite: async name => { sent.push(name); }, travel: null });
+      createHubPeople(window.gwHub!, session, null, party).setEnabled(true);
+    });
+    await chord(fixture, 'R', ['meta']); await searchOf(page).fill('invite Zed Delta');
+    await expect(page.locator('.hub-primary')).toContainText('Invite Zed Delta');
+    await clearCanvasKeys(page);
+    await hold(fixture, 'Enter', async () => { await expect(hubOf(page)).toBeHidden(); await expect.poll(() => isDomActiveElement(page.locator('#canvas'))).toBe(true); });
+    expect(await page.evaluate(() => (window as typeof window & { acceptanceInvites: string[] }).acceptanceInvites)).toEqual(['Zed Delta']);
+    expect(await canvasKeys(page)).toEqual([]);
+  } finally { await closeOffline(fixture); }
+});
+
+test('a native held Enter applies one team and owns its repeats and release (HUB-239)', async () => {
+  const fixture = await launch();
+  try {
+    const { page } = fixture;
+    const library = { version: 3 as const, builds: [], tags: [], teams: [{ id: teamId('native-team'), name: 'Native team', mode: 'hard' as const, tags: [], favourite: false, lastUsed: null, notes: '',
+      slots: teamSlotsOf(() => ({ hero: null, build: null, behaviour: null })) }] };
+    await page.evaluate(async library => {
+      const toolsPath = './tools/tools-app.js';
+      const { mountToolsApp } = await import(toolsPath) as import('../../src/shared/tools-bundle-contracts.js').EmbeddedToolsBundle<HTMLElement>;
+      const host = document.createElement('section'); host.id = 'native-team-host'; document.body.append(host);
+      const modes: boolean[] = []; Object.assign(window, { acceptanceModes: modes });
+      const observation = (hardMode: boolean) => ({ status: 'ready' as const, partyObserved: true, party: { status: 'ready' as const, rosterObserved: true, inOutpost: true, playRegion: 'pve' as const, hardMode,
+        unlockObserved: true, unlocked: [], slots: [{ index: 0, occupied: true, hero: null, agentId: 1, level: 20, professions: [3, 0] as const, behaviour: null, skills: Array(8).fill(0), attributes: [], disabled: 0 }] } });
+      const unexpected = () => { throw new Error('The mode-only team must not send another game command'); };
+      const nativeApi = window.gwNative;
+      if (!('buildLibrary' in nativeApi)) throw new Error('Tools native API is missing');
+      const app = mountToolsApp(host, { nativeApi: { ...nativeApi, buildLibrary: { get: async () => ({ library, recovered: false }), set: async value => value } },
+        hub: window.gwHub!, initiallyVisible: false, publishTemplate: null, storage: null, applyUnavailable: null, observationUnavailable: null, development: false,
+        commands: { cancelPending() {}, setHardMode(enabled) { modes.push(enabled); app.update(observation(enabled)); },
+          setPlayerSecondary: unexpected, setPlayerSkills: unexpected, setPlayerAttributes: unexpected, addHero: unexpected, kickHero: unexpected,
+          setHeroBehaviour: unexpected, setHeroSecondary: unexpected, setHeroSkills: unexpected, setHeroAttributes: unexpected } });
+      app.update(observation(false));
+    }, library);
+    await expect(page.locator('#native-team-host')).toHaveAttribute('data-ready', 'true');
+    await chord(fixture, 'R', ['meta']); await searchOf(page).fill('team native team');
+    await expect(page.locator('.hub-primary')).toContainText('Apply team Native team');
+    await clearCanvasKeys(page);
+    await hold(fixture, 'Enter', async () => { await expect(hubOf(page)).toBeHidden(); await expect.poll(() => isDomActiveElement(page.locator('#canvas'))).toBe(true); });
+    expect(await page.evaluate(() => (window as typeof window & { acceptanceModes: boolean[] }).acceptanceModes)).toEqual([true]);
+    expect(await canvasKeys(page)).toEqual([]);
   } finally { await closeOffline(fixture); }
 });
