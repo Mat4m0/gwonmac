@@ -2,6 +2,7 @@
  * Owns the Core command palette, its search focus and transient modal lifetime.
  * Optional Tools contributes local results and views without entering Core's imports.
  */
+import { TOOL_PRESENTATION } from '../shared/tool-presentation.js';
 import { HUB_SEARCH_GLYPH } from '../shared/ui/hub-search.js';
 import { resumeSearchInput } from './search-input.js';
 import { installHubWindow } from './hub-window.js';
@@ -294,16 +295,16 @@ export function createHub(parent: HTMLElement) {
   const commands = (every = false, query = input.value): HubRow[] => {
     const settings = window.gwToolsSettings?.();
     const tool = (id: string, title: string, detail: string, keywords: string, enabled: boolean | undefined, event: string): HubRow[] => enabled ? [{
-      id, title, keywords, detail, group: 'Tools', action: id === 'storage' ? 'Open Xunlai Storage' : `Open ${title}`,
+      id, title, keywords, detail, ...(id === 'storage' ? { aliases: ['Open Xunlai Storage'] } : {}), group: 'Tools', action: id === 'storage' ? 'Open Xunlai Storage' : `Open ${title}`,
       run: () => { if (id === 'storage') { close(); window.dispatchEvent(new CustomEvent(event, { cancelable: true })); } else dispatch(event, 'show'); },
     }] : [];
     return [
-      ...tool('travel', 'Travel', 'Outposts, favourites and recent places', 'outpost destination teleport tp', settings?.gwonmacTools && settings.travelPalette, 'gw:travel-toggle'),
-      ...tool('trade', 'Trade Chat', 'Find offers and contact sellers', 'kamadan prices trading market trader', settings?.gwonmacTools && settings.tradeChat, 'gw:trade-toggle'),
-      ...tool('whispers', 'Whispers', 'Conversations, friends and drafts', 'friends people message chat', settings?.gwonmacTools && settings.whispersEnabled, 'gw:whispers-toggle'),
-      ...(settings?.characterSwitchEnabled ? [{ id: 'character', title: 'Switch Character', detail: 'Choose another character', keywords: 'relog profession characters alts', group: 'Tools', action: 'Choose character', navigate: () => dispatch('gw:character-toggle'), run: () => dispatch('gw:character-toggle') }] : []),
-      ...tool('storage', 'Open Xunlai Storage', 'Open your storage chest', 'chest bank', settings?.gwonmacTools && settings.xunlaiStorage, 'gw:storage-open'),
-      ...(settings?.gwonmacTools && settings.cartographyEnabled ? [{ id: 'maps', title: 'Maps', detail: 'Exploration grid, walkable terrain and compass ranges', keywords: 'grid terrain compass opacity', group: 'Tools', action: 'Adjust maps', run: () => openSettings({ section: 'Maps' }) }] : []),
+      ...tool('travel', TOOL_PRESENTATION['quick-travel'].label, 'Outposts, favourites and recent places', 'outpost destination teleport tp', settings?.gwonmacTools && settings.travelPalette, 'gw:travel-toggle'),
+      ...tool('trade', TOOL_PRESENTATION['trade-chat'].label, 'Find offers and contact sellers', 'kamadan prices trading market trader', settings?.gwonmacTools && settings.tradeChat, 'gw:trade-toggle'),
+      ...tool('whispers', TOOL_PRESENTATION['whispers'].label, 'Conversations, friends and drafts', 'friends people message chat', settings?.gwonmacTools && settings.whispersEnabled, 'gw:whispers-toggle'),
+      ...(settings?.characterSwitchEnabled ? [{ id: 'character', title: TOOL_PRESENTATION['character-switch'].label, detail: 'Choose another character', keywords: 'relog profession characters alts', group: 'Tools', action: 'Choose character', navigate: () => dispatch('gw:character-toggle'), run: () => dispatch('gw:character-toggle') }] : []),
+      ...tool('storage', TOOL_PRESENTATION['xunlai-storage'].label, 'Open your storage chest', 'chest bank', settings?.gwonmacTools && settings.xunlaiStorage, 'gw:storage-open'),
+      ...(settings?.gwonmacTools && settings.cartographyEnabled ? [{ id: 'maps', title: TOOL_PRESENTATION['maps'].label, detail: 'Exploration grid, walkable terrain and compass ranges', keywords: 'grid terrain compass opacity', group: 'Tools', action: 'Adjust maps', run: () => openSettings({ section: 'Maps' }) }] : []),
       { id: 'commands', title: 'Commands', detail: 'Search words, calculator examples and keys', aliases: ['?'], keywords: 'help guide examples cheatsheet shortcuts keys', group: 'Commands', action: 'Browse commands', run: () => presenter.showRows('Commands', commandExamples) },
       { id: 'hub-preferences', title: 'Hub preferences', detail: 'Pins and exact search phrases', keywords: 'aliases vocabulary', group: 'Commands', action: 'Adjust Hub', run: () => manageHubShortcuts(presenter, shortcutStore, hubWindow.reset) },
       { id: 'settings', title: 'Settings', detail: 'Game, appearance, tools, shortcuts and maps', keywords: 'preferences graphics appearance hotkeys', group: 'Commands', action: 'Open Settings', run: () => openSettings() },
@@ -374,7 +375,7 @@ export function createHub(parent: HTMLElement) {
     // Keys: a tool's shortcut can change in Settings; the Hub's own keys are fixed.
     const bindings = resolveShortcuts(window.gwToolsSettings?.().shortcutOverrides ?? {});
     const keys = (action: ShortcutAction) => shortcutKeycaps(bindings[action]).map(cap => cap.label).join('') || 'Not set';
-    const toolKeys: [string, ShortcutAction, string][] = [['travel', 'travel.open', 'Travel'], ['character', 'character.switch', 'Switch Character'], ['builds', 'tools.toggle', 'Build Library'], ['trade', 'trade.toggle', 'Trade Chat'], ['whispers', 'whispers.toggle', 'Whispers']];
+    const toolKeys: [string, ShortcutAction, string][] = [['travel', 'travel.open', TOOL_PRESENTATION['quick-travel'].label], ['character', 'character.switch', TOOL_PRESENTATION['character-switch'].label], ['builds', 'tools.toggle', TOOL_PRESENTATION['build-management'].label], ['trade', 'trade.toggle', TOOL_PRESENTATION['trade-chat'].label], ['whispers', 'whispers.toggle', TOOL_PRESENTATION['whispers'].label]];
     rows.push(...toolKeys.filter(([tool]) => enabled.has(tool)).map(([tool, action, name]) => ({ id: `key:${tool}`, title: name, detail: keys(action), group: 'Keys & shortcuts', action: 'Change shortcut', run: () => openSettings({ section: 'Shortcuts' as const }) })));
     for (const [id, name, detail] of [['actions', 'Actions for the selected row', '⌘J'], ['back', 'Back', '⌘⌫'], ['escape', 'Clear, back, then close', '⎋'], ['open', 'Open a row with a page', '→']] as const)
       rows.push({ id: `key:${id}`, title: name, detail, group: 'Keys & shortcuts', action: 'Fixed key', unavailable: 'The Hub’s own keys do not change.', run() {} });

@@ -146,7 +146,7 @@ not run while typing or on login and character-selection screens. Existing
 custom Command-G shortcuts keep their binding; choose another Call target
 shortcut if Command-G was already assigned.
 
-Shortcuts use macOS Command combinations such as Command-T. Normal editing and
+Shortcuts can use Command, Control, Option, or function keys. Normal editing and
 application shortcuts such as Command-C, Command-V, Command-Q, and Command-W
 remain reserved. If a new or restored shortcut conflicts with any feature,
 the launcher asks before replacing it. This includes disabled features.
@@ -211,7 +211,7 @@ Enter, click the footer action, or double-click that result. Moving the pointer
 over other results on the way to the footer keeps the one you clicked; hover
 selects again after the pointer leaves the list or a key moves the selection.
 A double-click never runs anything on the page its first click opened, and it
-never reaches the game after Hub closes. The **Actions** button, or a right-click on a result, opens secondary actions. A right-click on a Travel destination or a character card only selects it. **Command-K** opens Trade. Escape first closes an open menu or disclosure, then
+never reaches the game after Hub closes. The **Actions** button, **Command-J**, or a right-click on a result, opens secondary actions. A right-click on a Travel destination or a character card only selects it. **Command-K** opens Trade. Escape first closes an open menu or disclosure, then
 clears typed text, then goes back, then closes the palette; a page you opened
 with its own shortcut closes without a stop at Home. A held Escape takes one
 step. In Settings, Up and Down stay in the section list or in the section; Right
@@ -276,11 +276,12 @@ Password and email fields receive the clipboard unchanged.
 
 Whispers uses one conversation interface for person search, the Whispers shortcut,
 and the unread launcher. Messages, drafts, history, mute and unread state stay in
-that view. Escape or Left at the start of a draft returns to people. In **Find a
+that view. Escape hides Whispers and keeps the draft.
+Left in the message field moves the caret. In **Find a
 friend…**, Escape clears the text before it hides Whispers, and Up and Down walk
 your conversations, friends and recent people; Enter opens the highlighted one.
 Command-Backspace returns from a conversation to that list, except in the
-message field, where it deletes to the start of the line as usual. Closing Hub
+message field, where it deletes to the start of the line as usual. Hiding Whispers
 keeps drafts for the game session. Character changes, leaving the game, or turning
 off Whispers clear the session.
 
@@ -300,8 +301,9 @@ invite is sent. It is unavailable for PvP outposts such as Random Arenas. If you
 a different district, Guild Wars cannot find them; Hub then shows the game's
 answer in chat. Both actions need Whispers enabled.
 
-Build Library, Trade Chat, Characters, and Whispers open inside Hub. Detach a tool
-when you want to keep it beside the game. Disabled tools are absent from search.
+Build Library and Characters open inside Hub. Trade Chat and Whispers open in
+floating windows beside the game. Opening either suspends Hub; reopening Hub
+resumes its page. Disabled tools are absent from search.
 Storage opens quietly and does not show a failure popup.
 
 Use `team gom afk` to review and apply that saved team, or `build smiter` to load
@@ -357,7 +359,7 @@ account's builds and teams; each group keeps its own order. Search `resign` for 
 row opens the same dialog as Command-Q and never quits on its own. Call target
 has no Hub row; use its shortcut while the game has keyboard focus.
 
-A custom shortcut already using Command-R takes priority. Use **View → Hub**
+A custom shortcut already using Command-R takes priority. Use **View → Hub — Command Palette**
 in that case. Existing custom shortcuts and cleared bindings are preserved.
 
 ## Switch Character
@@ -396,8 +398,8 @@ resign before the party returns to the outpost. Press Enter to confirm sending
 `/resign`, or click the red **Resign** button in the in-game dialog. The dialog accepts a
 confirmation only after a brief moment, so the press that opened it cannot also
 confirm it. Escape, **Cancel**, the close
-button, and clicking outside cancel. Close text fields first.
-The action stops if chat contains text or you interrupt it.
+button, and clicking outside cancel. Return focus to Guild Wars and finish or clear your chat draft first.
+Resign is available only in a PvE outpost or explorable area.
 
 Character names and search text are not saved.
 
@@ -508,7 +510,7 @@ Inside Hub, recent Travel destinations form a horizontal carousel and Favourites
 stay in a compact grid. With an empty query, arrows choose and Enter travels;
 the selection stops at the first and last destination.
 Escape returns to Hub. While editing a query, Left/Right preserve caret movement;
-Right at the end can activate a search result. Tab reaches Travel settings.
+Right preserves the caret at the end too; Enter runs the named Travel action. Tab reaches Travel settings.
 Hub keeps the same size and position across results and tools; content scrolls inside.
 
 Type `char Toefte` in Hub and press Enter on **Switch to Toefte**. A search

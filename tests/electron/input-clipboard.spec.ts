@@ -85,7 +85,10 @@ test.describe("renderer text editing", () => {
             "toggle-trade",
             "open-xunlai-storage",
             "open-travel",
+            "open-whispers",
           ].map((id) => menu?.getMenuItemById(id)?.accelerator),
+          whispersLabel: menu?.getMenuItemById("open-whispers")?.label,
+          whispersEnabled: menu?.getMenuItemById("open-whispers")?.enabled,
           toolsLabel: menu?.getMenuItemById("toggle-tools")?.label,
           tradeLabel: menu?.getMenuItemById("toggle-trade")?.label,
         };
@@ -99,10 +102,19 @@ test.describe("renderer text editing", () => {
           { id: "edit-paste", label: "Paste", role: null, accelerator: "CmdOrCtrl+V", hasClick: true },
           { id: "edit-select-all", label: "Select All", role: null, accelerator: "CmdOrCtrl+A", hasClick: true },
         ],
-        appAccelerators: [null, null, null, null],
+        appAccelerators: [null, null, null, null, null],
+        whispersLabel: "Whispers",
+        whispersEnabled: false,
         toolsLabel: "Build Library",
         tradeLabel: "Trade Chat",
       });
+      await fixture.page.evaluate(async () => {
+        await window.gwNative.hubSettings.update({kind: 'master', enabled: true});
+        await window.gwNative.hubSettings.update({kind: 'tool', tool: 'whispers', enabled: true});
+      });
+      await expect.poll(() => fixture.app.evaluate(({Menu}) => Menu.getApplicationMenu()?.getMenuItemById('open-whispers')?.enabled)).toBe(true);
+      await fixture.page.evaluate(() => window.gwNative.hubSettings.update({kind: 'tool', tool: 'whispers', enabled: false}));
+      await expect.poll(() => fixture.app.evaluate(({Menu}) => Menu.getApplicationMenu()?.getMenuItemById('open-whispers')?.enabled)).toBe(false);
     } finally {
       await closeOffline(fixture);
     }

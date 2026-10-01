@@ -2,6 +2,8 @@
  * Canonical app-shortcut actions, defaults, persistence shapes, and pure operations.
  * Main and renderer consume this one model so interception and presentation agree.
  */
+import { TOOL_PRESENTATION } from "./tool-presentation.js";
+
 export const SHORTCUT_ACTIONS = [
   "game.call-target",
   "game.resign",
@@ -54,14 +56,14 @@ export const DEFAULT_SHORTCUTS = Object.freeze({
 
 export const SHORTCUT_LABELS: Readonly<Record<ShortcutAction, string>> =
   Object.freeze({
-    "game.call-target": "Call target",
-    "game.resign": "Resign",
-    "character.switch": "Switch Character",
-    "tools.toggle": "Build Library",
-    "trade.toggle": "Trade Chat",
-    "whispers.toggle": "Whispers",
-    "storage.open": "Open Xunlai Storage",
-    "travel.open": "Travel",
+    "game.call-target": TOOL_PRESENTATION["call-target"].label,
+    "game.resign": TOOL_PRESENTATION["resign"].label,
+    "character.switch": TOOL_PRESENTATION["character-switch"].label,
+    "tools.toggle": TOOL_PRESENTATION["build-management"].label,
+    "trade.toggle": TOOL_PRESENTATION["trade-chat"].label,
+    "whispers.toggle": TOOL_PRESENTATION["whispers"].label,
+    "storage.open": TOOL_PRESENTATION["xunlai-storage"].label,
+    "travel.open": TOOL_PRESENTATION["quick-travel"].label,
     "cartography.grid.toggle": "Exploration grid",
     "cartography.walkability.toggle": "Walkable terrain",
   });

@@ -239,7 +239,7 @@ describe("unified launcher shell", () => {
     expect(wrapper.text()).toContain("Settings and shortcuts apply to every account");
     expect(wrapper.text()).toContain("Build Library");
     expect(wrapper.text()).toContain("⌘B");
-    expect(wrapper.text()).toContain("Quick Travel");
+    expect(wrapper.text()).toContain("Travel");
     expect(wrapper.text()).toContain("Xunlai Storage");
     expect(wrapper.text()).toContain("Trade Chat");
     expect(wrapper.text()).toContain("Character Switch");

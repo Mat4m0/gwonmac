@@ -36,6 +36,7 @@ import {
   toggleTravel,
   toggleCharacterSwitch,
   toggleTrade,
+  toggleWhispers,
   toggleTools,
 } from "./renderer-commands.js";
 import { isDevBuild } from "./protocol.js";
@@ -120,9 +121,10 @@ export function installNativeApplicationMenu(
 
 type ToolMenuSettings = Pick<AppSettings,
   "gwonmacTools" | "buildLibrary" | "tradeChat" | "xunlaiStorage"
-  | "travelPalette" | "characterSwitchEnabled" | "resignEnabled" | "shortcutOverrides">;
+  | "whispersEnabled" | "travelPalette" | "characterSwitchEnabled" | "resignEnabled" | "shortcutOverrides">;
 const TOOL_MENU_FEATURES: Readonly<Record<string, { feature: FeatureId; action: ShortcutAction }>> = {
   "toggle-tools": { feature: "buildLibrary", action: "tools.toggle" },
+  "open-whispers": { feature: "whispers", action: "whispers.toggle" },
   "toggle-trade": { feature: "tradeChat", action: "trade.toggle" },
   "open-xunlai-storage": { feature: "xunlaiStorage", action: "storage.open" },
   "open-travel": { feature: "travel", action: "travel.open" },
@@ -475,6 +477,12 @@ export function installApplicationMenu(actions: ApplicationMenuActions, settings
           label: "Trade Chat",
           enabled: false,
           click: withGameOwner((win) => toggleTrade(win)),
+        },
+        {
+          id: "open-whispers",
+          label: "Whispers",
+          enabled: false,
+          click: withGameOwner((win) => toggleWhispers(win)),
         },
         {
           id: "open-xunlai-storage",

@@ -262,6 +262,10 @@ class WindowShortcuts {
         return;
       }
       if (this.#hubAvailable && shortcutMatches(HUB_SHORTCUT, input)) {
+        recordMainInput(win, {
+          source: 'main', kind: 'native-key', phase: 'down',
+          key: tracedKey(input.key), repeat: input.isAutoRepeat, decision: 'shortcut',
+        });
         event.preventDefault();
         this.#claimedCodes.set(input.code, 'shortcut');
         if (!input.isAutoRepeat) void this.#actions.run("hub.toggle");

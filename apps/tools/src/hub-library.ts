@@ -1,4 +1,5 @@
 /** Hub presentation over the existing library controller and bounded apply owners. */
+import { TOOL_PRESENTATION } from '../../../src/shared/tool-presentation';
 import { watch } from 'vue';
 import { diffBuilds, diffSummary } from '../../../src/shared/builds/diff';
 import { buildAttributes, buildProfessions } from '../../../src/shared/builds/presentation';
@@ -313,7 +314,7 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
   }
   /** Reads the template files, then opens them, unless the player moved on or closed the Hub meanwhile (HUB-004). */
   async function openTemplates(task: HubTask) { try { await readTemplates(); } catch { templateProblem = 'Could not read templates.'; } if (task.live()) browseTemplates(); }
-  const libraryRow = (): HubRow => ({ id: 'builds', title: 'Build Library', detail: 'Browse saved builds and teams', aliases: ['library', 'lib', 'bu', 'build', 'builds', 'team', 'teams', 'skills', 'templates'], keywords: 'templates skills folders builds teams', group: 'Tools', action: 'Browse builds', navigate() { browseLibrary(); }, run: () => browseLibrary() });
+  const libraryRow = (): HubRow => ({ id: 'builds', title: TOOL_PRESENTATION['build-management'].label, detail: 'Browse saved builds and teams', aliases: ['library', 'lib', 'bu', 'build', 'builds', 'team', 'teams', 'skills', 'templates'], keywords: 'templates skills folders builds teams', group: 'Tools', action: 'Browse builds', navigate() { browseLibrary(); }, run: () => browseLibrary() });
   function browseLibrary(query = '') {
     hub.showRows('Build Library', () => {
       const items = all();

@@ -48,7 +48,7 @@ export const FINDABLE_SETTINGS: readonly Readonly<{ label: string; section: HubS
 export function openHubSettings(hub: Hub, focus?: HubSettingsFocus) {
   let page: HubSettingsSection = focus?.section ?? lastSection;
   let scroll = 0;
-  hub.showView('Settings', target => {
+  hub.showView('Settings', (target, _back, footer) => {
     const doc = target.ownerDocument;
     const view = doc.createElement('section'); view.className = 'hub-settings';
     const nav = doc.createElement('nav'); nav.setAttribute('aria-label', 'Settings sections');
@@ -68,7 +68,7 @@ export function openHubSettings(hub: Hub, focus?: HubSettingsFocus) {
       const button = doc.createElement('button'); button.type = 'button'; button.textContent = name; button.className = 'ui-button'; button.dataset.variant = 'quiet'; button.dataset.section = name;
       const icons: Record<HubSettingsSection, string> = { Game: 'game', Tools: 'settings', Appearance: 'appearance', Shortcuts: 'keyboard', Maps: 'maps' };
       button.prepend(hubIcon(doc, { id: icons[name], group: 'Settings' }));
-      button.onclick = () => { page = name; lastSection = name; status.textContent = ''; render(); };
+      button.onclick = () => { page = name; lastSection = name; if (snapshot) status.textContent = ''; render(); };
       // The sections are a list: the shared list keys choose one, without wrapping; → enters its first usable control.
       button.onkeydown = event => {
         if (event.key === 'ArrowRight' && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
@@ -166,8 +166,10 @@ export function openHubSettings(hub: Hub, focus?: HubSettingsFocus) {
       } else save({ kind: 'shortcut', action, binding }, SHORTCUT_LABELS[action]);
     }
     function render() {
-      if (disposed || !snapshot) return;
-      body.replaceChildren(); buttons.forEach(button => button.setAttribute('aria-current', String(button.dataset.section === page)));
+      if (disposed) return;
+      buttons.forEach(button => button.setAttribute('aria-current', String(button.dataset.section === page)));
+      if (!snapshot) return;
+      body.replaceChildren();
       const heading = doc.createElement('h2'); heading.textContent = page; body.append(heading);
       if (page === 'Game') {
         const game = GAME_SETTINGS;
@@ -260,15 +262,28 @@ export function openHubSettings(hub: Hub, focus?: HubSettingsFocus) {
       focusControl(control);
     };
     const show = (next: HubSettingsFocus) => {
-      focus = next; page = next.section; lastSection = page; status.textContent = '';
+      focus = next; page = next.section; lastSection = page; if (snapshot) status.textContent = '';
       if (snapshot) { render(); applyFocus(); }
     };
     showTarget = show;
-    status.textContent = 'Loading settings…'; buttons[sections.indexOf(page)]?.focus();
-    void api.get().then(next => {
-      if (disposed) return;
-      snapshot = next; status.textContent = ''; render(); body.scrollTop = scroll; applyFocus();
-    }).catch(() => { if (!disposed) { status.textContent = 'Settings could not load. Go back and try again.'; } });
+    const load = async () => {
+      status.textContent = 'Loading settings…';
+      footer.primary({ label: 'Loading settings…', disabled: true, run() {} });
+      try {
+        const next = await api.get();
+        if (disposed) return;
+        snapshot = next; status.textContent = ''; render(); body.scrollTop = scroll; applyFocus();
+        footer.primary(null);
+        // Retry removes its footer action. Return focus to the selected section.
+        if (doc.activeElement?.classList.contains('hub-primary')) buttons[sections.indexOf(page)]?.focus();
+      } catch {
+        if (disposed) return;
+        status.textContent = 'Settings could not load. Try again.';
+        footer.primary({ label: 'Retry settings', run: load });
+      }
+    };
+    buttons[sections.indexOf(page)]?.focus();
+    void load();
     return () => {
       scroll = body.scrollTop; disposed = true; unsubscribe(); if (showTarget === show) showTarget = null; view.remove();
       // Leaving with the mouse mid-capture must not leave main listening for the next game key (HUB-038).
