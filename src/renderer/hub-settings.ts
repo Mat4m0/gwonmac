@@ -14,7 +14,7 @@ import { extendedMemoryView } from './extended-memory-setting.js';
 import { CHARACTER_DETAILS, CHAT_FILTERS, CONTROLLER_SYMBOL_OPTIONS, GAME_SETTINGS, RENDER_SCALE_OPTIONS, settingDetail } from '../shared/setting-copy.js';
 import type { AppSettings, ExtendedMemoryRuntimeStatus } from '../shared/contracts.js';
 import type { LauncherSettingsSection } from '../shared/launcher-contracts.js';
-import { DEFAULT_SHORTCUTS, HUB_BACK_SHORTCUT, isHubBackKey, SHORTCUT_CAPTURE_HINT, shortcutEquals, shortcutKeycaps, shortcutReserved, SHORTCUT_ACTIONS, SHORTCUT_LABELS, shortcutConflict, type ShortcutAction, type ShortcutBinding } from '../shared/keyboard-shortcuts.js';
+import { DEFAULT_SHORTCUTS, HUB_BACK_SHORTCUT, HUB_SHORTCUT, isHubBackKey, SHORTCUT_CAPTURE_HINT, shortcutEquals, shortcutKeycaps, shortcutReserved, SHORTCUT_ACTIONS, SHORTCUT_LABELS, shortcutConflict, type ShortcutAction, type ShortcutBinding } from '../shared/keyboard-shortcuts.js';
 
 /** Hub Settings sections, in the order of the launcher's game settings (docs/settings.md). */
 export const HUB_SETTINGS_SECTIONS = ['Game', 'Appearance', 'Tools', 'Shortcuts', 'Maps'] as const;
@@ -205,6 +205,12 @@ export function openHubSettings(hub: Hub, focus?: HubSettingsFocus) {
         launcherLink('Custom colors', 'Edit the colors of Your custom theme.', 'game');
       } else if (page === 'Shortcuts') {
         const hint = doc.createElement('p'); hint.textContent = 'Changes apply to every account.'; body.append(hint);
+        // The Hub's own shortcut is fixed for now (D-9); a row shows it, so nothing takes it silently (HUB-095).
+        const hubOwner = SHORTCUT_ACTIONS.find(action => shortcutEquals(snapshot!.shortcuts[action], HUB_SHORTCUT));
+        const hubKeys = doc.createElement('span'); hubKeys.className = 'hub-setting-shortcut';
+        for (const cap of hubOwner ? [] : shortcutKeycaps(HUB_SHORTCUT)) { const key = doc.createElement('kbd'); key.className = 'ui-kbd'; key.textContent = cap.label; key.title = cap.name; hubKeys.append(key); }
+        if (hubOwner) hubKeys.textContent = 'Not set';
+        row('Hub', hubKeys, hubOwner ? `${SHORTCUT_LABELS[hubOwner]} uses this shortcut. Clear it to open the Hub with it again.` : 'Opens the Hub. This shortcut cannot be changed.');
         for (const action of SHORTCUT_ACTIONS) {
           const controls = doc.createElement('span'); controls.className = 'hub-setting-shortcut';
           const tool = action.startsWith('cartography.') ? 'maps' : GLOBAL_TOOLS.find(tool => TOOL_PRESENTATION[tool].action === action);
@@ -224,7 +230,7 @@ export function openHubSettings(hub: Hub, focus?: HubSettingsFocus) {
               if ((result.status === 'captured' || result.status === 'conflict') && shortcutReserved(result.binding)) status.textContent = shortcutEquals(result.binding, HUB_BACK_SHORTCUT) ? 'Reserved for Back' : 'Reserved by gwonmac or macOS. Choose another combination.';
               else if (result.status === 'captured' || result.status === 'conflict') chooseShortcut(action, result.binding);
               else if (result.status === 'cleared') chooseShortcut(action, null);
-              else if (result.status === 'reserved') status.textContent = 'Reserved by gwonmac or macOS. Choose another combination.';
+              else if (result.status === 'reserved') status.textContent = result.owner === 'hub' ? 'Used by Hub. Choose another combination.' : 'Reserved by gwonmac or macOS. Choose another combination.';
               else if (result.status === 'invalid') status.textContent = `That combination is not a shortcut. ${SHORTCUT_CAPTURE_HINT}`;
             } catch { if (!disposed) status.textContent = 'Could not capture the shortcut. Try again.'; }
             finally { if (!disposed) { render(); if (!status.contains(doc.activeElement)) focusControl(SHORTCUT_LABELS[action]); } }

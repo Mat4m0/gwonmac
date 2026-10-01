@@ -266,7 +266,8 @@ export interface ShortcutReplacement {
 }
 export type LauncherShortcutCaptureResult =
   | Readonly<{ status: "captured"; binding: ShortcutBinding }>
-  | Readonly<{ status: "reserved" }>
+  /** `owner: "hub"` is Command-R while the Hub uses it (HUB-095). */
+  | Readonly<{ status: "reserved"; owner?: "hub" }>
   | Readonly<{ status: "conflict"; action: ShortcutAction; binding: ShortcutBinding }>
   | Readonly<{ status: "cleared" }>
   | Readonly<{ status: "cancelled" }>

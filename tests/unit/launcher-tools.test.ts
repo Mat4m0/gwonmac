@@ -40,6 +40,14 @@ describe("global launcher Tools", () => {
     assert.throws(() => launcherShortcutPatch(DEFAULT_SETTINGS, "travel.open", { key: "q", shift: false, option: false }), /reserved/);
   });
 
+  it("never lets a tool take Command-R while the Hub uses it, and keeps an older saved owner (HUB-095)", () => {
+    const commandR = { key: "r", shift: false, option: false };
+    assert.throws(() => launcherShortcutPatch(DEFAULT_SETTINGS, "travel.open", commandR), /Used by Hub/);
+    // A binding saved before the Hub claimed Command-R stays the player's data and may be moved.
+    const older = { ...DEFAULT_SETTINGS, shortcutOverrides: { "travel.open": commandR } };
+    assert.deepEqual(resolveShortcuts(launcherShortcutPatch(older, "tools.toggle", commandR).shortcutOverrides!)["tools.toggle"], commandR);
+  });
+
   it("clears map shortcuts back to an empty override without changing other preferences", () => {
     const settings = { ...DEFAULT_SETTINGS, shortcutOverrides: { "cartography.grid.toggle": { key: "g", shift: false, option: false } } };
     assert.deepEqual(launcherShortcutPatch(settings, "cartography.grid.toggle", null), { shortcutOverrides: {} });
