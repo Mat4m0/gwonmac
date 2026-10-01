@@ -142,7 +142,8 @@ test('Commands is findable by ? and groups its fill-only examples by job (HUB-09
       await page.evaluate(({ action, binding }) => window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: { shortcutOverrides: { [action]: binding } } })), { action, binding });
       await page.keyboard.press('Meta+r'); await search(page).fill('?'); await search(page).press('Enter');
       const row = page.locator(`.hub-row[data-id="key:${id}"]`);
-      expect(await row.locator('kbd').allTextContents()).toEqual(binding ? labels : []);
+      await expect(row).toBeVisible();
+      await expect(row.locator('kbd')).toHaveText(binding ? labels : []);
       if (!binding) await expect(row.locator('.hub-detail')).toHaveText('Not set');
     }
   }
