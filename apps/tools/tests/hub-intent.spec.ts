@@ -129,7 +129,7 @@ test('Travel and Settings restore their own state after a temporary hide', async
 test('Hub placement survives reload, stays locked, and resets durably', async ({ page }) => {
   await page.goto('/?hub');
   const panel = page.locator('.hub-panel');
-  await page.getByRole('button', { name: 'Unlock Hub position', exact: true }).click();
+  await page.getByRole('button', { name: 'Lock Hub position', exact: true }).click();
   await page.getByRole('button', { name: 'Lock Hub position', exact: true }).press('Alt+ArrowRight');
   await page.getByRole('button', { name: 'Resize Hub', exact: true }).press('ArrowLeft');
   const placed = (await panel.boundingBox())!;
@@ -310,12 +310,13 @@ test('bare whisper and trade scopes start on their first row; nothing consequent
   const selected = page.locator('.hub-row[aria-selected="true"]');
   const primary = page.locator('.hub-primary');
   await search.pressSequentially('whisper ');
-  await expect(selected).toHaveAttribute('data-id', /^person:/);
+  await expect(selected).toHaveAttribute('data-id', 'friend:romi');
   await expect(selected).toContainText('Romi Ranger');
-  await expect(primary).toHaveText(/^View actions/);
+  await expect(primary).toHaveText(/^Reply to Romi Ranger/);
   await search.press('Enter');
-  await expect(page.locator('.hub-caption')).toHaveText('Romi Ranger');
-  await page.getByRole('button', { name: 'Home', exact: true }).click();
+  await expect(page.getByRole('textbox', { name: 'Message Romi Ranger', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Hide Whispers', exact: true }).click();
+  await page.keyboard.press('Meta+r');
   await search.fill(''); await search.pressSequentially('trade ');
   await expect(selected).toHaveAttribute('data-id', 'trade');
   await expect(primary).toHaveText(/^Open Trade Chat/);
@@ -340,7 +341,7 @@ test.describe('party invite', () => {
     await search.fill('invite Romi');
     await expect(selected).toContainText('Romi');
     await expect(selected).not.toHaveAttribute('aria-disabled', 'true');
-    await expect(page.locator('#hub')).not.toContainText('No matches');
+    await expect(page.locator('#hub .hub-empty')).toBeHidden();
     await expect(primary).toHaveText(/^Invite Romi Ranger/);
     await expect(primary).toBeEnabled();
     await search.fill('invite Zed Delta');

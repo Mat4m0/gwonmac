@@ -26,19 +26,21 @@ export function createHub(parent: HTMLElement) {
   root.id = 'hub';
   root.className = 'ui-modal ui-modal-layer';
   root.dataset.page = "home";
-  root.setAttribute('aria-label', 'Hub');
+  root.setAttribute('aria-labelledby', 'hub-name hub-title-separator hub-caption');
   root.innerHTML = `<section class="hub-panel ui-frame">
-    <header class="hub-heading ui-window-head"><button class="ui-button hub-back" data-variant="quiet" aria-label="Back" hidden>← Back</button><span class="hub-name">Hub</span><nav class="hub-breadcrumbs" aria-label="Hub breadcrumb"><span class="hub-caption">Home</span></nav><span class="hub-context"></span><button class="ui-window-lock hub-lock" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="lock-shackle" d="M7 11V7a5 5 0 0 1 10 0v4"/><rect x="5" y="11" width="14" height="10" rx="2"/></svg></button><button class="ui-window-close hub-close" aria-label="Close Hub" title="Close Hub">×</button></header>
+    <header class="hub-heading ui-window-head"><button class="ui-button hub-back" data-variant="quiet" aria-label="Back" hidden>← Back</button><span class="hub-name" id="hub-name">Hub</span><span id="hub-title-separator" hidden>—</span><nav class="hub-breadcrumbs" aria-label="Hub breadcrumb"><span class="hub-caption" id="hub-caption" role="heading" aria-level="1">Home</span></nav><span class="hub-context"></span><button class="ui-window-lock hub-lock" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="lock-shackle" d="M7 11V7a5 5 0 0 1 10 0v4"/><rect x="5" y="11" width="14" height="10" rx="2"/></svg></button><button class="ui-window-close hub-close" aria-label="Close Hub" title="Close Hub">×</button></header>
     <section class="hub-summary" aria-label="Build to apply" hidden></section>
     <div class="hub-search"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 8 10-8 10L4 12 12 2Zm0 5v10M8 12h8"/></svg><span class="hub-scope" hidden></span><input type="text" role="combobox" aria-label="Search people, places, builds" aria-describedby="hub-hint" aria-autocomplete="list" aria-controls="hub-results" aria-expanded="true" placeholder="Search people, places, builds…" autocomplete="off" spellcheck="false" maxlength="120"><span class="hub-progress" aria-hidden="true"></span></div>
     <p class="hub-hint" id="hub-hint" hidden></p><div class="hub-rate-controls" hidden></div><div class="hub-results ui-scroll" id="hub-results" role="listbox" aria-label="Results" tabindex="-1"></div>
-    <pre class="hub-preview ui-scroll" hidden></pre><div class="hub-view" hidden></div><p class="hub-status" role="status" hidden></p><p class="hub-lifecycle" hidden></p><p class="hub-announce ui-sr-only" aria-live="polite" aria-atomic="true"></p>
+    <p class="hub-empty" hidden>No matches</p><pre class="hub-preview ui-scroll" hidden></pre><div class="hub-view" hidden></div><p class="hub-status" role="status"></p><p class="hub-lifecycle" hidden></p><p class="hub-announce ui-sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
     <footer class="hub-footer"><span class="hub-legend"></span><span class="hub-count"></span><button class="hub-primary ui-button" data-variant="primary"></button><button class="hub-actions ui-button" data-variant="quiet" aria-haspopup="menu" aria-expanded="false">Actions</button></footer>
     <div class="hub-menu" role="menu" aria-label="Actions" hidden></div>
     <button class="ui-window-resize hub-resize" aria-label="Resize Hub" title="Drag to resize, or use arrow keys" hidden></button>
   </section>`;
   parent.append(root);
-  const receipt = document.createElement('output'); receipt.className = 'hub-receipt ui-toast'; receipt.popover = 'manual'; receipt.setAttribute('role', 'status'); receipt.hidden = true; parent.append(receipt);
+  const receipt = document.createElement('div'); receipt.className = 'hub-receipt ui-toast'; receipt.popover = 'manual'; receipt.setAttribute('aria-hidden', 'true'); receipt.hidden = true;
+  // The visual popover is absent while closed; this persistent node announces its first outcome.
+  const receiptAnnouncement = document.createElement('p'); receiptAnnouncement.className = 'hub-receipt-announcement ui-sr-only'; receiptAnnouncement.setAttribute('role', 'status'); receiptAnnouncement.setAttribute('aria-atomic', 'true'); parent.append(receipt, receiptAnnouncement);
   let receiptTimer: ReturnType<typeof setTimeout> | undefined;
   // Where the Hub frame last stood: a receipt after closing appears in its footprint, not as a window toast.
   let frame: DOMRect | null = null;
@@ -104,6 +106,9 @@ export function createHub(parent: HTMLElement) {
   const legend = required<HTMLElement>('.hub-legend');
   const lifecycle = required<HTMLElement>('.hub-lifecycle');
   const announcer = required<HTMLElement>('.hub-announce');
+  const empty = required<HTMLElement>('.hub-empty');
+  let announceTimer: ReturnType<typeof setTimeout> | undefined;
+  let resultAnnouncement = '';
   let rows: readonly HubRow[] = [];
   let shortcutRevision = '';
   let navigationRevision = '';
@@ -138,7 +143,7 @@ export function createHub(parent: HTMLElement) {
     const active = document.activeElement;
     let selector = '.hub-search input';
     if (active instanceof HTMLElement && root.contains(active) && active !== input) {
-      for (const attribute of ['id', 'data-character-key', 'data-section', 'aria-label']) {
+      for (const attribute of ['id', 'data-character-key', 'data-section', 'data-setting-label', 'aria-label']) {
         const value = active.getAttribute(attribute);
         if (value) { selector = `[${attribute}="${CSS.escape(value)}"]`; break; }
       }
@@ -275,7 +280,7 @@ export function createHub(parent: HTMLElement) {
   let progressInStatus = false;
   function report(message: string, receipt = false) {
     const text = message || progress?.message || '';
-    status.textContent = text; status.hidden = !text;
+    status.textContent = text;
     receiptInStatus = receipt && !!message; progressInStatus = !message && !!text;
     status.setAttribute('aria-busy', String(progressInStatus)); paintBusy();
   }
@@ -371,13 +376,16 @@ export function createHub(parent: HTMLElement) {
     if (focus) focusHubSetting(focus);
   }
   function select(id: string | null, scroll = false) {
+    const previous = list.querySelector<HTMLElement>('[aria-selected="true"]');
+    const next = id === null ? null : list.querySelector<HTMLElement>(`[data-id="${CSS.escape(id)}"]`);
+    if (previous !== next) {
+      previous?.setAttribute('aria-selected', 'false');
+      next?.setAttribute('aria-selected', 'true');
+    }
     selected = id;
-    for (const row of list.querySelectorAll<HTMLElement>('[role="option"]')) {
-      row.setAttribute('aria-selected', String(row.dataset.id === id));
-      if (row.dataset.id === id) {
-        input.setAttribute('aria-activedescendant', row.id);
-        if (scroll) row.scrollIntoView({ block: 'nearest' });
-      }
+    if (next) {
+      if (input.getAttribute('aria-activedescendant') !== next.id) input.setAttribute('aria-activedescendant', next.id);
+      if (scroll) next.scrollIntoView({ block: 'nearest' });
     }
     const row = rows.find(row => row.id === id);
     const rates = required<HTMLElement>('.hub-rate-controls'); rates.hidden = !row?.quoteBasis || !!disposeView;
@@ -495,7 +503,9 @@ export function createHub(parent: HTMLElement) {
     const bar = document.createElement('span'); bar.className = 'hub-skill-bar';
     skills.forEach((skill, index) => {
       const slot = document.createElement('span'); slot.className = 'hub-skill';
-      slot.dataset.elite = String(skill.elite); slot.dataset.changed = String(!!skill.changed); slot.title = `${index + 1}. ${skill.name}${skill.changed ? ' · will change' : ''}`;
+      if (skill.elite) slot.dataset.elite = 'true';
+      if (skill.changed) slot.dataset.changed = 'true';
+      slot.title = `${index + 1}. ${skill.name}${skill.changed ? ' · will change' : ''}`;
       slot.setAttribute('role', 'img'); slot.setAttribute('aria-label', `${index + 1}. ${skill.name}`);
       if (skill.changed) slot.setAttribute('aria-description', 'This slot will change.');
       slot.textContent = String(index + 1);
@@ -553,6 +563,25 @@ export function createHub(parent: HTMLElement) {
   /** The row the current click run selected; only its own double-click runs it (D-24). */
   let pressed: string | null = null;
   const hover = createHoverSelection();
+  const pointerRow = (event: Event) => {
+    const node = event.target instanceof Element ? event.target.closest<HTMLElement>('.hub-row') : null;
+    return node && list.contains(node) ? rows.find(row => row.id === node.dataset.id) : undefined;
+  };
+  // Delegated events always resolve the current row, including after its DOM was retained.
+  list.addEventListener('pointermove', event => {
+    const row = pointerRow(event); if (row && !busy() && hover.selects(event) && row.id !== selected) select(row.id);
+  });
+  list.addEventListener('click', event => {
+    const row = pointerRow(event); if (!row || busy()) return;
+    // A game-changing row needs the footer or a double-click that began on this identity (D-24).
+    if (event.detail <= 1) { pressed = row.id; hover.hold(); select(row.id); focusResult(); if (!row.consequential) void run(); }
+    else if (event.detail === 2 && row.consequential && pressed === row.id && selected === row.id) void run();
+  });
+  list.addEventListener('contextmenu', event => {
+    const row = pointerRow(event); if (!row) return;
+    event.preventDefault(); if (busy()) return;
+    hover.hold(); select(row.id); focusResult(); openMenu();
+  });
   function paintNavigation() {
     const summary = disposeView ? undefined : scope?.summary;
     const summaryPanel = required<HTMLElement>('.hub-summary');
@@ -611,7 +640,14 @@ export function createHub(parent: HTMLElement) {
     hint.textContent = !scope && !query.scope && input.value.trim() && example ? `Try “${example.title}” · ${example.detail}` : '';
     hint.hidden = !hint.textContent || !!disposeView;
   }
+  let refreshFrame = 0;
+  function scheduleRefresh() {
+    if (!root.open || refreshFrame) return;
+    refreshFrame = requestAnimationFrame(() => { refreshFrame = 0; refresh(); });
+  }
   function refresh(reset = false) {
+    // An immediate query or opening already consumes all facts queued by source notifications.
+    cancelAnimationFrame(refreshFrame); refreshFrame = 0;
     paintGlyphs();
     if (!root.open || disposeView) return;
     if (reset) hover.release();
@@ -643,30 +679,56 @@ export function createHub(parent: HTMLElement) {
     const priority = (row: HubRow) => { if (scope || row.group !== 'Tools') return 0; const index = tools.indexOf(row.id); return index < 0 ? tools.length : index; };
     rows = [...rows].sort((a, b) => (ranked ? best.get(a.group)! - best.get(b.group)! : 0) || groupIndex(a.group) - groupIndex(b.group)
       || (ranked ? tierOf(a) - tierOf(b) : 0) || priority(a) - priority(b));
+    const resultCount = `${rows.length} result${rows.length === 1 ? '' : 's'}`;
+    const message = !scope && !input.value.trim() ? '' : rows.length ? resultCount : 'No matches';
+    count.textContent = message === 'No matches' ? '' : message;
+    empty.hidden = rows.length > 0; list.hidden = !rows.length;
+    input.setAttribute('aria-expanded', String(rows.length > 0));
+    if (reset || message !== resultAnnouncement) {
+      clearTimeout(announceTimer); resultAnnouncement = message;
+      if (message) announceTimer = setTimeout(() => {
+        if (root.open && !disposeView && announcer.textContent !== message) announcer.textContent = message;
+      }, 500);
+    }
     const bindings = resolveShortcuts(window.gwToolsSettings?.().shortcutOverrides ?? {});
     const nextShortcutRevision = JSON.stringify(bindings);
     const shortcutsChanged = shortcutRevision !== nextShortcutRevision;
     shortcutRevision = nextShortcutRevision;
     // Keep mounted options steady when an observer only advances its sequence.
     // Actions still read the newly derived rows, so no stale closure can execute.
-    if (!reset && !shortcutsChanged && rows.length === previousRows.length && rows.every((row, index) => {
-      const previous = previousRows[index];
-      return previous && row.id === previous.id && row.title === previous.title
-        && row.detail === previous.detail && row.group === previous.group
-        && row.action === previous.action && row.destructive === previous.destructive && row.unavailable === previous.unavailable && row.readOnly === previous.readOnly && row.preview === previous.preview && row.folder === previous.folder && row.attributeStatus === previous.attributeStatus && JSON.stringify([row.skills, row.attributes, row.professions]) === JSON.stringify([previous.skills, previous.attributes, previous.professions]);
-    })) { select(selected); return; }
-    list.replaceChildren();
-    let group = '';
+    const samePaint = (row: HubRow, previous: HubRow | undefined) => previous && row.id === previous.id && row.title === previous.title
+      && row.detail === previous.detail && row.group === previous.group && row.icon === previous.icon
+      && row.action === previous.action && row.destructive === previous.destructive && row.unavailable === previous.unavailable
+      && row.readOnly === previous.readOnly && !!row.navigate === !!previous.navigate && row.preview === previous.preview
+      && row.folder === previous.folder && row.attributeStatus === previous.attributeStatus
+      && JSON.stringify([row.skills, row.attributes, row.professions, row.conversion]) === JSON.stringify([previous.skills, previous.attributes, previous.professions, previous.conversion]);
+    if (!reset && !shortcutsChanged && rows.length === previousRows.length && rows.every((row, index) => samePaint(row, previousRows[index]))) { select(selected); return; }
+    // The current list is the DOM source; retain only rows whose painted facts still match.
+    const previousById = new Map(previousRows.map(row => [row.id, row]));
+    const mounted = new Map([...list.querySelectorAll<HTMLElement>('.hub-row')].map(node => [node.dataset.id, node]));
+    const results = document.createDocumentFragment();
+    let group: string | undefined;
+    let section = list;
     rows.forEach((row, index) => {
       if (row.group !== group) {
         group = row.group;
         const heading = document.createElement('div');
         heading.className = 'hub-group'; heading.setAttribute('role', 'presentation'); heading.textContent = group;
-        list.append(heading);
+        heading.id = `hub-group-${index}`;
+        section = document.createElement('div'); section.setAttribute('role', 'group'); section.setAttribute('aria-labelledby', heading.id);
+        section.append(heading); results.append(section);
       }
+      const retained = !shortcutsChanged && samePaint(row, previousById.get(row.id)) ? mounted.get(row.id) : undefined;
+      if (retained) { retained.id = `hub-result-${index}`; section.append(retained); return; }
       const option = document.createElement('div');
       option.id = `hub-result-${index}`; option.dataset.id = row.id; option.className = 'hub-row';
-      option.setAttribute('role', 'option'); option.setAttribute('aria-disabled', String(!!row.unavailable));
+      option.setAttribute('role', 'option'); option.setAttribute('aria-selected', 'false'); option.setAttribute('aria-disabled', String(!!row.unavailable));
+      if (row.skills) option.setAttribute('aria-label', row.title);
+      const description = [row.skills ? row.unavailable ?? row.detail : '',
+        row.professions?.map(profession => profession.name).join(' / '),
+        row.skills ? `Skills: ${row.skills.map(skill => skill.name).join(', ')}` : '',
+        row.navigate ? 'Right Arrow opens the child page.' : ''].filter(Boolean).join('. ');
+      if (description) option.setAttribute('aria-description', description);
       if (row.destructive) option.dataset.destructive = 'true';
       if (row.readOnly) option.dataset.readOnly = 'true';
       const title = document.createElement('span'); title.className = 'hub-title'; title.textContent = row.title;
@@ -697,22 +759,9 @@ export function createHub(parent: HTMLElement) {
           option.append(renderBuildInfo(row));
         }
       }
-      // While this page's action runs, the pointer never moves the selection off it (HUB-083).
-      option.addEventListener('pointermove', event => { if (!busy() && hover.selects(event)) select(row.id); });
-      // A click opens a navigational row but only selects one that changes the game or the
-      // account; the footer primary or a double-click that started on this row runs it (D-24).
-      // A page change between the clicks cancels the run in the surface controller (HUB-242).
-      // The click holds its selection while the pointer crosses other rows to the footer.
-      option.addEventListener('click', event => {
-        if (busy()) return;
-        if (event.detail <= 1) { pressed = row.id; hover.hold(); select(row.id); focusResult(); if (!row.consequential) void run(); }
-        else if (event.detail === 2 && row.consequential && pressed === row.id && selected === row.id) void run();
-      });
-      // Right-click selects the row and opens its Actions (HUB-248).
-      option.addEventListener('contextmenu', event => { event.preventDefault(); if (busy()) return; hover.hold(); select(row.id); focusResult(); openMenu(); });
-      list.append(option);
+      section.append(option);
     });
-    count.textContent = `${rows.length} result${rows.length === 1 ? '' : 's'}`;
+    list.replaceChildren(results);
     // Two rows with the typed name are a tie, so nothing is chosen for the player; a saved phrase
     // is their own name for one row and always wins. Pins on an empty Home are no tie (HUB-060).
     // A query that is a row's whole name, `trade chat` included, answers with that row (HUB-008).
@@ -736,9 +785,7 @@ export function createHub(parent: HTMLElement) {
     if (prior?.unavailable && status.textContent === prior.unavailable && rows.some(row => row.conversion && !row.unavailable)) report('');
     select((prior?.id === 'quote-state' || prior?.id === 'market-state') && !!rows[0]?.conversion ? rows[0].id : settling || replacedPlaceholder ? exactCount > 1 && !phraseHit ? null : initial?.id ?? null : !revised && rows.some(row => row.id === selected) ? selected : null);
     if (!settling && prior && !replacedPlaceholder && !rows.some(row => row.id === prior.id) && !receiptInStatus) report('The previous selection is no longer available. Choose a result.');
-    if (!rows.length) {
-      const empty = document.createElement('p'); empty.className = 'hub-empty'; empty.textContent = 'No matches'; list.append(empty);
-    }
+
   }
   /**
    * Binds an action to the page session that starts it (HUB-004). While that page shows, the
@@ -756,7 +803,7 @@ export function createHub(parent: HTMLElement) {
       live,
       // Progress repaints only over itself or an empty line (or on its own page): a newer
       // message, e.g. a refusal or another action's failure, stays until the next report('').
-      progress: message => { progress = { owner: token, message }; if (live() || progressInStatus || status.hidden) report(''); },
+      progress: message => { progress = { owner: token, message }; if (live() || progressInStatus || !status.textContent) report(''); },
       done: receipt => {
         if (live() || (!root.open && suspended && suspendedSession === started)) close(receipt);
         else if (receipt) notify(receipt);
@@ -829,6 +876,9 @@ export function createHub(parent: HTMLElement) {
     if (root.open) frame = required<HTMLElement>('.hub-panel').getBoundingClientRect();
     suspended = null; history.length = 0; resetView(); modal.close(); for (const source of sources.keys()) source.setVisible(false); scope = null;
     input.value = ''; restoreQuery = ''; report(''); selected = null; announcer.textContent = '';
+    cancelAnimationFrame(refreshFrame); refreshFrame = 0;
+    clearTimeout(announceTimer); resultAnnouncement = '';
+    rows = []; list.replaceChildren(); empty.hidden = true; input.removeAttribute('aria-activedescendant');
     if (typeof message === 'string' && message) notify(message);
   }
   /**
@@ -839,7 +889,7 @@ export function createHub(parent: HTMLElement) {
   function notify(message: string, outcome?: 'failed') {
     if (root.open) { report(message, true); return; }
     if (outcome === 'failed') carriedFailure = message;
-    clearTimeout(receiptTimer); receipt.textContent = message; receipt.hidden = false; receiptTimer = setTimeout(() => { receipt.hidePopover(); receipt.hidden = true; }, 8000);
+    clearTimeout(receiptTimer); receiptAnnouncement.textContent = message; receipt.textContent = message; receipt.hidden = false; receiptTimer = setTimeout(() => { receipt.hidePopover(); receipt.hidden = true; receiptAnnouncement.textContent = ''; }, 8000);
     receipt.dataset.outcome = outcome ?? 'done'; receipt.dataset.tone = outcome === 'failed' ? 'error' : 'success';
     if (frame?.width) {
       receipt.style.left = `${frame.left + frame.width / 2}px`; receipt.style.bottom = `${Math.max(8, window.innerHeight - frame.bottom + 12)}px`;
@@ -910,7 +960,7 @@ export function createHub(parent: HTMLElement) {
   function show() {
     if (root.open) { if (atHome()) restoreQuery = input.value; home(); input.select(); return; }
     previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    clearTimeout(receiptTimer); receipt.hidePopover(); receipt.hidden = true;
+    clearTimeout(receiptTimer); receipt.hidePopover(); receipt.hidden = true; receiptAnnouncement.textContent = '';
     window.dispatchEvent(new Event('gw:input-reset'));
     modal.show(); window.dispatchEvent(new Event('gw:hub-visible'));
     const resume = resumable() ? suspended : null;
@@ -1144,7 +1194,7 @@ export function createHub(parent: HTMLElement) {
   }
   /** Mounts a view page, a new one or one that Back restores, with its footer and drafts. */
   function mountView(view: MountedView) {
-    resetView(); report('');
+    resetView(); report(''); clearTimeout(announceTimer); resultAnnouncement = ''; empty.hidden = true;
     root.dataset.page = 'section'; caption.textContent = view.title;
     required<HTMLElement>('.hub-preview').hidden = true; required<HTMLElement>('.hub-rate-controls').hidden = true;
     search.hidden = true; list.hidden = true; content.hidden = false;
@@ -1171,16 +1221,16 @@ export function createHub(parent: HTMLElement) {
     /** Whether Esc on an empty query goes back to a parent page rather than closing the Hub. */
     get hasParent() { return history.length > 0; },
     attach(next: HubSource) {
-      sources.set(next, next.subscribe(() => refresh())); next.setVisible(root.open && sourceEnabled(next)); refresh();
+      sources.set(next, next.subscribe(scheduleRefresh)); next.setVisible(root.open && sourceEnabled(next)); refresh();
       return () => {
         sources.get(next)?.(); sources.delete(next); next.setVisible(false);
         withdrawPages();
       };
     },
-    showRows(title: string, getRows: () => readonly HubRow[], summary?: HubSummary, destination?: HubDestination, owner?: HubSource) {
+    showRows(title: string, getRows: () => readonly HubRow[], summary?: HubSummary, destination?: HubDestination, owner?: HubSource, query = '') {
       enterPage();
       resetView(); scope = { title, rows: getRows, ...(summary ? { summary } : {}), ...(destination ? { destination } : {}), ...(owner ? { owner } : {}) }; root.dataset.page = 'section'; caption.textContent = title;
-      nameSearch(title); input.value = ''; report(''); refresh(true); focusResult();
+      nameSearch(title); input.value = query; report(''); refresh(true); focusResult();
     },
     showView(title: string, mount: HubViewMount<HTMLElement>, available?: () => boolean, destination?: HubDestination, owner?: HubSource) {
       enterPage();
@@ -1189,7 +1239,7 @@ export function createHub(parent: HTMLElement) {
     notify,
     browseBuilds() { direct('builds', () => { const row = lookup('builds'); if (row && !row.unavailable) void row.run(startTask()); else report('Build Library is unavailable.'); }); },
     resetPosition: hubWindow.reset,
-    dispose() { close(); glyphResize.disconnect(); cancelAnimationFrame(glyphFrame); clearTimeout(receiptTimer); receipt.hidePopover(); receipt.remove(); hubWindow.dispose(); disposeFrame(); for (const unsubscribe of sources.values()) unsubscribe(); sources.clear(); modal.dispose(); root.remove(); window.removeEventListener('blur', onBlur); window.removeEventListener('gw:tools-settings', onSettings); },
+    dispose() { close(); glyphResize.disconnect(); cancelAnimationFrame(glyphFrame); clearTimeout(receiptTimer); receipt.hidePopover(); receipt.remove(); receiptAnnouncement.remove(); hubWindow.dispose(); disposeFrame(); for (const unsubscribe of sources.values()) unsubscribe(); sources.clear(); modal.dispose(); root.remove(); window.removeEventListener('blur', onBlur); window.removeEventListener('gw:tools-settings', onSettings); },
   };
   presenter.attach(createHubAccounts(presenter, { get: () => window.gwNative.accounts.get(), open: request => window.gwNative.accounts.open(request), manage: () => window.gwNative.app.showLauncher() }));
   presenter.attach(createHubCalculator({

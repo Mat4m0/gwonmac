@@ -28,13 +28,14 @@ export function buildProfessions(professions: readonly (Profession | null)[]) {
 }
 
 export function buildAttributes(attributes: Build['attributes']) {
+  const invested = Object.entries(ATTRIBUTE_LABELS).flatMap(([key, label]) => {
+    const attribute = key as Attribute;
+    const rank = attributes[attribute];
+    return rank ? [{ profession: ATTRIBUTES[attribute].profession,
+      value: { label, rank: Number(rank), name: attribute.replace(/([a-z])([A-Z])/gu, '$1 $2') } }] : [];
+  });
   return Object.entries(PROFESSIONS).flatMap(([profession, facts]) => {
-    const ranks = Object.entries(ATTRIBUTE_LABELS).flatMap(([key, label]) => {
-      const attribute = key as Attribute;
-      const rank = attributes[attribute];
-      return rank && ATTRIBUTES[attribute].profession === profession
-        ? [{ label, rank: Number(rank), name: attribute.replace(/([a-z])([A-Z])/gu, '$1 $2') }] : [];
-    });
+    const ranks = invested.filter(attribute => attribute.profession === profession).map(attribute => attribute.value);
     const presentation = professionPresentation(facts.id);
     return ranks.length && presentation ? [{ ...presentation, attributes: ranks }] : [];
   });

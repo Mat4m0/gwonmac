@@ -10,7 +10,7 @@ export function openHubMaps(hub: HubPresenter<HTMLElement>) {
     let disposed = false;
     const doc = target.ownerDocument;
     const view = doc.createElement('section'); view.className = 'hub-detail hub-map-settings';
-    const status = doc.createElement('p'); status.setAttribute('role', 'status'); status.hidden = true;
+    const status = doc.createElement('p'); status.className = 'hub-map-status'; status.setAttribute('role', 'status'); view.append(status);
     const painters: (() => void)[] = [];
     type Patch = Parameters<typeof window.gwNative.settings.set>[0];
     let settings: Awaited<ReturnType<typeof window.gwNative.settings.get>> | null = null;
@@ -19,12 +19,12 @@ export function openHubMaps(hub: HubPresenter<HTMLElement>) {
     const saver = createTrailingSave<Patch>({
       write: async patch => { settings = await window.gwNative.settings.set(patch); },
       merge: (waiting, next) => ({ ...waiting, ...next }),
-      settled: failed => { if (disposed) return; status.textContent = failed ? 'Could not save this change. Try again.' : ''; status.hidden = !failed; paint(); },
+      settled: failed => { if (disposed) return; status.textContent = failed ? 'Could not save this change. Try again.' : ''; paint(); },
     });
     const paint = () => { if (settings && !saver.pending) painters.forEach(update => update()); };
     const save = (patch: Patch) => {
       if (!available()) { paint(); return; }
-      status.hidden = true; saver.save(patch);
+      status.textContent = ''; saver.save(patch);
     };
     target.append(view);
     void window.gwNative.settings.get().then(initial => {
@@ -48,16 +48,16 @@ export function openHubMaps(hub: HubPresenter<HTMLElement>) {
         if (opacity) {
           const control = doc.createElement('label'); control.className = 'hub-map-opacity'; control.textContent = opacityTitle;
           const range = doc.createElement('input'); range.type = 'range'; range.min = '0'; range.max = '100'; range.setAttribute('aria-label', opacityTitle);
-          const value = doc.createElement('output');
-          painters.push(() => { if (!settings) return; range.value = String(settings[opacity]); range.disabled = !available() || !settings[key]; value.textContent = `${range.value}%`; });
-          range.oninput = () => { value.textContent = `${range.value}%`; };
+          const value = doc.createElement('span');
+          painters.push(() => { if (!settings) return; range.value = String(settings[opacity]); range.disabled = !available() || !settings[key]; value.textContent = `${range.value}%`; range.setAttribute('aria-valuetext', value.textContent); });
+          range.oninput = () => { value.textContent = `${range.value}%`; range.setAttribute('aria-valuetext', value.textContent); };
           range.onchange = () => { save({ [opacity]: Number(range.value) }); };
           control.append(range, value); group.append(control);
         }
-        view.append(group);
+        status.before(group);
       }
-      view.append(status); paint(); view.querySelector('input')?.focus();
-    }).catch(() => { if (!disposed) { status.textContent = 'Maps controls could not load.'; status.hidden = false; view.append(status); } });
+      paint(); view.querySelector('input')?.focus();
+    }).catch(() => { if (!disposed) { status.textContent = 'Maps controls could not load.'; } });
     let removeListener = () => {};
     return () => { disposed = true; removeListener(); view.remove(); };
   }, available);

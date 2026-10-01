@@ -155,7 +155,7 @@ export interface HubPresenter<Target> {
   notify(message: string, outcome?: 'failed'): void;
   attach(source: HubSource): () => void;
   /** An optional owner binds navigation lifetime to the one attached source, without storing another availability flag. */
-  showRows(title: string, rows: () => readonly HubRow[], summary?: HubSummary, destination?: HubDestination, owner?: HubSource): void;
+  showRows(title: string, rows: () => readonly HubRow[], summary?: HubSummary, destination?: HubDestination, owner?: HubSource, query?: string): void;
   showView(title: string, mount: HubViewMount<Target>, available?: () => boolean, destination?: HubDestination, owner?: HubSource): void;
   /** Whether Esc on an empty query goes back to a parent page rather than closing the Hub. */
   readonly hasParent?: boolean;

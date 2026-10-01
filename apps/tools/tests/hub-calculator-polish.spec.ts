@@ -51,7 +51,7 @@ test('a loading refusal clears when evidence arrives and copy retains its questi
   await page.evaluate(()=>{const get=window.gwNative.trade.getTraderQuotes;window.gwNative.trade.getTraderQuotes=async()=>{await new Promise(resolve=>setTimeout(resolve,200));return get();};});
   const search=page.locator('.hub-search input');await search.fill('10e in p');await search.press('Enter');
   await expect(page.locator('.hub-status')).toHaveText('Loading trader quotes…');
-  await expect(page.locator('.hub-conversion')).toContainText('60 platinum');await expect(page.locator('.hub-status')).toBeHidden();
+  await expect(page.locator('.hub-conversion')).toContainText('60 platinum');await expect(page.locator('.hub-status')).toBeEmpty();
   await search.press('Enter');
   await expect(page.locator('#app')).toHaveAttribute('data-action',/Copied 10 e = 60 platinum.*Buy from trader.*Current observation/);
   await expect(page.locator('.hub-status')).toHaveText('Copied “60 platinum (sample)”');

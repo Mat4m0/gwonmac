@@ -27,6 +27,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   editBuild: [id: string, context: "player" | "hero"];
 }>();
+// Native select choices are materialized before keyboard or pointer interaction.
+const openedBuildPickers = ref(new Set<number>());
 const name = ref(props.team.name);
 const nameInput = ref<HTMLInputElement | null>(null);
 const notes = ref(props.team.notes);
@@ -437,11 +439,15 @@ defineExpose({
               :aria-invalid="issuesForSlot(index).length > 0 || !assignmentValid(slot, index)"
               :aria-describedby="issuesForSlot(index).length > 0 ? `team-slot-issue-${index}` : undefined"
               :disabled="index > 0 && slot.hero === null && slot.build === null"
+              @focus="openedBuildPickers.add(index)"
               @change="chooseBuild(index, $event)"
             >
               <option value="">No build</option>
+              <option v-if="!openedBuildPickers.has(index) && slot.build && controller.library.value && buildById(controller.library.value, slot.build)" :value="slot.build">
+                {{ buildById(controller.library.value, slot.build)?.name }} · {{ buildById(controller.library.value, slot.build)?.professions.join("/") }}
+              </option>
               <optgroup
-                v-for="group in buildOptionGroups(index)"
+                v-for="group in openedBuildPickers.has(index) ? buildOptionGroups(index) : []"
                 :key="group.label"
                 :label="group.label"
               >

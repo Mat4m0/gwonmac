@@ -16,6 +16,7 @@ describe("ToolsApp team management", () => {
     expect(wrapper.text()).toContain("Koss");
 
     const build = wrapper.findAll<HTMLSelectElement>(".build-picker select")[1]!;
+    await build.trigger("focus");
     const alternative = build.findAll("option").find(
       (option) => option.attributes("value") && option.attributes("value") !== build.element.value,
     );
@@ -228,6 +229,8 @@ describe("ToolsApp team management", () => {
     ));
     const player = wrapper.get<HTMLSelectElement>("#team-build-0");
     const hero = wrapper.get<HTMLSelectElement>("#team-build-1");
+    await player.trigger("focus");
+    await hero.trigger("focus");
 
     expect(player.findAll("optgroup").map((group) => group.attributes("label"))).toContain(
       "Other player professions",
@@ -296,6 +299,7 @@ describe("ToolsApp team management", () => {
 
     await heroSelect.setValue("4");
     const unknownHeroBuilds = wrapper.get<HTMLSelectElement>("#team-build-3");
+    await unknownHeroBuilds.trigger("focus");
     expect(unknownHeroBuilds.findAll("optgroup").map(
       (group) => group.attributes("label"),
     )).toContain("Available builds");
@@ -481,6 +485,7 @@ describe("ToolsApp team management", () => {
       saveLibrary: async () => { throw new Error("disk busy"); },
     });
     const select = wrapper.get<HTMLSelectElement>("#team-build-0");
+    await select.trigger("focus");
     const before = select.element.value;
     const alternative = select.findAll("option").find(
       (option) => option.attributes("value") && option.attributes("value") !== before,

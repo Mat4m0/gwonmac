@@ -109,7 +109,9 @@ export function createCharacterSwitchPalette(
   const document = parent.ownerDocument;
   const canvas = document.getElementById("canvas");
   if (!(canvas instanceof HTMLCanvasElement)) throw new Error("game canvas is missing");
-  const root = document.createElement("dialog");
+  const hub = window.gwHub;
+  const root = document.createElement(hub ? "div" : "dialog");
+  if (hub) root.hidden = true;
   root.id = "character-switch-root";
   root.className = "ui-modal ui-modal-layer";
   root.setAttribute("aria-labelledby", "character-switch-title");
@@ -192,7 +194,6 @@ export function createCharacterSwitchPalette(
   let attemptedKey: string | undefined;
   const busy = () => source.action.status === "switching";
   const carouselRadius = () => window.gwHub ? (window.innerWidth <= 640 ? 1 : 2) : window.innerWidth <= 680 ? 1 : window.innerWidth <= 1050 ? 2 : 3;
-  const hub = window.gwHub;
   // In the Hub the search leads the view, so it leads the Tab order too (HUB-138).
   if (hub) panel.prepend(search);
   let hubBack: (() => void) | undefined;
@@ -202,16 +203,19 @@ export function createCharacterSwitchPalette(
     show() { hub.showView('Characters', (target, back, footer) => {
       hubFooter = footer; footerElement.hidden = true;
       hubBack = back;
-      target.append(root); root.open = true;
+      target.append(root); root.hidden = false; root.setAttribute("open", "");
       if (view.kind === "closed") { view = Object.freeze({ kind: "characters" }); render(); }
       focusSelected();
-      return () => { hubBack = undefined; hubFooter = undefined; footerElement.hidden = false; root.open = false; parent.append(root); if (view.kind === 'confirming') source.cancelConfirmation(); view = { kind: 'closed' }; };
+      return () => { hubBack = undefined; hubFooter = undefined; footerElement.hidden = false; root.removeAttribute("open"); root.hidden = true; parent.append(root); if (view.kind === 'confirming') source.cancelConfirmation(); view = { kind: 'closed' }; };
     }, () => !!window.gwToolsSettings?.().characterSwitchEnabled, "characters"); },
     close() { hub.close(); },
     pageChanged() { hub.pageChanged(); },
-    dispose() { if (root.open) hub.close(); },
-  } : window.gwSurfaces.registerDialog({ root, priority: 7, transient: true,
-    dismiss: () => closePalette(true), restoreFocus: () => canvas });
+    dispose() { if (root.hasAttribute("open")) hub.close(); },
+  } : (() => {
+    if (!(root instanceof HTMLDialogElement)) throw new Error("standalone character palette requires a dialog");
+    return window.gwSurfaces.registerDialog({ root, priority: 7, transient: true,
+      dismiss: () => closePalette(true), restoreFocus: () => canvas });
+  })();
   const updateRowSelection = () => {
     // One Tab stop for the cards, on the selected one (roving tabindex, HUB-138).
     for (const button of list.querySelectorAll<HTMLButtonElement>("button[data-row]")) {
@@ -312,6 +316,8 @@ export function createCharacterSwitchPalette(
         : orderCharacters(state.characters);
       if (horizontal || searching) list.setAttribute("role", "listbox");
       else list.removeAttribute("role");
+      if (horizontal || searching) list.setAttribute("aria-orientation", horizontal ? "horizontal" : "vertical");
+      else list.removeAttribute("aria-orientation");
       rows = searchCharacters(orderedRows, query);
       const preserved = selectedKey === undefined
         ? -1
@@ -352,7 +358,11 @@ export function createCharacterSwitchPalette(
         button.type = "button";
         button.id = `character-switch-option-${index}`;
         button.className = "character-switch-row";
-        if (horizontal || searching) button.setAttribute("role", "option");
+        if (horizontal || searching) {
+          button.setAttribute("role", "option");
+          button.setAttribute("aria-setsize", String(rows.length));
+          button.setAttribute("aria-posinset", String(rowIndex + 1));
+        }
         button.dataset.index = String(index);
         button.dataset.row = String(rowIndex);
         button.dataset.characterKey = character.characterKey;
@@ -777,7 +787,7 @@ export function createCharacterSwitchPalette(
     // In the Hub, ⌘E follows the Hub's direct-shortcut contract: it focuses or resumes
     // Characters and never closes the Hub (HUB-049).
     if (hub) hub.direct("characters", () => openPalette());
-    else if (root.open) closePalette(true);
+    else if (root.hasAttribute("open")) closePalette(true);
     else openPalette();
   };
   window.addEventListener("gw:character-toggle", onToggle);
@@ -793,7 +803,7 @@ export function createCharacterSwitchPalette(
   }).catch(() => { /* Keep the surface closed until its enable setting is known. */ });
   const unsubscribe = source.subscribe(render);
   const resize = () => {
-    if (!root.open || layout !== "horizontal" || view.kind !== "characters") return;
+    if (!root.hasAttribute("open") || layout !== "horizontal" || view.kind !== "characters") return;
     render(false);
     focusSelected();
   };

@@ -46,7 +46,7 @@ test('only Hub locks, reset restores its default frame, and popouts have visible
   await page.goto('/?hub');
   const panel = page.locator('.hub-panel');
   const initial = await panel.boundingBox();
-  await page.getByRole('button', { name: 'Unlock Hub position', exact: true }).click();
+  await page.getByRole('button', { name: 'Lock Hub position', exact: true }).click();
   await page.getByRole('button', { name: 'Lock Hub position', exact: true }).press('Alt+ArrowLeft');
   await page.getByRole('button', { name: 'Resize Hub', exact: true }).press('ArrowLeft');
   expect(await panel.boundingBox()).not.toEqual(initial);
@@ -371,7 +371,7 @@ test('interrupted team Apply reopens a review with completed and remaining chang
   await search.press('Enter');
   const review = page.locator('.hub-build-review');
   await expect(review.getByRole('status')).toContainText('Team partly applied. Synthetic interruption');
-  await expect(page.locator('.hub-status')).toBeHidden();
+  await expect(page.locator('.hub-status')).toBeEmpty();
   await expect(review).toContainText('Completed');
   await expect(review).toContainText('Enabling Hard Mode confirmed.');
   await expect(review).toContainText('Remaining');
@@ -426,7 +426,7 @@ test('a new details view clears the previous page pin receipt', async ({ page })
   await page.keyboard.press('Meta+j');
   await page.getByRole('menuitem', { name: 'Show build details', exact: true }).click();
   await expect(page.locator('.hub-build-details')).toBeVisible();
-  await expect(page.locator('.hub-status')).toBeHidden();
+  await expect(page.locator('.hub-status')).toBeEmpty();
 });
 
 

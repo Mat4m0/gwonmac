@@ -729,7 +729,7 @@ useClassicFrame(panel);
         </div>
       </div>
 
-      <div v-show="view === 'listings'" class="trade-summary" aria-live="polite">
+      <div v-show="view === 'listings'" class="trade-summary">
         <span v-if="!playerName">
           {{ submittedQuery ? `Results for “${submittedQuery}”` : "Latest messages" }}
         </span>
