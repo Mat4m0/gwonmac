@@ -29,7 +29,7 @@ test("embedded whispers open on the first click and retain draft input when rais
     await launcher.click();
     const panel = page.locator("#whisper-window");
     await expect(panel).toBeVisible();
-    await panel.getByRole("button", { name: /Test Friend Message 30/ }).click();
+    await panel.getByRole("option", { name: /Test Friend Message 30/ }).click();
     const transcript = panel.locator("[data-transcript]");
     await panel.getByRole("button", { name: "30 new · Show latest" }).click();
     await transcript.evaluate(element => { element.scrollTop = 30; element.dispatchEvent(new Event("scroll")); });
@@ -69,7 +69,7 @@ test("embedded whispers open on the first click and retain draft input when rais
       .not.toBe(fullComposerBackground);
     await expect.poll(() => composer.evaluate(element => getComputedStyle(element).borderColor))
       .not.toBe(fullComposerEdge);
-    await panel.getByRole("button", { name: "Collapse whispers" }).click();
+    await panel.getByRole("button", { name: "Hide Whispers", exact: true }).click();
     await expect(panel).toBeHidden();
     await page.getByRole("button", { name: /Whispers, 0 unread/ }).click();
     await expect(panel).toBeVisible();
