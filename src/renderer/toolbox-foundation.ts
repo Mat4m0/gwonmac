@@ -202,7 +202,8 @@ export function createToolboxFoundation(
     if (!availability.builds) return;
     event.preventDefault();
     if (event instanceof CustomEvent && event.detail === 'workspace') openFloating(builds);
-    else if (window.gwHub?.visible) window.gwHub.browseBuilds();
+    // An open Hub, or one suspended on the Build Library's pages, takes ⌘B as a direct shortcut.
+    else if (window.gwHub?.visible || window.gwHub?.suspendedOn('builds')) window.gwHub.browseBuilds();
     else if (event instanceof CustomEvent && event.detail === "show") openFloating(builds);
     else toggle(builds);
   };
@@ -213,8 +214,10 @@ export function createToolboxFoundation(
       if (trade.tool) trade.tool.search?.(event.detail.query);
       else trade.query = event.detail.query;
     }
-    if (window.gwHub?.visible || event instanceof CustomEvent && (event.detail === "show" || typeof event.detail?.query === "string")) openFloating(trade);
-    else toggle(trade);
+    // ⌘K opens Trade with its search focused, from the game as from the Hub, and hides it only
+    // when the Hub is not open (HUB-128, HUB-036).
+    if (window.gwHub?.visible || !trade.visible || event instanceof CustomEvent && (event.detail === "show" || typeof event.detail?.query === "string")) openFloating(trade);
+    else requestClose(trade);
   };
 
   const stopAtOverlay = (event: Event) => event.stopPropagation();

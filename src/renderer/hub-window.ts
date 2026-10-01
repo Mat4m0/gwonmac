@@ -10,6 +10,11 @@ export function installHubWindow(panel: HTMLElement, heading: HTMLElement, lock:
   const viewport = () => ({ width: window.innerWidth, height: window.innerHeight, margin: 8 });
   let locked = true;
   let placed = false;
+  /**
+   * Where the player last put the Hub, normalized to the viewport. A resize derives the box from
+   * it, so a window that shrinks and grows back returns the Hub to that place and size (HUB-109).
+   */
+  let intent: string | null = null;
   let finishDrag: (() => void) | null = null;
   const paint = () => {
     panel.dataset.locked = String(locked);
@@ -27,20 +32,19 @@ export function installHubWindow(panel: HTMLElement, heading: HTMLElement, lock:
       top: `${Math.max(8, Math.min(top, window.innerHeight - height - 8))}px`,
       width: `${width}px`, height: `${height}px` });
   };
+  const minimum = { width: 340, height: 300 };
+  /** Only the player's own moves and resizes are saved, never a box a small window squeezed. */
   const save = () => {
     if (!placed) return;
-    const value = serializeFloatingWindowPlacement(panel.getBoundingClientRect(), viewport());
-    try { if (value) localStorage.setItem(storageKey, value); } catch { /* Placement remains usable when storage is unavailable. */ }
+    intent = serializeFloatingWindowPlacement(panel.getBoundingClientRect(), viewport());
+    try { if (intent) localStorage.setItem(storageKey, intent); } catch { /* Placement remains usable when storage is unavailable. */ }
   };
-  try {
-    const stored = restoreFloatingWindowPlacement(localStorage.getItem(storageKey), viewport(), { width: 340, height: 300 });
-    if (stored) place(stored.left, stored.top, stored.width, stored.height);
-  } catch { /* Use the default geometry when storage is unavailable. */ }
   const fit = () => {
-    if (!placed) return;
-    const box = panel.getBoundingClientRect();
-    if (box.width && box.height) place(box.left, box.top, box.width, box.height);
+    const box = placed ? restoreFloatingWindowPlacement(intent, viewport(), minimum) : null;
+    if (box) place(box.left, box.top, box.width, box.height);
   };
+  try { intent = localStorage.getItem(storageKey); } catch { /* Use the default geometry when storage is unavailable. */ }
+  if (restoreFloatingWindowPlacement(intent, viewport(), minimum)) { placed = true; fit(); } else intent = null;
   const toggle = () => { finishDrag?.(); locked = !locked; paint(); };
   const drag = (event: PointerEvent) => {
     if (locked || event.button !== 0 || (event.target as Element).closest('button, a, input, select')) return;
@@ -85,7 +89,7 @@ export function installHubWindow(panel: HTMLElement, heading: HTMLElement, lock:
   panel.closest('dialog')?.addEventListener('toggle', onShow);
   paint();
   const reset = () => {
-    finishDrag?.(); placed = false; locked = true;
+    finishDrag?.(); placed = false; locked = true; intent = null;
     try { localStorage.removeItem(storageKey); } catch { /* Reset still restores this session. */ }
     for (const property of ['left', 'top', 'width', 'height', 'transform']) panel.style.removeProperty(property);
     paint();

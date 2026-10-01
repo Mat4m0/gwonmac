@@ -46,14 +46,33 @@ test.describe('game lifecycle', () => {
 });
 
 test.describe('shortcuts through commands.ts', () => {
-  test('Command-T toggles Travel closed the way the renderer command does', async ({ page }) => {
+  // HUB-172: a direct shortcut for the page on top focuses it; it never stacks history or closes the Hub.
+  test('Command-T on Travel keeps Travel and its search, the way the renderer command does', async ({ page }) => {
     await open(page);
     const hub = page.getByRole('dialog', { name: 'Hub', exact: true });
     await page.keyboard.press('Meta+t');
     await expect(page.locator('.hub-caption')).toHaveText('Travel');
+    await page.getByRole('button', { name: 'Back', exact: true }).focus();
     await page.keyboard.press('Meta+t');
-    await expect(hub).toBeHidden();
-    await expect(page.locator('#canvas')).toBeFocused();
+    await expect(hub).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'Hub breadcrumb' })).toHaveText('Home›Travel');
+    await expect(page.getByRole('combobox', { name: 'Destination, phrase, or friend' })).toBeFocused();
+  });
+
+  test('Command-T finds a Travel page opened from Home, and a closed Hub starts Travel fresh', async ({ page }) => {
+    await open(page);
+    const travelSearch = page.getByRole('combobox', { name: 'Destination, phrase, or friend' });
+    await page.getByRole('combobox', { name: searchName }).fill('travel');
+    await expect(page.locator('.hub-primary')).toHaveText(/^Browse travel/);
+    await page.keyboard.press('Enter');
+    await travelSearch.fill('kamadan');
+    await page.keyboard.press('Meta+t');
+    await expect(page.getByRole('navigation', { name: 'Hub breadcrumb' })).toHaveText('Home›Travel');
+    await expect(travelSearch).toHaveValue('kamadan');
+    await page.getByRole('button', { name: 'Close Hub', exact: true }).click();
+    await page.keyboard.press('Meta+t');
+    await expect(travelSearch).toBeFocused();
+    await expect(travelSearch).toHaveValue('');
   });
 
   test('a held Command-R toggles once and its repeats never reach the page', async ({ page }) => {

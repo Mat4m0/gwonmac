@@ -5,7 +5,7 @@
 import { currentTravelFriend, type TravelFriend, type TravelFriends } from '../shared/friends.js';
 import type { TravelCommand, TravelGameState } from '../shared/travel-command.js';
 import type { EmbeddedToolsBundle } from '../shared/tools-bundle-contracts.js';
-import { matchHubRows, type HubSource } from '../shared/hub.js';
+import { matchHubRows, type HubSource, type HubViewMount } from '../shared/hub.js';
 import { ensureToolsStylesheet } from './tools-stylesheet.js';
 import { requireToolsApi } from './tools-native-api.js';
 
@@ -40,19 +40,37 @@ export function createTravelPalette(parent: HTMLElement, command: TravelCommand)
     await loading;
     return app;
   }
-  async function open() {
-    if (app) { app.open(); return; }
-    let active = true;
-    hub.showView('Travel', target => {
-      const message = target.ownerDocument.createElement('p');
-      message.className = 'hub-empty'; message.textContent = 'Loading Travel…';
-      target.append(message);
-      return () => { active = false; message.remove(); };
-    });
-    try {
-      const loaded = await load();
-      if (active && !disposed && enabled) loaded?.open();
-    } catch (error) { if (active) throw error; }
+  /**
+   * The Travel page. Before the lazy bundle has loaded, the page shows its loading line and the
+   * loaded view mounts into that same page, so the first ⌘T or `/tp` never leaves a placeholder
+   * parent behind (HUB-018).
+   */
+  function open() {
+    /** This page's Travel content, created once so Back restores its state. */
+    let page: HubViewMount<HTMLElement> | null = null;
+    hub.showView('Travel', (target, back, footer) => {
+      if (app) return (page ??= app.page())(target, back, footer);
+      let active = true;
+      let unmount = () => {};
+      const doc = target.ownerDocument;
+      const message = doc.createElement('p'); message.className = 'hub-empty'; message.setAttribute('role', 'status');
+      const retry = doc.createElement('button'); retry.type = 'button'; retry.className = 'ui-button'; retry.textContent = 'Try again'; retry.hidden = true;
+      target.append(message, retry);
+      const attempt = () => {
+        message.textContent = 'Loading Travel…'; retry.hidden = true;
+        load().then(loaded => {
+          if (!active || !loaded || !enabled) return;
+          message.remove(); retry.remove(); unmount = (page ??= loaded.page())(target, back, footer);
+          // The keyboard that waited on the loading page moves to Travel's search.
+          if (!target.contains(doc.activeElement)) target.querySelector<HTMLElement>('input[role=combobox]')?.focus();
+        }).catch(() => {
+          if (!active) return;
+          message.textContent = 'Travel could not load. Your Travel preferences are unchanged.'; retry.hidden = false; retry.focus();
+        });
+      };
+      retry.onclick = attempt; attempt();
+      return () => { active = false; message.remove(); retry.remove(); unmount(); };
+    }, () => enabled, 'travel');
   }
   const source: HubSource = {
     feature: 'travelPalette',
@@ -72,8 +90,7 @@ export function createTravelPalette(parent: HTMLElement, command: TravelCommand)
   const onCommand = (event: Event) => {
     if (!enabled) return;
     event.preventDefault();
-    if (app?.active && (!(event instanceof CustomEvent) || event.detail !== 'show')) { hub.close(); return; }
-    void open().catch(() => hub.showRows('Travel could not load', () => [{ id: 'retry-travel', title: 'Try again', detail: 'Your Travel preferences are unchanged', group: 'Travel', action: 'Retry', run: open }]));
+    hub.direct('travel', open);
   };
   window.addEventListener('gw:travel-toggle', onCommand);
   return {

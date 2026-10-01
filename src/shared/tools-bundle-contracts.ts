@@ -4,7 +4,7 @@
  * import these shapes directly instead of restating them on either side.
  */
 import type { EliteMapHandle, EliteMapHost } from "./elite-map.js";
-import type { HubPresenter, HubSource } from "./hub.js";
+import type { HubPresenter, HubSource, HubViewMount } from "./hub.js";
 import type { WhisperSession } from "./whisper-session.js";
 import type { TravelFriends } from "./friends.js";
 import type { ToolboxObservation } from "./builds/live-party.js";
@@ -85,6 +85,8 @@ export type EmbeddedToolsBundle<Target> = Readonly<{
     source: HubSource;
     readonly active: boolean;
     open(): void;
+    /** A new Travel page's content, for a page that was shown before the bundle loaded. */
+    page(): HubViewMount<Target>;
     travel(mapId: number): Promise<void>;
     update(state: TravelGameState): void;
     updateFriends(friends: TravelFriends): void;

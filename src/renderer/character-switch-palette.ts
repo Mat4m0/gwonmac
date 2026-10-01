@@ -113,7 +113,7 @@ export function createCharacterSwitchPalette(
   root.id = "character-switch-root";
   root.className = "ui-modal ui-modal-layer";
   root.setAttribute("aria-labelledby", "character-switch-title");
-  root.innerHTML = `<div class="ui-frame character-switch-panel"><header class="character-switch-head"><h2 id="character-switch-title">Switch Character</h2><span class="character-switch-count" aria-live="polite" aria-atomic="true"></span><button class="ui-button character-switch-head-action character-switch-settings-toggle" type="button" aria-label="Character Switch settings" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="ui-button character-switch-head-action character-switch-close" type="button" aria-label="Close Switch Character"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 3 10 10M13 3 3 13" /></svg></button></header><div class="character-switch-carousel"><button class="ui-button character-switch-arrow character-switch-previous" type="button" aria-label="Previous character"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m10.5 2.5-5 5 5 5"/></svg></button><ul id="character-switch-list" class="character-switch-list" aria-label="Characters"></ul><button class="ui-button character-switch-arrow character-switch-next" type="button" aria-label="Next character"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m5.5 2.5 5 5-5 5"/></svg></button></div><section class="character-switch-settings" aria-label="Character Switch settings" hidden><fieldset class="character-switch-layout-setting"><legend>Layout</legend><div><label class="ui-choice-row"><input type="radio" name="character-switch-layout" value="horizontal"><span><strong>Horizontal</strong><small>Selection-screen order</small></span></label><label class="ui-choice-row"><input type="radio" name="character-switch-layout" value="vertical"><span><strong>Vertical</strong><small>Alphabetical list</small></span></label></div></fieldset><label class="character-switch-setting" for="character-switch-enable-search"><span><strong>Show search bar</strong><small>Type from a character to search</small></span><input id="character-switch-enable-search" type="checkbox"></label><label class="character-switch-setting" for="character-switch-show-profession"><span><strong>Show profession</strong><small>Icon, primary, and secondary profession</small></span><input id="character-switch-show-profession" type="checkbox"></label><label class="character-switch-setting" for="character-switch-show-level"><span><strong>Show level</strong><small>Character level</small></span><input id="character-switch-show-level" type="checkbox"></label><label class="character-switch-setting" for="character-switch-show-location"><span><strong>Show known location</strong><small>Locations from the reviewed Travel catalogue</small></span><input id="character-switch-show-location" type="checkbox"></label></section><section class="character-switch-confirm" aria-describedby="character-switch-confirm-copy" hidden><p id="character-switch-confirm-copy">Switching characters will leave this explorable area. You may lose progress in this instance.</p><div class="character-switch-confirm-actions"><button type="button" class="ui-button character-switch-stay">Stay here</button><button type="button" class="ui-button character-switch-leave" data-variant="danger">Leave and switch</button></div></section><p class="character-switch-status" role="status" aria-live="polite" aria-atomic="true"></p><details class="character-switch-details"><summary>Technical details</summary><pre></pre><button type="button" class="ui-button character-switch-copy">Copy diagnostics</button></details><footer class="character-switch-footer"><span class="character-switch-hints character-switch-list-hints"></span><span class="character-switch-hints character-switch-settings-hints" hidden><kbd class="ui-kbd">esc</kbd> back</span><span class="character-switch-hints character-switch-confirm-hints" hidden><kbd class="ui-kbd">esc</kbd> back</span><button type="button" class="ui-button character-switch-action" data-variant="primary" disabled></button></footer></div>`;
+  root.innerHTML = `<div class="ui-frame character-switch-panel"><header class="character-switch-head"><h2 id="character-switch-title">Switch Character</h2><span class="character-switch-count" aria-live="polite" aria-atomic="true"></span><button class="ui-button character-switch-head-action character-switch-settings-toggle" type="button" aria-label="Character Switch settings" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="ui-button character-switch-head-action character-switch-close" type="button" aria-label="Close Switch Character"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 3 10 10M13 3 3 13" /></svg></button></header><div class="character-switch-carousel"><button class="ui-button character-switch-arrow character-switch-previous" type="button" aria-label="Previous character"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m10.5 2.5-5 5 5 5"/></svg></button><ul id="character-switch-list" class="character-switch-list" aria-label="Characters"></ul><button class="ui-button character-switch-arrow character-switch-next" type="button" aria-label="Next character"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m5.5 2.5 5 5-5 5"/></svg></button></div><section class="character-switch-settings" aria-label="Character Switch settings" hidden><fieldset class="character-switch-layout-setting"><legend>Layout</legend><div><label class="ui-choice-row"><input type="radio" name="character-switch-layout" value="horizontal"><span><strong>Horizontal</strong><small>Selection-screen order</small></span></label><label class="ui-choice-row"><input type="radio" name="character-switch-layout" value="vertical"><span><strong>Vertical</strong><small>Alphabetical list</small></span></label></div></fieldset><label class="character-switch-setting" for="character-switch-enable-search"><span><strong>Show search bar</strong><small>Type from a character to search</small></span><input id="character-switch-enable-search" type="checkbox"></label><label class="character-switch-setting" for="character-switch-show-profession"><span><strong>Show profession</strong><small>Icon, primary, and secondary profession</small></span><input id="character-switch-show-profession" type="checkbox"></label><label class="character-switch-setting" for="character-switch-show-level"><span><strong>Show level</strong><small>Character level</small></span><input id="character-switch-show-level" type="checkbox"></label><label class="character-switch-setting" for="character-switch-show-location"><span><strong>Show known location</strong><small>Locations from the reviewed Travel catalogue</small></span><input id="character-switch-show-location" type="checkbox"></label></section><section class="character-switch-confirm" aria-describedby="character-switch-confirm-copy" hidden><p id="character-switch-confirm-copy">Switching characters will leave this explorable area. You may lose progress in this instance.</p><div class="character-switch-confirm-actions"><button type="button" id="character-switch-stay" class="ui-button character-switch-stay">Stay here</button><button type="button" id="character-switch-leave" class="ui-button character-switch-leave" data-variant="danger">Leave and switch</button></div></section><p class="character-switch-status" role="status" aria-live="polite" aria-atomic="true"></p><details class="character-switch-details"><summary>Technical details</summary><pre></pre><button type="button" class="ui-button character-switch-copy">Copy diagnostics</button></details><footer class="character-switch-footer"><span class="character-switch-hints character-switch-list-hints"></span><span class="character-switch-hints character-switch-settings-hints" hidden><kbd class="ui-kbd">esc</kbd> back</span><span class="character-switch-hints character-switch-confirm-hints" hidden><kbd class="ui-kbd">esc</kbd> back</span><button type="button" class="ui-button character-switch-action" data-variant="primary" disabled></button></footer></div>`;
   parent.append(root);
   const panel = root.querySelector<HTMLElement>(".character-switch-panel")!;
   const carousel = root.querySelector<HTMLElement>(".character-switch-carousel")!;
@@ -204,7 +204,7 @@ export function createCharacterSwitchPalette(
       if (view.kind === "closed") { view = Object.freeze({ kind: "characters" }); render(); }
       focusSelected();
       return () => { hubBack = undefined; root.open = false; parent.append(root); if (view.kind === 'confirming') source.cancelConfirmation(); view = { kind: 'closed' }; };
-    }, () => !!window.gwToolsSettings?.().characterSwitchEnabled); },
+    }, () => !!window.gwToolsSettings?.().characterSwitchEnabled, "characters"); },
     close() { hub.close(); },
     pageChanged() { hub.pageChanged(); },
     dispose() { if (root.open) hub.close(); },
@@ -246,6 +246,9 @@ export function createCharacterSwitchPalette(
       ?.scrollIntoView({ block: "nearest" });
   };
   let renderedView: ViewState["kind"] = "closed";
+  /** The palette opened before the account's character list arrived. */
+  let awaitingList = false;
+  let arrived = false;
   const render = (preserveCharacterFocus = true) => {
     if (view.kind !== renderedView) {
       // A new inner page (the cards, a confirmation, the settings) cancels a
@@ -307,6 +310,14 @@ export function createCharacterSwitchPalette(
         ? -1
         : rows.findIndex(({ character }) => character.characterKey === selectedKey);
       if (preserved >= 0) selected = preserved;
+      // A list that arrives after the palette opened starts on the current character, like an
+      // opening with the list at hand, and takes the keyboard unless the player is searching (HUB-074).
+      else if (awaitingList) {
+        const current = rows.findIndex(({ index }) => index === state.selectedIndex);
+        if (current >= 0) selected = current;
+        arrived = !searching;
+      }
+      awaitingList = false;
       selected = Math.min(selected, Math.max(0, rows.length - 1));
       const renderedRows = horizontal
         ? characterCarouselRows(selected, rows.length, carouselRadius())
@@ -425,7 +436,8 @@ export function createCharacterSwitchPalette(
     confirmPanel.hidden = !confirming;
     count.hidden = confirming;
     settingsToggle.hidden = confirming;
-    listHints.hidden = settingsMode || confirming;
+    // No switch hints while the list is still on its way: there is nothing to choose yet (HUB-074).
+    listHints.hidden = settingsMode || confirming || state.status !== "ready";
     settingsHints.hidden = !settingsMode;
     confirmHints.hidden = !confirming;
     settingsToggle.setAttribute("aria-pressed", String(settingsMode));
@@ -465,7 +477,8 @@ export function createCharacterSwitchPalette(
     } else if (state.status !== "ready") status.textContent = "Waiting for the account character list…";
     else if (searching && rows.length === 0) status.textContent = "No characters match that search.";
     else status.textContent = "";
-    if (focusedCharacterKey !== undefined && view.kind === "characters") {
+    if (arrived && view.kind === "characters" && !searching) { arrived = false; focusSelected(); }
+    else if (focusedCharacterKey !== undefined && view.kind === "characters") {
       const replacement = [...list.querySelectorAll<HTMLButtonElement>("button[data-character-key]")]
         .find((button) => button.dataset.characterKey === focusedCharacterKey);
       if (replacement) replacement.focus({ preventScroll: true });
@@ -505,6 +518,7 @@ export function createCharacterSwitchPalette(
       rows = [];
       selected = 0;
     }
+    awaitingList = state.status !== "ready";
     modal.show();
     render();
     focusSelected();
@@ -753,7 +767,10 @@ export function createCharacterSwitchPalette(
     if (!enabled) return;
     event.preventDefault();
     if (source.action.status === "switching") return;
-    if (root.open) closePalette(true);
+    // In the Hub, ⌘E follows the Hub's direct-shortcut contract: it focuses or resumes
+    // Characters and never closes the Hub (HUB-049).
+    if (hub) hub.direct("characters", () => openPalette());
+    else if (root.open) closePalette(true);
     else openPalette();
   };
   window.addEventListener("gw:character-toggle", onToggle);

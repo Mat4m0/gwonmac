@@ -534,9 +534,8 @@ test.describe('Characters: typing never switches', () => {
     await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
     await page.keyboard.press('Escape');
     const closes: [string, (page: import('@playwright/test').Page) => Promise<void>][] = [
-      ['Command-E', page => page.keyboard.press('Meta+e')],
+      ['Escape', async page => { await page.keyboard.press('Escape'); await page.keyboard.press('Escape'); }],
       ['the close button', page => page.getByRole('button', { name: 'Close Hub', exact: true }).click()],
-      ['Command-R', page => page.keyboard.press('Meta+r')],
     ];
     for (const [name, close] of closes) {
       await page.keyboard.press('Meta+e');

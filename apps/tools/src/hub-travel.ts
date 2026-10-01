@@ -1,6 +1,6 @@
 /** One Travel host serves both unified search and the existing detailed view. */
 import { createApp, h, watch } from 'vue';
-import type { HubPresenter, HubRow, HubSource, HubTask } from '../../../src/shared/hub';
+import type { HubPresenter, HubRow, HubSource, HubTask, HubViewMount } from '../../../src/shared/hub';
 import { matchHubRows, parseHubQuery, hubMatch } from '../../../src/shared/hub';
 import { TRAVEL_DESTINATIONS, travelDestination } from '../../../src/shared/travel';
 import { travelContextRefusal, travelDestinationAvailability } from '../../../src/shared/travel-command';
@@ -28,9 +28,14 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
     catch { loadError = 'Travel preferences could not load. Open Travel to retry.'; }
     if (!disposed) refresh();
   };
-  function open() {
+  /**
+   * The content of one Travel page. The page keeps its search and Customize state while Back
+   * or a resume restores it; a new Travel page starts fresh. Core's lazy loader mounts it into
+   * the page it already shows.
+   */
+  function page(): HubViewMount<HTMLElement> {
     let resume: InstanceType<typeof TravelPalette>['$props']['resume'];
-    hub.showView('Travel', (target, back, footer) => {
+    return (target, back, footer) => {
       // Travel names its trip in its own footer.
       footer.own();
       active = true;
@@ -41,8 +46,10 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
       }) });
       app.mount(target);
       return () => { active = false; app.unmount(); };
-    }, () => !!window.gwToolsSettings?.().gwonmacTools && !!window.gwToolsSettings?.().travelPalette);
+    };
   }
+  const available = () => !!window.gwToolsSettings?.().gwonmacTools && !!window.gwToolsSettings?.().travelPalette;
+  function open() { hub.showView('Travel', page(), available, 'travel'); }
   /** The certified instance type, never the catalogue: a Guild Hall or an uncatalogued outpost is no explorable area. */
   const explorable = () => host.state.value.status === 'ready' && host.state.value.explorable;
   function refusal(mapId: number) {
@@ -91,7 +98,7 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
       }), ...matchHubRows(tools, query)];
     },
   };
-  return { source, open, travel, get active() { return active; },
+  return { source, open, page, travel, get active() { return active; },
     update: host.updateGameState, updateFriends: host.updateFriends,
     dispose() { disposed = true; stop(); stopNotice(); listeners.clear(); host.dispose(); },
   };

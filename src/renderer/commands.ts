@@ -57,10 +57,11 @@
   }
 
   window.gwNative.commands.handle(async (command) => {
+    // Build Library and Trade opened from an open Hub suspend it instead, so ⌘R resumes
+    // the page the player left (HUB-036).
     if (
       command.type === 'accounts.settings.open'
-      || (command.type === 'tools.toggle' && !window.gwHub?.visible)
-      || command.type === 'trade.toggle'
+      || ((command.type === 'tools.toggle' || command.type === 'trade.toggle') && !window.gwHub?.visible)
       || command.type === 'storage.open'
       || command.type === 'diagnostics.toggle'
     ) window.gwSurfaces?.dismissTransient();
@@ -70,8 +71,9 @@
         window.gwHub.openSettings();
         break;
       case 'hub.toggle':
+        // The command keeps its stored name; an open Hub goes Home and never closes.
         if (!window.gwHub) return 'unhandled';
-        window.gwHub.toggle();
+        window.gwHub.show();
         break;
       case 'input.reset':
         dispatch('gw:input-reset');
