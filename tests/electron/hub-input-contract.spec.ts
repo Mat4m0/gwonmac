@@ -614,6 +614,9 @@ test('Trade focuses search on its shortcut, keeps slash inside its controls, and
   try {
     const { page } = fixture;
     const trade = page.locator('#toolbox-trade .trade-window');
+    // Game input starts before the asynchronous Tools installation. Send the
+    // one shortcut only after its owner has installed the Trade host/listener.
+    await expect(page.locator('#toolbox-trade')).toBeAttached();
     await chord(fixture, 'K', ['meta']);
     await expect(trade).toBeVisible();
     const search = trade.getByRole('searchbox', { name: 'Search offers or character names' });
