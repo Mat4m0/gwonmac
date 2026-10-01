@@ -484,7 +484,11 @@ test('Accounts: keeping the running game open is the default; a replace needs on
   expect(await ledger(page)).toEqual(['Account Second replace']);
   // Back cancels it.
   await page.getByRole('button', { name: 'Open Hub', exact: true }).click();
-  await search(page).fill('acc second'); await search(page).press('ArrowDown'); await search(page).press('Enter');
+  // The reopened Hub loads its accounts again; Enter must reach the replace row, not a loading one.
+  await search(page).fill('acc second'); await search(page).press('ArrowDown');
+  await expect(primary(page)).toHaveText(/^Close Main and open Second/);
+  await search(page).press('Enter');
+  await expect(caption(page)).toHaveText('Close Main?');
   await page.keyboard.press('Meta+j');
   await expect(page.getByRole('menuitem', { name: 'Keep Main' })).toBeVisible();
   await page.keyboard.press('Escape');
