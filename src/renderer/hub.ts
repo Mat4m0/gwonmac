@@ -669,7 +669,8 @@ export function createHub(parent: HTMLElement) {
    * Library opens within one frame budget (HUB-112). Selection, End and a restored scroll position
    * paint through the rows they need first, so no row height is ever guessed.
    */
-  const PAINT_CHUNK = 50;
+  // Ten rich build rows leave time for their style and layout work in the same frame.
+  const PAINT_CHUNK = 10;
   type Painting = { rows: readonly HubRow[]; next: number; group?: string; section: HTMLElement; paint: (row: HubRow, index: number) => HTMLElement; frame: number };
   let painting: Painting | null = null;
   function stopPainting() { if (painting) cancelAnimationFrame(painting.frame); painting = null; }
@@ -776,6 +777,8 @@ export function createHub(parent: HTMLElement) {
     const top = list.scrollTop;
     list.before(rates);
     const compactBuilds = !scope && !input.value.trim();
+    // Reserve the preview from the complete result set, before deferred rows reach the DOM.
+    list.classList.toggle('hub-build-list', !compactBuilds && rows.some(row => !!row.skills));
     const paintRow = (row: HubRow, index: number) => {
       const compact = !!row.skills && compactBuilds;
       const retained = !shortcutsChanged && mounted.get(row.id)?.classList.contains('hub-build-compact') === compact && samePaint(row, previousById.get(row.id)) ? mounted.get(row.id) : undefined;

@@ -243,7 +243,8 @@ test('root typing and complete library entry stay within the scale budget (HUB-1
     longTasks.length = 0;
     const started = performance.now(); window.gwHub!.browseBuilds();
     const entry = performance.now() - started;
-    await new Promise(requestAnimationFrame);
+    // Observe every deferred batch, including those beyond the first 100 ms.
+    while (document.querySelectorAll('.hub-build-row').length < 1000) await new Promise(requestAnimationFrame);
     const row = document.querySelector<HTMLElement>('.hub-build-row')!;
     const height = row.getBoundingClientRect().height;
     // Long-task delivery is asynchronous; wait for the observer before judging its evidence.
@@ -269,13 +270,15 @@ test('End and Back reach rows the 1000-build Library has not painted yet (HUB-11
     window.gwHub!.browseBuilds();
     const input = document.querySelector<HTMLInputElement>('.hub-search input')!;
     const painted = document.querySelectorAll('.hub-row').length;
+    const height = document.getElementById('hub-results')!.getBoundingClientRect().height;
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
     const option = document.getElementById(input.getAttribute('aria-activedescendant') ?? '');
     const list = document.getElementById('hub-results')!.getBoundingClientRect(), box = option?.getBoundingClientRect();
-    return { painted, last: option === [...document.querySelectorAll('.hub-row')].at(-1), selected: option?.getAttribute('aria-selected'),
+    return { painted, height, heightAfter: list.height, last: option === [...document.querySelectorAll('.hub-row')].at(-1), selected: option?.getAttribute('aria-selected'),
       visible: !!box && box.top >= list.top - 1 && box.bottom <= list.bottom + 1 };
   });
   expect(end.painted).toBeLessThan(1000);
+  expect(end.heightAfter).toBe(end.height);
   expect(end).toMatchObject({ last: true, selected: 'true', visible: true });
   // A place far below the first painted rows; the row opened there ends above the list's end.
   const search = page.locator('.hub-search input');
