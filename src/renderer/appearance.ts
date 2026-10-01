@@ -102,6 +102,7 @@ export const appearanceVariables = (
   const variables: Record<string, string> = {
     "--ui-panel-opacity": String(settings.uiPanelOpacity / 100),
   };
+  if (settings.uiTextSize !== 100) variables["--ui-text-scale"] = String(settings.uiTextSize / 100);
   const theme = settings.uiStyle === "custom"
     ? settings.uiCustomTheme
     : defaultCustomUiTheme(settings.uiStyle === "obsidian" ? "modern" : "classic");

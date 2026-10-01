@@ -35,6 +35,7 @@ window.gwApplyFixtureAppearance = (fixture: StandaloneAppearanceFixture) => {
     ...DEFAULT_SETTINGS,
     uiStyle: fixture.uiStyle,
     uiPanelOpacity: fixture.uiPanelOpacity,
+    uiTextSize: fixture.uiTextSize ?? DEFAULT_SETTINGS.uiTextSize,
     uiFont: fixture.uiFont ?? DEFAULT_SETTINGS.uiFont,
     uiCustomTheme: fixture.uiCustomTheme ?? DEFAULT_SETTINGS.uiCustomTheme,
   });

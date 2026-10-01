@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { HUB_SEARCH_GLYPH } from '../../../../src/shared/ui/hub-search';
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import {
   TRAVEL_SEARCH_QUERY_LIMIT,
@@ -934,7 +935,7 @@ function onKeydown(event: KeyboardEvent): void {
 <template>
   <section ref="palette" v-show="visible" class="travel-palette" :class="{ 'ui-frame': !inset }" :role="nativeDialog ? undefined : 'dialog'" :aria-label="nativeDialog ? undefined : 'Quick Travel'" :aria-busy="preferenceWritePending" @keydown="onKeydown">
     <div class="travel-search">
-      <label for="travel-search-input"><svg class="travel-search-icon" viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.25" /><path d="m12.4 12.4 4.1 4.1" /></svg><input id="travel-search-input" ref="input" v-model="query" role="combobox" aria-label="Destination, phrase, or friend" :aria-controls="mode === 'travel' ? hasQuery ? 'travel-results' : 'travel-panel' : undefined" aria-autocomplete="list" aria-haspopup="listbox" :aria-activedescendant="mode === 'travel' && activeResultId ? `travel-${activeResultId}` : undefined" :aria-expanded="mode === 'travel' && selectableDestinations.length > 0" autocomplete="off" spellcheck="false" :maxlength="TRAVEL_SEARCH_QUERY_LIMIT" placeholder="Search destinations or friends…"></label>
+      <label for="travel-search-input" :class="{ 'ui-hub-search': !!footer }"><svg v-if="footer" class="travel-search-icon" viewBox="0 0 24 24" aria-hidden="true" v-html="HUB_SEARCH_GLYPH"></svg><svg v-else class="travel-search-icon" viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.25" /><path d="m12.4 12.4 4.1 4.1" /></svg><input id="travel-search-input" ref="input" v-model="query" role="combobox" aria-label="Destination, phrase, or friend" :aria-controls="mode === 'travel' ? hasQuery ? 'travel-results' : 'travel-panel' : undefined" aria-autocomplete="list" aria-haspopup="listbox" :aria-activedescendant="mode === 'travel' && activeResultId ? `travel-${activeResultId}` : undefined" :aria-expanded="mode === 'travel' && selectableDestinations.length > 0" autocomplete="off" spellcheck="false" :maxlength="TRAVEL_SEARCH_QUERY_LIMIT" placeholder="Search destinations or friends…"></label>
     </div>
 
     <!-- In the Hub the cog leads Customize's controls in Tab order (HUB-070); on its own it follows the destinations. -->

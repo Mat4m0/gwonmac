@@ -8,6 +8,7 @@ import type { FixtureCanvasEvent } from "./hub-fixture";
 export type StandaloneAppearanceFixture = Readonly<{
   uiStyle: AppSettings["uiStyle"];
   uiPanelOpacity: AppSettings["uiPanelOpacity"];
+  uiTextSize?: AppSettings["uiTextSize"];
   uiFont?: AppSettings["uiFont"];
   uiCustomTheme?: CustomUiTheme;
 }>;

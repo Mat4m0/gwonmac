@@ -54,3 +54,5 @@ test('progress accepts the same short track names as entered point quantities', 
   for (const [short, full] of [['sweet', 'sweet tooth'], ['drunk', 'drunkard'], ['party', 'party animal']] as const)
     assert.deepEqual(calculateTitle(`${short} from 0`), calculateTitle(`${full} from 0`));
 });
+
+ test('a single remaining point uses the singular unit',()=>{assert.equal(calculateTitle('sweet tooth from 9999')?.[0]?.title,'1 point remaining');});

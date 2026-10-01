@@ -2,7 +2,7 @@
  * Exact, offline title arithmetic from explicitly entered quantities and progress.
  * This catalogue owns point values; it never reads or stores character state.
  */
-import { decimal, divide, formatFraction, fraction, multiply } from './hub-calculator.js';
+import { decimal, divide, formatDisplayFraction, fraction, multiply } from './hub-calculator.js';
 
 type Track = 'sweet' | 'drunk' | 'party' | 'zaishen';
 const tracks: Record<Track, { name: string; ranks: readonly number[] }> = {
@@ -67,7 +67,7 @@ export function calculateTitle(query:string):readonly TitleCalculation[]|null {
       const target=rank!==undefined?definition.ranks[rank-1]!:term.includes(' next ')?definition.ranks.find(value=>value>current)??maximum:maximum;
       const remaining=Math.max(0,target-current);
       const detail=`From ${number(current)} entered points · Target ${number(target)}${rank?` (rank ${rank})`:''} · ${remaining===0?'Target reached':'Progress is not read from your character'}`;
-      const result=card(`${number(remaining)} points remaining`,detail,number(current),`${definition.name} points`,'To target');
+      const result=card(`${number(remaining)} point${remaining===1?'':'s'} remaining`,detail,number(current),`${definition.name} points`,'To target');
       return track==='zaishen'?[result,...shopping(remaining,track)]:[{...result,...(remaining>0?{next:`${remaining} ${track} points`}:{})}];
     }
     const conversion=new RegExp(`^(${integer})\\s*(?:(stacks?|stk)\\s+)?(.+?) (?:in|to) (.+)$`,'u').exec(term);
@@ -88,7 +88,7 @@ export function calculateTitle(query:string):readonly TitleCalculation[]|null {
       const perPoint=divide(price,fraction(BigInt(points)));
       const label=/^(?:g|gold)$/u.test(unit)?'gold':/^(?:e|ecto|ectos)$/u.test(unit)?'ecto':'platinum';
       const maximum=tracks[track].ranks.at(-1)!;
-      return [card(`${formatFraction(perPoint)} ${label} / point`,`Your entered offer · ${formatFraction(multiply(perPoint,fraction(BigInt(maximum))))} ${label} for ${number(maximum)} points at this same rate · Not a market quote`,`${number(points)} points`,tracks[track].name,'Price per point')];
+      return [card(`${formatDisplayFraction(perPoint)} ${label} / point`,`Your entered offer · ${formatDisplayFraction(multiply(perPoint,fraction(BigInt(maximum))))} ${label} for ${number(maximum)} points at this same rate · Not a market quote`,`${number(points)} points`,tracks[track].name,'Price per point')];
     }
     return null;
   }catch(error){return [{title:error instanceof Error?error.message:'Check the title calculation.',detail:'Edit the input; no progress was changed.',problem:true}];}

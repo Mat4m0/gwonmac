@@ -20,14 +20,18 @@ const paths = {
   target: '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/>',
   appearance: '<circle cx="12" cy="12" r="9"/><path d="M12 3v18a9 9 0 0 0 0-18Z" fill="currentColor"/>',
   keyboard: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 9h1m3 0h1m3 0h1m3 0h1M6 13h1m3 0h1m3 0h1m3 0h1M7 16h10"/>',
-  command: '<path d="m8 5 7 7-7 7"/>',
+  character: '<circle cx="8" cy="7" r="3"/><path d="M2 20v-2a6 6 0 0 1 12 0M16 7h6m-3-3 3 3-3 3"/>',
+  accounts: '<rect x="3" y="3" width="14" height="18" rx="2"/><path d="M7 7h6M7 11h6M14 16h8m-3-3 3 3-3 3"/>',
+  invite: '<circle cx="8" cy="7" r="3"/><path d="M2 21v-3a6 6 0 0 1 12 0M18 7v8m-4-4h8"/>',
+  command: '<path d="m9 5-6 7 6 7M13 19h8"/>',
   resign: '<path d="M6 21V4M6 4h11l-2.5 4 2.5 4H6"/>',
 };
 export function hubIcon(document: Document, row: Pick<HubRow, 'id' | 'group' | 'icon'>): HTMLElement {
   const icon = document.createElement('span'); icon.className = 'hub-icon'; icon.setAttribute('aria-hidden', 'true');
   if (row.icon) { const image = document.createElement('img'); image.src = row.icon; image.alt = ''; icon.append(image); return icon; }
   const id = row.id.split(':')[0];
-  const kind = id === 'folder' || id === 'game-templates' ? 'folder' : row.group === 'Teams' || id === 'team' ? 'team'
+  const action = row.id.split(':').at(-1);
+  const kind = id === 'character' ? 'character' : id === 'accounts' || id === 'account' ? 'accounts' : action === 'whisper' ? 'whispers' : action === 'invite' ? 'invite' : action === 'travel' ? 'travel' : id === 'folder' || id === 'game-templates' ? 'folder' : row.group === 'Teams' || id === 'team' ? 'team'
     : row.group === 'Builds' || id === 'build' || id === 'builds' ? 'builds'
     : row.group === 'Places' || id === 'place' || id === 'travel' ? 'travel'
     : row.group === 'Accounts' || id === 'accounts' || row.group === 'People' || row.group === 'Heroes' || row.group === 'Characters' || id === 'character' ? 'person'

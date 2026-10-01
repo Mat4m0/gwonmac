@@ -2,7 +2,7 @@
  * Hub currency presentation with inferred market prices and optional manual rates.
  * Market demand stays bounded to a complete visible query through Trade's owner.
  */
-import { calculate, currencyInfo, decimal, divide, evaluateConversion, formatFraction, formatCalculatorCopy, fraction, multiply, parseConversion, parseDefaultConversion, DEFAULT_CALCULATOR_RATES, parseCalculatorRates, parseManualRate, type CalculatorRates, type Currency, type Fraction } from '../shared/hub-calculator.js';
+import { calculate, currencyInfo, decimal, divide, evaluateConversion, formatFraction, formatDisplayFraction, formatCalculatorCopy, fraction, multiply, parseConversion, parseDefaultConversion, DEFAULT_CALCULATOR_RATES, parseCalculatorRates, parseManualRate, type CalculatorRates, type Currency, type Fraction } from '../shared/hub-calculator.js';
 import { hubTier, type HubPresenter, type HubRow, type HubSource } from '../shared/hub.js';
 import type { TraderQuoteSnapshot } from '../shared/trade-chat.js';
 import { MARKET_CACHE_MS, MARKET_MAX_AGE_MS, type MarketSnapshot, type MarketQuote, type MarketSide } from '../shared/market-rates.js';
@@ -93,19 +93,19 @@ export function createHubCalculator(options: {
       try{
         const explicit=parseConversion(term);
         const conversion=explicit??parseDefaultConversion(term);
-        if(!conversion){clear();const value=calculate(term);return value?[{...result('calculation',formatFraction(value),'Exact arithmetic',formatCalculatorCopy(term,formatFraction(value),'Exact arithmetic')),conversion:{input:term,from:'Calculation',to:'Result'}}]:[...partialConversion(term),...calculatorCommands(term)];}
+        if(!conversion){clear();const value=calculate(term);return value?[{...result('calculation',formatDisplayFraction(value),'Exact arithmetic',formatCalculatorCopy(term,formatDisplayFraction(value),'Exact arithmetic')),conversion:{input:term,from:'Calculation',to:'Result'}}]:[...partialConversion(term),...calculatorCommands(term)];}
         const units=[...conversion.terms.map(entry=>entry.unit),conversion.to];
         const fixed=units.every(unit=>unit==='gold'||unit==='platinum')||units.every(unit=>unit===conversion.to);
         const card=(id:string,rate:(unit:Currency)=>Fraction,detail:string)=>{
           const amount=evaluateConversion(conversion,rate);const unit=conversion.to;
           const label=unit.startsWith('item:')?currencyInfo(unit).name:unit;
-          const value=`${id.startsWith('market:')?'~ ':''}${formatFraction(amount)} ${conversion.divisor>1?'stacks ':''}${label}${conversion.perItem?' each':''}${(id.startsWith('market:')?marketSnapshot:id.startsWith('quote:')?snapshot:null)?.sample?' (sample)':''}`;
+          const value=`${id.startsWith('market:')?'~ ':''}${formatDisplayFraction(amount)} ${conversion.divisor>1?`${amount.n===amount.d?'stack':'stacks'} `:''}${label}${conversion.perItem?' each':''}${(id.startsWith('market:')?marketSnapshot:id.startsWith('quote:')?snapshot:null)?.sample?' (sample)':''}`;
           const equivalent=conversion.terms.some(entry=>entry.unit.startsWith('item:')||entry.unit==='ecto')&&(unit.startsWith('item:')||unit==='ecto')&&conversion.terms.some(entry=>entry.unit!==unit);
           const iconFrom=conversion.terms.length===1?currencyIcon(conversion.from):undefined,iconTo=currencyIcon(unit);
           const explanation=`${detail}${!explicit?' · Default target':''}${equivalent?' · Equivalent value':''}`;
           const copied=formatCalculatorCopy(conversion.input,value,explanation);
           // Only a result that depends on a rate the player can choose offers the rates editor (HUB-100).
-          return {...result(id,value,explanation,copied),...(!explicit?{action:`Copy ${value}`} : {}),...(fixed?{}:{actions:editRates,actionsLabel:'Edit rates'}),conversion:{input:conversion.input,from:conversion.terms.length>1?'Combined value':currencyInfo(conversion.from).name,to:currencyInfo(unit).name,...(iconFrom?{iconFrom}:{}),...(iconTo?{iconTo}:{})}};
+          return {...result(id,value,explanation,copied),action:`Copy ${value}`,...(fixed?{}:{actions:editRates,actionsLabel:'Edit rates'}),conversion:{input:conversion.input,from:conversion.terms.length>1?'Combined value':currencyInfo(conversion.from).name,to:currencyInfo(unit).name,...(iconFrom?{iconFrom}:{}),...(iconTo?{iconTo}:{})}};
         };
         if(fixed){clear();const stack=currencyInfo(conversion.to).stack;const detail=units.every(unit=>unit==='gold'||unit==='platinum')?'Fixed conversion · 1 platinum = 1,000 gold':`Fixed conversion${stack?` · 1 stack = ${stack} items`:''}`;return [card('conversion',unit=>fraction(unit==='gold'?1n:1000n),detail)];}
         if(!visible){clear();return [];}

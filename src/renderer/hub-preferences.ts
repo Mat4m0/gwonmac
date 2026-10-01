@@ -2,6 +2,7 @@
  * Explicit editing of the selected Hub object's search phrase and pin.
  * Keeps presentation separate from canonical game and storage owners.
  */
+import { hubIcon } from './hub-icons.js';
 import { HUB_SHORTCUT_LIMIT, isHubShortcuts, hubPhraseReserved, isLibraryHubShortcut, type HubShortcut } from '../shared/hub-preferences.js';
 import { normaliseHubQuery, type HubPresenter, type HubRow, type HubTask } from '../shared/hub.js';
 import { listIndexAfter, listKeyStep } from '../shared/ui/list-keys.js';
@@ -146,7 +147,10 @@ export function manageHubShortcuts(hub: HubPresenter<HTMLElement>, store: HubSho
         }
         const option = doc.createElement('div'); option.className = 'hub-preference-option'; option.id = `hub-preference-${index}`;
         option.setAttribute('role', 'option'); option.setAttribute('aria-selected', String(entry.id === chosen));
-        option.textContent = `${title(entry)}${entry.phrase ? ` · ${entry.phrase}` : ''}${entry.pinned ? ' · Pinned' : ''}`;
+        const identity = doc.createElement('span'); identity.textContent = `${title(entry)}${entry.phrase ? ` · ${entry.phrase}` : ''}${entry.pinned ? ' · Pinned' : ''}`;
+        const canonical = lookup(entry.id);
+        if (canonical) option.append(hubIcon(doc, canonical));
+        option.append(identity);
         option.onclick = () => { chosen = entry.id; paint(); list.focus({ preventScroll: true }); };
         option.oncontextmenu = event => { event.preventDefault(); chosen = entry.id; paint(); list.focus({ preventScroll: true }); footer.openActions(); };
         group.append(option);

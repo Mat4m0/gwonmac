@@ -92,6 +92,7 @@ export class LauncherOrchestrator {
         uiFont: settings.uiFont,
         uiCustomTheme: settings.uiCustomTheme,
         uiPanelOpacity: settings.uiPanelOpacity,
+        uiTextSize: settings.uiTextSize,
         controllerPromptStyle: settings.controllerPromptStyle,
         autoRelogAfterReload: settings.autoRelogAfterReload,
         characterSwitchProfession: settings.characterSwitchProfession,

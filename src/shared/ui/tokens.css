@@ -130,21 +130,23 @@
   --ui-target-min: 24px;
   --ui-gap: var(--ui-space-2);
 
+  --ui-text-scale: 1;
+
   /* Dense utility typography, matching the supplied Guild Wars reference. */
-  --ui-font-size: 14px;
-  --ui-font-size-sm: 12px;
-  --ui-font-size-lg: 16px;
-  --ui-line-height: 20px;
-  --ui-type-caption-size: 12px;
-  --ui-type-caption-line: 16px;
-  --ui-type-body-size: 14px;
-  --ui-type-body-line: 20px;
-  --ui-type-subtitle-size: 16px;
-  --ui-type-subtitle-line: 22px;
-  --ui-type-title-size: 20px;
-  --ui-type-title-line: 26px;
-  --ui-type-window-size: 18px;
-  --ui-type-window-line: 24px;
+  --ui-font-size: var(--ui-type-body-size);
+  --ui-font-size-sm: var(--ui-type-caption-size);
+  --ui-font-size-lg: var(--ui-type-subtitle-size);
+  --ui-line-height: var(--ui-type-body-line);
+  --ui-type-caption-size: calc(12px * var(--ui-text-scale, 1));
+  --ui-type-caption-line: calc(16px * var(--ui-text-scale, 1));
+  --ui-type-body-size: calc(14px * var(--ui-text-scale, 1));
+  --ui-type-body-line: calc(20px * var(--ui-text-scale, 1));
+  --ui-type-subtitle-size: calc(16px * var(--ui-text-scale, 1));
+  --ui-type-subtitle-line: calc(22px * var(--ui-text-scale, 1));
+  --ui-type-title-size: calc(20px * var(--ui-text-scale, 1));
+  --ui-type-title-line: calc(26px * var(--ui-text-scale, 1));
+  --ui-type-window-size: calc(18px * var(--ui-text-scale, 1));
+  --ui-type-window-line: calc(24px * var(--ui-text-scale, 1));
   --ui-font: "QTFrizQuad", "Palatino Linotype", "Book Antiqua", Palatino,
     "URW Palladio L", Georgia, serif;
   --ui-font-display: var(--ui-font);

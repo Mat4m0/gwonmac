@@ -9,6 +9,7 @@ test('decimal arithmetic is exact, bounded, and honours precedence', () => {
   assert.throws(() => calculate('1 / 0'), /zero/);
   assert.equal(calculate('fetch(1)'), null);
   assert.throws(() => calculate('1..2 + 3'));
+  for (const amount of ['1234567890123', '1.1234567']) assert.throws(() => decimal(amount), { message: 'Use at most 12 whole digits and six decimal places.' });
 });
 test('fixed and observed rates retain direction and units', () => {
   const conversion = parseConversion('10 ecto in p')!;
@@ -45,7 +46,7 @@ test('only a rate-dependent result offers the rates editor (HUB-100)', async () 
     quotes: async () => ({ updatedAt: Date.now(), quotes: [{ modelId: '0b03a2', side: 'buy', price: 6000, timestamp: Date.now() }] }) });
   source.setVisible(true);
   try {
-    for (const [query, title] of [['2+2', '4'], ['10p in g', '10000 gold'], ['250e in stacks e', '1 stacks ecto']] as const) {
+    for (const [query, title] of [['2+2', '4'], ['10p in g', '10,000 gold'], ['250e in stacks e', '1 stack ecto']] as const) {
       const row = source.search(query)[0];
       assert.equal(row?.title, title); row?.actions?.();
       if(query==='2+2')assert.deepEqual(row?.conversion,{input:'2+2',from:'Calculation',to:'Result'});

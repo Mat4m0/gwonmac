@@ -2,6 +2,7 @@
  * Owns the Core Command-E character palette, including focus and keyboard use.
  * It renders one bounded source and never reads game memory or native exports.
  */
+import { HUB_SEARCH_GLYPH } from '../shared/ui/hub-search.js';
 import { installSearchEditing, resumeSearchInput } from "./search-input.js";
 import { isHubBackKey } from "../shared/keyboard-shortcuts.js";
 import { hubMatch, normaliseHubQuery, type HubViewFooter } from "../shared/hub.js";
@@ -137,10 +138,10 @@ export function createCharacterSwitchPalette(
   const list = root.querySelector<HTMLUListElement>(".character-switch-list")!;
   list.classList.add("ui-scroll");
   const search = document.createElement("label");
-  search.className = "character-switch-search";
+  search.className = hub ? "character-switch-search ui-hub-search" : "character-switch-search";
   search.htmlFor = "character-switch-query";
   search.hidden = true;
-  search.innerHTML = `<span class="ui-sr-only">Search characters</span><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.25"/><path d="m12.4 12.4 4.1 4.1"/></svg><input id="character-switch-query" class="ui-input" type="search" role="combobox" aria-controls="character-switch-list" aria-autocomplete="list" autocomplete="off" spellcheck="false" maxlength="${CHARACTER_SEARCH_LIMIT}" placeholder="Search characters…">`;
+  search.innerHTML = `<span class="ui-sr-only">Search characters</span><svg viewBox="${hub ? "0 0 24 24" : "0 0 20 20"}" aria-hidden="true">${hub ? HUB_SEARCH_GLYPH : '<circle cx="8.5" cy="8.5" r="5.25"/><path d="m12.4 12.4 4.1 4.1"/>'}</svg><input id="character-switch-query" class="ui-input" type="search" role="combobox" aria-controls="character-switch-list" aria-autocomplete="list" autocomplete="off" spellcheck="false" maxlength="${CHARACTER_SEARCH_LIMIT}" placeholder="Search characters…">`;
   carousel.before(search);
   const queryInput = search.querySelector<HTMLInputElement>("#character-switch-query")!;
   const status = root.querySelector<HTMLElement>(".character-switch-status")!;

@@ -11,7 +11,7 @@ export const fraction = (n: bigint, d = 1n): Fraction => {
 };
 export function decimal(value: string): Fraction {
   if (value.startsWith(".")) value = `0${value}`;
-  if (!/^\d{1,12}(?:\.\d{1,6})?$/u.test(value)) throw new Error('Use up to six decimal places.');
+  if (!/^\d{1,12}(?:\.\d{1,6})?$/u.test(value)) throw new Error('Use at most 12 whole digits and six decimal places.');
   const [whole, digits = ''] = value.split('.');
   return fraction(BigInt(`${whole}${digits}`), 10n ** BigInt(digits.length));
 }
@@ -26,6 +26,11 @@ export function formatFraction(value: Fraction, places = 6): string {
   const digits = (rounded % scale).toString().padStart(places, '0');
   const rest = places > requestedPlaces ? digits : digits.replace(/0+$/u, '');
   return `${value.n < 0n && rounded !== 0n ? '-' : ''}${whole}${rest ? `.${rest}` : ''}`;
+}
+/** Group only display digits; canonical decimals used by parsers keep their exact shape. */
+export function formatDisplayFraction(value: Fraction): string {
+  const [whole, decimalPlaces] = formatFraction(value).split('.');
+  return `${whole!.replace(/\B(?=(\d{3})+(?!\d))/gu, ',')}${decimalPlaces ? `.${decimalPlaces}` : ''}`;
 }
 export function calculate(expression: string): Fraction | null {
   if (!/^[\d\s.+*/()-]+$/u.test(expression) || !/[+*/()-]/u.test(expression)) return null;
