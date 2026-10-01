@@ -51,6 +51,17 @@ test('a Settings section result opens that section (HUB-064)', async ({ page }) 
   }
 });
 
+test('travel <friend> offers the trip to that friend\'s outpost after the places (HUB-142)', async ({ page }) => {
+  await page.goto('/?hub&party');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  await search(page).fill('travel zed alpha');
+  const row = page.locator('#hub .hub-row[data-id="person:travel:alpha"]');
+  await expect(row).toContainText('Zed Alpha');
+  await row.click();
+  await expect(primary(page)).toHaveText(/^Travel to Kamadan, Jewel of Istan/);
+  expect(await page.locator('#app').getAttribute('data-action')).toBeNull();
+});
+
 test('places rank before the cap, and the rest are one row away in Travel (HUB-057)', async ({ page }) => {
   await open(page);
   await search(page).fill('k');

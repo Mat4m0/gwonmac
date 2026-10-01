@@ -4,7 +4,7 @@
  */
 import { currentTravelFriend, presenceLabel, type TravelFriend, type TravelFriends } from '../shared/friends.js';
 import { travelDestination } from '../shared/travel.js';
-import { parseHubQuery, type HubRow, type HubSource, type HubTask } from '../shared/hub.js';
+import { hubTier, parseHubQuery, type HubRow, type HubSource, type HubTask } from '../shared/hub.js';
 import { normaliseCharacterName } from '../shared/player-text.js';
 import { findPeople, whisperPersonKey, whisperUnread, type Person, type WhisperSession } from '../shared/whisper-session.js';
 import { isCharacterName, isFullCharacterName } from '../shared/whispers.js';
@@ -125,6 +125,17 @@ export function createHubPeople(hub: Pick<Hub, 'attach' | 'showRows' | 'notify'>
     search(query) {
       const whispersEnabled = toolEnabled('whispersEnabled');
       const parsed = parseHubQuery(query);
+      // `travel <friend>` offers the trip to that friend's outpost, the row their page offers,
+      // after the places Travel lists for the same words (HUB-142).
+      if (parsed.scope === 'travel') {
+        if (!parsed.term || friends.status !== 'ready') return [];
+        return friends.friends.filter(friend => friend.status !== 'offline' && hubTier({ title: friend.character || friend.alias, aliases: [friend.alias] }, parsed.term) !== null)
+          .slice(0, MAX_PEOPLE).flatMap(friend => {
+            const name = friend.character || friend.alias;
+            const trip = personRows(name, friend.key)().find(row => row.id === 'person:travel');
+            return trip ? [{ ...trip, id: `person:travel:${friend.key}`, title: name, group: 'Friends' }] : [];
+          });
+      }
       // `whisper` and `invite` address one person; both need the Whispers chat mailbox.
       const addressed = parsed.scope === 'whisper' || (parsed.scope === 'invite' && !!party);
       if (parsed.scope && (!addressed || !whispersEnabled)) return [];
