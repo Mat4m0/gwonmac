@@ -42,7 +42,8 @@ const VIEWS: Record<string, { query?: string; open(page: Page): Promise<void> }>
   'trade': { open: async page => { await page.keyboard.press('Escape'); await page.keyboard.press('Meta+k'); } },
   'whispers': { open: page => page.keyboard.press('Meta+d') },
   // The innermost levels answer first: a text in the Whispers picker, an open disclosure, a Settings section body.
-  'whispers-query': { open: async page => { await page.keyboard.press('Meta+d'); await page.keyboard.type('ro'); } },
+  // Wait for the search to take focus, or a slow runner drops the typed letters.
+  'whispers-query': { open: async page => { await page.keyboard.press('Meta+d'); await expect(page.locator('input#whisper-person')).toBeFocused(); await page.keyboard.type('ro'); } },
   'review-details': { open: async page => {
     await page.locator('.hub-search input').fill('team gom afk'); await page.keyboard.press('ArrowRight');
     await page.locator('#hub details summary').first().click();
