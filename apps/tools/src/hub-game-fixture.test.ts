@@ -322,7 +322,7 @@ test('a team apply that fails after the player moved on names the team and keeps
   source!.search('team gom afk')[0]!.run(task);
   const target = document.createElement('div');
   let primary: import('../../../src/shared/hub').HubViewAction | null = null;
-  review!(target, () => {}, { primary(next) { primary = next; }, secondary() {}, openActions() {}, own() {} });
+  review!(target, () => {}, { primary(next) { primary = next; }, secondary() {}, openActions() {} });
   expect(target.querySelector('[role=status]')?.textContent).toMatch(/^Team partly applied\. Synthetic interruption/);
   expect(target.textContent).toContain('Completed');
   expect(target.textContent).toContain('Enabling Hard Mode confirmed.');
@@ -496,7 +496,7 @@ test('invalid team reviews name the failing slot and open the same saved team in
   expect(row.unavailable).toBe('Choose a hero for slot 8.');
   row.navigate!(task);
   const target = document.createElement('div');
-  review!(target, () => {}, { primary(action) { expect(action?.disabled).toBe(true); }, secondary(action) { edit = action; }, openActions() {}, own() {} });
+  review!(target, () => {}, { primary(action) { expect(action?.disabled).toBe(true); }, secondary(action) { edit = action; }, openActions() {} });
   expect(target.querySelector('[role=status]')?.textContent).toBe('Choose a hero for slot 8.');
   expect(edit).toMatchObject({ label: 'Open in Build Library' });
   if (!edit) throw new Error('Editor action missing');

@@ -123,8 +123,8 @@ export function createHub(parent: HTMLElement) {
   let scope: RowScope | null = null;
   type MountedView = { title: string; mount: HubViewMount<HTMLElement>; available?: () => boolean; destination?: HubDestination; owner?: HubSource };
   let activeView: MountedView | null = null;
-  /** The mounted view's footer: its named primary and secondary, or its own footer (Travel, Characters). */
-  type ViewFooter = { primary: HubViewAction | null; secondary: HubViewAction | null; own: boolean };
+  /** The mounted view's footer: its named primary and secondary. */
+  type ViewFooter = { primary: HubViewAction | null; secondary: HubViewAction | null };
   let viewFooter: ViewFooter | null = null;
   let viewRunning = false;
   let viewArming: { label: string; arming: ReturnType<typeof armConfirmation> } | null = null;
@@ -299,7 +299,7 @@ export function createHub(parent: HTMLElement) {
       run: () => { if (id === 'storage') { close(); window.dispatchEvent(new CustomEvent(event, { cancelable: true })); } else dispatch(event, 'show'); },
     }] : [];
     return [
-      ...tool('travel', TOOL_PRESENTATION['quick-travel'].label, 'Outposts, favourites and recent places', 'outpost destination teleport tp', settings?.gwonmacTools && settings.travelPalette, 'gw:travel-toggle'),
+      // Travel's row comes from its owner, attached for its whole life with the command's refusal (HUB-135).
       ...tool('trade', TOOL_PRESENTATION['trade-chat'].label, 'Find offers and contact sellers', 'kamadan prices trading market trader', settings?.gwonmacTools && settings.tradeChat, 'gw:trade-toggle'),
       ...tool('whispers', TOOL_PRESENTATION['whispers'].label, 'Conversations, friends and drafts', 'friends people message chat', settings?.gwonmacTools && settings.whispersEnabled, 'gw:whispers-toggle'),
       ...(settings?.characterSwitchEnabled ? [{ id: 'character', title: TOOL_PRESENTATION['character-switch'].label, detail: 'Choose another character', keywords: 'relog profession characters alts', group: 'Tools', action: 'Choose character', navigate: () => dispatch('gw:character-toggle'), run: () => dispatch('gw:character-toggle') }] : []),
@@ -354,7 +354,7 @@ export function createHub(parent: HTMLElement) {
    */
   function commandExamples(): HubRow[] {
     const enabled = new Set(commands(true).map(row => row.id));
-    if (lookup('builds')) enabled.add('builds');
+    for (const owned of ['builds', 'travel']) if (lookup(owned)) enabled.add(owned);
     const example = (group: string, tool: string, title: string, fill: string, detail: string) => ({ group, tool, title, fill, detail });
     const examples = [
       example('Places', 'travel', 'travel <place>', 'travel ', 'Find an outpost by name or alias'),
@@ -483,7 +483,6 @@ export function createHub(parent: HTMLElement) {
   const done: HubViewAction = { label: 'Done', run: () => restoreParent() };
   function paintViewFooter() {
     if (!viewFooter) return;
-    footer.hidden = viewFooter.own;
     const action = viewFooter.primary ?? done;
     primaryText(action.label);
     // Enter runs a named primary, so only that one carries the keycap, and not while it runs.
@@ -917,7 +916,7 @@ export function createHub(parent: HTMLElement) {
     endSession(); restoringFocus?.disconnect(); restoringFocus = null; keepDrafts(); pressed = null; modal.pageChanged(); closeMenu(false);
     disposeView?.(); disposeView = null; activeView = null; content.replaceChildren(); content.hidden = true;
     viewFooter = null; viewRunning = false; actionFocus = null; viewArming?.arming.disarm(); viewArming = null;
-    search.hidden = false; list.hidden = false; footer.hidden = false;
+    search.hidden = false; list.hidden = false;
   }
   function home() {
     history.length = 0; resetView(); scope = null; input.value = restoreQuery;
@@ -1302,14 +1301,13 @@ export function createHub(parent: HTMLElement) {
     required<HTMLElement>('.hub-preview').hidden = true; required<HTMLElement>('.hub-rate-controls').hidden = true; required<HTMLElement>('.hub-hint').hidden = true;
     search.hidden = true; list.hidden = true; content.hidden = false;
     activeView = view;
-    const state: ViewFooter = { primary: null, secondary: null, own: false };
+    const state: ViewFooter = { primary: null, secondary: null };
     viewFooter = state;
     // A disposed view's late update never repaints the next page's footer.
     const shell: HubViewFooter = {
       primary: next => { state.primary = next; if (viewFooter === state) paintViewFooter(); },
       secondary: next => { state.secondary = next; if (viewFooter === state) paintViewFooter(); },
       openActions: () => { if (viewFooter === state) openMenu(); },
-      own: () => { state.own = true; if (viewFooter === state) paintViewFooter(); },
     };
     paintViewFooter();
     disposeView = view.mount(content, restoreParent, shell);
