@@ -30,6 +30,22 @@ test.describe('game lifecycle', () => {
     await expect(page.locator('#app')).toHaveAttribute('data-action', 'Character toefte');
   });
 
+  test('Characters list arrival focuses the current card instead of its prior display setting (HUB-074)', async ({ page }) => {
+    await open(page, '&characters-ms=1500');
+    await page.keyboard.press('Meta+e');
+    await page.getByRole('button', { name: 'Character Switch settings', exact: true }).click();
+    const profession = page.getByRole('checkbox', { name: 'Show profession' });
+    await profession.focus();
+    await expect(profession).toBeFocused();
+    const before = await profession.isChecked();
+    const current = page.locator('#character-switch-list button[aria-current=true]');
+    await expect(current).toBeFocused();
+    await page.keyboard.press('Enter');
+    expect((await page.evaluate(() => window.gwNative.hubSettings.get())).settings.characterSwitchProfession).toBe(before);
+    await expect(current).toBeFocused();
+    await expect(page.locator('#app')).not.toHaveAttribute('data-action', /Character/);
+  });
+
   test('a Travel arrival moves the lifecycle to the destination outpost', async ({ page }) => {
     await open(page, '&lifecycle=pve-explorable');
     const search = page.locator('.hub-search input');
