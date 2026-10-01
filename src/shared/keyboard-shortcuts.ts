@@ -301,5 +301,16 @@ export const SHORTCUT_CAPTURE_HINT = 'Press a key with Command, Control or Optio
 /** Hub has no persisted override until older settings readers can accept it. */
 export const HUB_SHORTCUT: ShortcutBinding = Object.freeze({ key: "r", shift: false, option: false });
 export function hubShortcutAvailable(overrides: ShortcutOverrides): boolean {
-  return !Object.values(resolveShortcuts(overrides)).some(binding => shortcutEquals(binding, HUB_SHORTCUT));
+  return hubOwnsShortcut(resolveShortcuts(overrides));
+}
+/** The Hub keeps Command-R unless an older saved app shortcut already took it. */
+function hubOwnsShortcut(shortcuts: Readonly<Record<ShortcutAction, ShortcutBinding | null>>): boolean {
+  return !Object.values(shortcuts).some(binding => shortcutEquals(binding, HUB_SHORTCUT));
+}
+/**
+ * A new app shortcut never takes Command-R while the Hub uses it (HUB-095). Rebinding the
+ * Hub itself is decision D-9, so there is nothing to replace.
+ */
+export function shortcutUsedByHub(binding: ShortcutBinding, shortcuts: Readonly<Record<ShortcutAction, ShortcutBinding | null>>): boolean {
+  return shortcutEquals(binding, HUB_SHORTCUT) && hubOwnsShortcut(shortcuts);
 }
