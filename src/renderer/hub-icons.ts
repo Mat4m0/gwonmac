@@ -29,7 +29,7 @@ export function hubIcon(document: Document, row: Pick<HubRow, 'id' | 'group' | '
     : row.group === 'Builds' || id === 'build' || id === 'builds' ? 'builds'
     : row.group === 'Places' || id === 'place' || id === 'travel' ? 'travel'
     : row.group === 'Accounts' || id === 'accounts' || row.group === 'People' || row.group === 'Heroes' || row.group === 'Characters' || id === 'character' ? 'person'
-    : id === 'hub-preferences' ? 'settings' : id === 'call-target' ? 'target'
+    : id === 'hub-preferences' ? 'settings'
     : id && id in paths ? id as keyof typeof paths : 'command';
   icon.dataset.kind = kind;
   icon.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${paths[kind]}</svg>`;

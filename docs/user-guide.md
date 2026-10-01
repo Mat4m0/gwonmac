@@ -229,7 +229,8 @@ the area. While a map loads, the same line says when Travel returns.
 With Travel enabled, search an outpost or your custom Travel phrase. Travel,
 favourites, recent places, and Guild Hall stay in the same window. A click on a
 destination selects it; press Enter, click **Travel to …** in the footer, or
-double-click the destination to travel. A trip closes Hub. The favourite for
+double-click the destination to travel. With an empty search, the number keys
+1–9 select that favourite; press Enter to travel. A trip closes Hub. The favourite for
 the outpost you are in is shown but cannot be chosen. Command-T
 and `/tp` also open Travel inside Hub.
 
@@ -303,7 +304,9 @@ start with a command word such as `team` or `invite`, or read as a calculation. 
 phrase saved before its first word became a command word keeps its pin but no
 longer matches. Search **Hub
 preferences** to reorder pins, remove saved actions, or reset aliases. Search `resign` for its existing
-confirmation, or `reload` for the account's Quit or Reload dialog.
+confirmation, or `reload` for the account's Quit or Reload dialog. The `reload`
+row opens the same dialog as Command-Q and never quits on its own. Call target
+has no Hub row; use its shortcut while the game has keyboard focus.
 
 A custom shortcut already using Command-R takes priority. Use **View → Hub**
 in that case. Existing custom shortcuts and cleared bindings are preserved.
@@ -320,9 +323,12 @@ Down for the next character. Control-N and Control-P step too, Page Up and Page
 Down move by the visible cards, and Home and End jump to the first and last
 character; the carousel stops at both ends instead of wrapping. Start typing a character name or primary profession
 to move focus to search. Secondary professions are not searched. The number keys
-1–9 and 0 switch to the first ten characters. A click on a card selects it; press
-Enter, click **Switch to …** in the footer, or double-click the card to switch.
-**Leave and switch** accepts a click only after a brief moment. Use **View → Reload Guild Wars**
+1–9 and 0 select one of the first ten characters and scroll its card into view;
+they never switch. A click on a card selects it; press Enter, click
+**Switch to …** in the footer, or double-click the card to switch. In an
+explorable area Hub asks "Leave this area and switch to …?" with the name.
+**Leave and switch to …** accepts a click only after a brief moment. Opening
+Switch Character again always starts on the current character. Use **View → Reload Guild Wars**
 to reload.
 
 Enable **Resign** in **Settings → Tools**. It is off by default and requires
@@ -447,9 +453,13 @@ Escape returns to Hub. While editing a query, Left/Right preserve caret movement
 Right at the end can activate a search result. Tab reaches Travel settings.
 Hub keeps the same size and position across results and tools; content scrolls inside.
 
-Type `char Toefte` in Hub and press Enter on **Switch to Toefte**. Switching from
-an explorable area retains the existing leave-area confirmation. The current
-character is labelled and cannot be switched to again.
+Type `char Toefte` in Hub and press Enter on **Switch to Toefte**. A search
+switches directly only on an exact name or a single match. When the words match
+several characters, such as `char fixture r`, the result reads
+**Show … in Characters**: it opens Switch Character on that card and switches
+nothing. Switching from an explorable area retains the existing leave-area
+confirmation; **Stay here** or Escape returns to the search that asked. The
+current character is labelled and cannot be switched to again.
 
 Type `acc second` to choose **Open Second** or **Close Main and open Second**.
 **Open Second** comes first and is selected, and keeps both accounts open. The

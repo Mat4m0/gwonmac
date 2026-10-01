@@ -21,6 +21,8 @@ declare global {
     gwApplyFixtureAppearance?: (fixture: StandaloneAppearanceFixture) => void;
     /** Hub fixture only: every input event that reached the synthetic game canvas. */
     gwFixtureCanvas?: Readonly<{ events: readonly FixtureCanvasEvent[]; clear(): void }>;
+    /** Hub fixture only: every recorded game or account action, oldest first. */
+    gwFixtureActions?: readonly string[];
   }
 }
 

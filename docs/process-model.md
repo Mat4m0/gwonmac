@@ -199,7 +199,14 @@ its repeats and its release. When that press closes the surface and focus
 returns to the canvas, the surface controller keeps the remaining repeats and
 the key-up out of the game, because Guild Wars never saw the key-down. A fresh
 press after the close reaches the game normally. The buffered character-select
-Enter accepts only a fresh press, never a repeat.
+Enter accepts only a fresh press, never a repeat. On a surface, a held Enter
+activates a control once: the controller marks each auto-repeated Enter handled,
+so it never presses a button, submits a form or toggles a disclosure again.
+
+A native sheet cannot be armed like a surface confirmation: its default button
+takes the next Return, auto-repeat included. The Hub row "Quit or Reload Game…"
+therefore asks main for the Quit-or-Reload sheet only after its Enter is
+released and its click run can add no further click.
 
 When Guild Wars moves focus from the canvas into one of its hidden text proxies,
 the renderer releases canvas-owned W, A, S, and D at that boundary. This keeps

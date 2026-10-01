@@ -22,10 +22,10 @@ test.describe('game lifecycle', () => {
     await expect(page.locator('#app')).not.toHaveAttribute('data-action', /Character/);
     await lifecycle(page).selectOption('pve-explorable');
     await search.fill('char toefte'); await search.press('Enter');
-    await expect(page.locator('#character-switch-title')).toHaveText('Leave this area?');
+    await expect(page.locator('#character-switch-title')).toHaveText('Leave this area and switch to Toefte?');
     await expect(page.locator('#app')).not.toHaveAttribute('data-action', /Character/);
     // The confirmation arms after a moment, so the press that raised it cannot pass it.
-    const leave = page.getByRole('button', { name: 'Leave and switch', exact: true });
+    const leave = page.getByRole('button', { name: 'Leave and switch to Toefte', exact: true });
     await expect(leave).toHaveAttribute('data-armed', '');
     await leave.click();
     await expect(page.locator('#app')).toHaveAttribute('data-action', 'Character toefte');
@@ -85,15 +85,67 @@ test.describe('shortcuts through commands.ts', () => {
     await expect(page.locator('.hub-fixture-quit')).toBeVisible();
   });
 
-  // HUB-001: the row promises the confirmation sheet but quits at once. The fixture
-  // models production, so this documents the open P0 until its fix lands.
+  // HUB-001: the row promises the confirmation sheet, so it opens it and quits nothing.
   test('the Quit or Reload row opens the confirmation sheet', async ({ page }) => {
-    test.fail(true, 'HUB-001: the Hub row calls requestQuit instead of the Quit-or-Reload sheet');
     await open(page);
     const search = page.getByRole('combobox', { name: searchName });
-    await search.fill('reload'); await search.press('Enter');
-    await expect(page.getByRole('dialog', { name: 'Quit or reload Guild Wars?' })).toBeVisible({ timeout: 2_000 });
-    await expect(page.locator('#app')).not.toHaveAttribute('data-action', 'Game quit');
+    const sheet = page.getByRole('dialog', { name: 'Quit or reload Guild Wars?' });
+    for (const word of ['reload', 'quit', 'restart']) {
+      if (!await page.locator('#hub').isVisible()) await page.keyboard.press('Meta+r');
+      await search.fill(word);
+      await expect(page.locator('#hub .hub-primary')).toContainText('Review options');
+      await search.press('Enter');
+      await expect(sheet).toBeVisible();
+      await expect(page.locator('#hub')).toBeHidden();
+      await page.keyboard.press('Escape');
+      await expect(sheet).toBeHidden();
+      await expect(page.locator('#app')).toHaveAttribute('data-action', 'Quit or reload cancelled');
+    }
+  });
+
+  // PTR-28: a double-click on the row or the footer primary, or a single click on
+  // the row, asks for the sheet exactly once; its later click never reaches the game.
+  for (const [gesture, clicks, locate] of [
+    ['double-click on the row', 2, (page: Page) => page.locator('#hub .hub-row', { hasText: 'Quit or Reload Game' })],
+    ['single click on the row', 1, (page: Page) => page.locator('#hub .hub-row', { hasText: 'Quit or Reload Game' })],
+    ['double-click on the footer primary', 2, (page: Page) => page.locator('#hub .hub-primary')],
+  ] as const) {
+    test(`a ${gesture} opens the Quit or Reload sheet once and quits nothing`, async ({ page }) => {
+      await open(page);
+      const search = page.getByRole('combobox', { name: searchName });
+      const sheet = page.getByRole('dialog', { name: 'Quit or reload Guild Wars?' });
+      await search.fill('reload');
+      await expect(page.locator('#hub .hub-primary')).toContainText('Review options');
+      await page.evaluate(() => window.gwFixtureCanvas?.clear());
+      await locate(page).click({ clickCount: clicks });
+      await expect(sheet).toBeVisible();
+      // Past the double-click interval, so a second request would have arrived.
+      await page.waitForTimeout(600);
+      await expect(sheet).toHaveAttribute('data-requests', '1');
+      expect(await canvasEvents(page)).toEqual([]);
+      await expect(page.locator('.hub-fixture-quit')).toHaveCount(0);
+      await page.keyboard.press('Escape');
+      await expect(page.locator('#app')).toHaveAttribute('data-action', 'Quit or reload cancelled');
+      expect(await page.evaluate(() => window.gwFixtureActions?.filter(action => /^(Game|Quit)/u.test(action)))).toEqual(['Quit or reload cancelled']);
+    });
+  }
+
+  // A native sheet cannot be armed, so it opens only after the press that asked for it:
+  // a held Enter never answers "Reload Guild Wars" with its auto-repeat.
+  test('a held Enter on the Quit or Reload row opens the sheet only after release', async ({ page }) => {
+    await open(page);
+    const search = page.getByRole('combobox', { name: searchName });
+    const sheet = page.getByRole('dialog', { name: 'Quit or reload Guild Wars?' });
+    await search.fill('reload');
+    for (let press = 0; press < 6; press++) { await page.keyboard.down('Enter'); await page.waitForTimeout(60); }
+    await expect(page.locator('#hub')).toBeHidden();
+    await expect(sheet).toBeHidden();
+    await page.keyboard.up('Enter');
+    await expect(sheet).toBeVisible();
+    await expect(sheet.getByRole('button', { name: 'Reload Guild Wars' })).toBeFocused();
+    await expect(page.locator('#app')).not.toHaveAttribute('data-action', /Game (reload|quit)/u);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#app')).toHaveAttribute('data-action', 'Quit or reload cancelled');
   });
 });
 

@@ -124,12 +124,67 @@ test.describe('owned press (HUB-003)', () => {
     await expect(page.locator('#hub')).toBeHidden();
   });
 
-  test('the Enter that invites and closes the Hub keeps its release, and the next key reaches the game', async ({ page }) => {
-    await open(page, '&party');
-    await search(page).fill('invite Romi Ranger');
-    expect(await hold(page, 'Enter', 0)).toEqual([]);
-    await expect(page.locator('#app')).toHaveAttribute('data-action', 'PARTY.INVITE Romi Ranger');
+  const actions = (page: Page, pattern: RegExp) => page.evaluate(source => (window.gwFixtureActions ?? []).filter(action => new RegExp(source, 'u').test(action)), pattern.source);
+
+  // PPL-15: one physical press sends one invite, tapped or held with auto-repeat.
+  for (const repeats of [0, 3]) {
+    test(`the Enter that invites and closes the Hub keeps its release, and the next key reaches the game (${repeats} repeats)`, async ({ page }) => {
+      await open(page, '&party');
+      await search(page).fill('invite Romi Ranger');
+      expect(await hold(page, 'Enter', repeats)).toEqual([]);
+      await expect(page.locator('#app')).toHaveAttribute('data-action', 'PARTY.INVITE Romi Ranger');
+      await expect(page.locator('#app')).toHaveAttribute('data-invites', 'Romi Ranger');
+      expect(await actions(page, /^PARTY\./u)).toEqual(['PARTY.INVITE Romi Ranger']);
+      await expect(page.locator('#canvas')).toBeFocused();
+      await page.evaluate(() => window.gwFixtureCanvas?.clear());
+      await page.keyboard.press('w');
+      expect(await canvasKeys(page)).toEqual(['keydown:KeyW', 'keyup:KeyW']);
+    });
+  }
+
+  // BLD-14: Enter stays held while the team applies and the Hub closes; its
+  // repeats keep coming after the close and none of them, nor the key-up, reaches the game.
+  test('a held Enter that applies a team applies it once and never reaches the game', async ({ page }) => {
+    await open(page);
+    await search(page).fill('team gom afk');
+    await expect(page.getByRole('button', { name: 'Apply team GOM AFK ↵' })).toBeEnabled();
+    await page.evaluate(() => window.gwFixtureCanvas?.clear());
+    await page.keyboard.down('Enter');
+    for (let repeat = 0; repeat < 30 && await page.locator('#hub').isVisible(); repeat++) {
+      await page.waitForTimeout(50);
+      await page.keyboard.down('Enter');
+    }
+    await expect(page.locator('#hub')).toBeHidden();
+    for (let repeat = 0; repeat < 3; repeat++) await page.keyboard.down('Enter');
+    await page.keyboard.up('Enter');
+    await settle(page);
+    expect(await canvasKeys(page)).toEqual([]);
+    expect(await actions(page, /^apply-/u)).toEqual(['apply-team']);
+    await expect(page.locator('#app')).toHaveAttribute('data-action', /^command:/u);
     await expect(page.locator('#canvas')).toBeFocused();
+    await page.evaluate(() => window.gwFixtureCanvas?.clear());
+    await page.keyboard.press('w');
+    expect(await canvasKeys(page)).toEqual(['keydown:KeyW', 'keyup:KeyW']);
+  });
+
+  test('a held Enter that travels or switches runs once and never reaches the game', async ({ page }) => {
+    const action = page.locator('#app');
+    await open(page);
+    await search(page).fill('travel kam');
+    expect(await hold(page, 'Enter')).toEqual([]);
+    await expect(action).toHaveAttribute('data-action', 'TRAVEL Kamadan, Jewel of Istan');
+    await open(page);
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Meta+t');
+    await page.keyboard.press('1');
+    expect(await hold(page, 'Enter')).toEqual([]);
+    await expect(action).toHaveAttribute('data-action', 'TRAVEL Ascalon City');
+    await open(page);
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Meta+e');
+    await page.keyboard.press('6');
+    expect(await hold(page, 'Enter')).toEqual([]);
+    await expect(action).toHaveAttribute('data-action', 'Character toefte');
     await page.evaluate(() => window.gwFixtureCanvas?.clear());
     await page.keyboard.press('w');
     expect(await canvasKeys(page)).toEqual(['keydown:KeyW', 'keyup:KeyW']);

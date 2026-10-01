@@ -2,7 +2,7 @@
  * Keeps Command-E owned by Core even when the current game build is unsupported.
  * A certified installation may replace only the source, never shortcut ownership.
  */
-import { matchHubRows, parseHubQuery, type HubSource } from '../shared/hub.js';
+import { matchHubRows, normaliseHubQuery, parseHubQuery, type HubRow, type HubSource } from '../shared/hub.js';
 import { professionPresentation } from '../shared/profession-assets.js';
 import { currentCharacterIndex, type CharacterSwitchSource } from "./character-switch-model.js";
 import { createCharacterSwitchPalette } from "./character-switch-palette.js";
@@ -55,7 +55,7 @@ export function installCharacterSwitchHost(parent: HTMLElement): CharacterSwitch
       const parsed = parseHubQuery(query);
       if ((parsed.scope && parsed.scope !== 'char') || !parsed.term || source.characters.status !== 'ready') return [];
       const characters = source.characters;
-      return matchHubRows(characters.characters.map((character, index) => {
+      const matched = matchHubRows(characters.characters.map((character, index): HubRow => {
         const current = index === currentCharacterIndex(source);
         return { id: `character:${character.characterKey}`, title: character.name,
           ...(professionPresentation(character.primaryProfession) ? { icon: professionPresentation(character.primaryProfession)!.icon } : {}),
@@ -68,6 +68,16 @@ export function installCharacterSwitchHost(parent: HTMLElement): CharacterSwitch
           },
         };
       }), parsed.term, true);
+      // A switch runs only on an exact name or the sole match. Otherwise the row opens the
+      // cards on that character and switches nothing, so Enter never relogs a guess (HUB-033).
+      if (matched.length === 1) return matched;
+      return matched.map(row => row.unavailable || normaliseHubQuery(row.title) === parsed.term ? row : {
+        ...row, action: `Show ${row.title} in Characters`, consequential: false,
+        run: () => {
+          const refusal = palette.reveal(row.id.slice('character:'.length));
+          if (refusal) throw refusal;
+        },
+      });
     },
   };
   const detachHub = window.gwHub?.attach(hubSource);

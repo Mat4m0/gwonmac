@@ -478,3 +478,162 @@ test.describe('party invite', () => {
     await expect(page.locator('#app')).toHaveAttribute('data-invites', 'Mo Kai|Mo Kai');
   });
 });
+
+test.describe('Characters: typing never switches', () => {
+  const action = (page: import('@playwright/test').Page) => page.locator('#app').getAttribute('data-action');
+  const card = (page: import('@playwright/test').Page, key: string) => page.locator(`button[data-character-key="${key}"]`);
+
+  // D-5, HUB-002: a digit selects and reveals its card; only Enter switches, to the card the footer names.
+  test('digits select and reveal a card, held digits repeat nothing, and Enter switches once', async ({ page }) => {
+    await page.goto('/?hub');
+    await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Meta+e');
+    await expect(card(page, 'monk')).toBeFocused();
+    // Card 7 is not drawn on a fresh open; its digit reveals it.
+    await expect(card(page, 'warrior')).toHaveCount(0);
+    await page.keyboard.press('7');
+    await expect(card(page, 'warrior')).toBeFocused();
+    await expect(card(page, 'warrior')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('.character-switch-action')).toHaveText(/^Switch to Fixture Warrior/u);
+    await page.keyboard.press('3');
+    await expect(card(page, 'mesmer')).toBeFocused();
+    // A digit with no card types nothing and switches nothing.
+    await page.keyboard.press('0');
+    await expect(card(page, 'mesmer')).toBeFocused();
+    await expect(page.locator('#character-switch-query')).toHaveValue('');
+    for (let press = 0; press < 6; press++) await page.keyboard.down('2');
+    await page.keyboard.up('2');
+    await expect(card(page, 'ranger')).toBeFocused();
+    await expect(page.locator('#character-switch-query')).toHaveValue('');
+    expect(await action(page)).toBeNull();
+    await expect(page.locator('.character-switch-action')).toHaveText(/^Switch to Fixture Ranger/u);
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#app')).toHaveAttribute('data-action', 'Character ranger');
+  });
+
+  test('a digit typed after a resume selects a card, and the rest searches', async ({ page }) => {
+    await page.goto('/?hub');
+    await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Meta+e');
+    await expect(card(page, 'monk')).toBeFocused();
+    await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+    await expect(page.locator('#hub')).toBeHidden();
+    await page.keyboard.press('Meta+r');
+    await expect(page.locator('.hub-caption')).toHaveText('Characters');
+    await page.keyboard.type('2p in g');
+    await expect(page.locator('#character-switch-query')).toHaveValue('p in g');
+    expect(await action(page)).toBeNull();
+  });
+
+  // HUB-009: a closed search never picks the card on the next open.
+  test('reopening Characters focuses the current character after any close', async ({ page }) => {
+    await page.goto('/?hub');
+    await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+    await page.keyboard.press('Escape');
+    const closes: [string, (page: import('@playwright/test').Page) => Promise<void>][] = [
+      ['Command-E', page => page.keyboard.press('Meta+e')],
+      ['the close button', page => page.getByRole('button', { name: 'Close Hub', exact: true }).click()],
+      ['Command-R', page => page.keyboard.press('Meta+r')],
+    ];
+    for (const [name, close] of closes) {
+      await page.keyboard.press('Meta+e');
+      await expect(card(page, 'monk')).toBeFocused();
+      await page.keyboard.type('toe');
+      await expect(card(page, 'toefte')).toBeVisible();
+      await close(page);
+      await expect(page.locator('#hub'), name).toBeHidden();
+      await page.keyboard.press('Meta+e');
+      await expect(card(page, 'monk'), name).toBeFocused();
+      await expect(card(page, 'monk')).toHaveAttribute('aria-current', 'true');
+      await page.keyboard.press('Escape');
+      await expect(page.locator('#hub')).toBeHidden();
+    }
+    expect(await action(page)).toBeNull();
+  });
+
+  // HUB-033: a prefix that names several characters opens the cards on the top hit.
+  test('an ambiguous char prefix opens Characters on the top hit and switches nothing', async ({ page }) => {
+    await page.goto('/?hub');
+    const search = page.getByRole('combobox', { name: searchName });
+    await search.fill('char fixture r');
+    await expect(page.locator('.hub-primary')).toHaveText(/^Show Fixture Ranger in Characters/u);
+    await search.press('Enter');
+    await expect(page.locator('.hub-caption')).toHaveText('Characters');
+    await expect(card(page, 'ranger')).toBeFocused();
+    expect(await action(page)).toBeNull();
+    await page.keyboard.press('Meta+Backspace');
+    await expect(search).toHaveValue('char fixture r');
+    // An exact name or the sole match still switches directly.
+    await search.fill('char toe');
+    await expect(page.locator('.hub-primary')).toHaveText(/^Switch to Toefte/u);
+    await search.press('Enter');
+    await expect(page.locator('#app')).toHaveAttribute('data-action', 'Character toefte');
+  });
+
+  // HUB-034, HUB-075: the confirmation names the character; Stay returns to the row that asked.
+  test('Leave this area names the character, and Stay returns to the search that asked', async ({ page }) => {
+    await page.goto('/?hub&lifecycle=pve-explorable');
+    const search = page.getByRole('combobox', { name: searchName });
+    for (const cancel of ['Stay here', 'Escape'] as const) {
+      await search.fill('char toefte'); await search.press('Enter');
+      await expect(page.locator('#character-switch-title')).toHaveText('Leave this area and switch to Toefte?');
+      const leave = page.getByRole('button', { name: 'Leave and switch to Toefte', exact: true });
+      await expect(leave).toHaveAttribute('data-variant', 'danger');
+      await expect(page.getByRole('button', { name: 'Stay here' })).toBeFocused();
+      await page.keyboard.press('ArrowRight');
+      await expect(leave).toBeFocused();
+      await page.keyboard.press('ArrowLeft');
+      if (cancel === 'Stay here') await page.keyboard.press('Enter'); else await page.keyboard.press('Escape');
+      await expect(page.locator('.hub-caption')).toHaveText('Home');
+      await expect(search).toHaveValue('char toefte');
+      await expect(search).toBeFocused();
+      expect(await action(page)).toBeNull();
+    }
+  });
+});
+
+// D-5, HUB-003: a Travel digit selects its favourite; a held digit repeats nothing.
+test('a Travel number key selects its favourite, a held one repeats nothing, and only Enter travels', async ({ page }) => {
+  await page.goto('/?hub');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Meta+t');
+  const travelSearch = page.locator('#travel-search-input');
+  await expect(travelSearch).toBeFocused();
+  for (let press = 0; press < 6; press++) await page.keyboard.down('1');
+  await page.keyboard.up('1');
+  const favourite = page.locator('#travel-favorite-0');
+  await expect(favourite).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('.travel-primary')).toHaveText(/^Travel to Ascalon City/u);
+  await expect(page.locator('.hub-caption')).toHaveText('Travel');
+  await expect(travelSearch).toHaveValue('');
+  await expect(page.locator('#app')).not.toHaveAttribute('data-action', /TRAVEL/u);
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#app')).toHaveAttribute('data-action', 'TRAVEL Ascalon City');
+  await expect(page.locator('#hub')).toBeHidden();
+});
+
+// HUB-130: a held Enter activates a surface control once; its repeats never toggle it back.
+test('holding Enter on Trade\'s Save offer or Follow player toggles once', async ({ page }) => {
+  await page.goto('/?hub');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Meta+k');
+  const trade = page.locator('#toolbox-trade .trade-window');
+  await expect(trade).toBeVisible();
+  await trade.locator('.trade-row', { hasText: 'Quiet Ember' }).locator('.offer-cell').click();
+  await trade.locator('.offer-actions summary').click();
+  const hold = async (name: RegExp) => {
+    await trade.getByRole('button', { name }).focus();
+    for (let press = 0; press < 6; press++) await page.keyboard.down('Enter');
+    await page.keyboard.up('Enter');
+  };
+  await hold(/^Save offer$/u);
+  await expect(trade.getByRole('button', { name: /^Saved$/u })).toHaveAttribute('aria-pressed', 'true');
+  await expect(trade.locator('.saved-count')).toHaveText('1');
+  await hold(/^Follow player$/u);
+  await expect(trade.getByRole('button', { name: /^Following$/u })).toHaveAttribute('aria-pressed', 'true');
+  await expect(trade.locator('.saved-count')).toHaveText('2');
+});

@@ -508,12 +508,22 @@ describe("TravelPalette", () => {
     wrapper.unmount();
   });
 
-  it("uses bare number keys for Quick Travel", async () => {
+  it("selects a favourite with its number key, and only Enter travels (D-5)", async () => {
     const { wrapper, travel } = fixture();
     await flushPromises();
+    const search = wrapper.get('[role="combobox"]');
 
-    await wrapper.get('[role="combobox"]').trigger("keydown", { key: "1", code: "Digit1" });
+    await search.trigger("keydown", { key: "2", code: "Digit2" });
+    await search.trigger("keydown", { key: "1", code: "Digit1" });
+    await search.trigger("keydown", { key: "1", code: "Digit1", repeat: true });
+    await flushPromises();
+    expect(travel).not.toHaveBeenCalled();
+    expect(wrapper.get("#travel-favorite-0").attributes("data-active")).toBe("true");
+    expect(wrapper.get("#travel-favorite-1").attributes("data-active")).toBeUndefined();
+    expect(search.element).toHaveProperty("value", "");
 
+    await search.trigger("keydown", { key: "Enter", code: "Enter" });
+    expect(travel).toHaveBeenCalledTimes(1);
     expect(travel).toHaveBeenCalledWith(DEFAULT_TRAVEL_SHORTCUTS[0]);
     wrapper.unmount();
   });
@@ -881,6 +891,8 @@ describe("TravelPalette", () => {
 
     await wrapper.get('[role="combobox"]').setValue("");
     await wrapper.get(".travel-palette").trigger("keydown", { key: "1", code: "Digit1" });
+    await flushPromises();
+    await wrapper.get('[role="combobox"]').trigger("keydown", { key: "Enter", code: "Enter" });
     expect(travel).toHaveBeenCalledWith(DEFAULT_TRAVEL_SHORTCUTS[0]);
     wrapper.unmount();
   });

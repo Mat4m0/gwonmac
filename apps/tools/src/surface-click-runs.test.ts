@@ -175,3 +175,62 @@ describe('confirmation arming', () => {
     } finally { vi.useRealTimers(); }
   });
 });
+
+describe('owned presses (HUB-003, HUB-130)', () => {
+  const key = (target: Element, type: 'keydown' | 'keyup', code: string, repeat = false) => {
+    const event = new KeyboardEvent(type, { bubbles: true, cancelable: true, code, key: code === 'Enter' ? 'Enter' : code, repeat });
+    target.dispatchEvent(event);
+    return event;
+  };
+  const view = () => {
+    const { surface, primary, canvas } = mount();
+    const chat = document.createElement('textarea'); document.body.append(chat);
+    const reached: string[] = [];
+    for (const [name, element] of [['canvas', canvas], ['chat', chat], ['primary', primary]] as const) {
+      for (const type of ['keydown', 'keyup']) element.addEventListener(type, event => reached.push(`${name} ${type}:${(event as KeyboardEvent).code}${(event as KeyboardEvent).repeat ? ':repeat' : ''}`));
+    }
+    return { surface, primary, canvas, chat, reached };
+  };
+
+  it('keeps the repeats and release of a surface press out of the game, and lets a fresh press through', () => {
+    const { primary, canvas, reached } = view();
+    key(primary, 'keydown', 'Enter');
+    // The press closed the surface; focus is back on the canvas.
+    key(canvas, 'keydown', 'Enter', true);
+    key(canvas, 'keyup', 'Enter');
+    key(canvas, 'keydown', 'KeyW');
+    key(canvas, 'keyup', 'KeyW');
+    expect(reached).toEqual(['primary keydown:Enter', 'canvas keydown:KeyW', 'canvas keyup:KeyW']);
+  });
+
+  it('never swallows the release of a press the game or its chat owns', () => {
+    const { chat, canvas, reached } = view();
+    key(chat, 'keydown', 'Enter');
+    key(chat, 'keydown', 'Enter', true);
+    key(canvas, 'keyup', 'Enter');
+    expect(reached).toEqual(['chat keydown:Enter', 'chat keydown:Enter:repeat', 'canvas keyup:Enter']);
+  });
+
+  it('lets a held Enter activate a surface control once', () => {
+    const { primary } = view();
+    expect(key(primary, 'keydown', 'Enter').defaultPrevented).toBe(false);
+    const repeat = key(primary, 'keydown', 'Enter', true);
+    expect(repeat.defaultPrevented).toBe(true);
+    expect(key(primary, 'keydown', 'KeyA', true).defaultPrevented).toBe(false);
+    key(primary, 'keyup', 'Enter');
+  });
+
+  it('resolves afterPress only once the activating Enter is released', async () => {
+    const { primary, canvas } = view();
+    // No click run can continue any more, so only the held Enter keeps the sheet waiting.
+    await new Promise(resolve => setTimeout(resolve, 600));
+    key(primary, 'keydown', 'Enter');
+    let settled = false;
+    const waiting = controller.afterPress().then(() => { settled = true; });
+    await new Promise(resolve => setTimeout(resolve, 120));
+    expect(settled).toBe(false);
+    key(canvas, 'keyup', 'Enter');
+    await waiting;
+    expect(settled).toBe(true);
+  });
+});

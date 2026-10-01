@@ -256,9 +256,17 @@ test('Command-Backspace steps out of a view\'s own inner level before it leaves 
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
   const caption = page.locator('.hub-caption');
-  // On a confirmation it acts as Cancel, like Esc and Stay here.
+  // On a confirmation it acts as Cancel, like Esc and Stay here. One a Hub row asked for
+  // returns to that row (HUB-075); one a card asked for returns to the cards.
   await search.fill('char toefte'); await search.press('Enter');
-  await expect(page.locator('#character-switch-title')).toHaveText('Leave this area?');
+  await expect(page.locator('#character-switch-title')).toHaveText('Leave this area and switch to Toefte?');
+  await page.keyboard.press('Meta+Backspace');
+  await expect(caption).toHaveText('Home');
+  await expect(search).toHaveValue('char toefte');
+  await page.keyboard.press('Meta+e');
+  await expect(caption).toHaveText('Characters');
+  await page.keyboard.press('End'); await page.keyboard.press('Enter');
+  await expect(page.locator('#character-switch-title')).toHaveText('Leave this area and switch to Fixture Warrior?');
   await page.keyboard.press('Meta+Backspace');
   await expect(page.locator('#character-switch-title')).toHaveText('Switch Character');
   await expect(caption).toHaveText('Characters');
@@ -315,4 +323,40 @@ test('the mouse back button goes back one level and never closes the Hub', async
   await expect(search).toHaveValue('accounts');
   await back();
   await expect(page.locator('#hub')).toBeVisible();
+});
+
+// HUB-048: a held Backspace only edits; it never leaves Travel or its picker, nor eats Home's query.
+test('a held Backspace empties Travel\'s search and leaves Travel, its picker and Home\'s query alone', async ({ page }) => {
+  await page.goto('/?hub');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const caption = page.locator('.hub-caption');
+  await search.fill('trav');
+  await expect(page.locator('.hub-row[aria-selected="true"]')).toHaveAttribute('data-id', 'travel');
+  await search.press('Enter');
+  await expect(caption).toHaveText('Travel');
+  const travelSearch = page.locator('#travel-search-input');
+  await travelSearch.fill('kam');
+  for (let press = 0; press < 7; press++) await page.keyboard.down('Backspace');
+  await page.keyboard.up('Backspace');
+  await expect(caption).toHaveText('Travel');
+  await expect(travelSearch).toHaveValue('');
+  await expect(travelSearch).toBeFocused();
+  await page.getByRole('button', { name: 'Customize Travel', exact: true }).click();
+  const customize = page.locator('#travel-customize-panel');
+  await customize.getByRole('button', { name: /shortcut 1\b/ }).click();
+  const picker = customize.locator('details.travel-destination-picker');
+  await picker.locator('summary').click();
+  const pickerSearch = picker.locator('input').first();
+  await pickerSearch.focus();
+  await expect(pickerSearch).toHaveValue('');
+  for (let press = 0; press < 7; press++) await page.keyboard.down('Backspace');
+  await page.keyboard.up('Backspace');
+  await expect(customize).toBeVisible();
+  await expect(caption).toHaveText('Travel');
+  await page.keyboard.press('Meta+Backspace');
+  await page.keyboard.press('Meta+Backspace');
+  await page.keyboard.press('Meta+Backspace');
+  await expect(caption).toHaveText('Home');
+  await expect(search).toHaveValue('trav');
 });

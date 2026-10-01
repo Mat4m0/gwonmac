@@ -1150,6 +1150,7 @@ export const CORE_IPC = {
   hubSettingsUpdate: "gw:hub:settings:update",
   hubShortcutCapture: "gw:hub:shortcut:capture",
   appRequestQuit: "gw:app:requestQuit",
+  appShowQuitOrReload: "gw:app:showQuitOrReload",
   appReloadGame: "gw:app:reloadGame",
   appClaimRelogIntent: "gw:app:claimRelogIntent",
   clipboardWriteText: "gw:clipboard:writeText",
@@ -1363,6 +1364,8 @@ export interface CoreGwNativeApiBase {
     reveal(kind: RevealKind): Promise<void>;
     openSettings(): Promise<void>;
     requestQuit(): Promise<void>;
+    /** The account's Quit-or-Reload confirmation sheet, the same one Command-Q opens. */
+    showQuitOrReload(): Promise<void>;
     reloadGame(cause: GameReloadCause): Promise<void>;
     claimRelogIntent(): Promise<boolean>;
   };

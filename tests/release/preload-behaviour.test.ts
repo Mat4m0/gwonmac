@@ -385,6 +385,7 @@ const INVOCATIONS: Invocation[] = [
   { path: "hubSettings.capture", args: ["character.switch"], channel: IPC.hubShortcutCapture },
   { path: "app.openSettings", args: [], channel: IPC.appOpenSettings },
   { path: "app.requestQuit", args: [], channel: IPC.appRequestQuit },
+  { path: "app.showQuitOrReload", args: [], channel: IPC.appShowQuitOrReload },
   {
     path: "app.reloadGame",
     args: ["memory-warning"],

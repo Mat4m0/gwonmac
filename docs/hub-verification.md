@@ -25,7 +25,7 @@ The fixture controls are:
   character-switch context, the way the game does. A zone change first reads as
   the game's unavailable state for a moment, as the live game can publish it, so
   Travel and invite must survive it. A Travel arrival moves it to the destination
-  outpost. Characters asks "Leave this area?" in an explorable area
+  outpost. Characters asks "Leave this area and switch to …?" in an explorable area
   and refuses while a map loads.
 - **Injected party**: the production party invite with the chat names Mo Kaiser
   and Kai Mo Bearer, four online friends named Zed (Kamadan, Ascalon City, Lion's

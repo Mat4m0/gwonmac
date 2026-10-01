@@ -4,10 +4,12 @@
  * Tools deliberately stays open when a player clicks Guild Wars, so DOM focus
  * alone cannot decide which surface Escape or Tab belongs to. This
  * controller keeps one ordered list of visible host surfaces. Escape dismisses
- * the topmost one and Tab enters or wraps within it. Dialogs use the platform's
- * modal behavior, with one shared backdrop, dismissal, and focus lifecycle.
+ * the topmost one and Tab wraps within it; Tab on the game canvas stays with
+ * the game (D-12). Dialogs use the platform's modal behavior, with one shared
+ * backdrop, dismissal, and focus lifecycle.
  * A press that starts on a surface owns its repeats and release, so a key that
- * closes a surface never continues into the game.
+ * closes a surface never continues into the game, and a held Enter activates
+ * a surface control only once.
  *
  * The pointer has the same rule for a click run (HUB-242, HUB-244). Chromium
  * counts the clicks of one run in `detail`; a run belongs to the surface page
@@ -15,7 +17,8 @@
  * before a later press of the run, the rest of the run is swallowed wherever
  * it lands, the game canvas included, so a double-click never runs what its
  * first click revealed and never reaches Guild Wars as a world click.
- * Destructive confirmations share one arming rule for the same reason.
+ * Destructive confirmations share one arming rule for the same reason, and a
+ * native sheet opens only after the press that asked for it has ended.
  */
 
 type Surface = Readonly<{
@@ -55,6 +58,10 @@ const DEFAULT_DOUBLE_CLICK_MS = 500;
 const CLICK_RUN_SLOP = 8;
 /** How long a destructive confirmation waits before it accepts an activation. */
 export const CONFIRMATION_ARMING_MS = 400;
+/** The keys that activate a control; their held press is what a native sheet must not inherit. */
+const ACTIVATION_KEYS = new Set(["Enter", "NumpadEnter", "Space"]);
+/** A lost key-up never keeps a native sheet from opening. */
+const PRESS_WAIT_LIMIT_MS = 5000;
 
 /**
  * Arms a destructive confirmation (Resign, Leave and switch, account replace):
@@ -137,6 +144,11 @@ export function installSurfaceController(
       event.preventDefault();
       event.stopImmediatePropagation();
       return;
+    } else if (event.key === "Enter" && onSurface(event.target)) {
+      // A held Enter activates once: its auto-repeat never presses a button,
+      // submits a form or toggles a disclosure again (HUB-130). Surface
+      // handlers still see the repeat, already marked handled.
+      event.preventDefault();
     }
     const nativeModal = document.querySelector("dialog:modal");
     const surface = topmost();
@@ -159,6 +171,14 @@ export function installSurfaceController(
       || event.metaKey
     ) return;
 
+    const active = document.activeElement;
+    // Tab is a Guild Wars key while the game has the keyboard (D-12): an open
+    // popout never takes it from the canvas, and neither does Chromium's own
+    // focus step. Other page focus keeps its native Tab.
+    if (active !== null && active !== document.body && !onSurface(active)) {
+      if (active instanceof HTMLCanvasElement) event.preventDefault();
+      return;
+    }
     const elements = focusableElements(surface.root);
     if (elements.length === 0) {
       claim(event);
@@ -166,7 +186,6 @@ export function installSurfaceController(
     }
     const first = elements[0]!;
     const last = elements.at(-1)!;
-    const active = document.activeElement;
     if (!surface.root.contains(active)) {
       claim(event);
       (event.shiftKey ? last : first).focus({ preventScroll: true });
@@ -277,6 +296,25 @@ export function installSurfaceController(
       if (swallowingPress || (event.detail > 1 && run !== null && stale(run))) swallow(event);
     }, true);
   }
+
+  /**
+   * A native sheet (Quit or Reload) cannot be armed like a DOM confirmation: its
+   * default button takes the next Return, auto-repeat included, and a click on it.
+   * So a surface opens one only after the press that asked for it has ended: no
+   * activation key that began on a surface is still held, and its click run can
+   * add no further click.
+   */
+  const afterPress = () => new Promise<void>((resolve) => {
+    const deadline = performance.now() + PRESS_WAIT_LIMIT_MS;
+    const check = () => {
+      const now = performance.now();
+      const held = [...ownedPresses].some((code) => ACTIVATION_KEYS.has(code))
+        || (run !== null && now - run.at <= clickRunMs);
+      if (!held || now > deadline) resolve();
+      else setTimeout(check, 50);
+    };
+    check();
+  });
 
   const register = (surface: Surface): GwonmacSurfaceHandle => {
     const id = Symbol("surface");
@@ -407,5 +445,6 @@ export function installSurfaceController(
       });
     },
     dismissTransient,
+    afterPress,
   });
 }

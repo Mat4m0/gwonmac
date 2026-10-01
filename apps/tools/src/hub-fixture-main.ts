@@ -2,8 +2,8 @@
  * Stands in for the main process in the Hub fixture. Physical shortcuts are
  * claimed the way `window-shortcuts.ts` claims them (repeats and key-ups
  * included) and reach the page only as renderer commands through the
- * production subscriber `commands.ts`. Command-Q opens a model of the native
- * Quit-or-Reload sheet. Import this module before `commands.ts`: it installs
+ * production subscriber `commands.ts`. Command-Q and the Hub's Quit or Reload
+ * row open a model of the native Quit-or-Reload sheet. Import this module before `commands.ts`: it installs
  * the command transport that `commands.ts` registers with when it loads.
  */
 import type { AppSettings, RendererCommand } from '../../../src/shared/contracts';
@@ -88,6 +88,8 @@ export function installFixtureMain(options: FixtureMainOptions) {
   window.addEventListener('keydown', onKeyDown, true);
   window.addEventListener('keyup', onKeyUp, true);
   window.addEventListener('blur', () => claimed.clear());
+  /** `app.showQuitOrReload`: the Hub row opens the same sheet as Command-Q. */
+  return { showQuitOrReload: () => sheet.show() };
 }
 
 /**
@@ -116,6 +118,8 @@ function createQuitOrReloadSheet(record: (action: string) => void, resetInput: (
     get open() { return dialog.open; },
     /** Resolves when the sheet settles; a second request joins the open sheet (`runExclusiveReloadDialog`). */
     async show() {
+      // Every request is counted, joined or not, so a test can require exactly one.
+      dialog.dataset.requests = String(Number(dialog.dataset.requests ?? 0) + 1);
       if (dialog.open) return;
       await resetInput();
       dialog.returnValue = '';
