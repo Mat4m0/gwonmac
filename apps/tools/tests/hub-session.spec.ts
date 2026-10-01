@@ -170,8 +170,15 @@ test('a template folder that loads late never opens over a newer page or a close
     await search(page).press('Enter');
     await expect(page.locator('.hub-caption')).toHaveText('Build Library');
     const templates = page.locator('#hub .hub-row[data-id="game-templates"]');
-    await search(page).press('End');
-    for (let step = 0; step < 20 && await templates.getAttribute('aria-selected') !== 'true'; step++) await search(page).press('ArrowUp');
+    const selected = page.locator('#hub .hub-row[aria-selected="true"]');
+    // Each key moves the selection asynchronously; read it only after it moved.
+    const press = async (key: string) => {
+      const before = await selected.getAttribute('data-id');
+      await search(page).press(key);
+      await expect(selected).not.toHaveAttribute('data-id', before ?? '');
+    };
+    await press('End');
+    for (let step = 0; step < 20 && await templates.getAttribute('aria-selected') !== 'true'; step++) await press('ArrowUp');
     await expect(templates).toHaveAttribute('aria-selected', 'true');
     await search(page).press('ArrowRight');
     if (moveOn === 'type') await page.keyboard.type('sm');
