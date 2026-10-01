@@ -34,7 +34,7 @@ test('a late quote cannot replace a new query or revive a disabled market', asyn
   await Promise.resolve();
   assert.equal(source.search('2 + 3')[0]?.title, '5');
   enabled = false;
-  assert.equal(source.search('10 ecto in p')[0]?.id, 'quote-disabled');
+  assert.deepEqual(source.search('10 ecto in p').map(row => row.id), ['quote-disabled']);
   source.setVisible(false);
 });
 
@@ -223,7 +223,9 @@ test('disabled automatic prices offer manual rates without demand', async () => 
   const source=createHubCalculator({copy:async()=>{},marketEnabled:()=>false,quotes:async()=>{requests++;return {updatedAt:Date.now(),quotes:[]};}});
   source.setVisible(true);
   try {
-    const row=source.search('10e in p')[0]!;
+    const rows=source.search('10e in p');
+    assert.deepEqual(rows.map(row => row.id), ['quote-disabled']);
+    const row=rows[0]!;
     assert.equal(row.title,'Use your conversion rates');assert.equal(row.action,'Choose rates');
     assert.equal(requests,0);
   } finally {source.setVisible(false);}

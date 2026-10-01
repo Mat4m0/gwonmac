@@ -77,7 +77,7 @@ test('late market responses cannot revive a hidden or disabled result',async()=>
   let enabled=true;let resolve!:(value:MarketSnapshot)=>void;
   const source=createHubCalculator({copy:async()=>{},marketEnabled:()=>enabled,quotes:async()=>({updatedAt:now,quotes:[]}),market:()=>new Promise(done=>{resolve=done;})});
   source.setVisible(true);source.search('1p in a');source.search('2+3');enabled=false;resolve({fetchedAt:now,quotes:[]});await Promise.resolve();
-  assert.equal(source.search('2+3')[0]?.title,'5');assert.equal(source.search('1p in a')[0]?.id,'quote-disabled');source.setVisible(false);
+  assert.equal(source.search('2+3')[0]?.title,'5');assert.deepEqual(source.search('1p in a').map(row => row.id), ['quote-disabled']);source.setVisible(false);
 });
 
 test('an open Hub expires evidence without waiting for another keystroke',async(context)=>{

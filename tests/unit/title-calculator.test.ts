@@ -47,7 +47,7 @@ test('title calculations stay offline and never change progress',async()=>{
   let copied='',reads=0;const source=createHubCalculator({copy:async value=>{copied=value;},marketEnabled:()=>false,quotes:async()=>{reads++;throw new Error('Network forbidden');}});
   source.setVisible(true);const row=source.search('250 cupcakes in sweet points')[0]!;
   assert.equal(row.group,'Titles');await row.run(task);assert.match(copied,/500 Sweet Tooth points/);
-  assert.equal(source.search('10 ecto in p')[0]?.id,'quote-disabled');assert.equal(reads,0);source.setVisible(false);
+  assert.deepEqual(source.search('10 ecto in p').map(row => row.id), ['quote-disabled']);assert.equal(reads,0);source.setVisible(false);
 });
 
 test('progress accepts the same short track names as entered point quantities', () => {
