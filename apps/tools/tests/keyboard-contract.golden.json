@@ -95,9 +95,9 @@
     "Meta+r": "closed | focus canvas | sel - | q \"\" | action - | life pve-explorable | canvas down 0 up 0 pointer 0"
   },
   "travel": {
-    "1": "Home | focus search | sel - | q \"\" | action TRAVEL Ascalon City | life outpost | canvas down 0 up 0 pointer 0",
+    "1": "closed | focus canvas | sel - | q \"\" | action TRAVEL Ascalon City | life outpost | canvas down 0 up 0 pointer 0",
     "a": "Travel | focus search | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
-    "Enter": "Home | focus search | sel - | q \"\" | action TRAVEL Kamadan, Jewel of Istan | life outpost | canvas down 0 up 0 pointer 0",
+    "Enter": "closed | focus canvas | sel - | q \"\" | action TRAVEL Kamadan, Jewel of Istan | life outpost | canvas down 0 up 0 pointer 0",
     "Escape": "Home | focus search | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Backspace": "Travel | focus search | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Meta+Backspace": "Home | focus search | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
@@ -123,11 +123,11 @@
     "ArrowDown": "Characters | focus card:ranger | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "ArrowUp": "Characters | focus search | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Tab": "Characters | focus button[Next character] | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
-    "Shift+Tab": "Characters | focus button[Previous character] | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
+    "Shift+Tab": "Characters | focus search | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Home": "Characters | focus card:monk | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
-    "End": "Characters | focus card:monk | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
-    "PageDown": "Characters | focus card:monk | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
-    "Control+n": "Characters | focus card:monk | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
+    "End": "Characters | focus card:warrior | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
+    "PageDown": "Characters | focus card:elementalist | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
+    "Control+n": "Characters | focus card:ranger | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Meta+Enter": "Characters | focus card:monk | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Meta+j": "Characters | focus card:monk | sel place:449 | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Meta+r": "closed | focus canvas | sel - | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0"
@@ -192,7 +192,7 @@
   "accounts": {
     "1": "Accounts | focus search | sel - | q \"1\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "a": "Accounts | focus search | sel - | q \"a\" | action - | life outpost | canvas down 0 up 0 pointer 0",
-    "Enter": "Second | focus search | sel account:<profile>:replace | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
+    "Enter": "Second | focus search | sel account:<profile>:open | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Escape": "Home | focus search | sel accounts | q \"switch account\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Backspace": "Accounts | focus search | sel account:<profile> | q \"\" | action - | life outpost | canvas down 0 up 0 pointer 0",
     "Meta+Backspace": "Home | focus search | sel accounts | q \"switch account\" | action - | life outpost | canvas down 0 up 0 pointer 0",

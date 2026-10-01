@@ -31,7 +31,7 @@ test('hero search includes unlocked heroes and applies only to an existing party
   await expect(page.getByRole('button', { name: 'Review availability ↵', exact: true })).toBeEnabled();
   await search.press('Enter');
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', /command|apply/);
-  await expect(page.getByRole('button', { name: 'Apply to Dunkoro ↵', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: /^Apply .+ to Dunkoro ↵$/ })).toBeDisabled();
   await page.getByRole('button', { name: 'Back', exact: true }).click();
   await search.fill('Tahlkora');
   await expect(page.locator('#hub').getByRole('option')).toHaveAttribute('aria-disabled', 'false');
@@ -120,7 +120,7 @@ for (const viewport of [{ width: 320, height: 800 }, { width: 640, height: 500 }
     const current = page.locator('#hub').getByRole('option', { name: /Apply to me/ });
     await current.getByRole('img').last().scrollIntoViewIfNeeded();
     await expect(current.getByRole('img').last()).toBeInViewport();
-    await expect(page.getByRole('button', { name: 'Apply to me ↵', exact: true })).toBeInViewport();
+    await expect(page.getByRole('button', { name: /^Apply .+ to Fixture Monk ↵$/ })).toBeInViewport();
     expect(await page.locator('.hub-results').evaluate(el => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
     await page.screenshot({ path: info.outputPath('hub-comparison-compact.png') });
   });

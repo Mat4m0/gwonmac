@@ -111,3 +111,27 @@ test('compact Hub keeps navigation reachable with reduced motion over a bright b
     expect((Math.max(background, foreground) + .05) / (Math.min(background, foreground) + .05), label.text ?? 'row text').toBeGreaterThanOrEqual(4.5);
   }
 });
+
+test('Modern hover stays clearly weaker than the selection it is not', async ({ page }, info) => {
+  await page.goto('/?hub');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  await page.evaluate(() => window.gwApplyFixtureAppearance?.({ uiStyle: 'obsidian', uiPanelOpacity: 100 }));
+  const rows = page.locator('#hub .hub-row');
+  // The pointer rests on row 2 while the keyboard selects row 1: row 2 shows hover, not selection.
+  const resting = (await rows.nth(2).boundingBox())!;
+  await page.mouse.move(resting.x + resting.width * 0.7, resting.y + resting.height / 2, { steps: 4 });
+  await page.keyboard.press('ArrowUp');
+  await expect(rows.nth(1)).toHaveAttribute('aria-selected', 'true');
+  await expect(rows.nth(2)).toHaveAttribute('aria-selected', 'false');
+  const png = PNG.sync.read(await page.screenshot());
+  const sample = async (index: number) => {
+    const box = (await rows.nth(index).boundingBox())!;
+    const offset = (Math.round(box.y + 4) * png.width + Math.round(box.x + box.width * 0.7)) * 4;
+    return [png.data[offset]!, png.data[offset + 1]!, png.data[offset + 2]!];
+  };
+  const distance = (a: number[], b: number[]) => Math.hypot(...a.map((value, channel) => value - b[channel]!));
+  const [selected, hover, plain] = [await sample(1), await sample(2), await sample(3)];
+  await page.screenshot({ path: info.outputPath('modern-hover-vs-selection.png') });
+  // Hover is a faint lift; the selection stands at least 1.5 times further from it than hover from a plain row.
+  expect(distance(selected, hover)).toBeGreaterThan(1.5 * distance(hover, plain));
+});

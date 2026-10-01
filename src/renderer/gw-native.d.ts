@@ -97,6 +97,8 @@ declare global {
 
   interface GwonmacSurfaceHandle {
     setOpen(open: boolean): void;
+    /** A new page replaced the content: a click run that began before it is cancelled. */
+    pageChanged(): void;
     raise(): void;
     dispose(): void;
   }
@@ -104,6 +106,8 @@ declare global {
   interface GwonmacDialogHandle {
     show(): void;
     close(): void;
+    /** A new page replaced the content: a click run that began before it is cancelled. */
+    pageChanged(): void;
     dispose(): void;
   }
 

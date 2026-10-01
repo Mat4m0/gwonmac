@@ -210,6 +210,8 @@
   --ui-well: #090907;
   --ui-well-fill: var(--gw-sunk);
   --ui-hover: rgb(230 200 130 / 9%);
+  /* Hover over a selectable row stays clearly weaker than the selection it may turn into. */
+  --ui-row-hover: var(--ui-hover);
   --ui-selection-fill: linear-gradient(rgb(38 55 74 / 62%), rgb(22 36 52 / 62%));
   --ui-selection-hover-fill: linear-gradient(rgb(48 69 91 / 74%), rgb(28 45 64 / 74%));
   --ui-selection-ink: var(--ui-text-bright);
@@ -406,6 +408,8 @@
   --ui-well: oklch(0.105 0.004 80);
   --ui-well-fill: oklch(0.105 0.004 80 / 0.78);
   --ui-hover: oklch(0.79 0.105 83 / 0.1);
+  /* Modern's selection is a warm fill; a warm hover read as a second selection (PTR playtest), so row hover is a faint neutral lift. */
+  --ui-row-hover: oklch(0.92 0.005 83 / 0.04);
   --ui-selection-fill: linear-gradient(oklch(0.3 0.035 78 / 0.82), oklch(0.27 0.025 78 / 0.82));
   --ui-selection-hover-fill: linear-gradient(oklch(0.35 0.04 78 / 0.9), oklch(0.3 0.03 78 / 0.9));
   --ui-selection-ink: var(--ui-text-bright);

@@ -73,6 +73,8 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
   const revision = (item: Item) => JSON.stringify(item.kind === 'team' ? [item.value, controller.library.value?.builds] : item.value);
   const playerName = () => { const source = window.gwCharacterSwitch; const state = source?.characters; return source && ['outpost', 'pve-explorable', 'pvp-explorable'].includes(source.context) && state?.status === 'ready' && state.selectedIndex !== null ? state.characters[state.selectedIndex]?.name ?? 'Your character' : 'Your character'; };
   const targetName = (hero: HeroId | null) => hero === null ? playerName() : heroLabel(hero);
+  /** The footer names the build and its target before Enter: "Apply Smiter to Fixture Monk". */
+  const applyAction = (build: Build, hero: HeroId | null) => { const target = targetName(hero); return `Apply ${build.name} to ${target === 'Your character' ? 'your character' : target}`; };
   const skillPreview = (build: Pick<Build, 'skills'>) => build.skills.map(id => {
     const skill = id === null ? null : host.skills.get(id);
     return { name: skill?.name ?? (id === null ? 'Empty slot' : `Unknown skill ${id}`), iconUrl: skill?.iconUrl ?? null, elite: skill?.elite ?? false, description: skill?.description ?? null };
@@ -175,7 +177,7 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
     const applyRow = (hero: HeroId | null, title: string): HubRow => {
       const refusal = unavailable(hero);
       return { id: `apply:${hero ?? 'me'}`, title, ...equipped(hero, item.value), group: 'Current build',
-        action: hero === null ? 'Apply to me' : `Apply to ${targetName(hero)}`, consequential: true,
+        action: applyAction(item.value, hero), consequential: true,
         ...(refusal ? { unavailable: refusal } : {}), run: () => apply(item, expected, hero) };
     };
     function compareTarget(hero: HeroId | null) {
@@ -192,7 +194,7 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
           const refusal = member ? unavailable(id) : 'Add this hero to your party first.';
           return { id: `hero:${id}`, title: heroLabel(id), ...equipped(id, item.value), group: member ? 'In your party' : 'Unlocked heroes',
             keywords: professions?.flatMap(value => value ? [PROFESSIONS[value].name] : []).join(' ') ?? '',
-            preferred: !refusal, consequential: !refusal, action: refusal ? 'Review availability' : `Apply to ${heroLabel(id)}`, ...(refusal ? { detail: refusal } : {}),
+            preferred: !refusal, consequential: !refusal, action: refusal ? 'Review availability' : applyAction(item.value, id), ...(refusal ? { detail: refusal } : {}),
             navigate: () => compareTarget(id), run: () => refusal ? compareTarget(id) : apply(item, expected, id) };
         }).sort((a, b) => Number(a.group !== 'In your party') - Number(b.group !== 'In your party') || a.title.localeCompare(b.title));
         return rows.length ? rows : [{ id: 'heroes-unavailable', title: 'No heroes observed', detail: 'Enter a PvE outpost to read your heroes.', group: 'Heroes', action: 'Choose hero', unavailable: 'Hero information is not available yet.', run() {} }];
@@ -240,9 +242,12 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
     if (item.kind === 'build') { chooseBuild(item); return; }
     operation = "";
     const expected = revision(item);
-    hub.showView(item.value.name, target => {
+    hub.showView(item.value.name, (target, _back, footer) => {
       const doc = target.ownerDocument;
-      const view = doc.createElement('section'); view.className = 'hub-detail hub-build-review';
+      // The review opens at its top and takes focus itself: its title, mode line and first
+      // member stay in view, and Enter runs the footer's named Apply (HUB-084).
+      const view = doc.createElement('section'); view.className = 'hub-detail hub-build-review'; view.tabIndex = 0;
+      view.setAttribute('aria-label', `Review ${item.value.name}`);
       const title = doc.createElement('h2'); title.textContent = item.value.name;
       const description = doc.createElement('div'); description.className = 'hub-review-roster';
       const showBuild = (build: Build, label: string) => {
@@ -259,20 +264,19 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
           const label = `${index === 0 ? playerName() : slot.hero === null ? 'Unassigned hero' : heroLabel(slot.hero)} · ${build?.name ?? 'Keep build'}${slot.behaviour ? ` · ${slot.behaviour}` : ''}`;
           if (build) showBuild(build, label); else { const text = doc.createElement('p'); text.textContent = label; description.append(text); }
         });
+      // A refusal or the running apply shows under the title, before the roster, never below the fold.
       const status = doc.createElement('p'); status.setAttribute('role', 'status');
-      const button = doc.createElement('button'); button.className = 'ui-button';
       const update = () => {
         const latest = current(item);
         const changed = !latest || revision(latest) !== expected;
         const refusal = changed ? 'This configuration changed. Go back and review it again.' : assess(item, null);
-        button.textContent = applying ? 'Applying…' : `Apply team ${item.value.name}`;
-        button.disabled = !!refusal;
+        footer.primary({ label: applying ? 'Applying…' : `Apply team ${item.value.name}`, disabled: !!refusal || applying,
+          run: () => apply(item, expected, null).catch(error => { operation = error instanceof Error ? error.message : 'Application stopped.'; update(); }) });
         status.textContent = operation || refusal || '';
+        status.hidden = !status.textContent;
       };
-      button.onclick = () => { void apply(item, expected, null).catch(error => { operation = error instanceof Error ? error.message : 'Application stopped.'; update(); }); };
-      view.append(title);
-      view.append(description, status, button); target.append(view);
-      listeners.add(update); update(); button.focus();
+      view.append(title, status, description); target.append(view);
+      listeners.add(update); update();
       return () => { listeners.delete(update); view.remove(); };
     });
   }
@@ -285,7 +289,7 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
       if (!item) return undefined;
       if (item.kind === 'build') return { ...buildRow(item), group: 'Pinned' };
       return { id, title: item.value.name, detail: 'Saved team', group: 'Pinned',
-        preview: preview(item), action: 'Review', run: () => review(item), actions: () => review(item) };
+        preview: preview(item), action: `Review ${item.value.name}`, run: () => review(item), actions: () => review(item) };
     },
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
     setVisible(next) {
@@ -307,7 +311,7 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
         const expected = revision(item);
         const refusal = direct ? assess(item, null) : null;
         return { id: `team:${item.value.id}`, title: item.value.name, detail: 'Saved team',
-          group: 'Teams', preview: preview(item), action: direct ? `Apply team ${item.value.name}` : 'Review', consequential: direct, navigate: () => review(item),
+          group: 'Teams', preview: preview(item), action: direct ? `Apply team ${item.value.name}` : `Review ${item.value.name}`, consequential: direct, navigate: () => review(item),
           ...(refusal ? { unavailable: refusal } : {}), actions: () => review(item),
           run: () => direct ? apply(item, expected, null) : review(item) } satisfies HubRow;
       }), ...(parsed.scope === 'build' ? templateStates() : [])];

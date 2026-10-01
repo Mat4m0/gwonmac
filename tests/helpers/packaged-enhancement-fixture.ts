@@ -609,8 +609,11 @@ export async function assertPackagedOffSession() {
       () =>
         performance.getEntriesByName("gw.runtime.initialized").length > 0,
     );
+    // The host's Double-click speed passes through unchanged; null when never set.
+    const { doubleClickMs, ...init } = await fixture.page.evaluate(() => window.gwNative.init);
+    assert.ok(doubleClickMs === null || doubleClickMs > 0);
     assert.deepEqual(
-      await fixture.page.evaluate(() => window.gwNative.init),
+      init,
       {
         development: false,
         enhancementProgram: "none",

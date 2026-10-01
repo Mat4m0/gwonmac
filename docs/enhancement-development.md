@@ -47,7 +47,8 @@ Current integrated features are:
   is unassigned by default and opens a small in-game confirmation before sending the fixed `/resign` command
   through the certified native chat sender in PvE. It does not type into chat.
   Turning off Resign or Tools disables the command and cancels a queued request.
-  Enter or the Resign button confirms. Escape, Cancel, the close button, an
+  Enter or the Resign button confirms once the dialog has armed (~400 ms after
+  it opens; a multi-click never confirms). Escape, Cancel, the close button, an
   outside click, and losing window focus dismiss without sending.
   A changed native chat path withdraws Resign until its exact bodies are reviewed.
 

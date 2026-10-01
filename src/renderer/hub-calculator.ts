@@ -24,7 +24,7 @@ export function createHubCalculator(options: {
   const refresh=()=>{for(const listener of listeners) listener();};
   const clear=()=>{generation++;queryKey='';snapshot=null;marketSnapshot=null;clearTimeout(timer);};
   function editRates(preferManual=false) {
-    options.hub?.showView('Conversion rates',target=>{
+    options.hub?.showView('Conversion rates',(target,_back,footer)=>{
       const doc=target.ownerDocument,form=doc.createElement('form');form.className='hub-detail';
       const heading=doc.createElement('h2');heading.textContent='Choose your rates';
       const hint=doc.createElement('p');hint.textContent='Your rates stay in this game window. They are estimates, not live market quotes. Leave unknown rates blank.';
@@ -35,7 +35,9 @@ export function createHubCalculator(options: {
       for(const [key,label] of [['ecto','Gold per ectoplasm'],['armbrace','Ectoplasm per armbrace'],['zkey','Ectoplasm per Zaishen key']] as const){
         const wrapper=doc.createElement('label');wrapper.textContent=label;const input=doc.createElement('input');input.className='ui-input';input.inputMode='decimal';input.setAttribute('aria-label',label);input.value=rates[key];wrapper.append(input);form.append(wrapper);fields.set(key,input);
       }
-      const status=doc.createElement('p');status.setAttribute('role','status');const save=doc.createElement('button');save.type='submit';save.className='ui-button';save.textContent='Use these rates';form.append(status,save);target.append(form);
+      const status=doc.createElement('p');status.setAttribute('role','status');form.append(status);target.append(form);
+      // The footer's "Use these rates" submits; Enter in a rate field runs it.
+      footer.primary({label:'Use these rates',run:()=>form.requestSubmit()});
       form.onsubmit=event=>{event.preventDefault();try{
         const values={...rates};for(const [key,input] of fields){const value=input.value.trim();if(value&&decimal(value).n<=0n)throw new Error('Rates must be greater than zero.');values[key]=value;}
         Object.assign(rates,values);manual=mode.value==='manual';clear();status.textContent='Rates selected. Go back to your conversion.';refresh();

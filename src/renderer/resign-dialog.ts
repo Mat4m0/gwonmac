@@ -1,7 +1,10 @@
 /**
  * Small Resign confirmation in the shared Travel modal and material system.
- * Dismissal never submits; only an explicit Enter or confirmation click does.
+ * Dismissal never submits; only an explicit Enter or confirmation click does,
+ * once the shared arming window has passed (HUB-245 arming, HUB-242).
  */
+import { armConfirmation } from "./surface-controller.js";
+
 export function createResignDialog(
   parent: HTMLElement,
   unavailable: () => string | null,
@@ -46,9 +49,11 @@ export function createResignDialog(
   const cancelButton = root.querySelector<HTMLButtonElement>("[data-cancel]")!;
   const confirmButton = root.querySelector<HTMLButtonElement>("[data-confirm]")!;
   const error = root.querySelector<HTMLParagraphElement>("[role=alert]")!;
+  const arming = armConfirmation(confirmButton);
   parent.append(style, root);
   const close = () => {
     window.removeEventListener("blur", close);
+    arming.disarm();
     modal.close();
   };
   const modal = window.gwSurfaces.registerDialog({
@@ -59,8 +64,10 @@ export function createResignDialog(
     error.hidden = message === null;
     confirmButton.disabled = message !== null;
   };
-  const confirm = () => {
-    if (!root.open || confirmButton.disabled) return;
+  // The press or click that opened the dialog, and the later clicks of a
+  // multi-click, never confirm it.
+  const confirm = (event?: Event) => {
+    if (!root.open || confirmButton.disabled || !arming.accepts(event)) return;
     try {
       const refusal = unavailable();
       if (refusal !== null) { report(refusal); cancelButton.focus(); return; }
@@ -73,7 +80,7 @@ export function createResignDialog(
   };
   closeButton.addEventListener("click", close);
   cancelButton.addEventListener("click", close);
-  confirmButton.addEventListener("click", confirm);
+  confirmButton.addEventListener("click", (event) => confirm(event));
   root.addEventListener("keydown", (event) => {
     if (event.key === " " && event.target === confirmButton) event.preventDefault();
     if (event.key !== "Enter") return;
@@ -87,6 +94,7 @@ export function createResignDialog(
       if (root.open) return;
       report(unavailable());
       modal.show();
+      arming.arm();
       (confirmButton.disabled ? cancelButton : confirmButton).focus({ preventScroll: true });
       window.addEventListener("blur", close);
     },

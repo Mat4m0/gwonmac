@@ -15,6 +15,8 @@ import type {
   CharacterSwitchSource,
 } from "./character-switch-model.js";
 import { currentCharacterIndex } from "./character-switch-model.js";
+import { armConfirmation } from "./surface-controller.js";
+import { listIndexAfter, listKeyStep } from "./list-keys.js";
 
 const failureMessage = (code: CharacterSwitchFailureCode): string => {
   switch (code) {
@@ -85,21 +87,6 @@ export function numberedCharacterPosition(key: string, count: number): number | 
   return position < count ? position : null;
 }
 
-export function moveCharacterSelection(
-  current: number,
-  count: number,
-  direction: -1 | 1,
-  disabled = -1,
-): number {
-  if (count <= 1) return current;
-  let next = current;
-  for (let attempts = 0; attempts < count; attempts += 1) {
-    next = (next + direction + count) % count;
-    if (next !== disabled) return next;
-  }
-  return current;
-}
-
 export function characterCarouselRows(
   selected: number,
   count: number,
@@ -124,7 +111,7 @@ export function createCharacterSwitchPalette(
   root.id = "character-switch-root";
   root.className = "ui-modal ui-modal-layer";
   root.setAttribute("aria-labelledby", "character-switch-title");
-  root.innerHTML = `<div class="ui-frame character-switch-panel"><header class="character-switch-head"><h2 id="character-switch-title">Switch Character</h2><span class="character-switch-count" aria-live="polite" aria-atomic="true"></span><button class="ui-button character-switch-head-action character-switch-settings-toggle" type="button" aria-label="Character Switch settings" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="ui-button character-switch-head-action character-switch-close" type="button" aria-label="Close Switch Character"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 3 10 10M13 3 3 13" /></svg></button></header><div class="character-switch-carousel"><button class="ui-button character-switch-arrow character-switch-previous" type="button" aria-label="Previous character"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m10.5 2.5-5 5 5 5"/></svg></button><ul id="character-switch-list" class="character-switch-list" aria-label="Characters"></ul><button class="ui-button character-switch-arrow character-switch-next" type="button" aria-label="Next character"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m5.5 2.5 5 5-5 5"/></svg></button></div><section class="character-switch-settings" aria-label="Character Switch settings" hidden><fieldset class="character-switch-layout-setting"><legend>Layout</legend><div><label class="ui-choice-row"><input type="radio" name="character-switch-layout" value="horizontal"><span><strong>Horizontal</strong><small>Selection-screen order</small></span></label><label class="ui-choice-row"><input type="radio" name="character-switch-layout" value="vertical"><span><strong>Vertical</strong><small>Alphabetical list</small></span></label></div></fieldset><label class="character-switch-setting" for="character-switch-enable-search"><span><strong>Show search bar</strong><small>Type from a character to search</small></span><input id="character-switch-enable-search" type="checkbox"></label><label class="character-switch-setting" for="character-switch-show-profession"><span><strong>Show profession</strong><small>Icon, primary, and secondary profession</small></span><input id="character-switch-show-profession" type="checkbox"></label><label class="character-switch-setting" for="character-switch-show-level"><span><strong>Show level</strong><small>Character level</small></span><input id="character-switch-show-level" type="checkbox"></label><label class="character-switch-setting" for="character-switch-show-location"><span><strong>Show known location</strong><small>Locations from the reviewed Travel catalogue</small></span><input id="character-switch-show-location" type="checkbox"></label></section><section class="character-switch-confirm" aria-describedby="character-switch-confirm-copy" hidden><p id="character-switch-confirm-copy">Switching characters will leave this explorable area. You may lose progress in this instance.</p><div class="character-switch-confirm-actions"><button type="button" class="ui-button character-switch-stay">Stay here</button><button type="button" class="ui-button character-switch-leave" data-variant="primary">Leave and switch</button></div></section><p class="character-switch-status" role="status" aria-live="polite" aria-atomic="true"></p><details class="character-switch-details"><summary>Technical details</summary><pre></pre><button type="button" class="ui-button character-switch-copy">Copy diagnostics</button></details><footer class="character-switch-footer"><span class="character-switch-hints character-switch-list-hints"></span><span class="character-switch-hints character-switch-settings-hints" hidden><kbd class="ui-kbd">esc</kbd> back</span><span class="character-switch-hints character-switch-confirm-hints" hidden><kbd class="ui-kbd">esc</kbd> back</span></footer></div>`;
+  root.innerHTML = `<div class="ui-frame character-switch-panel"><header class="character-switch-head"><h2 id="character-switch-title">Switch Character</h2><span class="character-switch-count" aria-live="polite" aria-atomic="true"></span><button class="ui-button character-switch-head-action character-switch-settings-toggle" type="button" aria-label="Character Switch settings" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="ui-button character-switch-head-action character-switch-close" type="button" aria-label="Close Switch Character"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 3 10 10M13 3 3 13" /></svg></button></header><div class="character-switch-carousel"><button class="ui-button character-switch-arrow character-switch-previous" type="button" aria-label="Previous character"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m10.5 2.5-5 5 5 5"/></svg></button><ul id="character-switch-list" class="character-switch-list" aria-label="Characters"></ul><button class="ui-button character-switch-arrow character-switch-next" type="button" aria-label="Next character"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m5.5 2.5 5 5-5 5"/></svg></button></div><section class="character-switch-settings" aria-label="Character Switch settings" hidden><fieldset class="character-switch-layout-setting"><legend>Layout</legend><div><label class="ui-choice-row"><input type="radio" name="character-switch-layout" value="horizontal"><span><strong>Horizontal</strong><small>Selection-screen order</small></span></label><label class="ui-choice-row"><input type="radio" name="character-switch-layout" value="vertical"><span><strong>Vertical</strong><small>Alphabetical list</small></span></label></div></fieldset><label class="character-switch-setting" for="character-switch-enable-search"><span><strong>Show search bar</strong><small>Type from a character to search</small></span><input id="character-switch-enable-search" type="checkbox"></label><label class="character-switch-setting" for="character-switch-show-profession"><span><strong>Show profession</strong><small>Icon, primary, and secondary profession</small></span><input id="character-switch-show-profession" type="checkbox"></label><label class="character-switch-setting" for="character-switch-show-level"><span><strong>Show level</strong><small>Character level</small></span><input id="character-switch-show-level" type="checkbox"></label><label class="character-switch-setting" for="character-switch-show-location"><span><strong>Show known location</strong><small>Locations from the reviewed Travel catalogue</small></span><input id="character-switch-show-location" type="checkbox"></label></section><section class="character-switch-confirm" aria-describedby="character-switch-confirm-copy" hidden><p id="character-switch-confirm-copy">Switching characters will leave this explorable area. You may lose progress in this instance.</p><div class="character-switch-confirm-actions"><button type="button" class="ui-button character-switch-stay">Stay here</button><button type="button" class="ui-button character-switch-leave" data-variant="primary">Leave and switch</button></div></section><p class="character-switch-status" role="status" aria-live="polite" aria-atomic="true"></p><details class="character-switch-details"><summary>Technical details</summary><pre></pre><button type="button" class="ui-button character-switch-copy">Copy diagnostics</button></details><footer class="character-switch-footer"><span class="character-switch-hints character-switch-list-hints"></span><span class="character-switch-hints character-switch-settings-hints" hidden><kbd class="ui-kbd">esc</kbd> back</span><span class="character-switch-hints character-switch-confirm-hints" hidden><kbd class="ui-kbd">esc</kbd> back</span><button type="button" class="ui-button character-switch-action" data-variant="primary" disabled></button></footer></div>`;
   parent.append(root);
   const panel = root.querySelector<HTMLElement>(".character-switch-panel")!;
   const carousel = root.querySelector<HTMLElement>(".character-switch-carousel")!;
@@ -144,6 +131,8 @@ export function createCharacterSwitchPalette(
   const confirmPanel = root.querySelector<HTMLElement>(".character-switch-confirm")!;
   const stayButton = root.querySelector<HTMLButtonElement>(".character-switch-stay")!;
   const leaveButton = root.querySelector<HTMLButtonElement>(".character-switch-leave")!;
+  const leaveArming = armConfirmation(leaveButton);
+  const primaryButton = root.querySelector<HTMLButtonElement>(".character-switch-action")!;
   const settingsToggle = root.querySelector<HTMLButtonElement>(".character-switch-settings-toggle")!;
   const searchCheckbox = root.querySelector<HTMLInputElement>("#character-switch-enable-search")!;
   const professionCheckbox = root.querySelector<HTMLInputElement>("#character-switch-show-profession")!;
@@ -164,6 +153,8 @@ export function createCharacterSwitchPalette(
     | Readonly<{ kind: "settings" }>
     | Readonly<{ kind: "confirming" }>;
   let view: ViewState = Object.freeze({ kind: "closed" });
+  /** The card the current click run selected; only its own double-click switches. */
+  let pressedKey: string | undefined;
   let selected = 0;
   let query = "";
   let layout: "horizontal" | "vertical" = "horizontal";
@@ -193,7 +184,9 @@ export function createCharacterSwitchPalette(
   const hub = window.gwHub;
   let hubBack: (() => void) | undefined;
   const modal = hub ? {
-    show() { hub.showView('Characters', (target, back) => {
+    show() { hub.showView('Characters', (target, back, footer) => {
+      // Characters names the switch in its own footer.
+      footer.own();
       hubBack = back;
       target.append(root); root.open = true;
       if (view.kind === "closed") { view = Object.freeze({ kind: "characters" }); render(); }
@@ -201,6 +194,7 @@ export function createCharacterSwitchPalette(
       return () => { hubBack = undefined; root.open = false; parent.append(root); if (view.kind === 'confirming') source.cancelConfirmation(); view = { kind: 'closed' }; };
     }, () => !!window.gwToolsSettings?.().characterSwitchEnabled); },
     close() { hub.close(); },
+    pageChanged() { hub.pageChanged(); },
     dispose() { if (root.open) hub.close(); },
   } : window.gwSurfaces.registerDialog({ root, priority: 7, transient: true,
     dismiss: () => closePalette(true), restoreFocus: () => canvas });
@@ -216,6 +210,19 @@ export function createCharacterSwitchPalette(
       queryInput.setAttribute("aria-activedescendant", active.id);
     }
     else queryInput.removeAttribute("aria-activedescendant");
+    // The footer names what Enter does; it disables instead of hiding, so nothing slides under the pointer.
+    const row = view.kind === "characters" && source.characters.status === "ready" ? rows[selected] : undefined;
+    const current = row !== undefined && row.index === currentCharacterIndex(source);
+    primaryButton.replaceChildren(row ? current ? "Current character" : `Switch to ${row.character.name}` : "Switch character");
+    if (row && !current) {
+      const key = document.createElement("kbd");
+      key.textContent = "↵";
+      primaryButton.append(" ", key);
+    }
+    primaryButton.disabled = !row || current || busy();
+    // The ends hold, so the arrow that cannot move is disabled.
+    previousButton.disabled = busy() || selected <= 0;
+    nextButton.disabled = busy() || selected >= rows.length - 1;
   };
   const focusSelected = () => {
     list.querySelector<HTMLButtonElement>(`button[data-row="${selected}"]`)?.focus({ preventScroll: true });
@@ -224,7 +231,17 @@ export function createCharacterSwitchPalette(
     list.querySelector<HTMLButtonElement>(`button[data-row="${selected}"]`)
       ?.scrollIntoView({ block: "nearest" });
   };
+  let renderedView: ViewState["kind"] = "closed";
   const render = (preserveCharacterFocus = true) => {
+    if (view.kind !== renderedView) {
+      // A new inner page (the cards, a confirmation, the settings) cancels a
+      // click run that began before it, and "Leave and switch" arms anew (HUB-242).
+      renderedView = view.kind;
+      pressedKey = undefined;
+      modal.pageChanged();
+      if (view.kind === "confirming") leaveArming.arm();
+      else leaveArming.disarm();
+    }
     if (!enabled) {
       closePalette(true);
       return;
@@ -384,8 +401,6 @@ export function createCharacterSwitchPalette(
     carousel.hidden = settingsMode || confirming;
     previousButton.hidden = !horizontal || settingsMode || confirming;
     nextButton.hidden = !horizontal || settingsMode || confirming;
-    previousButton.disabled = busy() || rows.length < 2;
-    nextButton.disabled = busy() || rows.length < 2;
     search.hidden = !searchEnabled || settingsMode || confirming || busy();
     settingsPanel.hidden = !settingsMode;
     confirmPanel.hidden = !confirming;
@@ -551,13 +566,12 @@ export function createCharacterSwitchPalette(
     if (hub && event.key === 'ArrowUp' && searchEnabled) {
       event.preventDefault(); event.stopPropagation(); queryInput.focus({ preventScroll: true }); return;
     }
-    const arrowMove = event.key === "ArrowLeft" || event.key === "ArrowRight"
-      || event.key === "ArrowUp" || event.key === "ArrowDown";
-    if (arrowMove) {
+    // The shared list move: arrows, ⌃N/⌃P, PgUp/PgDn by a visible page, Home/End; the carousel never wraps.
+    const step = listKeyStep(event, Math.max(1, list.querySelectorAll("button[data-row]").length - 1), true);
+    if (step !== null) {
       event.preventDefault();
       event.stopPropagation();
-      const backwards = event.key === "ArrowLeft" || event.key === "ArrowUp";
-      selected = moveCharacterSelection(selected, rows.length, backwards ? -1 : 1);
+      selected = listIndexAfter(selected, rows.length, step);
       render(false);
       focusSelected();
       revealSelected();
@@ -575,19 +589,40 @@ export function createCharacterSwitchPalette(
     selected = Number(button.dataset.row);
     updateRowSelection();
   });
+  // A click selects a card; Enter, the footer primary or a double-click that
+  // started on the same card switches (D-24). A keyboard activation (detail 0)
+  // switches as before.
   list.addEventListener("click", (event) => {
     const button = (event.target as Element).closest<HTMLButtonElement>("button[data-index]");
     if (!button || button.disabled) return;
     selected = rows.findIndex(({ index }) => index === Number(button.dataset.index));
-    requestSelected();
+    if (event.detail === 1) {
+      pressedKey = button.dataset.characterKey;
+      updateRowSelection();
+    } else if (event.detail === 0 || (event.detail === 2 && pressedKey === button.dataset.characterKey)) requestSelected();
+  });
+  // Right-click selects a card like a click and switches nothing, even as part
+  // of a later double-click (HUB-248). A card has no Actions of its own.
+  list.addEventListener("contextmenu", (event) => {
+    const button = (event.target as Element).closest<HTMLButtonElement>("button[data-index]");
+    if (!button) return;
+    event.preventDefault();
+    if (button.disabled) return;
+    selected = rows.findIndex(({ index }) => index === Number(button.dataset.index));
+    pressedKey = undefined;
+    updateRowSelection();
+    button.focus({ preventScroll: true });
+  });
+  primaryButton.addEventListener("click", (event) => {
+    if (event.detail <= 1 && view.kind === "characters") requestSelected();
   });
   previousButton.addEventListener("click", () => {
-    selected = moveCharacterSelection(selected, rows.length, -1);
+    selected = listIndexAfter(selected, rows.length, -1);
     render();
     focusSelected();
   });
   nextButton.addEventListener("click", () => {
-    selected = moveCharacterSelection(selected, rows.length, 1);
+    selected = listIndexAfter(selected, rows.length, 1);
     render();
     focusSelected();
   });
@@ -660,8 +695,8 @@ export function createCharacterSwitchPalette(
     render();
     focusSelected();
   });
-  leaveButton.addEventListener("click", () => {
-    if (view.kind !== "confirming") return;
+  leaveButton.addEventListener("click", (event) => {
+    if (view.kind !== "confirming" || !leaveArming.accepts(event)) return;
     view = Object.freeze({ kind: "characters" });
     source.confirm();
     render();

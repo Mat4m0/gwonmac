@@ -149,7 +149,7 @@ test('exact team applies through the observed runner, prefixes only review', asy
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
   await search.fill('team gom af');
-  await expect(page.getByRole('button', { name: 'Review ↵', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Review GOM AFK ↵', exact: true })).toBeEnabled();
   await search.press('Enter');
   await expect(page.getByRole('heading', { name: 'GOM AFK' })).toBeVisible();
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', /command|apply/);
@@ -174,7 +174,8 @@ test('exact build has a visible target and does not apply while typing', async (
   await search.press('Enter');
   await expect(page.getByRole('dialog', { name: 'Hub', exact: true })).toBeVisible();
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', /command|apply/);
-  await page.getByRole('button', { name: 'Apply to me ↵', exact: true }).click();
+  // The footer names the build and the character before Enter (BLD-09).
+  await page.getByRole('button', { name: 'Apply Smiter to Fixture Monk ↵', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Hub', exact: true })).not.toBeVisible();
 });
 
@@ -206,6 +207,9 @@ test('calculator shows both observed trader rates and fixed conversions', async 
   await expect(page.locator('#hub').getByRole('option')).toContainText('1.25 platinum');
   await search.press('Enter');
   await expect(page.locator('#app')).toHaveAttribute('data-action', 'Copied 1.25 platinum');
+  // The copy names what it copied in the Hub status line (D-8).
+  await expect(page.locator('#hub .hub-status')).toHaveText('Copied “1.25 platinum”');
+  await expect(page.locator('#hub')).toBeVisible();
 });
 
 test('a saved search phrase and pin survive reload and resolve the original item', async ({ page }) => {
@@ -424,6 +428,17 @@ test('Travel Enter from an empty search uses the selected recent destination',as
   const search=page.getByRole('combobox',{name:'Destination, phrase, or friend'});
   await search.press('ArrowDown');await search.press('Enter');
   await expect(page.locator('#hub .hub-view')).toBeHidden();
+  // A trip ends the task: the Hub closes, whether Travel opened from Home or by Command-T in an open Hub (HUB-017).
+  await expect(page.locator('#app')).toHaveAttribute('data-action','TRAVEL Kaineng Center');
+  await expect(page.locator('#hub')).toBeHidden();
+  await page.getByRole('button',{name:'Open Hub',exact:true}).click();
+  await expect(hubSearch).toBeFocused();
+  await page.keyboard.press('Meta+t');
+  await expect(search).toBeFocused();
+  await expect(page.locator('.travel-primary')).toBeEnabled();
+  await search.press('Enter');
+  await expect(page.locator('#app')).toHaveAttribute('data-action',/^TRAVEL (?!Kaineng Center)/);
+  await expect(page.locator('#hub')).toBeHidden();
 });
 
 test('Travel carousel arrows browse without executing and preserve query caret editing',async({page})=>{
@@ -506,13 +521,20 @@ test('account search offers explicit keep-open and replacement choices', async (
   await search.fill('acc second');
   const rows = page.locator('#hub').getByRole('option');
   await expect(rows).toHaveCount(2);
-  await expect(rows.nth(0)).toContainText('Close Main and open Second');
-  await expect(rows.nth(1)).toContainText('Open Second');
+  // Keeping the running game open is row 0 and the default (D-23).
+  await expect(rows.nth(0)).toContainText('Open Second');
+  await expect(rows.nth(1)).toContainText('Close Main and open Second');
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', /Account/);
-  await search.press('ArrowDown'); await page.keyboard.press('Enter');
+  await page.keyboard.press('Enter');
   await expect(page.locator('#app')).toHaveAttribute('data-action', 'Account Second open');
   await page.getByRole('button', { name: 'Open Hub', exact: true }).click();
-  await search.fill('acc second'); await search.press('Enter');
+  // Replacing closes the running game: Enter opens an armed confirmation, and only its Enter replaces.
+  await search.fill('acc second'); await search.press('ArrowDown'); await search.press('Enter');
+  const replace = page.getByRole('button', { name: /^Close Main and open Second/ });
+  await expect(page.locator('.hub-confirm')).toBeFocused();
+  await expect(page.locator('#app')).toHaveAttribute('data-action', 'Account Second open');
+  await expect(replace).toHaveAttribute('data-armed', '');
+  await page.keyboard.press('Enter');
   await expect(page.locator('#app')).toHaveAttribute('data-action', 'Account Second replace');
   await page.getByRole('button', { name: 'Open Hub', exact: true }).click();
   await search.fill('accounts'); await search.press('Enter');

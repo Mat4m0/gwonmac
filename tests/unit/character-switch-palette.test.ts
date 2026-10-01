@@ -2,7 +2,6 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   characterCarouselRows,
-  moveCharacterSelection,
   numberedCharacterPosition,
   orderCharacters,
   searchCharacters,
@@ -39,23 +38,15 @@ describe("character switch ordering", () => {
     );
   });
 
-  it("maps 1–9 plus 0 for row ten and wraps arrow navigation", () => {
+  it("maps 1–9 plus 0 for row ten", () => {
     assert.equal(numberedCharacterPosition("1", 4), 0);
     assert.equal(numberedCharacterPosition("4", 4), 3);
     assert.equal(numberedCharacterPosition("5", 4), null);
     assert.equal(numberedCharacterPosition("0", 9), null);
     assert.equal(numberedCharacterPosition("0", 10), 9);
-    assert.equal(moveCharacterSelection(0, 4, -1), 3);
-    assert.equal(moveCharacterSelection(0, 4, 1), 1);
-    assert.equal(moveCharacterSelection(3, 4, 1), 0);
-    assert.equal(moveCharacterSelection(0, 4, 1, 1), 2);
-    assert.equal(moveCharacterSelection(2, 4, -1, 1), 0);
-    assert.equal(moveCharacterSelection(3, 4, 1, 0), 1);
-    assert.equal(moveCharacterSelection(0, 4, -1, 3), 2);
-    assert.equal(moveCharacterSelection(0, 1, 1, 0), 0);
   });
 
-  it("shows finite carousel ends before navigation wraps", () => {
+  it("shows finite carousel ends", () => {
     assert.deepEqual(characterCarouselRows(0, 20), [0, 1, 2, 3, 4, 5, 6]);
     assert.deepEqual(characterCarouselRows(10, 20), [7, 8, 9, 10, 11, 12, 13]);
     assert.deepEqual(characterCarouselRows(19, 20), [13, 14, 15, 16, 17, 18, 19]);

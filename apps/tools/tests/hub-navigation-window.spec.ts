@@ -158,6 +158,31 @@ test('one list move keeps focus in search: arrows, Control-N/P, pages and ends n
   await expect(search).toBeFocused();
 });
 
+test('the Characters carousel takes the same list move and never wraps', async ({ page }) => {
+  await page.goto('/?hub');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  await page.keyboard.press('Meta+e');
+  const cards = page.locator('.character-switch-list button[data-row]');
+  const focusedRow = () => page.evaluate(() => Number((document.activeElement as HTMLElement | null)?.dataset.row ?? -1));
+  const count = await page.evaluate(() => window.gwCharacterSwitch?.characters.status === 'ready' ? window.gwCharacterSwitch.characters.characters.length : 0);
+  expect(count).toBeGreaterThan(5);
+  await expect(cards.first()).toBeFocused();
+  const previous = page.getByRole('button', { name: 'Previous character' });
+  const next = page.getByRole('button', { name: 'Next character' });
+  await expect(previous).toBeDisabled();
+  // Up leaves the cards for the character search (plan §3), so it is no list step here.
+  for (const key of ['ArrowLeft', 'Home', 'PageUp', 'Control+p']) { await page.keyboard.press(key); expect(await focusedRow(), key).toBe(0); }
+  await page.keyboard.press('Control+n'); expect(await focusedRow()).toBe(1);
+  await page.keyboard.press('ArrowRight'); expect(await focusedRow()).toBe(2);
+  await page.keyboard.press('End'); expect(await focusedRow()).toBe(count - 1);
+  await expect(next).toBeDisabled();
+  for (const key of ['ArrowRight', 'ArrowDown', 'End', 'PageDown', 'Control+n']) { await page.keyboard.press(key); expect(await focusedRow(), key).toBe(count - 1); }
+  await page.keyboard.press('PageUp'); expect(await focusedRow()).toBeLessThan(count - 1);
+  await page.keyboard.press('Home'); expect(await focusedRow()).toBe(0);
+  await expect(page.locator('.character-switch-list button[aria-selected="true"], .character-switch-list button[data-selected="true"]').first()).toBeFocused();
+  await expect(page.locator('#app')).not.toHaveAttribute('data-action', /Character/);
+});
+
 test('one list move from no selection: End lands on the last result, every other move on the first', async ({ page }) => {
   await page.goto('/?hub&party');
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });

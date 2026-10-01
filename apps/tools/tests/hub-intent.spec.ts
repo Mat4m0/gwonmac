@@ -28,7 +28,8 @@ test('account actions restore each visited account and command row', async ({ pa
   await expect(account).toContainText('Second');
   const identity = await account.getAttribute('data-id');
   await page.keyboard.press('Enter');
-  await expect(page.locator('.hub-row[aria-selected="true"]')).toContainText('Close');
+  // D-23: the page opens on keeping Main running, never on the replace.
+  await expect(page.locator('.hub-row[aria-selected="true"]')).toContainText('Open Second');
   await page.keyboard.press('Meta+Backspace');
   await expect(page.locator(`.hub-row[data-id="${identity}"]`)).toHaveAttribute('aria-selected', 'true');
   await page.keyboard.press('Meta+Backspace');
@@ -121,7 +122,7 @@ test('a modified Enter never runs the primary; only a plain Enter does', async (
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: searchName });
   await search.fill('build smiter'); await search.press('Enter');
-  await expect(page.locator('.hub-primary')).toHaveText(/^Apply to me/);
+  await expect(page.locator('.hub-primary')).toHaveText(/^Apply Smiter to Fixture Monk/);
   for (const chord of ['Meta+Enter', 'Control+Enter', 'Alt+Enter']) {
     await search.press(chord);
     await expect(page.locator('#hub')).toBeVisible();
@@ -146,7 +147,7 @@ test('held Enter on footer actions and Backspace in ordinary fields keep their s
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: searchName });
   await search.fill('build monk'); await search.press('Enter');
-  const apply = page.getByRole('button', { name: 'Apply to me ↵', exact: true });
+  const apply = page.getByRole('button', { name: /^Apply .+ to Fixture Monk ↵$/ });
   await apply.focus();
   expect(await apply.evaluate(button => button.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', repeat: true, bubbles: true, cancelable: true })))).toBe(false);
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', /command|apply/);
@@ -436,17 +437,44 @@ test.describe('party invite', () => {
     await expect(page.locator('.hub-primary')).toBeDisabled();
   });
 
-  // HUB-242: a double-click runs the action that its first click revealed. The pointer
-  // owner fixes it for every page; until then this documents the open P0.
+  // HUB-242: a double-click never runs the action that its first click revealed.
   test('double-clicking a friend opens the person page and runs nothing', async ({ page }) => {
-    test.fail(true, 'HUB-242: the shared pointer owner has not landed');
     const search = page.getByRole('combobox', { name: searchName });
     for (const [index, name] of ['Zed Beta', 'Zed Delta', 'Zed Gamma'].entries()) {
       await search.fill('zed');
       await page.locator('.hub-row').nth(index + 1).dblclick();
       await expect(page.locator('.hub-caption')).toHaveText(name, { timeout: 2_000 });
       await expect(page.locator('#app')).not.toHaveAttribute('data-action', /TRAVEL|INVITE/);
+      await expect(search).toBeFocused();
       await page.getByRole('button', { name: 'Home', exact: true }).click();
     }
+    // The Seen in chat prefix row in the invite scope: the second click lands on Invite to party.
+    await search.fill('invite Mo Kai');
+    await page.locator('.hub-row', { hasText: 'Seen in chat' }).first().dblclick();
+    await expect(page.locator('.hub-caption')).toHaveText('Mo Kaiser');
+    await expect(page.locator('#hub')).toBeVisible();
+    expect(await invites(page)).toBeNull();
+  });
+
+  // D-24: a row that changes the game only selects on a click.
+  test('a click only selects an invite; the footer or a double-click on it sends one', async ({ page }) => {
+    const search = page.getByRole('combobox', { name: searchName });
+    await search.fill('invite Mo Kai');
+    const typed = page.locator('.hub-row').first();
+    await expect(typed).toContainText('Character name');
+    await search.press('ArrowDown');
+    await typed.click();
+    await expect(typed).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('.hub-primary')).toHaveText(/^Invite Mo Kai/);
+    await expect(search).toBeFocused();
+    await page.waitForTimeout(600);
+    expect(await invites(page)).toBeNull();
+    await typed.dblclick();
+    await expect(page.locator('#app')).toHaveAttribute('data-invites', 'Mo Kai');
+    await page.getByRole('button', { name: 'Open Hub', exact: true }).click();
+    await search.fill('invite Mo Kai');
+    await page.locator('.hub-row').first().click();
+    await page.locator('.hub-primary').click();
+    await expect(page.locator('#app')).toHaveAttribute('data-invites', 'Mo Kai|Mo Kai');
   });
 });

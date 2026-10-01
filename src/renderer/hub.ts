@@ -13,7 +13,10 @@ import { openHubMaps } from './hub-maps.js';
 import { editHubShortcut, hubPhraseReserved, manageHubShortcuts } from './hub-preferences.js';
 import { isHubShortcuts, type HubShortcut } from '../shared/hub-preferences.js';
 import { createHubCalculator } from './hub-calculator.js';
-import { matchHubRows, parseHubQuery, normaliseHubQuery, type HubRow, type HubSource, type HubSummary } from '../shared/hub.js';
+import { armConfirmation } from './surface-controller.js';
+import { listIndexAfter, listKeyStep } from './list-keys.js';
+import { createHoverSelection } from '../shared/ui/hover-selection.js';
+import { matchHubRows, parseHubQuery, normaliseHubQuery, type HubRow, type HubSource, type HubSummary, type HubViewAction, type HubViewFooter, type HubViewMount } from '../shared/hub.js';
 export function createHub(parent: HTMLElement) {
   const document = parent.ownerDocument;
   const root = document.createElement('dialog');
@@ -63,8 +66,13 @@ export function createHub(parent: HTMLElement) {
   const sourceEnabled = (source: HubSource) => !source.feature || ((source.feature === 'characterSwitchEnabled' || !!window.gwToolsSettings?.().gwonmacTools) && !!window.gwToolsSettings?.()[source.feature]);
   type RowScope = Readonly<{ title: string; rows: () => readonly HubRow[]; summary?: HubSummary }>;
   let scope: RowScope | null = null;
-  type MountedView = { title: string; mount: (target: HTMLElement, back: () => void) => () => void; available?: () => boolean };
+  type MountedView = { title: string; mount: HubViewMount<HTMLElement>; available?: () => boolean };
   let activeView: MountedView | null = null;
+  /** The mounted view's footer: its named primary and secondary, or its own footer (Travel, Characters). */
+  type ViewFooter = { primary: HubViewAction | null; secondary: HubViewAction | null; own: boolean };
+  let viewFooter: ViewFooter | null = null;
+  let viewRunning = false;
+  let viewArming: { label: string; arming: ReturnType<typeof armConfirmation> } | null = null;
   let disposeView: (() => void) | null = null;
   let viewAvailable: (() => boolean) | null = null;
   let returnFromView: (() => void) | null = null;
@@ -241,9 +249,12 @@ export function createHub(parent: HTMLElement) {
     if (!row) input.removeAttribute('aria-activedescendant');
     const preview = required<HTMLElement>('.hub-preview');
     preview.textContent = row?.preview ?? ''; preview.hidden = !row?.preview || !!disposeView;
+    // A row action that opened a view ends here: the view names the footer now.
+    if (viewFooter) { paintViewFooter(); return; }
     primary.replaceChildren(document.createTextNode(row ? row.action : 'Select a result'));
     if (row) { const key = document.createElement('kbd'); key.textContent = '↵'; primary.append(key); }
     primary.disabled = !row || !!row.unavailable || pending;
+    primary.dataset.variant = row?.destructive ? 'danger' : 'primary';
     // Footer slots never hide, so nothing slides under a resting pointer; they disable instead.
     const actionsButton = required<HTMLButtonElement>('.hub-actions');
     actionsButton.disabled = !row || (!!scope && !row.skills && !scope.summary?.skills);
@@ -253,9 +264,9 @@ export function createHub(parent: HTMLElement) {
   /** The footer's key legend names only keys that act here and now. */
   function paintLegend(row: HubRow | undefined) {
     const keys: [string[], string][] = [];
-    if (rows.length > 1) keys.push([['↑', '↓'], 'Select']);
-    if (row?.navigate) keys.push([['→'], 'Open']);
-    keys.push([['Esc'], input.value ? 'Clear' : history.length ? 'Back' : 'Close']);
+    if (!viewFooter && rows.length > 1) keys.push([['↑', '↓'], 'Select']);
+    if (!viewFooter && row?.navigate) keys.push([['→'], 'Open']);
+    keys.push([['Esc'], !viewFooter && input.value ? 'Clear' : history.length ? 'Back' : 'Close']);
     if (!atHome()) keys.push([['⌘', '⌫'], 'Back']);
     const next = JSON.stringify(keys);
     if (legend.dataset.keys === next) return;
@@ -265,6 +276,38 @@ export function createHub(parent: HTMLElement) {
       for (const cap of caps) { const key = document.createElement('kbd'); key.className = 'ui-kbd'; key.textContent = cap; entry.append(key); }
       entry.append(` ${label}`); legend.append(entry);
     }
+  }
+  /** "Done" steps back; it is the primary of a view that names none, so the footer never goes blank. */
+  const done: HubViewAction = { label: 'Done', run: () => back() };
+  function paintViewFooter() {
+    if (!viewFooter) return;
+    footer.hidden = viewFooter.own;
+    const action = viewFooter.primary ?? done;
+    primary.replaceChildren(document.createTextNode(action.label));
+    // Enter runs a named primary, so only that one carries the keycap.
+    if (viewFooter.primary) { const key = document.createElement('kbd'); key.textContent = '↵'; primary.append(key); }
+    primary.disabled = !!action.disabled || viewRunning;
+    primary.dataset.variant = action.destructive ? 'danger' : 'primary';
+    if (!action.armed) { viewArming?.arming.disarm(); viewArming = null; }
+    else if (viewArming?.label !== action.label) {
+      viewArming?.arming.disarm(); viewArming = { label: action.label, arming: armConfirmation(primary) }; viewArming.arming.arm();
+    }
+    const secondary = required<HTMLButtonElement>('.hub-actions');
+    secondary.textContent = viewFooter.secondary?.label ?? 'Actions';
+    secondary.disabled = !viewFooter.secondary || !!viewFooter.secondary.disabled || viewRunning;
+    count.textContent = '';
+    paintLegend(undefined);
+  }
+  /** Runs a view's footer action once; an armed primary refuses anything before it arms and any multi-click. */
+  async function runViewAction(action: HubViewAction | null, event?: Event) {
+    const state = viewFooter;
+    if (!state || !action || action.disabled || viewRunning) return;
+    if (action.armed && !viewArming?.arming.accepts(event)) return;
+    const generation = epoch;
+    viewRunning = true; report(''); paintViewFooter();
+    try { await action.run(); }
+    catch (error) { if (generation === epoch) report(error instanceof Error ? error.message : 'The action could not complete. Try again.'); }
+    finally { viewRunning = false; if (viewFooter === state) paintViewFooter(); }
   }
   function renderSkillBar(skills: NonNullable<HubRow['skills']>) {
     const bar = document.createElement('span'); bar.className = 'hub-skill-bar';
@@ -325,6 +368,9 @@ export function createHub(parent: HTMLElement) {
     title.append(' ', label);
   }
   let renderedSummary: HubSummary | undefined;
+  /** The row the current click run selected; only its own double-click runs it (D-24). */
+  let pressed: string | null = null;
+  const hover = createHoverSelection();
   function paintNavigation() {
     const summary = disposeView ? undefined : scope?.summary;
     const summaryPanel = required<HTMLElement>('.hub-summary');
@@ -385,6 +431,7 @@ export function createHub(parent: HTMLElement) {
   }
   function refresh(reset = false) {
     if (!root.open || disposeView) return;
+    if (reset) hover.release();
     paintNavigation();
     const previousRows = rows;
     const tradeQuery = parseHubQuery(input.value);
@@ -417,7 +464,7 @@ export function createHub(parent: HTMLElement) {
       const previous = previousRows[index];
       return previous && row.id === previous.id && row.title === previous.title
         && row.detail === previous.detail && row.group === previous.group
-        && row.action === previous.action && row.unavailable === previous.unavailable && row.preview === previous.preview && row.folder === previous.folder && row.attributeStatus === previous.attributeStatus && JSON.stringify([row.skills, row.attributes, row.professions]) === JSON.stringify([previous.skills, previous.attributes, previous.professions]);
+        && row.action === previous.action && row.destructive === previous.destructive && row.unavailable === previous.unavailable && row.preview === previous.preview && row.folder === previous.folder && row.attributeStatus === previous.attributeStatus && JSON.stringify([row.skills, row.attributes, row.professions]) === JSON.stringify([previous.skills, previous.attributes, previous.professions]);
     })) { select(selected); return; }
     list.replaceChildren();
     let group = '';
@@ -431,6 +478,7 @@ export function createHub(parent: HTMLElement) {
       const option = document.createElement('div');
       option.id = `hub-result-${index}`; option.dataset.id = row.id; option.className = 'hub-row';
       option.setAttribute('role', 'option'); option.setAttribute('aria-disabled', String(!!row.unavailable));
+      if (row.destructive) option.dataset.destructive = 'true';
       const title = document.createElement('span'); title.className = 'hub-title'; title.textContent = row.title;
       appendProfessionLabel(title, row.professions);
       appendFolderLabel(title, row.folder);
@@ -458,8 +506,17 @@ export function createHub(parent: HTMLElement) {
           option.append(renderBuildInfo(row));
         }
       }
-      option.addEventListener('pointermove', event => { if (event.movementX || event.movementY) select(row.id); });
-      option.addEventListener('click', () => { select(row.id); focusResult(); void run(); });
+      option.addEventListener('pointermove', event => { if (hover.selects(event)) select(row.id); });
+      // A click opens a navigational row but only selects one that changes the game or the
+      // account; the footer primary or a double-click that started on this row runs it (D-24).
+      // A page change between the clicks cancels the run in the surface controller (HUB-242).
+      // The click holds its selection while the pointer crosses other rows to the footer.
+      option.addEventListener('click', event => {
+        if (event.detail <= 1) { pressed = row.id; hover.hold(); select(row.id); focusResult(); if (!row.consequential) void run(); }
+        else if (event.detail === 2 && row.consequential && pressed === row.id && selected === row.id) void run();
+      });
+      // Right-click selects the row and opens its Actions (HUB-248).
+      option.addEventListener('contextmenu', event => { event.preventDefault(); hover.hold(); select(row.id); focusResult(); actions(); });
       list.append(option);
     });
     count.textContent = `${rows.length} result${rows.length === 1 ? '' : 's'}`;
@@ -490,8 +547,9 @@ export function createHub(parent: HTMLElement) {
     finally { pending = false; select(selected); }
   }
   function resetView() {
-    restoringFocus?.disconnect(); restoringFocus = null; keepDrafts();
+    restoringFocus?.disconnect(); restoringFocus = null; keepDrafts(); pressed = null; modal.pageChanged();
     disposeView?.(); disposeView = null; activeView = null; viewAvailable = null; returnFromView = null; content.replaceChildren(); content.hidden = true;
+    viewFooter = null; viewRunning = false; viewArming?.arming.disarm(); viewArming = null;
     search.hidden = false; list.hidden = false; footer.hidden = false;
   }
   function home() {
@@ -557,24 +615,15 @@ export function createHub(parent: HTMLElement) {
     if (resume) restorePage(resume); else home();
   }
   input.addEventListener('input', () => { report(''); refresh(true); });
-  /** The one list move: ↑ ↓ ⌃P ⌃N step, PgUp PgDn page, Home End jump; no wrap. */
-  function listStep(event: KeyboardEvent): number | null {
-    if (event.altKey || event.metaKey || event.shiftKey) return null;
-    const key = event.ctrlKey ? ({ n: 'ArrowDown', p: 'ArrowUp' } as Record<string, string>)[event.key.toLowerCase()] : event.key;
-    const page = Math.max(1, Math.floor(list.clientHeight / (list.querySelector<HTMLElement>('.hub-row')?.offsetHeight || 40)) - 1);
-    return ({ ArrowDown: 1, ArrowUp: -1, PageDown: page, PageUp: -page, End: Infinity, Home: -Infinity } as Record<string, number>)[key ?? ''] ?? null;
-  }
   input.addEventListener('keydown', event => {
     if (event.isComposing) return;
-    const step = listStep(event);
+    const step = listKeyStep(event, Math.max(1, Math.floor(list.clientHeight / (list.querySelector<HTMLElement>('.hub-row')?.offsetHeight || 40)) - 1));
     if (step !== null) {
       // The list owns these keys even without results, so they never move the caret or drop a text selection.
       event.preventDefault();
       if (!rows.length) return;
-      const index = rows.findIndex(row => row.id === selected);
-      // From no selection, End lands on the last result and every other move on the first.
-      const next = index < 0 ? (step === Infinity ? rows.length - 1 : 0) : Math.max(0, Math.min(rows.length - 1, index + step));
-      select(rows[next]!.id, true);
+      hover.release();
+      select(rows[listIndexAfter(rows.findIndex(row => row.id === selected), rows.length, step)]!.id, true);
     } else if (event.key === 'ArrowRight' && !event.repeat && input.selectionStart === input.value.length && input.selectionEnd === input.value.length) {
       const row = rows.find(row => row.id === selected);
       if (row?.navigate) { event.preventDefault(); row.navigate(); }
@@ -585,6 +634,7 @@ export function createHub(parent: HTMLElement) {
   });
   // A press on a result keeps the keyboard in search.
   list.addEventListener('mousedown', event => event.preventDefault());
+  list.addEventListener('pointerleave', () => hover.release());
   // ⌘⌫ is Back from any focus inside the Hub, text fields included; ⌫ alone only edits text.
   // It bubbles here, so a mounted view first steps out of its own inner level (a confirmation,
   // its settings) and marks the press handled; the Hub still owns the press either way.
@@ -612,7 +662,7 @@ export function createHub(parent: HTMLElement) {
     if (!target || target === required<HTMLElement>('.hub-resize')) return;
     if (target.closest('.hub-footer')) {
       const controls = [primary, required<HTMLButtonElement>('.hub-actions')].filter(button => !button.hidden && !button.disabled);
-      if (event.key === 'ArrowUp') { event.preventDefault(); input.focus(); }
+      if (event.key === 'ArrowUp') { event.preventDefault(); (search.hidden ? firstControl() : input).focus(); }
       else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); controls[Math.max(0, Math.min(controls.length - 1, controls.indexOf(target as HTMLButtonElement) + (event.key === 'ArrowRight' ? 1 : -1)))]?.focus(); }
       return;
     }
@@ -622,6 +672,11 @@ export function createHub(parent: HTMLElement) {
       if (event.key === 'ArrowDown') { event.preventDefault(); (search.hidden ? content.querySelector<HTMLElement>('input[type=search],input[type=text]') ?? firstControl() : input).focus(); }
       else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); controls[Math.max(0, Math.min(controls.length - 1, index + (event.key === 'ArrowRight' ? 1 : -1)))]?.focus(); }
       return;
+    }
+    // Enter in a view runs its named primary, except on a control that Enter activates itself.
+    if (event.key === 'Enter' && viewFooter?.primary && content.contains(target)
+      && !target.matches('button,a[href],summary,select,textarea,input[type=checkbox],input[type=radio],input[type=range]')) {
+      event.preventDefault(); void runViewAction(viewFooter.primary, event); return;
     }
     if (content.contains(target) && event.key === 'ArrowUp' && target.matches('input[role=combobox]')) {
       event.preventDefault(); (backButton.hidden ? required<HTMLButtonElement>('.hub-lock') : backButton).focus(); return;
@@ -676,18 +731,26 @@ export function createHub(parent: HTMLElement) {
     if (row.actions) { row.actions(); return true; }
     presenter.showRows(row.title, () => [row]); return true;
   };
-  required<HTMLButtonElement>('.hub-actions').onclick = actions;
+  // In a view the Actions slot is the view's named secondary.
+  required<HTMLButtonElement>('.hub-actions').onclick = event => { if (!viewFooter) actions(); else if (event.detail <= 1) void runViewAction(viewFooter.secondary, event); };
   required<HTMLButtonElement>('.hub-close').onclick = () => close();
-  backButton.onclick = backOneLevel; primary.onclick = () => { void run(); };
+  // The primary acts once per click run, so a double-click on it runs its action once.
+  backButton.onclick = backOneLevel;
+  primary.onclick = event => { if (event.detail > 1) return; if (viewFooter) void runViewAction(viewFooter.primary ?? done, event); else void run(); };
   root.addEventListener('pointerdown', () => { restoringFocus?.disconnect(); restoringFocus = null; });
   // A press on blank panel space or a disabled control parks focus on the dialog
   // itself; return it to the last control so the keyboard keeps its place.
+  // A view's own dialog root (Characters) parks focus the same way (HUB-246).
   let lastFocus: HTMLElement | null = null;
-  root.addEventListener('focusin', event => { if (event.target !== root && event.target instanceof HTMLElement) lastFocus = event.target; });
-  root.addEventListener('focus', () => {
+  const keepPlace = () => {
     const usable = lastFocus?.isConnected && root.contains(lastFocus) && lastFocus.getClientRects().length > 0 && !lastFocus.matches(':disabled');
     (usable ? lastFocus! : search.hidden ? firstControl() : input).focus({ preventScroll: true });
+  };
+  root.addEventListener('focusin', event => {
+    if (event.target instanceof HTMLDialogElement && event.target !== root) keepPlace();
+    else if (event.target !== root && event.target instanceof HTMLElement) lastFocus = event.target;
   });
+  root.addEventListener('focus', keepPlace);
   root.addEventListener('click', event => { if (event.target === root) { event.stopImmediatePropagation(); close(); } }, true);
   root.addEventListener('close', () => { if (!root.open && !suspended) close(); });
   const onBlur = () => suspend();
@@ -702,6 +765,8 @@ export function createHub(parent: HTMLElement) {
   window.addEventListener('blur', onBlur); window.addEventListener('gw:tools-settings', onSettings);
   const presenter = {
     show, close, suspend, openSettings, toggle: () => root.open ? close() : show(), actions,
+    /** A mounted view replaced its own page (a confirmation): a click run from before it is cancelled. */
+    pageChanged: () => modal.pageChanged(),
     get visible() { return root.open; },
     attach(next: HubSource) {
       if (sourceEnabled(next)) enabledSources.add(next);
@@ -718,7 +783,7 @@ export function createHub(parent: HTMLElement) {
       if (fromOpenHub && !restoring) remember(); resetView(); scope = { title, rows: getRows, ...(summary ? { summary } : {}) }; root.dataset.page = 'section'; caption.textContent = title;
       input.placeholder = 'Search actions…'; input.value = ''; report(''); refresh(true); focusResult();
     },
-    showView(title: string, mount: (target: HTMLElement, back: () => void) => () => void, available?: () => boolean) {
+    showView(title: string, mount: HubViewMount<HTMLElement>, available?: () => boolean) {
       const fromOpenHub = root.open;
       if (!fromOpenHub) { suspended = null; show(); }
       if (!scope) restoreQuery = input.value;
@@ -727,10 +792,19 @@ export function createHub(parent: HTMLElement) {
       returnFromView = restoreParent;
       root.dataset.page = 'section'; caption.textContent = title;
       required<HTMLElement>('.hub-preview').hidden = true; required<HTMLElement>('.hub-rate-controls').hidden = true;
-      search.hidden = true; list.hidden = true; footer.hidden = true; content.hidden = false;
+      search.hidden = true; list.hidden = true; content.hidden = false;
       activeView = { title, mount, ...(available ? { available } : {}) };
       viewAvailable = available ?? null;
-      disposeView = mount(content, back);
+      const state: ViewFooter = { primary: null, secondary: null, own: false };
+      viewFooter = state;
+      // A disposed view's late update never repaints the next page's footer.
+      const shell: HubViewFooter = {
+        primary: next => { state.primary = next; if (viewFooter === state) paintViewFooter(); },
+        secondary: next => { state.secondary = next; if (viewFooter === state) paintViewFooter(); },
+        own: () => { state.own = true; if (viewFooter === state) paintViewFooter(); },
+      };
+      paintViewFooter();
+      disposeView = mount(content, back, shell);
       restoreDrafts([...history.map(pageTitle), title].join(' › '));
       paintNavigation();
       if (!content.contains(document.activeElement)) firstControl().focus();
@@ -743,7 +817,8 @@ export function createHub(parent: HTMLElement) {
   presenter.attach(createHubAccounts(presenter, { get: () => window.gwNative.accounts.get(), open: request => window.gwNative.accounts.open(request), manage: () => window.gwNative.app.showLauncher() }));
   presenter.attach(createHubCalculator({
     hub: presenter,
-    copy: value => window.gwNative.clipboard.writeText(value),
+    // A copy names what it put on the clipboard in the status line (D-8); it is never silent.
+    copy: async value => { await window.gwNative.clipboard.writeText(value); notify(`Copied “${value}”`); },
     marketEnabled: () => !!window.gwToolsSettings?.().gwonmacTools && !!window.gwToolsSettings?.().tradeChat,
     market: () => 'trade' in window.gwNative ? window.gwNative.trade.getMarketRates() : Promise.reject(new Error('Rate unavailable')),
     quotes: () => 'trade' in window.gwNative ? window.gwNative.trade.getTraderQuotes() : Promise.reject(new Error('Rate unavailable')),

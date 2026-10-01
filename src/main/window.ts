@@ -12,6 +12,7 @@ import {
   dialog,
   powerSaveBlocker,
   screen,
+  systemPreferences,
 } from "electron";
 import type {
   AppSettings,
@@ -424,8 +425,19 @@ export function rendererInitArgument(options: {
     templateFsTrace:
       !app.isPackaged && process.env.GW_TEMPLATE_FS_TRACE === "1",
     texturePackGeneration: options.texturePackGeneration ?? null,
+    doubleClickMs: doubleClickMs(),
   };
   return `${RENDERER_INIT_ARGUMENT}${JSON.stringify(init)}`;
+}
+
+/**
+ * The player's Double-click speed (System Settings › Accessibility), which
+ * Chromium also counts click runs by. The Hub's click-run owner needs the same
+ * interval to keep the trailing press of a closing double-click out of the game.
+ */
+function doubleClickMs(): number | null {
+  const seconds = systemPreferences.getUserDefault("com.apple.mouse.doubleClickThreshold", "double");
+  return Number.isFinite(seconds) && seconds > 0 ? Math.round(seconds * 1000) : null;
 }
 
 export function createMainWindow(

@@ -17,6 +17,8 @@ export type HubRow = Readonly<{
   preferred?: boolean;
   /** The primary changes the game or the account: travel, invite, apply, switch or account (D-24). Never selected on a guess. */
   consequential?: boolean;
+  /** The primary ends something the player cannot take back (closing the running account); styled as such. */
+  destructive?: boolean;
   /** The primary travels out of an explorable area; a fresh Home never preselects it (D-13). */
   leavesArea?: boolean;
   preview?: string;
@@ -81,9 +83,19 @@ export function matchHubRows(rows: readonly HubRow[], query: string, ordered = f
 
 export type HubSummary = Readonly<Pick<HubRow, 'title' | 'detail' | 'skills' | 'attributes' | 'professions' | 'attributeStatus' | 'folder' | 'workspace'> & { label: string }>;
 
+/** One footer action of a mounted view. `armed` holds a destructive primary until it has armed (~400 ms). */
+export type HubViewAction = Readonly<{ label: string; run(): void | Promise<void>; disabled?: boolean; destructive?: boolean; armed?: boolean }>;
+/**
+ * The Hub footer stays in every view and names what Enter does there. A view sets its named
+ * primary (Enter outside a control) and secondary; without one the primary reads "Done" and goes
+ * back. Travel and Characters keep their own footer and say so with `own()`.
+ */
+export type HubViewFooter = Readonly<{ primary(action: HubViewAction | null): void; secondary(action: HubViewAction | null): void; own(): void }>;
+export type HubViewMount<Target> = (target: Target, back: () => void, footer: HubViewFooter) => () => void;
+
 export interface HubPresenter<Target> {
   close(message?: string): void;
   attach(source: HubSource): () => void;
   showRows(title: string, rows: () => readonly HubRow[], summary?: HubSummary): void;
-  showView(title: string, mount: (target: Target, back: () => void) => () => void, available?: () => boolean): void;
+  showView(title: string, mount: HubViewMount<Target>, available?: () => boolean): void;
 }
