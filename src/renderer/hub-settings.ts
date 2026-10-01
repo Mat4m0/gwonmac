@@ -35,6 +35,13 @@ export function focusHubSetting(focus: HubSettingsFocus) { showTarget?.(focus); 
  * Settings that Hub search finds by their own words; ↵ opens the section with the control
  * focused (HUB-063). A setting whose control shows only with its tool on is offered only then.
  */
+/** Each section is found by its name and the words players use for it (HUB-064). Maps keeps its own tool row. */
+export const FINDABLE_SECTIONS: readonly Readonly<{ section: HubSettingsSection; keywords: string }>[] = [
+  { section: 'Game', keywords: 'graphics memory diagnostics' },
+  { section: 'Appearance', keywords: 'theme look style colors font opacity' },
+  { section: 'Tools', keywords: 'features chat filters' },
+  { section: 'Shortcuts', keywords: 'keyboard keys hotkeys bindings' },
+];
 export const FINDABLE_SETTINGS: readonly Readonly<{ label: string; section: HubSettingsSection; keywords?: string; shown?: (settings: Pick<AppSettings, 'gwonmacTools' | 'chatFiltersEnabled'>) => boolean }>[] = [
   ...Object.values(GAME_SETTINGS).map(copy => ({ label: copy.label, section: 'Game' as const, keywords: copy.keywords })),
   { label: 'Panel style', section: 'Appearance', keywords: 'theme modern classic look' },
