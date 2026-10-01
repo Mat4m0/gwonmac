@@ -425,7 +425,8 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
       const matchesBuild = buildMatcher(query);
       const matches = items.filter(item => (!parsed.scope || item.kind === parsed.scope)
         && (item.kind === 'build' ? matchesBuild(item.value) : hubMatch(item.value.name, parsed.term, item.value.tags) !== null));
-      const exacts = matches.filter(item => hubMatch(item.value.name, parsed.term) === 'exact');
+      // Only a scoped team query can apply directly; root and build searches never need this proof.
+      const exacts = parsed.scope === 'team' ? matches.filter(item => hubMatch(item.value.name, parsed.term) === 'exact') : [];
       // A short profession query remains additive, but actual primary-profession matches lead it (HUB-059).
       const profession = Object.keys(PROFESSIONS).find(code => code.toLowerCase() === parsed.term);
       // Resolve exact names once instead of normalizing them again for every sort comparison.
