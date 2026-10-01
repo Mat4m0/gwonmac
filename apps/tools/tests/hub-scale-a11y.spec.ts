@@ -25,7 +25,8 @@ test('arrow selection mutates only the old and new rows (HUB-112)', async ({ pag
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
   const search = page.locator('.hub-search input');
   await search.fill('build m');
-  expect(await page.locator('.hub-row[data-id^="build:"]').count()).toBeGreaterThan(100);
+  // Rows past the first chunks paint in later frames (HUB-112).
+  await expect.poll(() => page.locator('.hub-row[data-id^="build:"]').count()).toBeGreaterThan(100);
   const mutations = await search.evaluate(input => {
     const list = document.getElementById('hub-results')!;
     const observer = new MutationObserver(() => {});
@@ -56,7 +57,7 @@ test('explicit close clears result DOM while suspension retains its selection (H
   const selected = await page.locator('#hub [aria-selected="true"]').getAttribute('data-id');
   await page.evaluate(() => window.dispatchEvent(new Event('blur')));
   await expect(page.locator('#hub')).toBeHidden();
-  expect(await page.locator('.hub-row').count()).toBeGreaterThan(100);
+  await expect.poll(() => page.locator('.hub-row').count()).toBeGreaterThan(100);
   await page.keyboard.press('Meta+r');
   await expect(page.locator('#hub [aria-selected="true"]')).toHaveAttribute('data-id', selected!);
   await page.getByRole('button', { name: 'Close Hub', exact: true }).click();
@@ -216,7 +217,7 @@ test('only the selected whisper transcript announces appended messages (HUB-081)
   await expect(page.locator('[data-transcript][role="log"]')).toHaveCount(0);
 });
 
-test('root typing stays within the scale budget; complete library entry is measured (HUB-110, 169)', async ({ page }, info) => {
+test('root typing and complete library entry stay within the scale budget (HUB-110, 112, 169)', async ({ page }, info) => {
   await page.goto('/?hub&library=1000');
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
   const timings = await page.evaluate(async () => {
@@ -251,7 +252,42 @@ test('root typing stays within the scale budget; complete library entry is measu
   expect(Math.max(...timings.typing)).toBeLessThan(32);
   expect(Math.max(...timings.paints)).toBeLessThanOrEqual(32);
   expect(timings.rootLongTasks.filter(duration => duration > 50)).toEqual([]);
-  // Full Library entry exceeds the handoff budget; attach its measurement and defer that requirement.
+  expect(timings.entry).toBeLessThan(100);
+  expect(timings.libraryLongTasks.filter(duration => duration > 50)).toEqual([]);
+});
+
+test('End and Back reach rows the 1000-build Library has not painted yet (HUB-112)', async ({ page }) => {
+  await page.goto('/?hub&library=1000');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  // Entry and End in one task: later frames cannot have painted the last row yet.
+  const end = await page.evaluate(() => {
+    window.gwHub!.browseBuilds();
+    const input = document.querySelector<HTMLInputElement>('.hub-search input')!;
+    const painted = document.querySelectorAll('.hub-row').length;
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+    const option = document.getElementById(input.getAttribute('aria-activedescendant') ?? '');
+    const list = document.getElementById('hub-results')!.getBoundingClientRect(), box = option?.getBoundingClientRect();
+    return { painted, last: option === [...document.querySelectorAll('.hub-row')].at(-1), selected: option?.getAttribute('aria-selected'),
+      visible: !!box && box.top >= list.top - 1 && box.bottom <= list.bottom + 1 };
+  });
+  expect(end.painted).toBeLessThan(1000);
+  expect(end).toMatchObject({ last: true, selected: 'true', visible: true });
+  // A place far below the first painted rows; the row opened there ends above the list's end.
+  const search = page.locator('.hub-search input');
+  await search.press('Home');
+  const list = page.locator('#hub-results');
+  await list.evaluate(element => { element.scrollTop = element.scrollHeight / 2; });
+  const scroll = await list.evaluate(element => element.scrollTop);
+  const id = await list.evaluate(element => {
+    const box = element.getBoundingClientRect();
+    return document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)!.closest<HTMLElement>('.hub-row')!.dataset.id!;
+  });
+  await page.locator(`.hub-row[data-id="${id}"]`).click();
+  await expect(page.locator('.hub-caption')).not.toHaveText('Build Library');
+  await page.keyboard.press('Meta+Backspace');
+  await expect(page.locator('.hub-caption')).toHaveText('Build Library');
+  await expect(page.locator('#hub [aria-selected="true"]')).toHaveAttribute('data-id', id);
+  expect(await list.evaluate(element => element.scrollTop)).toBe(scroll);
 });
 
 test('narrowing a large result list retains unchanged rows and their pointer action (HUB-170)', async ({ page }) => {

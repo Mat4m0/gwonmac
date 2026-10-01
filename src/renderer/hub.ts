@@ -243,7 +243,7 @@ export function createHub(parent: HTMLElement) {
       input.value = page.query; caption.textContent = scope?.title ?? 'Home'; root.dataset.page = scope ? 'section' : 'home';
       nameSearch(scope?.title ?? null); report(''); refresh(true);
       const restored=rows.find(row=>row.id===page.selected)??(['quote:result','market:result','manual-conversion','conversion'].includes(page.selected??'')?rows.find(row=>row.group==='Calculator'):undefined);
-      select(restored?.id??null); list.scrollTop = page.scroll;
+      select(restored?.id??null); paintToScroll(page.scroll); list.scrollTop = page.scroll;
       if (page.selected && selected === null) report('The previous selection is no longer available. Choose a result.');
     }
     restoreFocus(page.focus);
@@ -388,6 +388,8 @@ export function createHub(parent: HTMLElement) {
     if (focus) focusHubSetting(focus);
   }
   function select(id: string | null, scroll = false) {
+    const index = painting && id !== null ? painting.rows.findIndex(row => row.id === id) : -1;
+    if (painting && index >= painting.next) paintThrough(index);
     const previous = list.querySelector<HTMLElement>('[aria-selected="true"]');
     const next = id === null ? null : list.querySelector<HTMLElement>(`[data-id="${CSS.escape(id)}"]`);
     if (previous !== next) {
@@ -662,6 +664,44 @@ export function createHub(parent: HTMLElement) {
     hint.textContent = !scope && !query.scope && input.value.trim() && example ? `Try “${example.title}” · ${example.detail}` : '';
     hint.title = hint.textContent; hint.hidden = !hint.textContent || !!disposeView;
   }
+  /**
+   * A long list paints its first rows at once and the rest one chunk per frame, so a 1000-build
+   * Library opens within one frame budget (HUB-112). Selection, End and a restored scroll position
+   * paint through the rows they need first, so no row height is ever guessed.
+   */
+  const PAINT_CHUNK = 50;
+  type Painting = { rows: readonly HubRow[]; next: number; group?: string; section: HTMLElement; paint: (row: HubRow, index: number) => HTMLElement; frame: number };
+  let painting: Painting | null = null;
+  function stopPainting() { if (painting) cancelAnimationFrame(painting.frame); painting = null; }
+  function startPainting(next: readonly HubRow[], paint: Painting['paint']) {
+    stopPainting(); list.replaceChildren();
+    painting = { rows: next, next: 0, section: list, paint, frame: 0 };
+    paintThrough(PAINT_CHUNK - 1);
+  }
+  /** Paints every row up to this index now and leaves the rest to the next frame. */
+  function paintThrough(index: number) {
+    const job = painting;
+    if (!job) return;
+    cancelAnimationFrame(job.frame);
+    for (const end = Math.min(index + 1, job.rows.length); job.next < end; job.next++) {
+      const row = job.rows[job.next]!;
+      if (row.group !== job.group) {
+        job.group = row.group;
+        const heading = document.createElement('div');
+        heading.className = 'hub-group'; heading.setAttribute('role', 'presentation'); heading.textContent = row.group;
+        heading.id = `hub-group-${job.next}`;
+        job.section = document.createElement('div'); job.section.setAttribute('role', 'group'); job.section.setAttribute('aria-labelledby', heading.id);
+        job.section.append(heading); list.append(job.section);
+      }
+      job.section.append(job.paint(row, job.next));
+    }
+    if (job.next >= job.rows.length) painting = null;
+    else job.frame = requestAnimationFrame(() => paintThrough(job.next + PAINT_CHUNK - 1));
+  }
+  /** A scroll position needs the rows above and in view: paint whole chunks until the list reaches it. */
+  function paintToScroll(top: number) {
+    while (painting && list.scrollHeight < top + list.clientHeight) paintThrough(painting.next + PAINT_CHUNK - 1);
+  }
   let refreshFrame = 0;
   function scheduleRefresh() {
     if (!root.open || refreshFrame) return;
@@ -727,27 +767,24 @@ export function createHub(parent: HTMLElement) {
       && row.readOnly === previous.readOnly && !!row.navigate === !!previous.navigate && row.preview === previous.preview
       && row.folder === previous.folder && row.attributeStatus === previous.attributeStatus
       && JSON.stringify([row.skills, row.attributes, row.professions, row.conversion]) === JSON.stringify([previous.skills, previous.attributes, previous.professions, previous.conversion]);
-    if (!reset && !shortcutsChanged && rows.length === previousRows.length && rows.every((row, index) => samePaint(row, previousRows[index]))) { select(selected); return; }
+    if (!reset && !shortcutsChanged && rows.length === previousRows.length && rows.every((row, index) => samePaint(row, previousRows[index]))) { if (painting) painting.rows = rows; select(selected); return; }
     // The current list is the DOM source; retain only rows whose painted facts still match.
     const previousById = new Map(previousRows.map(row => [row.id, row]));
     const mounted = new Map([...list.querySelectorAll<HTMLElement>('.hub-row')].map(node => [node.dataset.id, node]));
     const focusedRate = rates.contains(document.activeElement) ? document.activeElement : null;
+    // The rebuilt list keeps the reader's place, so the rows down to it paint at once.
+    const top = list.scrollTop;
     list.before(rates);
-    const results = document.createDocumentFragment();
-    let group: string | undefined;
-    let section = list;
-    rows.forEach((row, index) => {
-      if (row.group !== group) {
-        group = row.group;
-        const heading = document.createElement('div');
-        heading.className = 'hub-group'; heading.setAttribute('role', 'presentation'); heading.textContent = group;
-        heading.id = `hub-group-${index}`;
-        section = document.createElement('div'); section.setAttribute('role', 'group'); section.setAttribute('aria-labelledby', heading.id);
-        section.append(heading); results.append(section);
-      }
-      const compact = !!row.skills && !scope && !input.value.trim();
+    const compactBuilds = !scope && !input.value.trim();
+    const paintRow = (row: HubRow, index: number) => {
+      const compact = !!row.skills && compactBuilds;
       const retained = !shortcutsChanged && mounted.get(row.id)?.classList.contains('hub-build-compact') === compact && samePaint(row, previousById.get(row.id)) ? mounted.get(row.id) : undefined;
-      if (retained) { retained.id = `hub-result-${index}`; section.append(retained); return; }
+      if (retained) {
+        retained.id = `hub-result-${index}`;
+        // A row painted after select() ran is never the selection.
+        if (row.id !== selected && retained.getAttribute('aria-selected') === 'true') retained.setAttribute('aria-selected', 'false');
+        return retained;
+      }
       const option = document.createElement('div');
       option.id = `hub-result-${index}`; option.dataset.id = row.id; option.className = 'hub-row';
       option.setAttribute('role', 'option'); option.setAttribute('aria-selected', 'false'); option.setAttribute('aria-disabled', String(!!row.unavailable));
@@ -789,13 +826,14 @@ export function createHub(parent: HTMLElement) {
         detail.hidden = !detail.textContent;
         if (row.skills) {
           option.classList.add('hub-build-row');
-          if (!scope && !input.value.trim()) option.classList.add('hub-build-compact');
+          if (compactBuilds) option.classList.add('hub-build-compact');
           option.append(renderBuildInfo(row));
         }
       }
-      section.append(option);
-    });
-    list.replaceChildren(results);
+      return option;
+    };
+    startPainting(rows, paintRow);
+    paintToScroll(top);
     // Two rows with the typed name are a tie, so nothing is chosen for the player; a saved phrase
     // names one row only when its existing stores agree. Pins on an empty Home are no tie (HUB-060).
     // A query that is a row's whole name, `trade chat` included, answers with that row (HUB-008).
@@ -916,7 +954,7 @@ export function createHub(parent: HTMLElement) {
     input.value = ''; restoreQuery = ''; report(''); selected = null; announcer.textContent = '';
     cancelAnimationFrame(refreshFrame); refreshFrame = 0;
     clearTimeout(announceTimer); resultAnnouncement = '';
-    rows = []; list.replaceChildren(); empty.hidden = true; input.removeAttribute('aria-activedescendant');
+    rows = []; stopPainting(); list.replaceChildren(); empty.hidden = true; input.removeAttribute('aria-activedescendant');
     if (typeof message === 'string' && message) notify(message);
   }
   /**

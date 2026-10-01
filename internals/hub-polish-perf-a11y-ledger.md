@@ -428,3 +428,17 @@ now have passing final-source evidence; no test was skipped. Logs in the branch
 scratch directory: touched-browser-final.log and root-budget-final-alone.log.
 The passing scale measurement is retained as accepted-root-timings.json; it
 continues to record complete Library long tasks rather than assert that they pass.
+
+
+## HUB-112 complete Library entry (closed)
+
+The deferred complete-Library budget is now met without guessed heights. The
+Hub paints the first 50 rows of a list at once and the rest 50 per animation
+frame. Selection (End, PageDown, pointer, restored selection) paints through the
+row it needs first, and a rebuilt or restored list paints until it reaches its
+scroll position. With 1000 builds, three runs measured entry 20.9, 16.2 and
+16.4ms with no long task in the next 100ms (before: 110.1, 101.6 and 105.2ms
+with long tasks of 140-150ms and 185-207ms). The scale test asserts entry
+under 100ms and no library long task over 50ms again. A new regression proves
+End selects and shows the last unpainted build, and Back restores a deep scroll
+position below the first painted rows.
