@@ -422,6 +422,8 @@ test('the mouse back button at Home does nothing and never closes the Hub (PTR-3
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
   const search = page.locator('.hub-search input');
   await search.fill('kam');
+  // Finish the query announcement before checking that mouse Back adds nothing.
+  await expect(page.locator('#hub .hub-announce')).toHaveText('2 results');
   await restPointer(page, page.locator('#hub .hub-row').first());
   const selection = await selectedRow(page).getAttribute('data-id');
   await page.evaluate(() => window.gwFixtureCanvas?.clear());
@@ -433,7 +435,7 @@ test('the mouse back button at Home does nothing and never closes the Hub (PTR-3
   await expect(search).toHaveValue('kam');
   await expect(search).toBeFocused();
   await expect(selectedRow(page)).toHaveAttribute('data-id', selection!);
-  await expect(page.locator('#hub .hub-announce')).toHaveText('');
+  await expect(page.locator('#hub .hub-announce')).toHaveText('2 results');
   expect(await page.evaluate(() => window.gwFixtureActions)).toEqual([]);
   expect(await mouseLedger(page)).toEqual([]);
 });
