@@ -55,7 +55,7 @@ export function createHubCalculator(options: {
   }
   const result=(id:string,title:string,detail:string,value:string):HubRow=>({id,title,detail,group:'Calculator',action:'Copy result',run:()=>options.copy(value,title)});
   const titleRows=(entries:NonNullable<ReturnType<typeof calculateTitle>>):HubRow[]=>entries.map((entry,index)=>({
-    id:`title:${index}`,title:entry.title,detail:entry.example?`${entry.detail} · ${entry.example}`:entry.detail,group:'Titles',
+    id:`title:${index}`,title:entry.title,detail:entry.example&&!entry.detail.includes(entry.example)?`${entry.detail} · ${entry.example}`:entry.detail,group:'Titles',
     ...(entry.problem?{unavailable:entry.title}:{}),
     ...(!entry.input&&!entry.example&&!entry.problem?{preview:entry.detail}:{}),
     action:entry.problem?'Edit calculation':entry.next?'Compare items':entry.example?'Try example':'Copy result',
@@ -107,7 +107,7 @@ export function createHubCalculator(options: {
           // Only a result that depends on a rate the player can choose offers the rates editor (HUB-100).
           return {...result(id,value,explanation,copied),action:`Copy ${value}`,...(fixed?{}:{actions:editRates,actionsLabel:'Edit rates'}),conversion:{input:conversion.input,from:conversion.terms.length>1?'Combined value':currencyInfo(conversion.from).name,to:currencyInfo(unit).name,...(iconFrom?{iconFrom}:{}),...(iconTo?{iconTo}:{})}};
         };
-        if(fixed){clear();const stack=currencyInfo(conversion.to).stack;const detail=units.every(unit=>unit==='gold'||unit==='platinum')?'Fixed conversion · 1 platinum = 1,000 gold':`Fixed conversion${stack?` · 1 stack = ${stack} items`:''}`;return [card('conversion',unit=>fraction(unit==='gold'?1n:1000n),detail)];}
+        if(fixed){clear();const stack=currencyInfo(conversion.to).stack;const detail=units.every(unit=>unit==='gold'||unit==='platinum')&&units.some(unit=>unit!==conversion.to)?'Fixed conversion · 1 platinum = 1,000 gold':`Fixed conversion${stack?` · 1 stack = ${stack} items`:''}`;return [card('conversion',unit=>fraction(unit==='gold'?1n:1000n),detail)];}
         if(!visible){clear();return [];}
         if(manual){
           clear();

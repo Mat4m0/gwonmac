@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { calculate, decimal, convertCurrency, formatFraction, parseConversion } from '../../src/shared/hub-calculator.ts';
-test('decimal arithmetic is exact, bounded, and honours precedence', () => {
+test('decimal arithmetic is exact, bounded, and honours precedence', async () => {
   assert.equal(formatFraction(calculate('0.1 + 0.2')!), '0.3');
   assert.equal(formatFraction(calculate('(2 + 3) * 4')!), '20');
   assert.equal(formatFraction(calculate('10 / 3')!), '3.333333');
@@ -10,6 +10,15 @@ test('decimal arithmetic is exact, bounded, and honours precedence', () => {
   assert.equal(calculate('fetch(1)'), null);
   assert.throws(() => calculate('1..2 + 3'));
   for (const amount of ['1234567890123', '1.1234567']) assert.throws(() => decimal(amount), { message: 'Use at most 12 whole digits and six decimal places.' });
+  const { createHubCalculator } = await import('../../src/renderer/hub-calculator.ts');
+  const source = createHubCalculator({ copy: async () => {}, marketEnabled: () => false, quotes: async () => ({ updatedAt: 0, quotes: [] }) });
+  for (const [query, title] of [
+    ['1 / 0', 'Cannot divide by zero.'], ['1 +', 'Complete the calculation.'], ['1..2 + 3', 'Complete the calculation.'], ['1 + * 2', 'Complete the calculation.'], ['(1 + 2', 'Close the parentheses.'],
+    ['1.1234567 + 2', 'Use at most 12 whole digits and six decimal places.'], ['1234567890123 + 2', 'Use at most 12 whole digits and six decimal places.'],
+  ]) {
+    assert.deepEqual(source.search(query!).map(row => [row.title, row.detail, row.action]), [[title, '', 'Edit calculation']]);
+  }
+
 });
 test('fixed and observed rates retain direction and units', () => {
   const conversion = parseConversion('10 ecto in p')!;
@@ -46,11 +55,13 @@ test('only a rate-dependent result offers the rates editor (HUB-100)', async () 
     quotes: async () => ({ updatedAt: Date.now(), quotes: [{ modelId: '0b03a2', side: 'buy', price: 6000, timestamp: Date.now() }] }) });
   source.setVisible(true);
   try {
-    for (const [query, title] of [['2+2', '4'], ['10p in g', '10,000 gold'], ['250e in stacks e', '1 stack ecto']] as const) {
+    for (const [query, title] of [['2+2', '4'], ['10p in g', '10,000 gold'], ['250e in stacks e', '1 stack ecto'], ['500e in stacks e', '2 stacks ecto'], ['1g in g', '1 gold'], ['1p in p', '1 platinum'], ['1g + 1p in g', '1,001 gold']] as const) {
       const row = source.search(query)[0];
       assert.equal(row?.title, title); row?.actions?.();
       if(query==='2+2')assert.deepEqual(row?.conversion,{input:'2+2',from:'Calculation',to:'Result'});
-      if(query==='250e in stacks e')assert.equal(row?.detail,'Fixed conversion · 1 stack = 250 items');
+      if(['250e in stacks e', '500e in stacks e'].includes(query))assert.equal(row?.detail,'Fixed conversion · 1 stack = 250 items');
+      if(['1g in g', '1p in p'].includes(query))assert.equal(row?.detail,'Fixed conversion');
+      if(query==='1g + 1p in g')assert.equal(row?.detail,'Fixed conversion · 1 platinum = 1,000 gold');
     }
     assert.deepEqual(views, []);
     source.search('10 ecto in p'); await Promise.resolve();
