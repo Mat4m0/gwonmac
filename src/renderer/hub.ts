@@ -836,7 +836,8 @@ export function createHub(parent: HTMLElement) {
       return option;
     };
     startPainting(rows, paintRow);
-    paintToScroll(top);
+    // At the top, the first batch is already present; only a restored offset needs layout now.
+    if (top > 0) paintToScroll(top);
     // Two rows with the typed name are a tie, so nothing is chosen for the player; a saved phrase
     // names one row only when its existing stores agree. Pins on an empty Home are no tie (HUB-060).
     // A query that is a row's whole name, `trade chat` included, answers with that row (HUB-008).
@@ -1063,7 +1064,10 @@ export function createHub(parent: HTMLElement) {
   input.addEventListener('input', () => { endSession(); if (!receiptInStatus) report(''); refresh(true); });
   input.addEventListener('keydown', event => {
     if (event.isComposing) return;
-    const step = listKeyStep(event, Math.max(1, Math.floor(list.clientHeight / (list.querySelector<HTMLElement>('.hub-row')?.offsetHeight || 40)) - 1));
+    // Only paging needs row geometry; ordinary typing and arrows must not force this layout.
+    const pageSize = event.key === 'PageUp' || event.key === 'PageDown'
+      ? Math.max(1, Math.floor(list.clientHeight / (list.querySelector<HTMLElement>('.hub-row')?.offsetHeight || 40)) - 1) : 1;
+    const step = listKeyStep(event, pageSize);
     if (step !== null) {
       // The list owns these keys even without results, so they never move the caret or drop a text selection.
       event.preventDefault();

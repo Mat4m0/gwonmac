@@ -233,8 +233,11 @@ test('root typing and complete library entry stay within the scale budget (HUB-1
     const typing: number[] = [];
     const paints: number[] = [];
     for (const query of ['m', 'mo', 'mon', 'mo', 'm', '']) {
-      const started = performance.now(); input.value = query;
-      input.dispatchEvent(new Event('input', { bubbles: true }));
+      const key = query.length < input.value.length ? 'Backspace' : query.at(-1) ?? 'Backspace';
+      const started = performance.now();
+      // Real typing runs the key handler before input; include its layout cost in the budget.
+      input.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+      input.value = query; input.dispatchEvent(new Event('input', { bubbles: true }));
       typing.push(performance.now() - started);
       await new Promise(requestAnimationFrame); paints.push(performance.now() - started);
     }
