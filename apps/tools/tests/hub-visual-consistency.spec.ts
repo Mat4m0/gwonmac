@@ -212,7 +212,8 @@ test('hints, price basis and team selection keep the result list steady (HUB-105
   const tops:number[]=[];
   for(const query of ['k','trade','1p in a','10 ecto in p']){
     await search.fill(query);await expect(page.locator('.hub-group').first()).toBeVisible();
-    tops.push(await page.locator('.hub-group').first().evaluate(el=>el.getBoundingClientRect().y));
+    // A source can replace a heading between locating it and measuring a detached handle.
+    tops.push(await page.evaluate(()=>document.querySelector('.hub-group')!.getBoundingClientRect().y));
   }
   expect(Math.max(...tops)-Math.min(...tops)).toBeLessThanOrEqual(1);
   await expect(page.locator('.hub-conversion .hub-rate-controls')).toBeVisible();
