@@ -445,7 +445,7 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
         const total = ordered.filter(item => item.kind === kind).length;
         return total > 8 ? [{ id: `${kind}s:more`, title: `${total - 8} more — open in Build Library`, detail: '', group: kind === 'build' ? 'Builds' : 'Teams', action: 'Open in Build Library', navigate: () => browseLibrary(parsed.term), run: () => browseLibrary(parsed.term) }] : [];
       });
-      return [...shown.map(item => {
+      return [...(['team', 'teams'].includes(query.toLowerCase()) ? [libraryRow()] : []), ...shown.map(item => {
         if (item.kind === 'build') return buildRow(item, (names.get(item.value.name) ?? 0) > 1);
         return teamRow(item, parsed.scope === 'team' && exacts.length === 1 && exacts[0] === item);
       }), ...more, ...(parsed.scope === 'build' ? templateStates() : [])];

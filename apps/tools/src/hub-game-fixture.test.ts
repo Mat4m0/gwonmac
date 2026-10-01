@@ -367,6 +367,16 @@ test('Library browse includes saved teams and only an exact scoped team can appl
     return () => h('div');
   } });
   app.mount(document.createElement('div')); await nextTick(); await nextTick();
+  for (const query of ['library', 'lib', 'bu', 'team', 'teams', 'skills']) {
+    const results = source!.search(query);
+    expect(results.some(row => row.unavailable === 'Build Library is loading.'), query).toBe(false);
+    const row = results.find(row => row.id === 'builds')!;
+    expect(row.detail, query).toBe('Browse saved builds and teams');
+    expect(row.unavailable, query).toBeUndefined();
+    await row.run(task);
+    expect(browse!().map(row => row.title), query).toContain('GOM AFK');
+    expect(browse!().some(row => row.unavailable === 'Build Library is loading.'), query).toBe(false);
+  }
   source!.lookup!('builds')!.run(task);
   expect(browse!().filter(row => row.group === 'Teams').map(row => row.title)).toEqual(['GOM AFK', 'Balanced vanquish', 'Classic Discordway', 'Story and missions']);
   for (const query of ['team ', 'teams ', 'team gom']) {
@@ -587,7 +597,8 @@ test('bare team queries list every saved team for review and preserve loading ro
     }
     release(); await flushPromises();
     for (const query of ['team', 'teams']) {
-      const rows = source!.search(query);
+      const rows = source!.search(query).filter(row => row.group === 'Teams');
+      expect(source!.search(query).find(row => row.id === 'builds')?.action).toBe('Browse builds');
       expect(rows.map(row => row.title)).toEqual(['Saved team 0', 'Saved team 1', 'Saved team 2', 'Saved team 3', 'Saved team 4', 'Saved team 5', 'Saved team 6', 'Saved team 7', 'Saved team 8', 'Saved team 9']);
       expect(rows.map(row => [row.id, row.action, row.consequential])).toEqual(source!.search('team ').map(row => [row.id, row.action, row.consequential]));
       expect(rows.map(row => row.action)).toEqual(['Review Saved team 0', 'Review Saved team 1', 'Review Saved team 2', 'Review Saved team 3', 'Review Saved team 4', 'Review Saved team 5', 'Review Saved team 6', 'Review Saved team 7', 'Review Saved team 8', 'Review Saved team 9']);
