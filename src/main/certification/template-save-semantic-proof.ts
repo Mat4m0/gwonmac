@@ -3,6 +3,7 @@
  * It refuses incomplete or ambiguous call, storage, and bridge relationships.
  */
 import { createHash } from "node:crypto";
+import { normalizeTemplateCalleeCalls } from "./template-save-callee-proof.js";
 import { readSleb, readUleb } from "../core/wasm-binary.js";
 import type { BridgeKind, KnownTemplateSaveBuild } from "./template-save-compat.js";
 import {
@@ -281,6 +282,7 @@ function screenshotFamily(found: TemplateSemanticLocation, sink: number): {
     normalizedInitializer.fill(0, start, start + 5);
     normalizedInitializer[start] = 32 + index;
   });
+  normalizeTemplateCalleeCalls(found.view, initializer, "screenshot-initializer", normalizedInitializer);
   return { base, initializer, normalizedInitializer };
 }
 
@@ -351,6 +353,7 @@ export function templateSemanticFingerprint(
         || found.view.callers(provedHelper[0]).size !== 1) fail("screenshot helper identity changed");
       normalized.fill(0, 157, 162); normalized[157] = 63;
     }
+    normalizeTemplateCalleeCalls(found.view, local, role, normalized);
     return { role, relations: [...relations].sort(), bodySha256: sha256(normalized) };
   }).sort((left, right) => left.role.localeCompare(right.role));
   return sha256(text.encode(JSON.stringify({

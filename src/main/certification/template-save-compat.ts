@@ -473,6 +473,71 @@ export const TEMPLATE_SAVE_BUILDS: readonly KnownTemplateSaveBuild[] =
         }),
       ]),
     }),
+    // Reviewed October Template-saving facts; exact input and output remain bound.
+    Object.freeze({
+      "sha256": "266b5a8aa88fe6440b10737d3eda27f4ceae2401d51d263debc0bca5c2075d87",
+      "outputSha256": "b5f10d50833ed9390ce4faa49fb9a8c009416989e07f20690c27b39b5ef048ad",
+      "importCount": 219,
+      "carrierImport": 207,
+      "bridges": Object.freeze([Object.freeze({
+          "kind": "ensureDirectory",
+          "stubFunction": 185,
+          "stubBody": Object.freeze([0, 65, 2, 11] as const),
+          "callSites": Object.freeze([Object.freeze({
+              "localFunction": 9552,
+              "bodyOffset": 171
+            } as const), Object.freeze({
+              "localFunction": 11539,
+              "bodyOffset": 142
+            } as const), Object.freeze({
+              "localFunction": 12232,
+              "bodyOffset": 127
+            } as const)] as const)
+        } as const), Object.freeze({
+          "kind": "findFiles",
+          "stubFunction": 186,
+          "stubBody": Object.freeze([0, 11] as const),
+          "callSites": Object.freeze([Object.freeze({
+              "localFunction": 9541,
+              "bodyOffset": 157
+            } as const), Object.freeze({
+              "localFunction": 9542,
+              "bodyOffset": 157
+            } as const), Object.freeze({
+              "localFunction": 11539,
+              "bodyOffset": 210
+            } as const), Object.freeze({
+              "localFunction": 12232,
+              "bodyOffset": 419
+            } as const)] as const)
+        } as const), Object.freeze({
+          "kind": "fileBaseName",
+          "stubFunction": 197,
+          "stubBody": Object.freeze([0, 65, 0, 11] as const),
+          "callSites": Object.freeze([Object.freeze({
+              "localFunction": 9541,
+              "bodyOffset": 276
+            } as const), Object.freeze({
+              "localFunction": 9542,
+              "bodyOffset": 278
+            } as const)] as const)
+        } as const), Object.freeze({
+          "kind": "deleteFile",
+          "stubFunction": 333,
+          "stubBody": Object.freeze([0, 65, 177, 136, 197, 128, 0, 65, 244, 187, 195, 128, 0, 65, 200, 6, 16, 194, 130, 128, 128, 0, 0, 11] as const),
+          "callSites": Object.freeze([Object.freeze({
+              "localFunction": 459,
+              "bodyOffset": 201
+            } as const)] as const)
+        } as const), Object.freeze({
+          "kind": "fileExists",
+          "stubFunction": 552,
+          "callSites": Object.freeze([Object.freeze({
+              "localFunction": 9552,
+              "bodyOffset": 201
+            } as const)] as const)
+        } as const)] as const)
+    } as const),
   ]);
 
 function fail(message: string): never {

@@ -21,6 +21,7 @@ import {
   staticCStringHash,
   uniqueExactFunction,
   uniqueRoleFunction,
+  uniqueRoleVariant,
   unsignedOperand,
   valuesForRole,
 } from "./wasm-evidence.js";
@@ -156,6 +157,69 @@ const PARTY_DIRTY_ROLES = Object.freeze([
   ]), Array.from({ length: 3 }, () => "i32"), []),
 ] as const);
 
+// Each reviewed upstream change retains its complete native control flow.
+// Message IDs and context fields remain exact within that role variant.
+const PARTY_PLAYER_PARTY_ROLE_VARIANTS = [PARTY_PLAYER_PARTY_ROLE,
+  semanticRole(338, "8492fb8cf18d58dfb55b4659663684f521cca7e762393d2e9657b0cb59236e26", PARTY_PLAYER_PARTY_ROLE.spans, ["i32", "i32", "i32", "i32"], []),
+];
+const TEAM_SENDER_ROLE_VARIANTS = [TEAM_SENDER_ROLE,
+  semanticRole(4425, "4e08fe75a036f87d7582c61078a1ff2a88be012654c44008499ea48facb9ad17", TEAM_SENDER_ROLE.spans, ["i32", "i32", "i32"], []),
+];
+const PARTY_DIRTY_ROLES_0_VARIANTS = [PARTY_DIRTY_ROLES[0],
+  semanticRole(622, "d2b5f3bb6b551397cff3949a5a3b9e758beb1251cfdb47fc12115f4300697ef6", PARTY_DIRTY_ROLES[0].spans, ["i32", "i32", "i32", "i32", "i32"], []),
+];
+const PARTY_DIRTY_ROLES_2_VARIANTS = [PARTY_DIRTY_ROLES[2],
+  semanticRole(127, "fb40f0e9f5c3cabc04af92178d9c724a4af8233c60360df2e12487614598b66c", PARTY_DIRTY_ROLES[2].spans, ["i32", "i32"], ["i32"]),
+];
+const PARTY_DIRTY_ROLES_3_VARIANTS = [PARTY_DIRTY_ROLES[3],
+  semanticRole(262, "638f35e1e5946dfa4db8234df2a68bf493a5f7b4ed71d1498aa50285ee4f2595", PARTY_DIRTY_ROLES[3].spans, ["i32", "i32", "i32", "f32", "i32", "i32"], []),
+];
+const PARTY_DIRTY_ROLES_5_VARIANTS = [PARTY_DIRTY_ROLES[5],
+  semanticRole(288, "e540fcec2dd0710537d27a0418831dd6beab57871171ce96b7295539d93e37ce", PARTY_DIRTY_ROLES[5].spans, ["i32", "i32", "i32", "i32", "i32", "i32", "i32", "i32", "i32"], []),
+];
+const PARTY_DIRTY_ROLES_6_VARIANTS = [PARTY_DIRTY_ROLES[6],
+  semanticRole(305, "0ee5b5c9467d14b8c3e9e18c1de5d05c7dfd558d588e3c90a6b6ca3f37db1b25", PARTY_DIRTY_ROLES[6].spans, ["i32", "i32", "i32", "i32", "i32", "i32", "i32", "i32"], []),
+];
+const PARTY_DIRTY_ROLES_7_VARIANTS = [PARTY_DIRTY_ROLES[7],
+  semanticRole(459, "909d3055f381e82ee012e2c97a30fd47770352ae4708fcb34c4ae65313dd55c7", PARTY_DIRTY_ROLES[7].spans, ["i32", "i32", "i32", "i32"], []),
+];
+const PARTY_DIRTY_ROLES_8_VARIANTS = [PARTY_DIRTY_ROLES[8],
+  semanticRole(279, "35e374a944b7401965998e31575be14cd7fa30daaad6dc03804f713bff8d916f", PARTY_DIRTY_ROLES[8].spans, ["i32", "i32", "i32"], []),
+];
+const PARTY_DIRTY_ROLES_9_VARIANTS = [PARTY_DIRTY_ROLES[9],
+  semanticRole(256, "b56d90085c4ecd135580c0a56b6442e35dcdd5762c3a129bb09c7d7aa8ef8a64", PARTY_DIRTY_ROLES[9].spans, ["i32", "i32", "i32"], []),
+];
+
+const PARTY_DIRTY_ROLE_VARIANTS = PARTY_DIRTY_ROLES.map((role, index) => {
+  switch (index) {
+    case 0: return PARTY_DIRTY_ROLES_0_VARIANTS;
+    case 2: return PARTY_DIRTY_ROLES_2_VARIANTS;
+    case 3: return PARTY_DIRTY_ROLES_3_VARIANTS;
+    case 5: return PARTY_DIRTY_ROLES_5_VARIANTS;
+    case 6: return PARTY_DIRTY_ROLES_6_VARIANTS;
+    case 7: return PARTY_DIRTY_ROLES_7_VARIANTS;
+    case 8: return PARTY_DIRTY_ROLES_8_VARIANTS;
+    case 9: return PARTY_DIRTY_ROLES_9_VARIANTS;
+    default: return [role];
+  }
+});
+
+const BASELINE_PARTY_DIRTY_MESSAGES = Object.freeze([
+  0x10000038, 0x10000039, 0x1000008c, 0x10000098, 0x100000c2,
+  0x10000111, 0x1000011e, 0x1000011f, 0x10000124, 0x10000126,
+]);
+
+export const REVIEWED_PARTY_DIRTY_MESSAGES = Object.freeze([
+  0x10000038, 0x10000039, 0x1000008c, 0x10000098, 0x100000c2,
+  0x10000111, 0x1000011f, 0x10000120, 0x10000125, 0x10000127,
+]);
+
+// Decode both reviewed message families. A registry row is comparison evidence,
+// so its age must not change which exact native producer can be proved.
+export const PARTY_DIRTY_MESSAGE_ANCHORS = Object.freeze([
+  ...BASELINE_PARTY_DIRTY_MESSAGES, ...REVIEWED_PARTY_DIRTY_MESSAGES,
+]);
+
 const PARTY_IMMUTABLE_HASHES = Object.freeze({
   playerPartyAssertion: "11e293befd3a98a58c54d320146aab4746f2456cfe5fefd40eca2c48d28366bb",
 });
@@ -271,8 +335,8 @@ export function inspectPartyTeamRoleCandidates(
       (role) => exactPartyFunctionCount(module, role),
     ),
     ...playerSkillbarRoleCandidateCounts(module),
-    roleFunctions(module, PARTY_PLAYER_PARTY_ROLE).length,
-    ...PARTY_DIRTY_ROLES.map((role) => roleFunctions(module, role).length),
+    PARTY_PLAYER_PARTY_ROLE_VARIANTS.reduce((count, role) => count + roleFunctions(module, role).length, 0),
+    ...PARTY_DIRTY_ROLE_VARIANTS.map((roles) => roles.reduce((count, role) => count + roleFunctions(module, role).length, 0)),
   ]);
 
   const expected = baseline.teamApply;
@@ -302,7 +366,7 @@ export function inspectPartyTeamRoleCandidates(
       })
     : [];
   const teamApply = aggregateRoleCounts([
-    roleFunctions(module, TEAM_SENDER_ROLE).length,
+    TEAM_SENDER_ROLE_VARIANTS.reduce((count, role) => count + roleFunctions(module, role).length, 0),
     teamPacketConstructorHubCount(module),
     ...builderCounts,
   ]);
@@ -349,8 +413,10 @@ export function derivePartyObservation(
   ];
   const characterUnlockFunction = exactPartyFunction(module, PARTY_EXACT_ROLES.characterUnlockReader);
   const worldFunction = playerSkillbar.worldLifecycle.functionIndex;
-  const playerPartyFunction = uniqueRoleFunction(module, PARTY_PLAYER_PARTY_ROLE);
-  const dirtyFunctions = PARTY_DIRTY_ROLES.map((role) => uniqueRoleFunction(module, role));
+  const playerPartyCandidate = uniqueRoleVariant(module, PARTY_PLAYER_PARTY_ROLE_VARIANTS);
+  const playerPartyFunction = playerPartyCandidate?.functionIndex ?? null;
+  const dirtyCandidates = PARTY_DIRTY_ROLE_VARIANTS.map((roles) => uniqueRoleVariant(module, roles));
+  const dirtyFunctions = dirtyCandidates.map((candidate) => candidate?.functionIndex ?? null);
   const infoFunction = dirtyFunctions[1] ?? null;
   const mapLoadedFunction = dirtyFunctions[2] ?? null;
   if (
@@ -363,19 +429,21 @@ export function derivePartyObservation(
 
   const worldBody = functionBody(module, worldFunction);
   const playerPartyBody = functionBody(module, playerPartyFunction);
-  const playerPartyValues = valuesForRole(playerPartyBody, PARTY_PLAYER_PARTY_ROLE);
+  const playerPartyValues = valuesForRole(playerPartyBody, playerPartyCandidate!.role);
   if (
     staticCStringHash(module, soleValue(playerPartyValues, "party.membership-assertion"))
       !== PARTY_IMMUTABLE_HASHES.playerPartyAssertion
     || soleValue(playerPartyValues, "party.ui") !== uiDispatcher.functionIndex
   ) return null;
 
-  const dirtyMessages = [...expected.partyDirtyMessages];
+  const dirtyMessages = BASELINE_PARTY_DIRTY_MESSAGES.map((message, index) =>
+    dirtyCandidates[index]!.role === PARTY_DIRTY_ROLES[index]
+      ? message : REVIEWED_PARTY_DIRTY_MESSAGES[index]!);
   const decoded = suppliedDecoded ?? decodeFunctions(module, dirtyMessages);
   for (let index = 0; index < dirtyMessages.length; index += 1) {
     const roleValues = valuesForRole(
       functionBody(module, dirtyFunctions[index]!),
-      PARTY_DIRTY_ROLES[index]!,
+      dirtyCandidates[index]!.role,
     );
     if (soleValue(roleValues, "party.ui") !== uiDispatcher.functionIndex) return null;
     const relation = messageRelations(decoded, uiDispatcher.functionIndex, dirtyMessages[index]!)
@@ -552,10 +620,11 @@ export function deriveTeamApply(
 ): KnownEnhancementBuild["teamApply"] | null {
   const expected = baseline.teamApply;
   if (!expected || expected.entries.length !== TEAM_BUILDER_ROLES.length) return null;
-  const senderFunction = uniqueRoleFunction(module, TEAM_SENDER_ROLE);
+  const senderCandidate = uniqueRoleVariant(module, TEAM_SENDER_ROLE_VARIANTS);
+  const senderFunction = senderCandidate?.functionIndex ?? null;
   if (senderFunction === null) return null;
   const senderBody = functionBody(module, senderFunction);
-  const senderValues = valuesForRole(senderBody, TEAM_SENDER_ROLE);
+  const senderValues = valuesForRole(senderBody, senderCandidate!.role);
   const senderRoles = [
     "sender.assert-bytes", "sender.assert-string-length",
     "sender.assert-struct-count", "sender.assert-switch",
