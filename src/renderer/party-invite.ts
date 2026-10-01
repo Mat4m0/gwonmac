@@ -29,7 +29,7 @@ export function createPartyInvite(input: PartyInviteInput) {
   const settleMs = input.settleMs ?? 2_000;
   const arrivalTimeoutMs = input.arrivalTimeoutMs ?? 60_000;
   /** Withdraws the one pending arrival; null while nothing waits. */
-  let pending: { details: Readonly<{ name: string; place: string }>; cancelled: boolean; cancel(): void } | null = null;
+  let pending: { details: Readonly<{ name: string; place: string }>; mapId: number; cancelled: boolean; cancel(): void; fail(error: Error): void } | null = null;
   const listeners = new Set<() => void>();
   const refresh = () => { for (const listener of listeners) listener(); };
   const travelling = () => pending ? `Travelling to ${pending.details.place}. The invite to ${pending.details.name} follows on arrival.` : null;
@@ -74,6 +74,7 @@ export function createPartyInvite(input: PartyInviteInput) {
    */
   function arrival(mapId: number, characterKey: string | null) {
     let cancel = () => {};
+    let fail = (_error: Error) => {};
     const promise = new Promise<void>((resolve, reject) => {
       let known = characterKey;
       let finished = false;
@@ -84,6 +85,7 @@ export function createPartyInvite(input: PartyInviteInput) {
         unsubscribe(); clearTimeout(timeout); if (settle) clearTimeout(settle);
         if (error) reject(error); else resolve();
       };
+      fail = finish;
       cancel = () => finish(new Error('Travel and invite stopped. The invite was not sent.'));
       const check = () => {
         const region = input.region();
@@ -104,7 +106,7 @@ export function createPartyInvite(input: PartyInviteInput) {
       const timeout = setTimeout(() => finish(new Error('Travel did not finish. The invite was not sent.')), arrivalTimeoutMs);
     });
     promise.catch(() => {});
-    return { promise, cancel };
+    return { promise, cancel, fail };
   }
   function invite(name: string, friend?: TravelFriend): Promise<void> {
     const reason = unavailable(friend);
@@ -115,6 +117,10 @@ export function createPartyInvite(input: PartyInviteInput) {
     get pending() { return pending?.details ?? null; },
     subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; },
     cancel,
+    /** Travel owns trip failure and its message; only the matching arrival is withdrawn. */
+    travelFailed(mapId: number, message: string) {
+      if (pending?.mapId === mapId) pending.fail(new Error(message));
+    },
     unavailable,
     /** Why Travel and invite cannot start now, or null. */
     travelUnavailable,
@@ -133,7 +139,7 @@ export function createPartyInvite(input: PartyInviteInput) {
       const name = friend.character;
       if (!name) throw new Error('This friend is offline');
       const arrived = arrival(friend.mapId, region.characterKey);
-      const request = { details: Object.freeze({ name, place: travelDestination(friend.mapId)?.name ?? 'the outpost' }), cancelled: false, cancel: arrived.cancel };
+      const request = { details: Object.freeze({ name, place: travelDestination(friend.mapId)?.name ?? 'the outpost' }), mapId: friend.mapId, cancelled: false, cancel: arrived.cancel, fail: arrived.fail };
       pending = request; refresh();
       const clear = () => { if (pending === request) { pending = null; refresh(); } };
       try { await travel(friend, generation); } catch (error) {

@@ -45,6 +45,13 @@ export function createHubPeople(hub: Pick<Hub, 'attach' | 'showRows' | 'notify'>
     whisper(event.detail);
   };
   window.addEventListener('gw:whisper-person', contact);
+  const travelFailed = (event: Event) => {
+    if (!(event instanceof CustomEvent)) return;
+    const detail: unknown = event.detail;
+    if (detail && typeof detail === 'object' && 'mapId' in detail && typeof detail.mapId === 'number'
+      && 'message' in detail && typeof detail.message === 'string') party?.travelFailed(detail.mapId, detail.message);
+  };
+  window.addEventListener('gw:travel-failed', travelFailed);
   /** Why Travel to a friend cannot start; `current` is false once the selected friend changed. */
   function travelReason(friend: TravelFriend | undefined, current: boolean): string | null {
     return !friend ? 'Waiting for a fresh friend location'
@@ -207,6 +214,6 @@ export function createHubPeople(hub: Pick<Hub, 'attach' | 'showRows' | 'notify'>
       else { detach?.(); detach = null; friends = { status: 'waiting', reason: 'unavailable' }; }
     },
     updateFriends(next: TravelFriends) { friends = next; refresh(); },
-    dispose() { window.removeEventListener('gw:whisper-person', contact); detach?.(); unsubscribe(); unsubscribeParty?.(); listeners.clear(); },
+    dispose() { window.removeEventListener('gw:travel-failed', travelFailed); window.removeEventListener('gw:whisper-person', contact); detach?.(); unsubscribe(); unsubscribeParty?.(); listeners.clear(); },
   };
 }

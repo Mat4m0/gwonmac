@@ -81,7 +81,7 @@ test('Hub without Whispers keeps friend search only', () => withPeople({ gwonmac
 const invitePort = (overrides: Partial<PartyInvite> = {}) => {
   const calls: string[] = [];
   const party: PartyInvite = {
-    pending: null, subscribe: () => () => {}, cancel() {},
+    pending: null, subscribe: () => () => {}, cancel() {}, travelFailed() {},
     unavailable: () => null, travelUnavailable: () => null,
     invite: async name => { calls.push(`invite:${name}`); },
     travelAndInvite: async (friend) => { calls.push(`travel:${friend.character}`); return { invited: Promise.resolve() }; },
@@ -306,4 +306,33 @@ test('Home retains the named pending invite and Cancel never invites after arriv
     assert.equal(source.search('').some(row => row.id === 'pending-invite'), false);
   }, party);
   party.dispose();
+});
+
+// Wrong behavior: a refused trip leaves the invite waiting for its separate 60 s timeout.
+test('Travel failure withdraws the pending invite within five seconds with its own reason', async context => {
+  context.mock.timers.enable({ apis: ['setTimeout'] });
+  const region: CompanionPlayRegionState = { status: 'ready', sequence: 1, mapId: 55, instanceType: 0, playRegion: 'pve', travelContext: 'world', characterKey: 'a', unlockedMapWords: null, guildHall: false, hasGuildHall: false };
+  const sent: string[] = [];
+  const listeners = new Set<() => void>();
+  const party = createPartyInvite({ region: () => region, subscribeRegion: listener => { listeners.add(listener); return () => listeners.delete(listener); },
+    chatReady: () => true, invite: async name => { sent.push(name); }, travel: async () => {} });
+  await withPeople(ALL_TOOLS, async ({ source, page, receipts }) => {
+    try {
+      source.search('mo kaiser')[0]!.run(task);
+      await page().find(row => row.id === 'person:travel-invite')!.run(task);
+      receipts.length = 0;
+      context.mock.timers.tick(3_000);
+      // Travel's canonical host signal after its own queued-trip timeout.
+      window.dispatchEvent(new CustomEvent('gw:travel-failed', { detail: {
+        mapId: 449, message: 'Travel did not start. Check that this destination is unlocked, then try again.',
+      } }));
+      await new Promise<void>(resolve => setImmediate(resolve));
+      assert.deepEqual(receipts, ['Travel did not start. Check that this destination is unlocked, then try again.']);
+      assert.equal(party.pending, null);
+      assert.equal(listeners.size, 0);
+      context.mock.timers.tick(60_000);
+      assert.deepEqual(sent, []);
+      assert.deepEqual(receipts, ['Travel did not start. Check that this destination is unlocked, then try again.']);
+    } finally { party.dispose(); }
+  }, party);
 });
