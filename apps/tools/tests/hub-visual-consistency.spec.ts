@@ -255,6 +255,15 @@ test('a four-key shortcut fits the shared cue slot at both text sizes (HUB-150)'
   await page.evaluate(()=>window.dispatchEvent(new CustomEvent('hub-fixture-settings',{detail:{shortcutOverrides:{'travel.open':{key:'t',option:true,shift:true}}}})));
   for(const uiTextSize of [100,200]){
     await page.evaluate(uiTextSize=>window.gwApplyFixtureAppearance?.({uiStyle:'guild-wars',uiPanelOpacity:94,uiTextSize}),uiTextSize);
+    const search = page.locator('.hub-search input');
+    await search.fill('library'); await search.press('Enter');
+    const positions = await page.locator('.hub-row').evaluateAll(rows => rows.map(row => ({
+      build: row.classList.contains('hub-build-row'), icon: row.querySelector('.hub-icon,.hub-professions')!.getBoundingClientRect().x,
+      title: row.querySelector('.hub-title')!.getBoundingClientRect().x, cue: row.querySelector('.hub-row-type')!.getBoundingClientRect().right,
+    })));
+    expect(positions.some(row => row.build)).toBe(true); expect(positions.some(row => !row.build)).toBe(true);
+    for (const key of ['icon', 'title', 'cue'] as const) expect(Math.max(...positions.map(row => row[key])) - Math.min(...positions.map(row => row[key]))).toBeLessThanOrEqual(1);
+    await page.keyboard.press('Meta+r'); await search.fill('');
     const cue=page.locator('[data-id="travel"] .hub-row-type');await expect(cue.locator('kbd')).toHaveCount(4);
     const bounds=await cue.evaluate(el=>({left:el.getBoundingClientRect().left,right:el.getBoundingClientRect().right,childLeft:Math.min(...[...el.children].map(child=>child.getBoundingClientRect().left)),childRight:Math.max(...[...el.children].map(child=>child.getBoundingClientRect().right))}));
     expect(bounds.childRight).toBeLessThanOrEqual(bounds.right+1);expect(bounds.childLeft).toBeGreaterThanOrEqual(bounds.left-1);

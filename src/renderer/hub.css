@@ -158,11 +158,11 @@
 }
 
 /* Saved bars stay visible while comparing search results. */
-.hub-build-row { grid-template-columns:34px minmax(0,1fr); gap:2px 14px; padding-block:12px; }
+.hub-build-row { grid-template-columns:34px minmax(0,1fr) calc(9 * var(--ui-type-caption-size)); gap:2px 14px; padding-block:12px; }
 .hub-build-row > .hub-icon { grid-column:1; grid-row:1 / 3; }
 .hub-build-row > .hub-title { grid-column:2; grid-row:1; }
 .hub-build-row > .hub-detail { grid-column:2; grid-row:2; font-size:var(--ui-type-caption-size); }
-.hub-build-row > .hub-row-type { display:none; }
+.hub-build-row > .hub-row-type { display:flex; grid-column:3; grid-row:1 / 3; }
 .hub-skill-bar { grid-column:2; display:flex; gap:4px; margin-top:8px; }
 .hub-skill { position:relative; display:grid; place-items:center; width:32px; height:32px; flex-shrink:0; overflow:hidden; border-radius:var(--ui-radius-sm); background:var(--ui-well-fill); color:var(--ui-text-faint); font-size:var(--ui-type-caption-size); box-shadow:inset 0 0 0 1px var(--ui-edge); }
 .hub-skill img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
@@ -398,6 +398,7 @@
 .hub-results.hub-build-list ~ .hub-preview { flex:0 0 144px; height:144px; max-height:144px; }
 .hub-build-compact { min-height:40px; padding-block:4px; grid-template-columns:34px auto minmax(0,1fr) calc(9 * var(--ui-type-caption-size)); }
 .hub-build-compact > .hub-title { grid-column:2; grid-row:1; }
+.hub-build-compact > .hub-row-type { grid-column:4; grid-row:1; }
 .hub-build-compact > .hub-detail { grid-column:3; grid-row:1; }
 .hub-build-compact > .hub-professions { grid-row:1; height:28px; }
 .hub-build-compact > .hub-build-info { display:none; }
