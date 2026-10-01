@@ -457,6 +457,7 @@ test('Characters: a double-click that raises Leave this area? never confirms it'
 });
 
 test('Accounts: keeping the running game open is the default; a replace needs one deliberate armed confirmation', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-10-01T12:00:00Z') });
   await open(page);
   await search(page).fill('acc second');
   // D-23: Open Second is row 0 and selected; the replace is second and reads as destructive.
@@ -467,7 +468,10 @@ test('Accounts: keeping the running game open is the default; a replace needs on
   await search(page).press('ArrowDown');
   await expect(primary(page)).toHaveText(/^Close Main and open Second/);
   await expect(primary(page)).toHaveAttribute('data-variant', 'danger');
+  // Freeze the confirmation clock so CI assertion time cannot arm the quick second Enter.
+  await page.clock.pauseAt(new Date('2026-10-01T13:00:00Z'));
   await search(page).press('Enter');
+  await page.clock.runFor(50);
   await expect(caption(page)).toHaveText('Close Main?');
   // The confirmation keeps the Hub footer: the armed destructive primary names it, Keep Main is the secondary.
   const confirm = primary(page);
@@ -479,6 +483,7 @@ test('Accounts: keeping the running game open is the default; a replace needs on
   // An Enter or a multi-click before it arms confirms nothing.
   await page.keyboard.press('Enter');
   expect(await ledger(page)).toEqual([]);
+  await page.clock.resume();
   await expect(confirm).toHaveAttribute('data-armed', '');
   await clicks(page, confirm, 2, 0);
   expect(await ledger(page)).toEqual(['Account Second replace']);
