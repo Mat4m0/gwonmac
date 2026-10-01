@@ -275,10 +275,12 @@ decision. The saved palette remains unchanged.
   marker. Only its lightness moves, so gold stays gold. Fills, rails, icons
   and the primary button keep the exact `--ui-accent`.
 - The Classic head sits on painted metal that the model cannot measure, so its
-  secondary copy (crumbs, caption, context) uses the text ink with the Classic
-  text shadow.
-- Reduce Transparency changes panel material only. A modal scrim keeps its
-  value, so the game stays visible around the opaque panel.
+  secondary copy (crumbs, caption, context) uses the bright ink with the
+  Classic text shadow; size and face keep it below the title.
+- The Hub never dims the game, in Classic or Modern. Its text is guarded
+  against the brightest scene behind the panel instead.
+- Reduce Transparency changes panel material only, so the game stays visible
+  around the opaque panel.
 
 ## Compact reading surfaces
 

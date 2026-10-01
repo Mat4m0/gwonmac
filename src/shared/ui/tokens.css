@@ -36,9 +36,10 @@
   --ui-art-head-fill: transparent;
   --ui-art-head-shadow: none;
   /* The Classic head sits on painted metal, which the ink guard cannot
-   * measure, so its secondary copy uses the text ink. */
-  --ui-art-head-muted: var(--ui-text);
-  --ui-art-head-faint: var(--ui-text);
+   * measure, and the game is never dimmed behind it, so its secondary copy
+   * uses the bright ink; size and face keep it below the title. */
+  --ui-art-head-muted: var(--ui-text-bright);
+  --ui-art-head-faint: var(--ui-text-bright);
   --ui-art-title-size: var(--ui-type-body-size);
   --ui-art-head-control-height: 26px;
   --ui-art-head-detail-display: none;

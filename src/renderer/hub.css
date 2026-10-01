@@ -10,6 +10,9 @@
 .hub-name { color:var(--ui-display-text); font-family:var(--ui-font-display); }
 .hub-caption { color:var(--ui-text-muted); font-size:var(--ui-type-caption-size); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .hub-close { margin-left:auto; }
+/* The Hub never dims the game, in either style: it sits beside play, and its text is
+ * guarded against the brightest scene behind it (Matthias, 2026-10-01; HUB-039). */
+#hub::backdrop { background:transparent; }
 #hub .hub-close { min-height:max(var(--ui-target-min),var(--ui-type-title-size)); width:max(var(--ui-target-min),var(--ui-type-title-size)); padding:0; font-size:var(--ui-type-title-size); line-height:1; }
 /* The thin bar under the search while this page's action runs (HUB-083); static without motion. */
 .hub-progress { position:absolute; left:12px; right:12px; bottom:3px; height:2px; overflow:hidden; opacity:0; pointer-events:none; }

@@ -256,7 +256,8 @@ test('Reduce Transparency makes the Hub opaque without hiding the game or re-ink
     await reduce('reduce');
     await expect.poll(() => page.locator('.hub-panel').evaluate(element => getComputedStyle(element, '::before').backgroundColor), uiStyle).not.toMatch(/0\.65\)/);
     const reduced = await look();
-    // The scrim is not a material: the game stays exactly as visible around the Hub.
+    // Neither style dims the game behind the Hub, with or without Reduce Transparency.
+    expect(translucent.backdrop, uiStyle).toBe('rgba(0, 0, 0, 0)');
     expect(reduced.backdrop, uiStyle).toBe(translucent.backdrop);
     expect(reduced.outside, uiStyle).toEqual(translucent.outside);
     // The opaque panel keeps its designed inks, as at 100 %.
