@@ -239,11 +239,15 @@ describe("panel text legibility over the game", () => {
         const inks = publishedInks({ ...DEFAULT_SETTINGS, uiStyle, uiPanelOpacity });
         const surfaces = PAINTED_SURFACES[uiStyle === "obsidian" ? "modern" : "classic"];
         const panels = (["#FFFFFF", "#000000"] as const).map((scene) => compositeColor(painted.window, scene, uiPanelOpacity / 100));
-        for (const background of [
+        const backgrounds = [
           ...worstBackgrounds(painted.window, painted.accent, uiPanelOpacity / 100),
           ...surfaces.raised, ...surfaces.command, surfaces.well,
           ...panels.map((panel) => compositeColor(surfaces.wellFill, panel, surfaces.wellOpacity)),
-        ]) {
+        ];
+        if (backgrounds.every(background => contrastRatio(painted.faintText, background) >= 4.5)) {
+          assert.notEqual(inks["--ui-text-faint"], inks["--ui-text-muted"], `${uiStyle}/${uiPanelOpacity}: passing faint ink stays distinct`);
+        }
+        for (const background of backgrounds) {
           for (const [name, ink] of Object.entries(inks)) {
             assert.ok(contrastRatio(ink, background) >= 4.5, `${uiStyle} ${uiPanelOpacity}% ${name} ${ink} on ${background}`);
           }

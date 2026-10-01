@@ -58,6 +58,19 @@ for (const ratio of [1, 2]) {
 test('saved font and custom title material apply to the real Hub without losing query', async ({ page }, info) => {
   await page.goto('/?hub');
   const search = page.locator('.hub-search input');
+  await search.fill('k');
+  for (let i = 0; i < 5; i++) await search.press('ArrowDown');
+  await search.evaluate(el => (el as HTMLInputElement).setSelectionRange(0, 1));
+  await page.locator('.hub-results').evaluate(el => { el.scrollTop = 60; });
+  const state = async () => ({ query: await search.inputValue(), caret: await search.evaluate(el => [(el as HTMLInputElement).selectionStart, (el as HTMLInputElement).selectionEnd]), id: await page.locator('.hub-row[aria-selected=true]').getAttribute('data-id'), scroll: await page.locator('.hub-results').evaluate(el => el.scrollTop) });
+  const before = await state();
+  expect(before.scroll).toBeGreaterThan(0);
+  for (const patch of [{ uiStyle: 'obsidian' as const }, { uiFont: 'inter' as const }, { uiPanelOpacity: 65 }]) {
+    await page.evaluate(patch => window.gwApplyFixtureAppearance?.({ uiStyle: 'guild-wars', uiPanelOpacity: 94, ...patch }), patch);
+    expect(await state()).toEqual(before);
+    await expect(search).toBeFocused();
+  }
+
   await search.fill('settings'); await search.press('Enter');
   await page.getByRole('button', { name: 'Appearance', exact: true }).click();
   await page.getByLabel('Panel font', { exact: true }).selectOption('inter');
@@ -138,6 +151,8 @@ test('Modern hover stays clearly weaker than the selection it is not', async ({ 
 
 
 const CHECKERBOARD = 'body { background: repeating-conic-gradient(#fff 0% 25%, #ddd 0% 50%) 0 / 32px 32px !important; } .hub-fixture-controls { visibility:hidden; }';
+const BRIGHT = 'body { background: #f4f6f8 !important; } .hub-fixture-controls { visibility:hidden; }';
+const OVERCAST = 'body { background: #d0d4d8 !important; } .hub-fixture-controls { visibility:hidden; }';
 const NIGHT = 'body { background: #000 !important; } .hub-fixture-controls { visibility:hidden; }';
 const luminance = (rgb: readonly number[]) => {
   const linear = rgb.map(channel => { const value = channel / 255; return value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4; });
@@ -196,9 +211,24 @@ const BLUE_ACCENT = { material: 'classic', window: '#0B0B0B', titlebar: '#292927
 // Modern gold headings (HUB-249) and the Classic head (HUB-106) are the known worst cases.
 for (const [name, appearance, scene] of [
   ['Modern 65% over snow', { uiStyle: 'obsidian', uiPanelOpacity: 65 }, CHECKERBOARD],
+  ['Modern 70% over snow', { uiStyle: 'obsidian', uiPanelOpacity: 70 }, CHECKERBOARD],
+  ['Modern 65% over overcast', { uiStyle: 'obsidian', uiPanelOpacity: 65 }, OVERCAST],
+  ['Modern 65% over bright', { uiStyle: 'obsidian', uiPanelOpacity: 65 }, BRIGHT],
+  ['Classic 100% over bright', { uiStyle: 'guild-wars', uiPanelOpacity: 100 }, BRIGHT],
+  ['Classic 94% over bright', { uiStyle: 'guild-wars', uiPanelOpacity: 94 }, BRIGHT],
+  ['Classic 80% over bright', { uiStyle: 'guild-wars', uiPanelOpacity: 80 }, BRIGHT],
+  ['Classic 65% over bright', { uiStyle: 'guild-wars', uiPanelOpacity: 65 }, BRIGHT],
+  ['custom Classic at 65% over bright', { uiStyle: 'custom', uiPanelOpacity: 65, uiCustomTheme: BLUE_ACCENT }, BRIGHT],
+  ['custom Modern at 65% over bright', { uiStyle: 'custom', uiPanelOpacity: 65, uiCustomTheme: { ...BLUE_ACCENT, material: 'modern' } }, BRIGHT],
+  ['Classic 100% over snow', { uiStyle: 'guild-wars', uiPanelOpacity: 100 }, CHECKERBOARD],
+  ['Classic 80% over snow', { uiStyle: 'guild-wars', uiPanelOpacity: 80 }, CHECKERBOARD],
+  ['Classic 94% over night', { uiStyle: 'guild-wars', uiPanelOpacity: 94 }, NIGHT],
   ['Classic 94% over snow', { uiStyle: 'guild-wars', uiPanelOpacity: 94 }, CHECKERBOARD],
   ['Classic 65% over snow', { uiStyle: 'guild-wars', uiPanelOpacity: 65 }, CHECKERBOARD],
   ['a blue custom accent at 94% over night', { uiStyle: 'custom', uiPanelOpacity: 94, uiCustomTheme: BLUE_ACCENT }, NIGHT],
+  ['a red custom accent at 94% over night', { uiStyle: 'custom', uiPanelOpacity: 94, uiCustomTheme: { ...BLUE_ACCENT, accent: '#B03A2E' } }, NIGHT],
+  ['custom Classic at 65% over snow', { uiStyle: 'custom', uiPanelOpacity: 65, uiCustomTheme: BLUE_ACCENT }, CHECKERBOARD],
+  ['custom Modern at 65% over snow', { uiStyle: 'custom', uiPanelOpacity: 65, uiCustomTheme: { ...BLUE_ACCENT, material: 'modern' } }, CHECKERBOARD],
   // A light window with otherwise default colours: its controls follow the window.
   ['a white custom window at 100% over night', { uiStyle: 'custom', uiPanelOpacity: 100, uiCustomTheme: { ...BLUE_ACCENT, accent: '#E6C882', selected: '#1B3554', window: '#FFFFFF' } }, NIGHT],
 ] as const) {
@@ -208,10 +238,16 @@ for (const [name, appearance, scene] of [
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto('/?hub');
     await page.addStyleTag({ content: scene });
-    const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+    const search = page.locator('.hub-search input');
     await expect(search).toBeFocused();
     await page.evaluate(value => window.gwApplyFixtureAppearance?.(value), appearance);
     const measured = await textContrast(page, TEXT_ROLES);
+    for (const query of ['kam', 'team']) { await search.fill(query); measured.push(...await textContrast(page, TEXT_ROLES)); }
+    await page.keyboard.press('Meta+t'); measured.push(...await textContrast(page, TEXT_ROLES));
+    await page.keyboard.press('Meta+e');
+    const current = await textContrast(page, { 'current character': '.character-switch-current' });
+    expect(current.length).toBeGreaterThan(0); measured.push(...current);
+    await page.keyboard.press('Meta+r');
     await search.fill('build a');
     await expect(page.locator('.hub-scope')).toBeVisible();
     measured.push(...await textContrast(page, TEXT_ROLES));
@@ -222,6 +258,7 @@ for (const [name, appearance, scene] of [
     await search.fill('settings'); await search.press('Enter');
     await page.getByRole('button', { name: 'Appearance', exact: true }).click();
     await expect(page.locator('.hub-crumb').first()).toBeVisible();
+    expect(await page.locator('.hub-crumb').first().evaluate(el => getComputedStyle(el).textShadow)).toBe(await page.locator('.hub-caption').evaluate(el => getComputedStyle(el).textShadow));
     measured.push(...await textContrast(page, TEXT_ROLES));
     for (const role of Object.keys(TEXT_ROLES)) expect(measured.some(label => label.role === role), `${role} was measured`).toBe(true);
     for (const label of measured) expect(label.ratio, `${label.role} “${label.text}”`).toBeGreaterThanOrEqual(4.5);
@@ -237,7 +274,7 @@ test('Reduce Transparency makes the Hub opaque without hiding the game or re-ink
   await reduce('no-preference');
   await page.goto('/?hub');
   await page.addStyleTag({ content: CHECKERBOARD });
-  await expect(page.getByRole('combobox', { name: 'Search people, places, builds' })).toBeFocused();
+  await expect(page.locator('.hub-search input')).toBeFocused();
   const look = async () => {
     const png = PNG.sync.read(await page.screenshot());
     const outside = [...png.data.subarray((20 * png.width + 20) * 4, (20 * png.width + 20) * 4 + 3)];
@@ -275,7 +312,7 @@ for (const [name, viewport, hub] of [['a narrow window', { width: 390, height: 8
   test(`the footer stays one line while arrowing in ${name}`, async ({ page }) => {
     await page.setViewportSize(viewport);
     await page.goto('/?hub');
-    const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+    const search = page.locator('.hub-search input');
     await expect(search).toBeFocused();
     if (hub) await page.locator('.hub-panel').evaluate((panel, size) => { panel.style.width = `${size.width}px`; panel.style.height = `${size.height}px`; }, hub);
     const primary = page.locator('.hub-primary');
@@ -298,16 +335,27 @@ for (const [name, viewport, hub] of [['a narrow window', { width: 390, height: 8
   });
 }
 
-test('every Settings section fits one line in all six panel fonts', async ({ page }) => {
+test('every Settings section fits one line in all six panel fonts (HUB-253)', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
-  await search.fill('settings'); await search.press('Enter');
-  const nav = page.getByRole('navigation', { name: 'Settings sections' });
-  await expect(nav).toBeVisible();
-  for (const uiFont of PANEL_FONTS) {
-    await page.evaluate(value => window.gwApplyFixtureAppearance?.({ uiStyle: 'guild-wars', uiPanelOpacity: 94, uiFont: value }), uiFont);
-    const heights = await nav.getByRole('button').evaluateAll(buttons => buttons.map(button => Math.round(button.getBoundingClientRect().height)));
-    expect(new Set(heights).size, `${uiFont}: ${heights.join(', ')}`).toBe(1);
+  const search = page.locator('.hub-search input');
+  for (const uiStyle of ['guild-wars', 'obsidian'] as const) for (const uiPanelOpacity of [94, 65]) for (const uiFont of PANEL_FONTS) {
+    await page.keyboard.press('Meta+r');
+    await page.evaluate(value => window.gwApplyFixtureAppearance?.(value), { uiStyle, uiPanelOpacity, uiFont });
+    await search.fill('kam');
+    const geometry = await page.locator('.hub-row').evaluateAll(rows => rows.map(row => {
+      const title = row.querySelector('.hub-title')!, cue = row.querySelector('.hub-row-type')!;
+      const a = title.getBoundingClientRect(), b = cue.getBoundingClientRect();
+      return { height: row.getBoundingClientRect().height, overflow: title.scrollWidth - title.clientWidth, centres: Math.abs(a.y + a.height / 2 - b.y - b.height / 2) };
+    }));
+    expect(geometry.length).toBeGreaterThan(0);
+    for (const row of geometry) { expect(row.height).toBe(40); expect(row.overflow).toBeLessThanOrEqual(1); expect(row.centres).toBeLessThanOrEqual(1); }
+    await search.fill('settings'); await search.press('Enter');
+    const nav = page.getByRole('navigation', { name: 'Settings sections' });
+    await expect(nav).toBeVisible();
+    const buttons = await nav.getByRole('button').evaluateAll(buttons => buttons.map(button => ({ height: Math.round(button.getBoundingClientRect().height), overflow: button.scrollWidth - button.clientWidth })));
+    expect(new Set(buttons.map(button => button.height)).size, `${uiStyle}/${uiPanelOpacity}/${uiFont}`).toBe(1);
+    for (const button of buttons) expect(button.overflow).toBeLessThanOrEqual(1);
   }
 });
 
@@ -322,7 +370,7 @@ const customModern = (border: string) => ({
 /** Proves a custom Modern window paints its content rather than a border sheet:
  * the frame keeps its cut-out, the first row's centre is not the border colour,
  * and the row's ink reads at 4.5:1 over the composed pixels beneath it. */
-async function expectRowPainted(page: Page, panel: Locator, row: Locator, ink: Locator, border: string) {
+async function expectRowPainted(page: Page, panel: Locator, row: Locator, ink: Locator, border: string, expectedPaint?: number[]) {
   expect(await panel.evaluate(element => getComputedStyle(element, '::before').maskComposite)).toContain('exclude');
   const probe = async (target: Locator) => target.evaluate(element => {
     const box = element.getBoundingClientRect();
@@ -337,7 +385,8 @@ async function expectRowPainted(page: Page, panel: Locator, row: Locator, ink: L
   const pixel = (x: number, y: number) => [...composed.data.subarray((y * composed.width + x) * 4, (y * composed.width + x) * 4 + 3)];
   const sheet = border.match(/[0-9a-f]{2}/giu)!.map(channel => parseInt(channel, 16));
   const rowPixel = pixel(centre.x, centre.y);
-  expect(Math.max(...rowPixel.map((channel, index) => Math.abs(channel - sheet[index]!))), `row centre ${rowPixel} vs border ${border}`).toBeGreaterThan(16);
+  if (expectedPaint) expect(rowPixel, `content paint stays independent of border ${border}`).toEqual(expectedPaint);
+  else expect(Math.max(...rowPixel.map((channel, index) => Math.abs(channel - sheet[index]!))), `row centre ${rowPixel} vs border ${border}`).toBeGreaterThan(16);
   const luminance = (rgb: number[]) => {
     const linear = rgb.map(channel => { const value = channel / 255; return value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4; });
     return .2126 * linear[0]! + .7152 * linear[1]! + .0722 * linear[2]!;
@@ -345,6 +394,7 @@ async function expectRowPainted(page: Page, panel: Locator, row: Locator, ink: L
   const background = luminance(pixel(label.x, label.y));
   const foreground = luminance(label.color.match(/[\d.]+/gu)!.slice(0, 3).map(Number));
   expect((Math.max(background, foreground) + .05) / (Math.min(background, foreground) + .05), `row ink over ${border}`).toBeGreaterThanOrEqual(4.5);
+  return rowPixel;
 }
 
 test.describe('custom theme with the Modern flat finish', () => {
@@ -352,7 +402,7 @@ test.describe('custom theme with the Modern flat finish', () => {
 
   test('Hub rows stay visible for every border and opacity', async ({ page }, info) => {
     await page.goto('/?hub');
-    const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+    const search = page.locator('.hub-search input');
     await search.fill('kam');
     const panel = page.locator('.hub-panel');
     const rows = page.locator('#hub .hub-row');
@@ -369,31 +419,37 @@ test.describe('custom theme with the Modern flat finish', () => {
 
   test('Trade and the Build Library window render their lists', async ({ page }, info) => {
     await page.goto('/?hub');
-    await expect(page.getByRole('combobox', { name: 'Search people, places, builds' })).toBeFocused();
+    await expect(page.locator('.hub-search input')).toBeFocused();
     await page.evaluate(theme => window.gwApplyFixtureAppearance?.({ uiStyle: 'custom', uiPanelOpacity: 94, uiCustomTheme: theme }), customModern('#D8D2BF'));
     await page.keyboard.press('Meta+k');
     const trade = page.getByRole('dialog', { name: 'Trade Chat' });
     const offer = trade.locator('.trade-row').first();
     await expect(offer).toBeVisible();
-    await expectRowPainted(page, trade, offer, offer.locator('.character-cell bdi'), '#D8D2BF');
+    for (const border of ['#D8D2BF', '#8A7F6A', '#1B1A18']) {
+      await page.evaluate(theme => window.gwApplyFixtureAppearance?.({ uiStyle: 'custom', uiPanelOpacity: 94, uiCustomTheme: theme }), customModern(border));
+      await expectRowPainted(page, trade, offer, offer.locator('.character-cell bdi'), border);
+    }
     await page.screenshot({ path: info.outputPath('custom-modern-trade.png') });
     await page.getByRole('button', { name: 'Close Trade Chat', exact: true }).click();
 
     await page.getByRole('button', { name: 'Open Hub', exact: true }).click();
-    const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+    const search = page.locator('.hub-search input');
     await search.fill('build Word of Healing');
     await page.keyboard.press('Meta+j');
     await page.getByRole('menuitem', { name: 'Open in Build Library', exact: true }).click();
     const library = page.getByRole('dialog', { name: 'Build Library' });
     const build = library.locator('.library-row').first();
     await expect(build).toBeVisible();
-    await expectRowPainted(page, library, build, build.locator('.row-title'), '#D8D2BF');
+    for (const border of ['#D8D2BF', '#8A7F6A', '#1B1A18']) {
+      await page.evaluate(theme => window.gwApplyFixtureAppearance?.({ uiStyle: 'custom', uiPanelOpacity: 94, uiCustomTheme: theme }), customModern(border));
+      await expectRowPainted(page, library, build, build.locator('.row-title'), border);
+    }
     await page.screenshot({ path: info.outputPath('custom-modern-build-library.png') });
   });
 
   test('choosing the saved theme in Hub Settings keeps the page and focus', async ({ page }, info) => {
     await page.goto('/?hub');
-    const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+    const search = page.locator('.hub-search input');
     await expect(search).toBeFocused();
     await page.evaluate(theme => window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: { uiStyle: 'guild-wars', uiCustomTheme: theme } })), customModern('#D8D2BF'));
     await page.evaluate(() => window.gwApplyFixtureAppearance?.({ uiStyle: 'guild-wars', uiPanelOpacity: 94 }));
@@ -407,7 +463,11 @@ test.describe('custom theme with the Modern flat finish', () => {
     await expect(style).toHaveValue('custom');
     await expect(style).toBeFocused();
     const row = page.locator('.hub-setting-row').filter({ has: style });
-    await expectRowPainted(page, page.locator('.hub-panel'), row, row.locator('strong'), '#D8D2BF');
+    let expectedPaint: number[] | undefined;
+    for (const border of ['#D8D2BF', '#8A7F6A', '#1B1A18']) {
+      await page.evaluate(theme => window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: { uiCustomTheme: theme } })), customModern(border));
+      expectedPaint = await expectRowPainted(page, page.locator('.hub-panel'), row, row.locator('strong'), border, expectedPaint);
+    }
     await page.screenshot({ path: info.outputPath('custom-modern-settings.png') });
     await style.selectOption('guild-wars');
     await expect(page.locator('#hub > .hub-panel > .ui-frame-artwork')).toBeVisible();
