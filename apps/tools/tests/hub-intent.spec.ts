@@ -239,9 +239,65 @@ test('the phrase editor refuses a new phrase that starts with a scope word', asy
   await page.getByRole('menuitem', { name: /Set search phrase/ }).click();
   const phrase = page.getByRole('textbox', { name: 'Search phrase', exact: true });
   await phrase.fill('invite x'); await phrase.press('Enter');
-  await expect(page.locator('.hub-view [role="status"]')).toHaveText('Choose a unique phrase. Command words are reserved.');
+  await expect(page.getByRole('alert')).toHaveText('“invite x” starts with the command word “invite”. Choose another phrase.');
   await phrase.fill('gom night'); await phrase.press('Enter');
-  await expect(page.locator('.hub-view [role="status"]')).toHaveText('Saved');
+  // A saved phrase returns to the page that asked and says what it now finds (HUB-152).
+  await expect(page.locator('.hub-caption')).toHaveText('Home');
+  await expect(page.locator('#hub .hub-status')).toHaveText('“gom night” now finds GOM AFK.');
+});
+
+test('the phrase editor refuses a phrase that is already another result’s name, and saves nothing (HUB-062)', async ({ page }) => {
+  await page.goto('/?hub');
+  const search = page.getByRole('combobox', { name: searchName });
+  await search.fill('open xunlai storage');
+  await page.keyboard.press('Meta+j');
+  await page.getByRole('menuitem', { name: /Set search phrase/ }).click();
+  const phrase = page.getByRole('textbox', { name: 'Search phrase', exact: true });
+  await phrase.fill('Maps'); await phrase.press('Enter');
+  await expect(page.getByRole('alert')).toHaveText('“maps” already finds Maps. Choose another phrase.');
+  await expect(page.locator('.hub-caption')).toHaveText('Search phrase');
+  expect(await page.evaluate(() => localStorage.getItem('hub-fixture-shortcuts'))).toBeNull();
+  // A friend's name is a real result too.
+  await phrase.fill('romi'); await phrase.press('Enter');
+  await expect(page.getByRole('alert')).toHaveText('“romi” already finds Romi. Choose another phrase.');
+  await page.keyboard.press('Meta+Backspace');
+  await search.fill('maps');
+  await expect(page.locator('#hub .hub-row')).toHaveCount(1);
+  await expect(page.locator('#hub .hub-row[aria-selected="true"]')).toHaveAttribute('data-id', 'maps');
+});
+
+test('the phrase form stacks its label, names its error, submits with Command-Enter and keeps a draft through Esc (HUB-152)', async ({ page }) => {
+  await page.goto('/?hub');
+  const search = page.getByRole('combobox', { name: searchName });
+  const openForm = async () => {
+    await search.fill('team gom afk');
+    await page.keyboard.press('Meta+j');
+    await page.getByRole('menuitem', { name: /Set search phrase/ }).click();
+  };
+  await openForm();
+  const phrase = page.getByRole('textbox', { name: 'Search phrase', exact: true });
+  await expect(phrase).toBeFocused();
+  const label = await page.locator('.hub-view label').boundingBox(); const field = await phrase.boundingBox();
+  expect(label!.y + label!.height).toBeLessThanOrEqual(field!.y);
+  await expect(phrase).toHaveAccessibleDescription(/Type this exact phrase in Hub to find GOM AFK/);
+  // Esc leaves the form; the draft is still there when the player comes back.
+  await phrase.fill('keep me'); await phrase.press('Escape');
+  await expect(page.locator('.hub-caption')).toHaveText('Home');
+  await openForm();
+  await expect(phrase).toHaveValue('keep me');
+  await phrase.fill('invite x'); await phrase.press('Meta+Enter');
+  await expect(phrase).toHaveAttribute('aria-invalid', 'true');
+  await expect(phrase).toHaveAccessibleDescription(/^“invite x” starts with the command word “invite”\. Choose another phrase\./);
+  await expect(phrase).toBeFocused();
+  // Typing clears the error; Command-Enter saves from the field and returns.
+  await phrase.fill('gom evening');
+  await expect(phrase).not.toHaveAttribute('aria-invalid', 'true');
+  await expect(page.getByRole('alert')).toBeHidden();
+  await phrase.press('Meta+Enter');
+  await expect(page.locator('.hub-caption')).toHaveText('Home');
+  await expect(page.locator('#hub .hub-status')).toHaveText('“gom evening” now finds GOM AFK.');
+  await search.fill('gom evening');
+  await expect(page.locator('#hub .hub-row').first()).toHaveAttribute('data-id', /^team:/);
 });
 
 test('a bare travel scope in an explorable area selects Browse travel, so Enter never leaves the area', async ({ page }) => {
@@ -1012,4 +1068,64 @@ test('holding Enter on Trade\'s Save offer or Follow player toggles once', async
   await hold(/^Follow player$/u);
   await expect(trade.getByRole('button', { name: /^Following$/u })).toHaveAttribute('aria-pressed', 'true');
   await expect(trade.locator('.saved-count')).toHaveText('2');
+});
+
+
+test('a stored place phrase resolves in Home, its travel scope and detailed Travel without moving its data (HUB-061)', async ({ page }) => {
+  const stored = [{ id: 'place:194', phrase: 'home', pinned: true }];
+  await page.addInitScript(value => localStorage.setItem('hub-fixture-shortcuts', JSON.stringify(value)), stored);
+  await page.goto('/?hub');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  const search = page.getByRole('combobox', { name: searchName });
+  for (const query of ['home', 'travel home']) {
+    await search.fill(query);
+    await expect(page.locator('.hub-row[aria-selected="true"]')).toHaveAttribute('data-id', 'place:194');
+    await expect(page.locator('.hub-primary')).toContainText('Travel to Kaineng Center');
+  }
+  await page.keyboard.press('Meta+t');
+  const destination = page.getByRole('combobox', { name: 'Destination, phrase, or friend' });
+  await destination.fill('home');
+  await expect(destination).toHaveAttribute('aria-activedescendant', 'travel-map-194');
+  await expect(page.locator('.hub-primary')).toContainText('Travel to Kaineng Center');
+  expect(JSON.parse(await page.evaluate(() => localStorage.getItem('hub-fixture-shortcuts')) ?? 'null')).toEqual(stored);
+  await expect(page.locator('#app')).not.toHaveAttribute('data-action', /TRAVEL/);
+});
+
+
+test('editing a phrase preserves pin order and a delayed save cannot navigate a later page', async ({ page }) => {
+  const stored = [{ id: 'maps', phrase: '', pinned: true }, { id: 'travel', phrase: '', pinned: true }];
+  await page.addInitScript(value => localStorage.setItem('hub-fixture-shortcuts', JSON.stringify(value)), stored);
+  await page.goto('/?hub&settings-ms=700');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  const search = page.getByRole('combobox', { name: searchName });
+  await search.fill('maps');
+  await page.keyboard.press('Meta+j');
+  await page.getByRole('menuitem', { name: /Set search phrase/ }).click();
+  const phrase = page.getByRole('textbox', { name: 'Search phrase', exact: true });
+  await phrase.fill('my map'); await phrase.press('Enter');
+  await page.keyboard.press('Meta+Backspace');
+  await search.fill('commands'); await search.press('Enter');
+  await expect(page.locator('.hub-caption')).toHaveText('Commands');
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('hub-fixture-shortcuts') ?? '[]'))).toEqual([{ id: 'maps', phrase: 'my map', pinned: true }, stored[1]]);
+  await expect(page.locator('.hub-caption')).toHaveText('Commands');
+  await expect(page.locator('#hub input[role=combobox]')).toBeFocused();
+});
+
+
+test('pins keep each storage owner limit and preserve unresolved references while another owner changes (HUB-090)', async ({ page }) => {
+  const global = [{ id: 'maps', phrase: '', pinned: true }, ...Array.from({ length: 63 }, (_, index) => ({ id: `place:${10000 + index}`, phrase: '', pinned: true }))];
+  await page.addInitScript(value => localStorage.setItem('hub-fixture-shortcuts', JSON.stringify(value)), global);
+  await page.goto('/?hub');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  const search = page.getByRole('combobox', { name: searchName });
+  await search.fill('team gom afk'); await page.keyboard.press('Meta+j');
+  await page.getByRole('menuitem', { name: 'Pin to Hub' }).click();
+  await expect(page.locator('#hub .hub-status')).toHaveText('Pinned GOM AFK.');
+  expect(JSON.parse(await page.evaluate(() => localStorage.getItem('hub-fixture-shortcuts')) ?? 'null')).toEqual(global);
+  await search.fill('maps'); await page.keyboard.press('Meta+j');
+  await page.getByRole('menuitem', { name: /Set search phrase/ }).click();
+  const phrase = page.getByRole('textbox', { name: 'Search phrase', exact: true });
+  await phrase.fill('my map'); await phrase.press('Enter');
+  await expect(page.locator('#hub .hub-status')).toHaveText('“my map” now finds Maps.');
+  expect(JSON.parse(await page.evaluate(() => localStorage.getItem('hub-fixture-shortcuts')) ?? 'null')).toEqual([{ id: 'maps', phrase: 'my map', pinned: true }, ...global.slice(1)]);
 });

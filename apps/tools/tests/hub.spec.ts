@@ -17,11 +17,16 @@ test('Hub searches, restores the query after actions, and hands off explicitly',
   await expect(search).toBeFocused();
   await search.fill('settings');
   await expect(page.locator('#hub').getByRole('option')).toHaveCount(1);
-  // Settings has nothing beyond its primary, so Actions is disabled in place, never a dead-end page (HUB-043).
-  await expect(page.getByRole('button', { name: 'Actions', exact: true })).toBeDisabled();
+  // A pinnable search result exposes its extra actions in the shared menu.
+  await expect(page.getByRole('button', { name: 'Actions', exact: true })).toBeEnabled();
+  await search.press('Meta+j');
+  await expect(page.getByRole('menuitem', { name: /Pin to Hub/ })).toBeVisible();
+  await page.keyboard.press('Escape');
   await search.press('Enter');
   await expect(dialog).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Settings sections' })).toBeVisible();
+  // A mounted Settings page has only Done; the Actions slot stays disabled (HUB-043).
+  await expect(page.getByRole('button', { name: 'Actions', exact: true })).toBeDisabled();
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', 'Settings');
 });
 
@@ -221,13 +226,48 @@ test('a saved search phrase and pin survive reload and resolve the original item
   await page.getByRole('menuitem', { name: /Set search phrase/ }).click();
   await page.getByRole('textbox', { name: 'Search phrase' }).fill('evening team');
   await page.getByRole('button', { name: 'Save phrase' }).click();
-  await expect(page.getByRole('status')).toHaveText('Saved');
+  await expect(page.locator('#hub .hub-status')).toHaveText('“evening team” now finds GOM AFK.');
   await page.reload();
   await expect(page.locator('#hub').getByRole('option', { name: /GOM AFK/ })).toBeVisible();
   await search.fill('evening team');
   await expect(page.locator('#hub').getByRole('option')).toContainText('GOM AFK');
+  // A phrase finds the team in its own group, not a false "Pinned" one (HUB-062, HUB-177).
+  await expect(page.locator('#hub .hub-group')).toHaveText(['Teams']);
   await search.press('Enter');
   await expect(page.getByRole('heading', { name: 'GOM AFK' })).toBeVisible();
+});
+
+test('a pinned Travel or team row is the row search shows, and → opens it (HUB-177)', async ({ page }) => {
+  await page.goto('/?hub');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const row = (id: string) => page.locator(`#hub .hub-row[data-id="${id}"]`).first();
+  const found: Record<string, string | null> = {};
+  for (const [query, id] of [['travel', 'travel'], ['team gom afk', 'team:hub-gom-afk'], ['commands', 'commands'], ['settings', 'settings'], ['switch account', 'accounts']] as const) {
+    await search.fill(query);
+    await expect(row(id)).toBeVisible();
+    found[id] = await row(id).textContent();
+    await page.keyboard.press('Meta+j');
+    await page.getByRole('menuitem', { name: 'Pin to Hub' }).click();
+  }
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('hub-fixture-shortcuts') ?? '[]').map((entry: { id: string }) => entry.id))).toEqual(['travel', 'commands', 'settings', 'accounts']);
+  await page.reload();
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  await search.fill('');
+  await expect(page.locator('#hub .hub-group').first()).toHaveText('Pinned');
+  for (const [index, [id, caption]] of ([['travel', 'Travel'], ['commands', 'Commands'], ['settings', 'Settings'], ['accounts', 'Accounts'], ['team:hub-gom-afk', 'GOM AFK']] as const).entries()) {
+    // Same detail and the same › cue as its search row.
+    expect(await row(id).textContent()).toBe(found[id]);
+    if (id === 'commands' || id === 'settings') await expect(row(id).locator('.hub-child-cue')).toHaveCount(0);
+    else await expect(row(id).locator('.hub-child-cue')).toHaveText('›');
+    await search.press('Home');
+    for (let step = 0; step < index; step++) await search.press('ArrowDown');
+    await expect(row(id)).toHaveAttribute('aria-selected', 'true');
+    await search.press(id === 'commands' || id === 'settings' ? 'Enter' : 'ArrowRight');
+    await expect(page.locator('.hub-caption')).toHaveText(caption);
+    await page.keyboard.press('Meta+Backspace');
+    await expect(page.locator('.hub-caption')).toHaveText('Home');
+  }
 });
 
 test('Build shortcut browses inside Hub and opens the authoring window outside Hub', async ({ page }) => {

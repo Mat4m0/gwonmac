@@ -81,6 +81,9 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
     if (explorable()) await leaveArea(travelDestination(mapId)?.name ?? guildWarsMapName(mapId), trip);
     else await trip();
   }
+  /** Travel's own search phrases for one place: they find it as exactly as its name. */
+  const phrases = (mapId: number, query: string) => preferences.searchSynonyms(query).filter(entry => entry.mapId === mapId).map(entry => entry.term);
+  const toolRow = (): HubRow => ({ id: 'travel', title: 'Travel', detail: loadError || 'Outposts, favourites, recent places and Guild Hall', group: 'Tools', keywords: 'tp teleport destination', action: 'Browse travel', navigate: open, run: open });
   const source: HubSource = {
     feature: 'travelPalette',
     context() {
@@ -97,17 +100,21 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
       if (state.status !== 'ready') return state.reason === 'loading' ? 'Map loading — Travel returns when the map has loaded' : 'Waiting for Guild Wars — Travel returns in game';
       return explorable() ? 'Explorable area — Travel leaves this area' : null;
     },
-    lookup(id) { const place = travelDestination(Number(id.replace('place:', ''))); return place ? source.search(place.name).find(row => row.id === id) : undefined; },
+    // A pin or phrase shows the row search shows: its detail, its › and its → (HUB-177).
+    lookup(id) {
+      if (id === 'travel') return toolRow();
+      const place = travelDestination(Number(id.replace('place:', '')));
+      return place ? source.search(place.name).find(row => row.id === id) : undefined;
+    },
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
     setVisible(next) { if (next && !visible) void load(); visible = next; },
     search(query) {
       const parsed = parseHubQuery(query);
       if (parsed.scope && parsed.scope !== 'travel') return [];
       query = parsed.term;
-      const tools: HubRow[] = [{ id: 'travel', title: 'Travel', detail: loadError || 'Outposts, favourites, recent places and Guild Hall', group: 'Tools', keywords: 'tp teleport destination', action: 'Browse travel', navigate: open, run: open }];
       // Home ranks every matching place by the shared tier (its catalogue aliases and the
       // player's Travel phrases count as names) before it keeps the best eight (HUB-010, HUB-057).
-      const aliasesOf = (destination: TravelDestination) => [...destination.aliases, ...preferences.synonyms.value.filter(entry => entry.mapId === destination.mapId).map(entry => entry.term)];
+      const aliasesOf = (destination: TravelDestination) => [...destination.aliases, ...preferences.searchSynonyms(query).filter(entry => entry.mapId === destination.mapId).map(entry => entry.term)];
       const matches = query.trim() ? TRAVEL_DESTINATIONS.flatMap(destination => {
         const tier = hubTier({ title: destination.name, aliases: aliasesOf(destination) }, query);
         return tier === null ? [] : [{ destination, tier }];
@@ -131,7 +138,7 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
           detail: query.trim() ? 'Outpost · Any district' : 'Recently visited · Any district',
           group: query.trim() ? 'Places' : 'Continue', action: `Travel to ${destination.name}`, consequential: true, leavesArea: explorable(),
           ...(reason ? { unavailable: reason } : {}), run: async (task: HubTask) => { await travel(destination.mapId); task.done(); } };
-      }), ...more, ...matchHubRows(tools, query)];
+      }), ...more, ...matchHubRows([toolRow()], query)];
     },
   };
   /**

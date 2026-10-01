@@ -5,7 +5,7 @@
 import { currentTravelFriend, type TravelFriend, type TravelFriends } from '../shared/friends.js';
 import type { TravelCommand, TravelGameState } from '../shared/travel-command.js';
 import type { EmbeddedToolsBundle } from '../shared/tools-bundle-contracts.js';
-import { matchHubRows, type HubSource, type HubViewMount } from '../shared/hub.js';
+import { matchHubRows, type HubRow, type HubSource, type HubViewMount } from '../shared/hub.js';
 import { ensureToolsStylesheet } from './tools-stylesheet.js';
 import { askLeaveArea, leaveAreaCopy } from './leave-area.js';
 import { requireToolsApi } from './tools-native-api.js';
@@ -77,9 +77,11 @@ export function createTravelPalette(parent: HTMLElement, command: TravelCommand)
       return () => { active = false; message.remove(); retry.remove(); unmount(); };
     }, () => !disposed && toolOn(), 'travel');
   }
+  /** Travel's row until the lazy bundle loads; a pin shows the same row search shows (HUB-177). */
+  const toolRow = (): HubRow => ({ ...(command.unavailable() ? { unavailable: command.unavailable()! } : {}), id: 'travel', title: 'Travel', detail: 'Outposts, favourites and recent places', group: 'Tools', keywords: 'tp teleport destination', action: 'Browse travel', navigate: open, run: open });
   const source: HubSource = {
     feature: 'travelPalette',
-    lookup: id => app?.source.lookup?.(id),
+    lookup: id => app ? app.source.lookup?.(id) : id === 'travel' ? toolRow() : undefined,
     context: () => app?.source.context?.() ?? null,
     lifecycle: () => app?.source.lifecycle?.() ?? null,
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
@@ -89,8 +91,7 @@ export function createTravelPalette(parent: HTMLElement, command: TravelCommand)
       if (visible) void load().catch(() => { /* The explicit Travel action offers a retry. */ });
     },
     search(query) {
-      const unavailable = command.unavailable();
-      return app?.source.search(query) ?? matchHubRows([{ id: 'travel', title: 'Travel', detail: 'Outposts, favourites and recent places', group: 'Tools', keywords: 'tp teleport destination', action: 'Browse travel', ...(unavailable ? { unavailable } : {}), navigate: open, run: open }], query);
+      return app?.source.search(query) ?? matchHubRows([toolRow()], query);
     },
   };
   const onCommand = (event: Event) => {

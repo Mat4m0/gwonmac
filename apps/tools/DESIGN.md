@@ -321,7 +321,8 @@ at its ends and leave a scrolled region such as Build details to scroll natively
 Settings sections are a list: Right enters the first usable control and Left
 returns to the section. Esc at a shortcut conflict answers it like Cancel. The
 Characters search leads its Tab order, and the cards are one Tab stop on the
-selected card. Form fields keep their draft for
+selected card. In a form, Command-Enter runs the view's named primary from any
+field, as Enter does in a text field. Form fields keep their draft for
 the session by page path and field name, unless the stored value they started from
 changed meanwhile. Hub lists keep focus in search and move the active descendant. First entry and restoration are separate: character cards,
 account choices and action lists start on their useful item; search stays optional.

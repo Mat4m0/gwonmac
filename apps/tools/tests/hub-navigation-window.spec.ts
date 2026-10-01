@@ -217,8 +217,8 @@ test('a view whose first buttons are disabled still takes focus, and Command-Bac
   const search = page.locator('.hub-search input');
   await search.fill('hub preferences'); await page.keyboard.down('Enter');
   await expect(page.locator('.hub-caption')).toHaveText('Hub preferences');
-  // Nothing is pinned, so Reset aliases is disabled; focus goes to the first usable control.
-  await expect(page.getByRole('button', { name: 'Reset aliases', exact: true })).toBeDisabled();
+  // Nothing is pinned, so Remove all search phrases is disabled; focus goes to the first usable control.
+  await expect(page.getByRole('button', { name: 'Remove all search phrases…', exact: true })).toBeDisabled();
   await expect(page.getByRole('button', { name: 'Reset Hub position', exact: true })).toBeFocused();
   await page.keyboard.up('Enter');
   expect(await page.evaluate(() => document.activeElement === document.body)).toBe(false);
@@ -501,6 +501,35 @@ test('a held Backspace on a person page or an empty Build Library folder never l
   expect(await page.locator('#hub .hub-row').allTextContents()).toEqual(builds);
   expect(await page.evaluate(() => window.gwFixtureCanvas?.events.length)).toBe(0);
   expect(await page.evaluate(() => window.gwFixtureActions)).toEqual([]);
+});
+
+test('a build in a template folder offers Pin to Hub and a search phrase in Actions (HUB-091)', async ({ page }) => {
+  await page.goto('/?hub');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const crumbs = page.locator('.hub-breadcrumbs');
+  await search.fill('build library'); await search.press('Enter');
+  await search.press('Enter');
+  await expect(crumbs).toHaveText('Home›Build Library›Guild Wars templates');
+  while (!(await selectedRow(page).textContent())?.startsWith('Monk')) await search.press('ArrowDown');
+  await search.press('Enter');
+  await expect(crumbs).toHaveText('Home›Build Library›Guild Wars templates›Monk');
+  await search.fill('protection');
+  await expect(selectedRow(page)).toHaveAttribute('data-id', /^build:/);
+  const id = (await selectedRow(page).getAttribute('data-id'))!;
+  await page.keyboard.press('Meta+j');
+  const menu = page.getByRole('menu', { name: 'Actions' });
+  await expect(menu.getByRole('menuitem')).toHaveText([/^Choose target/, 'Show build details', 'Pin to Hub', 'Set search phrase…']);
+  await menu.getByRole('menuitem', { name: 'Pin to Hub' }).click();
+  await expect(page.locator('#hub .hub-status')).toHaveText('Pinned Protection.');
+  await expect(crumbs).toHaveText('Home›Build Library›Guild Wars templates›Monk');
+  await page.keyboard.press('Meta+j');
+  await expect(menu.getByRole('menuitem', { name: 'Unpin from Hub' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Home', exact: true }).click();
+  await search.fill('');
+  await expect(page.locator('#hub .hub-group').first()).toHaveText('Pinned');
+  await expect(page.locator(`#hub .hub-row[data-id="${id}"]`)).toBeVisible();
 });
 
 test('Backspace on a selected pinned build only edits the search and keeps the pin (BLD-25)', async ({ page }) => {

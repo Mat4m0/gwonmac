@@ -10,13 +10,13 @@ import { FINDABLE_SETTINGS, focusHubSetting, openHubSettings, type HubSettingsFo
 import { createHubAccounts } from './hub-accounts.js';
 import { hubIcon } from "./hub-icons.js";
 import { openHubMaps } from './hub-maps.js';
-import { editHubShortcut, hubPhraseReserved, manageHubShortcuts } from './hub-preferences.js';
-import { isHubShortcuts, type HubShortcut } from '../shared/hub-preferences.js';
+import { editHubShortcut, manageHubShortcuts } from './hub-preferences.js';
+import { hubPhraseReserved, isHubShortcuts, isLibraryHubShortcut, type HubShortcut } from '../shared/hub-preferences.js';
 import { createHubCalculator } from './hub-calculator.js';
 import { armConfirmation, closeDisclosure, focusable, focusableElements } from './surface-controller.js';
 import { listIndexAfter, listKeyStep } from '../shared/ui/list-keys.js';
 import { createHoverSelection } from '../shared/ui/hover-selection.js';
-import { matchHubRows, parseHubQuery, normaliseHubQuery, hubTier, type HubDestination, type HubRow, type HubSource, type HubSummary, type HubTask, type HubViewAction, type HubViewFooter, type HubViewMount } from '../shared/hub.js';
+import { hubMatch, matchHubRows, parseHubQuery, normaliseHubQuery, hubTier, type HubDestination, type HubRow, type HubSource, type HubSummary, type HubTask, type HubViewAction, type HubViewFooter, type HubViewMount } from '../shared/hub.js';
 export function createHub(parent: HTMLElement) {
   const document = parent.ownerDocument;
   const root = document.createElement('dialog');
@@ -228,7 +228,7 @@ export function createHub(parent: HTMLElement) {
     }
   };
   /** The command rows; `every` includes those an empty Home leaves out, so pins and phrases still resolve. */
-  const commands = (every = false): HubRow[] => {
+  const commands = (every = false, query = input.value): HubRow[] => {
     const settings = window.gwToolsSettings?.();
     const tool = (id: string, title: string, detail: string, keywords: string, enabled: boolean | undefined, event: string): HubRow[] => enabled ? [{
       id, title, keywords, detail, group: 'Tools', action: id === 'storage' ? 'Open Xunlai Storage' : `Open ${title}`,
@@ -243,14 +243,14 @@ export function createHub(parent: HTMLElement) {
       ...tool('storage', 'Open Xunlai Storage', 'Open your storage chest', 'chest bank', settings?.gwonmacTools && settings.xunlaiStorage, 'gw:storage-open'),
       ...(settings?.gwonmacTools && settings.cartographyEnabled ? [{ id: 'maps', title: 'Maps', detail: 'Exploration grid, walkable terrain and compass ranges', keywords: 'grid terrain compass opacity', group: 'Tools', action: 'Adjust maps', run: () => openHubMaps(presenter) }] : []),
       { id: 'commands', title: 'Commands', detail: 'Search words, calculator examples and keys', aliases: ['?'], keywords: 'help guide examples cheatsheet shortcuts keys', group: 'Commands', action: 'Browse commands', run: () => presenter.showRows('Commands', commandExamples) },
-      { id: 'hub-preferences', title: 'Hub preferences', detail: 'Pins and exact search phrases', keywords: 'aliases vocabulary', group: 'Commands', action: 'Adjust Hub', run: () => manageHubShortcuts(presenter, shortcuts, lookup, saveShortcuts, hubWindow.reset) },
+      { id: 'hub-preferences', title: 'Hub preferences', detail: 'Pins and exact search phrases', keywords: 'aliases vocabulary', group: 'Commands', action: 'Adjust Hub', run: () => manageHubShortcuts(presenter, shortcutStore, hubWindow.reset) },
       { id: 'settings', title: 'Settings', detail: 'Game, appearance, tools, shortcuts and maps', keywords: 'preferences graphics appearance hotkeys', group: 'Commands', action: 'Open Settings', run: () => openSettings() },
       // Launcher and the website are for a typed search; the first screen stays on the game (HUB-185).
-      ...(!every && !input.value.trim() ? [] : [
+      ...(!every && !query.trim() ? [] : [
         { id: 'launcher', title: 'Show Launcher', detail: 'Accounts, updates and game files', keywords: 'launcher administration', group: 'Commands', action: 'Show Launcher', run: async () => { await window.gwNative.app.showLauncher(); close(); } },
         { id: 'help', title: 'Project website', detail: 'Documentation and latest changes', keywords: 'help documentation', group: 'Commands', action: 'Open website', run: async () => { await window.gwNative.app.openExternal('github'); close(); } },
       ]),
-      ...(!every && !input.value.trim() ? [] : [
+      ...(!every && !query.trim() ? [] : [
         // Call Target stays on its own shortcut: it acts only while the game has focus (HUB-133).
         // Resign's row comes from its owner, with its refusal before Enter (resign.ts).
         // Quit or Reload opens the account's confirmation sheet, never a direct quit (HUB-001).
@@ -258,20 +258,29 @@ export function createHub(parent: HTMLElement) {
         { id: 'reload', title: 'Quit or Reload Game…', detail: 'Opens confirmation for this account', keywords: 'restart reconnect', group: 'Commands', action: 'Review options', run: async () => { close(); await window.gwSurfaces.afterPress(); await window.gwNative.app.showQuitOrReload(); } },
         // Settings are found by their own words and open with their control focused (HUB-063).
         // They follow the commands, so a command's own word keeps its row first.
-        ...(normaliseHubQuery(input.value).length < 3 ? [] : FINDABLE_SETTINGS).filter(setting => !setting.shown || (settings && setting.shown(settings))).map(setting => ({ id: `setting:${setting.label}`, title: setting.label, detail: `Settings › ${setting.section}`, keywords: `setting ${setting.keywords ?? ''}`, group: 'Settings', action: 'Open setting', run: () => openSettings({ section: setting.section, control: setting.label }) })),
+        ...(normaliseHubQuery(query).length < 3 ? [] : FINDABLE_SETTINGS).filter(setting => !setting.shown || (settings && setting.shown(settings))).map(setting => ({ id: `setting:${setting.label}`, title: setting.label, detail: `Settings › ${setting.section}`, keywords: `setting ${setting.keywords ?? ''}`, group: 'Settings', action: 'Open setting', run: () => openSettings({ section: setting.section, control: setting.label }) })),
       ]),
     ];
   };
   const shortcuts = () => [...(window.gwToolsSettings?.().hubShortcuts ?? []), ...[...sources.keys()].filter(sourceEnabled).flatMap(source => source.shortcuts?.get() ?? [])];
   const lookup = (id: string): HubRow | undefined => [...sources.keys()].filter(sourceEnabled).map(source => source.lookup?.(id)).find(Boolean)
     ?? commands(true).find(row => row.id === id);
+  /**
+   * The other result a root search for this phrase already finds by its exact name or alias. A
+   * search phrase equal to it would hide it or make both ambiguous, so the editor refuses it (HUB-062).
+   */
+  function exactlyNamed(phrase: string, id: string): HubRow | undefined {
+    const found = [...[...sources.keys()].filter(sourceEnabled).flatMap(source => source.search(phrase)), ...commands(true, phrase)];
+    return found.find(row => row.id !== id && hubMatch(row.title, phrase, row.aliases) === 'exact');
+  }
+  const shortcutStore = { get: () => shortcuts(), lookup, save: saveShortcuts, exactlyNamed };
   async function saveShortcuts(value: readonly HubShortcut[]) {
-    if (!isHubShortcuts(value)) throw new Error('Invalid Hub shortcuts');
-    const privateEntries = value.filter(entry => /^(build|team):/u.test(entry.id));
+    const privateEntries = value.filter(entry => isLibraryHubShortcut(entry.id));
+    const globalEntries = value.filter(entry => !isLibraryHubShortcut(entry.id));
+    if (!isHubShortcuts(privateEntries) || !isHubShortcuts(globalEntries)) throw new Error('Invalid Hub shortcuts');
     const owner = [...sources.keys()].find(source => sourceEnabled(source) && source.shortcuts);
     if (owner?.shortcuts && JSON.stringify(privateEntries) !== JSON.stringify(owner.shortcuts.get())) await owner.shortcuts.save(privateEntries);
     else if (privateEntries.length && !owner) throw new Error('Build Library is unavailable.');
-    const globalEntries = value.filter(entry => !/^(build|team):/u.test(entry.id));
     if (JSON.stringify(globalEntries) !== JSON.stringify(window.gwToolsSettings?.().hubShortcuts ?? [])) await window.gwNative.settings.set({ hubShortcuts: globalEntries });
     refresh();
   }
@@ -413,8 +422,8 @@ export function createHub(parent: HTMLElement) {
     else if (viewArming?.label !== action.label) {
       viewArming?.arming.disarm(); viewArming = { label: action.label, arming: armConfirmation(primary) }; viewArming.arming.arm();
     }
-    slotLabel(actionsButton, viewFooter.secondary?.label ?? 'Actions');
-    disableSlot(actionsButton, !viewFooter.secondary || !!viewFooter.secondary.disabled || viewRunning);
+    slotLabel(actionsButton, 'Actions', ['⌘', 'J']);
+    disableSlot(actionsButton, menuEntries(undefined).length < 2 || viewRunning);
     count.textContent = '';
     paintLegend(undefined);
     paintBusy();
@@ -567,7 +576,7 @@ export function createHub(parent: HTMLElement) {
     const parsed = parseHubQuery(input.value);
     // A phrase saved before its words joined the grammar stays stored but no longer matches.
     const saved = shortcuts().filter(entry => !parsed.term ? entry.pinned : entry.phrase === parsed.term && !hubPhraseReserved(entry.phrase))
-      .filter(entry => !parsed.scope || entry.id.startsWith(`${parsed.scope}:`));
+      .filter(entry => !parsed.scope || entry.id.startsWith(`${parsed.scope === 'travel' ? 'place' : parsed.scope}:`));
     const savedRows = saved.flatMap(entry => { const row = lookup(entry.id); return row ? [{ ...row, group: parsed.term ? row.group : 'Pinned' }] : []; });
     const ids = new Set([...extra, ...savedRows].map(row => row.id));
     rows = scope ? matchHubRows(extra, input.value) : [...savedRows, ...extra.filter(row => !savedRows.some(saved => saved.id === row.id)), ...(parsed.term && parsed.scope ? commands().filter(row => !ids.has(row.id) && normaliseHubQuery(row.title) === normaliseHubQuery(input.value)) : matchHubRows(commands().filter(row => !ids.has(row.id)), input.value))];
@@ -900,6 +909,11 @@ export function createHub(parent: HTMLElement) {
     if (!event.defaultPrevented && field && event.target instanceof HTMLElement && event.target !== field && !event.target.isContentEditable
       && !event.target.matches('input,textarea,select') && !event.target.closest('[data-hub-form]')
       && !(event.key === ' ' && event.target.matches('button,summary')) && resumeSearchInput(event, field)) return;
+    // ⌘↵ submits a form from any of its fields: the view's named primary, as Enter in a text field (HUB-152).
+    if (event.key === 'Enter' && event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && !event.defaultPrevented && !event.isComposing
+      && viewFooter?.primary && event.target instanceof HTMLElement && content.contains(event.target) && event.target.closest('form')) {
+      event.preventDefault(); if (!event.repeat) void runViewAction(viewFooter.primary, event); return;
+    }
     if (event.defaultPrevented || event.isComposing || event.metaKey || event.ctrlKey || event.altKey) return;
     const target = event.target instanceof HTMLElement ? event.target : null;
     if (!target || target === required<HTMLElement>('.hub-resize')) return;
@@ -960,28 +974,42 @@ export function createHub(parent: HTMLElement) {
    * A row's Actions, verb first: its primary (↵), a second way into it (build details, rates),
    * then pinning and a search phrase for rows the Hub can keep (HUB-040, HUB-184).
    */
-  function menuEntries(row: HubRow): MenuEntry[] {
+  function menuEntries(row: HubRow | undefined): MenuEntry[] {
+    if (viewFooter) {
+      const primary = viewFooter.primary ?? done;
+      return [
+        { label: primary.label, section: 'Primary', keys: ['↵'], destructive: !!primary.destructive, disabled: !!primary.disabled,
+          run: () => runViewAction(primary) },
+        ...(viewFooter.secondary ? [{ label: viewFooter.secondary.label, section: 'Details' as const,
+          destructive: !!viewFooter.secondary.destructive, disabled: !!viewFooter.secondary.disabled,
+          run: () => runViewAction(viewFooter?.secondary ?? null) }] : []),
+      ];
+    }
+    if (!row) return [];
     const entries: MenuEntry[] = [{ label: row.action, section: 'Primary', keys: ['↵'], ...(row.destructive ? { destructive: true } : {}), disabled: !!row.unavailable, run: () => run() }];
     if (row.skills || scope?.summary?.skills) entries.push({ label: 'Show build details', section: 'Details', run: () => showBuildDetails(row) });
     else if (row.actions && row.actionsLabel) entries.push({ label: row.actionsLabel, section: 'Details', run: () => row.actions?.() });
-    if (!scope && isHubShortcuts([{ id: row.id, phrase: '', pinned: false }])) {
+    // Any page offers them for a row the Hub can keep and find again, e.g. a build in a template folder (HUB-091).
+    if (isHubShortcuts([{ id: row.id, phrase: '', pinned: false }]) && lookup(row.id)) {
       const pinned = shortcuts().some(entry => entry.id === row.id && entry.pinned);
       entries.push({ label: pinned ? 'Unpin from Hub' : 'Pin to Hub', section: 'Personalize', run: async () => {
+        const task = startTask();
         const entries = shortcuts(); const old = entries.find(entry => entry.id === row.id);
-        try { await saveShortcuts([...entries.filter(entry => entry.id !== row.id), { id: row.id, phrase: old?.phrase ?? '', pinned: !old?.pinned }]); report(pinned ? `Unpinned ${row.title}.` : `Pinned ${row.title}.`); }
-        catch { report('Could not update the pin. Try again.', true); }
+        const edited = { id: row.id, phrase: old?.phrase ?? '', pinned: !old?.pinned };
+        try { await saveShortcuts(old ? entries.map(entry => entry.id === row.id ? edited : entry) : [...entries, edited]); const receipt = pinned ? `Unpinned ${row.title}.` : `Pinned ${row.title}.`; if (task.live()) report(receipt); else task.done(receipt); }
+        catch { task.fail(new Error('Could not update the pin. Try again.')); }
       } });
-      entries.push({ label: 'Set search phrase…', section: 'Personalize', run: () => editHubShortcut(presenter, row, shortcuts, saveShortcuts, () => !!lookup(row.id)) });
+      entries.push({ label: 'Set search phrase…', section: 'Personalize', run: () => editHubShortcut(presenter, row, shortcutStore, () => !!lookup(row.id)) });
     }
     return entries;
   }
   /** Opens the selected row's Actions over the footer; the page, query and selection stay. */
   function openMenu() {
     const row = rows.find(row => row.id === selected);
-    if (viewFooter || busy() || !row) return;
+    if (busy() || viewRunning || (!viewFooter && !row)) return;
     const entries = menuEntries(row);
     if (entries.length < 2) return;
-    menu.replaceChildren(); menuRow = row.id;
+    menu.replaceChildren(); menuRow = row?.id ?? null;
     let section = '';
     for (const entry of entries) {
       if (entry.section !== section) { section = entry.section; const heading = document.createElement('p'); heading.className = 'hub-menu-section'; heading.setAttribute('role', 'presentation'); heading.textContent = section; menu.append(heading); }
@@ -1022,9 +1050,9 @@ export function createHub(parent: HTMLElement) {
     event.preventDefault(); event.stopPropagation();
     if (!event.repeat && !closeMenu()) openMenu();
   });
-  // In a view the Actions slot is the view's named secondary.
+  // Views and row pages use the same Actions menu and fixed footer slot.
   // A double-click's second press never toggles the menu shut or runs anything (PTR-17).
-  actionsButton.onclick = event => { if (event.detail > 1) return; if (viewFooter) void runViewAction(viewFooter.secondary, event); else if (!closeMenu()) openMenu(); };
+  actionsButton.onclick = event => { if (event.detail > 1) return; if (!closeMenu()) openMenu(); };
   required<HTMLButtonElement>('.hub-close').onclick = () => close();
   // The primary acts once per click run, so a double-click on it runs its action once.
   backButton.onclick = back;
@@ -1075,6 +1103,7 @@ export function createHub(parent: HTMLElement) {
     const shell: HubViewFooter = {
       primary: next => { state.primary = next; if (viewFooter === state) paintViewFooter(); },
       secondary: next => { state.secondary = next; if (viewFooter === state) paintViewFooter(); },
+      openActions: () => { if (viewFooter === state) openMenu(); },
       own: () => { state.own = true; if (viewFooter === state) paintViewFooter(); },
     };
     paintViewFooter();

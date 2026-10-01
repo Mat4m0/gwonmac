@@ -92,7 +92,9 @@ export function createHubAccounts(hub: AccountsHub, api: { get(): Promise<HubAcc
         ...(unavailable ? { unavailable } : { navigate: choose }), run: choose };
     });
   };
+  const accountRow = (): HubRow => ({ id: 'accounts', title: 'Switch Account', detail: 'Open another saved account or switch to it', group: 'Tools', action: 'Browse accounts', navigate: showAccounts, run: showAccounts });
   return {
+    lookup: id => id === 'accounts' ? accountRow() : undefined,
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
     setVisible(next) {
       if (next && !visible) void load();
@@ -113,7 +115,7 @@ export function createHubAccounts(hub: AccountsHub, api: { get(): Promise<HubAcc
         return matched;
       }
       if (query && hubMatch('Switch Account', query, ['acc', 'accounts']) === null) return [];
-      return [{ id: 'accounts', title: 'Switch Account', detail: 'Open another saved account or switch to it', group: 'Tools', action: 'Browse accounts', navigate: showAccounts, run: showAccounts }];
+      return [accountRow()];
     },
   };
 }

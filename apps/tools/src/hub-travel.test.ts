@@ -67,6 +67,18 @@ describe('Hub travel recents', () => {
     } finally { travel.dispose(); }
   });
 
+  it('names a place by its Travel search phrase as exactly as by its name, so Hub refuses that phrase for another result (HUB-062)', async () => {
+    const host = createDemoTravelHost();
+    const hub = { showView: vi.fn(), showRows: vi.fn(), attach: vi.fn(), close: vi.fn(), notify: vi.fn() };
+    const travel = createHubTravel(host, hub);
+    try {
+      await host.savePreferences({ synonyms: [{ term: 'home', mapId: 194 }] });
+      travel.source.setVisible(true);
+      await vi.waitFor(() => expect(travel.source.search('home').map(row => row.id)).toContain('place:194'));
+      expect(travel.source.search('home').find(row => row.id === 'place:194')?.aliases).toEqual(['home']);
+    } finally { travel.dispose(); }
+  });
+
   it('reports a trip that fails after the quiet close once, and keeps success quiet (HUB-072)', () => {
     const host = createDemoTravelHost();
     const hub = { showView: vi.fn(), showRows: vi.fn(), attach: vi.fn(), close: vi.fn(), notify: vi.fn() };

@@ -305,7 +305,7 @@ test('a team apply that fails after the player moved on names the team and keeps
   expect(source!.search('team gom afk')[0]!.detail).toBe('Partly applied · Review');
   source!.search('team gom af')[0]!.run(task);
   const target = document.createElement('div');
-  review!(target, () => {}, { primary() {}, secondary() {}, own() {} });
+  review!(target, () => {}, { primary() {}, secondary() {}, openActions() {}, own() {} });
   expect(target.querySelector('[role=status]')?.textContent).toMatch(/Synthetic interruption/);
   expect(source!.search('team gom afk')[0]!.detail).toBe('Partly applied · Review');
   app.unmount();

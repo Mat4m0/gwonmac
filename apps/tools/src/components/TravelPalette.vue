@@ -116,7 +116,7 @@ type GuildHallSearchResult = Readonly<{
 }>;
 type SearchResult = DestinationSearchResult | FriendSearchResult | GuildHallSearchResult;
 const catalogueResults = computed(() => hasQuery.value
-  ? searchTravelDestinations(query.value, synonyms.value)
+  ? searchTravelDestinations(query.value, travelPreferences.searchSynonyms(query.value))
   : []
 );
 const availability = (mapId: number) =>
