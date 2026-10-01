@@ -26,6 +26,7 @@ export function createHubPeople(hub: Pick<Hub, 'attach' | 'showRows' | 'notify'>
   travel: FriendTravel | null, party: PartyInvite | null = null) {
   let friends: TravelFriends = { status: 'waiting', reason: 'unavailable' };
   let enabled = false;
+  let disposed = false;
   let detach: (() => void) | null = null;
   const listeners = new Set<() => void>();
   const refresh = () => { for (const listener of listeners) listener(); };
@@ -105,9 +106,10 @@ export function createHubPeople(hub: Pick<Hub, 'attach' | 'showRows' | 'notify'>
             ...(travelInvite ? { unavailable: travelInvite } : {}), run: async task => {
               if (!selectedFriend || selectedFeed.status !== 'ready') throw new Error('Friend travel is unavailable');
               const { invited } = await party.travelAndInvite(selectedFriend, selectedFeed.generation);
+              if (disposed) return;
               task.done(`Travelling to ${place}. Hub sends /invite ${target} on arrival.`);
-              invited.then(() => hub.notify(`Sent /invite ${target}. Guild Wars answers in chat.`),
-                error => hub.notify(error instanceof Error ? error.message : 'The invite was not sent.', 'failed'));
+              invited.then(() => { if (!disposed) hub.notify(`Sent /invite ${target}. Guild Wars answers in chat.`); },
+                error => { if (!disposed) hub.notify(error instanceof Error ? error.message : 'The invite was not sent.', 'failed'); });
             } });
         }
       }
@@ -214,6 +216,6 @@ export function createHubPeople(hub: Pick<Hub, 'attach' | 'showRows' | 'notify'>
       else { detach?.(); detach = null; friends = { status: 'waiting', reason: 'unavailable' }; }
     },
     updateFriends(next: TravelFriends) { friends = next; refresh(); },
-    dispose() { window.removeEventListener('gw:travel-failed', travelFailed); window.removeEventListener('gw:whisper-person', contact); detach?.(); unsubscribe(); unsubscribeParty?.(); listeners.clear(); },
+    dispose() { disposed = true; window.removeEventListener('gw:travel-failed', travelFailed); window.removeEventListener('gw:whisper-person', contact); detach?.(); unsubscribe(); unsubscribeParty?.(); listeners.clear(); },
   };
 }
