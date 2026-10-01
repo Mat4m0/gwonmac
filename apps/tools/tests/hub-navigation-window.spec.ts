@@ -160,6 +160,19 @@ test('one list move keeps focus in search: arrows, Control-N/P, pages and ends n
   await expect(search).toHaveAttribute('aria-activedescendant', 'hub-result-0');
   // The results scroller is no Tab stop (HUB-045).
   await expect(page.locator('#hub-results')).toHaveAttribute('tabindex', '-1');
+  await search.fill('build smiter'); await search.press('Enter');
+  await search.fill('hero'); await search.press('Enter');
+  await expect(page.locator('.hub-caption')).toHaveText('Heroes');
+  await search.press('End');
+  await expect(selected).toContainText('Zhed Shadowhoof');
+  await expect(selected).toBeInViewport();
+  await expect(search).toBeFocused();
+  await search.press('Home');
+  await expect(selected).toContainText('Livia');
+  await search.press('Control+n');
+  await expect(selected).toContainText('Master of Whispers');
+  await expect(search).toBeFocused();
+  await page.keyboard.press('Meta+r'); await search.fill('');
   // A click on a navigational row opens it and leaves the keyboard in search.
   await page.locator('.hub-row[data-id="commands"]').click();
   await expect(page.locator('.hub-caption')).toHaveText('Commands');
@@ -608,4 +621,33 @@ test('a held Backspace empties Travel\'s search and leaves Travel, its picker an
   await page.keyboard.press('Meta+Backspace');
   await expect(caption).toHaveText('Home');
   await expect(search).toHaveValue('trav');
+});
+
+test('Hub and Whispers restore bottom-right placement after shrinking without storage writes (HUB-109)', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/?hub');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  await page.evaluate(() => {
+    localStorage.setItem('gwonmac.hub-window-placement', JSON.stringify({ formatVersion: 1, left: 1, top: 1, width: 500 / 1264, height: 450 / 784 }));
+    localStorage.setItem('gwonmac.whispers-window-placement', JSON.stringify({ formatVersion: 1, left: 1, top: 1, width: 350 / 1264, height: 400 / 784 }));
+  });
+  await page.reload();
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  await page.locator('.hub-search input').fill('whisper Romi'); await page.keyboard.press('Enter');
+  await expect(page.locator('#whisper-window')).toBeVisible();
+  await page.keyboard.press('Meta+r');
+  const windows = page.locator('.hub-panel, #whisper-window');
+  const geometry = () => windows.evaluateAll(elements => elements.map(element => {
+    const box = element.getBoundingClientRect(); return { x: box.x, y: box.y, width: box.width, height: box.height };
+  }));
+  const storage = () => page.evaluate(() => Object.fromEntries(Object.entries(localStorage)));
+  await expect(windows).toHaveCount(2);
+  const before = await geometry(); const saved = await storage();
+  expect(before).toEqual([{ x: 772, y: 342, width: 500, height: 450 }, { x: 922, y: 392, width: 350, height: 400 }]);
+  await page.setViewportSize({ width: 900, height: 600 });
+  await expect(page.locator('.hub-panel')).toBeInViewport(); await expect(page.locator('#whisper-window')).toBeInViewport();
+  expect(await storage()).toEqual(saved);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await expect.poll(geometry).toEqual(before);
+  expect(await storage()).toEqual(saved);
 });

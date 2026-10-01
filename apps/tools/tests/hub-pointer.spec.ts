@@ -222,6 +222,18 @@ test.describe('a navigational row', () => {
     await expect(page.locator('.hub-build-review')).toBeFocused();
     await expect(page.getByRole('heading', { name: 'GOM AFK', exact: true, level: 2 })).toBeInViewport();
     expect(await page.locator('.hub-view').evaluate(view => view.scrollTop)).toBe(0);
+    await page.getByLabel('Lifecycle state', { exact: true }).selectOption('pve-explorable');
+    await page.keyboard.press('Meta+r'); await search(page).fill('team gom afk'); await search(page).press('ArrowRight');
+    await expect(page.locator('.hub-build-review [role=status]')).toHaveText('Enter an outpost to apply this team.');
+    await expect(page.locator('.hub-build-review [role=status]')).toBeInViewport();
+    await expect(page.locator('#hub :focus')).toBeEnabled();
+    await expect(page.locator('.hub-build-review')).toBeFocused();
+    await expect(primary(page)).toBeDisabled();
+    await page.getByLabel('Lifecycle state', { exact: true }).selectOption('outpost');
+    await search(page).fill('team gom afk'); await search(page).press('ArrowRight');
+    await expect(primary(page)).toBeEnabled();
+    // HUB-084 intentionally makes the review the entry focus; the named footer remains runnable.
+    await expect(page.locator('.hub-build-review')).toBeFocused();
     expect(await ledger(page)).toEqual([]);
     await clicks(page, primary(page), 3);
     await expect.poll(() => ledger(page)).toEqual(expect.arrayContaining(['apply-team']));
@@ -518,6 +530,26 @@ test('Accounts: a double-click on an account opens its page on Open Second and r
 });
 
 test('Hub preferences: Move up keeps focus and a double-click moves the same pin twice (PTR-12)', async ({ page }) => {
+  for (const pins of [[], ['place:449'], ['place:449', 'place:194', 'place:642']]) {
+    await page.goto('/?hub');
+    await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+    await page.evaluate(pins => localStorage.setItem('hub-fixture-shortcuts', JSON.stringify(pins.map(id => ({ id, phrase: '', pinned: true })))), pins);
+    await open(page); await enter(page, 'hub preferences');
+    const active = page.locator('.hub-view :focus');
+    await expect(active).toBeEnabled(); await expect(active).toBeVisible();
+    await page.locator('.hub-back').focus(); await page.keyboard.press('ArrowDown');
+    await expect(active).toBeEnabled(); await expect(active).toBeVisible();
+    if (pins.length) {
+      const list = page.getByRole('listbox', { name: 'Pins and search phrases' });
+      await list.focus();
+      await page.keyboard.press('Meta+j');
+      await page.getByRole('menuitem', { name: 'Remove Kamadan, Jewel of Istan…', exact: true }).click();
+      await expect(primary(page)).toHaveAttribute('data-armed', '');
+      await primary(page).click();
+      await expect(caption(page)).toHaveText('Hub preferences');
+      await expect(active).toBeEnabled(); await expect(active).toBeVisible();
+    }
+  }
   await page.goto('/?hub');
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
   await page.evaluate(() => localStorage.setItem('hub-fixture-shortcuts', JSON.stringify(['place:449', 'place:194', 'place:642'].map(id => ({ id, phrase: '', pinned: true })))));
@@ -863,4 +895,19 @@ test('Clear search cannot reuse a previous Travel destination click (HUB-242)', 
   await expect(page.locator('#travel-search-input')).toHaveValue('');
   await expect(page.locator('.hub-caption')).toHaveText('Travel');
   expect(await ledger(page)).toEqual([]);
+});
+
+// HUB-052: pointer origin decides dismissal; a backdrop click suspends the mounted task.
+test('dragging out preserves the Hub query, and a backdrop click resumes the same task', async ({ page }) => {
+  await open(page); await page.keyboard.press('Meta+b'); await search(page).fill('smiter');
+  const inside = (await search(page).boundingBox())!;
+  await page.mouse.move(inside.x + 10, inside.y + 10); await page.mouse.down();
+  await page.mouse.move(20, 20, { steps: 4 }); await page.mouse.up();
+  await expect(page.locator('#hub')).toBeVisible();
+  await expect(search(page)).toHaveValue('smiter');
+  await page.mouse.click(20, 20);
+  await expect(page.locator('#hub')).toBeHidden();
+  await page.keyboard.press('Meta+r');
+  await expect(caption(page)).toHaveText('Build Library');
+  await expect(search(page)).toHaveValue('smiter'); await expect(search(page)).toBeFocused();
 });

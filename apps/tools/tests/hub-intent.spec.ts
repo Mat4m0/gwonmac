@@ -126,6 +126,24 @@ test('Travel and Settings restore their own state after a temporary hide', async
   await page.evaluate(() => window.dispatchEvent(new Event('blur')));
   await page.getByRole('button', { name: 'Open Hub', exact: true }).click();
   await expect(page.getByLabel('Panel style', { exact: true })).toBeFocused();
+  await page.keyboard.press('Meta+r');
+  await search.fill('team gom afk'); await page.keyboard.press('Meta+j');
+  await page.getByRole('menuitem', { name: /Set search phrase/ }).click();
+  const phrase = page.getByRole('textbox', { name: 'Search phrase', exact: true });
+  await phrase.fill('smite now');
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await page.keyboard.press('Meta+r');
+  await expect(phrase).toHaveValue('smite now');
+  await expect(phrase).toBeFocused();
+  await page.keyboard.press('Meta+r');
+  await search.fill('rates'); await search.press('Enter');
+  await page.getByRole('combobox', { name: 'Rate source' }).selectOption('manual');
+  const rate = page.getByRole('textbox', { name: 'Gold per ectoplasm' });
+  await rate.fill('7500');
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await page.keyboard.press('Meta+r');
+  await expect(rate).toHaveValue('7500');
+  await expect(rate).toBeFocused();
 });
 
 test('Hub placement survives reload, stays locked, and resets durably', async ({ page }) => {
@@ -817,6 +835,11 @@ test.describe('Characters: typing never switches', () => {
     await expect(page.locator('#hub')).toBeHidden();
     await page.keyboard.press('Meta+r');
     await expect(page.locator('.hub-caption')).toHaveText('Characters');
+    await page.keyboard.press('ArrowRight'); await page.keyboard.press('ArrowRight');
+    await expect(card(page, 'mesmer')).toBeFocused();
+    await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+    await page.keyboard.press('Meta+e');
+    await expect(card(page, 'mesmer')).toBeFocused();
     await page.keyboard.type('2p in g');
     await expect(page.locator('#character-switch-query')).toHaveValue('p in g');
     expect(await action(page)).toBeNull();
@@ -830,6 +853,8 @@ test.describe('Characters: typing never switches', () => {
     const closes: [string, (page: import('@playwright/test').Page) => Promise<void>][] = [
       ['Escape', async page => { await page.keyboard.press('Escape'); await page.keyboard.press('Escape'); }],
       ['the close button', page => page.getByRole('button', { name: 'Close Hub', exact: true }).click()],
+      ['expired backdrop suspension', async page => { await page.mouse.click(20, 20); await page.clock.setFixedTime(new Date(await page.evaluate(() => Date.now()) + 90_001)); }],
+      ['expired blur suspension', async page => { await page.evaluate(() => window.dispatchEvent(new Event('blur'))); await page.clock.setFixedTime(new Date(await page.evaluate(() => Date.now()) + 90_001)); }],
     ];
     for (const [name, close] of closes) {
       await page.keyboard.press('Meta+e');
@@ -1011,6 +1036,16 @@ test.describe('Characters: typing never switches', () => {
 
   // HUB-034, HUB-075: the confirmation names the character; Stay returns to the row that asked.
   test('Leave this area names the character, and Stay returns to the search that asked', async ({ page }) => {
+    await page.goto('/?hub&lifecycle=pve-explorable');
+    await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+    await page.keyboard.press('Meta+e');
+    await expect(card(page, 'monk')).toBeFocused();
+    await page.keyboard.press('3');
+    await expect(card(page, 'mesmer')).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('heading', { name: 'Leave this area and switch to Fixture Mesmer?', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Leave and switch to Fixture Mesmer', exact: true })).toBeVisible();
+    await page.keyboard.press('Escape');
     for (const width of [1280, 390]) {
       await page.setViewportSize({width, height: 700});
       await page.goto('/?hub&lifecycle=pve-explorable');

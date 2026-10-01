@@ -76,6 +76,23 @@ test.describe('shortcuts through commands.ts', () => {
     await expect(hub).toBeVisible();
     await expect(page.getByRole('navigation', { name: 'Hub breadcrumb' })).toHaveText('Home›Travel');
     await expect(page.getByRole('combobox', { name: 'Destination, phrase, or friend' })).toBeFocused();
+    await page.keyboard.press('Meta+r');
+    await page.keyboard.press('Meta+b');
+    const search = page.locator('.hub-search input');
+    await search.fill('smiter');
+    for (let press = 0; press < 3; press++) await page.keyboard.press('Meta+b');
+    await expect(page.locator('.hub-breadcrumbs')).toHaveText('Home›Build Library');
+    await expect(search).toHaveValue('smiter'); await expect(search).toBeFocused();
+    await page.keyboard.press('Meta+Backspace');
+    await expect(page.locator('.hub-caption')).toHaveText('Home');
+    await search.fill('settings'); await search.press('Enter');
+    await page.getByRole('button', { name: 'Maps', exact: true }).click();
+    await page.evaluate(() => window.gwHub?.openSettings());
+    await page.evaluate(() => window.gwHub?.openSettings());
+    await expect(page.locator('.hub-settings-body h2')).toHaveText('Maps');
+    await expect(page.locator('.hub-breadcrumbs')).toHaveText('Home›Settings');
+    await page.keyboard.press('Meta+Backspace');
+    await expect(page.locator('.hub-caption')).toHaveText('Home');
   });
 
   test('Command-T finds a Travel page opened from Home, and a closed Hub starts Travel fresh', async ({ page }) => {
