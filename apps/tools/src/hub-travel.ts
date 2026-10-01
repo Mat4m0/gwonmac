@@ -118,6 +118,8 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
       // player's Travel phrases count as names) before it keeps the best eight (HUB-010, HUB-057).
       const aliasesOf = (destination: TravelDestination) => [...destination.aliases, ...phrases(destination.mapId, query)];
       const matches = query.trim() ? TRAVEL_DESTINATIONS.flatMap(destination => {
+        // A place outside this character's world is left out, as the Travel view leaves it out (HUB-065).
+        if (travelDestinationAvailability(host.state.value, destination.mapId) === 'outside-context') return [];
         const tier = hubTier({ title: destination.name, aliases: aliasesOf(destination) }, query);
         return tier === null ? [] : [{ destination, tier }];
       }).sort((a, b) => a.tier - b.tier || a.destination.name.localeCompare(b.destination.name)) : [];
