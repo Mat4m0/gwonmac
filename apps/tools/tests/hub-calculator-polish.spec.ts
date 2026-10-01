@@ -14,7 +14,7 @@ test('market basis retains the selected card and keyboard focus in both directio
 });
 
 test('rates accept trading shorthand, command-Enter saves once, and the choice survives reload', async ({ page }) => {
-  await page.goto('/?hub&settings-ms=100');
+  await page.goto('/?hub&settings-ms=1000');
   const search=page.locator('.hub-search input');
   await search.fill('rates'); await search.press('Enter');
   await page.getByRole('combobox',{name:'Rate source'}).selectOption('manual');
