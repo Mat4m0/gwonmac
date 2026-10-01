@@ -93,8 +93,9 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
   const revision = (item: Item) => JSON.stringify(item.kind === 'team' ? [item.value, controller.library.value?.builds] : item.value);
   const playerName = () => { const source = window.gwCharacterSwitch; const state = source?.characters; return source && ['outpost', 'pve-explorable', 'pvp-explorable'].includes(source.context) && state?.status === 'ready' && state.selectedIndex !== null ? state.characters[state.selectedIndex]?.name ?? 'Your character' : 'Your character'; };
   const targetName = (hero: HeroId | null) => hero === null ? playerName() : heroLabel(hero);
+  const sentenceTarget = (hero: HeroId | null) => { const target = targetName(hero); return target === 'Your character' ? 'your character' : target; };
   /** The footer names the build and its target before Enter: "Apply Smiter to Fixture Monk". */
-  const applyAction = (build: Build, hero: HeroId | null) => { const target = targetName(hero); return `Apply ${build.name} to ${target === 'Your character' ? 'your character' : target}`; };
+  const applyAction = (build: Build, hero: HeroId | null) => `Apply ${build.name} to ${sentenceTarget(hero)}`;
   const skillPreview = (build: Pick<Build, 'skills'>) => build.skills.map(id => {
     const skill = id === null ? null : host.skills.get(id);
     return { name: skill?.name ?? (id === null ? 'Empty slot' : `Unknown skill ${id}`), iconUrl: skill?.iconUrl ?? null, elite: skill?.elite ?? false, description: skill?.description ?? null };
@@ -238,8 +239,9 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
       landed = result.completedChanges;
       if (result.skippedSkills.length) throw new Error(`Partly applied. Not equipped: ${result.skippedSkills.map(id => host.skills.get(skillId(id)).name).join(', ')}. Review before retrying.`);
       const saved = next.kind === 'build' ? await controller.recordBuildUse(next.value.id, hero) : true;
-      if (next.kind === 'team' && result.completedChanges === 0) { task.done(`${name} already matches.`); return; }
-      task.done(`${name} applied${next.kind === 'build' ? ` to ${targetName(hero)}` : ''}.${saved ? '' : ' Recent use could not be saved.'}`);
+      const receipt = result.completedChanges === 0 ? `${name} already matches.`
+        : `${name} applied${next.kind === 'build' ? ` to ${sentenceTarget(hero)}` : ''}.`;
+      task.done(`${receipt}${saved ? '' : ' Recent use could not be saved.'}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Application stopped.';
       const partial = landed > 0;

@@ -505,3 +505,46 @@ test('invalid team reviews name the failing slot and open the same saved team in
   expect(selected).toEqual(invalid);
   app.unmount();
 });
+
+
+test('single-build receipts distinguish changes from reapplication and use the sentence target (HUB-183)', async () => {
+  const { createApp, h, nextTick } = await import('vue');
+  const { useLibrary } = await import('./use-library');
+  const { createHubLibrary } = await import('./hub-library');
+  localStorage.removeItem('hub-fixture-library');
+  const commands: string[] = [];
+  const { host } = createHubGameFixture(command => commands.push(command));
+  let failSave = false;
+  const fixtureHost = { ...host, async saveLibrary(value: Parameters<typeof host.saveLibrary>[0]) {
+    if (failSave) throw new Error('Synthetic save refusal');
+    return host.saveLibrary(value);
+  } };
+  let source: import('../../../src/shared/hub').HubSource | undefined;
+  let rows: (() => readonly import('../../../src/shared/hub').HubRow[]) | undefined;
+  const app = createApp({ setup() {
+    createHubLibrary(useLibrary(fixtureHost), fixtureHost, { attach(next) { source = next; return () => {}; }, close() {}, notify() {}, showRows(_title, next) { rows = next; }, showView() {} });
+    return () => h('div');
+  } });
+  app.mount(document.createElement('div')); await nextTick(); await nextTick();
+  const receipts: string[] = [];
+  const apply = async () => {
+    await source!.search('build smiter')[0]!.run(task);
+    expect(rows!()[0]!.action).toBe('Apply Smiter to your character');
+    await rows!()[0]!.run({ live: () => true, progress() {}, done: receipt => { if (receipt) receipts.push(receipt); } });
+  };
+  try {
+    await apply();
+    expect(receipts).toEqual(['Smiter applied to your character.']);
+    const changed = host.party.value.player;
+    const sent = commands.length;
+    await apply();
+    expect(receipts).toEqual(['Smiter applied to your character.', 'Smiter already matches.']);
+    expect(commands.slice(sent)).toEqual(['apply-build']);
+    failSave = true;
+    await apply();
+    expect(receipts.at(-1)).toBe('Smiter already matches. Recent use could not be saved.');
+    host.party.value = { ...host.party.value, player: { ...changed!, attributes: {} } };
+    await apply();
+    expect(receipts.at(-1)).toBe('Smiter applied to your character. Recent use could not be saved.');
+  } finally { app.unmount(); }
+});
