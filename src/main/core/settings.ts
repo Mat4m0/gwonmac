@@ -25,6 +25,8 @@ import {
   UPDATE_TRACKS,
   UI_PANEL_OPACITY_MAX,
   UI_PANEL_OPACITY_MIN,
+  UI_TEXT_SIZE_MIN,
+  UI_TEXT_SIZE_MAX,
   UI_FONTS,
   UI_STYLES,
   type AppSettings,
@@ -171,6 +173,7 @@ export function parseSettings(raw: unknown): AppSettings {
     }
     out.controllerPromptStyle = src.controllerPromptStyle as AppSettings["controllerPromptStyle"];
   }
+  if ("uiTextSize" in src) out.uiTextSize = asBoundedInteger(src.uiTextSize, "uiTextSize", UI_TEXT_SIZE_MIN, UI_TEXT_SIZE_MAX);
   if ("uiPanelOpacity" in src) {
     out.uiPanelOpacity = asBoundedInteger(
       src.uiPanelOpacity,

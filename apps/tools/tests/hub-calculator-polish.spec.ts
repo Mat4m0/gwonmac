@@ -9,7 +9,7 @@ test('market basis retains the selected card and keyboard focus in both directio
     await picker.selectOption(side);
     await expect(picker).toBeFocused();
     await expect(page.locator('.hub-row[aria-selected=true]')).toHaveAttribute('data-id','market:result');
-    await expect(page.getByRole('button',{name:/Copy result/})).toBeEnabled();
+    await expect(page.getByRole('button',{name:/Copy ~ /})).toBeEnabled();
   }
 });
 
@@ -73,7 +73,7 @@ test('defaults label the named copy action and questions stay legible at narrow 
   await page.setViewportSize({width:500,height:650});await page.goto('/?hub');
   const search=page.locator('.hub-search input');await search.fill('1k');
   await expect(page.locator('.hub-conversion')).toContainText('Default target');
-  await expect(page.getByRole('button',{name:/Copy 1000 gold/})).toBeEnabled();
+  await expect(page.getByRole('button',{name:/Copy 1,000 gold/})).toBeEnabled();
   await search.fill('14a per stack in e each');
   await expect(page.locator('.hub-conversion')).toHaveAttribute('aria-label',/^14 a per stack each equals/);
   await expect(page.locator('.hub-conversion-input')).toHaveCSS('white-space','normal');

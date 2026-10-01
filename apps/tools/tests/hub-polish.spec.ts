@@ -35,14 +35,14 @@ test('Home separates current context, teaches commands, and shows resolved short
   await expect(page.locator('.hub-hint')).toContainText('team <name>');
   await search.fill('team gom afk');
   await expect(page.locator('.hub-scope')).toHaveText('team');
-  await expect(page.locator('.hub-legend')).toContainText('Esc Clear');
+  await expect(page.locator('.hub-legend')).toContainText('⎋ Clear');
   await page.getByRole('button', { name: 'Actions', exact: true }).click();
   await expect(page.getByRole('menu', { name: 'Actions' })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('menu', { name: 'Actions' })).toBeHidden();
   await expect(search).toHaveValue('team gom afk');
   await search.press('ArrowRight');
-  await expect(page.locator('.hub-legend')).toContainText('Esc Back');
+  await expect(page.locator('.hub-legend')).toContainText('⎋ Back');
   await expect(page.getByRole('button', { name: 'Back', exact: true })).toHaveAttribute('title', 'Back (⌘⌫)');
   await expect(page.getByRole('button', { name: 'Back', exact: true })).toHaveAttribute('aria-description', 'Return to Home');
   await page.getByRole('button', { name: 'Back', exact: true }).click();
@@ -53,7 +53,7 @@ test('Maps follows external settings and recovers from a failed save', async ({ 
   await page.goto('/?hub');
   const search = page.locator('.hub-search input');
   await search.fill('maps'); await search.press('Enter');
-  const grid = page.getByRole('switch', { name: 'Exploration grid' });
+  const grid = page.getByRole('checkbox', { name: 'Exploration grid' });
   const opacity = page.getByRole('slider', { name: 'Grid opacity' });
   await grid.uncheck();
   await expect(opacity).toBeDisabled();
@@ -62,19 +62,19 @@ test('Maps follows external settings and recovers from a failed save', async ({ 
   await expect(opacity).toBeEnabled();
   await expect(opacity).toHaveValue('45');
   await page.evaluate(() => {
-    const save = window.gwNative.settings.set;
+    const save = window.gwNative.hubSettings.update;
     let fail = true;
-    window.gwNative.settings.set = async patch => {
+    window.gwNative.hubSettings.update = async patch => {
       if (fail) { fail = false; throw new Error('Offline fixture failure'); }
       return save(patch);
     };
   });
   await grid.click();
   await expect(grid).toBeChecked();
-  await expect(page.locator('.hub-map-settings > p[role="status"]')).toContainText('Could not save');
+  await expect(page.locator('.hub-settings-status')).toContainText('Could not save');
   await grid.uncheck();
   await expect(grid).not.toBeChecked();
-  await expect(page.locator('.hub-map-settings > p[role="status"]')).toBeHidden();
+  await expect(page.locator('.hub-settings-status')).toBeEmpty();
 });
 
 // docs/settings.md: every game setting is found by its words and changes in game; the rest is one link away.
@@ -90,6 +90,7 @@ test('a setting is found by its words, changes in game, follows the launcher, an
   await page.keyboard.press('Space');
   await expect(memory).toBeChecked();
   await expect(memory).toBeFocused();
+  await expect(page.locator('.hub-settings')).not.toHaveAttribute('aria-busy','true');
   await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: { extendedMemoryEnabled: false } })));
   await expect(memory).not.toBeChecked();
   await page.getByRole('button', { name: 'Updates, game files and texture packs' }).click();

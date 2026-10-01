@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import { UI_FONTS, UI_PANEL_OPACITY_MIN, UI_PANEL_OPACITY_MAX, type UiFont, type UiStyle } from "@shared/contracts";
+import { UI_FONTS, UI_PANEL_OPACITY_MIN, UI_PANEL_OPACITY_MAX, UI_TEXT_SIZE_MIN, UI_TEXT_SIZE_MAX, type UiFont, type UiStyle } from "@shared/contracts";
 import type { LauncherSettings, LauncherSettingsPatch } from "@shared/launcher-contracts";
 import { UI_THEME_COLOR_FIELDS, decodeCustomUiTheme, encodeCustomUiTheme, defaultCustomUiTheme, type CustomUiTheme, type UiThemeColorField } from "@shared/ui-theme";
 import ColorControl from "./ColorControl.vue";
@@ -37,6 +37,7 @@ async function importTheme() {
   <div class="setting-group">
     <label><span><strong>Panel style</strong></span><select :value="settings.uiStyle" @change="persist({ uiStyle: ($event.currentTarget as HTMLSelectElement).value as UiStyle })"><option value="guild-wars">Guild Wars</option><option value="obsidian">Modern</option><option value="custom">Custom</option></select></label>
     <label><span><strong>Panel font</strong></span><select :value="settings.uiFont" @change="persist({ uiFont: ($event.currentTarget as HTMLSelectElement).value as UiFont })"><option v-for="font in UI_FONTS" :key="font" :value="font">{{ fonts[font] }}</option></select></label>
+    <div class="setting-row"><span><strong>Text size</strong></span><RangeControl label="Text size" :value="settings.uiTextSize" :min="UI_TEXT_SIZE_MIN" :max="UI_TEXT_SIZE_MAX" unit="%" @change="persist({ uiTextSize: $event })" /></div>
     <div class="setting-row"><span><strong>Panel opacity</strong></span><RangeControl label="Panel opacity" :value="settings.uiPanelOpacity" :min="UI_PANEL_OPACITY_MIN" :max="UI_PANEL_OPACITY_MAX" unit="%" @change="persist({ uiPanelOpacity: $event })" /></div>
     <PanelStylePreview :settings="settings" />
     <template v-if="settings.uiStyle === 'custom'">

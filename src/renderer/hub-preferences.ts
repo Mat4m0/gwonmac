@@ -2,6 +2,7 @@
  * Explicit editing of the selected Hub object's search phrase and pin.
  * Keeps presentation separate from canonical game and storage owners.
  */
+import { hubIcon } from './hub-icons.js';
 import { isHubShortcuts, type HubShortcut } from '../shared/hub-preferences.js';
 import { HUB_SCOPES, normaliseHubQuery, type HubPresenter, type HubRow } from '../shared/hub.js';
 import { calculate, parseConversion } from '../shared/hub-calculator.js';
@@ -105,7 +106,10 @@ export function manageHubShortcuts(hub: HubPresenter<HTMLElement>, get: () => re
       visible.forEach((entry, index) => {
         const option = doc.createElement('div'); option.className = 'hub-preference-option'; option.id = `hub-preference-${index}`;
         option.setAttribute('role', 'option'); option.setAttribute('aria-selected', String(entry.id === chosen));
-        option.textContent = `${title(entry)}${entry.phrase ? ` · ${entry.phrase}` : ''}${entry.pinned ? ' · Pinned' : ''}`;
+        const identity = doc.createElement('span'); identity.textContent = `${title(entry)}${entry.phrase ? ` · ${entry.phrase}` : ''}${entry.pinned ? ' · Pinned' : ''}`;
+        const canonical = lookup(entry.id);
+        if (canonical) option.append(hubIcon(doc, canonical));
+        option.append(identity);
         option.onclick = () => { chosen = entry.id; paint(); list.focus({ preventScroll: true }); };
         list.append(option);
         if (entry.id === chosen) { list.setAttribute('aria-activedescendant', option.id); option.scrollIntoView({ block: 'nearest' }); }

@@ -3,7 +3,7 @@
  * Persistence, validation and shortcut conflicts belong to the native preferences owner.
  */
 import { hubIcon } from './hub-icons.js';
-import { UI_FONTS, UI_PANEL_OPACITY_MIN } from '../shared/contracts.js';
+import { UI_FONTS, UI_PANEL_OPACITY_MIN, UI_TEXT_SIZE_MIN, UI_TEXT_SIZE_MAX } from '../shared/contracts.js';
 import type { Hub } from './hub.js';
 import type { HubSettingsChange, HubSettingsPatch, HubSettingsSnapshot } from '../shared/hub-settings.js';
 import { GLOBAL_TOOLS } from '../shared/launcher-contracts.js';
@@ -39,6 +39,7 @@ export const FINDABLE_SETTINGS: readonly Readonly<{ label: string; section: HubS
   ...Object.values(GAME_SETTINGS).map(copy => ({ label: copy.label, section: 'Game' as const, keywords: copy.keywords })),
   { label: 'Panel style', section: 'Appearance', keywords: 'theme modern classic look' },
   { label: 'Panel opacity', section: 'Appearance', keywords: 'transparency' },
+  { label: 'Text size', section: 'Appearance', keywords: 'scale zoom enlarge' },
   { label: 'Panel font', section: 'Appearance', keywords: 'text typeface' },
   { label: 'Enable Tools', section: 'Tools', keywords: 'features' },
   ...CHAT_FILTERS.map(filter => ({ label: filter.label, section: 'Tools' as const, keywords: 'chat filter spam', shown: (settings: Pick<AppSettings, 'gwonmacTools' | 'chatFiltersEnabled'>) => settings.gwonmacTools && settings.chatFiltersEnabled })),
@@ -64,7 +65,7 @@ export function openHubSettings(hub: Hub, focus?: HubSettingsFocus) {
     const api = window.gwNative.hubSettings;
     const sections = HUB_SETTINGS_SECTIONS;
     const buttons = sections.map(name => {
-      const button = doc.createElement('button'); button.type = 'button'; button.textContent = name; button.className = 'ui-button'; button.dataset.section = name;
+      const button = doc.createElement('button'); button.type = 'button'; button.textContent = name; button.className = 'ui-button'; button.dataset.variant = 'quiet'; button.dataset.section = name;
       const icons: Record<HubSettingsSection, string> = { Game: 'game', Tools: 'settings', Appearance: 'appearance', Shortcuts: 'keyboard', Maps: 'maps' };
       button.prepend(hubIcon(doc, { id: icons[name], group: 'Settings' }));
       button.onclick = () => { page = name; lastSection = name; status.textContent = ''; render(); };
@@ -133,7 +134,7 @@ export function openHubSettings(hub: Hub, focus?: HubSettingsFocus) {
       const input = doc.createElement('input'); input.type = 'checkbox'; input.checked = value; input.disabled = disabled;
       input.onchange = () => { save(change(input.checked), title); }; row(title, input, detail, state);
     }
-    function settingToggle(title: string, key: keyof HubSettingsPatch, detail = '') { toggle(title, snapshot?.settings[key] === true, value => ({ kind: 'settings', patch: { [key]: value } }), detail); }
+    function settingToggle(title: string, key: keyof HubSettingsPatch, detail = '', disabled = false) { toggle(title, snapshot?.settings[key] === true, value => ({ kind: 'settings', patch: { [key]: value } }), detail, disabled); }
     /** A row that opens the launcher at the section holding what this section does not show. */
     function launcherLink(title: string, detail: string, section: LauncherSettingsSection) {
       const open = doc.createElement('button'); open.type = 'button'; open.className = 'ui-button'; open.textContent = 'Open in launcher';
@@ -145,8 +146,8 @@ export function openHubSettings(hub: Hub, focus?: HubSettingsFocus) {
       for (const choice of options) { const option = doc.createElement('option'); option.textContent = choice.label; option.value = String(choice.value); input.append(option); }
       input.value = String(snapshot?.settings[key]); input.onchange = () => { const chosen = options.find(choice => String(choice.value) === input.value); if (chosen) save({ kind: 'settings', patch: { [key]: chosen.value } }, title); }; row(title, input, detail);
     }
-    function range(title: string, key: keyof HubSettingsPatch, min = 0) {
-      const wrap = doc.createElement('span'); wrap.className = 'hub-setting-range'; const input = doc.createElement('input'); input.type = 'range'; input.className = 'ui-range'; input.min = String(min); input.max = '100'; input.value = String(snapshot?.settings[key] ?? 100); input.setAttribute('aria-label', title);
+    function range(title: string, key: keyof HubSettingsPatch, min = 0, disabled = false, max = 100) {
+      const wrap = doc.createElement('span'); wrap.className = 'hub-setting-range'; const input = doc.createElement('input'); input.type = 'range'; input.disabled = disabled; input.className = 'ui-range'; input.min = String(min); input.max = String(max); input.value = String(snapshot?.settings[key] ?? 100); input.setAttribute('aria-label', title);
       const output = doc.createElement('span'); const paintValue = () => { output.textContent = `${input.value}%`; input.setAttribute('aria-valuetext', output.textContent); }; paintValue(); input.oninput = paintValue; input.onchange = () => { save({ kind: 'settings', patch: { [key]: Number(input.value) } }, title); }; wrap.append(input, output); row(title, wrap);
     }
     function chooseShortcut(action: ShortcutAction, binding: ShortcutBinding | null) {
@@ -196,6 +197,7 @@ export function openHubSettings(hub: Hub, focus?: HubSettingsFocus) {
         resetPosition.onclick = () => { hub.resetPosition(); status.textContent = 'Hub position and size reset. Window locked.'; };
         row('Reset Hub position', resetPosition, 'Restore the default position and size, and lock the Hub.');
         select('Panel style', 'uiStyle', [{ label: 'Guild Wars', value: 'guild-wars' }, { label: 'Modern', value: 'obsidian' }, { label: 'Your custom theme', value: 'custom' }]);
+        range('Text size', 'uiTextSize', UI_TEXT_SIZE_MIN, false, UI_TEXT_SIZE_MAX);
         range('Panel opacity', 'uiPanelOpacity', UI_PANEL_OPACITY_MIN);
         select('Panel font', 'uiFont', UI_FONTS.map(value => ({ label: value === 'guild-wars' ? 'Guild Wars' : value.charAt(0).toUpperCase() + value.slice(1), value })), 'Changes Hub and other in-game panels. Messages keep a readable text face.');
         launcherLink('Custom colors', 'Edit the colors of Your custom theme.', 'game');
@@ -208,7 +210,7 @@ export function openHubSettings(hub: Hub, focus?: HubSettingsFocus) {
           controls.classList.toggle('is-disabled', !enabled);
           const change = doc.createElement('button'); change.className = 'ui-button'; change.classList.add('hub-shortcut-record'); const caps = shortcutKeycaps(snapshot.shortcuts[action]);
           if (!caps.length) change.textContent = 'Not set';
-          for (const cap of caps) { const key = doc.createElement('kbd'); key.textContent = cap.label; key.title = cap.name; change.append(key); }
+          for (const cap of caps) { const key = doc.createElement('kbd'); key.className = 'ui-kbd'; key.textContent = cap.label; key.title = cap.name; change.append(key); }
           change.title = `Change ${SHORTCUT_LABELS[action]} shortcut: ${caps.map(cap => cap.name).join(' + ') || 'Not set'}`; change.setAttribute('aria-label', SHORTCUT_LABELS[action]);
           // The record button keeps the keyboard while it listens (main owns the keys then), and
           // every outcome returns focus to it, so a second Enter records again (HUB-023).
@@ -230,8 +232,14 @@ export function openHubSettings(hub: Hub, focus?: HubSettingsFocus) {
           controls.append(change, clear, reset); row(SHORTCUT_LABELS[action], controls, enabled ? '' : 'Enable this tool to change its shortcut.');
         }
       } else if (page === 'Maps') {
-        settingToggle('Exploration grid', 'cartographyGridEnabled'); settingToggle('Walkable terrain', 'cartographyOverlayEnabled'); range('Grid opacity', 'cartographyGridOpacity'); range('Terrain opacity', 'cartographyWalkabilityOpacity');
-        settingToggle('Compass ranges', 'compassRangeIndicatorsEnabled'); settingToggle('Earshot range', 'compassRangeEarshotEnabled'); settingToggle('Casting range', 'compassRangeCastEnabled'); settingToggle('Spirit range', 'compassRangeSpiritEnabled'); settingToggle('Extended spirit range', 'compassRangeSpiritExtendedEnabled');
+        const unavailable = !snapshot.tools.configured || !snapshot.tools.features.maps.enabled;
+        settingToggle('Exploration grid', 'cartographyGridEnabled', '', unavailable);
+        range('Grid opacity', 'cartographyGridOpacity', 0, unavailable || !snapshot.settings.cartographyGridEnabled);
+        settingToggle('Walkable terrain', 'cartographyOverlayEnabled', '', unavailable);
+        range('Terrain opacity', 'cartographyWalkabilityOpacity', 0, unavailable || !snapshot.settings.cartographyOverlayEnabled);
+        settingToggle('Compass ranges', 'compassRangeIndicatorsEnabled', '', unavailable);
+        for (const [label, key] of [['Earshot range', 'compassRangeEarshotEnabled'], ['Casting range', 'compassRangeCastEnabled'], ['Spirit range', 'compassRangeSpiritEnabled'], ['Extended spirit range', 'compassRangeSpiritExtendedEnabled']] as const) settingToggle(label, key, '', unavailable || !snapshot.settings.compassRangeIndicatorsEnabled);
+        settingToggle('Elite skills', 'eliteSkillsEnabled', '', unavailable);
         launcherLink('Map styles and range colors', 'Styles, colors, range opacity and the elite skill planner.', 'maps');
       }
     }

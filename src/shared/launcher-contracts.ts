@@ -13,7 +13,7 @@ import type {
   FullDownloadState,
   NoticeCode,
 } from "./contracts.js";
-import { RENDER_SCALES, UI_STYLES, UI_FONTS, CONTROLLER_PROMPT_STYLES, UI_PANEL_OPACITY_MIN, UI_PANEL_OPACITY_MAX } from "./contracts.js";
+import { RENDER_SCALES, UI_STYLES, UI_FONTS, CONTROLLER_PROMPT_STYLES, UI_PANEL_OPACITY_MIN, UI_PANEL_OPACITY_MAX, UI_TEXT_SIZE_MIN, UI_TEXT_SIZE_MAX } from "./contracts.js";
 import {
   COMPASS_RANGE_OPACITY_MAX,
   COMPASS_RANGE_OPACITY_MIN,
@@ -207,6 +207,7 @@ export interface LauncherSettings {
   readonly uiStyle: AppSettings["uiStyle"];
   readonly uiFont: AppSettings["uiFont"];
   readonly uiCustomTheme: AppSettings["uiCustomTheme"];
+  readonly uiTextSize: AppSettings["uiTextSize"];
   readonly uiPanelOpacity: AppSettings["uiPanelOpacity"];
   readonly controllerPromptStyle: AppSettings["controllerPromptStyle"];
   readonly autoCheckUpdates: boolean;
@@ -409,7 +410,7 @@ export function parseLauncherNewsId(value: unknown): string {
 
 export function parseLauncherSettingsPatch(value: unknown): LauncherSettingsPatch {
   const source = exactObject(value, [
-    "uiStyle", "uiFont", "uiCustomTheme", "uiPanelOpacity", "controllerPromptStyle",
+    "uiStyle", "uiFont", "uiCustomTheme", "uiPanelOpacity", "uiTextSize", "controllerPromptStyle",
     "autoCheckUpdates", "updateTrack", "renderScale", "extendedMemoryEnabled", "showDiagnostics",
     "autoRelogAfterReload", "characterSwitchProfession", "characterSwitchLevel",
     "characterSwitchLocation", "skillKeyBindings", "skillCooldownColor", "alcoholTimerPosition",
@@ -439,6 +440,10 @@ export function parseLauncherSettingsPatch(value: unknown): LauncherSettingsPatc
     const theme = normaliseCustomUiTheme(source.uiCustomTheme);
     if (!theme) throw new Error("Custom panel colors are invalid");
     result.uiCustomTheme = theme;
+  }
+  if (source.uiTextSize !== undefined) {
+    if (typeof source.uiTextSize !== "number" || !Number.isInteger(source.uiTextSize) || source.uiTextSize < UI_TEXT_SIZE_MIN || source.uiTextSize > UI_TEXT_SIZE_MAX) throw new Error("Text size must be from 100% to 200%");
+    result.uiTextSize = source.uiTextSize;
   }
   if (source.uiPanelOpacity !== undefined) {
     if (typeof source.uiPanelOpacity !== "number" || !Number.isInteger(source.uiPanelOpacity)

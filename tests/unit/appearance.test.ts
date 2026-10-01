@@ -22,6 +22,11 @@ describe("appearance settings", () => {
     });
   });
 
+  it("scales interface text without scaling the game and removes the override at 100%", () => {
+    assert.equal(appearanceVariables({ ...DEFAULT_SETTINGS, uiTextSize: 200 })["--ui-text-scale"], "2");
+    assert.equal(appearanceVariables(DEFAULT_SETTINGS)["--ui-text-scale"], undefined);
+  });
+
   it("projects untouched custom palettes exactly like their built-in material", () => {
     for (const [material, uiStyle] of [
       ["classic", "guild-wars"],

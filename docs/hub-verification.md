@@ -65,9 +65,9 @@ Build and team previews use the existing planner and observed execution runner.
 - 27 Hub browser journeys: deterministic search, keyboard navigation, team and
   build application, duplicate refusal, preflight and partial failures, conversion,
   saved phrases and pins, disabled capabilities, silent Storage, character choice,
-  Trade query transfer, detachment, and inline Maps controls.
+  Trade query transfer, detachment, and Settings → Maps controls.
 - Browser visual exploration: home and conversion states, both themes, 390px width,
-  reduced motion. Raycast-style hierarchy with category icons, 54px rows, a spacious
+  reduced motion. Raycast-style hierarchy with category icons, compact Home rows, a spacious
   search area, rounded selection, conversion cards and a compact action footer.
 - 1,692 unit tests passed, including bounded calculator arithmetic, late quotes,
   stale rates, private/global phrase validation and single-build target guards.
@@ -811,3 +811,16 @@ Root build/team matches are capped. The complete Library still creates all rich
 row DOM on entry. Its measured entry and long task exceed the requested scale
 budget; the ledger keeps that requirement deferred. Do not treat faster isolated
 measurements or incomplete observer delivery as acceptance.
+
+## Visual consistency verification
+
+The visual regression spec covers shared search geometry, compact Home builds,
+folder glyphs, named calculator copy targets, grouped digits, and Settings → Maps.
+It checks native child controls without changing their saved values.
+
+The style matrix compares the frame and search box across both styles, six fonts,
+and 65% and 94% opacity. Text size uses existing typography tokens from 100%
+to 200%. It does not zoom the game. Regression backouts and verification counts
+are recorded in [the visual ledger](../internals/hub-polish-visual-ledger.md).
+
+These fixture checks do not verify the live game, input feel, VoiceOver, or AZERTY.

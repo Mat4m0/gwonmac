@@ -2,6 +2,7 @@
  * Owns the Core command palette, its search focus and transient modal lifetime.
  * Optional Tools contributes local results and views without entering Core's imports.
  */
+import { HUB_SEARCH_GLYPH } from '../shared/ui/hub-search.js';
 import { resumeSearchInput } from './search-input.js';
 import { installHubWindow } from './hub-window.js';
 import { attachClassicFrame } from '../shared/ui/frame.js';
@@ -9,7 +10,6 @@ import { isHubBackKey, resolveShortcuts, shortcutKeycaps, type ShortcutAction } 
 import { FINDABLE_SETTINGS, focusHubSetting, openHubSettings, type HubSettingsFocus } from "./hub-settings.js";
 import { createHubAccounts } from './hub-accounts.js';
 import { hubIcon } from "./hub-icons.js";
-import { openHubMaps } from './hub-maps.js';
 import { editHubShortcut, hubPhraseReserved, manageHubShortcuts } from './hub-preferences.js';
 import { isHubShortcuts, type HubShortcut } from '../shared/hub-preferences.js';
 import { createHubCalculator } from './hub-calculator.js';
@@ -30,9 +30,9 @@ export function createHub(parent: HTMLElement) {
   root.innerHTML = `<section class="hub-panel ui-frame">
     <header class="hub-heading ui-window-head"><button class="ui-button hub-back" data-variant="quiet" aria-label="Back" hidden>← Back</button><span class="hub-name" id="hub-name">Hub</span><span id="hub-title-separator" hidden>—</span><nav class="hub-breadcrumbs" aria-label="Hub breadcrumb"><span class="hub-caption" id="hub-caption" role="heading" aria-level="1">Home</span></nav><span class="hub-context"></span><button class="ui-window-lock hub-lock" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="lock-shackle" d="M7 11V7a5 5 0 0 1 10 0v4"/><rect x="5" y="11" width="14" height="10" rx="2"/></svg></button><button class="ui-window-close hub-close" aria-label="Close Hub" title="Close Hub">×</button></header>
     <section class="hub-summary" aria-label="Build to apply" hidden></section>
-    <div class="hub-search"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 8 10-8 10L4 12 12 2Zm0 5v10M8 12h8"/></svg><span class="hub-scope" hidden></span><input type="text" role="combobox" aria-label="Search people, places, builds" aria-describedby="hub-hint" aria-autocomplete="list" aria-controls="hub-results" aria-expanded="true" placeholder="Search people, places, builds…" autocomplete="off" spellcheck="false" maxlength="120"><span class="hub-progress" aria-hidden="true"></span></div>
-    <p class="hub-hint" id="hub-hint" hidden></p><div class="hub-rate-controls" hidden></div><div class="hub-results ui-scroll" id="hub-results" role="listbox" aria-label="Results" tabindex="-1"></div>
-    <p class="hub-empty" hidden>No matches</p><pre class="hub-preview ui-scroll" hidden></pre><div class="hub-view" hidden></div><p class="hub-status" role="status"></p><p class="hub-lifecycle" hidden></p><p class="hub-announce ui-sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
+    <div class="hub-search ui-hub-search"><svg viewBox="0 0 24 24" aria-hidden="true">${HUB_SEARCH_GLYPH}</svg><span class="hub-scope" hidden></span><input type="text" role="combobox" aria-label="Search people, places, builds" aria-describedby="hub-hint" aria-autocomplete="list" aria-controls="hub-results" aria-expanded="true" placeholder="Search people, places, builds…" autocomplete="off" spellcheck="false" maxlength="120"><span class="hub-progress" aria-hidden="true"></span></div>
+    <div class="hub-rate-controls" hidden></div><div class="hub-results ui-scroll" id="hub-results" role="listbox" aria-label="Results" tabindex="-1"></div>
+    <p class="hub-empty" hidden>No matches</p><pre class="hub-preview ui-scroll" hidden></pre><div class="hub-view" hidden></div><div class="hub-footer-status"><p class="hub-status" role="status"></p><p class="hub-lifecycle" hidden></p><p class="hub-hint" id="hub-hint" hidden></p></div><p class="hub-announce ui-sr-only" role="status" aria-live="polite" aria-atomic="true"></p>
     <footer class="hub-footer"><span class="hub-legend"></span><span class="hub-count"></span><button class="hub-primary ui-button" data-variant="primary"></button><button class="hub-actions ui-button" data-variant="quiet" aria-haspopup="menu" aria-expanded="false">Actions</button></footer>
     <div class="hub-menu" role="menu" aria-label="Actions" hidden></div>
     <button class="ui-window-resize hub-resize" aria-label="Resize Hub" title="Drag to resize, or use arrow keys" hidden></button>
@@ -92,6 +92,7 @@ export function createHub(parent: HTMLElement) {
   const glyphResize = new ResizeObserver(paintGlyphs); glyphResize.observe(input);
   const list = required<HTMLElement>('.hub-results');
   const content = required<HTMLElement>('.hub-view');
+  const rates = required<HTMLElement>('.hub-rate-controls');
   const backButton = required<HTMLButtonElement>('[aria-label="Back"]');
   const caption = required<HTMLElement>('.hub-caption');
   const breadcrumbs = required<HTMLElement>('.hub-breadcrumbs');
@@ -280,7 +281,7 @@ export function createHub(parent: HTMLElement) {
   let progressInStatus = false;
   function report(message: string, receipt = false) {
     const text = message || progress?.message || '';
-    status.textContent = text;
+    status.textContent = text; status.title = text;
     receiptInStatus = receipt && !!message; progressInStatus = !message && !!text;
     status.setAttribute('aria-busy', String(progressInStatus)); paintBusy();
   }
@@ -302,7 +303,7 @@ export function createHub(parent: HTMLElement) {
       ...tool('whispers', 'Whispers', 'Conversations, friends and drafts', 'friends people message chat', settings?.gwonmacTools && settings.whispersEnabled, 'gw:whispers-toggle'),
       ...(settings?.characterSwitchEnabled ? [{ id: 'character', title: 'Switch Character', detail: 'Choose another character', keywords: 'relog profession characters alts', group: 'Tools', action: 'Choose character', navigate: () => dispatch('gw:character-toggle'), run: () => dispatch('gw:character-toggle') }] : []),
       ...tool('storage', 'Open Xunlai Storage', 'Open your storage chest', 'chest bank', settings?.gwonmacTools && settings.xunlaiStorage, 'gw:storage-open'),
-      ...(settings?.gwonmacTools && settings.cartographyEnabled ? [{ id: 'maps', title: 'Maps', detail: 'Exploration grid, walkable terrain and compass ranges', keywords: 'grid terrain compass opacity', group: 'Tools', action: 'Adjust maps', run: () => openHubMaps(presenter) }] : []),
+      ...(settings?.gwonmacTools && settings.cartographyEnabled ? [{ id: 'maps', title: 'Maps', detail: 'Exploration grid, walkable terrain and compass ranges', keywords: 'grid terrain compass opacity', group: 'Tools', action: 'Adjust maps', run: () => openSettings({ section: 'Maps' }) }] : []),
       { id: 'commands', title: 'Commands', detail: 'Search words, calculator examples and keys', aliases: ['?'], keywords: 'help guide examples cheatsheet shortcuts keys', group: 'Commands', action: 'Browse commands', run: () => presenter.showRows('Commands', commandExamples) },
       { id: 'hub-preferences', title: 'Hub preferences', detail: 'Pins and exact search phrases', keywords: 'aliases vocabulary', group: 'Commands', action: 'Adjust Hub', run: () => manageHubShortcuts(presenter, shortcuts, lookup, saveShortcuts, hubWindow.reset) },
       { id: 'settings', title: 'Settings', detail: 'Game, appearance, tools, shortcuts and maps', keywords: 'preferences graphics appearance hotkeys', group: 'Commands', action: 'Open Settings', run: () => openSettings() },
@@ -342,6 +343,7 @@ export function createHub(parent: HTMLElement) {
    */
   function commandExamples(): HubRow[] {
     const enabled = new Set(commands(true).map(row => row.id));
+    if (lookup('builds')) enabled.add('builds');
     const example = (group: string, tool: string, title: string, fill: string, detail: string) => ({ group, tool, title, fill, detail });
     const examples = [
       example('Places', 'travel', 'travel <place>', 'travel ', 'Find an outpost by name or alias'),
@@ -365,7 +367,7 @@ export function createHub(parent: HTMLElement) {
     const keys = (action: ShortcutAction) => shortcutKeycaps(bindings[action]).map(cap => cap.label).join('') || 'Not set';
     const toolKeys: [string, ShortcutAction, string][] = [['travel', 'travel.open', 'Travel'], ['character', 'character.switch', 'Switch Character'], ['builds', 'tools.toggle', 'Build Library'], ['trade', 'trade.toggle', 'Trade Chat'], ['whispers', 'whispers.toggle', 'Whispers']];
     rows.push(...toolKeys.filter(([tool]) => enabled.has(tool)).map(([tool, action, name]) => ({ id: `key:${tool}`, title: name, detail: keys(action), group: 'Keys & shortcuts', action: 'Change shortcut', run: () => openSettings({ section: 'Shortcuts' as const }) })));
-    for (const [id, name, detail] of [['actions', 'Actions for the selected row', '⌘J'], ['back', 'Back', '⌘⌫'], ['escape', 'Clear, back, then close', 'Esc'], ['open', 'Open a row with a page', '→']] as const)
+    for (const [id, name, detail] of [['actions', 'Actions for the selected row', '⌘J'], ['back', 'Back', '⌘⌫'], ['escape', 'Clear, back, then close', '⎋'], ['open', 'Open a row with a page', '→']] as const)
       rows.push({ id: `key:${id}`, title: name, detail, group: 'Keys & shortcuts', action: 'Fixed key', unavailable: 'The Hub’s own keys do not change.', run() {} });
     return rows;
   }
@@ -388,13 +390,14 @@ export function createHub(parent: HTMLElement) {
       if (scroll) next.scrollIntoView({ block: 'nearest' });
     }
     const row = rows.find(row => row.id === id);
-    const rates = required<HTMLElement>('.hub-rate-controls'); rates.hidden = !row?.quoteBasis || !!disposeView;
+    rates.hidden = !row?.quoteBasis || !!disposeView;
     // A card that vanished under a focused Price basis hands the keyboard back to search (HUB-223).
     if (rates.hidden && rates.contains(document.activeElement)) focusResult();
     if (row?.quoteBasis) {
+      if (next && rates.parentElement !== next) next.append(rates);
       const basis = row.quoteBasis;
       let picker = rates.querySelector('select');
-      if (!picker) { const label = document.createElement('label'); label.textContent = 'Quote basis'; picker = document.createElement('select'); picker.className = 'ui-select'; picker.setAttribute('aria-label', 'Price basis'); label.append(picker); rates.replaceChildren(label); }
+      if (!picker) { const label = document.createElement('label'); label.textContent = 'Price basis'; picker = document.createElement('select'); picker.className = 'ui-select'; picker.setAttribute('aria-label', 'Price basis'); label.append(picker); rates.replaceChildren(label); }
       const choices = JSON.stringify(basis.options);
       if (picker.dataset.choices !== choices) { picker.replaceChildren(); for (const choice of basis.options) { const option = document.createElement('option'); option.value = choice.value; option.textContent = choice.label; picker.append(option); } picker.dataset.choices = choices; }
       picker.value = basis.value;
@@ -412,8 +415,8 @@ export function createHub(parent: HTMLElement) {
     if (viewFooter) { paintViewFooter(); return; }
     // A running action keeps the footer: it names what runs, disabled, until it ends (HUB-083).
     const working = busy() ? running : null;
-    primaryText(working ? working.label : row ? row.action : 'Select a result');
-    if (row && !working) { const key = document.createElement('kbd'); key.textContent = '↵'; primary.append(key); }
+    primaryText(working ? working.label : row ? row.action : 'Select a result', !working ? row?.conversion?.iconTo : undefined);
+    if (row && !working) { const key = document.createElement('kbd'); key.className = 'ui-kbd'; key.textContent = '↵'; primary.append(key); }
     disableSlot(primary, !row || !!row.unavailable || !!working);
     primary.dataset.variant = row?.destructive ? 'danger' : 'primary';
     // Footer slots never hide, so nothing slides under a resting pointer; they disable instead.
@@ -425,14 +428,14 @@ export function createHub(parent: HTMLElement) {
     paintBusy();
   }
   /** The primary names its action on one line; a long name ends in … and shows whole on hover (HUB-238). */
-  function primaryText(label: string) {
+  function primaryText(label: string, icon?: string) {
     const text = document.createElement('span'); text.className = 'hub-primary-label'; text.textContent = label;
-    primary.replaceChildren(text); primary.title = label;
+    primary.replaceChildren(text); if (icon) { const art = document.createElement('img'); art.src = icon; art.alt = ''; art.className = 'hub-primary-art'; art.onerror = () => art.remove(); primary.prepend(art); } primary.title = label;
   }
   /** A footer slot's text and, when it has one, its keys; the name stays the text, the keys are its shortcut. */
   function slotLabel(button: HTMLButtonElement, text: string, keys: readonly string[] = []) {
     button.replaceChildren(document.createTextNode(text));
-    for (const cap of keys) { const key = document.createElement('kbd'); key.textContent = cap; key.setAttribute('aria-hidden', 'true'); button.append(key); }
+    for (const cap of keys) { const key = document.createElement('kbd'); key.className = 'ui-kbd'; key.textContent = cap; key.setAttribute('aria-hidden', 'true'); button.append(key); }
     if (keys.length) button.setAttribute('aria-keyshortcuts', 'Meta+J'); else button.removeAttribute('aria-keyshortcuts');
   }
   /** A footer slot disables instead of hiding; under the focus it hands focus to search or the view, never to <body>. */
@@ -452,7 +455,7 @@ export function createHub(parent: HTMLElement) {
     const keys: [string[], string][] = [];
     if (!viewFooter && rows.length > 1 && !busy()) keys.push([['↑', '↓'], 'Select']);
     if (!viewFooter && row?.navigate) keys.push([['→'], 'Open']);
-    keys.push([['Esc'], !viewFooter && input.value ? 'Clear' : history.length ? 'Back' : 'Close']);
+    keys.push([['⎋'], !viewFooter && input.value ? 'Clear' : history.length ? 'Back' : 'Close']);
     if (!atHome()) keys.push([['⌘', '⌫'], 'Back']);
     const next = JSON.stringify(keys);
     if (legend.dataset.keys === next) return;
@@ -471,7 +474,7 @@ export function createHub(parent: HTMLElement) {
     const action = viewFooter.primary ?? done;
     primaryText(action.label);
     // Enter runs a named primary, so only that one carries the keycap, and not while it runs.
-    if (viewFooter.primary && !viewRunning) { const key = document.createElement('kbd'); key.textContent = '↵'; primary.append(key); }
+    if (viewFooter.primary && !viewRunning) { const key = document.createElement('kbd'); key.className = 'ui-kbd'; key.textContent = '↵'; primary.append(key); }
     disableSlot(primary, !!action.disabled || viewRunning);
     primary.dataset.variant = action.destructive ? 'danger' : 'primary';
     if (!action.armed) { viewArming?.arming.disarm(); viewArming = null; }
@@ -572,12 +575,14 @@ export function createHub(parent: HTMLElement) {
     const row = pointerRow(event); if (row && !busy() && hover.selects(event) && row.id !== selected) select(row.id);
   });
   list.addEventListener('click', event => {
+    if (event.target instanceof Node && rates.contains(event.target)) return;
     const row = pointerRow(event); if (!row || busy()) return;
     // A game-changing row needs the footer or a double-click that began on this identity (D-24).
     if (event.detail <= 1) { pressed = row.id; hover.hold(); select(row.id); focusResult(); if (!row.consequential) void run(); }
     else if (event.detail === 2 && row.consequential && pressed === row.id && selected === row.id) void run();
   });
   list.addEventListener('contextmenu', event => {
+    if (event.target instanceof Node && rates.contains(event.target)) return;
     const row = pointerRow(event); if (!row) return;
     event.preventDefault(); if (busy()) return;
     hover.hold(); select(row.id); focusResult(); openMenu();
@@ -608,7 +613,7 @@ export function createHub(parent: HTMLElement) {
     required<HTMLElement>('.hub-context').textContent = context.join(' · ');
     // One quiet lifecycle line on list stages; a report in the status line takes its place.
     lifecycle.textContent = disposeView ? '' : [...sources.keys()].filter(sourceEnabled).map(source => source.lifecycle?.()).find(Boolean) ?? '';
-    lifecycle.hidden = !lifecycle.textContent;
+    lifecycle.title = lifecycle.textContent; lifecycle.hidden = !lifecycle.textContent;
     const trail = history.map((page, index) => ({ title: pageTitle(page), index }));
     const nextNavigation = JSON.stringify([trail, currentTitle]);
     if (navigationRevision !== nextNavigation) {
@@ -638,7 +643,7 @@ export function createHub(parent: HTMLElement) {
     const hint = required<HTMLElement>('.hub-hint');
     const example = commandExamples().find(row => normaliseHubQuery(row.title).startsWith(`${normaliseHubQuery(input.value)} `));
     hint.textContent = !scope && !query.scope && input.value.trim() && example ? `Try “${example.title}” · ${example.detail}` : '';
-    hint.hidden = !hint.textContent || !!disposeView;
+    hint.title = hint.textContent; hint.hidden = !hint.textContent || !!disposeView;
   }
   let refreshFrame = 0;
   function scheduleRefresh() {
@@ -706,6 +711,8 @@ export function createHub(parent: HTMLElement) {
     // The current list is the DOM source; retain only rows whose painted facts still match.
     const previousById = new Map(previousRows.map(row => [row.id, row]));
     const mounted = new Map([...list.querySelectorAll<HTMLElement>('.hub-row')].map(node => [node.dataset.id, node]));
+    const focusedRate = rates.contains(document.activeElement) ? document.activeElement : null;
+    list.before(rates);
     const results = document.createDocumentFragment();
     let group: string | undefined;
     let section = list;
@@ -718,7 +725,8 @@ export function createHub(parent: HTMLElement) {
         section = document.createElement('div'); section.setAttribute('role', 'group'); section.setAttribute('aria-labelledby', heading.id);
         section.append(heading); results.append(section);
       }
-      const retained = !shortcutsChanged && samePaint(row, previousById.get(row.id)) ? mounted.get(row.id) : undefined;
+      const compact = !!row.skills && !scope && !input.value.trim();
+      const retained = !shortcutsChanged && mounted.get(row.id)?.classList.contains('hub-build-compact') === compact && samePaint(row, previousById.get(row.id)) ? mounted.get(row.id) : undefined;
       if (retained) { retained.id = `hub-result-${index}`; section.append(retained); return; }
       const option = document.createElement('div');
       option.id = `hub-result-${index}`; option.dataset.id = row.id; option.className = 'hub-row';
@@ -747,7 +755,12 @@ export function createHub(parent: HTMLElement) {
       } else {
         const type = document.createElement('span'); type.className = 'hub-row-type';
         const shortcutActions: Record<string, ShortcutAction> = { travel: 'travel.open', character: 'character.switch', builds: 'tools.toggle', trade: 'trade.toggle', whispers: 'whispers.toggle', storage: 'storage.open' };
-        const shortcut = shortcutActions[row.id];
+        const keyRow = row.id.startsWith('key:');
+        const shortcut = shortcutActions[keyRow ? row.id.slice(4) : row.id];
+        if (keyRow && !row.unavailable && row.detail !== 'Not set') detail.textContent = '';
+        if (keyRow && !shortcut) for (const label of row.detail) {
+          const cap = document.createElement('kbd'); cap.className = 'ui-kbd'; cap.textContent = label; type.append(cap);
+        }
         if (shortcut) for (const key of shortcutKeycaps(bindings[shortcut])) {
           const cap = document.createElement('kbd'); cap.className = 'ui-kbd'; cap.textContent = key.label; cap.setAttribute('aria-label', key.name); type.append(cap);
         }
@@ -756,6 +769,7 @@ export function createHub(parent: HTMLElement) {
         detail.hidden = !detail.textContent;
         if (row.skills) {
           option.classList.add('hub-build-row');
+          if (!scope && !input.value.trim()) option.classList.add('hub-build-compact');
           option.append(renderBuildInfo(row));
         }
       }
@@ -784,6 +798,7 @@ export function createHub(parent: HTMLElement) {
     // Clear only this loading refusal when its answer settles; unrelated failures stay.
     if (prior?.unavailable && status.textContent === prior.unavailable && rows.some(row => row.conversion && !row.unavailable)) report('');
     select((prior?.id === 'quote-state' || prior?.id === 'market-state') && !!rows[0]?.conversion ? rows[0].id : settling || replacedPlaceholder ? exactCount > 1 && !phraseHit ? null : initial?.id ?? null : !revised && rows.some(row => row.id === selected) ? selected : null);
+    if (focusedRate instanceof HTMLElement && !rates.hidden && rates.isConnected) focusedRate.focus({ preventScroll: true });
     if (!settling && prior && !replacedPlaceholder && !rows.some(row => row.id === prior.id) && !receiptInStatus) report('The previous selection is no longer available. Choose a result.');
 
   }
@@ -826,7 +841,7 @@ export function createHub(parent: HTMLElement) {
     const mine = { session, label: row.pending?.label ?? row.action, again: row.pending?.again ?? `${row.action} is still running.` };
     running = mine; select(selected); report(''); if (row.pending) task.progress(row.pending.label);
     try {
-      if(row.searchQuery!==undefined){remember();resetView();scope=null;caption.textContent='Home';input.value=row.searchQuery;nameSearch(null);refresh(true);input.focus();const argument=parseHubQuery(input.value).scope?input.value.indexOf(' ')+1:0;input.setSelectionRange(argument,input.value.length);}
+      if(row.searchQuery!==undefined){home();input.value=row.searchQuery;refresh(true);input.focus();const argument=parseHubQuery(input.value).scope?input.value.indexOf(' ')+1:0;input.setSelectionRange(argument,input.value.length);}
       else await row.run(task);
     }
     catch (error) { task.fail(error); }
@@ -990,7 +1005,9 @@ export function createHub(parent: HTMLElement) {
     }
   });
   // A press on a result keeps the keyboard in search.
-  list.addEventListener('mousedown', event => event.preventDefault());
+  list.addEventListener('mousedown', event => {
+    if (!(event.target instanceof Node && rates.contains(event.target))) event.preventDefault();
+  });
   list.addEventListener('pointerleave', () => hover.release());
   // ⌘⌫ is Back from any focus inside the Hub, text fields included; ⌫ alone only edits text.
   // It bubbles here, so a mounted view first steps out of its own inner level (a confirmation,
@@ -1196,7 +1213,7 @@ export function createHub(parent: HTMLElement) {
   function mountView(view: MountedView) {
     resetView(); report(''); clearTimeout(announceTimer); resultAnnouncement = ''; empty.hidden = true;
     root.dataset.page = 'section'; caption.textContent = view.title;
-    required<HTMLElement>('.hub-preview').hidden = true; required<HTMLElement>('.hub-rate-controls').hidden = true;
+    required<HTMLElement>('.hub-preview').hidden = true; required<HTMLElement>('.hub-rate-controls').hidden = true; required<HTMLElement>('.hub-hint').hidden = true;
     search.hidden = true; list.hidden = true; content.hidden = false;
     activeView = view;
     const state: ViewFooter = { primary: null, secondary: null, own: false };

@@ -408,6 +408,7 @@ const candidateSettingsDomains = Array.from(
       uiFont: cycle(UI_FONTS, index),
       controllerPromptStyle: cycle(CONTROLLER_PROMPT_STYLES, index),
       uiPanelOpacity: cycle(opacityValues, index),
+      uiTextSize: 100,
       characterSwitchEnabled: cycle(booleanValues, index),
       resignEnabled: cycle(booleanValues, index),
       whispersEnabled: cycle(booleanValues, index),

@@ -61,10 +61,10 @@ Both surfaces use these sections for game settings, in this order.
 | Section | Settings | Hub | Launcher |
 |---|---|---|---|
 | Game | Render quality, Extended memory, Controller symbols, Return to character after reload, Diagnostics overlay | All | All |
-| Appearance | Panel style, Panel font, Panel opacity, Reset Hub position (Hub only) | All; custom colors link to the launcher | All, with the custom theme editor |
+| Appearance | Panel style, Panel font, Text size (100–200%), Panel opacity, Reset Hub position (Hub only) | All; custom colors link to the launcher | All, with the custom theme editor |
 | Tools | Enable Tools, every tool, and each tool's options (Character Switch details, chat filters, timer color, skill key labels, Alcohol Timer position) | Switches and options; skill key labels and timer color link to the launcher | All |
 | Shortcuts | The ten app shortcuts | All | Shown beside their tools, as today |
-| Maps | Grid, walkable terrain, compass ranges and their opacity | Layers, ranges, opacity; styles link to the launcher | All, with the style editor |
+| Maps | Grid, walkable terrain, compass ranges, Elite skills and their opacity | One Settings renderer; children disable with their layer; styles link to the launcher | All, with the style editor |
 
 The Hub's former "Chat & characters" section moves into Tools, beside the tool
 each option belongs to (Character Switch, Chat Filters).

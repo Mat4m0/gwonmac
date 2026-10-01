@@ -146,9 +146,10 @@ tracking behavior belong in
   focus.
 
 The saved interface style is `guild-wars`, `obsidian`, or `custom`. Font and
-panel opacity remain independent. Panel opacity is from 65% through 100%.
-These preferences must not change component markup, layout density, or
-behavior. Every player-facing Settings and Tools stylesheet consumes the
+panel opacity and Text size remain independent. Text size scales the existing
+type ramp from 100% to 200%. It does not zoom the game.
+Panel opacity is from 65% through 100%. Style and opacity must not change
+component markup, layout density, or behavior. Every player-facing Settings and Tools stylesheet consumes the
 shared tokens; local palette literals are not allowed.
 
 ## Window and interaction rules
@@ -349,13 +350,21 @@ Whispers paints its background once across the complete frame interior. Its
 title is vertically centered, and conversation controls sit above the picker
 or transcript. There is no docking control or embedded Hub chat layout.
 
+Maps opens Settings → Maps. There is no separate Maps page.
 Maps pairs each native switch with its opacity control. Disabled layers retain
 but disable opacity controls. External settings updates repaint the same view;
 failed writes restore saved state and show a recoverable inline error.
 
 ### Compact build metadata
 
-Hub build results keep the skill bar and invested attribute ranks in each row.
+Empty Home uses compact 40 px rows for pinned and recent builds.
+Search and Build Library keep skill bars and invested attribute ranks.
+Mixed team/build results reserve comparison space across selections.
+
+Hub uses one search box geometry across Home, Travel and Characters.
+Material changes frame artwork; content keeps the same horizontal inset.
+The grammar hint shares the reserved footer status slot. Failures take priority.
+Price basis stays inside the conversion card and retains keyboard focus.
 There is no separate lower preview for individual builds and no visible template
 file path. Profession codes remain beside the title, such as Protection
 Mo/Me, in smaller muted text. Native templates also show a folder icon and

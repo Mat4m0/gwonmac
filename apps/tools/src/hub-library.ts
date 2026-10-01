@@ -305,7 +305,7 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
         return path && path.startsWith(prefix) && path !== folder ? [path.slice(prefix.length).split('/')[0]!] : [];
       }))].sort();
       const folderRows: HubRow[] = children.map(name => ({
-        id: `folder:${prefix}${name}`, title: name, detail: 'Template folder', group: 'Folders', icon: 'folder', action: 'Open folder', navigate: () => browseTemplates(prefix + name), run: () => browseTemplates(prefix + name),
+        id: `folder:${prefix}${name}`, title: name, detail: 'Template folder', group: 'Folders', action: 'Open folder', navigate: () => browseTemplates(prefix + name), run: () => browseTemplates(prefix + name),
       }));
       const files = templates.filter(build => templateFolder(build) === folder).map(value => buildRow({ kind: 'build', value }));
       return [...folderRows, ...files, ...templateStates(), ...(!folderRows.length && !files.length && !reading && !templateProblem ? [{ id: 'templates-empty', title: 'No skill templates here', detail: 'Save a skill template in Guild Wars, then retry.', group: 'Sources', action: 'Refresh templates', run: async () => { await readTemplates(); refresh(); } }] : [])];
