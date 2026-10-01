@@ -60,3 +60,6 @@ Unit tests cover exact points, incorrect tracks, unknown and everlasting items,
 rank targets, rounding, excess points, invalid counts, explicit offer prices,
 and offline operation. Browser journeys cover editable examples, the progress-to-
 shopping flow, Zaishen requirements, and inline corrections without modal views.
+
+Progress queries accept the same short track names as point queries. The track
+aliases in `src/shared/title-calculator.ts` own both forms.

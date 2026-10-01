@@ -210,7 +210,7 @@ test('calculator shows both observed trader rates and fixed conversions', async 
   await search.fill('1250 gold in p');
   await expect(page.locator('#hub').getByRole('option')).toContainText('1.25 platinum');
   await search.press('Enter');
-  await expect(page.locator('#app')).toHaveAttribute('data-action', 'Copied 1.25 platinum');
+  await expect(page.locator('#app')).toHaveAttribute('data-action', 'Copied 1250 gold = 1.25 platinum · Fixed conversion · 1 platinum = 1,000 gold');
   // The copy names what it copied in the Hub status line (D-8).
   await expect(page.locator('#hub .hub-status')).toHaveText('Copied “1.25 platinum”');
   await expect(page.locator('#hub')).toBeVisible();

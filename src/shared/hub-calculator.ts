@@ -16,11 +16,15 @@ export function decimal(value: string): Fraction {
   return fraction(BigInt(`${whole}${digits}`), 10n ** BigInt(digits.length));
 }
 export function formatFraction(value: Fraction, places = 6): string {
-  const scale = 10n ** BigInt(places);
+  const requestedPlaces = places;
   const magnitude = value.n < 0n ? -value.n : value.n;
+  // Bounded fractions must not display a nonzero value as zero or one significant digit.
+  while (magnitude !== 0n && magnitude * 10n ** BigInt(places) < value.d * 100n && places < 82) places++;
+  const scale = 10n ** BigInt(places);
   const rounded = (magnitude * scale * 2n + value.d) / (value.d * 2n);
   const whole = rounded / scale;
-  const rest = (rounded % scale).toString().padStart(places, '0').replace(/0+$/u, '');
+  const digits = (rounded % scale).toString().padStart(places, '0');
+  const rest = places > requestedPlaces ? digits : digits.replace(/0+$/u, '');
   return `${value.n < 0n && rounded !== 0n ? '-' : ''}${whole}${rest ? `.${rest}` : ''}`;
 }
 export function calculate(expression: string): Fraction | null {
@@ -74,6 +78,8 @@ for (const item of TRADER_ITEMS) {
 for (const [alias,name] of Object.entries({iron:'Iron Ingot',feathers:'Feather',dust:'Pile of Glittering Dust',bones:'Bone',granite:'Granite Slab',cloth:'Bolt of Cloth',wood:'Wood Plank',fiber:'Plant Fiber',fibers:'Plant Fiber','obby shards':'Obsidian Shard',lockpicks:'Lockpick'})) {
  const unit=core[name.toLowerCase()]; if(unit) core[alias]=unit;
 }
+// The parser and live input glyphs share this completed catalogue.
+export const CURRENCY_ALIASES: Readonly<Record<string, Currency>> = Object.freeze(core);
 export const currencyInfo = (unit: Currency): CurrencyInfo => metadata[unit]!;
 export const multiply = (a:Fraction,b:Fraction) => fraction(a.n*b.n,a.d*b.d);
 export const divide = (a:Fraction,b:Fraction) => fraction(a.n*b.d,a.d*b.n);
@@ -102,7 +108,7 @@ export function parseConversion(query:string): Conversion|null {
  const divisor=targetStacks ? currencyInfo(to).stack : 1;
  if(!divisor) throw new Error('This unit has no item stack.');
  const first=terms[0]; if(!first) return null;
- return {amount:first.amount,from:first.unit,to,terms,divisor,input:parts[0]!.replace(/(\d)(?=[a-z])/gu,'$1 '),perItem:each};
+ return {amount:first.amount,from:first.unit,to,terms,divisor,input:parts[0]!.replace(/(\d)(?=[a-z])/gu,'$1 ')+(each?' each':''),perItem:each};
 }
 export function convertCurrency(amount:Fraction,from:Currency,to:Currency,ectoGold?:number):Fraction {
  const rate=(unit:Currency):Fraction=>unit==='gold'?fraction(1n):unit==='platinum'?fraction(1000n):unit==='ecto'&&Number.isSafeInteger(ectoGold)&&ectoGold!>0?fraction(BigInt(ectoGold!)):(()=>{throw new Error('Rate unavailable');})();
@@ -111,4 +117,45 @@ export function convertCurrency(amount:Fraction,from:Currency,to:Currency,ectoGo
 export function evaluateConversion(conversion:Conversion,rate:(unit:Currency)=>Fraction):Fraction {
  const value=conversion.terms.map(term=>term.unit===conversion.to?term.amount:multiply(term.amount,divide(rate(term.unit),rate(conversion.to)))).reduce(add);
  return divide(value,fraction(BigInt(conversion.divisor)));
+}
+
+/** Only currency amounts have a default target; explicit incomplete directions stay editable. */
+export function parseDefaultConversion(query: string): Conversion | null {
+  if (/(?:^|\s)(?:in|to)(?:\s|$)/iu.test(query)) return null;
+  const entered = parseConversion(`${query} in gold`);
+  if (!entered || entered.terms.length !== 1) return null;
+  const target = entered.from === 'gold' ? 'platinum' : entered.from === 'platinum' ? 'gold'
+    : entered.from === 'ecto' ? 'platinum' : entered.from === 'armbrace' || entered.from === 'zkey' ? 'ecto' : null;
+  return target ? parseConversion(`${query} in ${target}`) : null;
+}
+
+export type CalculatorRates = Readonly<{ mode: 'automatic' | 'manual'; ecto: string; armbrace: string; zkey: string }>;
+export const DEFAULT_CALCULATOR_RATES: CalculatorRates = Object.freeze({ mode: 'automatic', ecto: '', armbrace: '', zkey: '' });
+/** Trading shorthand in a rate field denotes quantity, not a different rate denomination. */
+export function parseManualRate(text: string): string {
+  const value = text.trim().toLowerCase();
+  if (!value) return '';
+  const match = /^((?:\d{1,12}|\d{1,3}(?:,\d{3}){1,3})(?:\.\d{1,6})?|\.\d{1,6})(k)?$/u.exec(value);
+  if (!match) throw new Error('Enter a positive number, such as 5,000 or 5k.');
+  const amount = multiply(decimal(match[1]!.replaceAll(',', '')), fraction(match[2] ? 1000n : 1n));
+  if (amount.n <= 0n) throw new Error('Enter a rate greater than zero.');
+  const canonical = formatFraction(amount);
+  if(!/^\d{1,12}(?:\.\d{1,6})?$/u.test(canonical))throw new Error('Use at most 12 whole digits and six decimal places.');
+  return canonical;
+}
+/** Validate the whole saved calculator choice at the existing settings boundary. */
+export function parseCalculatorRates(value: unknown): CalculatorRates {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid conversion rates.');
+  const keys = Object.keys(value);
+  if (keys.length !== 4 || !keys.every(key => ['mode', 'ecto', 'armbrace', 'zkey'].includes(key)) ||
+      !('mode' in value) || (value.mode !== 'automatic' && value.mode !== 'manual') ||
+      !('ecto' in value) || typeof value.ecto !== 'string' || value.ecto.length > 24 ||
+      !('armbrace' in value) || typeof value.armbrace !== 'string' || value.armbrace.length > 24 ||
+      !('zkey' in value) || typeof value.zkey !== 'string' || value.zkey.length > 24) throw new Error('Invalid conversion rates.');
+  return { mode: value.mode, ecto: parseManualRate(value.ecto), armbrace: parseManualRate(value.armbrace), zkey: parseManualRate(value.zkey) };
+}
+
+/** Clipboard results always retain the entered question, answer and available provenance. */
+export function formatCalculatorCopy(question: string, answer: string, provenance: string): string {
+  return `${question} = ${answer}${provenance ? ` · ${provenance}` : ''}`;
 }

@@ -53,7 +53,7 @@ export function calculateTitle(query:string):readonly TitleCalculation[]|null {
     {title:'Plan a Zaishen rank',detail:'Required keys from an explicit starting point.',example:'zaishen rank 3 from 500'},
   ];
   try {
-    const progress=/^(sweet tooth|drunkard|party animal|zaishen)(?: (?:rank ([0-9]{1,2})|next|max))?(?: from (.+))?$/u.exec(term);
+    const progress=new RegExp(`^(${Object.keys(trackNames).sort((a,b)=>b.length-a.length).join('|')})(?: (?:rank ([0-9]{1,2})|next|max))?(?: from (.+))?$`,'u').exec(term);
     if(progress){
       const track=trackNames[progress[1]!]!,definition=tracks[track];
       if(!progress[2]&&progress[3]===undefined)return [{title:definition.name,detail:`Enter current points: ${progress[1]} from 7350${track==='zaishen'?' · Or: zaishen rank 3 from 0':''}`,example:track==='zaishen'?'zaishen rank 3 from 0':`${progress[1]} from 7350`}];

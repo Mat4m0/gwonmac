@@ -553,6 +553,7 @@ const emptySkillKeyBindings:
     [null, null, null, null, null, null, null, null];
 window.gwToolsSettings = () => Object.freeze({
   hubShortcuts: appSettings?.hubShortcuts ?? [],
+  ...(appSettings?{calculatorRates:appSettings.calculatorRates}:{}),
   shortcutOverrides: appSettings?.shortcutOverrides ?? {},
   gwonmacTools: appSettings?.gwonmacTools ?? false,
   buildLibrary: appSettings?.buildLibrary ?? true,

@@ -13,6 +13,9 @@ import { openHubMaps } from './hub-maps.js';
 import { editHubShortcut, manageHubShortcuts } from './hub-preferences.js';
 import { hubPhraseReserved, isHubShortcuts, isLibraryHubShortcut, type HubShortcut } from '../shared/hub-preferences.js';
 import { createHubCalculator } from './hub-calculator.js';
+import { recogniseCurrencyTokens } from '../shared/hub-currency-tokens.js';
+import { DEFAULT_CALCULATOR_RATES, type Currency } from '../shared/hub-calculator.js';
+import { currencyIcon } from '../shared/currency-assets.js';
 import { armConfirmation, closeDisclosure, focusable, focusableElements } from './surface-controller.js';
 import { listIndexAfter, listKeyStep } from '../shared/ui/list-keys.js';
 import { createHoverSelection } from '../shared/ui/hover-selection.js';
@@ -48,6 +51,43 @@ export function createHub(parent: HTMLElement) {
   const hubWindow = installHubWindow(required<HTMLElement>('.hub-panel'), required<HTMLElement>('.hub-heading'), required<HTMLButtonElement>('.hub-lock'), required<HTMLElement>('.hub-resize'));
   const input = required<HTMLInputElement>('input');
   const search = required<HTMLElement>('.hub-search');
+  // A measuring layer adds artwork in native word gaps; the input remains the sole editor.
+  const glyphs = document.createElement('div'); glyphs.className = 'hub-search-glyphs'; glyphs.setAttribute('aria-hidden', 'true'); search.append(glyphs);
+  let composing = false, glyphFrame = 0;
+  const syncGlyphScroll = () => { glyphs.scrollLeft = input.scrollLeft; };
+  function paintGlyphs() {
+    if (composing) return;
+    const mode = root.open && !disposeView && !scope && !parseHubQuery(input.value).scope && /^\s*(?:\d|\.\d)/u.test(input.value);
+    input.classList.toggle('hub-calculation-input', mode); glyphs.classList.toggle('hub-calculation-input', mode);
+    glyphs.hidden = !mode;
+    if (!mode) { glyphs.replaceChildren(); return; }
+    const box = input.getBoundingClientRect(), parentBox = search.getBoundingClientRect();
+    glyphs.style.left = `${box.left - parentBox.left}px`; glyphs.style.top = `${box.top - parentBox.top}px`;
+    glyphs.style.width = `${input.clientWidth}px`; glyphs.style.height = `${input.clientHeight}px`;
+    const text = input.value, spans: { span: HTMLSpanElement; unit: Currency }[] = [];
+    const fragment = document.createDocumentFragment(); let position = 0;
+    for (const token of recogniseCurrencyTokens(text)) {
+      fragment.append(document.createTextNode(text.slice(position, token.start)));
+      const span = document.createElement('span'); span.textContent = text.slice(token.start, token.end);
+      span.dataset.start = String(token.start); span.dataset.end = String(token.end); span.dataset.unit = token.unit;
+      fragment.append(span); spans.push({ span, unit: token.unit }); position = token.end;
+    }
+    fragment.append(document.createTextNode(text.slice(position))); glyphs.replaceChildren(fragment);
+    const glyphBox = glyphs.getBoundingClientRect(), fontSize = Number.parseFloat(getComputedStyle(input).fontSize);
+    for (const { span, unit } of spans) {
+      const url = currencyIcon(unit); if (!url) continue;
+      const icon = document.createElement('img'); icon.src = url; icon.alt = ''; icon.dataset.unit = unit;
+      const end = span.getBoundingClientRect().right - glyphBox.left + glyphs.scrollLeft;
+      icon.style.left = `${end + fontSize * 0.625}px`; icon.onerror = () => icon.remove(); glyphs.append(icon);
+    }
+    syncGlyphScroll();
+    cancelAnimationFrame(glyphFrame); glyphFrame = requestAnimationFrame(syncGlyphScroll);
+  }
+  input.addEventListener('scroll', syncGlyphScroll); input.addEventListener('select', syncGlyphScroll);
+  input.addEventListener('keyup', syncGlyphScroll);
+  input.addEventListener('compositionstart', () => { composing = true; });
+  input.addEventListener('compositionend', () => { composing = false; paintGlyphs(); });
+  const glyphResize = new ResizeObserver(paintGlyphs); glyphResize.observe(input);
   const list = required<HTMLElement>('.hub-results');
   const content = required<HTMLElement>('.hub-view');
   const backButton = required<HTMLButtonElement>('[aria-label="Back"]');
@@ -179,7 +219,8 @@ export function createHub(parent: HTMLElement) {
     } else {
       input.value = page.query; caption.textContent = scope?.title ?? 'Home'; root.dataset.page = scope ? 'section' : 'home';
       nameSearch(scope?.title ?? null); report(''); refresh(true);
-      select(rows.some(row => row.id === page.selected) ? page.selected : null); list.scrollTop = page.scroll;
+      const restored=rows.find(row=>row.id===page.selected)??(['quote:result','market:result','manual-conversion','conversion'].includes(page.selected??'')?rows.find(row=>row.group==='Calculator'):undefined);
+      select(restored?.id??null); list.scrollTop = page.scroll;
       if (page.selected && selected === null) report('The previous selection is no longer available. Choose a result.');
     }
     restoreFocus(page.focus);
@@ -346,6 +387,7 @@ export function createHub(parent: HTMLElement) {
       picker.onchange = () => basis.choose(picker.value);
       let details = rates.querySelector('button');
       if (!details) { details = document.createElement('button'); details.className = 'ui-button'; details.textContent = 'Details'; rates.append(details); }
+      details.textContent = row.actionsLabel === 'Refresh quotes' ? 'Refresh quotes' : 'Details';
       details.onclick = () => rows.find(item => item.id === selected)?.actions?.();
     }
 
@@ -563,6 +605,7 @@ export function createHub(parent: HTMLElement) {
     hint.hidden = !hint.textContent || !!disposeView;
   }
   function refresh(reset = false) {
+    paintGlyphs();
     if (!root.open) return;
     // A mounted view keeps its header facts current, e.g. where the player is.
     if (disposeView) { paintNavigation(); return; }
@@ -628,6 +671,7 @@ export function createHub(parent: HTMLElement) {
       const arrow = document.createElement('span'); arrow.className = 'hub-row-arrow'; arrow.textContent = '↵'; arrow.setAttribute('aria-hidden', 'true');
       if (row.conversion) {
         option.classList.add('hub-conversion');
+        option.setAttribute('aria-label', `${row.conversion.input} equals ${row.title}. ${row.detail}`);
         const source = document.createElement('strong'); source.className = 'hub-conversion-input'; source.textContent = row.conversion.input;
         const from = document.createElement('span'); from.className = 'hub-currency hub-currency-from'; from.textContent = row.conversion.from;
         const to = document.createElement('span'); to.className = 'hub-currency hub-currency-to'; to.textContent = row.conversion.to;
@@ -683,6 +727,8 @@ export function createHub(parent: HTMLElement) {
     // A placeholder row that goes away (a loading or state row) hands its selection to what
     // replaced it, as a fresh query would, so Enter acts without another key (HUB-232).
     const replacedPlaceholder = !!prior?.unavailable && !rows.some(row => row.id === prior.id);
+    // Clear only this loading refusal when its answer settles; unrelated failures stay.
+    if (prior?.unavailable && status.textContent === prior.unavailable && rows.some(row => row.conversion && !row.unavailable)) report('');
     select((prior?.id === 'quote-state' || prior?.id === 'market-state') && !!rows[0]?.conversion ? rows[0].id : settling || replacedPlaceholder ? exactCount > 1 && !phraseHit ? null : initial?.id ?? null : !revised && rows.some(row => row.id === selected) ? selected : null);
     if (!rows.length) {
       const empty = document.createElement('p'); empty.className = 'hub-empty'; empty.textContent = 'No matches'; list.append(empty);
@@ -1147,13 +1193,15 @@ export function createHub(parent: HTMLElement) {
     notify,
     browseBuilds() { direct('builds', () => { const row = lookup('builds'); if (row && !row.unavailable) void row.run(startTask()); else report('Build Library is loading. Try again.'); }); },
     resetPosition: hubWindow.reset,
-    dispose() { close(); clearTimeout(receiptTimer); receipt.remove(); hubWindow.dispose(); disposeFrame(); for (const unsubscribe of sources.values()) unsubscribe(); sources.clear(); modal.dispose(); root.remove(); window.removeEventListener('blur', onBlur); window.removeEventListener('gw:tools-settings', onSettings); },
+    dispose() { close(); glyphResize.disconnect(); cancelAnimationFrame(glyphFrame); clearTimeout(receiptTimer); receipt.remove(); hubWindow.dispose(); disposeFrame(); for (const unsubscribe of sources.values()) unsubscribe(); sources.clear(); modal.dispose(); root.remove(); window.removeEventListener('blur', onBlur); window.removeEventListener('gw:tools-settings', onSettings); },
   };
   presenter.attach(createHubAccounts(presenter, { get: () => window.gwNative.accounts.get(), open: request => window.gwNative.accounts.open(request), manage: () => window.gwNative.app.showLauncher() }));
   presenter.attach(createHubCalculator({
     hub: presenter,
+    settings: () => window.gwToolsSettings?.().calculatorRates ?? DEFAULT_CALCULATOR_RATES,
+    saveRates: async calculatorRates => { await window.gwNative.settings.set({ calculatorRates }); },
     // A copy names what it put on the clipboard in the status line (D-8); it is never silent.
-    copy: async value => { await window.gwNative.clipboard.writeText(value); notify(`Copied “${value}”`); },
+    copy: async (value,label=value) => { await window.gwNative.clipboard.writeText(value); notify(`Copied “${label}”`); },
     marketEnabled: () => !!window.gwToolsSettings?.().gwonmacTools && !!window.gwToolsSettings?.().tradeChat,
     market: () => 'trade' in window.gwNative ? window.gwNative.trade.getMarketRates() : Promise.reject(new Error('Rate unavailable')),
     quotes: () => 'trade' in window.gwNative ? window.gwNative.trade.getTraderQuotes() : Promise.reject(new Error('Rate unavailable')),

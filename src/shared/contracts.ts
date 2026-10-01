@@ -22,6 +22,7 @@ import type { EliteTracking, EliteUpdate } from "./elite-skills.js";
 import type { HubSettingsApi } from "./hub-settings.js";
 import type { LauncherSettingsSection } from "./launcher-contracts.js";
 import type { MarketSnapshot } from "./market-rates.js";
+import { DEFAULT_CALCULATOR_RATES, type CalculatorRates } from './hub-calculator.js';
 import type { HubShortcut } from './hub-preferences.js';
 import type {
   DiagnosticSummary,
@@ -462,6 +463,8 @@ export interface AppSettings {
   /** Player changes to the app-owned shortcuts; missing entries use defaults. */
   shortcutOverrides: ShortcutOverrides;
   hubShortcuts: readonly HubShortcut[];
+  /** Optional estimates and selected source, shared across game windows. */
+  calculatorRates: CalculatorRates;
   /** Display-only labels that mirror the player's eight Guild Wars bindings. */
   skillKeyBindings: SkillKeyBindings;
   /** Show the configured skill-key labels over the eight player skill slots. */
@@ -558,6 +561,7 @@ export const RENDERER_WRITABLE_SETTINGS = [
   "characterSwitchLevel",
   "characterSwitchLocation",
   "hubShortcuts",
+  "calculatorRates",
 ] as const satisfies readonly (keyof AppSettings)[];
 type RendererWritableSetting = (typeof RENDERER_WRITABLE_SETTINGS)[number];
 
@@ -641,6 +645,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   targetReadout: false,
   shortcutOverrides: {},
   hubShortcuts: [],
+  calculatorRates: DEFAULT_CALCULATOR_RATES,
   skillKeyBindings: EMPTY_SKILL_KEY_BINDINGS,
   skillKeyLabelsEnabled: false,
   chatFiltersEnabled: false,
