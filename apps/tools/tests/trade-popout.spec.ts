@@ -324,6 +324,11 @@ test('Trade keeps the keyboard inside as its views change (HUB-025)', async ({ p
   await expect(trade.getByRole('button', { name: /Back to offers/u })).toBeVisible();
   await expect(trade.getByRole('option').first()).toBeFocused();
   await page.keyboard.press('Meta+Backspace');
+  // A control inside a row, here the seller's name, does its own job on Enter, not the row's whisper.
+  await tyria.getByRole('button', { name: 'Show listings from Tyria Cartographer', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(trade.getByRole('button', { name: /Back to offers/u })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Message Tyria Cartographer', exact: true })).toHaveCount(0);
 });
 
 test('narrow Trade walks the ledger without its sheet, and the sheet has focus targets (HUB-025)', async ({ page }) => {
