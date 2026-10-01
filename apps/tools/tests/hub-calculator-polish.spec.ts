@@ -15,6 +15,11 @@ test('market basis retains the selected card and keyboard focus in both directio
     await expect(picker).toBeFocused();
     await expect(page.locator('.hub-row[aria-selected=true]')).toHaveAttribute('data-id','market:result');
     await expect(page.getByRole('button',{name:/Copy ~ /})).toBeEnabled();
+    // Enter on the picker copies the card it just re-priced (HUB-022).
+    await page.evaluate(() => { delete document.getElementById('app')!.dataset.action; });
+    await picker.press('Enter');
+    await expect(page.locator('#app')).toHaveAttribute('data-action', /^Copied 1 zkey = ~ /);
+    await expect(picker).toBeFocused();
   }
 });
 

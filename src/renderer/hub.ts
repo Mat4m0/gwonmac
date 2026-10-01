@@ -416,6 +416,8 @@ export function createHub(parent: HTMLElement) {
       if (picker.dataset.choices !== choices) { picker.replaceChildren(); for (const choice of basis.options) { const option = document.createElement('option'); option.value = choice.value; option.textContent = choice.label; picker.append(option); } picker.dataset.choices = choices; }
       picker.value = basis.value;
       picker.onchange = () => basis.choose(picker.value);
+      // Enter on the picker copies the card it prices, as Enter on the search does (HUB-022).
+      picker.onkeydown = event => { if (event.key === 'Enter' && !event.repeat && !event.isComposing && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) { event.preventDefault(); void run(); } };
       let details = rates.querySelector('button');
       if (!details) { details = document.createElement('button'); details.className = 'ui-button'; details.textContent = 'Details'; rates.append(details); }
       details.textContent = row.actionsLabel === 'Refresh quotes' ? 'Refresh quotes' : 'Details';
