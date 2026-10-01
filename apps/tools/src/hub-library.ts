@@ -351,11 +351,17 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
       };
 
         const mode = doc.createElement('p'); mode.textContent = `${item.value.mode === 'none' ? 'Keep difficulty' : item.value.mode === 'hard' ? 'Hard Mode' : 'Normal Mode'} · Target: current character and hero party`; description.append(mode);
+        const resolution = resolveTeamApplyPlan(item.value, controller.library.value!, controller.validate);
         item.value.slots.forEach((slot, index) => {
           if (index > 0 && slot.hero === null && slot.build === null) return;
           const build = controller.library.value?.builds.find(build => build.id === slot.build);
           const label = `${index === 0 ? playerName() : slot.hero === null ? 'Unassigned hero' : heroLabel(slot.hero)} · ${build?.name ?? 'Keep build'}${slot.behaviour ? ` · ${slot.behaviour}` : ''}`;
           if (build) showBuild(build, label); else { const text = doc.createElement('p'); text.textContent = label; description.append(text); }
+          if (!resolution.valid) for (const problem of resolution.problems) {
+            if (!('slot' in problem) || problem.slot !== index) continue;
+            const reason = doc.createElement('p'); reason.textContent = teamApplyStoredProblemMessage(problem);
+            description.lastElementChild?.append(reason);
+          }
         });
       // A refusal or the stored outcome shows under the title, before the roster, never below the fold.
       // The running apply's progress has one owner, the Hub status line (HUB-083).

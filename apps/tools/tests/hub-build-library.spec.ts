@@ -394,6 +394,13 @@ test('interrupted team Apply reopens a review with completed and remaining chang
   await actions.getByRole('menuitem', { name: 'Open in Build Library', exact: true }).click();
   await expect(page.locator('#hub')).toBeHidden();
   await expect(page.getByRole('textbox', { name: 'Team name', exact: true })).toHaveValue('GOM AFK');
+  await page.getByRole('button', { name: 'Close Build Library', exact: true }).click();
+  await page.getByRole('button', { name: 'Open Hub', exact: true }).click();
+  await page.keyboard.press('Meta+r');
+  await search.fill('team balanced vanquish'); await search.press('ArrowRight');
+  await page.keyboard.press('Meta+j');
+  await page.getByRole('menuitem', { name: 'Open in Build Library', exact: true }).click();
+  await expect(page.getByRole('textbox', { name: 'Team name', exact: true })).toHaveValue('Balanced vanquish');
 });
 
 
