@@ -517,7 +517,7 @@ async function completeSyntheticClientStartup(page: Page) {
     if (!Module) throw new Error("the renderer published no Module");
     Module.setStartupProgress("complete", undefined, undefined, undefined, undefined);
   });
-  await page.waitForSelector("#loading.gone");
+  await page.waitForSelector("#loading.gone", { state: "attached" });
 }
 
 export async function driveHarnessRuntime(page: Page) {
