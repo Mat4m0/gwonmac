@@ -1382,8 +1382,11 @@ export interface CoreGwNativeApiBase {
     /** Opens the launcher at a Settings section, for settings the Hub links to. */
     openSettings(section: LauncherSettingsSection): Promise<void>;
     requestQuit(): Promise<void>;
-    /** The account's Quit-or-Reload confirmation sheet, the same one Command-Q opens. */
-    showQuitOrReload(): Promise<void>;
+    /**
+     * The account's Quit-or-Reload confirmation sheet, the same one Command-Q opens. "stayed"
+     * means this window keeps playing; undefined means another request already owns the sheet.
+     */
+    showQuitOrReload(): Promise<"stayed" | "left" | undefined>;
     reloadGame(cause: GameReloadCause): Promise<void>;
     claimRelogIntent(): Promise<boolean>;
   };

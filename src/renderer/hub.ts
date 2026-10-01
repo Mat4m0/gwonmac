@@ -318,7 +318,8 @@ export function createHub(parent: HTMLElement) {
         // Resign's row comes from its owner, with its refusal before Enter (resign.ts).
         // Quit or Reload opens the account's confirmation sheet, never a direct quit (HUB-001).
         // The sheet waits for the press that asked for it, so its repeat or trailing click never answers it.
-        { id: 'reload', title: 'Quit or Reload Game…', detail: 'Opens confirmation for this account', keywords: 'restart reconnect', group: 'Commands', action: 'Review options', run: async () => { close(); await window.gwSurfaces.afterPress(); await window.gwNative.app.showQuitOrReload(); } },
+        // Cancel hands the task back with its search, as Resign's confirmation does (HUB-250).
+        { id: 'reload', title: 'Quit or Reload Game…', detail: 'Opens confirmation for this account', keywords: 'restart reconnect', group: 'Commands', action: 'Review options', run: async () => { suspend(); await window.gwSurfaces.afterPress(); if (await window.gwNative.app.showQuitOrReload() === 'stayed') show(); else close(); } },
         // Settings are found by their own words and open with their control focused (HUB-063).
         // They follow the commands, so a command's own word keeps its row first.
         ...(normaliseHubQuery(query).length < 3 ? [] : FINDABLE_SECTIONS).map(({ section, keywords }) => ({ id: `settings:${section}`, title: section, detail: 'Settings section', keywords, group: 'Settings', action: `Open ${section} settings`, run: () => openSettings({ section }) })),
