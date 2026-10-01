@@ -12,6 +12,7 @@ import {
   encodeCode,
   encodeSection,
   uleb,
+  sleb,
   WASM_HEADER,
 } from "../../src/main/core/wasm-binary.js";
 
@@ -74,13 +75,7 @@ test("the generated frame guard accepts even pointers and rejects unsafe ranges"
   assert.equal(withinMemory(65_536), 0, "a pointer outside memory must fail closed");
 });
 
-test("character switching uses only the certified internal frame dispatcher", () => {
-  const frameChild = 7;
-  const frameParent = 8;
-  const frameResolver = 9;
-  const frameDispatch = 10;
-  const logoutDispatch = 11;
-  const body = characterActionExecute({
+const actionConfig = {
     layout: {
       contextRoot: 100,
       gameContextSlot: 1,
@@ -96,11 +91,11 @@ test("character switching uses only the certified internal frame dispatcher", ()
       frameState: 0x18c,
       frameHashId: 0x134,
     },
-    dispatcherFunctionIndex: logoutDispatch,
-    frameChildFunctionIndex: frameChild,
-    frameParentFunctionIndex: frameParent,
-    frameResolverFunctionIndex: frameResolver,
-    frameDispatchFunctionIndex: frameDispatch,
+    dispatcherFunctionIndex: 4,
+    frameChildFunctionIndex: 0,
+    frameParentFunctionIndex: 1,
+    frameResolverFunctionIndex: 2,
+    frameDispatchFunctionIndex: 3,
     frameDispatchOffset: 0xa8,
     logoutMessageId: 0x1000_009d,
     selectorHash: 11,
@@ -108,7 +103,13 @@ test("character switching uses only the certified internal frame dispatcher", ()
     pendingGlobalIndex: 2,
     expectedIndexGlobalIndex: 3,
     confirmationAttemptsGlobalIndex: 4,
-  });
+  };
+
+test("character switching uses only the certified internal frame dispatcher", () => {
+  const { frameChildFunctionIndex: frameChild, frameParentFunctionIndex: frameParent,
+    frameResolverFunctionIndex: frameResolver, frameDispatchFunctionIndex: frameDispatch,
+    dispatcherFunctionIndex: logoutDispatch } = actionConfig;
+  const body = characterActionExecute(actionConfig);
   const decoded = decodeFunctions(bodyModule(body), [0x31, 0x4a, 0x5a, 85])[0]!;
   const memorySizeChecks = [...body].filter((byte, index) =>
     byte === 0x3f
@@ -235,4 +236,84 @@ test("the Selector slot reader maps account characters to carousel slots read-on
   u32(0x3400 + layout.frameState, 4);
   u32(0x4100 + 4, 2);
   assert.equal(slot(0), -1, "a context owned by another frame reports no slot");
+});
+
+
+test("Play rechecks the Selector identity and refuses a selection changed after confirmation", async () => {
+  // ArenaNet owns these callbacks. Execute our real generated guard against a
+  // bounded memory fixture; count messages at that external game boundary.
+  const text = (value: string) => {
+    const bytes = new TextEncoder().encode(value);
+    return concat(uleb(bytes.length), bytes);
+  };
+  const signature = (parameters: number, returns: boolean) => concat(
+    Uint8Array.of(0x60), uleb(parameters), new Uint8Array(parameters).fill(0x7f),
+    uleb(returns ? 1 : 0), returns ? Uint8Array.of(0x7f) : new Uint8Array(),
+  );
+  const imports = ["child", "parent", "resolve", "frameDispatch", "logout"];
+  const bytes = concat(
+    WASM_HEADER,
+    section(1, concat(uleb(5), signature(3, false), signature(2, true),
+      signature(1, true), signature(4, false), signature(3, false))),
+    section(2, concat(uleb(5), ...imports.map((name, index) => concat(
+      text("game"), text(name), Uint8Array.of(0), uleb([1, 2, 2, 3, 4][index]!),
+    )))),
+    section(3, concat(uleb(1), uleb(0))),
+    section(5, concat(uleb(1), Uint8Array.of(0), uleb(1))),
+    section(6, concat(uleb(5), ...[0, 0, 0, -1, 0].map(value => concat(
+      Uint8Array.of(0x7f, 1, 0x41), sleb(value), Uint8Array.of(0x0b),
+    )))),
+    section(7, concat(uleb(2), text("execute"), Uint8Array.of(0), uleb(5),
+      text("memory"), Uint8Array.of(2), uleb(0))),
+    section(10, encodeCode([characterActionExecute(actionConfig)])),
+  );
+  const module = await WebAssembly.compile(Uint8Array.from(bytes).buffer);
+  let selectedIndex = 1;
+  let playMessages = 0;
+  let selectorClicks = 0;
+  const frames = [1024, 1536, 2048, 2560, 3072];
+  const instance = await WebAssembly.instantiate(module, { game: {
+    child: () => 1,
+    parent: (id: number) => id === 3 ? 4 : 2,
+    resolve: (id: number) => frames[id] ?? 0,
+    frameDispatch: (frame: number, message: number, _wparam: number, payload: number) => {
+      if (message === 0x5a) new DataView(memory.buffer).setUint32(payload, selectedIndex, true);
+      else if (frame === frames[4]! + 0xa8) playMessages += 1;
+      else selectorClicks += 1;
+    },
+    logout: () => {},
+  } });
+  const memory = instance.exports.memory as WebAssembly.Memory;
+  const execute = instance.exports.execute as (action: number, target: number, packet: number) => void;
+  const view = new DataView(memory.buffer);
+  const set = (address: number, value: number) => view.setUint32(address, value, true);
+  const name = (address: number, value: string) => {
+    for (let index = 0; index < value.length; index++) view.setUint16(address + index * 2, value.charCodeAt(index), true);
+  };
+  set(104, 5000); set(112, 2); set(116, 512); set(124, 5);
+  frames.forEach((pointer, id) => {
+    set(512 + id * 4, pointer); set(pointer + 0xbc, id);
+    set(pointer + 0xb8, id); set(pointer + 0x18c, 4);
+  });
+  set(1024 + 0x134, 11); set(2560 + 0x134, 12);
+  set(1024 + 0xa8, 3500); set(1024 + 0xb0, 1); set(3504, 3600);
+  set(3604, 0); set(3608, 3800); set(3612, 2); set(3616, 2);
+  set(3800, 4000); set(3804, 4200);
+  name(4000 + 0x20, "Alpha"); name(4200 + 0x20, "Beta");
+  name(5000 + 0x18, "Alpha"); name(5000 + 0x84 + 0x18, "Beta");
+  execute(2, 1, 6000);
+  assert.equal(view.getUint32(6020, true), 1, "the target was confirmed before the delay");
+  selectedIndex = 0;
+  execute(3, 1, 6000);
+  assert.equal(view.getUint32(6020, true), 7, "changed selection must refuse Play");
+  assert.equal(playMessages, 0);
+  assert.equal(selectorClicks, 0, "refusal must not correct selection with another click");
+  selectedIndex = 1;
+  execute(3, 1, 6000);
+  assert.equal(view.getUint32(6020, true), 1);
+  assert.equal(playMessages, 1, "the exact target may receive one Play message");
+  assert.equal(view.getUint32(6032, true), 1, "diagnostics retain the rechecked Selector index");
+  execute(3, 64, 6000);
+  assert.equal(view.getUint32(6020, true), 3, "an out-of-range target must refuse");
+  assert.equal(playMessages, 1);
 });

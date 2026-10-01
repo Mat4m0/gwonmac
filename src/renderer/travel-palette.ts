@@ -7,7 +7,11 @@ import type { TravelCommand, TravelGameState } from '../shared/travel-command.js
 import type { EmbeddedToolsBundle } from '../shared/tools-bundle-contracts.js';
 import { matchHubRows, type HubSource, type HubViewMount } from '../shared/hub.js';
 import { ensureToolsStylesheet } from './tools-stylesheet.js';
+import { askLeaveArea, leaveAreaCopy } from './leave-area.js';
 import { requireToolsApi } from './tools-native-api.js';
+
+/** The Travel tool is switched on; a map load, character select or PvP only makes it unavailable for now. */
+const toolOn = () => !!window.gwToolsSettings?.().gwonmacTools && !!window.gwToolsSettings?.().travelPalette;
 
 export function createTravelPalette(parent: HTMLElement, command: TravelCommand) {
   const installed = window.gwHub;
@@ -32,7 +36,8 @@ export function createTravelPalette(parent: HTMLElement, command: TravelCommand)
       const specifier = './tools/tools-app.js';
       const bundle: EmbeddedToolsBundle<HTMLElement> = await import(specifier);
       if (disposed) return;
-      app = bundle.createHubTravel({ nativeApi: native, command, development: window.gwNative.init.development, hub });
+      app = bundle.createHubTravel({ nativeApi: native, command, development: window.gwNative.init.development, hub,
+        leaveArea: (place, leave) => askLeaveArea(hub, leaveAreaCopy('travel', place), leave) });
       app.update(state); app.updateFriends(friends);
       unsubscribe = app.source.subscribe(refresh);
       app.source.setVisible(enabled && hub.visible); refresh();
@@ -70,7 +75,7 @@ export function createTravelPalette(parent: HTMLElement, command: TravelCommand)
       };
       retry.onclick = attempt; attempt();
       return () => { active = false; message.remove(); retry.remove(); unmount(); };
-    }, () => enabled, 'travel');
+    }, () => !disposed && toolOn(), 'travel');
   }
   const source: HubSource = {
     feature: 'travelPalette',
@@ -84,7 +89,8 @@ export function createTravelPalette(parent: HTMLElement, command: TravelCommand)
       if (visible) void load().catch(() => { /* The explicit Travel action offers a retry. */ });
     },
     search(query) {
-      return app?.source.search(query) ?? matchHubRows([{ id: 'travel', title: 'Travel', detail: 'Outposts, favourites and recent places', group: 'Tools', keywords: 'tp teleport destination', action: 'Browse travel', navigate: open, run: open }], query);
+      const unavailable = command.unavailable();
+      return app?.source.search(query) ?? matchHubRows([{ id: 'travel', title: 'Travel', detail: 'Outposts, favourites and recent places', group: 'Tools', keywords: 'tp teleport destination', action: 'Browse travel', ...(unavailable ? { unavailable } : {}), navigate: open, run: open }], query);
     },
   };
   const onCommand = (event: Event) => {
@@ -93,10 +99,15 @@ export function createTravelPalette(parent: HTMLElement, command: TravelCommand)
     hub.direct('travel', open);
   };
   window.addEventListener('gw:travel-toggle', onCommand);
+  // Attached for the palette's whole life: a map load, character select or PvP only makes its
+  // rows unavailable, with the command's reason, so the open page and the Home query survive
+  // (HUB-051, HUB-135). Disposal withdraws it; the Travel setting hides it.
+  detach = hub.attach(source);
   return {
     observingFriends: () => enabled && hub.visible,
     async travelToFriend(friend: TravelFriend, generation: number) {
-      if (!enabled) throw new Error('Travel is turned off');
+      const reason = command.unavailable();
+      if (reason) throw new Error(reason);
       const intent = visibilityGeneration;
       await load();
       if (intent !== visibilityGeneration) throw new Error('Travel cancelled');
@@ -107,16 +118,16 @@ export function createTravelPalette(parent: HTMLElement, command: TravelCommand)
       }
       await app.travel(current.mapId);
     },
+    /** Whether Travel can act now; the rows follow the command's reason. */
     setEnabled(next: boolean) {
       if (enabled === next) return;
       enabled = next;
-      if (next) detach = hub.attach(source);
-      else { detach?.(); detach = null; }
+      refresh();
     },
     updateFriends(next: TravelFriends) { friends = next; app?.updateFriends(next); },
     update(next: TravelGameState) { state = next; app?.update(next); },
     dispose() {
-      disposed = true; detach?.(); unsubscribe(); app?.dispose(); listeners.clear();
+      disposed = true; app?.dispose(); detach?.(); unsubscribe(); listeners.clear();
       window.removeEventListener('gw:travel-toggle', onCommand);
     },
   };

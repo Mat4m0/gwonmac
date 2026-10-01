@@ -1,5 +1,5 @@
 /**
- * Owns the ten canonical profession names and icons shared by Core and Tools.
+ * Owns the ten canonical profession names, codes and icons shared by Core and Tools.
  * Numeric IDs stay identical to the game record and no caller keeps a second map.
  */
 const PROFESSION_NAMES = Object.freeze([
@@ -21,13 +21,20 @@ const PROFESSION_ICONS = Object.freeze([
   new URL("./images/professions/10.png", import.meta.url).href,
 ] as const);
 
+/** The short codes Guild Wars players use, as in "Mo/Me". */
+const PROFESSION_CODES = Object.freeze([
+  "", "W", "R", "Mo", "N", "Me", "E", "A", "Rt", "P", "D",
+] as const);
+
 export function professionPresentation(id: number): Readonly<{
   name: string;
   icon: string;
+  code: string;
 }> | null {
   if (!Number.isInteger(id) || id < 1 || id > 10) return null;
   return Object.freeze({
     name: PROFESSION_NAMES[id]!,
     icon: PROFESSION_ICONS[id]!,
+    code: PROFESSION_CODES[id]!,
   });
 }

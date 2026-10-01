@@ -14,6 +14,7 @@ import { travelContextRefusal } from "../../../src/shared/travel-command";
 import {
   DEFAULT_TRAVEL_SHORTCUTS,
   TRAVEL_DESTINATIONS,
+  isPvpTravelDestination,
   travelDestination,
   type TravelRequest,
   type TravelUserPreferences,
@@ -346,7 +347,15 @@ export function createDemoTravelHost(): TravelHost {
     attempt,
     notice,
     history,
-    unavailable: null,
+    // The production command's answers for the synthetic game state, so a map load or a PvP
+    // outpost reads here as it does in game (HUB-135).
+    get unavailable() {
+      const current = state.value;
+      if (current.status !== "ready") {
+        return current.reason === "loading" ? "Travel is unavailable while a map is loading" : "Travel is waiting for Guild Wars";
+      }
+      return isPvpTravelDestination(current.mapId) ? "Travel is unavailable during PvP play" : null;
+    },
     guildHallUnavailable: null,
     async loadPreferences() {
       return current;

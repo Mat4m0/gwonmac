@@ -145,17 +145,10 @@ test("a 27-character account uses the Hub carousel and preserves search, identit
     await dialog.getByRole("button", { name: "Character Switch settings" }).click();
     const horizontalLayout = dialog.getByRole("radio", { name: /Horizontal/u });
     const verticalLayout = dialog.getByRole("radio", { name: /Vertical/u });
-    const searchSetting = dialog.getByRole("checkbox", { name: /Show search bar/u });
     await expect(horizontalLayout).toBeHidden();
     await expect(verticalLayout).toBeHidden();
-    await expect(searchSetting).toBeChecked();
-    await searchSetting.uncheck();
-    await page.keyboard.press("Escape");
-    await expect(search).toBeHidden();
-    await expect.poll(() => isDomActiveElement(selected)).toBe(true);
-
-    await dialog.getByRole("button", { name: "Character Switch settings" }).click();
-    await searchSetting.check();
+    // The search always shows; an unsaved toggle for it is gone (HUB-198).
+    await expect(dialog.getByRole("checkbox", { name: /Show search bar/u })).toHaveCount(0);
 
     await page.keyboard.press("Escape");
     await expect(search).toBeVisible();
@@ -223,7 +216,7 @@ test("a 27-character account uses the Hub carousel and preserves search, identit
       (await dialog.locator(".character-switch-panel").boundingBox())?.y ?? -1
     ).toBeGreaterThanOrEqual(7);
     expect((compactBounds?.y ?? 0) + (compactBounds?.height ?? 0)).toBeLessThanOrEqual(248);
-    await expect(dialog.locator(".character-switch-footer")).toBeInViewport();
+    await expect(page.locator("#hub .hub-footer")).toBeInViewport();
     await page.setViewportSize({ width: 1280, height: 720 });
 
     await search.fill("Character");
@@ -370,13 +363,13 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
       "aria-describedby",
       "character-switch-confirm-copy",
     );
-    await expect.poll(() => isDomActiveElement(page.getByRole("button", { name: "Stay here" }))).toBe(true);
+    await expect.poll(() => isDomActiveElement(page.getByRole("button", { name: "Stay here", exact: true }))).toBe(true);
     await page.keyboard.press("Escape");
     await expect(page.getByRole("heading", { name: "Switch Character" })).toBeVisible();
     await expect(page.locator("body")).not.toHaveAttribute("data-character-switch-request", /.*/u);
 
     await dialog.getByRole("option", { name: /Switch to Private Beta/u }).dblclick();
-    await page.getByRole("button", { name: "Stay here" }).click();
+    await page.getByRole("button", { name: "Stay here", exact: true }).click();
     await expect(dialog).toBeVisible();
     await expect(page.locator("body")).not.toHaveAttribute("data-character-switch-request", /.*/u);
 
@@ -387,8 +380,8 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
       };
       target.__characterSwitchTestRefreshCharacters();
     });
-    await expect(page.getByRole("button", { name: "Leave and switch" })).toHaveAttribute("data-armed", "");
-    await page.getByRole("button", { name: "Leave and switch" }).click();
+    await expect(page.getByRole("button", { name: "Leave and switch to Private Beta", exact: true })).toHaveAttribute("data-armed", "");
+    await page.getByRole("button", { name: "Leave and switch to Private Beta", exact: true }).click();
     await expect(dialog).toBeHidden();
     await expect(page.locator("body")).toHaveAttribute("data-character-switch-request", "0000000000000002");
 
@@ -429,7 +422,7 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
     await expect(hub).toBeHidden();
     await expect(dialog).toBeHidden();
 
-    // A refused Hub request is reported in Hub instead of opening the palette.
+    // A refused Hub row states its reason before any request.
     await page.evaluate(() => {
       const target = window as typeof window & {
         __characterSwitchTestSet(phase: "idle" | "confirming" | "switching" | "failed", context: CharacterSwitchContext): void;
@@ -439,8 +432,9 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
       window.gwHub?.show();
     });
     await hubSearch.fill("char Private Beta");
-    await hub.locator('[data-id="character:0000000000000002"]').dblclick();
-    await expect(hub.locator(".hub-status")).toContainText("Automatic switching stopped.");
+    await expect(hub.locator('[data-id="character:0000000000000002"]')).toHaveAttribute("aria-disabled", "true");
+    await expect(hub.locator('[data-id="character:0000000000000002"]')).toContainText("loading");
+    await hubSearch.press("Enter");
     await expect(dialog).toBeHidden();
     await expect(page.locator("body")).not.toHaveAttribute("data-character-switch-request", /.*/u);
     await page.getByRole("button", { name: "Close Hub", exact: true }).click();
@@ -457,8 +451,8 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
     await hubSearch.fill("char Private Beta");
     await hub.locator('[data-id="character:0000000000000002"]').dblclick();
     await expect(page.getByRole("heading", { name: "Leave this area and switch to Private Beta?" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Leave and switch" })).toHaveAttribute("data-armed", "");
-    await page.getByRole("button", { name: "Leave and switch" }).click();
+    await expect(page.getByRole("button", { name: "Leave and switch to Private Beta", exact: true })).toHaveAttribute("data-armed", "");
+    await page.getByRole("button", { name: "Leave and switch to Private Beta", exact: true }).click();
     await expect(hub).toBeHidden();
     await expect(page.locator("body")).toHaveAttribute(
       "data-character-switch-request",

@@ -13,6 +13,7 @@ import {
   type EnhancementProgram,
 } from "../shared/enhancement-contracts.js";
 import type { AppSettings } from "../shared/contracts.js";
+import { featureActivationRequested } from "../shared/feature-contracts.js";
 import type { ToolboxObservation } from "../shared/builds/live-party.js";
 import type { TravelFriend, TravelFriends } from "../shared/friends.js";
 import {
@@ -617,7 +618,9 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
     const nextEliteIdentity = eliteRegion.status === "ready" ? `${eliteRegion.characterKey}:${eliteRegion.mapId}` : "";
     if (nextEliteIdentity !== eliteIdentity) { party = null; eliteIdentity = nextEliteIdentity; }
     eliteMaps.update(policy().cartography && snapshot().settings.eliteSkillsEnabled);
-    hubPeople?.setEnabled(policy().travel || policy().whispers);
+    // People stays attached through a map load, character select or PvP; its person pages say
+    // why an action waits, and the Home query survives the load (HUB-051, HUB-135).
+    hubPeople?.setEnabled(featureActivationRequested("travel", snapshot().settings) || featureActivationRequested("whispers", snapshot().settings));
     quickItemMoveInstallation?.update(policy().quickItemMove);
   };
   const syncPolicy = (reason: "region" | "settings") => {
@@ -636,7 +639,12 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
     travel: travelToFriend,
   }) : null;
   if (hub) hubPeople = prepare(() => createHubPeople(hub, whisperSession, travelToFriend ? {
-    unavailable: () => { const command = travel?.command(); return command ? command.unavailable() : "Travel is unavailable"; },
+    unavailable: friend => {
+      const command = travel?.command();
+      if (!command) return "Travel is unavailable";
+      const region = playRegions.state;
+      return command.unavailable() ?? (region.status === "ready" && region.mapId === friend.mapId ? "You are already in this outpost" : null);
+    },
     run: travelToFriend,
   } : null, partyInvite));
   const storageCommand = storage?.command() ?? null;

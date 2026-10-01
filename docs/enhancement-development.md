@@ -30,15 +30,12 @@ Current integrated features are:
   action outside the palette. A saved Command-R override takes priority; Scry
   remains available from View. Its default is not serialized as a new shortcut
   key because older settings readers reject unknown keys.
-- **Character Switch** (Core): Command-Shift-R opens an account-character palette
-  independently of Tools. Its default horizontal layout follows Guild Wars'
-  character-selection order, opens on the current character, and wraps only
-  after navigation reaches a visible end. Its alternative vertical layout is
-  alphabetical. Accounts that fit inside the visible carousel are centered and
-  shown in full. Bounded name and primary-profession search is shown by default
-  for every account size and can be hidden. Profession search matches a
-  substring of the canonical profession name and does not search the secondary
-  profession. Character focus remains primary until typing starts a search.
+- **Character Switch** (Core): Command-E opens Characters in the Hub
+  independently of Tools. Its Hub carousel follows Guild Wars'
+  character-selection order, opens on the current character, and holds at
+  both navigation ends. Accounts that fit inside the visible carousel are centered
+  and shown in full. Bounded name and primary-profession search always shows.
+  Search matches word prefixes and excludes secondary professions. Character focus remains primary until typing starts a search.
   The 1–9 and 0 keys select and reveal the first ten characters; only Enter
   switches (D-5). The exact
   companion projection owns the live records. Reload Guild Wars is in the View
@@ -296,7 +293,9 @@ accepted. That one window-local transaction then owns the native action channel
 through Logout, Selector, and Play, including while the window is unfocused or
 hidden. Completion, failure, timeout, and disposal disable the channel and clear
 pending native work. Focus alone never enables it. The existing context, target
-identity, selection proof, and deadline checks still apply; automatic return
+identity, selection proof, and deadline checks still apply. The game-thread
+executor rechecks the Selector target immediately before Play. It refuses a
+changed selection without another click. Automatic return
 after reload retains its separate focus policy.
 
 Run the unpackaged developer probe with:

@@ -17,6 +17,10 @@ import { createHub } from '../../../src/renderer/hub';
 // eslint-disable-next-line no-restricted-imports
 import { installSurfaceController } from '../../../src/renderer/surface-controller';
 // eslint-disable-next-line no-restricted-imports
+import { askLeaveArea, leaveAreaCopy } from '../../../src/renderer/leave-area';
+// eslint-disable-next-line no-restricted-imports
+import { installResignCommand } from '../../../src/renderer/resign';
+// eslint-disable-next-line no-restricted-imports
 import '../../../src/renderer/hub.css';
 // eslint-disable-next-line no-restricted-imports
 import { createHubPeople } from '../../../src/renderer/hub-people';
@@ -49,7 +53,7 @@ export type FixtureCanvasEvent = Readonly<{ type: string; code?: string; repeat?
 export function mountHubFixture(target: HTMLElement) {
   const params = new URLSearchParams(location.search);
   // Slow and failing game answers for the session races (HUB-004): `?accounts-ms=`, `?invite-ms=`,
-  // `?invite-fail=<reason>`, `?switch-fail=<code>`, `?templates-ms=` and `?slow-apply` (the runner on the real clock).
+  // `?invite-fail=<reason>`, `?switch-fail=<code>` (after `?switch-ms=`), `?templates-ms=` and `?slow-apply` (the runner on the real clock).
   const delay = (name: string) => new Promise(resolve => setTimeout(resolve, Number(params.get(name)) || 0));
   // Every game or account action in order, so a test can count what one press ran.
   const actions: string[] = [];
@@ -70,7 +74,7 @@ export function mountHubFixture(target: HTMLElement) {
   }
   window.gwFixtureCanvas = { events: canvasEvents, clear() { canvasEvents.length = 0; countCanvas(); } };
   countCanvas();
-  let settings: AppSettings = { ...DEFAULT_SETTINGS, gwonmacTools: true, travelPalette: true, whispersEnabled: true, buildLibrary: true, tradeChat: true, xunlaiStorage: true };
+  let settings: AppSettings = { ...DEFAULT_SETTINGS, gwonmacTools: true, travelPalette: true, whispersEnabled: true, buildLibrary: true, tradeChat: true, xunlaiStorage: true, resignEnabled: true };
   try { settings.hubShortcuts = JSON.parse(localStorage.getItem('hub-fixture-shortcuts') ?? '[]'); } catch { /* Disposable fixture data. */ }
   const settingsListeners = new Set<(value: AppSettings) => void>();
   let capturingShortcut = false; let cancelShortcutCapture = () => {};
@@ -154,7 +158,7 @@ export function mountHubFixture(target: HTMLElement) {
     else if (switchFailure) {
       // The palette withdraws while the switch runs; the failure arrives after the Hub closed (HUB-035).
       pendingCharacter = null; record(`Character ${key}`); publishCharacter({ status: 'switching', stage: 'logout' });
-      setTimeout(() => publishCharacter({ status: 'failed', code: switchFailure, retryable: true }), 1000);
+      setTimeout(() => publishCharacter({ status: 'failed', code: switchFailure, retryable: true }), Number(params.get('switch-ms')) || 1000);
     }
     else { pendingCharacter = null; record(`Character ${key}`); hub.close(); publishCharacter({ status: 'idle' }); }
   };
@@ -184,6 +188,12 @@ export function mountHubFixture(target: HTMLElement) {
   };
   window.gwCharacterSwitch = characterSource;
   installCharacterSwitchHost(document.body).attach(characterSource);
+  // The production Resign owner over a synthetic command queue: /resign is a recorded game action.
+  const resign = installResignCommand({
+    enhancement_configure_resign: () => 0,
+    enhancement_resign: () => { record('RESIGN'); return 1; },
+  } as unknown as WebAssembly.Exports);
+  resign.update(settings.gwonmacTools && settings.resignEnabled);
   const foundation = createToolboxFoundation(document.body, {
     async mountTool(element, onVisibilityChange) {
       const app = mountToolsApp(element, { host: game.host, hub, mode: 'embedded', initiallyVisible: false, onVisibilityChange });
@@ -194,7 +204,7 @@ export function mountHubFixture(target: HTMLElement) {
       return { setVisible: visible => visible ? app.show() : app.hide(), setActive: app.setActive, requestClose: app.hide, stepBack: app.stepBack, search: app.search, update() {}, dispose: app.dispose };
     },
   });
-  const travel = createHubTravel(travelHost, hub);
+  const travel = createHubTravel(travelHost, hub, (place, leave) => askLeaveArea(hub, leaveAreaCopy('travel', place), leave));
   // `?travel-load-ms=` attaches Travel late, as the game loads its lazy bundle after the Hub opened.
   const travelLoadMs = Number(params.get('travel-load-ms')) || 0;
   if (travelLoadMs) setTimeout(() => hub.attach(travel.source), travelLoadMs); else hub.attach(travel.source);
@@ -230,7 +240,7 @@ export function mountHubFixture(target: HTMLElement) {
     },
     travel: async friend => { await travel.travel(friend.mapId); record(`PARTY.TRAVEL ${friend.character}`); },
   });
-  const people = createHubPeople(hub, session, { unavailable: () => null,
+  const people = createHubPeople(hub, session, { unavailable: friend => { const region = lifecycle.region(); return region.status === 'ready' && region.mapId === friend.mapId ? 'You are already in this outpost' : null; },
     run: async friend => { await travel.travel(friend.mapId); record(`FRIEND.TRAVEL ${friend.character}`); } }, partyInvite);
   people.setEnabled(true);
   // Romi waits in the player's starting outpost, so `invite Romi` is ready to send there.
@@ -270,6 +280,7 @@ export function mountHubFixture(target: HTMLElement) {
     settings = { ...settings, ...event.detail }; for (const listener of settingsListeners) listener(settings);
     foundation.setAvailable({ builds: settings.gwonmacTools && settings.buildLibrary, trade: settings.gwonmacTools && settings.tradeChat });
     people.setEnabled(settings.gwonmacTools && (settings.travelPalette || settings.whispersEnabled));
+    resign.update(settings.gwonmacTools && settings.resignEnabled);
     window.dispatchEvent(new Event('gw:tools-settings'));
   } });
   const controls = document.createElement('div'); controls.className = 'hub-fixture-controls';

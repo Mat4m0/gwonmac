@@ -132,8 +132,8 @@ Skill labels only change the displayed labels, not Guild Wars key bindings.
 Character Switch has its own switch, shortcut, and display settings here.
 It is a Core feature and does not require **Enable Tools**.
 Inside Hub, Character Switch uses compact horizontal cards in character-selection
-order. Its settings control search, profession, level and known-location display.
-The search bar is shown by default and can be hidden for the current app session.
+order. Its settings control profession, level and known-location display; the
+search bar always shows.
 
 Build Library defaults to **Command-B**. **Control-Shift-Space** remains a
 Guild Wars control for calling the selected target without attacking.
@@ -236,15 +236,28 @@ Option-Command-Up and Down to reorder it. **Remove …** in the footer asks firs
 The header shows your character and where you are, including a Guild Hall. In
 an explorable area, Hub opens on **Travel** instead of a recent place, so Enter
 never leaves the area by accident, and a quiet line explains that Travel leaves
-the area. While a map loads, the same line says when Travel returns.
+the area. While a map loads, the same line says when Travel returns. Rows that
+cannot act during a load, at character selection or in PvP stay in place and say
+why before Enter; what you typed and the page you are on stay through the load.
 
-With Travel enabled, search an outpost or your custom Travel phrase. Travel,
-favourites, recent places, and Guild Hall stay in the same window. A click on a
+With Travel enabled, search an outpost or your custom Travel phrase. Travel
+finds a destination by the start of its words (`kam`, `jewel istan`), an
+official shortcut (`ha`, `eotn`) or your phrase; it never guesses from a typo or
+a campaign. Travel, favourites, recent places, and Guild Hall stay in the same
+window, and the header shows where you are. A click on a
 destination selects it; press Enter, click **Travel to …** in the footer, or
 double-click the destination to travel. With an empty search, the number keys
-1–9 select that favourite; press Enter to travel. A trip closes Hub. The favourite for
-the outpost you are in is shown but cannot be chosen. Command-T
-and `/tp` also open Travel inside Hub.
+1–9 select that favourite; press Enter to travel. A trip closes Hub. The outpost
+you are in and places this character has not unlocked stay in the list with the
+reason, and cannot be chosen. The selection stays on its destination while the
+game state changes; if that destination goes away, nothing else is selected.
+Command-1 to Command-9 saves the selected destination under that number; a
+destination has one number, and the note names what the number held before.
+From an explorable area, every trip from Hub first asks "Leave this area and
+travel to …?": a place row, the Travel view, a friend's **Travel to outpost** and
+**Travel and invite**. **Stay here** is selected, so Enter stays; **Leave and
+travel to …** accepts a click only after a brief moment.
+Command-T and `/tp` also open Travel inside Hub.
 
 Search a friend's alias or character name and press Enter to choose an action.
 With Whispers enabled, people search also finds your conversations, recent
@@ -337,8 +350,9 @@ Use Actions to pin a result or give it an exact search phrase. A new phrase cann
 start with a command word such as `team` or `invite`, or read as a calculation. A
 phrase saved before its first word became a command word keeps its pin but no
 longer matches. Search **Hub
-preferences** to reorder pins, remove saved actions, or reset aliases. Search `resign` for its existing
-confirmation, or `reload` for the account's Quit or Reload dialog. The `reload`
+preferences** to reorder pins, remove saved actions, or reset aliases. Search `resign` for its
+confirmation: the row says it asks before sending `/resign` and works only in a PvE area, and
+Cancel or Escape returns to your search. Search `reload` for the account's Quit or Reload dialog. The `reload`
 row opens the same dialog as Command-Q and never quits on its own. Call target
 has no Hub row; use its shortcut while the game has keyboard focus.
 
@@ -352,25 +366,33 @@ the Guild Wars character-selection screen. You can also search for a character
 in Hub and select it to switch directly. On the character-selection screen,
 every character can be selected, and the switch enters it without a logout.
 The search bar is shown for every account size. Initial focus remains on the
-current character. Press Left or Up for the previous character. Press Right or
-Down for the next character. Control-N and Control-P step too, Page Up and Page
+current character. Press Left for the previous character and Right or Down for
+the next; Up moves to the search. Control-N and Control-P step too, Page Up and Page
 Down move by the visible cards, and Home and End jump to the first and last
 character; the carousel stops at both ends instead of wrapping. Start typing a character name or primary profession
-to move focus to search. Secondary professions are not searched. The number keys
+to move focus to search. Secondary professions are not searched. A search keeps
+the chosen card while it still matches, and clearing it returns to the card you
+chose before. Each card shows the profession pair, such as `Mo/Me`, and marks a
+PvP character. The number keys
 1–9 and 0 select one of the first ten characters and scroll its card into view;
 they never switch. A click on a card selects it; press Enter, click
 **Switch to …** in the footer, or double-click the card to switch. In an
 explorable area Hub asks "Leave this area and switch to …?" with the name.
 **Leave and switch to …** accepts a click only after a brief moment. Opening
-Switch Character again always starts on the current character. Use **View → Reload Guild Wars**
+Switch Character again always starts on the current character. While a map
+loads or in active PvP, Switch Character says so when it opens and on each
+`char` row, and Enter switches nothing. While a switch runs, a thin line
+"Switching to …" covers the game and ignores clicks; a second request says that
+a switch is already running. Use **View → Reload Guild Wars**
 to reload.
 
 Enable **Resign** in **Settings → Tools**. It is off by default and requires
 Tools. Its shortcut is unassigned by default and can be assigned or cleared
 in the same row. Turning off Resign or Tools disables it immediately.
 
-Press the shortcut for **Resign** in PvE. Press Enter to confirm sending
-`/resign`, or click **Resign** in the in-game dialog. The dialog accepts a
+Press the shortcut for **Resign** in PvE. The dialog says that everyone must
+resign before the party returns to the outpost. Press Enter to confirm sending
+`/resign`, or click the red **Resign** button in the in-game dialog. The dialog accepts a
 confirmation only after a brief moment, so the press that opened it cannot also
 confirm it. Escape, **Cancel**, the close
 button, and clicking outside cancel. Close text fields first.
@@ -481,7 +503,7 @@ calculations from your entered numbers, not observed character progress.
 See [title calculators](hub-title-calculators.md) for supported items and syntax.
 
 
-Inside Hub, recent Travel destinations form a horizontal carousel and Favorites
+Inside Hub, recent Travel destinations form a horizontal carousel and Favourites
 stay in a compact grid. With an empty query, arrows choose and Enter travels;
 the selection stops at the first and last destination.
 Escape returns to Hub. While editing a query, Left/Right preserve caret movement;

@@ -98,6 +98,11 @@
 .hub-view .hub-detail { padding:16px 20px; display:grid; gap:12px; }
 .hub-view .hub-detail h2,.hub-view .hub-detail p { margin:0; }
 .hub-view .hub-detail pre { white-space:pre-wrap; font:inherit; }
+/* "Leave this area?" (D-27): the question, its consequence, Stay here first and the consequential leave. */
+.hub-leave-area { padding:16px 20px; display:grid; gap:12px; }
+.hub-leave-area h2,.hub-leave-area p { margin:0; }
+.hub-leave-area p { color:var(--ui-text-muted); }
+.hub-leave-area-actions { display:flex; justify-content:flex-end; flex-wrap:wrap; gap:var(--ui-space-2); padding-top:var(--ui-space-2); }
 
 .hub-view #character-switch-root { position:relative; inset:auto; width:100%; height:100%; padding:0; border:0; background:none; }
 .hub-view .character-switch-panel { position:relative; inset:auto; width:100%!important; height:100%; max-height:100%; transform:none; box-shadow:none; }
@@ -182,14 +187,17 @@
 .hub-view .character-switch-search svg { left:20px; width:20px; height:20px; }
 .hub-view .character-switch-search .ui-input { padding:8px 8px 8px 36px; font:var(--ui-type-window-size)/var(--ui-type-window-line) var(--ui-font-interface); }
 .hub-view .character-switch-carousel { padding:12px 16px; gap:8px; }
-.hub-view .character-switch-panel[data-layout=horizontal] .character-switch-list { grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px; }
+/* The cards sit in the middle of the page instead of above an empty band (HUB-199). */
+.hub-view .character-switch-panel { display:flex; flex-direction:column; }
+.hub-view .character-switch-panel > .character-switch-carousel { margin-block:auto; }
+/* As many cards as fit at 100 px or more in the carousel's width: 1, 3 or 5 (HUB-076, set by the palette). */
+.hub-view .character-switch-panel[data-layout=horizontal] .character-switch-list { grid-template-columns:repeat(var(--character-cards,5),minmax(0,1fr)); gap:8px; }
 .hub-view .character-switch-panel[data-layout=horizontal] .character-switch-row { min-height:138px; padding:10px 8px; border-radius:var(--ui-radius-sm); background:var(--ui-well-fill); box-shadow:none; }
 .hub-view .character-switch-panel[data-layout=horizontal] .character-switch-row[data-selected=true] { background:var(--ui-selection-fill); box-shadow:inset 0 0 0 1px var(--ui-line-soft); }
 .hub-view .character-switch-row[aria-current=true] { border-color:transparent; }
 .hub-view .character-switch-panel[data-layout=horizontal] .character-switch-row img { width:28px; height:28px; margin:4px 0; }
 .hub-view .character-switch-panel[data-layout=horizontal] .character-switch-name { font:500 13px/1.3 var(--ui-font-interface); white-space:normal; }
 .hub-view .character-switch-panel[data-layout=horizontal] .character-switch-meta { font:11px/1.35 var(--ui-font-interface); white-space:normal; }
-.hub-view .character-switch-footer { margin-top:auto; border-top:1px solid var(--ui-line-soft); font:12px/1.4 var(--ui-font-interface); padding:14px 20px; }
 .hub-view .character-switch-settings fieldset:has(input[name=character-switch-layout]) { display:none; }
 .hub-view .travel-history .travel-recent-grid { display:flex; gap:10px; overflow-x:auto; padding:2px 1px 10px; scroll-snap-type:x proximity; }
 .hub-view .travel-history .travel-recent { flex:0 0 190px; min-height:124px; display:flex; flex-direction:column; align-items:flex-start; justify-content:center; gap:10px; padding:14px; background:var(--ui-well-fill); scroll-snap-align:start; }
@@ -207,11 +215,11 @@
   .hub-view .travel-history .travel-recent { flex-basis:160px; }
 }
 
-@media(max-width:640px) { .hub-view .character-switch-panel[data-layout=horizontal] .character-switch-list { grid-template-columns:repeat(3,minmax(0,1fr)); } }
 
 /* Character identity: artwork first, compact metadata and aligned shortcut badges. */
 .hub-view .character-switch-panel[data-layout=horizontal] .character-switch-row img { width:42px; height:42px; outline:none; border:0; box-shadow:none; margin:5px 0 8px; }
 .hub-view .character-switch-panel[data-layout=horizontal] .character-switch-key { position:absolute; top:8px; left:8px; width:21px; height:21px; display:grid; place-items:center; border-radius:var(--ui-radius-sm); background:var(--ui-well-fill); font:500 11px/1 var(--ui-font-interface); }
+.hub-view .character-switch-panel[data-layout=horizontal] .character-switch-key:empty { display:none; }
 .hub-view .character-switch-panel[data-layout=horizontal] .character-switch-row { min-height:146px; padding-top:12px; }
 .hub-view .character-switch-panel[data-layout=horizontal] .character-switch-meta { margin-top:7px; display:block; text-align:center; width:100%; }
 .hub-view .character-switch-panel[data-layout=horizontal] .character-switch-row { display:grid; grid-template-columns:minmax(0,1fr); grid-template-rows:48px minmax(0,1fr); justify-items:center; align-items:start; gap:6px; height:154px; min-height:154px; padding:12px 8px; }

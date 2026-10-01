@@ -161,7 +161,7 @@ test('a modified Enter never runs the primary; only a plain Enter does', async (
   const search = page.locator('.hub-search input');
   await search.fill('build smiter'); await search.press('Enter');
   await expect(page.locator('.hub-primary')).toHaveText(/^Apply Smiter to Fixture Monk/);
-  for (const chord of ['Meta+Enter', 'Control+Enter', 'Alt+Enter']) {
+  for (const chord of ['Meta+Enter', 'Control+Enter', 'Alt+Enter', 'Shift+Enter']) {
     await search.press(chord);
     await expect(page.locator('#hub')).toBeVisible();
     await expect(page.locator('#app')).not.toHaveAttribute('data-action', /command|apply/);
@@ -173,7 +173,7 @@ test('a modified Enter never runs the primary; only a plain Enter does', async (
   await page.keyboard.press('Meta+t');
   const travel = page.getByRole('combobox', { name: 'Destination, phrase, or friend' });
   await expect(travel).toBeFocused();
-  await travel.press('Meta+Enter');
+  for (const chord of ['Meta+Enter', 'Control+Enter', 'Alt+Enter', 'Shift+Enter']) await travel.press(chord);
   await page.waitForTimeout(700);
   await expect(page.locator('#hub')).toBeVisible();
   await expect(travel).toBeFocused();
@@ -268,7 +268,7 @@ test('a fresh Home in an explorable area starts on Travel, says why, and Enter n
   await expect(page.locator('.hub-row[aria-selected="true"]')).toHaveAttribute('data-id', 'travel');
   await expect(page.locator('.hub-primary')).toHaveText(/^Browse travel/);
   // D-26: the header names the area and one quiet line names what it holds back.
-  await expect(page.locator('.hub-context')).toHaveText('Fixture Monk · Explorable area');
+  await expect(page.locator('.hub-context')).toHaveText('Fixture Monk · North Kryta Province · Explorable area');
   await expect(page.locator('.hub-lifecycle')).toHaveText('Explorable area — Travel leaves this area');
   await search.press('Enter');
   await expect(page.locator('.hub-caption')).toHaveText('Travel');
@@ -289,6 +289,199 @@ test('a fresh Home in an explorable area starts on Travel, says why, and Enter n
   await search.fill('invite romi'); await search.press('Enter');
   await expect(page.locator('.hub-status')).toBeVisible();
   await expect(page.locator('.hub-lifecycle')).toBeHidden();
+});
+
+test.describe('Leave this area? before Travel (D-27, HUB-027)', () => {
+  const question = (page: import('@playwright/test').Page) => page.locator('#leave-area-question');
+  test('a trip from the Travel view asks first, Stay returns, and only an armed Leave travels', async ({ page }) => {
+    await page.goto('/?hub&lifecycle=pve-explorable');
+    await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+    await page.keyboard.press('Meta+t');
+    const travel = page.getByRole('combobox', { name: 'Destination, phrase, or friend' });
+    await expect(travel).toBeFocused();
+    await expect(page.locator('#travel-recent-449')).toHaveAttribute('data-active', 'true');
+    await travel.press('Enter');
+    await expect(question(page)).toHaveText('Leave this area and travel to Kamadan, Jewel of Istan?');
+    await expect(page.locator('#leave-area-stay')).toBeFocused();
+    await expect(page.locator('.hub-primary')).toHaveText(/^Stay here/);
+    // A second quick Enter stays: the safe choice has the keyboard.
+    await page.keyboard.press('Enter');
+    await expect(travel).toBeFocused();
+    await expect(page.locator('#travel-recent-449')).toHaveAttribute('data-active', 'true');
+    await travel.press('Enter');
+    const leave = page.getByRole('button', { name: 'Leave and travel to Kamadan, Jewel of Istan', exact: true });
+    await leave.dblclick();
+    await expect(page.locator('#app')).not.toHaveAttribute('data-action', /TRAVEL/);
+    await expect(leave).toHaveAttribute('data-armed', '');
+    await leave.click();
+    await expect(page.locator('#app')).toHaveAttribute('data-action', 'TRAVEL Kamadan, Jewel of Istan');
+    await expect(page.locator('#hub')).toBeHidden();
+  });
+
+  test('a Home place row and Travel and invite ask the same step, and staying sends nothing', async ({ page }) => {
+    await page.goto('/?hub&party&lifecycle=pve-explorable');
+    await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+    const search = page.getByRole('combobox', { name: searchName });
+    await search.fill('kamadan'); await search.press('Enter');
+    await expect(question(page)).toHaveText('Leave this area and travel to Kamadan, Jewel of Istan?');
+    await page.keyboard.press('Escape');
+    await expect(search).toHaveValue('kamadan');
+    await expect(page.locator('.hub-row[aria-selected="true"]')).toHaveAttribute('data-id', 'place:449');
+    await expect(page.locator('.hub-status')).toBeHidden();
+    await search.fill('zed beta'); await search.press('Enter');
+    const selected = page.locator('.hub-row[aria-selected="true"]');
+    while (!await selected.getAttribute('data-id').then(id => id === 'person:travel-invite')) await search.press('ArrowDown');
+    await search.press('Enter');
+    await expect(question(page)).toHaveText('Leave this area and travel to Ascalon City?');
+    await page.locator('#leave-area-stay').click();
+    await expect(page.locator('.hub-breadcrumbs')).toHaveText('Home›Zed Beta');
+    await expect(selected).toHaveAttribute('data-id', 'person:travel-invite');
+    await expect(page.locator('.hub-status')).toBeHidden();
+    await expect(page.locator('#app')).not.toHaveAttribute('data-action', /TRAVEL/);
+  });
+});
+
+test('Resign says what it does before Enter, reads as destructive, and Cancel returns to the search (HUB-250, HUB-251)', async ({ page }) => {
+  await page.goto('/?hub&lifecycle=pve-explorable');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  const search = page.getByRole('combobox', { name: searchName });
+  const row = page.locator('.hub-row[data-id="resign"]');
+  await search.fill('resign');
+  await expect(row).toHaveAttribute('aria-selected', 'true');
+  await expect(row.locator('.hub-detail')).toHaveText('Asks before sending /resign · PvE only');
+  await expect(page.locator('.hub-primary')).toHaveAttribute('data-variant', 'danger');
+  const dialog = page.locator('#resign-dialog');
+  const confirm = dialog.getByRole('button', { name: 'Resign', exact: true });
+  for (const cancel of ['Escape', 'Cancel'] as const) {
+    await page.evaluate(() => window.gwFixtureCanvas?.clear());
+    await search.press('Enter');
+    await expect(dialog).toBeVisible();
+    await expect(confirm).toHaveAttribute('data-variant', 'danger');
+    await expect(dialog).toContainText('When everyone has resigned, the party returns to the outpost');
+    if (cancel === 'Escape') await page.keyboard.press('Escape');
+    else await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await expect(dialog).toBeHidden();
+    await expect(search).toBeFocused();
+    await expect(search).toHaveValue('resign');
+    await expect(row).toHaveAttribute('aria-selected', 'true');
+    expect(await page.evaluate(() => window.gwFixtureCanvas?.events.filter(event => event.code === 'Escape').length)).toBe(0);
+  }
+  await expect(page.locator('#app')).not.toHaveAttribute('data-action', 'RESIGN');
+});
+
+test('Resign rejects early confirmation and trailing multi-clicks before sending once (HUB-245)', async ({ page }) => {
+  const initial = new Date('2026-09-30T12:00:00Z');
+  await page.clock.install({ time: initial });
+  await page.goto('/?hub&lifecycle=pve-explorable');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  await page.clock.pauseAt(new Date('2026-09-30T12:01:00Z'));
+  const search = page.locator('.hub-search input');
+  await search.fill('resign'); await search.press('Enter');
+  const dialog = page.locator('#resign-dialog');
+  const confirm = dialog.getByRole('button', { name: 'Resign', exact: true });
+  for (const advance of [0, 100, 250]) {
+    await page.clock.runFor(advance);
+    for (const action of ['click', 'Enter']) {
+      if (action === 'click') await confirm.dispatchEvent('click', { detail: 1 });
+      else await confirm.press('Enter');
+      await expect(page.locator('#app')).not.toHaveAttribute('data-action', 'RESIGN');
+      await expect(dialog).toBeVisible();
+      await expect(confirm).not.toHaveAttribute('data-armed', '');
+    }
+  }
+  await page.clock.runFor(100);
+  await expect(confirm).toHaveAttribute('data-armed', '');
+  for (const detail of [2, 3]) await confirm.dispatchEvent('click', { detail });
+  await expect(dialog).toBeVisible();
+  await expect(page.locator('#app')).not.toHaveAttribute('data-action', 'RESIGN');
+  await confirm.dispatchEvent('click', { detail: 1 });
+  await expect(page.locator('#app')).toHaveAttribute('data-action', 'RESIGN');
+  await expect(dialog).toBeHidden();
+});
+
+test('Resign sends once from its armed confirmation, and says before Enter why it cannot while a map loads', async ({ page }) => {
+  await page.goto('/?hub&lifecycle=pve-explorable');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  const search = page.getByRole('combobox', { name: searchName });
+  const row = page.locator('.hub-row[data-id="resign"]');
+  await search.fill('resign'); await search.press('Enter');
+  const confirm = page.locator('#resign-dialog').getByRole('button', { name: 'Resign', exact: true });
+  await expect(confirm).toHaveAttribute('data-armed', '');
+  await confirm.click();
+  await expect(page.locator('#app')).toHaveAttribute('data-action', 'RESIGN');
+  await expect(page.locator('#hub')).toBeHidden();
+  // While a map loads, the reason shows on the row before Enter (HUB-135).
+  await page.getByLabel('Lifecycle state', { exact: true }).selectOption('map-loading');
+  await search.fill('resign');
+  await expect(row).toHaveAttribute('aria-disabled', 'true');
+  await expect(row.locator('.hub-detail')).toHaveText('Resign is available with Tools enabled in a PvE area.');
+});
+
+test('a friend in your outpost offers no trip, and says so before Enter (HUB-068)', async ({ page }) => {
+  await page.goto('/?hub&party');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  const search = page.getByRole('combobox', { name: searchName });
+  await search.fill('zed delta'); await search.press('Enter');
+  await expect(page.locator('.hub-breadcrumbs')).toHaveText('Home›Zed Delta');
+  for (const id of ['person:travel', 'person:travel-invite']) {
+    const row = page.locator(`.hub-row[data-id="${id}"]`);
+    await expect(row).toHaveAttribute('aria-disabled', 'true');
+    await expect(row.locator('.hub-detail')).toHaveText('You are already in this outpost');
+  }
+  const selected = page.locator('.hub-row[aria-selected="true"]');
+  while (await selected.getAttribute('data-id') !== 'person:travel') await search.press('ArrowDown');
+  await expect(page.locator('#hub .hub-primary')).toBeDisabled();
+  await search.press('Enter');
+  await expect(page.locator('#app')).not.toHaveAttribute('data-action', /TRAVEL/);
+});
+
+test('while a map loads, the Travel rows say why before Enter and a fresh Home never starts on them (HUB-135)', async ({ page }) => {
+  await page.goto('/?hub&lifecycle=map-loading');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  const search = page.getByRole('combobox', { name: searchName });
+  const selected = page.locator('.hub-row[aria-selected="true"]');
+  await expect(selected).not.toHaveAttribute('aria-disabled', 'true');
+  await expect(selected).not.toHaveAttribute('data-id', 'travel');
+  await search.fill('travel');
+  const travel = page.locator('.hub-row[data-id="travel"]');
+  await expect(travel).toHaveAttribute('aria-disabled', 'true');
+  await expect(travel.locator('.hub-detail')).toHaveText('Travel is unavailable while a map is loading');
+  await search.fill('travel kamadan');
+  const kamadan = page.locator('.hub-row[data-id="place:449"]');
+  await expect(kamadan).toHaveAttribute('aria-disabled', 'true');
+  await expect(kamadan.locator('.hub-detail')).toHaveText('Travel is unavailable while a map is loading');
+  await expect(page.locator('#hub .hub-primary')).toBeDisabled();
+  await search.press('Enter');
+  await expect(page.locator('.hub-caption')).toHaveText('Home');
+  await expect(page.locator('#app')).not.toHaveAttribute('data-action', /TRAVEL/);
+  await expect(page.locator('#hub')).not.toContainText('Unavailable in the current game state.');
+});
+
+test('a tool that withdraws keeps the Home query and selection, and closes only its own phrase editor (HUB-051, HUB-231)', async ({ page }) => {
+  await page.goto('/?hub');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  const search = page.getByRole('combobox', { name: searchName });
+  await search.fill('team gom a');
+  const selected = page.locator('.hub-row[aria-selected="true"]');
+  await expect(selected).toContainText('GOM AFK');
+  // Turning off Travel and Whispers withdraws the People source while Home shows a search.
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: { travelPalette: false, whispersEnabled: false } })));
+  await expect(search).toHaveValue('team gom a');
+  await expect(selected).toContainText('GOM AFK');
+  await search.press('End'); await page.keyboard.type('fk');
+  await expect(search).toHaveValue('team gom afk');
+  await expect(selected).toContainText('GOM AFK');
+  // A phrase editor opened for a place closes with Travel; Settings stays whatever tool changes.
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: { travelPalette: true } })));
+  await search.fill('kamadan');
+  await expect(selected).toHaveAttribute('data-id', 'place:449');
+  await page.keyboard.press('Meta+j');
+  await page.getByRole('menuitem', { name: /Set search phrase/ }).click();
+  await expect(page.locator('.hub-caption')).toHaveText('Search phrase');
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: { buildLibrary: false } })));
+  await expect(page.locator('.hub-caption')).toHaveText('Search phrase');
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: { travelPalette: false } })));
+  await expect(page.locator('.hub-caption')).toHaveText('Home');
 });
 
 test('a Guild Hall is an outpost: no explorable label, no leaving line, and a fresh Home keeps Continue', async ({ page }) => {
@@ -610,6 +803,100 @@ test.describe('Characters: typing never switches', () => {
     await expect(page.locator('#app')).toHaveAttribute('data-action', 'Character toefte');
   });
 
+  // HUB-073: a state that refuses switching says so on open, in plain words, and Enter asks nothing.
+  test('while a map loads, Characters and char rows say so before Enter and switch nothing', async ({ page }) => {
+    await page.goto('/?hub&lifecycle=map-loading');
+    await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+    const search = page.getByRole('combobox', { name: searchName });
+    await search.fill('char toefte');
+    const row = page.locator('.hub-row[data-id="character:toefte"]');
+    await expect(row).toHaveAttribute('aria-disabled', 'true');
+    await expect(row.locator('.hub-detail')).toHaveText('Wait until Guild Wars finishes loading, then try again.');
+    await search.press('Escape');
+    await page.keyboard.press('Meta+e');
+    await expect(page.locator('.character-switch-status')).toHaveText('Wait until Guild Wars finishes loading, then try again.');
+    await expect(card(page, 'monk')).toBeFocused();
+    await page.keyboard.press('ArrowRight');
+    await expect(card(page, 'ranger')).toHaveAttribute('aria-disabled', 'true');
+    await expect(page.locator('#hub .hub-primary')).toBeDisabled();
+    await page.keyboard.press('Enter');
+    expect(await action(page)).toBeNull();
+    await expect(page.locator('#hub')).not.toContainText('(game-loading)');
+    await expect(page.locator('.character-switch-details')).toBeHidden();
+  });
+
+  // D-30, HUB-193: a running switch covers the game with one quiet line, absorbs clicks, and answers a second request.
+  test('a running switch shows its veil, keeps clicks from the game, and says a switch is running', async ({ page }) => {
+    await page.goto('/?hub&switch-fail=selector-timeout&switch-ms=4000');
+    await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+    const search = page.getByRole('combobox', { name: searchName });
+    await search.fill('char toefte'); await search.press('Enter');
+    const veil = page.locator('.character-switch-veil');
+    await expect(veil).toHaveText('Switching to Toefte…');
+    await expect(veil.locator('button, a, input, [tabindex]')).toHaveCount(0);
+    await page.evaluate(() => window.gwFixtureCanvas?.clear());
+    await page.mouse.click(300, 300);
+    expect(await page.evaluate(() => window.gwFixtureCanvas?.events.filter(event => event.type !== 'keydown' && event.type !== 'keyup').length)).toBe(0);
+    await page.keyboard.press('Meta+e');
+    await expect(page.locator('.hub-receipt')).toHaveText('A character switch is already running.');
+    await expect(veil).toBeHidden({ timeout: 10_000 });
+    await expect(page.locator('.hub-receipt')).toHaveText('Automatic switching stopped. Continue from the Guild Wars character selector.');
+    await expect(page.locator('#app')).toHaveAttribute('data-action', 'Character toefte');
+  });
+
+  // HUB-197, HUB-195, HUB-194: search keeps the chosen card; badges and profession pairs read true.
+  test('clearing, spacing or pasting in the search keeps the chosen card, and cards show their profession pair', async ({ page }) => {
+    await page.goto('/?hub');
+    await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Meta+e');
+    await page.keyboard.press('3');
+    await expect(card(page, 'mesmer')).toBeFocused();
+    await page.keyboard.type('fix');
+    const query = page.locator('#character-switch-query');
+    await expect(query).toHaveValue('fix');
+    await expect(card(page, 'mesmer')).toHaveAttribute('aria-selected', 'true');
+    await query.press('Space');
+    await expect(card(page, 'mesmer')).toHaveAttribute('aria-selected', 'true');
+    await query.fill('');
+    await expect(card(page, 'mesmer')).toHaveAttribute('aria-selected', 'true');
+    await query.fill('toe');
+    await expect(card(page, 'toefte')).toHaveAttribute('aria-selected', 'true');
+    // A search hides the number badges instead of drawing empty squares.
+    await expect(card(page, 'toefte').locator('.character-switch-key')).toBeHidden();
+    await expect(card(page, 'toefte').locator('.character-switch-meta')).toContainText('Mo/Me');
+    expect(await action(page)).toBeNull();
+  });
+
+  // HUB-076: a narrow Hub shows fewer, wider cards instead of five squeezed ones.
+  test('a narrow Hub shows at most three cards, each at least 100 px wide', async ({ page }) => {
+    await page.goto('/?hub');
+    await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+    await page.getByRole('button', { name: 'Unlock Hub position', exact: true }).click();
+    const grip = page.getByRole('button', { name: 'Resize Hub', exact: true });
+    const corner = (await grip.boundingBox())!;
+    await page.mouse.move(corner.x + 10, corner.y + 10);
+    await page.mouse.down(); await page.mouse.move(corner.x - 900, corner.y + 10, { steps: 4 }); await page.mouse.up();
+    await page.keyboard.press('Meta+e');
+    await expect(card(page, 'monk')).toBeFocused();
+    const widths = await page.locator('#character-switch-list button[data-row]').evaluateAll(cards => cards.map(card => card.getBoundingClientRect().width));
+    expect(widths.length).toBeGreaterThan(0);
+    expect(widths.length).toBeLessThanOrEqual(3);
+    for (const width of widths) expect(width).toBeGreaterThanOrEqual(100);
+  });
+
+  // HUB-198, HUB-199: one name, no unsaved search toggle.
+  test('Characters shows one name and keeps no unsaved search setting', async ({ page }) => {
+    await page.goto('/?hub');
+    await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Meta+e');
+    await expect(page.locator('.hub-caption')).toHaveText('Characters');
+    await expect(page.locator('#character-switch-title')).toHaveClass(/ui-sr-only/);
+    await page.getByRole('button', { name: 'Character Switch settings', exact: true }).click();
+    await expect(page.getByText('Show search bar')).toHaveCount(0);
+  });
+
   // HUB-034, HUB-075: the confirmation names the character; Stay returns to the row that asked.
   test('Leave this area names the character, and Stay returns to the search that asked', async ({ page }) => {
     await page.goto('/?hub&lifecycle=pve-explorable');
@@ -633,6 +920,57 @@ test.describe('Characters: typing never switches', () => {
 });
 
 // D-5, HUB-003: a Travel digit selects its favourite; a held digit repeats nothing.
+test('Travel keeps selection under a still pointer and changes it only on real movement (HUB-012)', async ({ page }) => {
+  await page.goto('/?hub');
+  await page.mouse.move(0, 0);
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  await page.keyboard.press('Meta+t');
+  const search = page.locator('#travel-search-input');
+  const eye = page.locator('#travel-favorite-4');
+  await expect(search).toBeFocused();
+  const box = await eye.boundingBox();
+  if (!box) throw new Error('Expected a painted favourite');
+  await page.mouse.move(box.x + 10, box.y + 10);
+  await expect(search).toHaveAttribute('aria-activedescendant', 'travel-favorite-4');
+  await search.press('Home');
+  await expect(search).toHaveAttribute('aria-activedescendant', 'travel-recent-449');
+  await page.mouse.wheel(0, 120);
+  await page.mouse.move(box.x + 10, box.y + 10);
+  await expect(search).toHaveAttribute('aria-activedescendant', 'travel-recent-449');
+  await page.mouse.move(box.x + 11, box.y + 10);
+  await expect(search).toHaveAttribute('aria-activedescendant', 'travel-favorite-4');
+  await page.getByRole('button', { name: 'Close Hub', exact: true }).click();
+  await page.mouse.move(box.x + 11, box.y + 10);
+  await page.keyboard.press('Meta+t');
+  await expect(search).toHaveAttribute('aria-activedescendant', 'travel-recent-449');
+  await expect(page.locator('#app')).not.toHaveAttribute('data-action', /TRAVEL/);
+});
+
+test('Travel favourite arrows follow the painted columns and hold at the ends (HUB-069)', async ({ page }) => {
+  await page.goto('/?hub');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  await page.keyboard.press('Meta+t');
+  const search = page.locator('#travel-search-input');
+  await expect(search).toBeFocused();
+  for (const [width, destination] of [[1280, 'travel-favorite-3'], [500, 'travel-favorite-2']] as const) {
+    await page.setViewportSize({ width, height: 900 });
+    await search.press('1');
+    await expect(search).toHaveAttribute('aria-activedescendant', 'travel-favorite-0');
+    await search.press('ArrowDown');
+    await expect(search).toHaveAttribute('aria-activedescendant', destination);
+    await search.press('End');
+    await expect(search).toHaveAttribute('aria-activedescendant', 'travel-favorite-5');
+    await search.press('ArrowDown');
+    await expect(search).toHaveAttribute('aria-activedescendant', 'travel-favorite-5');
+    await search.press('Home');
+    const first = await search.getAttribute('aria-activedescendant');
+    await search.press('ArrowUp');
+    await expect(search).toHaveAttribute('aria-activedescendant', first!);
+    await expect(search).toBeFocused();
+    await expect(page.locator('#app')).not.toHaveAttribute('data-action', /TRAVEL/);
+  }
+});
+
 test('a Travel number key selects its favourite, a held one repeats nothing, and only Enter travels', async ({ page }) => {
   await page.goto('/?hub');
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');

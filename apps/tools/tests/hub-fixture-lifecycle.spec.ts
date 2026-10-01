@@ -14,7 +14,7 @@ test.describe('game lifecycle', () => {
     await open(page, '&lifecycle=pvp-outpost');
     const search = page.locator('.hub-search input');
     await expect(lifecycle(page)).toHaveValue('pvp-outpost');
-    await expect(page.locator('.hub-context')).toHaveText('Fixture Monk · Random Arenas');
+    await expect(page.locator('.hub-context')).toHaveText('Fixture Monk · Random Arenas · PvP');
     await lifecycle(page).selectOption('map-loading');
     await search.fill('char toefte'); await search.press('Enter');
     await expect(page.locator('#hub')).toContainText('Wait until Guild Wars finishes loading');
@@ -36,6 +36,10 @@ test.describe('game lifecycle', () => {
     await search.fill('kamadan');
     await expect(page.locator('.hub-primary')).toHaveText(/^Travel to Kamadan/);
     await search.press('Enter');
+    // Leaving the explorable area asks first (D-27); the armed Leave starts the trip.
+    const leave = page.getByRole('button', { name: 'Leave and travel to Kamadan, Jewel of Istan', exact: true });
+    await expect(leave).toHaveAttribute('data-armed', '');
+    await leave.click();
     // The trip is recorded as a game action, like every other command that reaches the game.
     await expect(page.locator('#app')).toHaveAttribute('data-action', 'TRAVEL Kamadan, Jewel of Istan');
     await expect(lifecycle(page)).toHaveValue('outpost');

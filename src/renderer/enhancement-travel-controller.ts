@@ -37,15 +37,18 @@ function unavailableReason(
   if (availability.playRegion === "pvp") {
     return "Travel is unavailable during PvP play";
   }
-  if (!availability.enabled) return "Travel is turned off in Settings";
-  if (availability.playRegion === "unknown") {
-    return "Travel is waiting to confirm the current region";
-  }
-  if (availability.state?.status !== "ready") {
-    return availability.state?.reason === "loading"
+  // The game state explains a load or character select before the region policy, which
+  // withdraws Travel then too; "turned off in Settings" is only true of the setting (HUB-135).
+  if (availability.state?.status === "waiting") {
+    return availability.state.reason === "loading"
       ? "Travel is unavailable while a map is loading"
       : "Travel is waiting for Guild Wars";
   }
+  if (availability.playRegion === "unknown") {
+    return "Travel is waiting to confirm the current region";
+  }
+  if (!availability.enabled) return "Travel is turned off in Settings";
+  if (availability.state?.status !== "ready") return "Travel is waiting for Guild Wars";
   return null;
 }
 

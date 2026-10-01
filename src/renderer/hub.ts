@@ -252,10 +252,10 @@ export function createHub(parent: HTMLElement) {
       ]),
       ...(!every && !input.value.trim() ? [] : [
         // Call Target stays on its own shortcut: it acts only while the game has focus (HUB-133).
+        // Resign's row comes from its owner, with its refusal before Enter (resign.ts).
         // Quit or Reload opens the account's confirmation sheet, never a direct quit (HUB-001).
         // The sheet waits for the press that asked for it, so its repeat or trailing click never answers it.
         { id: 'reload', title: 'Quit or Reload Game…', detail: 'Opens confirmation for this account', keywords: 'restart reconnect', group: 'Commands', action: 'Review options', run: async () => { close(); await window.gwSurfaces.afterPress(); await window.gwNative.app.showQuitOrReload(); } },
-        ...(settings?.gwonmacTools && settings.resignEnabled ? [{ id: 'resign', title: 'Resign…', detail: 'Opens the existing confirmation', group: 'Commands', action: 'Review resign', run: () => { dispatch('gw:resign-show'); close(); } }] : []),
         // Settings are found by their own words and open with their control focused (HUB-063).
         // They follow the commands, so a command's own word keeps its row first.
         ...(normaliseHubQuery(input.value).length < 3 ? [] : FINDABLE_SETTINGS).filter(setting => !setting.shown || (settings && setting.shown(settings))).map(setting => ({ id: `setting:${setting.label}`, title: setting.label, detail: `Settings › ${setting.section}`, keywords: `setting ${setting.keywords ?? ''}`, group: 'Settings', action: 'Open setting', run: () => openSettings({ section: setting.section, control: setting.label }) })),
@@ -515,8 +515,9 @@ export function createHub(parent: HTMLElement) {
     }
     const currentTitle = activeView?.title ?? scope?.title ?? 'Home';
     caption.textContent = currentTitle;
-    const context = !scope && !disposeView && !input.value.trim()
-      ? [...sources.keys()].filter(sourceEnabled).flatMap(source => source.context?.() ?? []) : [];
+    // Home with an empty query, and the views about where you are and who you play (HUB-190).
+    const located = activeView ? activeView.destination === 'travel' || activeView.destination === 'characters' : !scope && !input.value.trim();
+    const context = located ? [...sources.keys()].filter(sourceEnabled).flatMap(source => source.context?.() ?? []) : [];
     required<HTMLElement>('.hub-context').textContent = context.join(' · ');
     // One quiet lifecycle line on list stages; a report in the status line takes its place.
     lifecycle.textContent = disposeView ? '' : [...sources.keys()].filter(sourceEnabled).map(source => source.lifecycle?.()).find(Boolean) ?? '';
@@ -553,7 +554,9 @@ export function createHub(parent: HTMLElement) {
     hint.hidden = !hint.textContent || !!disposeView;
   }
   function refresh(reset = false) {
-    if (!root.open || disposeView) return;
+    if (!root.open) return;
+    // A mounted view keeps its header facts current, e.g. where the player is.
+    if (disposeView) { paintNavigation(); return; }
     if (reset) hover.release();
     paintNavigation();
     const previousRows = rows;
@@ -697,6 +700,8 @@ export function createHub(parent: HTMLElement) {
         else if (receipt) notify(receipt);
       },
       fail: error => {
+        // A step the player declined, e.g. Stay here on "Leave this area?", is no failure.
+        if (error instanceof DOMException && error.name === 'AbortError') return;
         const message = error instanceof Error ? error.message : 'The action could not complete. Try again.';
         if (live()) report(message); else notify(message, 'failed');
       },
@@ -866,7 +871,7 @@ export function createHub(parent: HTMLElement) {
     } else if (event.key === 'ArrowRight' && !event.repeat && input.selectionStart === input.value.length && input.selectionEnd === input.value.length) {
       const row = rows.find(row => row.id === selected);
       if (row?.navigate) { event.preventDefault(); row.navigate(startTask()); }
-    } else if (event.key === 'Enter' && !event.metaKey && !event.ctrlKey && !event.altKey) {
+    } else if (event.key === 'Enter' && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
       // Only a plain Enter runs the named primary; a modified Enter is never a second route to it.
       event.preventDefault(); if (!event.repeat) void run();
     }
@@ -912,7 +917,7 @@ export function createHub(parent: HTMLElement) {
       return;
     }
     // Enter in a view runs its named primary, except on a control that Enter activates itself.
-    if (event.key === 'Enter' && viewFooter?.primary && content.contains(target)
+    if (event.key === 'Enter' && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && viewFooter?.primary && content.contains(target)
       && !target.matches('button,a[href],summary,select,textarea,input[type=checkbox],input[type=radio],input[type=range]')) {
       event.preventDefault(); void runViewAction(viewFooter.primary, event); return;
     }
@@ -966,7 +971,7 @@ export function createHub(parent: HTMLElement) {
         try { await saveShortcuts([...entries.filter(entry => entry.id !== row.id), { id: row.id, phrase: old?.phrase ?? '', pinned: !old?.pinned }]); report(pinned ? `Unpinned ${row.title}.` : `Pinned ${row.title}.`); }
         catch { report('Could not update the pin. Try again.', true); }
       } });
-      entries.push({ label: 'Set search phrase…', section: 'Personalize', run: () => editHubShortcut(presenter, row, shortcuts, saveShortcuts) });
+      entries.push({ label: 'Set search phrase…', section: 'Personalize', run: () => editHubShortcut(presenter, row, shortcuts, saveShortcuts, () => !!lookup(row.id)) });
     }
     return entries;
   }
@@ -1090,7 +1095,14 @@ export function createHub(parent: HTMLElement) {
       sources.set(next, next.subscribe(() => refresh())); next.setVisible(root.open && sourceEnabled(next)); refresh();
       return () => {
         sources.get(next)?.(); sources.delete(next); enabledSources.delete(next); next.setVisible(false);
-        if (root.open && (!disposeView || !viewAvailable || !viewAvailable())) home();
+        // A withdrawn source never costs Home its query or a surviving selection: Home refreshes in
+        // place (HUB-051). A list page or a view that is no longer available may be its own, so
+        // it goes Home, and a suspended one never resumes stale.
+        const live = (page: Pick<Page, 'scope' | 'view'>) => page.view ? !!page.view.available?.() : !page.scope;
+        if (suspended && !root.open && ![...history, suspended].every(live)) { suspended = null; history.length = 0; }
+        if (!root.open) return;
+        if (atHome()) refresh();
+        else if (!disposeView || !viewAvailable || !viewAvailable()) home();
       };
     },
     showRows(title: string, getRows: () => readonly HubRow[], summary?: HubSummary, destination?: HubDestination) {

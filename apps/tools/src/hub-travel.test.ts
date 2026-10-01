@@ -6,24 +6,38 @@ describe('Hub travel recents', () => {
   it('shows actionable recents and keeps unavailable places in explicit search', () => {
     const host = createDemoTravelHost();
     const hub = { showView: vi.fn(), showRows: vi.fn(), attach: vi.fn(), close: vi.fn(), notify: vi.fn() };
-    const travel = createHubTravel(host, hub);
+    const travel = createHubTravel(host, hub, async (_place, leave) => leave());
     try {
       const state = host.state.value;
       if (state.status !== 'ready') throw new Error('Expected outpost fixture');
       host.state.value = { ...state, mapId: 449 };
       expect(travel.source.search('').filter(row => row.group === 'Continue')).toHaveLength(3);
       expect(travel.source.search('').some(row => row.id === 'place:449')).toBe(false);
-      expect(travel.source.search('kamadan').find(row => row.id === 'place:449')?.unavailable).toBe('Current location');
+      expect(travel.source.search('kamadan').find(row => row.id === 'place:449')?.unavailable).toBe('You are already in Kamadan, Jewel of Istan');
       host.state.value = { ...state, unlockedMapWords: Array.from({ length: 28 }, () => 0) };
       expect(travel.source.search('').filter(row => row.group === 'Continue')).toHaveLength(0);
       expect(travel.source.search('kamadan').find(row => row.id === 'place:449')?.unavailable).toBe('Not unlocked by this character');
     } finally { travel.dispose(); }
   });
 
+  it('ranks official aliases and saved Travel phrases before limiting Home places', async () => {
+    const host = createDemoTravelHost();
+    await host.savePreferences({ synonyms: [{ term: 'fort', mapId: 857 }] });
+    const hub = { showView: vi.fn(), showRows: vi.fn(), attach: vi.fn(), close: vi.fn(), notify: vi.fn() };
+    const travel = createHubTravel(host, hub, async (_place, leave) => leave());
+    try {
+      travel.source.setVisible?.(true);
+      await vi.waitFor(() => expect(travel.source.search('fort')[0]?.id).toBe('place:857'));
+      expect(travel.source.search('la')[0]?.id).toBe('place:55');
+      expect(travel.source.search('kmaadan')).toEqual([]);
+      expect(travel.source.search('ada')).toEqual([]);
+    } finally { travel.dispose(); }
+  });
+
   it('marks places consequential, flags leaving an explorable area and names the game state', () => {
     const host = createDemoTravelHost();
     const hub = { showView: vi.fn(), showRows: vi.fn(), attach: vi.fn(), close: vi.fn(), notify: vi.fn() };
-    const travel = createHubTravel(host, hub);
+    const travel = createHubTravel(host, hub, async (_place, leave) => leave());
     try {
       const state = host.state.value;
       if (state.status !== 'ready') throw new Error('Expected outpost fixture');
@@ -45,7 +59,7 @@ describe('Hub travel recents', () => {
       host.state.value = { ...state, mapId: 58, explorable: true };
       expect(places().length).toBeGreaterThan(0);
       expect(places().every(row => row.leavesArea)).toBe(true);
-      expect(travel.source.context?.()).toBe('Explorable area');
+      expect(travel.source.context?.()).toBe('North Kryta Province · Explorable area');
       expect(travel.source.lifecycle?.()).toBe('Explorable area — Travel leaves this area');
       host.state.value = { status: 'waiting', reason: 'loading' };
       expect(travel.source.context?.()).toBe('Map loading');
@@ -56,7 +70,7 @@ describe('Hub travel recents', () => {
   it('reports a trip that fails after the quiet close once, and keeps success quiet (HUB-072)', () => {
     const host = createDemoTravelHost();
     const hub = { showView: vi.fn(), showRows: vi.fn(), attach: vi.fn(), close: vi.fn(), notify: vi.fn() };
-    const travel = createHubTravel(host, hub);
+    const travel = createHubTravel(host, hub, async (_place, leave) => leave());
     try {
       host.notice.value = { message: 'Travelling to Kamadan…', level: 'info' };
       host.notice.value = { message: 'Travel started.', level: 'success' };
@@ -70,7 +84,7 @@ describe('Hub travel recents', () => {
   it('starts a trip from a row and ends only the Hub task that asked for it', async () => {
     const host = createDemoTravelHost();
     const hub = { showView: vi.fn(), showRows: vi.fn(), attach: vi.fn(), close: vi.fn(), notify: vi.fn() };
-    const travel = createHubTravel(host, hub);
+    const travel = createHubTravel(host, hub, async (_place, leave) => leave());
     try {
       const done = vi.fn();
       await travel.source.search('kamadan').find(row => row.id === 'place:449')!.run({ live: () => false, progress() {}, done });

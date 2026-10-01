@@ -90,7 +90,10 @@ Home contains a focused search field, a short Pinned section, existing relevant
 recents, and enabled sections. Do not show dangerous actions in empty-query recents.
 In an explorable area (the certified instance type, not the Travel catalogue, so a
 Guild Hall is an outpost) a fresh Home never starts on a place, because Enter would
-leave the area; it starts on the first pin, else **Travel**. The header names the
+leave the area; it starts on the first pin, else **Travel**. Every Hub action that
+leaves an explorable area (a trip, Travel and invite, a character switch) first asks
+the one "Leave this area?" step, which names the place or character, focuses
+**Stay here** and arms "Leave and …" before it accepts a press. The header names the
 character and area, and one quiet lifecycle line under the results says what the
 game state holds back, for example "Map loading — Travel returns when the map has
 loaded". A task report in the status line takes its place.
@@ -282,7 +285,7 @@ the independent calculator and fixed conversions can remain enabled.
 
 | Section | Presentation | Completion |
 | --- | --- | --- |
-| Travel | Existing destinations, aliases, favourites, history, Guild Hall | Explicit destination action, then quiet close |
+| Travel | Existing destinations, aliases, favourites, history, Guild Hall | Explicit destination action, then quiet close; "Leave this area?" first from an explorable area |
 | People | Identity, presence, available Whisper/Invite/Travel actions | No social or travel action without an explicit choice |
 | Whispers | Floating conversation with unread state, history, composer and delivery/retry | Send stays in conversation; Escape preserves draft |
 | Trade | Floating ledger with sources, search, filters, message detail and quotes | Contact opens addressed composer without sending |
@@ -291,7 +294,7 @@ the independent calculator and fixed conversions can remain enabled.
 | Accounts | Saved profile names and runtime state; `acc name` offers open or replace | Launch successfully before closing the source; normal sign-in |
 | Maps | Existing layer toggles, ranges, opacity, style controls | Update inline and remain open for comparison |
 | Storage | One existing named action | Dismiss and attempt; completely silent failure |
-| Resign/reload | Explicit search-only entries | Existing confirmation, never empty-query suggestions |
+| Resign/reload | Explicit search-only entries; Resign states "PvE only" and its refusal before Enter | Existing confirmation, never empty-query suggestions; cancelling Resign returns to the Hub search |
 | Settings | Explicit entry and relevant supported section links | User deliberately chooses configuration |
 
 Travel to a friend means **Travel to outpost**, not join their exact instance.

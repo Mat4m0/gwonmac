@@ -21,6 +21,7 @@ const paths = {
   appearance: '<circle cx="12" cy="12" r="9"/><path d="M12 3v18a9 9 0 0 0 0-18Z" fill="currentColor"/>',
   keyboard: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 9h1m3 0h1m3 0h1m3 0h1M6 13h1m3 0h1m3 0h1m3 0h1M7 16h10"/>',
   command: '<path d="m8 5 7 7-7 7"/>',
+  resign: '<path d="M6 21V4M6 4h11l-2.5 4 2.5 4H6"/>',
 };
 export function hubIcon(document: Document, row: Pick<HubRow, 'id' | 'group' | 'icon'>): HTMLElement {
   const icon = document.createElement('span'); icon.className = 'hub-icon'; icon.setAttribute('aria-hidden', 'true');

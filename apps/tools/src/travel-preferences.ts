@@ -71,9 +71,12 @@ export function useTravelPreferences(host: TravelHost) {
     pending,
     disabled,
     load,
+    /** A destination holds one number: assigning it to another number moves it there. */
     async assignShortcut(slot: number, destination: TravelDestination) {
+      const moved = shortcuts.value.findIndex((entry, index) => index !== slot && entry?.mapId === destination.mapId);
+      const freed = moved < 0 ? shortcuts.value : replaceTravelShortcut(shortcuts.value, moved, null);
       return save({
-        shortcuts: replaceTravelShortcut(shortcuts.value, slot, { mapId: destination.mapId }),
+        shortcuts: replaceTravelShortcut(freed, slot, { mapId: destination.mapId }),
       });
     },
     async removeShortcut(slot: number) {

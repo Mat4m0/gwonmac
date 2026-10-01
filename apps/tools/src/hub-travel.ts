@@ -2,7 +2,8 @@
 import { createApp, h, watch } from 'vue';
 import type { HubPresenter, HubRow, HubSource, HubTask, HubViewMount } from '../../../src/shared/hub';
 import { matchHubRows, parseHubQuery, hubTier } from '../../../src/shared/hub';
-import { TRAVEL_DESTINATIONS, travelDestination, type TravelDestination } from '../../../src/shared/travel';
+import { TRAVEL_DESTINATIONS, isPvpTravelDestination, travelDestination, type TravelDestination } from '../../../src/shared/travel';
+import { guildWarsMapName } from '../../../src/shared/guild-wars-map-names';
 import { travelContextRefusal, travelDestinationAvailability } from '../../../src/shared/travel-command';
 import TravelPalette from './components/TravelPalette.vue';
 import type { TravelHost } from './travel-host';
@@ -11,7 +12,13 @@ import { useTravelPreferences } from './travel-preferences';
 /** Home shows the best few places; the rest are one row away, in Travel. */
 const PLACES_SHOWN = 8;
 
-export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>) {
+/**
+ * Asks "Leave this area?" on its own Hub page before a trip out of an explorable area, runs
+ * `leave` when the player leaves, and rejects with an AbortError when they stay (D-27).
+ */
+export type LeaveArea = (place: string, leave: () => Promise<void>) => Promise<void>;
+
+export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>, leaveArea: LeaveArea) {
   const preferences = useTravelPreferences(host);
   let visible = false;
   let active = false;
@@ -43,7 +50,7 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
     return (target, back, footer) => {
       active = true;
       const app = createApp({ setup: () => () => h(TravelPalette, {
-        host, preferences, footer, ...(resume ? { resume } : {}), onRemember: state => { resume = state; }, inset: true, hubParent: !!hub.hasParent, visible: true, nativeDialog: true, onClose: back,
+        host, preferences, footer, leaveArea, ...(resume ? { resume } : {}), onRemember: state => { resume = state; }, inset: true, hubParent: !!hub.hasParent, visible: true, nativeDialog: true, onClose: back,
         // A trip ends the task: the Hub closes, whether Travel opened from Home or by Command-T (HUB-017).
         onTravelled: () => hub.close(),
       }) });
@@ -51,7 +58,7 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
       return () => { active = false; app.unmount(); };
     };
   }
-  const available = () => !!window.gwToolsSettings?.().gwonmacTools && !!window.gwToolsSettings?.().travelPalette;
+  const available = () => !disposed && !!window.gwToolsSettings?.().gwonmacTools && !!window.gwToolsSettings?.().travelPalette;
   function open() { hub.showView('Travel', page(), available, 'travel'); }
   /** The certified instance type, never the catalogue: a Guild Hall or an uncatalogued outpost is no explorable area. */
   const explorable = () => host.state.value.status === 'ready' && host.state.value.explorable;
@@ -60,14 +67,19 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
     return host.unavailable ?? travelContextRefusal(host.state.value, mapId)
       ?? (host.attempt.value.status !== 'idle' ? 'Travel is already in progress' : null)
       ?? (host.state.value.status !== 'ready' ? 'Waiting for Guild Wars' : null)
-      ?? (host.state.value.status === 'ready' && host.state.value.mapId === mapId ? 'Current location' : null)
+      ?? (host.state.value.status === 'ready' && host.state.value.mapId === mapId ? `You are already in ${travelDestination(mapId)?.name ?? 'this outpost'}` : null)
       ?? (availability === 'locked' ? 'Not unlocked by this character' : null);
   }
-  /** Starts one trip; the Hub task that asked for it ends the Hub session. */
+  /**
+   * Starts one trip; the Hub task that asked for it ends the Hub session. A trip out of an
+   * explorable area asks first, whichever row, person page or invite asked for it (D-27).
+   */
   async function travel(mapId: number) {
     const reason = refusal(mapId);
     if (reason) throw new Error(reason);
-    await host.travel({ mapId });
+    const trip = () => host.travel({ mapId });
+    if (explorable()) await leaveArea(travelDestination(mapId)?.name ?? guildWarsMapName(mapId), trip);
+    else await trip();
   }
   const source: HubSource = {
     feature: 'travelPalette',
@@ -75,7 +87,10 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
       const state = host.state.value;
       if (state.status !== 'ready') return state.reason === 'loading' ? 'Map loading' : null;
       if (state.guildHall) return 'Guild Hall';
-      return travelDestination(state.mapId)?.name ?? (state.explorable ? 'Explorable area' : null);
+      // An explorable area by its name when the game names it; a PvP outpost says so.
+      if (state.explorable) { const name = guildWarsMapName(state.mapId); return name.startsWith('Unknown map') ? 'Explorable area' : `${name} · Explorable area`; }
+      const outpost = travelDestination(state.mapId)?.name ?? null;
+      return outpost && isPvpTravelDestination(state.mapId) ? `${outpost} · PvP` : outpost;
     },
     lifecycle() {
       const state = host.state.value;
@@ -119,7 +134,12 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
       }), ...more, ...matchHubRows(tools, query)];
     },
   };
-  return { source, open, page, travel, get active() { return active; },
+  /**
+   * The Travel row stays through a map load, character select or PvP and says why it waits, so a
+   * fresh Home never starts on it and Enter never runs a dead row (HUB-135).
+   */
+  const withReason = (row: HubRow): HubRow => row.id === 'travel' && host.unavailable ? { ...row, unavailable: host.unavailable } : row;
+  return { source: { ...source, search: (query: string) => source.search(query).map(withReason) }, open, page, travel, get active() { return active; },
     update: host.updateGameState, updateFriends: host.updateFriends,
     dispose() { disposed = true; stop(); stopNotice(); listeners.clear(); host.dispose(); },
   };

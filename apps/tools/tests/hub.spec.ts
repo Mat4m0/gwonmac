@@ -83,7 +83,8 @@ test('a friend opens explicit actions and an offline location cannot travel', as
   await search.fill('romi');
   await search.press('Enter');
   await expect(page.locator('#hub').getByRole('option').locator('.hub-title')).toHaveText(['Whisper', 'Travel to outpost', 'Invite to party', 'Travel and invite']);
-  await expect(page.locator('#hub').getByRole('option', { name: /Travel to outpost/ })).toContainText('Any district');
+  await expect(page.locator('#hub').getByRole('option', { name: /Travel to outpost/ })).toContainText('You are already in this outpost');
+  await expect(page.locator('#hub').getByRole('option', { name: /Travel to outpost/ })).toHaveAttribute('aria-disabled', 'true');
   await page.getByRole('button', { name: 'Back', exact: true }).click();
   await expect(search).toHaveValue('romi');
   await search.fill('offline');
@@ -421,6 +422,24 @@ test('Travel uses Hub typography and supports empty-query arrows, favorites and 
   await search.press('Escape');await expect(hubSearch).toBeVisible();
 });
 
+test('Travel names where you are, and Customize keeps Tab and a chosen number inside Travel (HUB-190, HUB-070)',async({page})=>{
+  await page.goto('/?hub');
+  await expect(page.getByRole('combobox',{name:'Search people, places, builds'})).toBeFocused();
+  await page.keyboard.press('Meta+t');
+  const search=page.getByRole('combobox',{name:'Destination, phrase, or friend'});
+  await expect(search).toBeFocused();
+  await expect(page.locator('.hub-context')).toHaveText("Fixture Monk · Lion's Arch");
+  await search.press('Tab');
+  await expect(page.getByRole('button',{name:'Customize Travel'})).toBeFocused();
+  await page.keyboard.press('Enter');
+  // The next Tab reaches the first number, not the Hub footer.
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('button',{name:/^Change shortcut 1,/})).toBeFocused();
+  await page.getByRole('button',{name:'Assign shortcut 7'}).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('summary[aria-label="Destination for shortcut 7"]')).toBeFocused();
+});
+
 test('Travel Enter from an empty search uses the selected recent destination',async({page})=>{
   await page.goto('/?hub');
   const hubSearch=page.locator('.hub-search input');
@@ -506,7 +525,7 @@ test('Hub keeps its geometry across results and compact carousels', async ({ pag
       await expect(selected).toContainText('Fixture Ranger');
       await expect(page.locator('#app')).not.toHaveAttribute('data-action', /Character/);
       await page.getByRole('button', { name: 'Character Switch settings', exact: true }).click();
-      await expect(page.getByRole('checkbox', { name: /Show search bar/ })).toBeFocused();
+      await expect(page.getByRole('checkbox', { name: /Show profession/ })).toBeFocused();
       await page.keyboard.press('Escape');
     }
     if (['travel', 'switch character'].includes(query)) await page.getByRole('button', { name: 'Back', exact: true }).click();
@@ -549,7 +568,7 @@ test('character cards start at the left edge without leading empty slots', async
   const icon = page.locator('.character-switch-row img').first();
   expect(await icon.evaluate(el => getComputedStyle(el).outlineStyle)).toBe('none');
   expect((await icon.boundingBox())!.width).toBeGreaterThanOrEqual(40);
-  await expect(page.locator('.character-switch-meta').first()).toHaveText('Lv 20 · Kamadan');
+  await expect(page.locator('.character-switch-meta').first()).toHaveText('Mo · Lv 20 · Kamadan');
 });
 
 

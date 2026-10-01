@@ -5,6 +5,7 @@ import {
   TRAVEL_DESTINATIONS,
   PIKEN_SQUARE_PRE_SEARING_MAP_ID,
   TRAVEL_SEARCH_QUERY_LIMIT,
+  highlightTravelDestinationName,
   isStoredTravelShortcuts,
   isTravelRequest,
   isTravelShortcuts,
@@ -56,8 +57,24 @@ describe("Travel", () => {
     assert.equal(searchTravelDestinations("ac")[0]?.name, "Ascalon City");
     assert.equal(searchTravelDestinations("kama")[0]?.name, "Kamadan, Jewel of Istan");
     assert.equal(searchTravelDestinations("central transfer")[0]?.mapId, 652);
-    assert.equal(searchTravelDestinations("kamadna")[0]?.mapId, 449);
-    assert.equal(searchTravelDestinations("nightfall").length > 0, true);
+  });
+
+  it("finds a destination only by the starts of its words, never by a guess (HUB-065)", () => {
+    // A typo, a fragment inside a word and a campaign name each travelled somewhere before.
+    for (const guess of ["kamadna", "kmaadan", "ada", "factions"]) {
+      assert.deepEqual(searchTravelDestinations(guess), [], guess);
+    }
+    assert.equal(searchTravelDestinations("jewel istan")[0]?.mapId, 449);
+  });
+
+  it("marks only the typed start of each word, never the space before it (HUB-189)", () => {
+    const lionsArch = travelDestination(55)!;
+    assert.deepEqual(highlightTravelDestinationName(lionsArch, "arch"), [
+      { text: "Lion's ", match: false }, { text: "Arch", match: true },
+    ]);
+    assert.deepEqual(highlightTravelDestinationName(lionsArch, "lions ar"), [
+      { text: "Lion's", match: true }, { text: " ", match: false }, { text: "Ar", match: true }, { text: "ch", match: false },
+    ]);
   });
 
   it("bounds search work before normalization or scoring", () => {
