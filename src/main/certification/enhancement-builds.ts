@@ -570,6 +570,424 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
         }),
       }),
     }),
+    // Reviewed October native feature facts; exact input and output remain bound.
+    Object.freeze({
+      "sha256": "b5f10d50833ed9390ce4faa49fb9a8c009416989e07f20690c27b39b5ef048ad",
+      "outputSha256": Object.freeze({
+        "features-7ff": "bd31f50897a69d4f1d2241564941757c59e572880d01e65f417d6c09d75042bf"
+      } as const),
+      "programId": 1,
+      "buildId": 644569738,
+      "hookFunction": 446,
+      "hookParams": Object.freeze(["i32"] as const),
+      "hookResults": Object.freeze([] as const),
+      "hookBodySha256": "3318dc0a3af5352870ee4382ad46c12b36e9fecf25205425461e060e4aab66fc",
+      "tableSlot": 4698,
+      "cursorEvent": Object.freeze({
+        "functionIndex": 2469,
+        "params": Object.freeze(["i32", "i32", "i32", "i32", "i32"] as const),
+        "results": Object.freeze([] as const),
+        "tableSlot": 922,
+        "producerFunctions": Object.freeze([2828, 2834] as const),
+        "producerParams": Object.freeze([Object.freeze(["i32", "i32"] as const), Object.freeze(["i32", "i32"] as const)] as const),
+        "producerResults": Object.freeze([Object.freeze(["i32"] as const), Object.freeze(["i32"] as const)] as const),
+        "bodySha256": "f09a7a12954169ae595d12d870e69a4c0092003157d72523d626d2a3990241e2",
+        "producerBodySha256": Object.freeze(["35fe49f08a02658bc552e7e32ec59c70d103ca235c5379662b570a4df51dcc10", "1007e04530666176638cee41535cc044fea62c300818ab85aacca3cdde5d9176"] as const),
+        "tableNeighbourBodySha256": Object.freeze(["f09a7a12954169ae595d12d870e69a4c0092003157d72523d626d2a3990241e2", "cb751dd998dc5591fb1a8d05d08d194a8a7e4670b1a9685816b9a2af8fab7980"] as const),
+        "layout": Object.freeze({
+          "cursorActiveArt": 5920896,
+          "cursorSoftwareModel": 5920900,
+          "cursorShowCount": 5920904,
+          "cursorColorBuffer": 2740208,
+          "cursorArtHotspot": 0,
+          "cursorArtTexture": 12,
+          "cursorHandleKey": 8,
+          "cursorHandleObject": 0,
+          "cursorViewTexture": 8,
+          "cursorTextureType": 12,
+          "cursorTextureWidth": 20,
+          "cursorTextureHeight": 24
+        } as const)
+      } as const),
+      "observationBase": Object.freeze({
+        "layout": Object.freeze({
+          "contextRoot": 5918848,
+          "gameContextSlot": 6,
+          "characterContext": 68,
+          "characterUuid": 100,
+          "mapId": 408,
+          "isExplorable": 412,
+          "currentMapId": 564,
+          "currentInstanceType": 572,
+          "playerNumber": 688,
+          "areaInfo": 1892352,
+          "areaInfoCount": 883,
+          "areaInfoStride": 124,
+          "areaInfoFlags": 16,
+          "agentArray": 5935096,
+          "agentId": 44,
+          "agentX": 116,
+          "agentY": 120,
+          "agentType": 156,
+          "agentPlayerNumber": 244,
+          "agentModelType": 246,
+          "worldContext": 44
+        } as const)
+      } as const),
+      "playRegionObservation": Object.freeze({
+        "layout": Object.freeze({
+          "contextRoot": 5918848,
+          "gameContextSlot": 6,
+          "characterContext": 68,
+          "characterUuid": 100,
+          "mapId": 408,
+          "isExplorable": 412,
+          "currentMapId": 564,
+          "currentInstanceType": 572,
+          "playerNumber": 688,
+          "areaInfo": 1892352,
+          "areaInfoCount": 883,
+          "areaInfoStride": 124,
+          "areaInfoFlags": 16
+        } as const)
+      } as const),
+      "targetObservation": Object.freeze({
+        "layout": Object.freeze({
+          "manualTargetAgentId": 5929708,
+          "automaticTargetAgentId": 5929704
+        } as const)
+      } as const),
+      "uiDispatcher": Object.freeze({
+        "functionIndex": 6842,
+        "params": Object.freeze(["i32", "i32", "i32"] as const),
+        "results": Object.freeze([] as const),
+        "bodySha256": "985cae0fcf4d60ed66513ee6973a6dc3afb11cdccc57f2e9467e020279047d20",
+        "playerChatMessage": 268435586,
+        "hideHeroPanelMessage": 268435878,
+        "showHeroPanelMessage": 268435879
+      } as const),
+      "gameThread": Object.freeze({
+        "drain": Object.freeze({
+          "functionIndex": 6661,
+          "params": Object.freeze(["i32", "i32"] as const),
+          "results": Object.freeze([] as const),
+          "tableSlot": 1721,
+          "bodySha256": "97cf36fad18be74e2e9a153cf85e4dc64fc7ca9c741887bf6ccd204726bb3de8"
+        } as const)
+      } as const),
+      "travelAction": Object.freeze({
+        "enqueueExport": "enhancement_travel",
+        "configureExport": "enhancement_configure_travel",
+        "toggleExport": "enhancement_take_travel_toggle",
+        "messageId": 268435846,
+        "unlockProof": Object.freeze({
+          "layout": Object.freeze({
+            "worldUnlockedMaps": 1548
+          } as const),
+          "accessor": Object.freeze({
+            "functionIndex": 9191,
+            "params": Object.freeze([] as const),
+            "results": Object.freeze(["i32"] as const),
+            "bodySha256": "24579d9f602bc21a37c0dc8ca88c362a38493c64d101d42081ccd6ed5314f975"
+          } as const),
+          "consumer": Object.freeze({
+            "functionIndex": 16010,
+            "params": Object.freeze(["i32"] as const),
+            "results": Object.freeze(["i32"] as const),
+            "bodySha256": "783f07589bd1261921b9bc8f80f3e517450d4fa504a7f213beb2e3ddd694dae9"
+          } as const)
+        } as const),
+        "producer": Object.freeze({
+          "functionIndex": 16231,
+          "params": Object.freeze(["i32", "i32", "i32", "i32", "i32"] as const),
+          "results": Object.freeze([] as const),
+          "bodySha256": "e224119860e7616256c5e74d92d2e2fac124dde9c3c3217dc3feccdd0615f39b"
+        } as const),
+        "contextResolver": Object.freeze({
+          "functionIndex": 11661,
+          "params": Object.freeze(["i32", "i32", "i32"] as const),
+          "results": Object.freeze([] as const),
+          "bodySha256": "4316bdd74d3766f19d7f8c4288b06f5192866686921f1661edc3a3590cbf3297"
+        } as const)
+      } as const),
+      "xunlaiAction": Object.freeze({
+        "openExport": "enhancement_open_storage",
+        "configureExport": "enhancement_configure_storage",
+        "accessProof": Object.freeze({
+          "layout": Object.freeze({
+            "worldPlayers": 2060,
+            "playerRecordStride": 80,
+            "playerRecordAgentId": 0,
+            "playerRecordAccessFlags": 52,
+            "playerRecordNumber": 56,
+            "areaInfoType": 8
+          } as const),
+          "readers": Object.freeze({
+            "agent-id": Object.freeze({
+              "functionIndex": 8945,
+              "params": Object.freeze(["i32"] as const),
+              "results": Object.freeze(["i32"] as const),
+              "bodySha256": "5b816ccbcecb08a28d003eb51df03c33478e6a92e4d874168c1315a8f5f091ae"
+            } as const),
+            "access-flags": Object.freeze({
+              "functionIndex": 9203,
+              "params": Object.freeze(["i32"] as const),
+              "results": Object.freeze(["i32"] as const),
+              "bodySha256": "333132534dcbd28aa53aa5946299455b4b7988ee49895a783765fbce9ba9b2fc"
+            } as const),
+            "player-number": Object.freeze({
+              "functionIndex": 9212,
+              "params": Object.freeze(["i32"] as const),
+              "results": Object.freeze(["i32"] as const),
+              "bodySha256": "0497a06f8d44c263df830a0981f78241df478d7466984fa621e2f390591625fe"
+            } as const)
+          } as const)
+        } as const),
+        "handler": Object.freeze({
+          "functionIndex": 8984,
+          "params": Object.freeze(["i32"] as const),
+          "results": Object.freeze([] as const),
+          "bodySha256": "0a46adca4dd597f9430c23457f6ce6ff7ccdfbdaf4a77b449a8158e2c595189a"
+        } as const)
+      } as const),
+      "chatAliases": Object.freeze({
+        "parser": Object.freeze({
+          "functionIndex": 13720,
+          "params": Object.freeze(["i32", "i32"] as const),
+          "results": Object.freeze(["i32"] as const),
+          "bodySha256": "f924982b0a2702c7c7ea6150b9c9f80a5a886c0da04610a17e08f84330cf14e0"
+        } as const)
+      } as const),
+      "partyObservation": Object.freeze({
+        "partyDirtyMessages": Object.freeze([268435512, 268435513, 268435596, 268435608, 268435650, 268435729, 268435743, 268435744, 268435749, 268435751] as const),
+        "playerChatProducer": 8953,
+        "playerChatSites": 3,
+        "nearbyPlayerMessages": Object.freeze([268435583, 268435584] as const),
+        "nearbyPlayerMessageProducers": Object.freeze([7884, 8951] as const),
+        "layout": Object.freeze({
+          "partyContext": 76,
+          "playerParty": 84,
+          "partyHeroes": 36,
+          "heroMemberStride": 24,
+          "heroAgentId": 0,
+          "heroOwnerPlayerId": 4,
+          "heroId": 8,
+          "heroLevel": 20,
+          "partyPlayers": 4,
+          "partyHenchmen": 20,
+          "partyFlag": 20,
+          "accountContextSlot": 10,
+          "accountUnlockedSkills": 292,
+          "worldHeroFlags": 1412,
+          "heroFlagStride": 36,
+          "flagHeroId": 0,
+          "flagAgentId": 4,
+          "flagBehavior": 12,
+          "worldHeroInfo": 1428,
+          "heroInfoStride": 156,
+          "infoHeroId": 0,
+          "infoAgentId": 4,
+          "infoLevel": 8,
+          "infoPrimary": 12,
+          "infoSecondary": 16,
+          "infoAppearanceBitmap": 72,
+          "worldAttributes": 172,
+          "attributeStride": 1084,
+          "attributeAgentId": 0,
+          "attributeEntries": 4,
+          "attributeEntryStride": 20,
+          "attributeEntryId": 0,
+          "attributeEntryRank": 4,
+          "worldProfessionStates": 1724,
+          "professionStateStride": 20,
+          "worldCharacterSkills": 1808
+        } as const)
+      } as const),
+      "preGameControls": Object.freeze({
+        "hashFunction": Object.freeze({
+          "functionIndex": 365,
+          "params": Object.freeze(["i32", "i32"] as const),
+          "results": Object.freeze(["i32"] as const),
+          "bodySha256": "b8ede3a030d6dbe916834d24b05d2a1d1e90c77bbf992e38ecfef314f36a328c"
+        } as const),
+        "labels": Object.freeze({
+          "play": 1533534,
+          "selector": 1533756,
+          "yes": 1534456,
+          "no": 1534470,
+          "reconnectDialog": 1534538
+        } as const),
+        "labelHashes": Object.freeze({
+          "play": 184818986,
+          "selector": 828467986,
+          "yes": 1398610279,
+          "no": 3600335809,
+          "reconnectDialog": 4200678686
+        } as const),
+        "layout": Object.freeze({
+          "frameArray": 5923308,
+          "frameCount": 5923316,
+          "frameBytes": 456,
+          "frameId": 188,
+          "frameHashId": 308,
+          "frameState": 396,
+          "contextRoot": 5918848,
+          "gameContextSlot": 6,
+          "characterContext": 68,
+          "characterUuid": 100,
+          "currentInstanceType": 572
+        } as const)
+      } as const),
+      "playerSkillbarObservation": Object.freeze({
+        "worldLifecycle": Object.freeze({
+          "functionIndex": 8818,
+          "params": Object.freeze(["i32"] as const),
+          "results": Object.freeze(["i32"] as const),
+          "bodySha256": "4b17d31aebec931fd482d7f1b0f378e1c68999a9a755f52699138060404ffe3f"
+        } as const),
+        "update": Object.freeze({
+          "functionIndex": 8704,
+          "params": Object.freeze([] as const),
+          "results": Object.freeze([] as const),
+          "bodySha256": "034c27b93373990031cc071563ac2377036daeb799fd2bfcac6f0c7e3033f2ae"
+        } as const),
+        "rowReader": Object.freeze({
+          "functionIndex": 8707,
+          "params": Object.freeze(["i32", "i32", "i32"] as const),
+          "results": Object.freeze(["i32"] as const),
+          "bodySha256": "7b8b5c65a126fae2edfa517a4706244a0d2352c628fde208d049ecf82dfa4e72"
+        } as const),
+        "slotReader": Object.freeze({
+          "functionIndex": 8708,
+          "params": Object.freeze(["i32", "i32", "i32"] as const),
+          "results": Object.freeze(["i32"] as const),
+          "bodySha256": "ee41be1f4dcaf8e5822fc024e41cbbad74cf293cdafb2b89a8691aeb680e68b5"
+        } as const),
+        "coreLayout": Object.freeze({
+          "worldSkillbars": 1776,
+          "skillbarStride": 188,
+          "skillbarAgentId": 0,
+          "skillbarSkills": 4,
+          "skillSlotStride": 20
+        } as const),
+        "partyLayout": Object.freeze({
+          "skillSlotId": 12,
+          "skillbarDisabled": 164
+        } as const)
+      } as const),
+      "teamApply": Object.freeze({
+        "thunkExport": "enhancement_command",
+        "professionTrace": Object.freeze({
+          "readerExport": "enhancement_profession_trace",
+          "sender": Object.freeze({
+            "functionIndex": 5951,
+            "params": Object.freeze(["i32", "i32", "i32"] as const),
+            "results": Object.freeze([] as const),
+            "bodySha256": "f356a39b419774e117dd6b92a3a572235956421ab2dcb2f4c6fbdfbc2eb922a4"
+          } as const)
+        } as const),
+        "entries": Object.freeze([Object.freeze({
+            "opcode": 31,
+            "functionIndex": 6887,
+            "params": Object.freeze(["i32"] as const),
+            "results": Object.freeze([] as const),
+            "bodySha256": "b4707ba68961478b04bd26740a635e7e6057df00fcf8f213514d01f7bd2e429a",
+            "label": "CharMsgSendHeroDeactivate(heroId)"
+          } as const), Object.freeze({
+            "opcode": 30,
+            "functionIndex": 6886,
+            "params": Object.freeze(["i32"] as const),
+            "results": Object.freeze([] as const),
+            "bodySha256": "66bb9d030c176e18df76ffea58684209ca7ea855440cc44e040410a9a424d0c5",
+            "label": "CharMsgSendHeroActivate(heroId)"
+          } as const), Object.freeze({
+            "opcode": 21,
+            "functionIndex": 6878,
+            "params": Object.freeze(["i32", "i32"] as const),
+            "results": Object.freeze([] as const),
+            "bodySha256": "6caf9a926312f6827f6229981d48348d8ad07ac2dd6411657aef7e5e27de1f5a",
+            "label": "CharMsgSendCommandAiMode(agentId, behavior)"
+          } as const), Object.freeze({
+            "opcode": 93,
+            "functionIndex": 6943,
+            "params": Object.freeze(["i32", "i32", "i32"] as const),
+            "results": Object.freeze([] as const),
+            "bodySha256": "ad0ba348c1b48828ac169c184038a796f80710d7ffd01888e1770da7f15f7189",
+            "label": "skillbar set (agentId, count, skills[])"
+          } as const), Object.freeze({
+            "opcode": 65,
+            "functionIndex": 6917,
+            "params": Object.freeze(["i32", "i32"] as const),
+            "results": Object.freeze([] as const),
+            "bodySha256": "d6f6f3745e75eb42dbae4bc6def2c213626679b5a899c169871ea577fcbf2cff",
+            "label": "CharMsgSendOrderSetProfessionSecondary(agentId, profession)"
+          } as const), Object.freeze({
+            "opcode": 16,
+            "functionIndex": 6873,
+            "params": Object.freeze(["i32", "i32", "i32", "i32"] as const),
+            "results": Object.freeze([] as const),
+            "bodySha256": "65ac54b88cb4b4e0155e7a6676628679d4aad9f994a64a989fd3f0de0a90b195",
+            "label": "attributes set (agentId, count, ids[], ranks[])"
+          } as const), Object.freeze({
+            "opcode": 155,
+            "functionIndex": 10661,
+            "params": Object.freeze(["i32"] as const),
+            "results": Object.freeze([] as const),
+            "bodySha256": "875225d80b2c9e488980853f512f63641de3b842c5239f62c3989b3da677cd88",
+            "label": "CharMsgSendSetHardMode(enabled)"
+          } as const)] as const)
+      } as const),
+      "skillSlotGeometry": Object.freeze({
+        "initializer": Object.freeze({
+          "functionIndex": 15775,
+          "params": Object.freeze(["i32", "i32"] as const),
+          "results": Object.freeze([] as const),
+          "bodySha256": "968c145474ccf26e7b2b8bd64ee11c06cecd0e9d0af011474560111c421cf209",
+          "constructorCallOperand": 2157
+        } as const),
+        "constructor": Object.freeze({
+          "functionIndex": 6676,
+          "params": Object.freeze(["i32", "i32", "i32", "i32", "i32", "i32"] as const),
+          "results": Object.freeze(["i32"] as const),
+          "bodySha256": "501d4e22c342f594bebc1ade8b6280b369160c488e3b6f7b4ff40fe86ed01aca"
+        } as const),
+        "labelAddress": 1601450,
+        "layout": Object.freeze({
+          "frameArray": 5923308,
+          "frameCount": 5923316,
+          "frameBytes": 456,
+          "frameChildOffsetId": 184,
+          "frameId": 188,
+          "framePositionFlags": 216,
+          "frameViewportWidth": 260,
+          "frameViewportHeight": 264,
+          "frameScreenLeft": 268,
+          "frameScreenBottom": 272,
+          "frameScreenRight": 276,
+          "frameScreenTop": 280,
+          "frameRelation": 296,
+          "frameState": 396
+        } as const)
+      } as const),
+      "skillCooldownObservation": Object.freeze({
+        "reader": Object.freeze({
+          "functionIndex": 8710,
+          "params": Object.freeze(["i32", "i32", "i32"] as const),
+          "results": Object.freeze(["i32"] as const),
+          "bodySha256": "4ea487e15fd9ceff5aefb1425e619567151516eed9ca7b9068aad937f89cb7ee",
+          "timerCallOperand": 200
+        } as const),
+        "timer": Object.freeze({
+          "functionIndex": 249,
+          "params": Object.freeze([] as const),
+          "results": Object.freeze(["i32"] as const),
+          "bodySha256": "20aad705e846ffd764f7de00845f7767b080329264e2526480ddb6d9d02df259"
+        } as const),
+        "layout": Object.freeze({
+          "skillSlotRecharge": 8
+        } as const)
+      } as const)
+    } as const),
   ]);
 
 export function findEnhancementBuild(

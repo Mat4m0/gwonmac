@@ -576,7 +576,7 @@ export function analyzeTemplateSaveCandidate(
  * not from the whole client, so an unrelated ArenaNet rebuild can still pass.
  */
 export const TEMPLATE_SAVE_SEMANTIC_BASELINE_FINGERPRINT =
-  "c465fb8bf0bc00d2d599ef59d42d03f63123801607d254330635ced0e7f458c4";
+  "5d0305798965c90e7ab44183d04df3e253c37f234d1e24d24a8a38be3bde5527";
 
 /**
  * Return a transform record only when the locator and the complete relevant
