@@ -139,7 +139,7 @@ export function createHubPeople(hub: Pick<Hub, 'attach' | 'showRows' | 'notify'>
       // A whisper only opens a draft, so Enter on a partial name keeps the known person first.
       if (typedRow) rows.push(typedRow);
       return parsed.scope === 'whisper'
-        ? rows.map(entry => ({ ...entry, action: 'Write whisper', run: () => whisper(entry.keywords || entry.title) }))
+        ? rows.map(entry => ({ ...entry, action: 'Write whisper', actionsLabel: 'View all actions', run: () => whisper(entry.keywords || entry.title) }))
         : rows;
     },
   };
@@ -148,7 +148,7 @@ export function createHubPeople(hub: Pick<Hub, 'attach' | 'showRows' | 'notify'>
     const target = friend ? friend.character : entry.title;
     const reason = friend && (friend.status === 'offline' || !friend.character) ? 'This friend is offline'
       : party.unavailable(friend, travelInviteReason(party, friend, true) === null);
-    return { ...entry, action: `Invite ${target || entry.title}`, consequential: true, pending: invitePending(target || entry.title),
+    return { ...entry, action: `Invite ${target || entry.title}`, actionsLabel: 'View all actions', consequential: true, pending: invitePending(target || entry.title),
       ...(reason ? { unavailable: reason } : {}), run: task => inviteNow(party, target, task, friend) };
   }
   const invitePending = (target: string) => ({ label: `Inviting ${target}…`, again: `/invite ${target} is still being sent.` });

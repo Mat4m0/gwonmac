@@ -66,7 +66,7 @@ test.describe('a row that changes the game', () => {
       await page.waitForTimeout(600);
       await clicks(page, target, 1);
       await expect(target).toHaveAttribute('aria-selected', 'true');
-      await expect(name === 'character card' ? page.locator('.character-switch-action') : primary(page)).toHaveText(subject.footer);
+      await expect(name === 'character card' ? page.locator('#hub .hub-primary') : primary(page)).toHaveText(subject.footer);
       expect(await ledger(page)).toEqual([]);
       await expect(page.locator('#hub')).toBeVisible();
     });
@@ -327,10 +327,10 @@ test('Travel: a click selects a destination and the footer travels once', async 
   await clicks(page, kaineng, 1);
   await page.waitForTimeout(400);
   await expect(kaineng).toHaveAttribute('aria-selected', 'true');
-  await expect(page.locator('.travel-primary')).toHaveText('Travel to Kaineng Center · Any district↵');
+  await expect(page.locator('#hub .hub-primary')).toHaveText('Travel to Kaineng Center · Any district↵');
   await expect(page.locator('#travel-search-input')).toBeFocused();
   expect(await ledger(page)).toEqual([]);
-  await page.locator('.travel-primary').click();
+  await page.locator('#hub .hub-primary').click();
   await expect.poll(() => ledger(page)).toEqual(['TRAVEL Kaineng Center']);
 });
 
@@ -355,7 +355,7 @@ async function glide(page: Page, from: Locator, to: Locator) {
 test.describe('a clicked row keeps the footer while the pointer crosses other rows to it (D-24)', () => {
   const subjects: Record<string, { open(page: Page): Promise<Locator>; footer: string; named: RegExp; ran: string[] }> = {
     'Home: Continue Eye of the North': { open: async page => row(page, 'Eye of the North'), footer: '.hub-primary', named: /^Travel to Eye of the North/, ran: ['TRAVEL Eye of the North'] },
-    'Travel: Kaineng Center (TRV-07)': { open: async page => { await page.keyboard.press('Meta+t'); return page.locator('.travel-recent', { hasText: 'Kaineng Center' }); }, footer: '.travel-primary', named: /^Travel to Kaineng Center · Any district/, ran: ['TRAVEL Kaineng Center'] },
+    'Travel: Kaineng Center (TRV-07)': { open: async page => { await page.keyboard.press('Meta+t'); return page.locator('.travel-recent', { hasText: 'Kaineng Center' }); }, footer: '#hub .hub-primary', named: /^Travel to Kaineng Center · Any district/, ran: ['TRAVEL Kaineng Center'] },
     'build target: Apply to me (BLD-09)': { open: async page => { await enter(page, 'build smiter'); return page.getByRole('option', { name: /Apply to me/ }); }, footer: '.hub-primary', named: /^Apply Smiter to Fixture Monk/, ran: ['apply-build', 'command:1', 'command:2'] },
   };
   for (const [name, subject] of Object.entries(subjects)) {
@@ -409,7 +409,7 @@ test('Travel: a view that opens under a resting pointer keeps its selection (HUB
   await page.waitForTimeout(400);
   await expect(page.locator('#travel-recent-449')).toHaveAttribute('aria-selected', 'true');
   await expect(favourite).toHaveAttribute('aria-selected', 'false');
-  await expect(page.locator('.travel-primary')).toHaveText(/^Travel to Kamadan/);
+  await expect(page.locator('#hub .hub-primary')).toHaveText(/^Travel to Kamadan/);
   // A wheel under the still pointer leaves it too; only a real move selects.
   await page.mouse.wheel(0, 30);
   await page.waitForTimeout(200);
@@ -564,10 +564,12 @@ test('every Hub view keeps the footer with a key legend and a named primary', as
 test('right-click selects a row and opens its Actions', async ({ page }) => {
   await open(page);
   await row(page, 'Eye of the North').click({ button: 'right' });
-  await expect(caption(page)).toHaveText('Eye of the North');
-  await expect(page.locator('#hub')).toContainText('Pin to Hub');
-  await expect(page.locator('#hub')).toContainText('Set search phrase');
-  await search(page).press('Escape');
+  const menu = page.getByRole('menu', { name: 'Actions' });
+  await expect(menu.getByRole('menuitem')).toHaveText([/^Travel to Eye of the North/, 'Pin to Hub', 'Set search phrase…']);
+  await expect(caption(page)).toHaveText('Home');
+  await page.keyboard.press('Escape');
+  await expect(menu).toBeHidden();
+  await expect(search(page)).toBeFocused();
   await expect(row(page, 'Eye of the North')).toHaveAttribute('aria-selected', 'true');
   expect(await ledger(page)).toEqual([]);
 });
@@ -591,7 +593,7 @@ test('right-click selects a Travel destination or a character card and runs noth
   for (const [target, named] of [['#travel-favorite-0', /^Travel to Ascalon City/], ['#travel-recent-194', /^Travel to Kaineng Center/]] as const) {
     expect(await rightClick(page.locator(target)), target).toBe(false);
     await expect(page.locator(target)).toHaveAttribute('aria-selected', 'true');
-    await expect(page.locator('.travel-primary')).toHaveText(named);
+    await expect(page.locator('#hub .hub-primary')).toHaveText(named);
     await expect(page.locator('#travel-search-input')).toBeFocused();
   }
   // The outpost the player stands in is no trip, so a right-click cannot select it either.
@@ -604,7 +606,7 @@ test('right-click selects a Travel destination or a character card and runs noth
   expect(await rightClick(card)).toBe(false);
   await expect(card).toHaveAttribute('aria-selected', 'true');
   await expect(card).toBeFocused();
-  await expect(page.locator('.character-switch-action')).toHaveText(/^Switch to Fixture Mesmer/);
+  await expect(page.locator('#hub .hub-primary')).toHaveText(/^Switch to Fixture Mesmer/);
   await page.waitForTimeout(600);
   expect(await ledger(page)).toEqual([]);
   expect(await canvas(page)).toEqual([]);
@@ -620,7 +622,7 @@ test('the footer slots keep their place from page to page', async ({ page }) => 
   };
   const home = await slot();
   await enter(page, 'build smiter');
-  await expect(page.locator('.hub-actions')).toHaveText('Details');
+  await expect(page.getByRole('button', { name: 'Actions', exact: true })).toBeEnabled();
   expect(await slot()).toEqual(home);
 });
 

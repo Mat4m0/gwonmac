@@ -506,7 +506,7 @@ test('Backspace on a selected pinned build only edits the search and keeps the p
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
   await search.fill('build smiter');
   await page.getByRole('button', { name: 'Actions', exact: true }).click();
-  await page.locator('#hub').getByRole('option', { name: /Pin to Hub/ }).click();
+  await page.getByRole('menuitem', { name: 'Pin to Hub' }).click();
   await page.reload();
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
   await expect(search).toHaveValue('');

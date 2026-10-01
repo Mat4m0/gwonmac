@@ -17,10 +17,8 @@ test('Hub searches, restores the query after actions, and hands off explicitly',
   await expect(search).toBeFocused();
   await search.fill('settings');
   await expect(page.locator('#hub').getByRole('option')).toHaveCount(1);
-  await page.getByRole('button', { name: 'Actions' }).click();
-  await expect(page.getByRole('button', { name: 'Back', exact: true })).toBeVisible();
-  await search.press('Escape');
-  await expect(search).toHaveValue('settings');
+  // Settings has nothing beyond its primary, so Actions is disabled in place, never a dead-end page (HUB-043).
+  await expect(page.getByRole('button', { name: 'Actions', exact: true })).toBeDisabled();
   await search.press('Enter');
   await expect(dialog).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Settings sections' })).toBeVisible();
@@ -58,12 +56,12 @@ test('Esc clears the query, then goes back, then closes onto the game, never <bo
     await search.fill(query); await search.press('Escape');
     await expect(dialog).toBeVisible(); await expect(search).toHaveValue(''); await expect(search).toBeFocused();
   }
-  await search.fill('settings');
-  await page.getByRole('button', { name: 'Actions' }).click();
+  await search.fill('switch account'); await search.press('Enter');
+  await expect(page.locator('.hub-caption')).toHaveText('Accounts');
   await search.fill('pin'); await search.press('Escape');
-  await expect(search).toHaveValue(''); await expect(page.locator('.hub-caption')).toHaveText('Settings');
+  await expect(search).toHaveValue(''); await expect(page.locator('.hub-caption')).toHaveText('Accounts');
   await search.press('Escape');
-  await expect(page.locator('.hub-caption')).toHaveText('Home'); await expect(search).toHaveValue('settings');
+  await expect(page.locator('.hub-caption')).toHaveText('Home'); await expect(search).toHaveValue('switch account');
   await search.press('Escape'); await search.press('Escape');
   await expect(dialog).not.toBeVisible();
   // The fixture opens Hub on load, so no opener was focused: focus returns to the game canvas.
@@ -83,7 +81,7 @@ test('a friend opens explicit actions and an offline location cannot travel', as
   await page.goto('/?hub');
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
   await search.fill('romi');
-  await page.getByRole('button', { name: 'Actions', exact: true }).click();
+  await search.press('Enter');
   await expect(page.locator('#hub').getByRole('option').locator('.hub-title')).toHaveText(['Whisper', 'Travel to outpost', 'Invite to party', 'Travel and invite']);
   await expect(page.locator('#hub').getByRole('option', { name: /Travel to outpost/ })).toContainText('Any district');
   await page.getByRole('button', { name: 'Back', exact: true }).click();
@@ -217,8 +215,9 @@ test('a saved search phrase and pin survive reload and resolve the original item
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
   await search.fill('team gom afk');
   await page.getByRole('button', { name: 'Actions', exact: true }).click();
-  await page.locator('#hub').getByRole('option', { name: /Pin to Hub/ }).click();
-  await page.locator('#hub').getByRole('option', { name: /Set search phrase/ }).click();
+  await page.getByRole('menuitem', { name: 'Pin to Hub' }).click();
+  await page.getByRole('button', { name: 'Actions', exact: true }).click();
+  await page.getByRole('menuitem', { name: /Set search phrase/ }).click();
   await page.getByRole('textbox', { name: 'Search phrase' }).fill('evening team');
   await page.getByRole('button', { name: 'Save phrase' }).click();
   await expect(page.getByRole('status')).toHaveText('Saved');
@@ -319,6 +318,7 @@ test('compact armbrace conversions use explicit manual rates and original item a
   await search.fill('1p in a');
   await expect(page.locator('#hub .hub-row')).toContainText('~ 0.006667 armbrace');
   await page.getByRole('button',{name:'Actions',exact:true}).click();
+  await page.getByRole('menuitem',{name:'Show price details'}).click();
   await page.getByRole('button',{name:'Edit rates',exact:true}).click();
   await page.getByRole('combobox',{name:'Rate source'}).selectOption('manual');
   await page.getByRole('textbox',{name:'Gold per ectoplasm'}).fill('5000');
@@ -435,7 +435,7 @@ test('Travel Enter from an empty search uses the selected recent destination',as
   await expect(hubSearch).toBeFocused();
   await page.keyboard.press('Meta+t');
   await expect(search).toBeFocused();
-  await expect(page.locator('.travel-primary')).toBeEnabled();
+  await expect(page.locator('#hub .hub-primary')).toBeEnabled();
   await search.press('Enter');
   await expect(page.locator('#app')).toHaveAttribute('data-action',/^TRAVEL (?!Kaineng Center)/);
   await expect(page.locator('#hub')).toBeHidden();

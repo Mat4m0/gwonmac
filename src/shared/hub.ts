@@ -39,7 +39,9 @@ export type HubRow = Readonly<{
   unavailable?: string;
   /** Opens the canonical saved record in its existing authoring workspace. */
   workspace?(): void;
+  /** A second way into this row; its Actions menu lists it when `actionsLabel` names it. */
   actions?(): void;
+  actionsLabel?: string;
   /** How the footer and a repeated Enter name this row's action while it runs (HUB-083). */
   pending?: Readonly<{ label: string; again: string }>;
   run(task: HubTask): void | Promise<void>;
@@ -112,8 +114,11 @@ export type HubViewAction = Readonly<{ label: string; run(task: HubTask): void |
 export type HubViewFooter = Readonly<{ primary(action: HubViewAction | null): void; secondary(action: HubViewAction | null): void; own(): void }>;
 export type HubViewMount<Target> = (target: Target, back: () => void, footer: HubViewFooter) => () => void;
 
-/** A page a direct shortcut opens (⌘T, ⌘E, ⌘B, Settings); every route to it names it, so the shortcut finds it. */
-export type HubDestination = 'travel' | 'characters' | 'builds' | 'settings';
+/**
+ * A page a direct shortcut opens (⌘T, ⌘E, ⌘B, Settings) or an action returns to (Accounts);
+ * every route to it names it, so `direct` finds it.
+ */
+export type HubDestination = 'travel' | 'characters' | 'builds' | 'settings' | 'accounts';
 
 export interface HubPresenter<Target> {
   close(): void;

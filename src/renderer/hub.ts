@@ -30,7 +30,8 @@ export function createHub(parent: HTMLElement) {
     <div class="hub-search"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 8 10-8 10L4 12 12 2Zm0 5v10M8 12h8"/></svg><span class="hub-scope" hidden></span><input type="text" role="combobox" aria-label="Search people, places, builds" aria-autocomplete="list" aria-controls="hub-results" aria-expanded="true" placeholder="Search people, places, builds…" autocomplete="off" spellcheck="false" maxlength="120"><span class="hub-progress" aria-hidden="true"></span></div>
     <p class="hub-hint" id="hub-hint" hidden></p><div class="hub-rate-controls" hidden></div><div class="hub-results ui-scroll" id="hub-results" role="listbox" aria-label="Results" tabindex="-1"></div>
     <pre class="hub-preview ui-scroll" hidden></pre><div class="hub-view" hidden></div><p class="hub-status" role="status" hidden></p><p class="hub-lifecycle" hidden></p><p class="hub-announce ui-sr-only" aria-live="polite" aria-atomic="true"></p>
-    <footer class="hub-footer"><span class="hub-legend"></span><span class="hub-count"></span><button class="hub-primary ui-button" data-variant="primary"></button><button class="hub-actions ui-button" data-variant="quiet">Actions</button></footer>
+    <footer class="hub-footer"><span class="hub-legend"></span><span class="hub-count"></span><button class="hub-primary ui-button" data-variant="primary"></button><button class="hub-actions ui-button" data-variant="quiet" aria-haspopup="menu" aria-expanded="false">Actions</button></footer>
+    <div class="hub-menu" role="menu" aria-label="Actions" hidden></div>
     <button class="ui-window-resize hub-resize" aria-label="Resize Hub" title="Drag to resize, or use arrow keys" hidden></button>
   </section>`;
   parent.append(root);
@@ -55,6 +56,10 @@ export function createHub(parent: HTMLElement) {
   const status = required<HTMLElement>('.hub-status');
   const footer = required<HTMLElement>('footer');
   const primary = required<HTMLButtonElement>('.hub-primary');
+  const actionsButton = required<HTMLButtonElement>('.hub-actions');
+  const menu = required<HTMLElement>('.hub-menu');
+  /** The row whose Actions menu is open. */
+  let menuRow: string | null = null;
   const count = required<HTMLElement>('.hub-count');
   const legend = required<HTMLElement>('.hub-legend');
   const lifecycle = required<HTMLElement>('.hub-lifecycle');
@@ -304,16 +309,28 @@ export function createHub(parent: HTMLElement) {
     if (viewFooter) { paintViewFooter(); return; }
     // A running action keeps the footer: it names what runs, disabled, until it ends (HUB-083).
     const working = busy() ? running : null;
-    primary.replaceChildren(document.createTextNode(working ? working.label : row ? row.action : 'Select a result'));
+    primaryText(working ? working.label : row ? row.action : 'Select a result');
     if (row && !working) { const key = document.createElement('kbd'); key.textContent = '↵'; primary.append(key); }
     disableSlot(primary, !row || !!row.unavailable || !!working);
     primary.dataset.variant = row?.destructive ? 'danger' : 'primary';
     // Footer slots never hide, so nothing slides under a resting pointer; they disable instead.
-    const actionsButton = required<HTMLButtonElement>('.hub-actions');
-    disableSlot(actionsButton, !row || (!!scope && !row.skills && !scope.summary?.skills));
-    actionsButton.textContent = scope ? 'Details' : 'Actions';
+    // Actions opens only where it lists more than the primary (HUB-043).
+    slotLabel(actionsButton, 'Actions', ['⌘', 'J']);
+    disableSlot(actionsButton, !row || !!working || menuEntries(row).length < 2);
+    if (!menu.hidden && menuRow !== row?.id) closeMenu(false);
     paintLegend(row);
     paintBusy();
+  }
+  /** The primary names its action on one line; a long name ends in … and shows whole on hover (HUB-238). */
+  function primaryText(label: string) {
+    const text = document.createElement('span'); text.className = 'hub-primary-label'; text.textContent = label;
+    primary.replaceChildren(text); primary.title = label;
+  }
+  /** A footer slot's text and, when it has one, its keys; the name stays the text, the keys are its shortcut. */
+  function slotLabel(button: HTMLButtonElement, text: string, keys: readonly string[] = []) {
+    button.replaceChildren(document.createTextNode(text));
+    for (const cap of keys) { const key = document.createElement('kbd'); key.textContent = cap; key.setAttribute('aria-hidden', 'true'); button.append(key); }
+    if (keys.length) button.setAttribute('aria-keyshortcuts', 'Meta+J'); else button.removeAttribute('aria-keyshortcuts');
   }
   /** A footer slot disables instead of hiding; under the focus it hands focus to search or the view, never to <body>. */
   function disableSlot(button: HTMLButtonElement, disabled: boolean) {
@@ -349,7 +366,7 @@ export function createHub(parent: HTMLElement) {
     if (!viewFooter) return;
     footer.hidden = viewFooter.own;
     const action = viewFooter.primary ?? done;
-    primary.replaceChildren(document.createTextNode(action.label));
+    primaryText(action.label);
     // Enter runs a named primary, so only that one carries the keycap, and not while it runs.
     if (viewFooter.primary && !viewRunning) { const key = document.createElement('kbd'); key.textContent = '↵'; primary.append(key); }
     disableSlot(primary, !!action.disabled || viewRunning);
@@ -358,9 +375,8 @@ export function createHub(parent: HTMLElement) {
     else if (viewArming?.label !== action.label) {
       viewArming?.arming.disarm(); viewArming = { label: action.label, arming: armConfirmation(primary) }; viewArming.arming.arm();
     }
-    const secondary = required<HTMLButtonElement>('.hub-actions');
-    secondary.textContent = viewFooter.secondary?.label ?? 'Actions';
-    disableSlot(secondary, !viewFooter.secondary || !!viewFooter.secondary.disabled || viewRunning);
+    slotLabel(actionsButton, viewFooter.secondary?.label ?? 'Actions');
+    disableSlot(actionsButton, !viewFooter.secondary || !!viewFooter.secondary.disabled || viewRunning);
     count.textContent = '';
     paintLegend(undefined);
     paintBusy();
@@ -587,7 +603,7 @@ export function createHub(parent: HTMLElement) {
         else if (event.detail === 2 && row.consequential && pressed === row.id && selected === row.id) void run();
       });
       // Right-click selects the row and opens its Actions (HUB-248).
-      option.addEventListener('contextmenu', event => { event.preventDefault(); if (busy()) return; hover.hold(); select(row.id); focusResult(); actions(); });
+      option.addEventListener('contextmenu', event => { event.preventDefault(); if (busy()) return; hover.hold(); select(row.id); focusResult(); openMenu(); });
       list.append(option);
     });
     count.textContent = `${rows.length} result${rows.length === 1 ? '' : 's'}`;
@@ -601,7 +617,10 @@ export function createHub(parent: HTMLElement) {
       : !scope && parsed.scope && !parsed.term ? rows.find(row => !row.consequential && !row.unavailable) : rows[0];
     const settling = reset || (awaitingResults && selected === null && rows.length > 0);
     if (settling) awaitingResults = !rows.length;
-    select((prior?.id === 'quote-state' || prior?.id === 'market-state') && !!rows[0]?.conversion ? rows[0].id : settling ? exactCount > 1 ? null : initial?.id ?? null : !revised && rows.some(row => row.id === selected) ? selected : null);
+    // A placeholder row that goes away (a loading or state row) hands its selection to what
+    // replaced it, as a fresh query would, so Enter acts without another key (HUB-232).
+    const replacedPlaceholder = !!prior?.unavailable && !rows.some(row => row.id === prior.id);
+    select((prior?.id === 'quote-state' || prior?.id === 'market-state') && !!rows[0]?.conversion ? rows[0].id : settling || replacedPlaceholder ? exactCount > 1 ? null : initial?.id ?? null : !revised && rows.some(row => row.id === selected) ? selected : null);
     if (!rows.length) {
       const empty = document.createElement('p'); empty.className = 'hub-empty'; empty.textContent = 'No matches'; list.append(empty);
     }
@@ -652,7 +671,7 @@ export function createHub(parent: HTMLElement) {
     finally { task.end(); if (running === mine) { running = null; if (root.open) select(selected); } }
   }
   function resetView() {
-    endSession(); restoringFocus?.disconnect(); restoringFocus = null; keepDrafts(); pressed = null; modal.pageChanged();
+    endSession(); restoringFocus?.disconnect(); restoringFocus = null; keepDrafts(); pressed = null; modal.pageChanged(); closeMenu(false);
     disposeView?.(); disposeView = null; activeView = null; viewAvailable = null; content.replaceChildren(); content.hidden = true;
     viewFooter = null; viewRunning = false; actionFocus = null; viewArming?.arming.disarm(); viewArming = null;
     search.hidden = false; list.hidden = false; footer.hidden = false;
@@ -813,7 +832,7 @@ export function createHub(parent: HTMLElement) {
     event.stopPropagation();
     if (event.defaultPrevented) return;
     event.preventDefault();
-    if (event.repeat || closeDisclosure(event.target, root)) return;
+    if (event.repeat || closeMenu() || closeDisclosure(event.target, root)) return;
     back();
   });
   root.addEventListener('mouseup', event => { if (event.button === 3) { event.preventDefault(); back(); } });
@@ -881,28 +900,76 @@ export function createHub(parent: HTMLElement) {
       return () => view.remove();
     });
   }
-  const actions = () => {
-    if (!root.open || document.querySelector('dialog:modal') !== root) return false;
-    if (disposeView) return true;
-    const row = rows.find(row => row.id === selected);
-    if (scope) { if (row && (row.skills || scope.summary?.skills)) showBuildDetails(row); return true; }
-    if (!row) return true;
-    if (isHubShortcuts([{ id: row.id, phrase: '', pinned: false }])) {
-      presenter.showRows(row.title, () => [
-        { ...row, id: 'selected-action', group: 'Actions' },
-        ...(row.skills || row.actions ? [{ id: 'review-selected', title: row.skills ? 'Details' : 'Review', detail: row.title, group: 'Actions', action: row.skills ? 'Details' : 'Review', run: () => row.skills ? showBuildDetails(row) : row.actions?.() }] : []),
-        { id: 'pin-selected', title: shortcuts().some(entry => entry.id === row.id && entry.pinned) ? 'Unpin' : 'Pin to Hub', detail: row.title, group: 'Actions', action: 'Update pin', run: async () => {
-          const entries = shortcuts(); const old = entries.find(entry => entry.id === row.id);
-          await saveShortcuts([...entries.filter(entry => entry.id !== row.id), { id: row.id, phrase: old?.phrase ?? '', pinned: !old?.pinned }]);
-        } },
-        { id: 'alias-selected', title: 'Set search phrase', detail: 'An exact name for this saved action', group: 'Actions', action: 'Edit phrase', run: () => editHubShortcut(presenter, row, shortcuts, saveShortcuts) },
-      ]); return true;
+  type MenuEntry = Readonly<{ label: string; section: 'Primary' | 'Details' | 'Personalize'; keys?: readonly string[]; destructive?: boolean; disabled?: boolean; run(): void | Promise<void> }>;
+  /**
+   * A row's Actions, verb first: its primary (↵), a second way into it (build details, rates),
+   * then pinning and a search phrase for rows the Hub can keep (HUB-040, HUB-184).
+   */
+  function menuEntries(row: HubRow): MenuEntry[] {
+    const entries: MenuEntry[] = [{ label: row.action, section: 'Primary', keys: ['↵'], ...(row.destructive ? { destructive: true } : {}), disabled: !!row.unavailable, run: () => run() }];
+    if (row.skills || scope?.summary?.skills) entries.push({ label: 'Show build details', section: 'Details', run: () => showBuildDetails(row) });
+    else if (row.actions && row.actionsLabel) entries.push({ label: row.actionsLabel, section: 'Details', run: () => row.actions?.() });
+    if (!scope && isHubShortcuts([{ id: row.id, phrase: '', pinned: false }])) {
+      const pinned = shortcuts().some(entry => entry.id === row.id && entry.pinned);
+      entries.push({ label: pinned ? 'Unpin from Hub' : 'Pin to Hub', section: 'Personalize', run: async () => {
+        const entries = shortcuts(); const old = entries.find(entry => entry.id === row.id);
+        try { await saveShortcuts([...entries.filter(entry => entry.id !== row.id), { id: row.id, phrase: old?.phrase ?? '', pinned: !old?.pinned }]); report(pinned ? `Unpinned ${row.title}.` : `Pinned ${row.title}.`); }
+        catch { report('Could not update the pin. Try again.', true); }
+      } });
+      entries.push({ label: 'Set search phrase…', section: 'Personalize', run: () => editHubShortcut(presenter, row, shortcuts, saveShortcuts) });
     }
-    if (row.actions) { row.actions(); return true; }
-    presenter.showRows(row.title, () => [row]); return true;
-  };
+    return entries;
+  }
+  /** Opens the selected row's Actions over the footer; the page, query and selection stay. */
+  function openMenu() {
+    const row = rows.find(row => row.id === selected);
+    if (viewFooter || busy() || !row) return;
+    const entries = menuEntries(row);
+    if (entries.length < 2) return;
+    menu.replaceChildren(); menuRow = row.id;
+    let section = '';
+    for (const entry of entries) {
+      if (entry.section !== section) { section = entry.section; const heading = document.createElement('p'); heading.className = 'hub-menu-section'; heading.setAttribute('role', 'presentation'); heading.textContent = section; menu.append(heading); }
+      const item = document.createElement('button'); item.type = 'button'; item.className = 'hub-menu-item'; item.setAttribute('role', 'menuitem'); item.disabled = !!entry.disabled;
+      if (entry.destructive) item.dataset.variant = 'danger';
+      const label = document.createElement('span'); label.textContent = entry.label; item.append(label);
+      if (entry.keys) { const keys = document.createElement('span'); keys.className = 'hub-menu-keys'; for (const cap of entry.keys) { const key = document.createElement('kbd'); key.className = 'ui-kbd'; key.textContent = cap; keys.append(key); } item.append(keys); }
+      // The item runs on its first click only; the menu closes first, so its action owns the page.
+      item.onclick = event => { if (event.detail > 1) return; closeMenu(); void entry.run(); };
+      menu.append(item);
+    }
+    // The menu stands on the footer, however tall the footer is.
+    menu.style.bottom = `${footer.offsetHeight + 8}px`;
+    menu.hidden = false; actionsButton.setAttribute('aria-expanded', 'true');
+    menu.querySelector<HTMLElement>('.hub-menu-item:not(:disabled)')?.focus({ preventScroll: true });
+  }
+  /** Closes the Actions menu; with `refocus` the keyboard returns to search. Whether a menu was open. */
+  function closeMenu(refocus = true) {
+    if (menu.hidden) return false;
+    const inside = menu.contains(document.activeElement);
+    menu.hidden = true; menuRow = null; actionsButton.setAttribute('aria-expanded', 'false'); menu.replaceChildren();
+    if (refocus || inside) (search.hidden ? firstControl() : input).focus({ preventScroll: true });
+    return true;
+  }
+  // The menu's own keys: the shared list move, Esc closes only the menu, Tab leaves it.
+  menu.addEventListener('keydown', event => {
+    const items = [...menu.querySelectorAll<HTMLButtonElement>('.hub-menu-item:not(:disabled)')];
+    const step = listKeyStep(event, items.length);
+    if (step !== null) { event.preventDefault(); items[listIndexAfter(items.indexOf(document.activeElement as HTMLButtonElement), items.length, step)]?.focus(); }
+    else if (event.key === 'Escape' && !event.isComposing) { event.preventDefault(); event.stopPropagation(); closeMenu(); }
+    else if (event.key === 'Tab') closeMenu(false);
+  });
+  // A press anywhere else in the Hub closes the menu; the Actions button toggles it itself.
+  root.addEventListener('pointerdown', event => { if (!menu.hidden && event.target instanceof Node && !menu.contains(event.target) && !actionsButton.contains(event.target)) closeMenu(false); }, true);
+  // ⌘J opens and closes Actions from anywhere in the Hub (D-1).
+  root.addEventListener('keydown', event => {
+    if (event.key.toLowerCase() !== 'j' || !event.metaKey || event.ctrlKey || event.altKey || event.shiftKey || event.isComposing) return;
+    event.preventDefault(); event.stopPropagation();
+    if (!event.repeat && !closeMenu()) openMenu();
+  });
   // In a view the Actions slot is the view's named secondary.
-  required<HTMLButtonElement>('.hub-actions').onclick = event => { if (!viewFooter) actions(); else if (event.detail <= 1) void runViewAction(viewFooter.secondary, event); };
+  // A double-click's second press never toggles the menu shut or runs anything (PTR-17).
+  actionsButton.onclick = event => { if (event.detail > 1) return; if (viewFooter) void runViewAction(viewFooter.secondary, event); else if (!closeMenu()) openMenu(); };
   required<HTMLButtonElement>('.hub-close').onclick = () => close();
   // The primary acts once per click run, so a double-click on it runs its action once.
   backButton.onclick = back;
@@ -962,7 +1029,7 @@ export function createHub(parent: HTMLElement) {
     if (!content.contains(document.activeElement)) firstControl().focus();
   }
   const presenter = {
-    show, close: () => close(), suspend, openSettings, direct, suspendedOn, actions,
+    show, close: () => close(), suspend, openSettings, direct, suspendedOn,
     /** A mounted view replaced its own page (a confirmation): a click run from before it is cancelled. */
     pageChanged: () => modal.pageChanged(),
     get visible() { return root.open; },

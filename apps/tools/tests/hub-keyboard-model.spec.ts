@@ -62,7 +62,7 @@ test('Escape on a page its shortcut opened clears the query, then closes without
   const travel = page.getByRole('combobox', { name: 'Destination, phrase, or friend' });
   await expect(travel).toBeFocused();
   // The hint names what Esc does here, and ⌘⌫ still has the real Home to return to.
-  await expect(page.locator('.travel-key-hints')).toContainText('Esc close ⌘⌫ back');
+  await expect(page.locator('.hub-legend')).toContainText('Esc Close');
   await travel.fill('kam');
   // A held Escape clears the query and stops there: one step per physical press.
   await page.evaluate(() => window.gwFixtureCanvas?.clear());
@@ -304,7 +304,8 @@ test('Escape at a shortcut conflict clears the prompt and returns to its shortcu
 test('arrow keys scroll Build details and never jump to Back (HUB-088)', async ({ page }) => {
   await openHub(page);
   await hubSearch(page).fill('build smiter'); await page.keyboard.press('Enter');
-  await page.getByRole('button', { name: 'Details' }).click();
+  await page.getByRole('button', { name: 'Actions', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Show build details' }).click();
   const details = page.locator('.hub-build-details');
   await expect(details).toBeFocused();
   for (let press = 0; press < 3; press++) await page.keyboard.press('ArrowDown');

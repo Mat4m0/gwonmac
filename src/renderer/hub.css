@@ -45,8 +45,18 @@
 .hub-row[aria-disabled=true] .hub-title { color:var(--ui-text-muted); }
 .hub-footer { display:flex; align-items:center; justify-content:flex-end; gap:8px; padding:8px; min-height:48px; flex-shrink:0; border-top:1px solid var(--ui-line-soft); }
 .hub-primary { display:flex; align-items:center; gap:10px; }
-/* Actions and Details share one width, so the primary beside it never shifts under a resting pointer. */
-.hub-actions { min-width:5.75em; justify-content:center; }
+/* The Actions slot keeps one width on every page (its label and ⌘J, or a view's secondary), so the
+   primary beside it never shifts under a resting pointer. */
+.hub-actions { min-width:9em; justify-content:center; gap:6px; }
+/* Actions: a compact menu over the footer's right edge; the page under it stays put (D-1, HUB-040). */
+.hub-menu { position:absolute; right:8px; bottom:56px; z-index:var(--ui-z-title); width:min(300px,calc(100% - 16px)); max-height:60%; overflow:auto; padding:6px; border-radius:var(--ui-radius-sm); background:var(--ui-well-strong-fill); box-shadow:var(--ui-shadow), 0 0 0 1px var(--ui-edge); }
+.hub-menu-section { margin:6px 8px 4px; color:var(--ui-text-muted); font:var(--ui-type-caption-size)/var(--ui-type-caption-line) var(--ui-font-interface); }
+.hub-menu-section:first-child { margin-top:2px; }
+.hub-menu-item { display:flex; align-items:center; justify-content:space-between; gap:12px; width:100%; min-height:34px; padding:6px 8px; border:0; border-radius:var(--ui-radius-sm); background:none; color:inherit; font:inherit; text-align:left; cursor:pointer; }
+.hub-menu-item:hover:not(:disabled), .hub-menu-item:focus-visible { background:var(--ui-selection-fill); box-shadow:var(--ui-shadow-selected); color:var(--ui-selection-ink); outline:none; }
+.hub-menu-item:disabled { color:var(--ui-text-muted); cursor:default; }
+.hub-menu-item[data-variant="danger"] { color:var(--ui-danger); }
+.hub-menu-keys { display:flex; gap:2px; flex-shrink:0; }
 .hub-legend { display:flex; flex-wrap:wrap; gap:4px 12px; min-width:0; color:var(--ui-text-muted); font:var(--ui-type-caption-size)/var(--ui-type-caption-line) var(--ui-font-reading); }
 .hub-legend .ui-kbd { min-width:20px; margin-right:2px; padding:0 4px; }
 .hub-count { margin-right:auto; color:var(--ui-text-muted); font:var(--ui-type-caption-size)/var(--ui-type-caption-line) var(--ui-font-reading); white-space:nowrap; }
@@ -315,7 +325,8 @@
 .hub-scope { flex:none; order:1; padding:2px 6px; border:1px solid var(--ui-line-soft); border-radius:var(--ui-radius-sm); color:var(--ui-accent); font:var(--ui-type-caption-size)/1.4 var(--ui-font-interface); }
 .hub-hint { margin:0; padding:0 16px 8px; color:var(--ui-text-muted); font:var(--ui-type-caption-size)/1.4 var(--ui-font-reading); }
 .hub-row-type .ui-kbd { min-width:20px; padding:2px 4px; }
-.hub-footer .hub-primary { min-width:0; text-align:left; overflow-wrap:anywhere; }
+.hub-footer .hub-primary { min-width:0; text-align:left; }
+.hub-primary-label { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .hub-panel:has(.hub-preview:not([hidden])) .hub-results { flex:0 1 auto; max-height:50%; }
 .hub-panel:has(.hub-preview:not([hidden])) .hub-preview { flex:1; max-height:none; }
 

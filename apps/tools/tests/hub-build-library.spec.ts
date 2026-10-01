@@ -197,13 +197,14 @@ test('comparison details are keyboard accessible without applying a build', asyn
   const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
   await search.fill('build monk'); await search.press('Enter');
   await expect(page.locator('.hub-row [data-changed=true]').first()).toBeVisible();
-  await page.getByRole('button', { name: 'Details', exact: true }).focus();
-  await page.keyboard.press('Enter');
+  await page.keyboard.press('Meta+j');
+  await expect(page.getByRole('menuitem', { name: /^Apply / })).toBeFocused();
+  await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter');
   await expect(page.locator('.hub-build-details')).toContainText('Protective Spirit');
   await expect(page.locator('.hub-build-details')).toContainText('Healing Prayers');
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', /command|apply/);
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('button', { name: 'Details', exact: true })).toBeFocused();
+  await expect(search).toBeFocused();
 });
 
 for (const width of [390, 1280]) {
@@ -222,7 +223,8 @@ test(`recent build targets and editor handoff retain their place at ${width}px`,
   await page.getByRole('button', { name: 'Home', exact: true }).click();
   await search.fill('build Word of Healing'); await search.press('Enter');
   await expect(page.getByRole('region', { name: 'Build to apply', exact: true })).toContainText('Word of Healing');
-  await page.getByRole('button', { name: 'Details', exact: true }).click();
+  await page.getByRole('button', { name: 'Actions', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Show build details' }).click();
   await page.getByRole('button', { name: 'Open in Build Library', exact: true }).click();
   await expect(page.locator('#hub')).toBeHidden();
   await expect(page.locator('.tools-window')).toBeVisible();

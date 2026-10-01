@@ -37,6 +37,25 @@ test('a late quote cannot replace a new query or revive a disabled market', asyn
   source.setVisible(false);
 });
 
+test('only a rate-dependent result offers the rates editor (HUB-100)', async () => {
+  const { createHubCalculator } = await import('../../src/renderer/hub-calculator.ts');
+  const views: string[] = [];
+  const hub = { close() {}, notify() {}, attach: () => () => {}, showRows() {}, showView(title: string) { views.push(title); } };
+  const source = createHubCalculator({ copy: async () => {}, marketEnabled: () => true, hub,
+    quotes: async () => ({ updatedAt: Date.now(), quotes: [{ modelId: '0b03a2', side: 'buy', price: 6000, timestamp: Date.now() }] }) });
+  source.setVisible(true);
+  try {
+    for (const [query, title] of [['2+2', '4'], ['10p in g', '10000 gold']] as const) {
+      const row = source.search(query)[0];
+      assert.equal(row?.title, title); row?.actions?.();
+    }
+    assert.deepEqual(views, []);
+    source.search('10 ecto in p'); await Promise.resolve();
+    source.search('10 ecto in p')[0]?.actions?.();
+    assert.deepEqual(views, ['Conversion rates']);
+  } finally { source.setVisible(false); }
+});
+
 test('market rows distinguish buy, sell, and stale observation', async () => {
   const { createHubCalculator } = await import('../../src/renderer/hub-calculator.ts');
   const source = createHubCalculator({ copy: async () => {}, marketEnabled: () => true,

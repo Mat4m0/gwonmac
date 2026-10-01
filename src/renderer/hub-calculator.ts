@@ -45,7 +45,7 @@ export function createHubCalculator(options: {
       mode.focus();return()=>form.remove();
     });
   }
-  const result=(id:string,title:string,detail:string,value:string):HubRow=>({id,title,detail,group:'Calculator',action:'Copy result',run:()=>options.copy(value),actions:editRates});
+  const result=(id:string,title:string,detail:string,value:string):HubRow=>({id,title,detail,group:'Calculator',action:'Copy result',run:()=>options.copy(value)});
   const titleRows=(entries:NonNullable<ReturnType<typeof calculateTitle>>):HubRow[]=>entries.map((entry,index)=>({
     id:`title:${index}`,title:entry.title,detail:entry.example?`${entry.detail} · ${entry.example}`:entry.detail,group:'Titles',
     ...(entry.problem?{unavailable:entry.title}:{}),
@@ -76,7 +76,8 @@ export function createHubCalculator(options: {
           const fractional=currencyInfo(unit).stack!==null&&amount.n%amount.d!==0n;
           const iconFrom=conversion.terms.length===1?currencyIcon(conversion.from):undefined,iconTo=currencyIcon(unit);
           const copied=id.startsWith('quote:')?`${id==='quote:buy'?'Buy from trader':'Sell to trader'}: ${value}`:id==='manual-conversion'?`Your rates: ${value}`:id.startsWith('market:')?`${value} · ${detail}`:value;
-          return {...result(id,value,`${detail}${fractional?' · Equivalent value':''}`,copied),conversion:{input:conversion.input,from:conversion.terms.length>1?'Combined value':currencyInfo(conversion.from).name,to:currencyInfo(unit).name,...(iconFrom?{iconFrom}:{}),...(iconTo?{iconTo}:{})}};
+          // Only a result that depends on a rate the player can choose offers the rates editor (HUB-100).
+          return {...result(id,value,`${detail}${fractional?' · Equivalent value':''}`,copied),...(fixed?{}:{actions:editRates,actionsLabel:'Edit rates'}),conversion:{input:conversion.input,from:conversion.terms.length>1?'Combined value':currencyInfo(conversion.from).name,to:currencyInfo(unit).name,...(iconFrom?{iconFrom}:{}),...(iconTo?{iconTo}:{})}};
         };
         if(fixed){clear();return [card('conversion',unit=>fraction(unit==='gold'?1n:1000n),'Fixed conversion · 1 platinum = 1,000 gold')];}
         if(!visible){clear();return [];}
@@ -136,7 +137,7 @@ export function createHubCalculator(options: {
                 const detail=`${marketSnapshot.sample?'Sample data — not live Kamadan prices · Median of simulated ads':'Inferred from median prices in recent Kamadan trade ads'} · ${side==='wts'?'Seller asking prices':'Buyer offers'} · ${evidence.map(entry=>`${entry.advertisers} advertisers (${currencyInfo(entry.item).name})`).join(', ')} · Ads since ${new Date(oldest).toLocaleString()}${Date.now()-marketSnapshot.fetchedAt>MARKET_CACHE_MS?' · Last fetched '+new Date(marketSnapshot.fetchedAt).toLocaleTimeString():''}`;
                 const row = card(`market:${side}`,rate,detail);
                 const age = Math.max(0, Math.round((Date.now() - marketSnapshot.fetchedAt) / 60000));
-                rows.push({ ...row, detail: `${marketSnapshot.sample ? 'Sample prices · ' : ''}${side === 'wts' ? 'Seller asking prices' : 'Buyer offers'} · Inferred median · Updated ${age < 1 ? 'just now' : `${age} min ago`}`, actions: () => options.hub?.showView('Price details', target => {
+                rows.push({ ...row, detail: `${marketSnapshot.sample ? 'Sample prices · ' : ''}${side === 'wts' ? 'Seller asking prices' : 'Buyer offers'} · Inferred median · Updated ${age < 1 ? 'just now' : `${age} min ago`}`, actionsLabel: 'Show price details', actions: () => options.hub?.showView('Price details', target => {
                   const section = target.ownerDocument.createElement('section'); section.className = 'hub-detail'; const text = target.ownerDocument.createElement('p'); text.textContent = detail; const button = target.ownerDocument.createElement('button'); button.className = 'ui-button'; button.textContent = 'Edit rates'; button.onclick = () => editRates(); section.append(text, button); target.append(section); button.focus(); return () => section.remove();
                 }) });
               }catch{/* Incomplete routes never mix in NPC or invented prices. */}
@@ -145,7 +146,7 @@ export function createHubCalculator(options: {
           const chosen=rows.find(row=>row.id===`market:${marketBasis}`)??rows[0];
           if(chosen)return [{...chosen,quoteBasis:{value:chosen.id.slice(7),options:rows.map(row=>({value:row.id.slice(7),label:row.id==='market:wts'?'Seller asking prices':'Buyer offers'})),choose(value){marketBasis=value==='wtb'?'wtb':'wts';refresh();}}}];
           const loading=!marketSnapshot&&!failed;
-          return [{id:'market-state',title:loading?'Reading recent Kamadan trades…':'Not enough recent prices',detail:'An estimate needs at least 5 advertisers with consistent prices per rate. No rate is guessed.',group:'Calculator',action:loading?'Loading':'Refresh',...(loading?{unavailable:'Reading recent trades'}:{}),run(){queryKey='';refresh();},actions:editRates}];
+          return [{id:'market-state',title:loading?'Reading recent Kamadan trades…':'Not enough recent prices',detail:'An estimate needs at least 5 advertisers with consistent prices per rate. No rate is guessed.',group:'Calculator',action:loading?'Loading':'Refresh',...(loading?{unavailable:'Reading recent trades'}:{}),run(){queryKey='';refresh();},actions:editRates,actionsLabel:'Edit rates'}];
         }
         if(queryKey!==term){clear();queryKey=term;failed=false;const request=++generation;
           void options.quotes().then(value=>{if(generation!==request||!visible||!options.marketEnabled())return;snapshot=value;refresh();const expiry=Math.min(...value.quotes.filter(quote=>quote.timestamp+HUB_QUOTE_FRESH_MS>Date.now()).map(quote=>quote.timestamp+HUB_QUOTE_FRESH_MS));if(Number.isFinite(expiry))timer=setTimeout(refresh,Math.max(1,expiry-Date.now()+1));}).catch(()=>{if(generation===request&&visible){failed=true;refresh();}});

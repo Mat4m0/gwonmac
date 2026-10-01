@@ -4,7 +4,7 @@
  */
 import { installSearchEditing, resumeSearchInput } from "./search-input.js";
 import { isHubBackKey } from "../shared/keyboard-shortcuts.js";
-import { hubMatch, normaliseHubQuery } from "../shared/hub.js";
+import { hubMatch, normaliseHubQuery, type HubViewFooter } from "../shared/hub.js";
 import type {
   CharacterSummary,
 } from "./companion-character-list-snapshot.js";
@@ -135,6 +135,7 @@ export function createCharacterSwitchPalette(
   const leaveButton = root.querySelector<HTMLButtonElement>(".character-switch-leave")!;
   const leaveArming = armConfirmation(leaveButton);
   const primaryButton = root.querySelector<HTMLButtonElement>(".character-switch-action")!;
+  const footerElement = root.querySelector<HTMLElement>(".character-switch-footer")!;
   const settingsToggle = root.querySelector<HTMLButtonElement>(".character-switch-settings-toggle")!;
   const searchCheckbox = root.querySelector<HTMLInputElement>("#character-switch-enable-search")!;
   const professionCheckbox = root.querySelector<HTMLInputElement>("#character-switch-show-profession")!;
@@ -195,15 +196,16 @@ export function createCharacterSwitchPalette(
   // In the Hub the search leads the view, so it leads the Tab order too (HUB-138).
   if (hub) panel.prepend(search);
   let hubBack: (() => void) | undefined;
+  /** In the Hub, its footer names the switch; the palette's own footer stays hidden (HUB-042). */
+  let hubFooter: HubViewFooter | undefined;
   const modal = hub ? {
     show() { hub.showView('Characters', (target, back, footer) => {
-      // Characters names the switch in its own footer.
-      footer.own();
+      hubFooter = footer; footerElement.hidden = true;
       hubBack = back;
       target.append(root); root.open = true;
       if (view.kind === "closed") { view = Object.freeze({ kind: "characters" }); render(); }
       focusSelected();
-      return () => { hubBack = undefined; root.open = false; parent.append(root); if (view.kind === 'confirming') source.cancelConfirmation(); view = { kind: 'closed' }; };
+      return () => { hubBack = undefined; hubFooter = undefined; footerElement.hidden = false; root.open = false; parent.append(root); if (view.kind === 'confirming') source.cancelConfirmation(); view = { kind: 'closed' }; };
     }, () => !!window.gwToolsSettings?.().characterSwitchEnabled, "characters"); },
     close() { hub.close(); },
     pageChanged() { hub.pageChanged(); },
@@ -234,6 +236,11 @@ export function createCharacterSwitchPalette(
       primaryButton.append(" ", key);
     }
     primaryButton.disabled = !row || current || busy();
+    // The Hub footer: the switch on the cards, Done in the settings, and the safe Stay here while
+    // a confirmation asks; the armed Leave and switch stays in the confirmation itself.
+    hubFooter?.primary(view.kind === "settings" ? { label: "Done", run: () => settingsToggle.click() }
+      : view.kind === "confirming" ? { label: "Stay here", run: () => stayButton.click() }
+      : { label: row ? current ? "Current character" : `Switch to ${row.character.name}` : "Switch character", disabled: !row || current || busy(), run: () => requestSelected() });
     // The ends hold, so the arrow that cannot move is disabled.
     previousButton.disabled = busy() || selected <= 0;
     nextButton.disabled = busy() || selected >= rows.length - 1;
