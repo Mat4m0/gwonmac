@@ -25,7 +25,7 @@
 @keyframes hub-progress { from { transform:translateX(-100%); } to { transform:translateX(340%); } }
 @media (prefers-reduced-motion: reduce) { .hub-progress::after { width:100%; opacity:.6; animation:none; } }
 .hub-results { min-height:0; flex:1; overflow:auto; padding:0 8px 8px; overscroll-behavior:contain; }
-.hub-group { padding:12px 10px 6px; color:var(--ui-accent); font:var(--ui-type-body-size)/var(--ui-type-body-line) var(--ui-font-display); }
+.hub-group { padding:12px 10px 6px; color:var(--ui-accent-text); font:var(--ui-type-body-size)/var(--ui-type-body-line) var(--ui-font-display); }
 .hub-group:first-child { padding-top:4px; }
 .hub-row { position:relative; display:grid; grid-template-columns:30px auto minmax(0,1fr) auto; align-items:center; column-gap:12px; padding:8px 10px; min-height:46px; border-radius:var(--ui-radius-sm); cursor:pointer; }
 .hub-row:hover { background:var(--ui-row-hover); }
@@ -91,7 +91,6 @@
   .hub-conversion { grid-template-columns:minmax(0,1fr) 20px minmax(0,1fr); gap:10px; padding:18px 10px; }
   .hub-conversion-input,.hub-conversion .hub-title { font-size:20px; }
   .hub-conversion > .hub-detail { grid-column:1 / -1; }
-  .hub-footer { flex-wrap:wrap; }
 }
 @media(max-height:500px) { .hub-panel { top:8px; height:calc(100vh - 16px); } }
 
@@ -311,7 +310,7 @@
 .whisper-popout-host .whisper-presence-label .whisper-presence { position:static; width:5px; height:5px; }
 .hub-setting-shortcut .hub-shortcut-record { display:flex; align-items:center; justify-content:center; gap:4px; min-width:68px; min-height:36px; background:transparent; }
 .hub-shortcut-record kbd { display:grid; place-items:center; min-width:25px; height:27px; padding:0 5px; border:1px solid var(--ui-line-soft); border-bottom-width:2px; border-radius:var(--ui-radius-sm); background:var(--ui-well-fill); color:var(--ui-text-bright); font:500 14px/1 var(--ui-font-interface); }
-.hub-shortcut-record[data-capturing=true] { color:var(--ui-accent); }
+.hub-shortcut-record[data-capturing=true] { color:var(--ui-accent-text); }
 
 /* Docking changes placement only; the outer Hub owns the sole window frame. */
 #hub .hub-view .ui-art-frame { padding:0; background:transparent; }
@@ -322,10 +321,18 @@
 
 /* Context and examples teach the existing grammar without changing execution. */
 .hub-back { max-width:42%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.hub-scope { flex:none; order:1; padding:2px 6px; border:1px solid var(--ui-line-soft); border-radius:var(--ui-radius-sm); color:var(--ui-accent); font:var(--ui-type-caption-size)/1.4 var(--ui-font-interface); }
+.hub-scope { flex:none; order:1; padding:2px 6px; border:1px solid var(--ui-line-soft); border-radius:var(--ui-radius-sm); color:var(--ui-accent-text); font:var(--ui-type-caption-size)/1.4 var(--ui-font-interface); }
 .hub-hint { margin:0; padding:0 16px 8px; color:var(--ui-text-muted); font:var(--ui-type-caption-size)/1.4 var(--ui-font-reading); }
 .hub-row-type .ui-kbd { min-width:20px; padding:2px 4px; }
-.hub-footer .hub-primary { min-width:0; text-align:left; }
+/* One footer line at every Hub width and font, so arrowing never resizes the
+ * list (HUB-238). Room goes first from the key legend, whose hints drop out
+ * whole onto a clipped second line, then from the count; the primary then
+ * ellipsizes and keeps its full label as the accessible name. */
+.hub-footer .hub-primary { min-width:0; flex:0 1 auto; text-align:left; }
+.hub-footer .hub-primary kbd,.hub-footer .hub-actions { flex:none; white-space:nowrap; }
+.hub-footer .hub-legend { flex:0 10000 auto; min-width:0; height:var(--ui-type-caption-line); overflow:hidden; }
+.hub-legend > * { white-space:nowrap; }
+.hub-footer .hub-count { flex:0 100 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; }
 .hub-primary-label { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .hub-panel:has(.hub-preview:not([hidden])) .hub-results { flex:0 1 auto; max-height:50%; }
 .hub-panel:has(.hub-preview:not([hidden])) .hub-preview { flex:1; max-height:none; }
@@ -351,7 +358,7 @@
 
 /* The incoming build remains above the target search and equipped bars. */
 .hub-summary { flex-shrink:0; margin:2px 12px 4px; padding:10px 12px; border-bottom:1px solid var(--ui-edge); }
-.hub-summary-label { display:block; color:var(--ui-accent); font-size:11px; margin-bottom:4px; }
+.hub-summary-label { display:block; color:var(--ui-accent-text); font-size:11px; margin-bottom:4px; }
 .hub-summary strong { color:var(--ui-text-bright); font-weight:600; }
 .hub-summary p { margin:8px 0 0; color:var(--ui-text-muted); font-size:12px; white-space:pre-line; }
 .hub-build-info { grid-column:2; display:flex; align-items:center; flex-wrap:wrap; gap:10px 16px; min-width:0; margin-top:8px; }

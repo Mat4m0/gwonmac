@@ -35,6 +35,10 @@
   --ui-art-head-radius: 0;
   --ui-art-head-fill: transparent;
   --ui-art-head-shadow: none;
+  /* The Classic head sits on painted metal, which the ink guard cannot
+   * measure, so its secondary copy uses the text ink. */
+  --ui-art-head-muted: var(--ui-text);
+  --ui-art-head-faint: var(--ui-text);
   --ui-art-title-size: var(--ui-type-body-size);
   --ui-art-head-control-height: 26px;
   --ui-art-head-detail-display: none;
@@ -169,6 +173,9 @@
   --ui-text-faint: #948e7e;
   --ui-display-text: var(--ui-text-bright);
   --ui-accent: #e6c882;
+  /* The accent used as text. appearance.ts re-inks only this role when the
+   * accent would read below 4.5:1; fills, rails and icons keep --ui-accent. */
+  --ui-accent-text: var(--ui-accent);
   --ui-accent-hover: var(--gw-gold-bright);
   --ui-accent-strong: #8a7433;
   --ui-accent-ink: #171613;
@@ -375,6 +382,8 @@
   --ui-art-head-radius: var(--ui-radius);
   --ui-art-head-fill: var(--ui-title-fill) padding-box, var(--ui-frame) border-box;
   --ui-art-head-shadow: var(--ui-title-shadow);
+  --ui-art-head-muted: var(--ui-text-muted);
+  --ui-art-head-faint: var(--ui-text-faint);
   --ui-art-title-size: var(--ui-type-window-size);
   --ui-art-head-control-height: var(--ui-control-height);
   --ui-art-head-detail-display: block;
@@ -450,11 +459,12 @@
 }
 
 /* Accessibility changes the rendered material, never the player's saved
- * preference. Returning to the ordinary system setting restores their value. */
+ * preference. Returning to the ordinary system setting restores their value.
+ * A modal scrim is not a material: it keeps its value, so the game stays
+ * visible around an opaque panel. */
 @media (prefers-reduced-transparency: reduce) {
   :root {
     --ui-effective-panel-opacity: 1;
-    --ui-overlay-fill: #080807;
   }
 }
 

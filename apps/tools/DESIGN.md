@@ -245,6 +245,37 @@ Settings dialog too. Body text must have a contrast ratio of at least 4.5:1.
 Large text must have a ratio of at least 3:1. Test minimum opacity over bright,
 detailed game artwork.
 
+### Legibility model
+
+[`appearance.ts`](../../src/renderer/appearance.ts) owns one worst-case model
+for every text role. It measures the inks `tokens.css` paints, or the colours a
+player chose, against the panel at its effective opacity over snow and over a
+black scene, each with and without the accent hover layer. It includes actual
+title, raised and recessed paint, unchanged controls, and translucent wells.
+Tests pin default paint to `tokens.css`. Reduce Transparency makes the
+effective opacity 1; the saved opacity stays unchanged.
+
+Opposing custom surfaces can make 4.5:1 impossible for one shared ink. The
+existing neutral fallback maximises the minimum contrast; it does not guarantee
+AA for those palettes. Separate surface inks or palette limits need a design
+decision. The saved palette remains unchanged.
+
+- Text, bright, muted, faint and the accent used as text move separately and
+  only as far as they must. One opacity step never re-inks a whole role, and
+  faint stays apart from muted wherever both read.
+- At low opacity over snow the inks converge. Hierarchy then comes from type
+  role and size: row detail, counts and hints use the smaller Reading role,
+  keycaps the Data role, and headings the Display role.
+- `--ui-accent-text` is the accent used as text: group headings, the scope
+  chip, the build summary label, links, progress and the current-character
+  marker. Only its lightness moves, so gold stays gold. Fills, rails, icons
+  and the primary button keep the exact `--ui-accent`.
+- The Classic head sits on painted metal that the model cannot measure, so its
+  secondary copy (crumbs, caption, context) uses the text ink with the Classic
+  text shadow.
+- Reduce Transparency changes panel material only. A modal scrim keeps its
+  value, so the game stays visible around the opaque panel.
+
 ## Compact reading surfaces
 
 Whispers uses the shared `.ui-frame` with `data-variant="quiet"`: the theme's
