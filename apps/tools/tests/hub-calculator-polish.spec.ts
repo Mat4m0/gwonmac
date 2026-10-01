@@ -6,6 +6,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('market basis retains the selected card and keyboard focus in both directions', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-09-30T12:00:00Z') });
   await page.goto('/?hub');
   await page.locator('.hub-search input').fill('1zkey in a');
   const picker=page.getByRole('combobox',{name:'Price basis'});
@@ -21,6 +22,12 @@ test('market basis retains the selected card and keyboard focus in both directio
     await expect(page.locator('#app')).toHaveAttribute('data-action', /^Copied 1 zkey = ~ /);
     await expect(picker).toBeFocused();
   }
+  // Quote expiry withdraws the conversion while its basis control owns focus.
+  await picker.focus();
+  await page.clock.setFixedTime(new Date('2026-10-02T12:00:00Z'));
+  await page.clock.runFor(60_001);
+  await expect(page.locator('.hub-conversion')).toHaveCount(0);
+  await expect(page.locator('.hub-search input')).toBeFocused();
 });
 
 test('rates accept trading shorthand, command-Enter saves once, and the choice survives reload', async ({ page }) => {

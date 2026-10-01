@@ -869,7 +869,10 @@ export function createHub(parent: HTMLElement) {
     // Clear only this loading refusal when its answer settles; unrelated failures stay.
     if (prior?.unavailable && status.textContent === prior.unavailable && rows.some(row => row.conversion && !row.unavailable)) report('');
     select((prior?.id === 'quote-state' || prior?.id === 'market-state') && !!rows[0]?.conversion ? rows[0].id : settling || replacedPlaceholder ? phraseMatches.length > 1 || (exactCount > 1 && !phraseHit) ? null : initial?.id ?? null : !revised && rows.some(row => row.id === selected) ? selected : null);
-    if (focusedRate instanceof HTMLElement && !rates.hidden && rates.isConnected) focusedRate.focus({ preventScroll: true });
+    if (focusedRate instanceof HTMLElement) {
+      if (!rates.hidden && rates.isConnected) focusedRate.focus({ preventScroll: true });
+      else focusResult();
+    }
     if (!settling && prior && !replacedPlaceholder && !rows.some(row => row.id === prior.id) && !receiptInStatus) report('The previous selection is no longer available. Choose a result.');
 
   }
