@@ -83,15 +83,23 @@ export function openHubSettings(hub: Hub, focus?: HubSettingsFocus) {
     });
     /** A setting's row; `state` says what the running game uses when that differs from the saved choice. */
     function row(title: string, control: HTMLElement, detail = '', state?: Readonly<{ text: string; level: string }>) {
-      const label = doc.createElement('label'); label.className = control.matches('input[type=checkbox]') ? 'hub-setting-row ui-check' : 'hub-setting-row';
-      const copy = doc.createElement('span'); const name = doc.createElement('strong'); name.textContent = title; copy.append(name);
-      if (detail) { const hint = doc.createElement('small'); hint.textContent = detail; copy.append(hint); }
-      if (state) { const note = doc.createElement('small'); note.className = 'hub-setting-state'; note.dataset.level = state.level; note.textContent = state.text; copy.append(note); }
-      if (control.matches('input,select,button')) control.setAttribute('aria-label', title); label.append(copy, control); body.append(label);
+      const label = doc.createElement(control.matches('input,select,button') ? 'label' : 'div');
+      label.className = control.matches('input[type=checkbox]') ? 'hub-setting-row ui-check' : 'hub-setting-row';
+      const copy = doc.createElement('span'); const name = doc.createElement('strong'); name.textContent = title;
+      name.id = `hub-setting-name-${body.childElementCount}`; copy.append(name);
+      const descriptions: string[] = [];
+      if (detail) { const hint = doc.createElement('small'); hint.textContent = detail; hint.id = `${name.id}-detail`; descriptions.push(hint.id); copy.append(hint); }
+      if (state) { const note = doc.createElement('small'); note.className = 'hub-setting-state'; note.dataset.level = state.level; note.textContent = state.text; note.id = `${name.id}-state`; descriptions.push(note.id); copy.append(note); }
+      const fields = control.matches('input,select,button') ? [control] : [...control.querySelectorAll<HTMLElement>('input,select,button')];
+      for (const field of fields) {
+        if (fields.length === 1) { field.removeAttribute('aria-label'); field.setAttribute('aria-labelledby', name.id); field.dataset.settingLabel = title; }
+        if (descriptions.length) field.setAttribute('aria-describedby', descriptions.join(' '));
+      }
+      label.append(copy, control); body.append(label);
     }
     /** The control that keeps the keyboard after the saves settle, by its label. */
     let refocus = '';
-    const focusControl = (label: string) => body.querySelector<HTMLElement>(`[aria-label="${CSS.escape(label)}"]`)?.focus({ preventScroll: true });
+    const focusControl = (label: string) => body.querySelector<HTMLElement>(`[data-setting-label="${CSS.escape(label)}"],[aria-label="${CSS.escape(label)}"]`)?.focus({ preventScroll: true });
     // The controls stay live while saves run; the section repaints once they settled, and the
     // focused control, or the one the last save named, keeps the keyboard.
     const saver = createTrailingSave<HubSettingsChange>({
@@ -102,7 +110,7 @@ export function openHubSettings(hub: Hub, focus?: HubSettingsFocus) {
           if (disposed || saver.pending) return;
           view.removeAttribute('aria-busy');
           const active = doc.activeElement;
-          const label = active instanceof HTMLElement && body.contains(active) ? active.getAttribute('aria-label') ?? refocus : refocus;
+          const label = active instanceof HTMLElement && body.contains(active) ? active.dataset.settingLabel ?? active.getAttribute('aria-label') ?? refocus : refocus;
           const prompt = status.contains(active);
           render();
           if (failed) status.textContent = 'Could not save this setting. Your previous value is kept. Try again.';
@@ -117,7 +125,7 @@ export function openHubSettings(hub: Hub, focus?: HubSettingsFocus) {
     /** Repaints the section from the stored values; the focused control keeps the keyboard. */
     function repaint() {
       const active = doc.activeElement;
-      const label = active instanceof HTMLElement && body.contains(active) ? active.getAttribute('aria-label') : null;
+      const label = active instanceof HTMLElement && body.contains(active) ? active.dataset.settingLabel ?? active.getAttribute('aria-label') : null;
       render();
       if (label) focusControl(label);
     }
@@ -139,7 +147,7 @@ export function openHubSettings(hub: Hub, focus?: HubSettingsFocus) {
     }
     function range(title: string, key: keyof HubSettingsPatch, min = 0) {
       const wrap = doc.createElement('span'); wrap.className = 'hub-setting-range'; const input = doc.createElement('input'); input.type = 'range'; input.className = 'ui-range'; input.min = String(min); input.max = '100'; input.value = String(snapshot?.settings[key] ?? 100); input.setAttribute('aria-label', title);
-      const output = doc.createElement('output'); output.textContent = `${input.value}%`; input.oninput = () => { output.textContent = `${input.value}%`; }; input.onchange = () => { save({ kind: 'settings', patch: { [key]: Number(input.value) } }, title); }; wrap.append(input, output); row(title, wrap);
+      const output = doc.createElement('span'); const paintValue = () => { output.textContent = `${input.value}%`; input.setAttribute('aria-valuetext', output.textContent); }; paintValue(); input.oninput = paintValue; input.onchange = () => { save({ kind: 'settings', patch: { [key]: Number(input.value) } }, title); }; wrap.append(input, output); row(title, wrap);
     }
     function chooseShortcut(action: ShortcutAction, binding: ShortcutBinding | null) {
       const conflict = binding && snapshot ? shortcutConflict(action, binding, snapshot.shortcuts) : null;
@@ -209,15 +217,16 @@ export function openHubSettings(hub: Hub, focus?: HubSettingsFocus) {
             status.textContent = SHORTCUT_CAPTURE_HINT; change.dataset.capturing = 'true'; change.setAttribute('aria-busy', 'true'); change.textContent = 'Press keys…';
             capturing = true;
             try { const result = await api.capture(action).finally(() => { capturing = false; }); if (disposed) return; status.textContent = '';
-              if ((result.status === 'captured' || result.status === 'conflict') && shortcutReserved(result.binding)) status.textContent = shortcutEquals(result.binding, HUB_BACK_SHORTCUT) ? 'Reserved for Back' : 'That shortcut is unavailable. Choose another combination.';
+              if ((result.status === 'captured' || result.status === 'conflict') && shortcutReserved(result.binding)) status.textContent = shortcutEquals(result.binding, HUB_BACK_SHORTCUT) ? 'Reserved for Back' : 'Reserved by gwonmac or macOS. Choose another combination.';
               else if (result.status === 'captured' || result.status === 'conflict') chooseShortcut(action, result.binding);
               else if (result.status === 'cleared') chooseShortcut(action, null);
-              else if (result.status === 'reserved' || result.status === 'invalid') status.textContent = 'That shortcut is unavailable. Choose another combination.';
+              else if (result.status === 'reserved') status.textContent = 'Reserved by gwonmac or macOS. Choose another combination.';
+              else if (result.status === 'invalid') status.textContent = `That combination is not a shortcut. ${SHORTCUT_CAPTURE_HINT}`;
             } catch { if (!disposed) status.textContent = 'Could not capture the shortcut. Try again.'; }
             finally { if (!disposed) { render(); if (!status.contains(doc.activeElement)) focusControl(SHORTCUT_LABELS[action]); } }
           };
           const clear = doc.createElement('button'); clear.className = 'ui-button'; clear.textContent = 'Clear'; clear.setAttribute('aria-label', `Clear ${SHORTCUT_LABELS[action]}`); clear.disabled = !snapshot.shortcuts[action]; clear.onclick = () => chooseShortcut(action, null);
-          const reset = doc.createElement('button'); reset.className = 'ui-button'; reset.textContent = 'Reset'; reset.setAttribute('aria-label', `Reset ${SHORTCUT_LABELS[action]}`); reset.onclick = () => chooseShortcut(action, DEFAULT_SHORTCUTS[action]);
+          const reset = doc.createElement('button'); reset.className = 'ui-button'; reset.textContent = 'Reset'; reset.setAttribute('aria-label', `Reset ${SHORTCUT_LABELS[action]}`); reset.disabled = shortcutEquals(snapshot.shortcuts[action], DEFAULT_SHORTCUTS[action]); reset.onclick = () => chooseShortcut(action, DEFAULT_SHORTCUTS[action]);
           if (!enabled) { change.disabled = true; clear.disabled = true; reset.disabled = true; }
           controls.append(change, clear, reset); row(SHORTCUT_LABELS[action], controls, enabled ? '' : 'Enable this tool to change its shortcut.');
         }
@@ -239,7 +248,7 @@ export function openHubSettings(hub: Hub, focus?: HubSettingsFocus) {
     const applyFocus = () => {
       const control = focus?.control; focus = undefined;
       if (!control) return;
-      body.querySelector<HTMLElement>(`[aria-label="${CSS.escape(control)}"]`)?.scrollIntoView({ block: 'center' });
+      body.querySelector<HTMLElement>(`[data-setting-label="${CSS.escape(control)}"],[aria-label="${CSS.escape(control)}"]`)?.scrollIntoView({ block: 'center' });
       focusControl(control);
     };
     const show = (next: HubSettingsFocus) => {

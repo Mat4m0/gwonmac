@@ -287,8 +287,8 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
       { id: 'choose-hero', title: 'Apply to hero', detail: 'Compare your heroes’ current builds', group: 'Targets', action: 'Choose hero', navigate: chooseHero, run: chooseHero },
     ], summary, undefined, source);
   }
-  const buildRow = (item: Item & { kind: 'build' }): HubRow => ({
-    ...workspace(item.value), id: `build:${item.value.id}`, title: item.value.name, detail: all().some(other => other.kind === 'build' && other.value.id !== item.value.id && other.value.name === item.value.name) ? (templateFolder(item.value) === null ? 'Saved library' : 'Guild Wars templates') : '', matches: query => matchesBuild(item.value, query), folder: templateFolder(item.value), professions: buildProfessions(item.value.professions),
+  const buildRow = (item: Item & { kind: 'build' }, duplicate = all().some(other => other.kind === 'build' && other.value.id !== item.value.id && other.value.name === item.value.name)): HubRow => ({
+    ...workspace(item.value), id: `build:${item.value.id}`, title: item.value.name, detail: duplicate ? (templateFolder(item.value) === null ? 'Saved library' : 'Guild Wars templates') : '', matches: query => matchesBuild(item.value, query), folder: templateFolder(item.value), professions: buildProfessions(item.value.professions),
     keywords: [item.value.professions[0], PROFESSIONS[item.value.professions[0]].name, ...item.value.tags, templateFolder(item.value)?.replaceAll('/', ' ') ?? '', templateFolder(item.value) ?? ''].join(' '),
     group: 'Builds', attributes: buildAttributes(item.value.attributes), skills: skillPreview(item.value), action: 'Choose target', navigate: () => chooseBuild(item), run: () => chooseBuild(item), actions: () => chooseBuild(item),
   });
@@ -314,13 +314,18 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
   /** Reads the template files, then opens them, unless the player moved on or closed the Hub meanwhile (HUB-004). */
   async function openTemplates(task: HubTask) { try { await readTemplates(); } catch { templateProblem = 'Could not read templates.'; } if (task.live()) browseTemplates(); }
   const libraryRow = (): HubRow => ({ id: 'builds', title: 'Build Library', detail: 'Browse saved builds and teams', aliases: ['library', 'lib', 'bu', 'build', 'builds', 'team', 'teams', 'skills', 'templates'], keywords: 'templates skills folders builds teams', group: 'Tools', action: 'Browse builds', navigate() { browseLibrary(); }, run: () => browseLibrary() });
-  function browseLibrary() {
-    hub.showRows('Build Library', () => [
-      ...all().filter((item): item is Item & { kind: 'team' } => item.kind === 'team').map(item => teamRow(item)),
-      { id: 'game-templates', title: 'Guild Wars templates', detail: 'Your existing skill template files and folders', group: 'Builds', action: 'Browse templates', navigate: openTemplates, run: openTemplates },
-      ...all().filter((item): item is Item & { kind: 'build' } => item.kind === 'build' && !String(item.value.id).startsWith('template:')).map(buildRow),
-      ...templateStates(),
-    ], undefined, 'builds', source);
+  function browseLibrary(query = '') {
+    hub.showRows('Build Library', () => {
+      const items = all();
+      const names = new Map<string, number>();
+      for (const item of items) if (item.kind === 'build') names.set(item.value.name, (names.get(item.value.name) ?? 0) + 1);
+      return [
+        ...items.filter((item): item is Item & { kind: 'team' } => item.kind === 'team').map(item => teamRow(item)),
+        { id: 'game-templates', title: 'Guild Wars templates', detail: 'Your existing skill template files and folders', group: 'Builds', action: 'Browse templates', navigate: openTemplates, run: openTemplates },
+        ...items.filter((item): item is Item & { kind: 'build' } => item.kind === 'build' && !String(item.value.id).startsWith('template:')).map(item => buildRow(item, (names.get(item.value.name) ?? 0) > 1)),
+        ...templateStates(),
+      ];
+    }, undefined, 'builds', source, query);
   }
   function review(item: Item) {
     if (item.kind === 'build') { chooseBuild(item); return; }
@@ -382,7 +387,8 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
   }
   function teamRow(item: Item & { kind: 'team' }, direct = false): HubRow {
     direct = direct && !outcomes.get(outcomeKey(item, null))?.partial;
-    const expected = revision(item);
+    // Browsing never needs an apply snapshot; only an explicit unique team action does.
+    const expected = direct ? revision(item) : '';
     const refusal = direct ? assess(item, null) : null;
     return { ...(openWorkspace ? { workspace: () => openWorkspace(item.value) } : {}), id: `team:${item.value.id}`, title: item.value.name, detail: teamDetail(item),
       group: 'Teams', preview: preview(item), action: direct ? `Apply team ${item.value.name}` : `Review ${item.value.name}`, consequential: direct, navigate: () => review(item),
@@ -419,17 +425,27 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
       if (parsed.scope === 'team' && controller.loading.value) return [{ id: 'teams-loading', title: 'Loading teams…', detail: '', group: 'Teams', action: 'Loading teams', unavailable: 'Build Library is loading.', run() {} }];
       // `team ` lists every team; the build scope and library words open the library instead.
       if ((!parsed.term && parsed.scope !== 'team') || ['build', 'builds', 'build library', 'templates', 'library', 'lib', 'bu', 'team', 'teams', 'skills'].includes(query.trim().toLowerCase()) && parsed.scope !== 'team') return [libraryRow(), ...(!query.trim() ? controller.recentBuilds.value.flatMap(recent => { const item = all().find((item): item is Item & { kind: 'build' } => item.kind === 'build' && item.value.id === recent.id); return item ? [{ ...buildRow(item), id: `recent:${recent.id}:${recent.hero ?? 'me'}`, detail: `Recently applied to ${targetName(recent.hero)}`, group: 'Continue', run: () => chooseBuild(item, recent.hero), navigate: () => chooseBuild(item, recent.hero) }] : []; }) : templateStates())];
-      const matches = all().filter(item => (!parsed.scope || item.kind === parsed.scope)
+      const items = all();
+      const names = new Map<string, number>();
+      for (const item of items) if (item.kind === 'build') names.set(item.value.name, (names.get(item.value.name) ?? 0) + 1);
+      const matches = items.filter(item => (!parsed.scope || item.kind === parsed.scope)
         && (item.kind === 'build' ? matchesBuild(item.value, query) : hubMatch(item.value.name, parsed.term, item.value.tags) !== null));
       const exacts = matches.filter(item => hubMatch(item.value.name, parsed.term) === 'exact');
       // A short profession query remains additive, but actual primary-profession matches lead it (HUB-059).
       const profession = Object.keys(PROFESSIONS).find(code => code.toLowerCase() === parsed.term);
-      return [...matches.sort((a, b) => Number(hubMatch(b.value.name, parsed.term) === 'exact') - Number(hubMatch(a.value.name, parsed.term) === 'exact')
+      const ordered = matches.sort((a, b) => Number(hubMatch(b.value.name, parsed.term) === 'exact') - Number(hubMatch(a.value.name, parsed.term) === 'exact')
         || (profession ? Number(b.kind === 'build' && b.value.professions[0] === profession) - Number(a.kind === 'build' && a.value.professions[0] === profession) : 0)
-        || a.value.name.localeCompare(b.value.name) || a.value.id.localeCompare(b.value.id)).map(item => {
-        if (item.kind === 'build') return buildRow(item);
+        || a.value.name.localeCompare(b.value.name) || a.value.id.localeCompare(b.value.id));
+      const seen = { build: 0, team: 0 };
+      const shown = parsed.scope ? ordered : ordered.filter(item => ++seen[item.kind] <= 8);
+      const more: HubRow[] = parsed.scope ? [] : (['team', 'build'] as const).flatMap(kind => {
+        const total = ordered.filter(item => item.kind === kind).length;
+        return total > 8 ? [{ id: `${kind}s:more`, title: `${total - 8} more — open in Build Library`, detail: '', group: kind === 'build' ? 'Builds' : 'Teams', action: 'Open in Build Library', navigate: () => browseLibrary(parsed.term), run: () => browseLibrary(parsed.term) }] : [];
+      });
+      return [...shown.map(item => {
+        if (item.kind === 'build') return buildRow(item, (names.get(item.value.name) ?? 0) > 1);
         return teamRow(item, parsed.scope === 'team' && exacts.length === 1 && exacts[0] === item);
-      }), ...(parsed.scope === 'build' ? templateStates() : [])];
+      }), ...more, ...(parsed.scope === 'build' ? templateStates() : [])];
     },
   };
   const detach = hub.attach(source);

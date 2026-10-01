@@ -349,6 +349,31 @@ for already accepted operations. Do not redirect to Settings.
 Accessibility announcements should describe focused results and inline state once.
 Do not announce every feed update or create a hidden stream of toast equivalents.
 
+Root search shows at most eight matching builds and eight matching teams per group.
+A final **N more — open in Build Library** row carries the query into the complete
+Library. An explicit build or team scope remains complete.
+
+Coalesce source notifications once per animation frame. Typing updates immediately.
+Keep unchanged result DOM and update only the old and new selected rows. Explicit
+close clears result DOM; temporary suspension preserves query, selection and drafts.
+Mount the authoring workspace on first use. Populate each team slot's full build
+choices when that slot receives focus. Preserve its selected build before focus.
+
+Keep empty status regions rendered before their first message. Announce a settled
+root result count after typing pauses; Home has no result count. Announce new
+whispers only inside the selected visible conversation log. Trade offer counts
+and opacity labels are passive; sliders expose percentage value text. Named action
+outcomes and connection failures remain available to assistive technology.
+
+Label list groups with their visible headings. Name the Hub dialog with its current
+visible page title. Keep skill names in build descriptions, separate from the build
+name. Characters uses a plain container inside that dialog; its carousel exposes
+orientation, total count and each character's position.
+
+Keep **Lock Hub position** as one toggle name. Its pressed state means locked.
+When unlocked, show the move hint. Option-arrow moves 16 pixels; adding Shift
+moves 48 pixels. Breadcrumb focus leaves space around its text and focus halo.
+
 ## 11. Vocabulary, pins, and saved flows
 
 Hub settings provide explicit aliases, pins/order, history controls, appearance,

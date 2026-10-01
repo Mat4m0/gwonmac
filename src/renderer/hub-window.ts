@@ -7,6 +7,7 @@ import { installResizeGrip } from '../shared/ui/resize.js';
 
 export function installHubWindow(panel: HTMLElement, heading: HTMLElement, lock: HTMLButtonElement, grip: HTMLElement) {
   const storageKey = 'gwonmac.hub-window-placement';
+  const hint = heading.ownerDocument.createElement('span'); hint.className = 'hub-move-hint'; hint.id = 'hub-move-hint'; hint.textContent = '⌥ arrows move · ⇧ 48 px'; heading.insertBefore(hint, lock);
   const viewport = () => ({ width: window.innerWidth, height: window.innerHeight, margin: 8 });
   let locked = true;
   let placed = false;
@@ -18,7 +19,9 @@ export function installHubWindow(panel: HTMLElement, heading: HTMLElement, lock:
   let finishDrag: (() => void) | null = null;
   const paint = () => {
     panel.dataset.locked = String(locked);
-    lock.setAttribute('aria-label', locked ? 'Unlock Hub position' : 'Lock Hub position');
+    lock.setAttribute('aria-label', 'Lock Hub position');
+    hint.hidden = locked;
+    if (locked) lock.removeAttribute('aria-describedby'); else lock.setAttribute('aria-describedby', hint.id);
     lock.title = locked ? 'Unlock to move and resize' : 'Lock position and size. Option + arrows here moves the Hub; arrows on the corner resize it.';
     lock.setAttribute('aria-pressed', String(locked));
     grip.hidden = locked;
@@ -69,8 +72,9 @@ export function installHubWindow(panel: HTMLElement, heading: HTMLElement, lock:
     if (locked || !event.altKey || !event.key.startsWith('Arrow')) return;
     event.preventDefault(); event.stopPropagation();
     const box = panel.getBoundingClientRect();
-    place(box.left + (event.key === 'ArrowRight' ? 16 : event.key === 'ArrowLeft' ? -16 : 0),
-      box.top + (event.key === 'ArrowDown' ? 16 : event.key === 'ArrowUp' ? -16 : 0), box.width, box.height);
+    const step = event.shiftKey ? 48 : 16;
+    place(box.left + (event.key === 'ArrowRight' ? step : event.key === 'ArrowLeft' ? -step : 0),
+      box.top + (event.key === 'ArrowDown' ? step : event.key === 'ArrowUp' ? -step : 0), box.width, box.height);
     save();
   };
   const disposeResize = installResizeGrip(grip, {
@@ -94,5 +98,5 @@ export function installHubWindow(panel: HTMLElement, heading: HTMLElement, lock:
     for (const property of ['left', 'top', 'width', 'height', 'transform']) panel.style.removeProperty(property);
     paint();
   };
-  return { reset, dispose() { panel.closest('dialog')?.removeEventListener('toggle', onShow); finishDrag?.(); disposeResize(); grip.removeEventListener('keyup', saveResize); lock.removeEventListener('click', toggle); lock.removeEventListener('keydown', moveWithKeys); heading.removeEventListener('pointerdown', drag); window.removeEventListener('resize', fit); } };
+  return { reset, dispose() { hint.remove(); panel.closest('dialog')?.removeEventListener('toggle', onShow); finishDrag?.(); disposeResize(); grip.removeEventListener('keyup', saveResize); lock.removeEventListener('click', toggle); lock.removeEventListener('keydown', moveWithKeys); heading.removeEventListener('pointerdown', drag); window.removeEventListener('resize', fit); } };
 }

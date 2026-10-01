@@ -452,7 +452,7 @@ useClassicFrame(panel);
         <div class="ui-raised ui-scroll whisper-menu">
           <label for="whisper-sound">Sound alerts</label>
           <select id="whisper-sound" class="ui-select" :value="state.sound" @change="soundChange"><option value="off">Off</option><option value="background">When chat is in background</option><option value="every">Every incoming whisper</option></select>
-          <label class="ui-range-field whisper-opacity" for="whisper-opacity"><span><span>Background</span><output>{{ state.backgroundOpacity }}%</output></span><input id="whisper-opacity" class="ui-range" type="range" min="15" max="100" step="5" :value="state.backgroundOpacity" @input="opacityChange"/></label>
+          <label class="ui-range-field whisper-opacity" for="whisper-opacity"><span><span id="whisper-opacity-label">Background</span><span class="whisper-opacity-value">{{ state.backgroundOpacity }}%</span></span><input id="whisper-opacity" aria-labelledby="whisper-opacity-label" :aria-valuetext="`${state.backgroundOpacity}%`" class="ui-range" type="range" min="15" max="100" step="5" :value="state.backgroundOpacity" @input="opacityChange"/></label>
           <button v-if="selected" data-variant="quiet" class="ui-button whisper-control" :aria-pressed="selected.muted" @click="session.mute(selected.key)">{{ selected.muted ? 'Unmute this conversation' : 'Mute this conversation' }}</button>
           <button v-if="selected" data-variant="quiet" class="ui-button whisper-control whisper-danger" :disabled="selected.sending" :aria-label="`Close conversation with ${selected.name}`" @click="close(selected.key)">Close conversation</button>
           <div class="whisper-menu-divider" />
@@ -467,7 +467,7 @@ useClassicFrame(panel);
     <div v-if="closing" class="whisper-notice" role="alert"><p>Discard the unsent draft and close this conversation?</p><div class="whisper-inline"><button data-variant="quiet" class="ui-button whisper-control whisper-danger" @click="close(closing, true)">Discard and close</button><button data-variant="quiet" class="ui-button whisper-control" @click="closing = null">Keep chatting</button></div></div>
     <template v-for="conversation in state.conversations" :key="conversation.key">
       <div v-show="state.selected === conversation.key" class="whisper-conversation">
-        <div class="ui-scroll whisper-transcript" data-transcript :data-transcript-key="conversation.key" :hidden="state.selected !== conversation.key" tabindex="0" :aria-label="`Messages with ${conversation.name}`" @scroll="markVisibleRead" @focus="markVisibleRead">
+        <div class="ui-scroll whisper-transcript" :role="state.visible && state.selected === conversation.key ? 'log' : undefined" aria-relevant="additions" data-transcript :data-transcript-key="conversation.key" :hidden="state.selected !== conversation.key" tabindex="0" :aria-label="`Messages with ${conversation.name}`" @scroll="markVisibleRead" @focus="markVisibleRead">
           <p v-if="conversation.trimmed" class="whisper-empty">Earlier messages remain in original chat.</p>
           <p v-if="!conversation.messages.length" class="whisper-empty">Say hello to {{ conversation.name }}.</p>
           <article v-for="(message, index) in conversation.messages" :key="message.id" class="whisper-message" :data-direction="message.direction" :data-grouped="index > 0 && conversation.messages[index - 1]?.direction === message.direction && message.id !== firstUnreadFor(conversation.key) ? '' : undefined" :data-first-unread="message.id === firstUnreadFor(conversation.key) ? '' : undefined">
@@ -585,6 +585,7 @@ useClassicFrame(panel);
 .whisper-menu > label { display: block; margin-bottom: 6px; font-weight: 500; }
 .whisper-menu select { font-size: 12px; margin-bottom: 8px; }
 .whisper-menu .whisper-opacity { margin: 6px 2px 10px; }
+.whisper-opacity-value { color: var(--ui-text-bright); font-variant-numeric: tabular-nums; }
 .whisper-menu button { width: 100%; justify-content: flex-start; text-align: left; }
 .whisper-menu small { display: block; padding: 0 12px 8px; }
 .whisper-menu-divider { height: 1px; background: var(--whisper-line); margin: 8px 0; }

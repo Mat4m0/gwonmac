@@ -798,3 +798,18 @@ The existing developer game session was preserved. Acceptance of that session
 does not certify the later signed assets. Signed qualification, Stable/Beta
 round-trip and the exact-draft live checklist in
 [Release verification](release-verification.md) remain release gates.
+
+
+## Hub polish — Performance and Accessibility
+
+The [branch ledger](../internals/hub-polish-perf-a11y-ledger.md) records scope,
+regression backouts, visual inspections and unresolved performance requirements.
+Current local evidence is offline. Empty status regions, named result groups,
+carousel positions and conversation logs have browser structural proof. This does
+not establish VoiceOver speech or AZERTY behavior. Live gameplay and input feel
+remain Matthias's checks.
+
+Root build/team matches are capped. The complete Library still creates all rich
+row DOM on entry. Its measured entry and long task exceed the requested scale
+budget; the ledger keeps that requirement deferred. Do not treat faster isolated
+measurements or incomplete observer delivery as acceptance.

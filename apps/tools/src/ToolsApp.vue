@@ -49,6 +49,10 @@ const emit = defineEmits<{
   ready: [];
 }>();
 
+// The Hub needs the controller immediately; its editor DOM is needed only after first open.
+// Keep it mounted thereafter so hiding a window never discards an unsaved draft.
+const workspaceMounted = ref(props.visible);
+watch(() => props.visible, visible => { if (visible) workspaceMounted.value = true; });
 const controller = useLibrary(props.host);
 const hubLibrary = props.hub ? createHubLibrary(controller, props.host, props.hub, build => {
   window.dispatchEvent(new CustomEvent('gw:tools-toggle', { detail: 'workspace', cancelable: true }));
@@ -285,6 +289,7 @@ useClassicFrame(panel);
       aria-label="Build Library"
       role="dialog"
     >
+      <template v-if="workspaceMounted">
       <header class="ui-panel-head ui-window-head window-bar" @pointerdown="startDrag">
         <div class="window-brand" aria-hidden="true">GW</div>
         <div class="window-identity">
@@ -706,6 +711,7 @@ useClassicFrame(panel);
           </footer>
         </form>
       </UiDialog>
+      </template>
       <button
         v-if="mode === 'embedded'"
         type="button"

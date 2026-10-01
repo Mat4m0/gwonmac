@@ -12,7 +12,7 @@ test('Hub has a locked frame, invisible corner hit area and bounded movable geom
   await page.mouse.move(heading.x + heading.width / 2, heading.y + 12);
   await page.mouse.down(); await page.mouse.move(heading.x + heading.width / 2 + 60, heading.y + 45); await page.mouse.up();
   expect(await panel.boundingBox()).toEqual(initial);
-  await page.getByRole('button', { name: 'Unlock Hub position', exact: true }).click();
+  await page.getByRole('button', { name: 'Lock Hub position', exact: true }).click();
   await expect(grip).toBeVisible();
   await page.mouse.move(heading.x + heading.width / 2, heading.y + 12);
   await page.mouse.down(); await page.mouse.move(heading.x + heading.width / 2 - 60, heading.y + 36); await page.mouse.up();
@@ -490,7 +490,7 @@ test('a held Backspace on a person page or an empty Build Library folder never l
   await page.keyboard.press('Meta+Backspace');
   await search.fill('build library'); await search.press('Enter');
   await expect(crumbs).toHaveText('Home›Build Library');
-  await search.press('Enter');
+  await page.locator('.hub-row[data-id="game-templates"]').click();
   await expect(crumbs).toHaveText('Home›Build Library›Guild Wars templates');
   while (!(await selectedRow(page).textContent())?.startsWith('Monk')) await search.press('ArrowDown');
   await search.press('Enter');

@@ -125,7 +125,8 @@ export function createCharacterSwitchPalette(
   if (!hub) throw new Error("Hub is not installed");
   const canvas = document.getElementById("canvas");
   if (!(canvas instanceof HTMLCanvasElement)) throw new Error("game canvas is missing");
-  const root = document.createElement("dialog");
+  const root = document.createElement("div");
+  root.hidden = true;
   root.id = "character-switch-root";
   root.className = "ui-modal ui-modal-layer";
   root.setAttribute("aria-labelledby", "character-switch-title");
@@ -221,14 +222,14 @@ export function createCharacterSwitchPalette(
     show() { hub.showView('Characters', (target, back, footer) => {
       hubFooter = footer;
       hubBack = back;
-      target.append(root); root.open = true;
+      target.append(root); root.hidden = false; root.setAttribute("open", "");
       if (view.kind === "closed") { view = Object.freeze({ kind: "characters" }); render(); }
       focusSelected();
-      return () => { hubBack = undefined; hubFooter = undefined; root.open = false; parent.append(root); if (view.kind === 'confirming') source.cancelConfirmation(); view = { kind: 'closed' }; };
+      return () => { hubBack = undefined; hubFooter = undefined; root.removeAttribute("open"); root.hidden = true; parent.append(root); if (view.kind === 'confirming') source.cancelConfirmation(); view = { kind: 'closed' }; };
     }, () => !!window.gwToolsSettings?.().characterSwitchEnabled, "characters"); },
     close() { hub.close(); },
     pageChanged() { hub.pageChanged(); },
-    dispose() { if (root.open) hub.close(); },
+    dispose() { if (root.hasAttribute("open")) hub.close(); },
   };
   /**
    * While an accepted switch runs, one quiet line covers the game: it names the character and
@@ -393,6 +394,8 @@ export function createCharacterSwitchPalette(
         button.id = `character-switch-option-${index}`;
         button.className = "character-switch-row";
         button.setAttribute("role", "option");
+        button.setAttribute("aria-setsize", String(rows.length));
+        button.setAttribute("aria-posinset", String(rowIndex + 1));
         button.dataset.index = String(index);
         button.dataset.row = String(rowIndex);
         button.dataset.characterKey = character.characterKey;
@@ -819,7 +822,7 @@ export function createCharacterSwitchPalette(
   }).catch(() => { /* Keep the surface closed until its enable setting is known. */ });
   const unsubscribe = source.subscribe(render);
   const resize = () => {
-    if (!root.open || view.kind !== "characters") return;
+    if (!root.hasAttribute("open") || view.kind !== "characters") return;
     render(false);
     focusSelected();
   };
@@ -828,7 +831,7 @@ export function createCharacterSwitchPalette(
   let observedRadius = -1;
   const resizeObserver = typeof ResizeObserver === "function" ? new ResizeObserver(() => {
     const radius = carouselRadius();
-    if (radius !== observedRadius) { observedRadius = radius; if (root.open && view.kind === "characters") render(); }
+    if (radius !== observedRadius) { observedRadius = radius; if (root.hasAttribute("open") && view.kind === "characters") render(); }
   }) : null;
   resizeObserver?.observe(list);
   return Object.freeze({

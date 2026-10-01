@@ -60,7 +60,7 @@ export const SHORTCUT_LABELS: Readonly<Record<ShortcutAction, string>> =
     "tools.toggle": "Build Library",
     "trade.toggle": "Trade Chat",
     "whispers.toggle": "Whispers",
-    "storage.open": "Open Xunlai storage",
+    "storage.open": "Open Xunlai Storage",
     "travel.open": "Travel",
     "cartography.grid.toggle": "Exploration grid",
     "cartography.walkability.toggle": "Walkable terrain",
