@@ -23,6 +23,9 @@ its action and target on one line, with the complete accessible name and title.
 Views use `HubViewFooter`; they do not add another footer or Actions menu.
 A running primary shows progress without an Enter keycap.
 Search uses the shared grammar and ranking in `src/shared/hub.ts`.
+An owned list refreshes from its own source. Other observations update navigation
+facts without rebuilding that list. Home searches all enabled sources.
+
 Conflicting stored exact phrases require a choice. Both stores remain intact.
 Tool labels come from `src/shared/tool-presentation.ts`. Settings copy comes from
 `src/shared/setting-copy.ts`. Neither surface owns another copy of those labels.

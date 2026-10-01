@@ -96,6 +96,32 @@ test('source bursts coalesce while typing stays synchronous and opening searches
   expect(result).toEqual({ beforeFrame: 0, afterFrame: 1, typing: 1, opening: 1, afterOpeningFrame: 1 });
 });
 
+test('an owned list ignores unrelated observations and still follows its own source (HUB-111)', async ({ page }) => {
+  await page.goto('/?hub');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  const result = await page.evaluate(async () => {
+    const hub = window.gwHub!;
+    let notifyOwner = () => {}, notifyOther = () => {};
+    let title = 'Original', reads = 0;
+    const owner: HubSource = { search: () => [], setVisible() {}, subscribe(listener) { notifyOwner = listener; return () => {}; } };
+    const detachOwner = hub.attach(owner);
+    const detachOther = hub.attach({ search: () => [], setVisible() {}, subscribe(listener) { notifyOther = listener; return () => {}; } });
+    hub.showRows('Owned list', () => { reads++; return [{ id: 'owned', title, detail: '', group: 'Builds', action: 'Choose', run() {} }]; }, undefined, undefined, owner);
+    await new Promise(requestAnimationFrame);
+    reads = 0;
+    for (let update = 0; update < 20; update++) notifyOther();
+    await new Promise(requestAnimationFrame);
+    const unrelatedReads = reads;
+    title = 'Updated'; notifyOwner();
+    await new Promise(requestAnimationFrame);
+    const updated = document.querySelector('#hub .hub-title')?.textContent;
+    const ownReads = reads - unrelatedReads;
+    detachOther(); detachOwner();
+    return { unrelatedReads, ownReads, updated, withdrawn: document.querySelector('.hub-caption')?.textContent };
+  });
+  expect(result).toEqual({ unrelatedReads: 0, ownReads: 1, updated: 'Updated', withdrawn: 'Home' });
+});
+
 test('the unopened Build workspace stays small and only a focused slot loads choices (HUB-254)', async ({ page }) => {
   await page.goto('/?hub&library=1000');
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');

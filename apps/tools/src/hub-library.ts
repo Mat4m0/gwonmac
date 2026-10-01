@@ -33,29 +33,31 @@ function folderMatches(folder: string | null, query: string): boolean {
       return actual !== undefined && (index < wanted.length - 1 || query.endsWith('/') ? actual === part : actual.startsWith(part));
     }));
 }
-function matchesBuild(build: Build, query: string): boolean {
+function buildMatcher(query: string): (build: Build) => boolean {
   const parsed = parseHubQuery(query);
   if (parsed.scope === 'build') query = parsed.term;
   if (['build', 'builds'].includes(query)) query = '';
-  const folder = templateFolder(build);
-  const aliases = [build.professions[0], PROFESSIONS[build.professions[0]].name, ...build.tags, ...(folder?.split('/') ?? [])];
   // Quotes group names with spaces; an unfinished quote remains useful while typing.
   const tokens = query.toLowerCase().replaceAll('\\', '/').match(/(?:[^\s"]+|"[^"]*"?)+/gu) ?? [];
-  return tokens.every(raw => {
-    const token = raw.replaceAll('"', '');
-    if (token.startsWith('folder:')) return folderMatches(folder, token.slice(7));
-    if (token.includes('/')) {
-      const pair = token.split('/');
-      const professionPair = pair.length === 2 && pair.every(code => Object.keys(PROFESSIONS).some(profession => profession.toLowerCase() === code));
-      return professionPair ? token === build.professions.filter(Boolean).join('/').toLowerCase() : folderMatches(folder, token);
-    }
-    const profession = Object.entries(PROFESSIONS).find(([code, facts]) => code.toLowerCase() === token || facts.name.toLowerCase() === token);
-    // A full profession name filters; a short code is also the start of a word while typing,
-    // so `air p` still finds "Air pressure" (D-17, HUB-059). Monk builds rank first by their code.
-    if (profession && !raw.startsWith('"')) return build.professions[0] === profession[0]
-      || (profession[1].name.toLowerCase() !== token && hubMatch(build.name, token, aliases) !== null);
-    return hubMatch(build.name, token, aliases) !== null;
-  });
+  return build => {
+    const folder = templateFolder(build);
+    const aliases = [build.professions[0], PROFESSIONS[build.professions[0]].name, ...build.tags, ...(folder?.split('/') ?? [])];
+    return tokens.every(raw => {
+      const token = raw.replaceAll('"', '');
+      if (token.startsWith('folder:')) return folderMatches(folder, token.slice(7));
+      if (token.includes('/')) {
+        const pair = token.split('/');
+        const professionPair = pair.length === 2 && pair.every(code => Object.keys(PROFESSIONS).some(profession => profession.toLowerCase() === code));
+        return professionPair ? token === build.professions.filter(Boolean).join('/').toLowerCase() : folderMatches(folder, token);
+      }
+      const profession = Object.entries(PROFESSIONS).find(([code, facts]) => code.toLowerCase() === token || facts.name.toLowerCase() === token);
+      // A full profession name filters; a short code is also the start of a word while typing,
+      // so `air p` still finds "Air pressure" (D-17, HUB-059). Monk builds rank first by their code.
+      if (profession && !raw.startsWith('"')) return build.professions[0] === profession[0]
+        || (profession[1].name.toLowerCase() !== token && hubMatch(build.name, token, aliases) !== null);
+      return hubMatch(build.name, token, aliases) !== null;
+    });
+  };
 }
 
 export function createHubLibrary(controller: LibraryController, host: ToolsHost, hub: HubPresenter<HTMLElement>, openWorkspace?: (item: Build | Team) => void) {
@@ -289,7 +291,7 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
     ], summary, undefined, source);
   }
   const buildRow = (item: Item & { kind: 'build' }, duplicate = all().some(other => other.kind === 'build' && other.value.id !== item.value.id && other.value.name === item.value.name)): HubRow => ({
-    ...workspace(item.value), id: `build:${item.value.id}`, title: item.value.name, detail: duplicate ? (templateFolder(item.value) === null ? 'Saved library' : 'Guild Wars templates') : '', matches: query => matchesBuild(item.value, query), folder: templateFolder(item.value), professions: buildProfessions(item.value.professions),
+    ...workspace(item.value), id: `build:${item.value.id}`, title: item.value.name, detail: duplicate ? (templateFolder(item.value) === null ? 'Saved library' : 'Guild Wars templates') : '', matches: query => buildMatcher(query)(item.value), folder: templateFolder(item.value), professions: buildProfessions(item.value.professions),
     keywords: [item.value.professions[0], PROFESSIONS[item.value.professions[0]].name, ...item.value.tags, templateFolder(item.value)?.replaceAll('/', ' ') ?? '', templateFolder(item.value) ?? ''].join(' '),
     group: 'Builds', attributes: buildAttributes(item.value.attributes), skills: skillPreview(item.value), action: 'Choose target', navigate: () => chooseBuild(item), run: () => chooseBuild(item), actions: () => chooseBuild(item),
   });
@@ -420,12 +422,15 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
       const items = all();
       const names = new Map<string, number>();
       for (const item of items) if (item.kind === 'build') names.set(item.value.name, (names.get(item.value.name) ?? 0) + 1);
+      const matchesBuild = buildMatcher(query);
       const matches = items.filter(item => (!parsed.scope || item.kind === parsed.scope)
-        && (item.kind === 'build' ? matchesBuild(item.value, query) : hubMatch(item.value.name, parsed.term, item.value.tags) !== null));
+        && (item.kind === 'build' ? matchesBuild(item.value) : hubMatch(item.value.name, parsed.term, item.value.tags) !== null));
       const exacts = matches.filter(item => hubMatch(item.value.name, parsed.term) === 'exact');
       // A short profession query remains additive, but actual primary-profession matches lead it (HUB-059).
       const profession = Object.keys(PROFESSIONS).find(code => code.toLowerCase() === parsed.term);
-      const ordered = matches.sort((a, b) => Number(hubMatch(b.value.name, parsed.term) === 'exact') - Number(hubMatch(a.value.name, parsed.term) === 'exact')
+      // Resolve exact names once instead of normalizing them again for every sort comparison.
+      const exactNames = new Set(matches.filter(item => hubMatch(item.value.name, parsed.term) === 'exact'));
+      const ordered = matches.sort((a, b) => Number(exactNames.has(b)) - Number(exactNames.has(a))
         || (profession ? Number(b.kind === 'build' && b.value.professions[0] === profession) - Number(a.kind === 'build' && a.value.professions[0] === profession) : 0)
         || a.value.name.localeCompare(b.value.name) || a.value.id.localeCompare(b.value.id));
       const seen = { build: 0, team: 0 };

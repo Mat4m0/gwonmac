@@ -1273,7 +1273,11 @@ export function createHub(parent: HTMLElement) {
     /** Whether Esc on an empty query goes back to a parent page rather than closing the Hub. */
     get hasParent() { return history.length > 0; },
     attach(next: HubSource) {
-      sources.set(next, next.subscribe(scheduleRefresh)); next.setVisible(root.open && sourceEnabled(next)); refresh();
+      sources.set(next, next.subscribe(() => {
+        // A scoped list belongs to its source; peer observations only update navigation facts.
+        if (scope?.owner && scope.owner !== next) { if (root.open) paintNavigation(); return; }
+        scheduleRefresh();
+      })); next.setVisible(root.open && sourceEnabled(next)); refresh();
       return () => {
         sources.get(next)?.(); sources.delete(next); next.setVisible(false);
         withdrawPages();
