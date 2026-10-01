@@ -199,6 +199,7 @@ test('team preflight is inline and an interruption is not reported as success', 
   await expect(page.getByRole('button', { name: 'Apply team GOM AFK ↵' })).toBeEnabled();
   await search.press('Enter');
   await expect(page.locator('.hub-status')).toContainText('1 change was confirmed');
+  await expect(page.locator('.hub-status')).toHaveAttribute('role', 'status');
   await expect(page.locator('#hub')).toBeVisible();
 });
 

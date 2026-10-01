@@ -151,6 +151,8 @@ test('build folder search handles paths, words, quotes, prefixes and ambiguous n
     ['Skills/Root.txt', monk],
     ['Skills/Mo/Me/Panic.txt', mesmer],
     ['Skills/Moon pressure.txt', mesmer],
+    ['Skills/Prefixes/Air Protection Moon.txt', monk],
+    ['Skills/Prefixes/Deep Healer.txt', monk],
   ] as const;
   let source: import('../../../src/shared/hub').HubSource | undefined;
   let dispose: (() => void) | undefined;
@@ -179,7 +181,15 @@ test('build folder search handles paths, words, quotes, prefixes and ambiguous n
   for (const query of ['build missing monk', 'build farming/team monk', 'build folder:protection', 'build folder:template-code', 'build folder:', 'build travel monk']) expect(folders(query), query).toEqual([]);
   expect(source!.search('build folder:"Team Builds/Farming" monk')[0]).toMatchObject({ title: 'Protection', folder: 'Team Builds/Farming', action: 'Choose target' });
   // HUB-059: short codes remain additive, with actual profession matches before name prefixes.
+  for (const name of ['Air Protection Moon', 'Deep Healer', 'Moon pressure']) {
+    for (const word of name.split(' ')) for (let length = 1; length <= word.length; length++) {
+      const query = `build ${word.slice(0, length).toLowerCase()}`;
+      expect(source!.search(query).map(row => row.title), query).toContain(name);
+    }
+  }
   const professionRows = source!.search('build mo');
+  expect(professionRows.map(row => row.professions?.[0]?.code)).toEqual(['Mo', 'Mo', 'Mo', 'Mo', 'Mo', 'Mo', 'Mo', 'Mo', 'Mo', 'Me', 'Me', 'Me']);
+  expect(professionRows.slice(-3).map(row => row.title)).toEqual(['Moon pressure', 'Panic', 'Panic']);
   expect(professionRows[0]?.professions?.[0]?.code).toBe('Mo');
   expect(professionRows.map(row => row.title)).toContain('Moon pressure');
   dispose?.(); app.unmount();
