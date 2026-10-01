@@ -205,7 +205,13 @@ export function mountHubFixture(target: HTMLElement) {
     async mountTrade(element, onVisibilityChange) {
       const loadMs = Number(params.get("trade-load-ms")) || 0;
       if (loadMs) await new Promise(resolve => setTimeout(resolve, loadMs));
-      const host = createDemoTradeHost();
+      const demo = createDemoTradeHost();
+      const offerCount = Number(params.get('trade-offers'));
+      const host = offerCount > 0 ? { ...demo, subscribe: async (source: import('../../../src/shared/trade-chat').TradeSource) => ({
+        source, status: 'live' as const, messages: Array.from({ length: offerCount }, (_, index) => ({
+          source, timestamp: Date.now() - index * 1000, sender: `Trader ${index + 1}`, message: 'WTS testing materials',
+        })),
+      }) } : demo;
       // A seller's re-post, as the feed sends it: a new message that replaces their older one.
       window.gwTradeFixture = { repost: host.repost };
       const app = mountTradeChat(element, { host, mode: 'embedded', initiallyVisible: false, onVisibilityChange });
