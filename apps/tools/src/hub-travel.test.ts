@@ -70,12 +70,12 @@ describe('Hub travel recents', () => {
   it('names a place by its Travel search phrase as exactly as by its name, so Hub refuses that phrase for another result (HUB-062)', async () => {
     const host = createDemoTravelHost();
     const hub = { showView: vi.fn(), showRows: vi.fn(), attach: vi.fn(), close: vi.fn(), notify: vi.fn() };
-    const travel = createHubTravel(host, hub);
+    const travel = createHubTravel(host, hub, async (_place, leave) => leave());
     try {
       await host.savePreferences({ synonyms: [{ term: 'home', mapId: 194 }] });
       travel.source.setVisible(true);
       await vi.waitFor(() => expect(travel.source.search('home').map(row => row.id)).toContain('place:194'));
-      expect(travel.source.search('home').find(row => row.id === 'place:194')?.aliases).toEqual(['home']);
+      expect(travel.source.search('home').find(row => row.id === 'place:194')?.aliases).toEqual(['kc', 'kaineng', 'home']);
     } finally { travel.dispose(); }
   });
 
@@ -90,6 +90,8 @@ describe('Hub travel recents', () => {
       host.notice.value = { message: 'Travel did not start. Check that this destination is unlocked, then try again.', level: 'warning' };
       expect(hub.notify).toHaveBeenCalledOnce();
       expect(hub.notify).toHaveBeenCalledWith('Travel did not start. Check that this destination is unlocked, then try again.', 'failed');
+      host.notice.value = null;
+      expect(hub.notify).toHaveBeenLastCalledWith('Travel did not start. Check that this destination is unlocked, then try again.', 'cleared');
     } finally { travel.dispose(); }
   });
 
@@ -104,4 +106,22 @@ describe('Hub travel recents', () => {
       expect(hub.close).not.toHaveBeenCalled();
     } finally { travel.dispose(); }
   });
+});
+
+
+it('root Guild Hall travel asks before leaving an explorable area', async () => {
+  const host = createDemoTravelHost();
+  const state = host.state.value;
+  if (state.status !== 'ready') throw new Error('Expected ready fixture');
+  host.state.value = {...state, mapId: 58, explorable: true};
+  const leave = vi.fn(async () => {throw new DOMException('Stayed in area', 'AbortError');});
+  const hub = {showView: vi.fn(), showRows: vi.fn(), attach: vi.fn(), close: vi.fn(), notify: vi.fn()};
+  const travel = createHubTravel(host, hub, leave);
+  try {
+    const row = travel.source.search('gh').find(row => row.id === 'place:guild-hall');
+    expect(row).toBeDefined();
+    await expect(row!.run({live: () => true, progress() {}, done() {}})).rejects.toMatchObject({name: 'AbortError'});
+    expect(leave).toHaveBeenCalledOnce();
+    expect(host.state.value).toMatchObject({mapId: 58, explorable: true, guildHall: false});
+  } finally {travel.dispose();}
 });

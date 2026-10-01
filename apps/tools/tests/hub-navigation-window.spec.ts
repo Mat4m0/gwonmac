@@ -506,10 +506,10 @@ test('a held Backspace on a person page or an empty Build Library folder never l
 test('a build in a template folder offers Pin to Hub and a search phrase in Actions (HUB-091)', async ({ page }) => {
   await page.goto('/?hub');
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.getByRole('combobox', { name: /^Search .*…$/u });
   const crumbs = page.locator('.hub-breadcrumbs');
   await search.fill('build library'); await search.press('Enter');
-  await search.press('Enter');
+  await page.locator('.hub-row[data-id="game-templates"]').click();
   await expect(crumbs).toHaveText('Home›Build Library›Guild Wars templates');
   while (!(await selectedRow(page).textContent())?.startsWith('Monk')) await search.press('ArrowDown');
   await search.press('Enter');

@@ -362,7 +362,7 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
         const changed = !latest || revision(latest) !== expected;
         const mine = applying && runningKey === outcomeKey(item, null);
         const refusal = changed ? 'This configuration changed. Go back and review it again.' : mine ? null : assess(item, null);
-        footer.primary({ label: mine ? `Applying ${item.value.name}…` : `Apply team ${item.value.name}`, disabled: !!refusal || applying,
+        footer.primary({ label: mine ? `Applying ${item.value.name}…` : `Apply team ${item.value.name}`, disabled: !!refusal || applying, running: mine,
           // A failure on this page shows under the title, and the task clears its progress; after the player left, the Hub reports it.
           run: task => apply(item, expected, null, task).catch(error => { if (!task.live()) throw error; update(); }) });
         status.textContent = outcomes.get(outcomeKey(item, null))?.message || refusal || '';
@@ -396,15 +396,6 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
       ...(refusal ? { unavailable: refusal } : {}), ...(direct ? { pending: applyPending(item.value.name) } : {}), actions: () => review(item),
       run: task => direct ? apply(item, expected, null, task) : review(item) };
   }
-  /** A team's row; `direct` for the one exact `team` result, whose Enter applies it with its preview in view. */
-  const teamRow = (item: Item & { kind: 'team' }, direct: boolean): HubRow => {
-    const expected = revision(item);
-    const refusal = direct ? assess(item, null) : null;
-    return { id: `team:${item.value.id}`, title: item.value.name, detail: teamDetail(item),
-      group: 'Teams', preview: preview(item), action: direct ? `Apply team ${item.value.name}` : `Review ${item.value.name}`, consequential: direct, navigate: () => review(item),
-      ...(refusal ? { unavailable: refusal } : {}), ...(direct ? { pending: applyPending(item.value.name) } : {}), actions: () => review(item),
-      run: task => direct ? apply(item, expected, null, task) : review(item) };
-  };
   const source: HubSource = {
     feature: 'buildLibrary',
     shortcuts: { get: () => controller.library.value?.hubShortcuts ?? [], save: controller.saveHubShortcuts },

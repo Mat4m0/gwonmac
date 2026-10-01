@@ -346,7 +346,7 @@ test('trade query opens the same floating searchable tool with the words as type
   await expect(page.locator('#toolbox-trade .trade-search input')).toHaveValue('Polar Bear');
   await expect(page.locator('#hub')).not.toBeVisible();
   await expect(page.locator('#toolbox-foundation .trade-search input')).toHaveValue('Polar Bear');
-  await expect(page.getByRole('dialog', { name: 'Hub', exact: true })).not.toBeVisible();
+  await expect(page.getByRole('dialog', { name: /^Hub(?: — .+)?$/u })).not.toBeVisible();
 });
 
 test('Maps controls save inline without navigating away', async ({ page }) => {

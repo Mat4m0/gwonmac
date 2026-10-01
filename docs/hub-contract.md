@@ -21,7 +21,9 @@ actions ask for confirmation. No transition leaves focus on a removed node.
 Every page keeps the same footer. Disabled slots stay visible. The primary names
 its action and target on one line, with the complete accessible name and title.
 Views use `HubViewFooter`; they do not add another footer or Actions menu.
+A running primary shows progress without an Enter keycap.
 Search uses the shared grammar and ranking in `src/shared/hub.ts`.
+Conflicting stored exact phrases require a choice. Both stores remain intact.
 Tool labels come from `src/shared/tool-presentation.ts`. Settings copy comes from
 `src/shared/setting-copy.ts`. Neither surface owns another copy of those labels.
 
@@ -34,4 +36,6 @@ Tool labels come from `src/shared/tool-presentation.ts`. Settings copy comes fro
 Currency icons use the native search input and an inert measuring overlay.
 The overlay never rewrites text or owns editing, selection, composition, or undo.
 Progress belongs to the page session that started it. Late outcomes show receipts
-and cannot navigate a newer session. Reduced motion keeps progress static.
+and cannot navigate a newer session. A closed-Hub failure expires with the resume window.
+An observer clears only its matching resolved failure, never another outcome.
+Reduced motion keeps progress static.

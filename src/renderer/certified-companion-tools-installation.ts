@@ -14,7 +14,6 @@ import {
 } from "../shared/enhancement-contracts.js";
 import { featureActivationRequested } from "../shared/feature-contracts.js";
 import type { AppSettings } from "../shared/contracts.js";
-import { featureActivationRequested } from "../shared/feature-contracts.js";
 import type { ToolboxObservation } from "../shared/builds/live-party.js";
 import type { TravelFriend, TravelFriends } from "../shared/friends.js";
 import {

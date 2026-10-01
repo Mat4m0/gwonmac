@@ -496,7 +496,7 @@ test('invalid team reviews name the failing slot and open the same saved team in
   expect(row.unavailable).toBe('Choose a hero for slot 8.');
   row.navigate!(task);
   const target = document.createElement('div');
-  review!(target, () => {}, { primary(action) { expect(action?.disabled).toBe(true); }, secondary(action) { edit = action; }, own() {} });
+  review!(target, () => {}, { primary(action) { expect(action?.disabled).toBe(true); }, secondary(action) { edit = action; }, openActions() {}, own() {} });
   expect(target.querySelector('[role=status]')?.textContent).toBe('Choose a hero for slot 8.');
   expect(edit).toMatchObject({ label: 'Open in Build Library' });
   if (!edit) throw new Error('Editor action missing');

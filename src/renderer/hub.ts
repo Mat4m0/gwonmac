@@ -270,8 +270,8 @@ export function createHub(parent: HTMLElement) {
   /** The row action running on this page; the footer and status name it until it ends (HUB-083). */
   let running: { session: number; label: string; again: string } | null = null;
   const busy = () => running !== null && running.session === session;
-  /** A failure reported while the Hub was closed waits in the status line of the next opening. */
-  let carriedFailure = '';
+  /** A closed-Hub failure names its action on the next opening within the resume window. */
+  let carriedFailure: {message: string; at: number} | null = null;
   /** A late task's receipt outlives the typing that ended its session; any other report replaces it. */
   let receiptInStatus = false;
   /**
@@ -310,8 +310,8 @@ export function createHub(parent: HTMLElement) {
       { id: 'settings', title: 'Settings', detail: 'Game, appearance, tools, shortcuts and maps', keywords: 'preferences graphics appearance hotkeys', group: 'Commands', action: 'Open Settings', run: () => openSettings() },
       // Launcher and the website are for a typed search; the first screen stays on the game (HUB-185).
       ...(!every && !query.trim() ? [] : [
-        { id: 'launcher', title: 'Show Launcher', detail: 'Accounts, updates and game files', keywords: 'launcher administration', group: 'Commands', action: 'Show Launcher', run: async () => { await window.gwNative.app.showLauncher(); close(); } },
-        { id: 'help', title: 'Project website', detail: 'Documentation and latest changes', keywords: 'help documentation', group: 'Commands', action: 'Open website', run: async () => { await window.gwNative.app.openExternal('github'); close(); } },
+        { id: 'launcher', title: 'Show Launcher', detail: 'Accounts, updates and game files', keywords: 'launcher administration', group: 'Commands', action: 'Show Launcher', run: async (task: HubTask) => { await window.gwNative.app.showLauncher(); task.done(); } },
+        { id: 'help', title: 'Project website', detail: 'Documentation and latest changes', keywords: 'help documentation', group: 'Commands', action: 'Open website', run: async (task: HubTask) => { await window.gwNative.app.openExternal('github'); task.done(); } },
       ]),
       ...(!every && !query.trim() ? [] : [
         // Call Target stays on its own shortcut: it acts only while the game has focus (HUB-133).
@@ -456,8 +456,8 @@ export function createHub(parent: HTMLElement) {
   }
   /** `aria-busy` and the thin bar under the search while this page's action runs or the status line shows progress. */
   function paintBusy() {
-    const working = busy() || (viewRunning && !!viewFooter) || progressInStatus;
-    list.setAttribute('aria-busy', String(busy())); content.setAttribute('aria-busy', String(viewRunning && !!viewFooter));
+    const working = busy() || ((viewRunning || viewFooter?.primary?.running) && !!viewFooter) || progressInStatus;
+    list.setAttribute('aria-busy', String(busy())); content.setAttribute('aria-busy', String(!!(viewRunning || viewFooter?.primary?.running) && !!viewFooter));
     required<HTMLElement>('.hub-panel').dataset.busy = String(working);
   }
   /** The footer's key legend names only keys that act here and now. */
@@ -465,7 +465,7 @@ export function createHub(parent: HTMLElement) {
     const keys: [string[], string][] = [];
     if (!viewFooter && rows.length > 1 && !busy()) keys.push([['↑', '↓'], 'Select']);
     if (!viewFooter && row?.navigate) keys.push([['→'], 'Open']);
-    keys.push([['⎋'], !viewFooter && input.value ? 'Clear' : history.length ? 'Back' : 'Close']);
+    keys.push([['⎋'], searchField()?.value ? 'Clear' : history.length ? 'Back' : 'Close']);
     if (!atHome()) keys.push([['⌘', '⌫'], 'Back']);
     const next = JSON.stringify(keys);
     if (legend.dataset.keys === next) return;
@@ -484,8 +484,8 @@ export function createHub(parent: HTMLElement) {
     const action = viewFooter.primary ?? done;
     primaryText(action.label);
     // Enter runs a named primary, so only that one carries the keycap, and not while it runs.
-    if (viewFooter.primary && !viewRunning) { const key = document.createElement('kbd'); key.className = 'ui-kbd'; key.textContent = '↵'; primary.append(key); }
-    disableSlot(primary, !!action.disabled || viewRunning);
+    if (viewFooter.primary && !viewRunning && !action.running) { const key = document.createElement('kbd'); key.className = 'ui-kbd'; key.textContent = '↵'; primary.append(key); }
+    disableSlot(primary, !!action.disabled || viewRunning || !!action.running);
     primary.dataset.variant = action.destructive ? 'danger' : 'primary';
     if (!action.armed) { viewArming?.arming.disarm(); viewArming = null; }
     else if (viewArming?.label !== action.label) {
@@ -674,7 +674,7 @@ export function createHub(parent: HTMLElement) {
     const tradeQuery = parseHubQuery(input.value);
     const tradeRows: HubRow[] = tradeQuery.scope === "trade" && tradeQuery.term && window.gwToolsSettings?.().gwonmacTools && window.gwToolsSettings?.().tradeChat
       // The player's own words, in the market Trade has open; `trade:` gives the row Trade's icon (HUB-124).
-      ? [{ id: "trade:query", title: `Search Trade for ${tradeQuery.text}`, detail: "Offers and character names", group: "Tools", action: "Search Trade", run: () => dispatch("gw:trade-toggle", { query: tradeQuery.text }) }] : [];
+      ? [{ id: "trade:query", title: `Search Trade for ${tradeQuery.text}`, detail: "Offers and character names", group: "Tools", action: `Search Trade for ${tradeQuery.text}`, run: () => dispatch("gw:trade-toggle", { query: tradeQuery.text }) }] : [];
     const extra = scope ? scope.rows() : [...sources.keys()].filter(sourceEnabled).flatMap(source => source.search(input.value)).concat(tradeRows);
     const parsed = parseHubQuery(input.value);
     // A phrase saved before its words joined the grammar stays stored but no longer matches.
@@ -686,7 +686,7 @@ export function createHub(parent: HTMLElement) {
     // A typed root search orders sections by their best answer, then by the usual group order,
     // and rows by the same tier (HUB-008, HUB-058). A saved phrase is the best answer of all;
     // the calculator's card answers its own grammar. Scoped lists keep their source's order.
-    const phraseIds = new Set(parsed.term ? savedRows.map(row => row.id) : []);
+    const phraseIds = new Set(parsed.term ? [...savedRows, ...extra.filter(row => row.exactPhrase)].map(row => row.id) : []);
     const ranked = !scope && !parsed.scope && !!parsed.term;
     const tierOf = (row: HubRow) => phraseIds.has(row.id) ? -1 : row.conversion || row.group === 'Calculator' ? 0 : hubTier(row, parsed.term) ?? 3;
     const best = new Map<string, number>();
@@ -791,9 +791,10 @@ export function createHub(parent: HTMLElement) {
     });
     list.replaceChildren(results);
     // Two rows with the typed name are a tie, so nothing is chosen for the player; a saved phrase
-    // is their own name for one row and always wins. Pins on an empty Home are no tie (HUB-060).
+    // names one row only when its existing stores agree. Pins on an empty Home are no tie (HUB-060).
     // A query that is a row's whole name, `trade chat` included, answers with that row (HUB-008).
-    const phraseHit = rows.find(row => phraseIds.has(row.id)) ?? (parsed.scope ? rows.find(row => normaliseHubQuery(row.title) === normaliseHubQuery(input.value)) : undefined);
+    const phraseMatches = rows.filter(row => phraseIds.has(row.id));
+    const phraseHit = (phraseMatches.length === 1 ? phraseMatches[0] : undefined) ?? (parsed.scope ? rows.find(row => normaliseHubQuery(row.title) === normaliseHubQuery(input.value)) : undefined);
     const exactCount = parsed.term ? rows.filter(row => hubTier(row, parsed.term) === 0).length : 0;
     const prior = previousRows.find(row => row.id === selected);
     const revised = prior && rows.find(row => row.id === selected)?.preview !== prior.preview;
@@ -811,7 +812,7 @@ export function createHub(parent: HTMLElement) {
     const replacedPlaceholder = !!prior?.unavailable && !rows.some(row => row.id === prior.id);
     // Clear only this loading refusal when its answer settles; unrelated failures stay.
     if (prior?.unavailable && status.textContent === prior.unavailable && rows.some(row => row.conversion && !row.unavailable)) report('');
-    select((prior?.id === 'quote-state' || prior?.id === 'market-state') && !!rows[0]?.conversion ? rows[0].id : settling || replacedPlaceholder ? exactCount > 1 && !phraseHit ? null : initial?.id ?? null : !revised && rows.some(row => row.id === selected) ? selected : null);
+    select((prior?.id === 'quote-state' || prior?.id === 'market-state') && !!rows[0]?.conversion ? rows[0].id : settling || replacedPlaceholder ? phraseMatches.length > 1 || (exactCount > 1 && !phraseHit) ? null : initial?.id ?? null : !revised && rows.some(row => row.id === selected) ? selected : null);
     if (focusedRate instanceof HTMLElement && !rates.hidden && rates.isConnected) focusedRate.focus({ preventScroll: true });
     if (!settling && prior && !replacedPlaceholder && !rows.some(row => row.id === prior.id) && !receiptInStatus) report('The previous selection is no longer available. Choose a result.');
 
@@ -917,9 +918,18 @@ export function createHub(parent: HTMLElement) {
    * it shows briefly where the frame's footer stood, and never outlives the next opening.
    * A failure also waits in the status line of that next opening, so it is never dropped.
    */
-  function notify(message: string, outcome?: 'failed') {
+  function notify(message: string, outcome?: 'failed' | 'cleared') {
+    // An observer withdraws only its own resolved failure, never another owner's outcome.
+    if (outcome === 'cleared') {
+      if (carriedFailure?.message === message) carriedFailure = null;
+      if (receiptInStatus && status.textContent === message) report('');
+      if (receipt.textContent === message) {
+        clearTimeout(receiptTimer); receipt.hidePopover(); receipt.hidden = true; receiptAnnouncement.textContent = '';
+      }
+      return;
+    }
     if (root.open) { report(message, true); return; }
-    if (outcome === 'failed') carriedFailure = message;
+    if (outcome === 'failed') carriedFailure = {message, at: Date.now()};
     clearTimeout(receiptTimer); receiptAnnouncement.textContent = message; receipt.textContent = message; receipt.hidden = false; receiptTimer = setTimeout(() => { receipt.hidePopover(); receipt.hidden = true; receiptAnnouncement.textContent = ''; }, 8000);
     receipt.dataset.outcome = outcome ?? 'done'; receipt.dataset.tone = outcome === 'failed' ? 'error' : 'success';
     if (frame?.width) {
@@ -1000,7 +1010,8 @@ export function createHub(parent: HTMLElement) {
     suspended = null;
     for (const source of sources.keys()) source.setVisible(sourceEnabled(source));
     if (resume) resumePage(resume); else home();
-    if (carriedFailure) { report(carriedFailure, true); carriedFailure = ''; }
+    if (carriedFailure && Date.now() - carriedFailure.at <= RESUME_MS) report(carriedFailure.message, true);
+    carriedFailure = null;
   }
   input.addEventListener('input', () => { endSession(); if (!receiptInStatus) report(''); refresh(true); });
   input.addEventListener('keydown', event => {
@@ -1234,7 +1245,7 @@ export function createHub(parent: HTMLElement) {
   }
   /** Mounts a view page, a new one or one that Back restores, with its footer and drafts. */
   function mountView(view: MountedView) {
-    resetView(); report(''); clearTimeout(announceTimer); resultAnnouncement = ''; empty.hidden = true;
+    resetView(); if (!receiptInStatus) report(''); clearTimeout(announceTimer); resultAnnouncement = ''; empty.hidden = true;
     root.dataset.page = 'section'; caption.textContent = view.title;
     required<HTMLElement>('.hub-preview').hidden = true; required<HTMLElement>('.hub-rate-controls').hidden = true; required<HTMLElement>('.hub-hint').hidden = true;
     search.hidden = true; list.hidden = true; content.hidden = false;
@@ -1271,7 +1282,7 @@ export function createHub(parent: HTMLElement) {
     showRows(title: string, getRows: () => readonly HubRow[], summary?: HubSummary, destination?: HubDestination, owner?: HubSource, query = '') {
       enterPage();
       resetView(); scope = { title, rows: getRows, ...(summary ? { summary } : {}), ...(destination ? { destination } : {}), ...(owner ? { owner } : {}) }; root.dataset.page = 'section'; caption.textContent = title;
-      nameSearch(title); input.value = query; report(''); refresh(true); focusResult();
+      nameSearch(title); input.value = query; if (!receiptInStatus) report(''); refresh(true); focusResult();
     },
     showView(title: string, mount: HubViewMount<HTMLElement>, available?: () => boolean, destination?: HubDestination, owner?: HubSource) {
       enterPage();

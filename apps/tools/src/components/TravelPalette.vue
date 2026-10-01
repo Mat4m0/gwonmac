@@ -48,7 +48,8 @@ const props = defineProps<{
   };
 }>();
 /** `close` leaves Travel (Esc, Back); `travelled` ends the task after a trip started, so a host closes rather than steps back. */
-const emit = defineEmits<{ close: []; travelled: []; remember: [state: NonNullable<typeof props.resume>] }>();
+const emit = defineEmits<{
+  pageChanged: []; close: []; travelled: []; remember: [state: NonNullable<typeof props.resume>] }>();
 type PaletteMode = "travel" | "customize";
 const GEAR_PATH = "M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z";
 const SMALL_TRAVEL_CATALOGUE_LIMIT = 10;
@@ -71,6 +72,8 @@ const query = ref(props.resume?.query ?? "");
  * first destination; `NO_SELECTION` means the chosen one went away.
  */
 const NO_SELECTION = "";
+/** The destination the current click run selected; only its own double-click travels. */
+let pressed: string | null = null;
 const activeKey = ref<string | null>(props.resume ? props.resume.selected ?? NO_SELECTION : null);
 /** Hover moves `active` only on real movement and never off a clicked destination. */
 const hover = createHoverSelection();
@@ -205,7 +208,7 @@ const results = computed<SearchResult[]>(() => {
       destination,
       disabledReason: destinationDisabledReason(destination),
     }));
-  const exact = destinations.filter(({ destination }) => travelMatchIsExact(destination, query.value, synonyms.value));
+  const exact = destinations.filter(({ destination }) => travelMatchIsExact(destination, query.value, travelPreferences.searchSynonyms(query.value)));
   return [
     ...(guildHallExact.value ? guildHallResults.value : []),
     ...exact,
@@ -273,6 +276,15 @@ const selectableDestinations = computed(() => hasQuery.value
   ? results.value
   : [...leadingDestinations.value, ...assignedShortcuts.value.flatMap(row => row.destination ? [row.destination] : [])]);
 const hasSelectableDestination = computed(() => selectableDestinations.value.some(selectable));
+/** Two exact stored phrases can name different places; only the player can choose the trip. */
+const initialDestinationIndex = computed(() => {
+  const aliases = travelPreferences.searchSynonyms(query.value);
+  const exact = hasQuery.value ? results.value.filter(result => selectable(result) && (
+    result.kind === "guild-hall" ? guildHallExact.value
+      : result.kind === "destination" && travelMatchIsExact(result.destination, query.value, aliases)
+  )) : [];
+  return exact.length > 1 ? -1 : selectableDestinations.value.findIndex(selectable);
+});
 const resultId = (index: number): string | null => {
   const destination = selectableDestinations.value[index];
   if (!destination) return null;
@@ -285,7 +297,7 @@ const selectableIds = computed(() => selectableDestinations.value.map((_, index)
 /** The selected position, derived from its identity; setting it records the identity at that position. */
 const active = computed({
   get: () => activeKey.value === null
-    ? selectableDestinations.value.findIndex(selectable)
+    ? initialDestinationIndex.value
     : selectableIds.value.indexOf(activeKey.value),
   set: (index: number) => { activeKey.value = resultId(index) ?? NO_SELECTION; },
 });
@@ -358,7 +370,7 @@ function queryMatchLabel(destination: TravelDestination): string {
   const normalized = normaliseTravelTerm(query.value);
   const tokens = normalized.split(" ").filter(Boolean);
   if (tokens.length === 0) return destination.campaign;
-  return synonyms.value.some((entry) =>
+  return travelPreferences.searchSynonyms(query.value).some((entry) =>
     entry.mapId === destination.mapId
     && tokens.every((token) => normaliseTravelTerm(entry.term).includes(token))
   ) ? "Search phrase" : destination.campaign;
@@ -461,6 +473,7 @@ function activateBrowseDestination(mapId: number): void {
 }
 
 watch(query, () => {
+  pressed = null; emit("pageChanged");
   hover.release();
   activeKey.value = null;
   // A receipt or refusal belongs to what was on screen; typing starts over (HUB-188).
@@ -479,7 +492,7 @@ watch(selectableIds, (next, previous) => {
   if (key === null) {
     // Publish the initial choice as an identity too: it is already visible
     // to the player, so an observation must not silently replace it.
-    activeKey.value = resultId(selectableDestinations.value.findIndex(selectable));
+    activeKey.value = resultId(initialDestinationIndex.value) ?? NO_SELECTION;
     return;
   }
   if (!sameQuery || key === NO_SELECTION || !previous?.includes(key)) return;
@@ -493,6 +506,7 @@ watch(results, (next) => {
     (result) => result.kind === "guild-hall" ? [] : [result.mapId],
   ));
 });
+watch([mode, () => props.visible], () => {pressed = null; emit("pageChanged");});
 watch(() => props.visible, async (visible) => {
   if (!visible) return;
   const load = ++visibilityLoad;
@@ -788,8 +802,6 @@ function runActive(): void {
     void travel(favorite?.request ?? { mapId: entry.mapId });
   }
 }
-/** The destination the current click run selected; only its own double-click travels. */
-let pressed: string | null = null;
 /**
  * A click selects a destination; Enter, the footer primary or a double-click
  * that started on the same destination travels (D-24). A page change between
@@ -933,7 +945,7 @@ function onKeydown(event: KeyboardEvent): void {
 </script>
 
 <template>
-  <section ref="palette" v-show="visible" class="travel-palette" :class="{ 'ui-frame': !inset }" :role="nativeDialog ? undefined : 'dialog'" :aria-label="nativeDialog ? undefined : 'Quick Travel'" :aria-busy="preferenceWritePending" @keydown="onKeydown">
+  <section ref="palette" v-show="visible" class="travel-palette" @mousedown.capture="$event.detail === 1 && (pressed = null)" :class="{ 'ui-frame': !inset }" :role="nativeDialog ? undefined : 'dialog'" :aria-label="nativeDialog ? undefined : 'Quick Travel'" :aria-busy="preferenceWritePending" @keydown="onKeydown">
     <div class="travel-search">
       <label for="travel-search-input" :class="{ 'ui-hub-search': !!footer }"><svg v-if="footer" class="travel-search-icon" viewBox="0 0 24 24" aria-hidden="true" v-html="HUB_SEARCH_GLYPH"></svg><svg v-else class="travel-search-icon" viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.25" /><path d="m12.4 12.4 4.1 4.1" /></svg><input id="travel-search-input" ref="input" v-model="query" role="combobox" aria-label="Destination, phrase, or friend" :aria-controls="mode === 'travel' ? hasQuery ? 'travel-results' : 'travel-panel' : undefined" aria-autocomplete="list" aria-haspopup="listbox" :aria-activedescendant="mode === 'travel' && activeResultId ? `travel-${activeResultId}` : undefined" :aria-expanded="mode === 'travel' && selectableDestinations.length > 0" autocomplete="off" spellcheck="false" :maxlength="TRAVEL_SEARCH_QUERY_LIMIT" placeholder="Search destinations or friends…"></label>
     </div>
@@ -972,7 +984,7 @@ function onKeydown(event: KeyboardEvent): void {
           <button v-for="(destination, index) in recentDestinations" :id="`travel-recent-${destination.mapId}`" :key="destination.mapId" :tabindex="inset ? -1 : undefined" :data-active="active === index || undefined" :role="inset ? 'option' : undefined" :aria-selected="inset ? active === index : undefined" @pointermove="moved($event) && (active = index)" type="button" class="travel-recent ui-row" :disabled="travelPending || host.unavailable !== null" :aria-label="`Travel to recent destination ${destination.name}, ${destination.campaign}`" @mousedown="keepSearchFocus" @click="pick($event, index)" @contextmenu="selectOnly($event, index)"><svg v-if="inset" class="travel-place-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 8 8-8 10-8-10 8-8Z"/><circle cx="12" cy="10" r="2.5"/></svg><span><strong>{{ destination.name }}</strong><small>{{ destination.campaign }}</small></span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 4 6 6-6 6" /></svg></button>
         </div>
       </section>
-      <section v-if="!showingSmallCatalogue" class="travel-section travel-favorites" :role="inset ? 'group' : undefined" aria-labelledby="travel-favorites-title">
+      <section class="travel-section travel-favorites" :role="inset ? 'group' : undefined" aria-labelledby="travel-favorites-title">
         <header class="travel-section-head"><h2 id="travel-favorites-title">Favourites</h2><span>1–9 select</span></header>
         <div v-if="assignedShortcuts.length" class="travel-favorite-grid">
           <button v-for="(row, index) in assignedShortcuts" :id="`travel-favorite-${row.index}`" :key="row.index" :tabindex="inset ? -1 : undefined" :data-active="active === leadingDestinations.length + index || undefined" :role="inset ? 'option' : undefined" :aria-selected="inset ? active === leadingDestinations.length + index : undefined" @pointermove="moved($event) && (active = leadingDestinations.length + index)" type="button" class="travel-favorite ui-raised" :title="row.destination?.mapId === currentMapId ? `${row.destination?.name} · Current location` : row.destination?.name" :data-current="row.destination?.mapId === currentMapId || undefined" :disabled="travelPending || host.unavailable !== null || row.destination?.mapId === currentMapId" :aria-label="row.destination?.mapId === currentMapId ? `${row.destination?.name}, current location, shortcut ${row.index + 1}` : `Travel to ${row.destination?.name}, shortcut ${row.index + 1}`" @mousedown="keepSearchFocus" @click="pick($event, leadingDestinations.length + index)" @contextmenu="selectOnly($event, leadingDestinations.length + index)"><svg v-if="inset" class="travel-place-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 8 8-8 10-8-10 8-8Z"/><circle cx="12" cy="10" r="2.5"/></svg><template v-if="inset"><span>{{ row.destination && favoriteLabel(row.destination) }}</span><b>{{ row.index + 1 }}</b></template><template v-else><b>{{ row.index + 1 }}</b><span>{{ row.destination && favoriteLabel(row.destination) }}</span></template></button>

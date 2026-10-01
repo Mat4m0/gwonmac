@@ -12,6 +12,7 @@ import type {
   TravelPreferencePatch,
   TravelPreferences,
 } from "../travel-host";
+import { DEFAULT_SETTINGS } from "../../../../src/shared/contracts";
 import TravelDestinationPicker from "./TravelDestinationPicker.vue";
 import TravelPalette from "./TravelPalette.vue";
 import {
@@ -965,4 +966,27 @@ describe("TravelPalette", () => {
     expect(travel).toHaveBeenCalledWith(DEFAULT_TRAVEL_SHORTCUTS[0]);
     wrapper.unmount();
   });
+});
+
+
+it("conflicting stored global and Travel phrases require a destination choice and preserve both stores", async () => {
+  const settings = window.gwToolsSettings;
+  const global = [{id: "place:194", phrase: "home", pinned: true}];
+  window.gwToolsSettings = () => ({...DEFAULT_SETTINGS, hubShortcuts: global});
+  const {wrapper, travel, savePreferences} = fixture({synonyms: [{term: "home", mapId: 449}]});
+  try {
+    await flushPromises();
+    const search = wrapper.get('[role="combobox"]');
+    await search.setValue("home");
+    expect(wrapper.find("#travel-map-194").exists()).toBe(true);
+    expect(wrapper.find("#travel-map-449").exists()).toBe(true);
+    expect(search.attributes("aria-activedescendant")).toBeUndefined();
+    await search.trigger("keydown", {key: "Enter", code: "Enter"});
+    expect(travel).not.toHaveBeenCalled();
+    await search.trigger("keydown", {key: "ArrowDown", code: "ArrowDown"});
+    await search.trigger("keydown", {key: "Enter", code: "Enter"});
+    expect(travel).toHaveBeenCalledOnce();
+    expect(savePreferences).not.toHaveBeenCalled();
+    expect(window.gwToolsSettings?.().hubShortcuts).toEqual(global);
+  } finally {wrapper.unmount(); window.gwToolsSettings = settings;}
 });

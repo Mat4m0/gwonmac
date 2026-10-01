@@ -9,7 +9,7 @@ import { expect, test, type Page } from '@playwright/test';
  * `?slow-apply` lands each fixture command after half a second on the real confirmation clock.
  */
 const search = (page: Page) => page.locator('.hub-search input');
-const hub = (page: Page) => page.getByRole('dialog', { name: 'Hub', exact: true });
+const hub = (page: Page) => page.getByRole('dialog', { name: /^Hub(?: — .+)?$/u });
 const status = (page: Page) => page.locator('.hub-status');
 const receipt = (page: Page) => page.locator('.hub-receipt');
 const primary = (page: Page) => page.locator('.hub-primary');
@@ -95,6 +95,13 @@ test('a running apply keeps its progress in the status line after Back and throu
     // Back and every typed key leave the running apply's progress, busy, in the status line.
     await expect(busyStatus).toHaveText(/^Applying GOM AFK… \d+\/16$/);
     await expect(page.locator('.hub-panel')).toHaveAttribute('data-busy', 'true');
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('.hub-caption')).toHaveText('GOM AFK');
+    await expect(primary(page)).toHaveText('Applying GOM AFK…');
+    await expect(primary(page).locator('kbd')).toHaveCount(0);
+    await expect(page.locator('.hub-view')).toHaveAttribute('aria-busy', 'true');
+    await expect(busyStatus).toHaveText(/^Applying GOM AFK… \d+\/16$/);
+    await page.keyboard.press('Meta+Backspace');
     await page.keyboard.press('ControlOrMeta+a');
     const seen = new Set<string>();
     for (const character of 'travel kamadan') {
@@ -147,12 +154,12 @@ test('a team apply that fails on its review leaves the outcome there and no prog
   await expect(status(page)).toHaveText(/^Applying GOM AFK… \d+\/16$/);
   await expect(primary(page)).toHaveText('Applying GOM AFK…');
   await expect(review).toBeHidden();
-  await expect(review).toHaveText(/^Synthetic interruption/);
-  await expect(status(page)).toBeHidden();
+  await expect(review).toHaveText(/^Team partly applied\. Synthetic interruption/);
+  await expect(status(page)).toBeEmpty();
   await expect(page.locator('.hub-panel')).toHaveAttribute('data-busy', 'false');
   await expect(primary(page)).toHaveText('Apply team GOM AFK↵');
   await page.waitForTimeout(600);
-  await expect(status(page)).toBeHidden();
+  await expect(status(page)).toBeEmpty();
   expect(await actions(page)).toEqual(['apply-team']);
 });
 
@@ -163,7 +170,9 @@ test('a template folder that loads late never opens over a newer page or a close
     await search(page).press('Enter');
     await expect(page.locator('.hub-caption')).toHaveText('Build Library');
     const templates = page.locator('#hub .hub-row[data-id="game-templates"]');
-    while (await templates.getAttribute('aria-selected') !== 'true') await search(page).press('ArrowUp');
+    await search(page).press('End');
+    for (let step = 0; step < 20 && await templates.getAttribute('aria-selected') !== 'true'; step++) await search(page).press('ArrowUp');
+    await expect(templates).toHaveAttribute('aria-selected', 'true');
     await search(page).press('ArrowRight');
     if (moveOn === 'type') await page.keyboard.type('sm');
     else await page.locator('.hub-close').click();
@@ -299,7 +308,7 @@ test('an account open that focuses another window still ends the task, so the ne
   await expect(search(page)).toHaveValue('');
   await expect(search(page)).toBeFocused();
   await expect(primary(page)).not.toHaveText(/Second/);
-  await expect(status(page)).toBeHidden();
+  await expect(status(page)).toBeEmpty();
   expect(await actions(page)).toEqual(['Account Second open']);
 });
 
@@ -317,8 +326,59 @@ test('a character switch that fails after the Hub closed is reported and reopens
   await open(page, '&switch-fail=logout-refused');
   await enter(page, 'char toefte');
   await expect(hub(page)).toBeHidden();
-  await expect(receipt(page)).toHaveText('Guild Wars did not return to the character selector. Try again.');
+  await expect(receipt(page)).toHaveText('Switch to Toefte stopped. Guild Wars did not return to the character selector. Try again.');
   await expect(hub(page)).toBeHidden();
   await page.keyboard.press('Meta+e');
   await expect(page.locator('button[data-character-key="toefte"]')).toBeFocused();
+  await expect(status(page)).toContainText('Switch to Toefte stopped.');
+  await expect(page.locator('.character-switch-status')).not.toContainText('did not return');
+});
+
+
+test('delayed Launcher and website completions cannot close a newer Hub session (HUB-004)', async ({page}) => {
+  for (const [query, method] of [['launcher', 'showLauncher'], ['project website', 'openExternal']] as const) {
+    await open(page, '');
+    await page.evaluate(method => {
+      Object.defineProperty(window.gwNative.app, method, {value: () => new Promise<void>(resolve => {
+        window.addEventListener('integration-app-complete', () => resolve(), {once: true});
+      })});
+    }, method);
+    await search(page).fill(query); await search(page).press('Enter');
+    await expect(primary(page)).toBeDisabled();
+    await page.keyboard.press('Escape'); await page.keyboard.press('Escape');
+    await expect(hub(page)).toBeHidden();
+    await page.keyboard.press('Meta+r');
+    await search(page).fill('travel kam');
+    await page.evaluate(() => window.dispatchEvent(new Event('integration-app-complete')));
+    await page.waitForTimeout(50);
+    await expect(hub(page)).toBeVisible();
+    await expect(search(page)).toHaveValue('travel kam');
+    await expect(search(page)).toBeFocused();
+  }
+});
+
+test('a carried failure expires with the existing 90-second Hub resume window', async ({page}) => {
+  await open(page, '&party&invite-ms=100&invite-fail=Guild Wars chat is not ready');
+  await enter(page, 'invite Zed Delta');
+  await page.keyboard.press('Escape'); await page.keyboard.press('Escape');
+  await expect(receipt(page)).toContainText('/invite Zed Delta was not sent.');
+  await page.clock.setFixedTime(new Date(Date.now() + 90_001));
+  await page.keyboard.press('Meta+r');
+  await expect(status(page)).not.toContainText('/invite Zed Delta was not sent.');
+});
+
+
+test('resolving a Travel failure preserves another owner’s newer receipt (HUB-072)', async ({page}) => {
+  await open(page, '');
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => {
+    window.gwHub?.notify('Travel did not start.', 'failed');
+    window.gwHub?.notify('Invite Zed Delta stopped. Try again.', 'failed');
+    window.gwHub?.notify('Travel did not start.', 'cleared');
+  });
+  await expect(receipt(page)).toHaveText('Invite Zed Delta stopped. Try again.');
+  await page.keyboard.press('Meta+r');
+  await expect(status(page)).toHaveText('Invite Zed Delta stopped. Try again.');
+  await page.evaluate(() => window.gwHub?.notify('Invite Zed Delta stopped. Try again.', 'cleared'));
+  await expect(status(page)).toBeEmpty();
 });

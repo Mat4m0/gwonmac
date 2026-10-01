@@ -1,7 +1,8 @@
 /** One Travel host serves both unified search and the existing detailed view. */
+import { TOOL_PRESENTATION } from '../../../src/shared/tool-presentation';
 import { createApp, h, watch } from 'vue';
 import type { HubPresenter, HubRow, HubSource, HubTask, HubViewMount } from '../../../src/shared/hub';
-import { matchHubRows, parseHubQuery, hubTier } from '../../../src/shared/hub';
+import { matchHubRows, parseHubQuery, hubTier, normaliseHubQuery } from '../../../src/shared/hub';
 import { TRAVEL_DESTINATIONS, isPvpTravelDestination, travelDestination, type TravelDestination } from '../../../src/shared/travel';
 import { guildWarsMapName } from '../../../src/shared/guild-wars-map-names';
 import { travelContextRefusal, travelDestinationAvailability } from '../../../src/shared/travel-command';
@@ -30,7 +31,8 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
   // A trip that fails after the quiet close ("did not start", "did not confirm arrival") is
   // reported once through the Hub's receipt; success stays quiet, and the open Travel view
   // shows its own notice (HUB-072).
-  const stopNotice = watch(host.notice, notice => {
+  const stopNotice = watch(host.notice, (notice, previous) => {
+    if ((!notice || notice.level === 'success') && previous && (previous.level === 'warning' || previous.level === 'danger')) hub.notify(previous.message, 'cleared');
     if (notice && (notice.level === 'warning' || notice.level === 'danger') && !active) hub.notify(notice.message, 'failed');
   }, { flush: 'sync' });
   const load = async () => {
@@ -50,7 +52,7 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
     return (target, back, footer) => {
       active = true;
       const app = createApp({ setup: () => () => h(TravelPalette, {
-        host, preferences, footer, leaveArea, ...(resume ? { resume } : {}), onRemember: state => { resume = state; }, inset: true, hubParent: !!hub.hasParent, visible: true, nativeDialog: true, onClose: back,
+        host, preferences, footer, leaveArea, onPageChanged: () => hub.pageChanged?.(), ...(resume ? { resume } : {}), onRemember: state => { resume = state; }, inset: true, hubParent: !!hub.hasParent, visible: true, nativeDialog: true, onClose: back,
         // A trip ends the task: the Hub closes, whether Travel opened from Home or by Command-T (HUB-017).
         onTravelled: () => hub.close(),
       }) });
@@ -83,7 +85,7 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
   }
   /** Travel's own search phrases for one place: they find it as exactly as its name. */
   const phrases = (mapId: number, query: string) => preferences.searchSynonyms(query).filter(entry => entry.mapId === mapId).map(entry => entry.term);
-  const toolRow = (): HubRow => ({ id: 'travel', title: 'Travel', detail: loadError || 'Outposts, favourites, recent places and Guild Hall', group: 'Tools', keywords: 'tp teleport destination', action: 'Browse travel', navigate: open, run: open });
+  const toolRow = (): HubRow => ({ id: 'travel', title: TOOL_PRESENTATION['quick-travel'].label, detail: loadError || 'Outposts, favourites, recent places and Guild Hall', group: 'Tools', keywords: 'tp teleport destination', action: 'Browse travel', navigate: open, run: open });
   const source: HubSource = {
     feature: 'travelPalette',
     context() {
@@ -114,7 +116,7 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
       query = parsed.term;
       // Home ranks every matching place by the shared tier (its catalogue aliases and the
       // player's Travel phrases count as names) before it keeps the best eight (HUB-010, HUB-057).
-      const aliasesOf = (destination: TravelDestination) => [...destination.aliases, ...preferences.searchSynonyms(query).filter(entry => entry.mapId === destination.mapId).map(entry => entry.term)];
+      const aliasesOf = (destination: TravelDestination) => [...destination.aliases, ...phrases(destination.mapId, query)];
       const matches = query.trim() ? TRAVEL_DESTINATIONS.flatMap(destination => {
         const tier = hubTier({ title: destination.name, aliases: aliasesOf(destination) }, query);
         return tier === null ? [] : [{ destination, tier }];
@@ -126,7 +128,11 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
       const guildHall: HubRow[] = query.trim() && hubTier({ title: 'Guild Hall', aliases: ['gh'] }, query) !== null ? [{
         id: 'place:guild-hall', title: inHall ? 'Leave Guild Hall' : 'Guild Hall', detail: inHall ? 'Return to the outpost you came from' : 'Your guild’s hall',
         group: 'Places', action: inHall ? 'Leave Guild Hall' : 'Travel to Guild Hall', consequential: true, leavesArea: explorable(),
-        ...(host.guildHallUnavailable ? { unavailable: host.guildHallUnavailable } : {}), run: async (task: HubTask) => { await host.guildHall(); task.done(); },
+        ...(host.guildHallUnavailable ? { unavailable: host.guildHallUnavailable } : {}), run: async (task: HubTask) => {
+          if (explorable()) await leaveArea('Guild Hall', () => host.guildHall());
+          else await host.guildHall();
+          task.done();
+        },
       }] : [];
       // The rest stay one step away, in Travel with the same search.
       const more: HubRow[] = matches.length > PLACES_SHOWN ? [{ id: 'places:more', title: `All ${matches.length} places`, detail: 'Open Travel with this search', group: 'Places', action: 'Show in Travel',
@@ -135,6 +141,7 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
         const reason = refusal(destination.mapId);
         // The aliases travel with the row, so Home ranks it by them as this list did.
         return { id: `place:${destination.mapId}`, title: destination.name, aliases: aliasesOf(destination),
+          ...(query.trim() && phrases(destination.mapId, query).some(phrase => normaliseHubQuery(phrase) === query) ? {exactPhrase: true} : {}),
           detail: query.trim() ? 'Outpost · Any district' : 'Recently visited · Any district',
           group: query.trim() ? 'Places' : 'Continue', action: `Travel to ${destination.name}`, consequential: true, leavesArea: explorable(),
           ...(reason ? { unavailable: reason } : {}), run: async (task: HubTask) => { await travel(destination.mapId); task.done(); } };

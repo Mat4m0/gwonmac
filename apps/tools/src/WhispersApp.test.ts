@@ -269,3 +269,27 @@ it("lists only conversations with messages or an unfinished draft and keeps unus
   expect(picker.text()).toContain("Empty Stranger");
   wrapper.unmount();
 });
+
+
+it("keeps the selected person by identity when incoming whispers reorder the picker, and Back clears the choice", async () => {
+  const session = createWhisperSession(async () => {});
+  session.setAvailable(true); session.showPicker();
+  session.updateFriends({status: "ready", sequence: 1, generation: 1, friends: [
+    {key: "first", character: "First Friend", alias: "First", status: "online", mapId: 55},
+    {key: "second", character: "Second Friend", alias: "Second", status: "online", mapId: 55},
+  ]});
+  const wrapper = mount(WhispersApp, {props: {session}, attachTo: document.body});
+  try {
+    await flushPromises();
+    const search = wrapper.get("#whisper-person");
+    await search.trigger("keydown", {key: "ArrowDown"});
+    await search.trigger("keydown", {key: "ArrowDown"});
+    session.observe([{id: 1, sender: "New Conversation", message: "Hello", direction: "incoming"}]);
+    await flushPromises();
+    await search.trigger("keydown", {key: "Enter"});
+    expect(session.state.selected).toBe("second friend");
+    await wrapper.get('[aria-label="Conversations"]').trigger("click");
+    await flushPromises();
+    expect(search.attributes("aria-activedescendant")).toBeUndefined();
+  } finally {wrapper.unmount();}
+});

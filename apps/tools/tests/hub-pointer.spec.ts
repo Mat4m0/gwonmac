@@ -220,7 +220,7 @@ test.describe('a navigational row', () => {
     await expect(primary(page)).toHaveText('Apply team GOM AFK↵');
     await expect(primary(page)).toBeEnabled();
     await expect(page.locator('.hub-build-review')).toBeFocused();
-    await expect(page.getByRole('heading', { name: 'GOM AFK', exact: true })).toBeInViewport();
+    await expect(page.getByRole('heading', { name: 'GOM AFK', exact: true, level: 2 })).toBeInViewport();
     expect(await page.locator('.hub-view').evaluate(view => view.scrollTop)).toBe(0);
     expect(await ledger(page)).toEqual([]);
     await clicks(page, primary(page), 3);
@@ -366,7 +366,10 @@ test.describe('a clicked row keeps the footer while the pointer crosses other ro
       await page.waitForTimeout(400);
       await clicks(page, target, 1);
       await expect(page.locator(subject.footer)).toHaveText(subject.named);
-      const crossed = await glide(page, target, page.locator(subject.footer));
+      const via = name.startsWith('build target') ? page.locator('#hub .hub-row[data-id="choose-hero"]') : null;
+      if (via && await via.count()) await via.scrollIntoViewIfNeeded();
+      const crossed = await glide(page, target, via && await via.count() ? via : page.locator(subject.footer));
+      if (via && await via.count()) await glide(page, via, page.locator(subject.footer));
       // The path really crossed other rows, as a hand's path to the footer does.
       expect(crossed.length).toBeGreaterThan(0);
       await expect(target).toHaveAttribute('aria-selected', 'true');
@@ -720,11 +723,11 @@ test('a click on blank space keeps the keyboard where it was (HUB-246)', async (
   await search(page).fill('');
   expect(await typedInto(() => page.locator('.hub-group').first().click())).toBe('INPUT:mo');
   await page.keyboard.press('Meta+t');
-  expect(await typedInto(() => page.locator('#travel-panel').click({ position: { x: 300, y: 330 } }))).toBe('INPUT:mo');
+  expect(await typedInto(() => page.locator('#travel-panel').click({ position: { x: 300, y: 10 } }))).toBe('INPUT:mo');
   await page.keyboard.press('Meta+e');
   await expect(page.locator('button[data-character-key="monk"]')).toBeFocused();
   // Characters is card-first: typing from the card it returns to moves to its search.
-  expect(await typedInto(() => page.locator('.character-switch-panel').click({ position: { x: 300, y: 300 } }))).toBe('INPUT:mo');
+  expect(await typedInto(() => page.locator('.character-switch-panel').click({ position: { x: 2, y: 2 } }))).toBe('INPUT:mo');
   await expect(page.locator('#character-switch-query')).toBeFocused();
 });
 
@@ -782,4 +785,17 @@ test('Hub preferences keeps the Actions slot and opens its named actions with Co
   await page.getByRole('menuitem', { name: 'Keep', exact: true }).click();
   await expect(caption(page)).toHaveText('Hub preferences');
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('hub-fixture-shortcuts') ?? '[]'))).toEqual([{ id: 'place:449', phrase: '', pinned: true }, { id: 'place:194', phrase: '', pinned: true }]);
+});
+
+
+test('Clear search cannot reuse a previous Travel destination click (HUB-242)', async ({page}) => {
+  await open(page);
+  await page.keyboard.press('Meta+t');
+  await page.locator('#travel-recent-194').click();
+  await page.locator('#travel-search-input').fill('zzzzqq');
+  const clear = page.getByRole('button', {name: 'Clear search', exact: true});
+  await clicks(page, clear, 2);
+  await expect(page.locator('#travel-search-input')).toHaveValue('');
+  await expect(page.locator('.hub-caption')).toHaveText('Travel');
+  expect(await ledger(page)).toEqual([]);
 });

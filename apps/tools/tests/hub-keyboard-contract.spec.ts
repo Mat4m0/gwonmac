@@ -81,6 +81,7 @@ const observe = (page: Page) => page.evaluate(() => {
   const life = document.querySelector<HTMLSelectElement>('select[aria-label="Lifecycle state"]')?.value ?? '-';
   // Account profile ids stay out of the repository (forbidden-artifacts policy).
   return `${surface} | focus ${focus} | sel ${selected} | q "${query}"${disclosure} | action ${action} | life ${life} | canvas ${canvas}`
+    .replace(/Current observation [^·|]+(?= ·)/gu, 'Current observation <time>')
     .replace(/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}/giu, '<profile>');
 });
 

@@ -375,9 +375,9 @@ test.describe('custom theme with the Modern flat finish', () => {
 
     await page.getByRole('button', { name: 'Open Hub', exact: true }).click();
     const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
-    await search.fill('build Word of Healing'); await search.press('Enter');
-    await page.getByRole('button', { name: 'Details', exact: true }).click();
-    await page.getByRole('button', { name: 'Open in Build Library', exact: true }).click();
+    await search.fill('build Word of Healing');
+    await page.keyboard.press('Meta+j');
+    await page.getByRole('menuitem', { name: 'Open in Build Library', exact: true }).click();
     const library = page.getByRole('dialog', { name: 'Build Library' });
     const build = library.locator('.library-row').first();
     await expect(build).toBeVisible();

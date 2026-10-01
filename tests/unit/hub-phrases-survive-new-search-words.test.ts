@@ -75,7 +75,7 @@ test("stored phrases are refused only for shape, id, length and uniqueness", () 
 test("the phrase editor still refuses a new phrase that the grammar reads first, and says how it reads it", () => {
   const reads = {
     "invite x": "command", "Invite": "command", "acc second": "command", "team gom afk": "command",
-    "ecto": "unit", "P": "unit",
+    "ecto": "unit", "P": "unit", "k": "unit", "a": "unit", "armbrace of truth": "unit", "zkeys": "unit", "zaishen keys": "unit", "iron": "unit",
     "1p in g": "calculation", "1 p in g": "calculation", "10e in p": "calculation", "2+2": "calculation",
     "": null, "my route": null, "inviter": null, "romi": null, "ranger": null,
   };

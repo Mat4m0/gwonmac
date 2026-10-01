@@ -154,7 +154,10 @@ Incoming bubbles align left; replies align right. Both use bright text and follo
 UI theme and wrap long text. The header names the person; each message retains
 an accessible author label. Back opens the people list. Its search is a
 combobox over a listbox of the listed people (or the suggestions while typing):
-Up and Down move the selected option and Enter opens it. Sound and cleanup are
+Up and Down move the selected option and Enter opens it. Feed updates keep the
+selected person by canonical name. Returning to the picker clears that selection.
+The listbox owns person options; headings and cleanup buttons stay outside it.
+Sound and cleanup are
 in the options menu. A local Background slider reduces only this messenger's
 broad panel and transcript paint to 15% of the selected global panel opacity;
 text and controls stay legible. The options menu uses an opaque theme surface,

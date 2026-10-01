@@ -17,8 +17,8 @@ test('Command-R opens Core Hub, keeps editing local and restores game focus', as
       contents?.sendInputEvent({ type: 'keyDown', keyCode: 'R', modifiers: ['meta'] });
       contents?.sendInputEvent({ type: 'keyUp', keyCode: 'R', modifiers: ['meta'] });
     });
-    const hub = page.getByRole('dialog', { name: 'Hub', exact: true });
-    const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+    const hub = page.getByRole('dialog', { name: /^Hub(?: — .+)?$/u });
+    const search = page.getByRole('combobox', { name: /^Search .*…$/u });
     await expect(hub).toBeVisible(); await expect(search).toBeFocused();
     // Exercise the production gw:// asset route, not only the Vite fixture.
     await expect.poll(() => hub.locator('.ui-frame-artwork').evaluate(element => {
@@ -79,7 +79,7 @@ test('Hub list navigation preserves native editing shortcuts, Unicode and compos
   try {
     await startGameInput(page);
     await page.evaluate(() => { document.getElementById('loading')?.classList.add('gone'); window.gwHub?.show(); });
-    const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+    const search = page.getByRole('combobox', { name: /^Search .*…$/u });
     const row = page.locator('.hub-row[aria-selected=true]');
     await search.fill('sw'); await search.press('ArrowDown');
     await app.evaluate(({ BrowserWindow }, url) => {
@@ -166,7 +166,7 @@ test('the trailing clicks of a closing double-click never reach the game', async
     type Recording = typeof window & { __hubPointerPresses: string[] };
     const presses = () => page.evaluate(() => [...(window as Recording).__hubPointerPresses]);
     const clearPresses = () => page.evaluate(() => { (window as Recording).__hubPointerPresses.length = 0; });
-    const hub = page.getByRole('dialog', { name: 'Hub', exact: true });
+    const hub = page.getByRole('dialog', { name: /^Hub(?: — .+)?$/u });
     const openHub = async () => {
       await app.evaluate(({ BrowserWindow }, url) => {
         const contents = BrowserWindow.getAllWindows().find(win => win.webContents.getURL() === url)?.webContents;
@@ -223,8 +223,8 @@ test('native click runs that close the Hub leave no later press for the game', a
     await expect(page.locator('#input-trace')).toBeVisible();
     const trace = () => page.evaluate(() => [...document.querySelectorAll('#input-trace li')].map(row => row.textContent ?? '').join('\n'));
     const clearTrace = () => page.evaluate(() => document.querySelector<HTMLButtonElement>('#input-trace [data-role="clear"]')?.click());
-    const hub = page.getByRole('dialog', { name: 'Hub', exact: true });
-    const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+    const hub = page.getByRole('dialog', { name: /^Hub(?: — .+)?$/u });
+    const search = page.getByRole('combobox', { name: /^Search .*…$/u });
     const send = (events: readonly Record<string, unknown>[]) => app.evaluate(({ BrowserWindow }, { url, events }) => {
       const contents = BrowserWindow.getAllWindows().find(win => win.webContents.getURL() === url)?.webContents;
       if (!contents) throw new Error('Game fixture window is missing');

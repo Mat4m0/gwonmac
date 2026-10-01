@@ -306,8 +306,10 @@ test('status owners are rendered before their first message (HUB-114)', async ({
   await expect(page.locator('.hub-settings-status')).toBeVisible();
   await page.getByRole('button', { name: 'Home', exact: true }).click();
   await search.fill('maps'); await search.press('Enter');
-  await expect(page.locator('.hub-map-status')).toBeEmpty();
-  await expect(page.locator('.hub-map-status')).toBeVisible();
+  await expect(page.locator('.hub-caption')).toHaveText('Settings');
+  await expect(page.getByRole('button', {name: 'Maps', exact: true})).toHaveAttribute('aria-current', 'true');
+  await expect(page.locator('.hub-settings-status')).toBeEmpty();
+  await expect(page.locator('.hub-settings-status')).toBeVisible();
 });
 
 

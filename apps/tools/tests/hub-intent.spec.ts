@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+const searchName = /^Search (?:people, places, builds|in .+)…$/u;
+
 test('character entry is card-first and Back restores the launching result', async ({ page }) => {
   await page.goto('/?hub');
   const search = page.locator('.hub-search input');
@@ -383,16 +385,17 @@ test.describe('Leave this area? before Travel (D-27, HUB-027)', () => {
     await page.keyboard.press('Escape');
     await expect(search).toHaveValue('kamadan');
     await expect(page.locator('.hub-row[aria-selected="true"]')).toHaveAttribute('data-id', 'place:449');
-    await expect(page.locator('.hub-status')).toBeHidden();
+    await expect(page.locator('.hub-status')).toBeEmpty();
     await search.fill('zed beta'); await search.press('Enter');
     const selected = page.locator('.hub-row[aria-selected="true"]');
-    while (!await selected.getAttribute('data-id').then(id => id === 'person:travel-invite')) await search.press('ArrowDown');
+    await search.press('End');
+    await expect(selected).toHaveAttribute('data-id', 'person:travel-invite');
     await search.press('Enter');
     await expect(question(page)).toHaveText('Leave this area and travel to Ascalon City?');
     await page.locator('#leave-area-stay').click();
     await expect(page.locator('.hub-breadcrumbs')).toHaveText('Home›Zed Beta');
     await expect(selected).toHaveAttribute('data-id', 'person:travel-invite');
-    await expect(page.locator('.hub-status')).toBeHidden();
+    await expect(page.locator('.hub-status')).toBeEmpty();
     await expect(page.locator('#app')).not.toHaveAttribute('data-action', /TRAVEL/);
   });
 });
@@ -685,7 +688,7 @@ test.describe('party invite', () => {
     // The footer keeps both slots and a key legend; a person page has no details to show.
     await expect(page.locator('.hub-actions')).toBeVisible();
     await expect(page.locator('.hub-actions')).toBeDisabled();
-    await expect(page.locator('.hub-legend')).toHaveText('↑↓ SelectEsc Back⌘⌫ Back');
+    await expect(page.locator('.hub-legend')).toHaveText('↑↓ Select⎋ Back⌘⌫ Back');
     await page.keyboard.press('ArrowDown'); await page.keyboard.press('ArrowDown');
     await expect(search).toBeFocused();
     await expect(search).toHaveAttribute('aria-activedescendant', 'hub-result-2');
@@ -897,7 +900,7 @@ test.describe('Characters: typing never switches', () => {
     await page.keyboard.press('Meta+e');
     await expect(page.locator('.hub-receipt')).toHaveText('A character switch is already running.');
     await expect(veil).toBeHidden({ timeout: 10_000 });
-    await expect(page.locator('.hub-receipt')).toHaveText('Automatic switching stopped. Continue from the Guild Wars character selector.');
+    await expect(page.locator('.hub-receipt')).toHaveText('Switch to Toefte stopped. Automatic switching stopped. Continue from the Guild Wars character selector.');
     await expect(page.locator('#app')).toHaveAttribute('data-action', 'Character toefte');
   });
 
@@ -929,7 +932,7 @@ test.describe('Characters: typing never switches', () => {
   test('a narrow Hub shows at most three cards, each at least 100 px wide', async ({ page }) => {
     await page.goto('/?hub');
     await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
-    await page.getByRole('button', { name: 'Unlock Hub position', exact: true }).click();
+    await page.getByRole('button', { name: 'Lock Hub position', exact: true }).click();
     const grip = page.getByRole('button', { name: 'Resize Hub', exact: true });
     const corner = (await grip.boundingBox())!;
     await page.mouse.move(corner.x + 10, corner.y + 10);
@@ -956,22 +959,27 @@ test.describe('Characters: typing never switches', () => {
 
   // HUB-034, HUB-075: the confirmation names the character; Stay returns to the row that asked.
   test('Leave this area names the character, and Stay returns to the search that asked', async ({ page }) => {
-    await page.goto('/?hub&lifecycle=pve-explorable');
-    const search = page.locator('.hub-search input');
-    for (const cancel of ['Stay here', 'Escape'] as const) {
-      await search.fill('char toefte'); await search.press('Enter');
-      await expect(page.locator('#character-switch-title')).toHaveText('Leave this area and switch to Toefte?');
-      const leave = page.getByRole('button', { name: 'Leave and switch to Toefte', exact: true });
-      await expect(leave).toHaveAttribute('data-variant', 'danger');
-      await expect(page.locator('#character-switch-stay')).toBeFocused();
-      await page.keyboard.press('ArrowRight');
-      await expect(leave).toBeFocused();
-      await page.keyboard.press('ArrowLeft');
-      if (cancel === 'Stay here') await page.keyboard.press('Enter'); else await page.keyboard.press('Escape');
-      await expect(page.locator('.hub-caption')).toHaveText('Home');
-      await expect(search).toHaveValue('char toefte');
-      await expect(search).toBeFocused();
-      expect(await action(page)).toBeNull();
+    for (const width of [1280, 390]) {
+      await page.setViewportSize({width, height: 700});
+      await page.goto('/?hub&lifecycle=pve-explorable');
+      const search = page.locator('.hub-search input');
+      for (const cancel of ['Stay here', 'Escape'] as const) {
+        await search.fill('char toefte'); await search.press('Enter');
+        const question = page.getByRole('heading', {name: 'Leave this area and switch to Toefte?', exact: true});
+        await expect(question).toBeVisible();
+        if (cancel === 'Stay here') await page.screenshot({path: test.info().outputPath(`character-confirm-${width}.png`)});
+        const leave = page.getByRole('button', { name: 'Leave and switch to Toefte', exact: true });
+        await expect(leave).toHaveAttribute('data-variant', 'danger');
+        await expect(page.locator('#character-switch-stay')).toBeFocused();
+        await page.keyboard.press('ArrowRight');
+        await expect(leave).toBeFocused();
+        await page.keyboard.press('ArrowLeft');
+        if (cancel === 'Stay here') await page.keyboard.press('Enter'); else await page.keyboard.press('Escape');
+        await expect(page.locator('.hub-caption')).toHaveText('Home');
+        await expect(search).toHaveValue('char toefte');
+        await expect(search).toBeFocused();
+        expect(await action(page)).toBeNull();
+      }
     }
   });
 });
@@ -1130,4 +1138,42 @@ test('pins keep each storage owner limit and preserve unresolved references whil
   await phrase.fill('my map'); await phrase.press('Enter');
   await expect(page.locator('#hub .hub-status')).toHaveText('“my map” now finds Maps.');
   expect(JSON.parse(await page.evaluate(() => localStorage.getItem('hub-fixture-shortcuts')) ?? 'null')).toEqual([{ id: 'maps', phrase: 'my map', pinned: true }, ...global.slice(1)]);
+});
+
+
+test('existing global and Travel phrases that name different places require a choice everywhere (HUB-061)', async ({page}) => {
+  await page.goto('/?hub');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  await page.keyboard.press('Meta+t');
+  await page.getByRole('button', {name: 'Customize Travel', exact: true}).click();
+  await page.getByRole('button', {name: '+ Add phrase', exact: true}).click();
+  await page.locator('#travel-new-phrase').fill('home');
+  const picker = page.locator('.travel-add-phrase details');
+  await picker.locator('summary').click();
+  await expect(picker.getByRole('combobox')).toBeFocused();
+  await picker.getByRole('combobox').fill('kamadan');
+  await picker.getByRole('option', {name: /Kamadan, Jewel of Istan/}).click();
+  await page.getByRole('button', {name: 'Save', exact: true}).click();
+  await expect(page.locator('#travel-search-input')).toHaveValue('home');
+  const stored = [{id: 'place:194', phrase: 'home', pinned: true}];
+  // Simulate an older app's separate global store arriving, without editing either phrase.
+  await page.evaluate(async stored => {await window.gwNative.settings.set({hubShortcuts: stored});}, stored);
+  await page.keyboard.press('Meta+Backspace');
+  const search = page.locator('.hub-search input');
+  for (const query of ['home', 'travel home']) {
+    await search.fill(query);
+    await expect(page.locator('.hub-row[data-id="place:194"]')).toBeVisible();
+    await expect(page.locator('.hub-row[data-id="place:449"]')).toBeVisible();
+    await expect(page.locator('.hub-row[aria-selected=true]')).toHaveCount(0);
+    await search.press('Enter');
+    await expect(page.locator('.hub-caption')).toHaveText('Home');
+    expect(await page.locator('#app').getAttribute('data-action')).toBeNull();
+  }
+  await page.keyboard.press('Meta+t');
+  const destination = page.locator('#travel-search-input');
+  await destination.fill('home');
+  await expect(destination).not.toHaveAttribute('aria-activedescendant', /.+/);
+  await destination.press('Enter');
+  expect(await page.locator('#app').getAttribute('data-action')).toBeNull();
+  expect(JSON.parse(await page.evaluate(() => localStorage.getItem('hub-fixture-shortcuts')) ?? 'null')).toEqual(stored);
 });

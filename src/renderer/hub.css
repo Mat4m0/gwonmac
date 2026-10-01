@@ -400,7 +400,7 @@
 .hub-build-compact > .hub-professions { grid-row:1; height:28px; }
 .hub-build-compact > .hub-build-info { display:none; }
 .hub-context { padding-left:var(--ui-space-2); border-left:1px solid var(--ui-line-soft); }
-.hub-view .character-switch-head h2 { display:none; }
+.hub-view .character-switch-head h2.ui-sr-only { display:none; }
 .hub-settings .ui-button { width:auto; }
 .hub-settings nav .ui-button { position:relative; border:0; box-shadow:none; background:transparent; }
 .hub-settings nav .ui-button[aria-current=true] { background:var(--ui-selection-fill); box-shadow:var(--ui-shadow-selected); color:var(--ui-selection-ink); }

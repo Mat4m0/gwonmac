@@ -3,11 +3,11 @@
  * Keeps presentation separate from canonical game and storage owners.
  */
 import { HUB_SCOPES, normaliseHubQuery } from './hub.js';
-import { calculate, parseConversion } from './hub-calculator.js';
+import { CURRENCY_ALIASES, calculate, parseConversion } from './hub-calculator.js';
 /** First words that Hub's query grammar owns. */
 export const HUB_RESERVED_WORDS: readonly string[] = [...HUB_SCOPES, 'settings', 'hub', 'commands', 'help', 'titles', 'rates', 'launcher'];
 /** Whole phrases that the calculator reads as a unit. */
-export const HUB_CALCULATOR_UNITS: readonly string[] = ['g', 'gold', 'p', 'plat', 'platinum', 'e', 'ecto', 'ectos', 'ectoplasm'];
+export const HUB_CALCULATOR_UNITS: readonly string[] = Object.keys(CURRENCY_ALIASES);
 /**
  * What the query grammar reads a phrase as before any saved phrase: a command word first, a
  * calculator unit, or a calculation. Editing rejects these phrases; readers preserve stored

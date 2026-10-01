@@ -2,6 +2,7 @@
  * Owns lazy optional Travel presentation inside the Core Hub surface.
  * The existing Travel host remains the command and preference owner.
  */
+import { TOOL_PRESENTATION } from '../shared/tool-presentation.js';
 import { currentTravelFriend, type TravelFriend, type TravelFriends } from '../shared/friends.js';
 import type { TravelCommand, TravelGameState } from '../shared/travel-command.js';
 import type { EmbeddedToolsBundle } from '../shared/tools-bundle-contracts.js';
@@ -78,7 +79,7 @@ export function createTravelPalette(parent: HTMLElement, command: TravelCommand)
     }, () => !disposed && toolOn(), 'travel');
   }
   /** Travel's row until the lazy bundle loads; a pin shows the same row search shows (HUB-177). */
-  const toolRow = (): HubRow => ({ ...(command.unavailable() ? { unavailable: command.unavailable()! } : {}), id: 'travel', title: 'Travel', detail: 'Outposts, favourites and recent places', group: 'Tools', keywords: 'tp teleport destination', action: 'Browse travel', navigate: open, run: open });
+  const toolRow = (): HubRow => { const unavailable = command.unavailable(); return ({ ...(unavailable ? { unavailable } : {}), id: 'travel', title: TOOL_PRESENTATION['quick-travel'].label, detail: 'Outposts, favourites and recent places', group: 'Tools', keywords: 'tp teleport destination', action: 'Browse travel', navigate: open, run: open }); };
   const source: HubSource = {
     feature: 'travelPalette',
     lookup: id => app ? app.source.lookup?.(id) : id === 'travel' ? toolRow() : undefined,

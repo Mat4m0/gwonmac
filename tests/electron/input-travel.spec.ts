@@ -58,7 +58,7 @@ test.describe("renderer Travel input", () => {
         installation.poll();
       });
 
-      await expect(page.getByRole("dialog", { name: "Hub", exact: true })).toBeVisible();
+      await expect(page.getByRole("dialog", { name: /^Hub(?: — .+)?$/u })).toBeVisible();
     } finally {
       await closeOffline(fixture);
     }
@@ -92,7 +92,7 @@ test.describe("renderer Travel input", () => {
       });
 
       const canvas = page.locator("#canvas");
-      const palette = page.getByRole("dialog", { name: "Hub", exact: true });
+      const palette = page.getByRole("dialog", { name: /^Hub(?: — .+)?$/u });
       const search = page.getByRole("combobox", {
         name: "Destination, phrase, or friend",
       });

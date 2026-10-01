@@ -52,7 +52,7 @@ test.describe('shortcuts through commands.ts', () => {
   // HUB-172: a direct shortcut for the page on top focuses it; it never stacks history or closes the Hub.
   test('Command-T on Travel keeps Travel and its search, the way the renderer command does', async ({ page }) => {
     await open(page);
-    const hub = page.getByRole('dialog', { name: 'Hub', exact: true });
+    const hub = page.getByRole('dialog', { name: /^Hub(?: — .+)?$/u });
     await page.keyboard.press('Meta+t');
     await expect(page.locator('.hub-caption')).toHaveText('Travel');
     await page.getByRole('button', { name: 'Back', exact: true }).focus();
@@ -80,7 +80,7 @@ test.describe('shortcuts through commands.ts', () => {
 
   test('a held Command-R toggles once and its repeats never reach the page', async ({ page }) => {
     await open(page);
-    const hub = page.getByRole('dialog', { name: 'Hub', exact: true });
+    const hub = page.getByRole('dialog', { name: /^Hub(?: — .+)?$/u });
     await page.keyboard.press('Escape');
     await expect(hub).toBeHidden();
     await page.evaluate(() => window.gwFixtureCanvas?.clear());

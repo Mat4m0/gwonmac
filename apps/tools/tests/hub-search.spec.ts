@@ -25,7 +25,7 @@ const answers: [query: string, primary: RegExp, finding: string][] = [
   ['trader prices', /^Open Trade Chat/, 'HUB-224: trader finds Trade Chat'],
   ['rate', /^Choose rates/, 'HUB-063: the rates editor by its word'],
   ['title', /^Open calculator/, 'HUB-063: the title calculator by its word'],
-  ['10 ecto', /^Add a target/, 'HUB-102: a conversion without its target completes, runs nothing'],
+  ['10 ecto', /^Copy 60 platinum/, 'HUB-102: a conversion without its target uses the labelled default, runs nothing'],
 ];
 
 test('a typed search selects its best answer', async ({ page }) => {

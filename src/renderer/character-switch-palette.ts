@@ -318,7 +318,8 @@ export function createCharacterSwitchPalette(
     // only inside the closed palette; the next opening starts on the attempted card (HUB-035).
     if (!busy() && withdrawnForSwitch && view.kind === "closed" && source.action.status === "failed") {
       attemptedKey = requestedKey;
-      hub.notify(failureMessage(source.action.code), "failed");
+      const name = source.characters.status === "ready" ? source.characters.characters.find(character => character.characterKey === requestedKey)?.name : undefined;
+      hub.notify(`Switch to ${name ?? "your character"} stopped. ${failureMessage(source.action.code)}`, "failed");
     }
     if (!busy()) withdrawnForSwitch = false;
     else if (!withdrawnForSwitch) {
@@ -354,6 +355,7 @@ export function createCharacterSwitchPalette(
       const selectedKey = rows[selected]?.character.characterKey;
       const orderedRows = characterRows(state.characters);
       list.setAttribute("role", "listbox");
+      list.setAttribute("aria-orientation", "horizontal");
       rows = searchCharacters(orderedRows, query);
       const preserved = selectedKey === undefined
         ? -1
@@ -547,7 +549,7 @@ export function createCharacterSwitchPalette(
    */
   const openPalette = (characterKey?: string) => {
     if (source.action.status === "switching") return;
-    if (source.action.status === "complete") source.reset();
+    if (source.action.status === "complete" || (source.action.status === "failed" && attemptedKey !== undefined)) source.reset();
     query = "";
     queryInput.value = "";
     preferenceFailure = false;

@@ -28,7 +28,9 @@ test('consecutive Escapes pop one level each and never close the Hub early (HUB-
   }
   // Three Build Library levels deep, then one Escape per level back to Home (KEY-09).
   await hubSearch(page).fill('build library');
-  await page.keyboard.press('Enter'); await page.keyboard.press('Enter'); await page.keyboard.press('Enter');
+  await page.keyboard.press('Enter');
+  await page.locator('.hub-row[data-id="game-templates"]').click();
+  await page.keyboard.press('Enter');
   await expect(page.locator('.hub-breadcrumbs')).toHaveText('Home›Build Library›Guild Wars templates›Mesmer');
   await page.keyboard.press('Escape'); await page.keyboard.press('Escape'); await page.keyboard.press('Escape');
   await expect(page.locator('.hub-breadcrumbs')).toHaveText('Home');
@@ -61,7 +63,7 @@ test('Escape on a page its shortcut opened clears the query, then closes without
   const travel = page.getByRole('combobox', { name: 'Destination, phrase, or friend' });
   await expect(travel).toBeFocused();
   // The hint names what Esc does here, and ⌘⌫ still has the real Home to return to.
-  await expect(page.locator('.hub-legend')).toContainText('Esc Close');
+  await expect(page.locator('.hub-legend')).toContainText('⎋ Close');
   await travel.fill('kam');
   // A held Escape clears the query and stops there: one step per physical press.
   await page.evaluate(() => window.gwFixtureCanvas?.clear());
@@ -74,12 +76,12 @@ test('Escape on a page its shortcut opened clears the query, then closes without
   expect(await canvasKeys(page)).toBe(0);
   // ⌘⌫ there returns to the real Home instead, and the Characters hint names each Esc step.
   await page.keyboard.press('Meta+e');
-  const hints = page.locator('.character-switch-list-hints');
-  await expect(hints).toContainText('esc close ⌘⌫ back');
+  const hints = page.locator('.hub-legend');
+  await expect(hints).toContainText('⎋ Close⌘⌫ Back');
   await page.keyboard.press('Meta+Backspace');
   await expect(page.locator('.hub-caption')).toHaveText('Home');
   await hubSearch(page).fill('switch character'); await page.keyboard.press('Enter');
-  await expect(hints).toContainText('esc back');
+  await expect(hints).toContainText('⎋ Back');
 });
 
 test('list stages keep focus in search: ↓ moves one selection, Tab never lands on the list, ↓ steps from a hovered row (HUB-045, HUB-047)', async ({ page }) => {
@@ -194,8 +196,6 @@ test('Characters: search leads the Tab order, the cards are one roving Tab stop,
   for (let press = 0; press < 6 && !(await card.evaluate(element => element === document.activeElement)); press++) await page.keyboard.press('Tab');
   await expect(card).toBeFocused();
   await expect(card).toHaveAttribute('data-character-key', chosen!);
-  await expect(page.locator('.character-switch-list-hints')).toContainText('↑ search');
-  await expect(page.locator('.character-switch-list-hints')).not.toContainText('Back');
 });
 
 test('typing and ⌫ on a view\'s buttons and the header edit that view\'s search (HUB-046)', async ({ page }) => {
@@ -239,7 +239,7 @@ test('Characters: Escape during composition keeps the query (HUB-140)', async ({
   await page.keyboard.type('toe');
   const query = page.locator('#character-switch-query');
   await expect(query).toHaveValue('toe');
-  await expect(page.locator('.character-switch-list-hints')).toContainText('esc clear');
+  await expect(page.locator('.hub-legend')).toContainText('⎋ Clear');
   await query.evaluate(element => element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', isComposing: true, bubbles: true, cancelable: true })));
   await expect(query).toHaveValue('toe');
   await expect(page.locator('.hub-caption')).toHaveText('Characters');
@@ -371,9 +371,14 @@ test('Whispers: Escape clears the picker text first, ↓ walks the people, ⌘�
   // The empty picker's hint promises ↑ ↓: they walk the listed people and Enter opens one.
   await expect(page.locator('.whisper-hints')).toContainText('↑ ↓ choose');
   // The walk is announced: the combobox is expanded over a listbox of options, and the chosen one is selected.
-  const people = page.getByRole('listbox', { name: 'People' }).getByRole('option');
+  const people = page.locator('#whisper-people').getByRole('option');
   await expect(people).toHaveCount(6);
-  await expect(picker).toHaveAttribute('aria-controls', 'whisper-people');
+  await expect(page.getByRole('listbox', {name: 'People'})).toHaveAttribute('aria-owns', 'whisper-pick-0 whisper-pick-1 whisper-pick-2 whisper-pick-3 whisper-pick-4 whisper-pick-5');
+  const peopleTree = await page.getByRole('listbox', {name: 'People'}).ariaSnapshot();
+  expect(peopleTree.match(/- option /gu)).toHaveLength(6);
+  expect(peopleTree).not.toMatch(/- (?:heading|button) /u);
+  expect(await people.evaluateAll(options => options.every(option => option.getAttribute('tabindex') === '-1'))).toBe(true);
+  await expect(picker).toHaveAttribute('aria-controls', 'whisper-people-options');
   await expect(picker).toHaveAttribute('aria-expanded', 'true');
   await expect(page.locator('#whisper-pick-0')).toContainText('Romi Ranger');
   await expect(page.locator('#whisper-pick-1')).toContainText('Zed Alpha');

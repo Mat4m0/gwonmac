@@ -120,8 +120,8 @@ async function installReadyTravel(page: Page) {
 }
 const trips = (page: Page) => page.evaluate(() => [...(window as RecordingWindow).__hubContractTrips ?? []]);
 
-const hubOf = (page: Page) => page.getByRole('dialog', { name: 'Hub', exact: true });
-const searchOf = (page: Page) => page.getByRole('combobox', { name: 'Search people, places, builds' });
+const hubOf = (page: Page) => page.getByRole('dialog', { name: /^Hub(?: — .+)?$/u });
+const searchOf = (page: Page) => page.getByRole('combobox', { name: /^Search .*…$/u });
 
 test('Command-R and typed search stay in the Hub, and the game gets the next key after it closes', async () => {
   const fixture = await launch();
@@ -142,7 +142,7 @@ test('Command-R and typed search stay in the Hub, and the game gets the next key
   } finally { await closeOffline(fixture); }
 });
 
-test('the Command-R that closes the Hub keeps its release out of the game', async () => {
+test('Command-R returns an open Hub to Home and keeps its press out of the game', async () => {
   const fixture = await launch();
   try {
     const { page } = fixture;
@@ -151,11 +151,18 @@ test('the Command-R that closes the Hub keeps its release out of the game', asyn
     await expect(hub).toBeVisible();
     await searchOf(page).fill('kam');
     await clearCanvasKeys(page);
-    // Hold Command-R: the Hub closes and the game gets focus back before R is released.
+    // Command-R returns to Home; its repeat and release stay owned by that press.
     await sendKey(fixture, 'keyDown', 'R', ['meta']);
-    await expect(hub).toBeHidden();
-    await expect.poll(() => isDomActiveElement(page.locator('#canvas'))).toBe(true);
+    await expect(hub).toBeVisible();
+    await expect(hub.locator('.hub-caption')).toHaveText('Home');
+    await expect(searchOf(page)).toHaveValue('kam');
+    await sendKey(fixture, 'keyDown', 'R', ['meta', 'isautorepeat']);
     await sendKey(fixture, 'keyUp', 'R', ['meta']);
+    await page.keyboard.press('w');
+    await expect(searchOf(page)).toHaveValue('w');
+    expect(await canvasKeys(page)).toEqual([]);
+    await page.keyboard.press('Escape'); await page.keyboard.press('Escape');
+    await expect(hub).toBeHidden();
     await page.keyboard.press('w');
     // The release belongs to the claimed press; the next key belongs to the game.
     expect(await canvasKeys(page)).toEqual(['keydown:KeyW', 'keyup:KeyW']);
@@ -592,8 +599,8 @@ test('a held Enter at character selection never becomes a fresh Enter', async ()
   } finally { await closeOffline(fixture); }
 });
 
-// HUB-037: a shortcut whose tool is off still hands its base letter to the game.
-test.fixme('a disabled tool shortcut never hands its letter to the game', async () => {
+// HUB-037: native claiming keeps a disabled tool's chord out of game input.
+test('a disabled tool shortcut never hands its letter to the game', async () => {
   const fixture = await launch({ xunlaiStorage: false });
   try {
     await chord(fixture, 'S', ['meta']);

@@ -35,7 +35,7 @@ const windowStyle = computed(() => ({
   "--whisper-background-percent": `${state.value.backgroundOpacity}%`,
 }));
 const search = ref("");
-const suggestionIndex = ref(-1);
+const selectedPerson = ref<string | null>(null);
 const suggestFriends = computed(() => state.value.suggest.friends);
 const suggestChat = computed(() => state.value.suggest.chat);
 const pickerError = ref("");
@@ -65,7 +65,7 @@ function stepBack(event: KeyboardEvent) {
 }
 function showPicker() {
   if (optionsMenu.value) optionsMenu.value.open = false;
-  search.value = "";
+  search.value = ""; suggestionIndex.value = -1;
   props.session.showPicker();
   void nextTick(() => document.getElementById("whisper-person")?.focus());
 }
@@ -129,6 +129,14 @@ const suggestions = computed(() => findPeople(state.value, search.value).slice(0
 const pickerPeople = computed(() => [...continuedConversations.value.map(c => c.name),
   ...friends.value.map(friend => friend.character || friend.alias), ...recent.value.map(person => person.name)]);
 const pickerOptions = computed(() => search.value.trim() ? suggestions.value.map(person => person.name) : pickerPeople.value);
+/** Feed updates may reorder people; the chosen name keeps its identity, never its position. */
+const suggestionIndex = computed({
+  get: () => selectedPerson.value === null ? -1 : pickerOptions.value.findIndex(name => whisperPersonKey(name) === selectedPerson.value),
+  set: index => {selectedPerson.value = pickerOptions.value[index] === undefined ? null : whisperPersonKey(pickerOptions.value[index]);},
+});
+watch(pickerOptions, options => {
+  if (selectedPerson.value !== null && !options.some(name => whisperPersonKey(name) === selectedPerson.value)) selectedPerson.value = null;
+});
 const pickerOptionId = (index: number) => search.value.trim() ? `whisper-suggestion-${index}` : `whisper-pick-${index}`;
 const maxLength = computed(() => Math.min(WHISPER_MESSAGE_UNITS, WHISPER_LINE_UNITS - (selected.value?.name.length ?? 0) - 2));
 function open(name: string) {
@@ -400,7 +408,7 @@ useClassicFrame(panel);
     </header>
     <div class="whisper-layout">
     <div v-show="!selected" class="ui-scroll whisper-picker" :data-searching="Boolean(search.trim())">
-      <form class="ui-input-group whisper-search" @submit.prevent="submitSearch"><label class="whisper-sr-only" for="whisper-person">Character name</label><input id="whisper-person" v-model="search" placeholder="Find a friend…" autocomplete="off" role="combobox" aria-autocomplete="list" :aria-controls="search.trim() ? 'whisper-suggestions' : 'whisper-people'" :aria-expanded="pickerOptions.length > 0" :aria-activedescendant="suggestionIndex >= 0 && pickerOptions[suggestionIndex] !== undefined ? pickerOptionId(suggestionIndex) : undefined" @input="searchInput" @keydown="searchKeydown"/><button data-variant="primary" class="ui-button whisper-control" type="submit" :disabled="!search.trim()" aria-label="Whisper"><span class="whisper-compose-label">Whisper</span><svg class="whisper-compose-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5 4 4M4 20l4-1L21 6l-4-4L4 15v5Zm7-16H4v7"/></svg></button></form>
+      <form class="ui-input-group whisper-search" @submit.prevent="submitSearch"><label class="whisper-sr-only" for="whisper-person">Character name</label><input id="whisper-person" v-model="search" placeholder="Find a friend…" autocomplete="off" role="combobox" aria-autocomplete="list" :aria-controls="search.trim() ? 'whisper-suggestions' : 'whisper-people-options'" :aria-expanded="pickerOptions.length > 0" :aria-activedescendant="suggestionIndex >= 0 && pickerOptions[suggestionIndex] !== undefined ? pickerOptionId(suggestionIndex) : undefined" @input="searchInput" @keydown="searchKeydown"/><button data-variant="primary" class="ui-button whisper-control" type="submit" :disabled="!search.trim()" aria-label="Whisper"><span class="whisper-compose-label">Whisper</span><svg class="whisper-compose-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5 4 4M4 20l4-1L21 6l-4-4L4 15v5Zm7-16H4v7"/></svg></button></form>
       <p v-if="pickerError" class="whisper-notice" role="alert">{{ pickerError }}</p>
       <div class="whisper-source-filters" role="group" aria-label="Suggestion sources">
         <span>Suggest from</span>
@@ -409,17 +417,18 @@ useClassicFrame(panel);
       </div>
       <template v-if="search.trim()">
         <div v-if="suggestions.length" id="whisper-suggestions" role="listbox" aria-label="Character suggestions">
-          <button v-for="(person, index) in suggestions" :id="`whisper-suggestion-${index}`" :key="person.key" data-variant="quiet" class="ui-button whisper-control whisper-person-open whisper-suggestion" role="option" :aria-selected="suggestionIndex === index" @click="open(person.name)"><span class="whisper-person-main"><span class="whisper-avatar" aria-hidden="true">{{ initials(person.name) }}</span><span v-if="person.source === 'friend' && friendFor(person.name)" class="whisper-presence" :data-presence="friendFor(person.name)!.status"/><strong>{{ person.name }}</strong></span><small>{{ person.detail }}</small></button>
+          <button v-for="(person, index) in suggestions" :id="`whisper-suggestion-${index}`" :key="person.key" data-variant="quiet" class="ui-button whisper-control whisper-person-open whisper-suggestion" role="option" tabindex="-1" :aria-selected="suggestionIndex === index" @click="open(person.name)"><span class="whisper-person-main"><span class="whisper-avatar" aria-hidden="true">{{ initials(person.name) }}</span><span v-if="person.source === 'friend' && friendFor(person.name)" class="whisper-presence" :data-presence="friendFor(person.name)!.status"/><strong>{{ person.name }}</strong></span><small>{{ person.detail }}</small></button>
         </div>
         <p v-else class="whisper-empty">{{ !suggestFriends && !suggestChat ? 'Suggestions are off.' : 'No matching friends or chat names.' }} Press Whisper to use this exact name.</p>
         <p v-if="suggestions.length" class="whisper-completion-hint">↑↓ choose · Tab completes</p>
       </template>
       <template v-else>
-      <div id="whisper-people" class="whisper-people-grid" role="listbox" aria-label="People">
+      <div id="whisper-people-options" class="ui-sr-only" role="listbox" aria-label="People" :aria-owns="pickerPeople.map((_, index) => `whisper-pick-${index}`).join(' ')"></div>
+      <div id="whisper-people" class="whisper-people-grid">
       <template v-if="continuedConversations.length">
         <h3>Conversations</h3>
         <div v-for="(conversation, index) in continuedConversations" :key="conversation.key" class="whisper-person" :data-unread="whisperUnread(conversation) ? '' : undefined" :data-active="selected?.key === conversation.key">
-          <button :id="`whisper-pick-${index}`" data-variant="quiet" class="ui-button whisper-control whisper-person-open" role="option" :aria-selected="suggestionIndex === index" :data-highlighted="suggestionIndex === index || undefined" @click="open(conversation.name)"><span class="whisper-person-main"><span class="whisper-avatar" aria-hidden="true">{{ initials(conversation.name) }}</span><span v-if="friendFor(conversation.name)" class="whisper-presence" :data-presence="friendFor(conversation.name)!.status" /><span class="whisper-person-copy"><strong>{{ conversation.name }}</strong><small :data-draft="Boolean(conversation.draft)">{{ conversation.draft ? 'Draft: ' + conversation.draft : conversation.messages.at(-1)?.message || 'No messages yet' }}</small></span></span><span v-if="whisperUnread(conversation)" class="whisper-count">{{ whisperUnread(conversation) }}</span></button>
+          <button :id="`whisper-pick-${index}`" data-variant="quiet" class="ui-button whisper-control whisper-person-open" role="option" tabindex="-1" :aria-selected="suggestionIndex === index" :data-highlighted="suggestionIndex === index || undefined" @click="open(conversation.name)"><span class="whisper-person-main"><span class="whisper-avatar" aria-hidden="true">{{ initials(conversation.name) }}</span><span v-if="friendFor(conversation.name)" class="whisper-presence" :data-presence="friendFor(conversation.name)!.status" /><span class="whisper-person-copy"><strong>{{ conversation.name }}</strong><small :data-draft="Boolean(conversation.draft)">{{ conversation.draft ? 'Draft: ' + conversation.draft : conversation.messages.at(-1)?.message || 'No messages yet' }}</small></span></span><span v-if="whisperUnread(conversation)" class="whisper-count">{{ whisperUnread(conversation) }}</span></button>
           <button data-variant="quiet" class="ui-button whisper-control whisper-icon" :aria-label="`Close conversation with ${conversation.name}`" :disabled="conversation.sending" @click="close(conversation.key)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button>
         </div>
       </template>
@@ -427,11 +436,11 @@ useClassicFrame(panel);
       <h3>Available friends</h3>
       <p v-if="state.friends.status !== 'ready'" class="whisper-empty">Friends are unavailable.</p>
       <p v-else-if="!friends.length" class="whisper-empty">Friends who are online appear here.</p>
-      <button v-for="(friend, index) in friends" :id="`whisper-pick-${continuedConversations.length + index}`" :key="friend.key" data-variant="quiet" class="ui-button whisper-control whisper-person-open" role="option" :aria-selected="suggestionIndex === continuedConversations.length + index" :data-highlighted="suggestionIndex === continuedConversations.length + index || undefined" @click="open(friend.character || friend.alias)"><span class="whisper-person-main"><span class="whisper-avatar" aria-hidden="true">{{ initials(friend.character || friend.alias) }}</span><span class="whisper-presence" :data-presence="friend.status" /><span class="whisper-person-copy"><strong>{{ friend.character || friend.alias }}</strong><small v-if="friend.character && friend.alias !== friend.character">{{ friend.alias }}</small></span></span><small class="whisper-status-copy">{{ presenceLabel(friend.status) }}</small></button>
+      <button v-for="(friend, index) in friends" :id="`whisper-pick-${continuedConversations.length + index}`" :key="friend.key" data-variant="quiet" class="ui-button whisper-control whisper-person-open" role="option" tabindex="-1" :aria-selected="suggestionIndex === continuedConversations.length + index" :data-highlighted="suggestionIndex === continuedConversations.length + index || undefined" @click="open(friend.character || friend.alias)"><span class="whisper-person-main"><span class="whisper-avatar" aria-hidden="true">{{ initials(friend.character || friend.alias) }}</span><span class="whisper-presence" :data-presence="friend.status" /><span class="whisper-person-copy"><strong>{{ friend.character || friend.alias }}</strong><small v-if="friend.character && friend.alias !== friend.character">{{ friend.alias }}</small></span></span><small class="whisper-status-copy">{{ presenceLabel(friend.status) }}</small></button>
       </template>
       <template v-if="recent.length">
         <h3>Recent people</h3>
-        <div v-for="(person, index) in recent" :key="person.key" class="whisper-person whisper-recent"><button :id="`whisper-pick-${continuedConversations.length + friends.length + index}`" data-variant="quiet" class="ui-button whisper-control whisper-person-open" role="option" :aria-selected="suggestionIndex === continuedConversations.length + friends.length + index" :data-highlighted="suggestionIndex === continuedConversations.length + friends.length + index || undefined" @click="open(person.name)">{{ person.name }}</button><button data-variant="quiet" class="ui-button whisper-control whisper-icon" :aria-label="`Remove ${person.name} from recent people`" @click="session.removeRecent(person.key)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button></div>
+        <div v-for="(person, index) in recent" :key="person.key" class="whisper-person whisper-recent"><button :id="`whisper-pick-${continuedConversations.length + friends.length + index}`" data-variant="quiet" class="ui-button whisper-control whisper-person-open" role="option" tabindex="-1" :aria-selected="suggestionIndex === continuedConversations.length + friends.length + index" :data-highlighted="suggestionIndex === continuedConversations.length + friends.length + index || undefined" @click="open(person.name)">{{ person.name }}</button><button data-variant="quiet" class="ui-button whisper-control whisper-icon" :aria-label="`Remove ${person.name} from recent people`" @click="session.removeRecent(person.key)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button></div>
       </template>
       </div>
       </template>

@@ -10,6 +10,8 @@ export type HubRow = Readonly<{
   group: string;
   keywords?: string;
   aliases?: readonly string[];
+  /** This query exactly names a stored phrase; multiple phrase owners require a choice. */
+  exactPhrase?: boolean;
   /** A domain-specific matcher shared by global search and scoped browsing. */
   matches?(query: string): boolean;
   action: string;
@@ -134,11 +136,11 @@ export function matchHubRows(rows: readonly HubRow[], query: string, ordered = f
 export type HubSummary = Readonly<Pick<HubRow, 'title' | 'detail' | 'skills' | 'attributes' | 'professions' | 'attributeStatus' | 'folder' | 'workspace'> & { label: string }>;
 
 /** One footer action of a mounted view. `armed` holds a destructive primary until it has armed (~400 ms). */
-export type HubViewAction = Readonly<{ label: string; run(task: HubTask): void | Promise<void>; disabled?: boolean; destructive?: boolean; armed?: boolean }>;
+export type HubViewAction = Readonly<{ label: string; run(task: HubTask): void | Promise<void>; disabled?: boolean; running?: boolean; destructive?: boolean; armed?: boolean }>;
 /**
  * The Hub footer stays in every view and names what Enter does there. A view sets its named
  * primary (Enter outside a control) and a secondary in Actions (⌘J); without one the primary reads "Done" and goes
- * back. Travel and Characters keep their own footer and say so with `own()`.
+ * back. Every mounted view uses this same footer owner.
  * A view can open that same menu for its selected item through openActions().
  */
 export type HubViewFooter = Readonly<{ primary(action: HubViewAction | null): void; secondary(action: HubViewAction | null): void; openActions(): void; own(): void }>;
@@ -152,8 +154,10 @@ export type HubDestination = 'travel' | 'characters' | 'builds' | 'settings' | '
 
 export interface HubPresenter<Target> {
   close(): void;
-  /** A named outcome with no running task behind it; a failure also waits in the status line of the next opening. */
-  notify(message: string, outcome?: 'failed'): void;
+  /** A named outcome outside a running task. A closed-Hub failure survives within the resume window; cleared withdraws only its matching outcome. */
+  notify(message: string, outcome?: 'failed' | 'cleared'): void;
+  /** An inner page change invalidates the current pointer click run. */
+  pageChanged?(): void;
   attach(source: HubSource): () => void;
   /** An optional owner binds navigation lifetime to the one attached source, without storing another availability flag. */
   showRows(title: string, rows: () => readonly HubRow[], summary?: HubSummary, destination?: HubDestination, owner?: HubSource, query?: string): void;

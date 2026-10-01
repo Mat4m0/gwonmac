@@ -329,6 +329,7 @@ test.describe("renderer Tools input", () => {
       await page.evaluate(() => window.dispatchEvent(new CustomEvent('gw:trade-toggle', { cancelable: true, detail: 'show' })));
       await expect(trade).toBeVisible();
       await expect(trade).toHaveAttribute('data-active', 'true');
+      await expect.poll(() => isDomActiveElement(page.getByLabel('Trade field'))).toBe(true);
       await page.keyboard.press("Escape");
       await expect(trade).toBeHidden();
       await expect(tool).toBeVisible();
