@@ -85,15 +85,11 @@ test('Travel and invite never invites after a refused trip, a character change o
 
 test('Invite is unavailable for a friend in another map and names where they are', () => {
   const h = harness();
-  assert.equal(h.party.unavailable(friend), 'Mo Kaiser is in Kamadan, Jewel of Istan. Use Travel and invite.');
-  assert.equal(h.party.unavailable({ ...friend, mapId: 55 }), null);
+  assert.equal(h.party.unavailable(friend, true), 'Mo Kaiser is in Kamadan, Jewel of Istan. Use Travel and invite.');
+  assert.equal(h.party.unavailable(friend), 'Mo Kaiser is in Kamadan, Jewel of Istan.', 'only the caller knows whether Travel and invite is offered');
+  assert.equal(h.party.unavailable({ ...friend, mapId: 55 }, true), null);
   assert.equal(h.party.unavailable(), null, 'a name without a known map is not refused');
-});
-
-test('Invite points to Travel and invite only where Travel and invite can start', () => {
-  const h = harness();
   assert.equal(h.party.unavailable({ ...friend, mapId: 0 }), 'Mo Kaiser is in another map.', 'an explorable area is no travel destination');
-  assert.equal(h.party.unavailable({ ...friend, mapId: 188 }), 'Mo Kaiser is in Random Arenas.', 'Travel and invite refuses a PvP outpost');
   assert.equal(h.party.travelUnavailable({ ...friend, mapId: 188 }), 'Invites from Hub need a PvE outpost');
 });
 

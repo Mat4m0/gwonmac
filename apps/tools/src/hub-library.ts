@@ -295,7 +295,8 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
     search(query) {
       const parsed = parseHubQuery(query);
       if (parsed.scope && parsed.scope !== 'team' && parsed.scope !== 'build') return [];
-      if (!parsed.term || ['build', 'builds', 'build library', 'templates'].includes(query.trim().toLowerCase())) return [libraryRow(), ...(!query.trim() ? controller.recentBuilds.value.flatMap(recent => { const item = all().find((item): item is Item & { kind: 'build' } => item.kind === 'build' && item.value.id === recent.id); return item ? [{ ...buildRow(item), id: `recent:${recent.id}:${recent.hero ?? 'me'}`, detail: `Recently applied to ${targetName(recent.hero)}`, group: 'Continue', run: () => chooseBuild(item, recent.hero), navigate: () => chooseBuild(item, recent.hero) }] : []; }) : templateStates())];
+      // `team ` lists every team; the build scope and library words open the library instead.
+      if ((!parsed.term && parsed.scope !== 'team') || ['build', 'builds', 'build library', 'templates'].includes(query.trim().toLowerCase())) return [libraryRow(), ...(!query.trim() ? controller.recentBuilds.value.flatMap(recent => { const item = all().find((item): item is Item & { kind: 'build' } => item.kind === 'build' && item.value.id === recent.id); return item ? [{ ...buildRow(item), id: `recent:${recent.id}:${recent.hero ?? 'me'}`, detail: `Recently applied to ${targetName(recent.hero)}`, group: 'Continue', run: () => chooseBuild(item, recent.hero), navigate: () => chooseBuild(item, recent.hero) }] : []; }) : templateStates())];
       const matches = all().filter(item => (!parsed.scope || item.kind === parsed.scope)
         && (item.kind === 'build' ? matchesBuild(item.value, query) : hubMatch(item.value.name, parsed.term, item.value.tags) !== null));
       const exacts = matches.filter(item => hubMatch(item.value.name, parsed.term) === 'exact');

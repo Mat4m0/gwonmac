@@ -89,9 +89,10 @@ Wars reports acceptance or refusal in original chat.
 
 `party-invite.ts` allows an invite only in a PvE outpost with the chat mailbox
 enabled. A friend in another map cannot receive it, so the row says where the
-friend is before Enter. It points to Travel and invite only when the friend is
-in a PvE travel destination; an explorable area or PvP outpost gets no pointer
-to a row that cannot start. Travel and invite
+friend is before Enter. The caller decides whether it points to Travel and
+invite: `hub-people.ts` adds the pointer only where it shows that row and the
+row can start, so a hidden Travel palette, an unavailable Travel, an
+explorable area or a PvP outpost gets no pointer. Travel and invite
 refuses a known PvP outpost up front. It captures the character, starts the
 existing friend Travel, and invites once after a ready PvE outpost of the
 friend's map stays ready for two seconds. The first outpost after login can
@@ -106,6 +107,8 @@ invite; a non-PvE arrival withdraws it at once. Disposing Tools withdraws a
 pending arrival. The friend feed has no district, so an arrival in another
 district can fail in Guild Wars.
 
+`invite ` with an empty name lists the online friends, those invitable from
+here first, each as an exact invite by character name.
 In the `invite` scope only an exact name invites: the exact typed name or an
 exact known person comes first, and the footer names the target, such as
 **Invite Mo Kai**. A prefix or "Seen in chat" match opens the person page.

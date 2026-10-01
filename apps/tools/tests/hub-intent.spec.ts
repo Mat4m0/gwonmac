@@ -145,7 +145,7 @@ test('a legacy phrase that is now a scope word keeps its pins and only stops mat
   await expect(page.locator('.hub-row').nth(0)).toContainText('Whispers');
   await expect(page.locator('.hub-row').nth(1)).toContainText('Travel');
   await search.pressSequentially('invite ');
-  await expect(page.locator('.hub-hint')).toContainText('invite Romi');
+  await expect(page.locator('.hub-scope')).toHaveText('invite');
   await expect(page.locator('.hub-row[data-id="whispers"]')).toHaveCount(0);
   await page.getByRole('button', { name: 'Close Hub', exact: true }).click();
   expect(await page.evaluate(() => localStorage.getItem('hub-fixture-shortcuts'))).toBe(legacy);
@@ -194,6 +194,22 @@ test.describe('party invite', () => {
     await search.fill('invite Mo Kai'); await search.press('Enter');
     await expect(page.locator('#app')).toHaveAttribute('data-invites', /(^|\|)Mo Kai$/);
     await expect(page.locator('.hub-receipt')).toHaveText('Sent /invite Mo Kai. Guild Wars answers in chat.');
+  });
+
+  test('a bare invite scope lists online friends, the ones invitable here first, and names the target', async ({ page }) => {
+    const search = page.getByRole('combobox', { name: searchName });
+    await search.pressSequentially('invite ');
+    await expect(page.locator('.hub-scope')).toHaveText('invite');
+    const primary = page.locator('.hub-primary');
+    await expect(primary).toBeEnabled();
+    await expect(primary).toHaveText(/^Invite \S+ \S+/);
+    const target = (await primary.innerText()).replace(/^Invite /u, '').replace(/\s*↵$/u, '').trim();
+    await expect(page.locator('.hub-row', { hasText: 'Zed Alpha' })).toContainText('Zed Alpha is in Kamadan, Jewel of Istan. Use Travel and invite.');
+    await expect(page.locator('.hub-row', { hasText: 'Offline Friend' })).toHaveCount(0);
+    const disabled = await page.locator('.hub-row').evaluateAll(rows => rows.map(row => row.getAttribute('aria-disabled') === 'true'));
+    expect(disabled).toEqual([...disabled].sort((a, b) => Number(a) - Number(b)));
+    await search.press('Enter');
+    await expect(page.locator('#app')).toHaveAttribute('data-invites', target);
   });
 
   test('Invite to a friend in another map says why before Enter and sends nothing', async ({ page }) => {

@@ -116,8 +116,10 @@ vanishes, clear selection and require a new choice. Never execute its replacemen
 ### Grammar
 
 Recognize a closed set of leading words: `team`, `build`, `travel`, `char`, `acc`,
-`whisper`, and `trade`. Their exact registered aliases may also select a scope.
-The rest of the input is a name query, not executable instructions.
+`whisper`, `invite`, and `trade`. Their exact registered aliases may also select a scope.
+The rest of the input is a name query, not executable instructions. A leading word
+followed by a space enters its scope with an empty query, so `invite ` lists the
+online friends and `team ` lists the saved teams; a lone word is still a search.
 
 Recognize conversions only when the entire input matches a supported numeric
 expression or `<amount> <unit> in <unit>`. Parse with a bounded grammar, never eval.

@@ -50,6 +50,9 @@ test('explicit scopes never reinterpret the remaining words as another action', 
   assert.deepEqual(parseHubQuery(' TEAM  gom AFK '), { scope: 'team', term: 'gom afk', text: 'gom AFK' });
   assert.deepEqual(parseHubQuery('build smiter'), { scope: 'build', term: 'smiter', text: 'smiter' });
   assert.deepEqual(parseHubQuery('team'), { scope: null, term: 'team', text: 'team' });
+  assert.deepEqual(parseHubQuery(' team'), { scope: null, term: 'team', text: 'team' }, 'a lone word is still a search');
+  assert.deepEqual(parseHubQuery('Invite '), { scope: 'invite', term: '', text: '' }, 'a scope word and a space enter the scope');
+  assert.deepEqual(parseHubQuery('invites '), { scope: null, term: 'invites', text: 'invites' });
   assert.deepEqual(parseHubQuery('gmo afk'), { scope: null, term: 'gmo afk', text: 'gmo afk' });
   assert.deepEqual(parseHubQuery('Whisper  Mo Kai'), { scope: 'whisper', term: 'mo kai', text: 'Mo Kai' }, 'names keep their capitalisation');
 });

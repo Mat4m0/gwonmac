@@ -337,7 +337,7 @@ export function createHub(parent: HTMLElement) {
     paintNavigation();
     const previousRows = rows;
     const tradeQuery = parseHubQuery(input.value);
-    const tradeRows: HubRow[] = tradeQuery.scope === "trade" && window.gwToolsSettings?.().gwonmacTools && window.gwToolsSettings?.().tradeChat
+    const tradeRows: HubRow[] = tradeQuery.scope === "trade" && tradeQuery.term && window.gwToolsSettings?.().gwonmacTools && window.gwToolsSettings?.().tradeChat
       ? [{ id: "trade-query", title: `Search Trade for ${tradeQuery.term}`, detail: "Kamadan listings", group: "Tools", action: "Search Trade", run: () => dispatch("gw:trade-toggle", { query: tradeQuery.term }) }] : [];
     const extra = scope ? scope.rows() : [...sources.keys()].filter(sourceEnabled).flatMap(source => source.search(input.value)).concat(tradeRows);
     const parsed = parseHubQuery(input.value);
@@ -346,7 +346,7 @@ export function createHub(parent: HTMLElement) {
       .filter(entry => !parsed.scope || entry.id.startsWith(`${parsed.scope}:`));
     const savedRows = saved.flatMap(entry => { const row = lookup(entry.id); return row ? [{ ...row, group: parsed.term ? row.group : 'Pinned' }] : []; });
     const ids = new Set([...extra, ...savedRows].map(row => row.id));
-    rows = scope ? matchHubRows(extra, input.value) : [...savedRows, ...extra.filter(row => !savedRows.some(saved => saved.id === row.id)), ...(parseHubQuery(input.value).scope ? [] : matchHubRows(commands().filter(row => !ids.has(row.id)), input.value))];
+    rows = scope ? matchHubRows(extra, input.value) : [...savedRows, ...extra.filter(row => !savedRows.some(saved => saved.id === row.id)), ...(parsed.term && parsed.scope ? [] : matchHubRows(commands().filter(row => !ids.has(row.id)), input.value))];
     rows = [...rows].sort((a, b) => {
       const groups = ["Pinned", "Calculator", "Teams", "Folders", "Builds", "Targets", "Current build", "Accounts", "Characters", "In your party", "Unlocked heroes", "Heroes", "People", "Places", "Continue", "Tools", "Commands", "Sources"];
       const groupOrder = groups.indexOf(a.group) - groups.indexOf(b.group);
