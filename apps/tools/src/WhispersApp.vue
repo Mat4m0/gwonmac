@@ -27,6 +27,11 @@ const { panel, resizeGrip, panelStyle, startDrag } = useFloatingWindow({
   mode: "embedded", visible, initialPosition: { left: 72, top: 80 },
   minWidth: 288, minHeight: 300, viewportMargin: VIEWPORT_MARGIN,
   placementStorageKey: WINDOW_PLACEMENT_KEY,
+  // Until the player places it, Whispers opens beside an open Trade, never over its toolbar (HUB-108).
+  beside: () => {
+    const trade = document.querySelector<HTMLElement>("#toolbox-trade .trade-window");
+    return trade && trade.getClientRects().length ? trade.getBoundingClientRect() : null;
+  },
 });
 const selected = computed(() => state.value.conversations.find(c => c.key === state.value.selected));
 const unread = computed(() => state.value.conversations.reduce((total, c) => total + whisperUnread(c), 0));

@@ -452,3 +452,19 @@ test('the popout the player used last is on top, Trade or Whispers (HUB-108)', a
   await whispers.dispatchEvent('pointerdown');
   expect(await topAt()).toBe('whispers');
 });
+
+test('Whispers opens beside an open Trade until the player places it (HUB-108)', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await page.goto('/?hub');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Meta+k');
+  await expect(tradeWindow(page)).toBeVisible();
+  await page.keyboard.press('Meta+d');
+  await expect(page.locator('#whisper-window')).toBeVisible();
+  const boxes = await page.evaluate(() => [document.querySelector('#whisper-window')!, document.querySelector('#toolbox-trade .trade-window')!]
+    .map(element => { const box = element.getBoundingClientRect(); return { left: box.left, right: box.right, top: box.top, bottom: box.bottom }; }));
+  const [whispers, trade] = boxes as [typeof boxes[0], typeof boxes[0]];
+  // The two windows share no pixel: Trade's toolbar stays uncovered.
+  expect(whispers.left >= trade.right || whispers.right <= trade.left, JSON.stringify(boxes)).toBe(true);
+});
