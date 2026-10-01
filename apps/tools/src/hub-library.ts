@@ -424,11 +424,14 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
       const items = all();
       const names = new Map<string, number>();
       for (const item of items) if (item.kind === 'build') names.set(item.value.name, (names.get(item.value.name) ?? 0) + 1);
+      // A team's own saved phrase names it as exactly as its name, so `team <phrase>` applies it (HUB-062).
+      const phrase = (item: Item) => (controller.library.value?.hubShortcuts ?? []).find(entry => entry.id === `${item.kind}:${item.value.id}`)?.phrase || null;
+      const phrases = (item: Item) => item.kind === 'team' && phrase(item) ? [phrase(item)!] : [];
       const matchesBuild = buildMatcher(query);
       const matches = items.filter(item => (!parsed.scope || item.kind === parsed.scope)
-        && (item.kind === 'build' ? matchesBuild(item.value) : hubMatch(item.value.name, parsed.term, item.value.tags) !== null));
+        && (item.kind === 'build' ? matchesBuild(item.value) : hubMatch(item.value.name, parsed.term, [...(item.value.tags ?? []), ...phrases(item)]) !== null));
       // Only a scoped team query can apply directly; root and build searches never need this proof.
-      const exacts = parsed.scope === 'team' ? matches.filter(item => hubMatch(item.value.name, parsed.term) === 'exact') : [];
+      const exacts = parsed.scope === 'team' ? matches.filter(item => hubMatch(item.value.name, parsed.term, phrases(item)) === 'exact') : [];
       // A short profession query remains additive, but actual primary-profession matches lead it (HUB-059).
       const profession = Object.keys(PROFESSIONS).find(code => code.toLowerCase() === parsed.term);
       // Resolve exact names once instead of normalizing them again for every sort comparison.

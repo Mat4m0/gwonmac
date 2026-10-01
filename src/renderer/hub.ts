@@ -728,7 +728,8 @@ export function createHub(parent: HTMLElement) {
     // A phrase saved before its words joined the grammar stays stored but no longer matches.
     const saved = shortcuts().filter(entry => !parsed.term ? entry.pinned : entry.phrase === parsed.term && !hubPhraseReserved(entry.phrase))
       .filter(entry => !parsed.scope || entry.id.startsWith(`${parsed.scope === 'travel' ? 'place' : parsed.scope}:`));
-    const savedRows = saved.flatMap(entry => { const row = lookup(entry.id); return row ? [{ ...row, group: parsed.term ? row.group : 'Pinned' }] : []; });
+    // A phrase answers with the row its owner gives this query (a scoped team applies), else the stored row.
+    const savedRows = saved.flatMap(entry => { const row = extra.find(candidate => candidate.id === entry.id) ?? lookup(entry.id); return row ? [{ ...row, group: parsed.term ? row.group : 'Pinned' }] : []; });
     const ids = new Set([...extra, ...savedRows].map(row => row.id));
     rows = scope ? matchHubRows(extra, input.value) : [...savedRows, ...extra.filter(row => !savedRows.some(saved => saved.id === row.id)), ...(parsed.term && parsed.scope ? commands().filter(row => !ids.has(row.id) && normaliseHubQuery(row.title) === normaliseHubQuery(input.value)) : matchHubRows(commands().filter(row => !ids.has(row.id)), input.value))];
     // A typed root search orders sections by their best answer, then by the usual group order,
