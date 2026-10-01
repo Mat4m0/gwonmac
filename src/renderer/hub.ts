@@ -743,10 +743,14 @@ export function createHub(parent: HTMLElement) {
     const best = new Map<string, number>();
     if (ranked) for (const row of rows) best.set(row.group, Math.min(best.get(row.group) ?? Infinity, tierOf(row)));
     const groups = ["Pinned", "Calculator", "Teams", "Folders", "Builds", "Targets", "Current build", "Accounts", "Characters", "In your party", "Unlocked heroes", "Heroes", "People", "Places", "Friends", "Continue", "Tools", "Commands", "Settings", "Sources", "Trade", "Calculate", "Keys & shortcuts"];
-    const groupIndex = (group: string) => { const index = groups.indexOf(group); return index < 0 ? groups.length : index; };
-    // Keep everyday game actions ahead of account management, independent of provider order.
+    // A typed query that names a tool or command as well as places answers with the tool: the Hub
+    // has a few of those and hundreds of places (`ma` is Maps before Maguuma Stade, HUB-058).
+    const typedFirst = ranked ? ['Tools', 'Commands'] : [];
+    const groupIndex = (group: string) => { const first = typedFirst.indexOf(group); if (first >= 0) return first - typedFirst.length; const index = groups.indexOf(group); return index < 0 ? groups.length : index; };
+    // Keep everyday game actions ahead of account management, independent of provider order,
+    // and Commands, the way into everything else, first among the commands (HUB-185).
     const tools = ['travel', 'character', 'whispers', 'builds', 'trade', 'storage', 'maps', 'accounts'];
-    const priority = (row: HubRow) => { if (scope || row.group !== 'Tools') return 0; const index = tools.indexOf(row.id); return index < 0 ? tools.length : index; };
+    const priority = (row: HubRow) => { if (scope) return 0; if (row.group === 'Commands') return row.id === 'commands' ? -1 : 0; if (row.group !== 'Tools') return 0; const index = tools.indexOf(row.id); return index < 0 ? tools.length : index; };
     rows = [...rows].sort((a, b) => (ranked ? best.get(a.group)! - best.get(b.group)! : 0) || groupIndex(a.group) - groupIndex(b.group)
       || (ranked ? tierOf(a) - tierOf(b) : 0) || priority(a) - priority(b));
     const resultCount = `${rows.length} result${rows.length === 1 ? '' : 's'}`;

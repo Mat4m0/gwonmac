@@ -20,6 +20,7 @@ const answers: [query: string, primary: RegExp, finding: string][] = [
   ['gh', /^Travel to Guild Hall/, 'HUB-010: Guild Hall is a place'],
   ['Seeker’s Passage', /^Travel to Seeker's Passage/, 'HUB-143: typographic apostrophes fold'],
   ['tp kamadan', /^Travel to Kamadan/, 'HUB-142: scope aliases'],
+  ['ma', /^Adjust maps/, 'HUB-058: a tool named by the query leads places that start the same'],
   ['tra', /^Browse travel/, 'HUB-058: a name that starts with the query beats a later word'],
   ['ascalon city', /^Travel to Ascalon City/, 'HUB-056: the available exact place, not the disabled pre-Searing one'],
   ['char f', /^Show Fixture Ranger in Characters/, 'HUB-056: the eligible character'],
@@ -106,6 +107,8 @@ test('a saved phrase wins over a name, and pins on an empty Home keep a selectio
 test('the first screen stays on the game: Launcher and the website wait for a typed search (HUB-185)', async ({ page }) => {
   await open(page);
   await expect(page.locator('#hub [role="option"]', { hasText: 'Show Launcher' })).toHaveCount(0);
+  // Commands, the way into everything else, leads its group.
+  await expect(page.locator('#hub [role="group"]', { has: page.locator('.hub-group', { hasText: /^Commands$/ }) }).locator('.hub-row').first()).toHaveAttribute('data-id', 'commands');
   await search(page).fill('launcher');
   await expect(primary(page)).toHaveText(/^Show Launcher/);
 });
