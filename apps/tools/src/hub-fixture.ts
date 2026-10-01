@@ -9,7 +9,7 @@ import { resolveShortcuts, shortcutConflict, shortcutFromInput, shortcutReserved
 /** Disposable Hub workbench: synthetic state, no native IPC or game commands. */
 // Offline fixture exercises the production Hub mounting owner.
 // eslint-disable-next-line no-restricted-imports
-import { toggleHubWhispers } from '../../../src/renderer/hub-whisper';
+import { toggleHubWhispers, whisperFocusReturn } from '../../../src/renderer/hub-whisper';
 // eslint-disable-next-line no-restricted-imports
 import type {} from '../../../src/renderer/gw-native';
 // eslint-disable-next-line no-restricted-imports
@@ -200,8 +200,13 @@ export function mountHubFixture(target: HTMLElement) {
       return { setVisible: visible => visible ? app.show() : app.hide(), setActive: app.setActive, requestClose: app.requestClose, update() {}, dispose: app.dispose };
     },
     async mountTrade(element, onVisibilityChange) {
-      const app = mountTradeChat(element, { host: createDemoTradeHost(), mode: 'embedded', initiallyVisible: false, onVisibilityChange });
-      return { setVisible: visible => visible ? app.show() : app.hide(), setActive: app.setActive, requestClose: app.hide, stepBack: app.stepBack, search: app.search, update() {}, dispose: app.dispose };
+      const loadMs = Number(params.get("trade-load-ms")) || 0;
+      if (loadMs) await new Promise(resolve => setTimeout(resolve, loadMs));
+      const host = createDemoTradeHost();
+      // A seller's re-post, as the feed sends it: a new message that replaces their older one.
+      window.gwTradeFixture = { repost: host.repost };
+      const app = mountTradeChat(element, { host, mode: 'embedded', initiallyVisible: false, onVisibilityChange });
+      return { setVisible: visible => visible ? app.show() : app.hide(), requestClose: app.hide, stepBack: app.stepBack, search: app.search, update() {}, dispose: app.dispose };
     },
   });
   const travel = createHubTravel(travelHost, hub, (place, leave) => askLeaveArea(hub, leaveAreaCopy('travel', place), leave));
@@ -222,13 +227,20 @@ export function mountHubFixture(target: HTMLElement) {
   messenger.style.cssText = 'position:fixed;inset:0;pointer-events:none';
   document.body.append(messenger);
   const whisperSurface = window.gwSurfaces.register({ root: messenger, priority: 4, dismiss: () => session.setVisible(false) });
-  session.subscribe(state => whisperSurface.setOpen(state.visible));
+  // As `whisper-surface.ts`: hiding returns the keyboard to the control that opened Whispers.
+  const returnFocus = whisperFocusReturn(messenger, () => canvas.focus({ preventScroll: true }));
+  let whispersVisible = false;
+  session.subscribe(state => {
+    whisperSurface.setOpen(state.visible);
+    if (state.visible !== whispersVisible) returnFocus(whispersVisible = state.visible);
+  });
   messenger.addEventListener('pointerdown', () => whisperSurface.raise(), true);
   mountWhispers(messenger, { session });
   window.addEventListener('hub-fixture-failure', () => { failSend = true; });
   window.addEventListener('hub-fixture-reset', () => session.reset());
   window.addEventListener('hub-fixture-incoming', () => session.observe([{ id: ++id, sender: 'Romi Ranger', message: 'Ready for another mission?', direction: 'incoming' }]));
   window.addEventListener('hub-fixture-unavailable', () => session.setAvailable(false));
+  window.addEventListener('hub-fixture-available', () => session.setAvailable(true));
   session.setAvailable(true);
   const invites: string[] = [];
   const partyInvite = createPartyInvite({ region: lifecycle.region, chatReady: () => session.state.available, settleMs: 400,

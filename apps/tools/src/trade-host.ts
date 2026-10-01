@@ -70,8 +70,10 @@ const DEMO_MESSAGES: readonly TradeMessage[] = [
   fixture("pre-searing", 4, "The Legendary Defender", "WTB max purple sword q8"),
 ];
 
-export function createDemoTradeHost(): TradeHost {
+/** The offline feed, plus the re-post a test sends as the upstream feed would. */
+export function createDemoTradeHost(): TradeHost & Readonly<{ repost(sender: string, message: string): void }> {
   let source: TradeSource = "kamadan";
+  let messages = [...DEMO_MESSAGES];
   const listeners = new Set<(event: TradeEvent) => void>();
   let timer: ReturnType<typeof setInterval> | null = null;
   let saved: TradeSavedState = { offers: [], players: [] };
@@ -96,13 +98,13 @@ export function createDemoTradeHost(): TradeHost {
       return {
         source,
         status: "live",
-        messages: DEMO_MESSAGES.filter((message) => message.source === source),
+        messages: messages.filter((message) => message.source === source),
       };
     },
     async unsubscribe() {},
     async search(request) {
       const query = request.query.toLocaleLowerCase();
-      const messages = DEMO_MESSAGES.filter((candidate) =>
+      const matches = messages.filter((candidate) =>
         candidate.source === request.source
         && (request.scope === "player"
           ? candidate.sender.toLocaleLowerCase() === query
@@ -111,8 +113,21 @@ export function createDemoTradeHost(): TradeHost {
       ).sort((left, right) => right.timestamp - left.timestamp);
       return {
         ...request,
-        messages,
+        messages: matches,
       };
+    },
+    repost(sender, text) {
+      const previous = messages.find((candidate) => candidate.sender === sender);
+      if (!previous) return;
+      const message: TradeMessage = Object.freeze({
+        source: previous.source,
+        timestamp: Date.now(),
+        sender,
+        message: text,
+        replacementTimestamp: previous.timestamp,
+      });
+      messages = [message, ...messages.filter((candidate) => candidate !== previous)];
+      for (const listener of listeners) listener({ type: "message", source: message.source, message });
     },
     async retry(next) {
       for (const listener of listeners) {

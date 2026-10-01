@@ -181,9 +181,10 @@ link as one operation. It may preserve the entered query and intent filter so
 the player can compare the same item, but messages from the two sources never
 appear in one result set.
 
-An empty search field shows the live feed. Submitting non-empty text shows
-history results. Clearing the field returns to the preserved live feed. Search
-runs on explicit submit, not on every keystroke.
+An empty search field shows the live feed. Typing narrows the loaded messages on
+every keystroke to those whose author or text contains every typed word, without
+a network request. Return searches the selected source's public history and shows
+those results. Clearing the field returns to the preserved live feed.
 
 Each result row shows:
 
@@ -206,6 +207,15 @@ The original wording is canonical. GWonMac does not rewrite a message into a
 structured listing.
 
 Matching search text is highlighted visually without changing copyable text.
+When the intent filter hides every match, the empty state says how many and
+offers **Show all**.
+
+The selection keeps its message. A re-post by the same author replaces the
+selected row in place and stays selected; a filter that hides the selected
+message shows no offer rather than another author's. Only a newly loaded list,
+a new search or a player's listings start on their first row. A saved offer
+opened from the Saved drawer stays in the inspector until the next search,
+listings view or market change.
 Sender names use bidirectional text isolation so mixed writing systems do not
 reorder the row.
 
@@ -242,7 +252,9 @@ The detail pane is calm and sparse. It shows:
 - source attribution with **Open Kamadan** or **Open Ascalon** as a secondary
   link.
 
-Copy feedback appears beside the action and does not hide the copied value.
+Copy feedback appears on its menu action, which stays open and keeps focus.
+It does not hide the copied value or move the footer and ledger. Saving and following show in the row and the Saved
+count; only a failure is announced, in the error tone.
 Selecting another row replaces the detail in place.
 
 The detail view does not show guessed item fields, prices, availability, or
@@ -316,7 +328,7 @@ The core Trade feature must not depend on this enhancement.
 | --- | --- |
 | Initial connection | Show a small progress state without replacing the window |
 | Live | Show the latest bounded feed and connection status |
-| Searching | Keep the submitted query visible and show progress in the result area |
+| Searching | Keep the submitted query visible and show progress in the result area; while the feed reconnects, say the search waits for it and offer **Try again** |
 | No results | State that no recent messages matched; keep query and filters editable |
 | Reconnecting | Keep existing rows visible, mark them as possibly stale, and retry |
 | Offline | Keep existing rows visible with their real times and offer **Retry** |
@@ -335,13 +347,28 @@ like a compact working tool, consistent with Hero/Build management.
 
 - Tab follows visual reading order inside Trade Chat and wraps at its ends.
   Tab on the game canvas stays with Guild Wars; the window is entered by
-  its shortcut, a click, or `/`.
+  its shortcut or a click, and Tab from outside every control enters at the
+  search. The ledger is one Tab stop on its selected row.
 - The search field, intent filter, results, and actions have visible focus.
 - The shared list keys move through results and Trader prices when the list
   has focus: Up/Down and Control-P/N step, Page Up/Down move by a page, and
-  Home/End jump. The lists do not wrap.
-- Enter selects the focused result.
-- `/` focuses Trade search when focus is not in an input.
+  Home/End jump. The lists do not wrap. Down, Control-N and Page Down in a
+  search enter its list at the selected item; Up on the first ledger row
+  returns to the search. Return in the Trader prices search opens the first
+  match.
+- Return on a ledger row prepares an empty whisper to its author through
+  Whispers; Command-Return opens the author's listings (D-10). While a row has
+  focus, the inspector shows these keys on **Whisper** and **Show listings**.
+  When Whispers is off or not ready, Return says so and nothing waits for
+  a later Whispers shortcut. Closing that whisper returns the keyboard to the row.
+- Typing or Backspace on a row continues in the search. A click on a row
+  selects it and gives the ledger the keyboard, so the next arrow key moves the
+  selection instead of the character. At narrow widths the arrows only move the
+  selection; a click opens the offer sheet with the keyboard on **Whisper**.
+- Command-J opens Actions for the selected offer on its first item; the list
+  keys walk it.
+- `/` focuses Trade search while a Trade control holds the keyboard. On the game
+  canvas it stays the Guild Wars chat-command key.
 - Escape and Command-Backspace leave Trade's own levels first, one per press:
   the Actions menu, then the Saved drawer, then Trader prices, the narrow offer
   sheet or a player's listings. Then Escape clears a typed or submitted search

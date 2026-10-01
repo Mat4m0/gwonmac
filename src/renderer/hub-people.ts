@@ -33,7 +33,13 @@ export function createHubPeople(hub: Pick<Hub, 'attach' | 'showRows' | 'notify'>
     session.open(name, { visible: false });
     window.dispatchEvent(new CustomEvent('gw:whispers-toggle', { cancelable: true, detail: 'show' }));
   };
-  const contact = (event: Event) => { if (event instanceof CustomEvent && typeof event.detail === 'string' && toolEnabled('whispersEnabled')) whisper(event.detail); };
+  // Another tool asks for a conversation (Trade's Whisper). Accepting cancels the event; while
+  // Whispers cannot open, nothing is queued for a later ⌘D and the caller says why (HUB-129).
+  const contact = (event: Event) => {
+    if (!(event instanceof CustomEvent) || typeof event.detail !== 'string' || !toolEnabled('whispersEnabled') || !session.state.available) return;
+    event.preventDefault();
+    whisper(event.detail);
+  };
   window.addEventListener('gw:whisper-person', contact);
   /** Why Travel to a friend cannot start; `current` is false once the selected friend changed. */
   function travelReason(friend: TravelFriend | undefined, current: boolean): string | null {

@@ -1056,17 +1056,18 @@ test('holding Enter on Trade\'s Save offer or Follow player toggles once', async
   const trade = page.locator('#toolbox-trade .trade-window');
   await expect(trade).toBeVisible();
   await trade.locator('.trade-row', { hasText: 'Quiet Ember' }).locator('.offer-cell').click();
-  await trade.locator('.offer-actions summary').click();
-  const hold = async (name: RegExp) => {
-    await trade.getByRole('button', { name }).focus();
+  const hold = async (name: string) => {
+    await trade.locator('.offer-actions summary').click();
+    await trade.getByRole('menuitemcheckbox', { name }).focus();
     for (let press = 0; press < 6; press++) await page.keyboard.down('Enter');
     await page.keyboard.up('Enter');
+    await trade.locator('.offer-actions summary').click();
+    await expect(trade.getByRole('menuitemcheckbox', { name })).toHaveAttribute('aria-checked', 'true');
+    await trade.locator('.offer-actions summary').click();
   };
-  await hold(/^Save offer$/u);
-  await expect(trade.getByRole('button', { name: /^Saved$/u })).toHaveAttribute('aria-pressed', 'true');
+  await hold('Save offer');
   await expect(trade.locator('.saved-count')).toHaveText('1');
-  await hold(/^Follow player$/u);
-  await expect(trade.getByRole('button', { name: /^Following$/u })).toHaveAttribute('aria-pressed', 'true');
+  await hold('Follow player');
   await expect(trade.locator('.saved-count')).toHaveText('2');
 });
 

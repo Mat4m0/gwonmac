@@ -240,7 +240,7 @@ test('a saved search phrase and pin survive reload and resolve the original item
 test('a pinned Travel or team row is the row search shows, and → opens it (HUB-177)', async ({ page }) => {
   await page.goto('/?hub');
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   const row = (id: string) => page.locator(`#hub .hub-row[data-id="${id}"]`).first();
   const found: Record<string, string | null> = {};
   for (const [query, id] of [['travel', 'travel'], ['team gom afk', 'team:hub-gom-afk'], ['commands', 'commands'], ['settings', 'settings'], ['switch account', 'accounts']] as const) {
@@ -332,13 +332,18 @@ test('character search switches the explicitly selected observed character', asy
   await expect(page.getByRole('dialog', { name: 'Hub', exact: true })).not.toBeVisible();
 });
 
-test('trade query opens the same floating searchable tool', async ({ page }) => {
+test('trade query opens the same floating searchable tool with the words as typed (HUB-124)', async ({ page }) => {
   await page.goto('/?hub');
   const search = page.locator('.hub-search input');
-  await search.fill('trade ecto'); await search.press('Enter');
-  await expect(page.locator('#toolbox-trade .trade-search input')).toHaveValue('ecto');
+  await search.fill('trade Polar Bear');
+  const row = page.locator('#hub .hub-row[aria-selected="true"]');
+  await expect(row).toContainText('Search Trade for Polar Bear');
+  await expect(row).not.toContainText('Kamadan');
+  await expect(row.locator('.hub-icon')).toHaveAttribute('data-kind', 'trade');
+  await search.press('Enter');
+  await expect(page.locator('#toolbox-trade .trade-search input')).toHaveValue('Polar Bear');
   await expect(page.locator('#hub')).not.toBeVisible();
-  await expect(page.locator('#toolbox-foundation .trade-search input')).toHaveValue('ecto');
+  await expect(page.locator('#toolbox-foundation .trade-search input')).toHaveValue('Polar Bear');
   await expect(page.getByRole('dialog', { name: 'Hub', exact: true })).not.toBeVisible();
 });
 
