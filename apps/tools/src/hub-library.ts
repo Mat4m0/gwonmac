@@ -416,11 +416,11 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
       visible = next;
     },
     search(query) {
-      const parsed = parseHubQuery(query);
+      const parsed = parseHubQuery(['team', 'teams'].includes(query.trim().toLowerCase()) ? 'team ' : query);
       if (parsed.scope && parsed.scope !== 'team' && parsed.scope !== 'build') return [];
       if (parsed.scope === 'team' && controller.loading.value) return [{ id: 'teams-loading', title: 'Loading teams…', detail: '', group: 'Teams', action: 'Loading teams', unavailable: 'Build Library is loading.', run() {} }];
-      // `team ` lists every team; the build scope and library words open the library instead.
-      if ((!parsed.term && parsed.scope !== 'team') || ['build', 'builds', 'build library', 'templates', 'library', 'lib', 'bu', 'team', 'teams', 'skills'].includes(query.trim().toLowerCase()) && parsed.scope !== 'team') return [libraryRow(), ...(!query.trim() ? controller.recentBuilds.value.flatMap(recent => { const item = all().find((item): item is Item & { kind: 'build' } => item.kind === 'build' && item.value.id === recent.id); return item ? [{ ...buildRow(item), id: `recent:${recent.id}:${recent.hero ?? 'me'}`, detail: `Recently applied to ${targetName(recent.hero)}`, group: 'Continue', run: () => chooseBuild(item, recent.hero), navigate: () => chooseBuild(item, recent.hero) }] : []; }) : templateStates())];
+      // Bare and scoped team queries list every team; build and library words open the library.
+      if ((!parsed.term && parsed.scope !== 'team') || ['build', 'builds', 'build library', 'templates', 'library', 'lib', 'bu', 'skills'].includes(query.trim().toLowerCase()) && parsed.scope !== 'team') return [libraryRow(), ...(!query.trim() ? controller.recentBuilds.value.flatMap(recent => { const item = all().find((item): item is Item & { kind: 'build' } => item.kind === 'build' && item.value.id === recent.id); return item ? [{ ...buildRow(item), id: `recent:${recent.id}:${recent.hero ?? 'me'}`, detail: `Recently applied to ${targetName(recent.hero)}`, group: 'Continue', run: () => chooseBuild(item, recent.hero), navigate: () => chooseBuild(item, recent.hero) }] : []; }) : templateStates())];
       const items = all();
       const names = new Map<string, number>();
       for (const item of items) if (item.kind === 'build') names.set(item.value.name, (names.get(item.value.name) ?? 0) + 1);

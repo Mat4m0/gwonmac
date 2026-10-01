@@ -74,7 +74,7 @@ test('Hub exposes a ready exact team from the shared controller', async () => {
   } });
   app.mount(document.createElement('div')); await nextTick(); await nextTick();
   expect(source!.search('team gom afk')[0]?.unavailable).toBeUndefined();
-  for (const query of ['library', 'lib', 'bu', 'team', 'teams', 'skills', 'build library']) {
+  for (const query of ['build', 'builds', 'library', 'lib', 'bu', 'skills', 'build library']) {
     const rows = source!.search(query);
     expect(rows.filter(row => row.id === 'builds'), query).toHaveLength(1);
     expect(rows.find(row => row.id === 'builds')?.detail).toBe('Browse saved builds and teams');
@@ -547,4 +547,44 @@ test('single-build receipts distinguish changes from reapplication and use the s
     await apply();
     expect(receipts.at(-1)).toBe('Smiter applied to your character. Recent use could not be saved.');
   } finally { app.unmount(); }
+});
+
+
+test('bare team queries list every saved team for review and preserve loading rows (HUB-087)', async () => {
+  const { createApp, h, nextTick } = await import('vue');
+  const { flushPromises } = await import('@vue/test-utils');
+  const { useLibrary } = await import('./use-library');
+  const { createHubLibrary } = await import('./hub-library');
+  const commands: string[] = [];
+  const { host } = createHubGameFixture(command => commands.push(command));
+  // More than eight teams catches accidental use of the unscoped result cap.
+  const { library } = await host.loadLibrary();
+  const { teamId } = await import('../../../src/shared/builds/library');
+  const teams = Array.from({ length: 10 }, (_, index) => ({ ...library.teams[0]!, id: teamId(`team-${index}`), name: `Saved team ${index}` }));
+  let release = () => {};
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  let source: import('../../../src/shared/hub').HubSource | undefined;
+  const reviews: string[] = [];
+  const app = createApp({ setup() {
+    createHubLibrary(useLibrary({ ...host, loadLibrary: async () => { await gate; return { library: { ...library, teams }, recovered: false }; } }), host,
+      { attach(next) { source = next; return () => {}; }, close() {}, notify() {}, showRows() {}, showView(title) { reviews.push(title); } });
+    return () => h('div');
+  } });
+  app.mount(document.createElement('div')); await nextTick();
+  try {
+    for (const query of ['team', 'teams']) {
+      expect(source!.search(query).map(row => [row.title, row.unavailable])).toEqual([['Loading teams…', 'Build Library is loading.']]);
+    }
+    release(); await flushPromises();
+    for (const query of ['team', 'teams']) {
+      const rows = source!.search(query);
+      expect(rows.map(row => row.title)).toEqual(['Saved team 0', 'Saved team 1', 'Saved team 2', 'Saved team 3', 'Saved team 4', 'Saved team 5', 'Saved team 6', 'Saved team 7', 'Saved team 8', 'Saved team 9']);
+      expect(rows.map(row => [row.id, row.action, row.consequential])).toEqual(source!.search('team ').map(row => [row.id, row.action, row.consequential]));
+      expect(rows.map(row => row.action)).toEqual(['Review Saved team 0', 'Review Saved team 1', 'Review Saved team 2', 'Review Saved team 3', 'Review Saved team 4', 'Review Saved team 5', 'Review Saved team 6', 'Review Saved team 7', 'Review Saved team 8', 'Review Saved team 9']);
+      expect(rows.every(row => row.group === 'Teams' && !row.consequential)).toBe(true);
+      for (const row of rows) await row.run(task);
+    }
+    expect(reviews).toHaveLength(20);
+    expect(commands).toEqual([]);
+  } finally { release(); app.unmount(); }
 });

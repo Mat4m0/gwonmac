@@ -282,13 +282,18 @@ test('details from Choose hero show the incoming build without an empty second c
 test('library words open the loaded Library and its teams stay review-only when browsing', async ({ page }) => {
   await page.goto('/?hub');
   const search = page.locator('.hub-search input');
-  for (const query of ['library', 'lib', 'bu', 'team', 'teams', 'skills']) {
+  // Bare `team` and `teams` list the saved teams instead (HUB-087).
+  for (const query of ['library', 'lib', 'bu', 'skills']) {
     await search.fill(query);
     const entry = page.locator('.hub-row[data-id="builds"]');
     await expect(entry).toContainText('Browse saved builds and teams');
     await expect(entry).toHaveAttribute('aria-disabled', 'false');
     await expect(page.locator('.hub-primary')).toBeEnabled();
   }
+  await search.fill('teams');
+  await expect(page.locator('#hub .hub-row[data-id^="team:"]')).toHaveCount(4);
+  await expect(page.locator('#hub .hub-row[data-id="builds"]')).toHaveCount(0);
+  await search.fill('skills');
   await search.press('Enter');
   await expect(page.locator('.hub-breadcrumbs')).toHaveText('Home›Build Library');
   const teams = page.locator('.hub-row[data-id^="team:"]');
