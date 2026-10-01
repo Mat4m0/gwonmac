@@ -144,7 +144,9 @@ encoder; integration tests cover echo confirmation and clearing the draft.
 
 Incoming bubbles align left; replies align right. Both use bright text and follow the selected Tools
 UI theme and wrap long text. The header names the person; each message retains
-an accessible author label. Back opens the people list. Sound and cleanup are
+an accessible author label. Back opens the people list. Its search is a
+combobox over a listbox of the listed people (or the suggestions while typing):
+Up and Down move the selected option and Enter opens it. Sound and cleanup are
 in the options menu. A local Background slider reduces only this messenger's
 broad panel and transcript paint to 15% of the selected global panel opacity;
 text and controls stay legible. The options menu uses an opaque theme surface,

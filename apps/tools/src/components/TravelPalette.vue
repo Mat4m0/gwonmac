@@ -22,6 +22,7 @@ import { TRAVEL_HISTORY_VISIBLE_LIMIT } from "../../../../src/shared/travel-hist
 import { guildWarsMapName } from "../../../../src/shared/guild-wars-map-names";
 import { isHubBackKey } from "../../../../src/shared/keyboard-shortcuts";
 import { createHoverSelection } from "../../../../src/shared/ui/hover-selection";
+import { listIndexAfter, listKeyStep, listPage } from "../../../../src/shared/ui/list-keys";
 import { useTravelPreferences } from "../travel-preferences";
 import TravelDestinationPicker from "./TravelDestinationPicker.vue";
 
@@ -30,6 +31,8 @@ const props = defineProps<{
   visible: boolean;
   nativeDialog?: boolean;
   inset?: boolean;
+  /** In the Hub, whether Esc on an empty query returns to a parent page; Travel opened by its shortcut closes instead. */
+  hubParent?: boolean;
   preferences?: ReturnType<typeof useTravelPreferences>;
   resume?: {
     query: string; selected: string | null; mode: "travel" | "customize";
@@ -722,13 +725,11 @@ function moved(event: PointerEvent): boolean {
   return hover.selects(event);
 }
 
-async function moveActive(direction: 1 | -1): Promise<void> {
+/** The shared list move over the destinations it may choose; the ends hold. */
+async function moveActive(step: number): Promise<void> {
   const entries = selectableDestinations.value;
-  if (!entries.some(selectable)) return;
-  let next = active.value < 0 ? (direction === 1 ? entries.length - 1 : 0) : active.value;
-  do next = (next + direction + entries.length) % entries.length;
-  while (!selectable(entries[next]!));
-  await reveal(next);
+  const next = listIndexAfter(active.value, entries.length, step, (index) => selectable(entries[index]!));
+  if (next >= 0) await reveal(next);
 }
 
 /** Selects a destination by keyboard and scrolls it into view. */
@@ -759,8 +760,15 @@ function onKeydown(event: KeyboardEvent): void {
   if (!props.visible || event.isComposing) return;
   const plainArrow = !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey;
   const atStart = event.target === input.value && input.value?.selectionStart === 0 && input.value.selectionEnd === 0;
-  if (props.inset && mode.value === 'travel' && !hasQuery.value && event.target === input.value && plainArrow && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
-    event.preventDefault(); void moveActive(event.key === 'ArrowRight' ? 1 : -1); return;
+  // The keyboard stays in search: the shared list keys move one selection without wrapping,
+  // and in the Hub ← → step the Recent carousel while there is no query.
+  const step = mode.value === "travel" && event.target === input.value
+    ? listKeyStep(event, listPage(palette.value?.querySelector<HTMLElement>(".travel-body"), palette.value?.querySelector<HTMLElement>(`#travel-${activeResultId.value}`)), props.inset && !hasQuery.value)
+    : null;
+  if (step !== null) {
+    event.preventDefault();
+    void moveActive(step);
+    return;
   }
   // In the Hub, ⌘⌫ leaves Customize like Esc; an open picker closes first, and from the
   // destination list the press is the Hub's own Back.
@@ -772,17 +780,13 @@ function onKeydown(event: KeyboardEvent): void {
   }
   if (event.key === "Escape" || (event.key === "ArrowLeft" && plainArrow && atStart && !hasQuery.value)) {
     event.preventDefault();
+    // One step per physical press: a held Esc clears the query and stops there.
+    if (event.repeat) return;
     if (mode.value === "customize") void selectMode("travel");
     else if (hasQuery.value) {
       query.value = "";
       void nextTick(() => input.value?.focus());
     } else emit("close");
-    return;
-  }
-  if (mode.value === "travel" && event.target === input.value && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
-    if (props.inset && event.key === "ArrowUp" && active.value === 0) return;
-    event.preventDefault();
-    void moveActive(event.key === "ArrowDown" ? 1 : -1);
     return;
   }
   // Only a plain Enter travels; a modified Enter is never a second route to it.
@@ -857,7 +861,7 @@ function onKeydown(event: KeyboardEvent): void {
       </section>
     </section>
 
-    <section v-else id="travel-customize-panel" class="ui-scroll travel-body travel-customize" role="region" aria-label="Travel settings">
+    <section v-else id="travel-customize-panel" class="ui-scroll travel-body travel-customize" role="region" aria-label="Travel settings" data-hub-form>
       <section class="travel-customize-group" aria-labelledby="travel-shortcuts-title">
         <header class="travel-section-head"><h2 id="travel-shortcuts-title">Number shortcuts</h2><span>1–9 select</span></header>
         <div class="travel-customize-shortcuts">
@@ -874,7 +878,7 @@ function onKeydown(event: KeyboardEvent): void {
         <p v-if="phraseError" id="travel-phrase-error" class="ui-field-error travel-phrase-error">{{ phraseError }}</p>
       </section>
     </section>
-    <footer class="travel-footer"><span v-if="statusText && !urgentNoticeVisible" :data-level="statusLevel" aria-hidden="true">{{ statusText }}</span><span v-if="hasQuery && hasSelectableDestination" class="travel-key-hints"><kbd class="ui-kbd">↑↓</kbd> choose <kbd class="ui-kbd">↵</kbd> travel <kbd class="ui-kbd">⌘1–9</kbd> save</span><span v-else-if="showingSmallCatalogue" class="travel-key-hints"><kbd class="ui-kbd">←→ ↑↓</kbd> choose <kbd class="ui-kbd">↵</kbd> travel <kbd class="ui-kbd">⌘1–9</kbd> save</span><span v-else-if="mode === 'travel' && !hasQuery" class="travel-key-hints"><kbd class="ui-kbd">←→ ↑↓</kbd> choose <kbd class="ui-kbd">↵</kbd> travel <kbd class="ui-kbd">Esc</kbd> back</span><span v-else-if="mode === 'customize'" class="travel-key-hints"><kbd class="ui-kbd">esc</kbd> back</span><button v-if="mode === 'travel'" type="button" class="ui-button travel-primary" data-variant="primary" tabindex="-1" :disabled="!canRunActive" @mousedown="keepSearchFocus" @click="pickPrimary">{{ primaryLabel }}<kbd v-if="canRunActive" aria-hidden="true">↵</kbd></button></footer>
+    <footer class="travel-footer"><span v-if="statusText && !urgentNoticeVisible" :data-level="statusLevel" aria-hidden="true">{{ statusText }}</span><span v-if="hasQuery && hasSelectableDestination" class="travel-key-hints"><kbd class="ui-kbd">↑↓</kbd> choose <kbd class="ui-kbd">↵</kbd> travel <kbd class="ui-kbd">⌘1–9</kbd> save <template v-if="inset"><kbd class="ui-kbd">⌘</kbd><kbd class="ui-kbd">⌫</kbd> back</template></span><span v-else-if="showingSmallCatalogue" class="travel-key-hints"><kbd class="ui-kbd">←→ ↑↓</kbd> choose <kbd class="ui-kbd">↵</kbd> travel <kbd class="ui-kbd">⌘1–9</kbd> save <template v-if="inset"><kbd class="ui-kbd">⌘</kbd><kbd class="ui-kbd">⌫</kbd> back</template></span><span v-else-if="mode === 'travel' && !hasQuery" class="travel-key-hints"><kbd class="ui-kbd">←→ ↑↓</kbd> choose <kbd class="ui-kbd">↵</kbd> travel <kbd class="ui-kbd">Esc</kbd> {{ inset && !hubParent ? "close" : "back" }} <template v-if="inset"><kbd class="ui-kbd">⌘</kbd><kbd class="ui-kbd">⌫</kbd> back</template></span><span v-else-if="mode === 'customize'" class="travel-key-hints"><kbd class="ui-kbd">esc</kbd> back <template v-if="inset"><kbd class="ui-kbd">⌘</kbd><kbd class="ui-kbd">⌫</kbd> back</template></span><button v-if="mode === 'travel'" type="button" class="ui-button travel-primary" data-variant="primary" tabindex="-1" :disabled="!canRunActive" @mousedown="keepSearchFocus" @click="pickPrimary">{{ primaryLabel }}<kbd v-if="canRunActive" aria-hidden="true">↵</kbd></button></footer>
     <div class="travel-header-actions">
       <button ref="settingsButton" type="button" class="ui-button travel-close" data-icon aria-label="Customize Travel" title="Customize Travel" :aria-pressed="mode === 'customize'" aria-controls="travel-customize-panel" :disabled="preferenceControlsDisabled" @click="toggleCustomize"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z" /><circle cx="12" cy="12" r="3" /></svg></button>
       <button v-if="!inset" type="button" class="ui-button travel-close" data-icon aria-label="Close Quick Travel" @click="emit('close')"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 3 10 10M13 3 3 13" /></svg></button>

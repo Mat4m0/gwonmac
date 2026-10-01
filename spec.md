@@ -105,10 +105,14 @@ such as ↑↓ Select, → Open and Esc Clear, Back or Close. Footer buttons nev
 a secondary action that does not apply is disabled, so nothing moves under the
 pointer.
 
-- Up/Down selects rows. Enter performs the displayed action.
-- Escape closes an action menu, then clears a non-empty query, then goes back
-  one level, then dismisses Hub. Focus then returns to the previous control or
-  the game, never to the page body.
+- Up/Down selects rows. Enter performs the displayed action. Every list and
+  carousel shares one list move (Up/Down, Control-P/N, Page Up/Down, Home/End)
+  and never wraps; Up at the top of a list stays.
+- Escape closes an action menu or an open disclosure, then clears a non-empty
+  query, then goes back one level, then dismisses Hub, one step per physical
+  press. Focus then returns to the previous control or the game, never to the
+  page body. Trade and Whispers popouts leave their own menu, drawer, sub-view
+  or typed search the same way before they hide.
 - A direct shortcut has no artificial Home step when Escape closes its section.
 - A visible Actions button exposes secondary actions. Tab reaches it; its menu
   supports normal arrow navigation. Do not consume text-editing arrow keys.

@@ -26,6 +26,8 @@ import {
   type TradeIntent,
 } from "./trade-ledger";
 import { useClassicFrame } from "./ui/use-classic-frame";
+import { listIndexAfter, listKeyStep, listPage } from "../../../src/shared/ui/list-keys";
+import { isHubBackKey } from "../../../src/shared/keyboard-shortcuts";
 import { useFloatingWindow } from "./use-floating-window";
 import TradeIcon from "./TradeIcon.vue";
 import TraderPrices from "./components/TraderPrices.vue";
@@ -38,10 +40,18 @@ const props = defineProps<{
   active: boolean;
 }>();
 const offerActions = ref<HTMLDetailsElement | null>(null);
-function closeOfferActions() {
+function closeOfferActions(restoreFocus = ownsFocus()) {
   if (!offerActions.value?.open) return;
   offerActions.value.open = false;
-  offerActions.value.querySelector('summary')?.focus();
+  if (restoreFocus) offerActions.value.querySelector('summary')?.focus();
+}
+/**
+ * Trade is a non-activating surface: a click leaves the keyboard with the game.
+ * Closing a level hands focus back inside Trade only while Trade holds it, so an
+ * Escape or a click from the game never moves the game's keyboard into Trade.
+ */
+function ownsFocus(): boolean {
+  return panel.value?.contains(document.activeElement) ?? false;
 }
 const whispersEnabled = ref(false);
 const updateWhispersEnabled = () => { whispersEnabled.value = !!window.gwToolsSettings?.().gwonmacTools && !!window.gwToolsSettings?.().whispersEnabled; };
@@ -70,7 +80,11 @@ type PlayerReturnState = {
   focusTimestamp: number | null;
 };
 
-defineExpose({ search(value: string) { query.value = value; view.value = "listings"; void runSearch(); } });
+defineExpose({
+  search(value: string) { query.value = value; view.value = "listings"; void runSearch(); },
+  /** Escape's step: Trade's inner levels, then a typed search. */
+  stepBack: () => stepBack(true),
+});
 
 const source = ref<TradeSource>("kamadan");
 const view = ref<"listings" | "prices">("listings");
@@ -331,7 +345,7 @@ async function openPlayer(sender: string, focusTimestamp: number | null = null):
   }
 }
 
-function closePlayer(): void {
+function closePlayer(restoreFocus = ownsFocus()): void {
   const previous = playerReturn.value;
   requestRevision += 1;
   resetPlayerView();
@@ -345,7 +359,7 @@ function closePlayer(): void {
     const selector = previous.focusTimestamp === null
       ? null
       : `[data-player-timestamp="${previous.focusTimestamp}"]`;
-    if (selector) list.value?.querySelector<HTMLElement>(selector)?.focus();
+    if (selector && restoreFocus) list.value?.querySelector<HTMLElement>(selector)?.focus();
   });
 }
 
@@ -426,9 +440,9 @@ function openSaved(): void {
   nextTick(() => savedClose.value?.focus());
 }
 
-function closeSaved(): void {
+function closeSaved(restoreFocus = ownsFocus()): void {
   savedOpen.value = false;
-  nextTick(() => savedButton.value?.focus());
+  if (restoreFocus) nextTick(() => savedButton.value?.focus());
 }
 
 async function inspectSavedOffer(offer: TradeSavedOffer): Promise<void> {
@@ -451,30 +465,52 @@ function currentOffersFor(sender: string): number {
   return current.value.live.filter((message) => message.sender.toLocaleLowerCase() === key).length;
 }
 
+/** The shared list move over the ledger; the ends hold. */
 function onListKeydown(event: KeyboardEvent): void {
-  if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
   const rows = visibleMessages.value;
-  if (!rows.length) return;
+  const step = listKeyStep(event, listPage(list.value, list.value?.querySelector<HTMLElement>(".trade-row")));
+  if (step === null || !rows.length) return;
   event.preventDefault();
   const index = rows.findIndex((message) => message.timestamp === current.value.selection);
-  const next = event.key === "ArrowDown"
-    ? Math.min(rows.length - 1, index + 1)
-    : Math.max(0, index < 0 ? 0 : index - 1);
-  selectMessage(rows[next]!);
+  const next = rows[listIndexAfter(index, rows.length, step)]!;
+  selectMessage(next);
   nextTick(() => {
-    list.value?.querySelector<HTMLElement>(`[data-timestamp="${rows[next]!.timestamp}"]`)
+    list.value?.querySelector<HTMLElement>(`[data-timestamp="${next.timestamp}"]`)
       ?.focus({ preventScroll: false });
   });
 }
 
+/**
+ * Trade's own levels, innermost first: the Actions menu, the Saved drawer, then a
+ * sub-view (Trader prices, the narrow offer sheet, a player's listings), then for
+ * Escape only a typed search (D-4). ⌘⌫ never edits the search.
+ */
+function stepBack(clearQuery: boolean): boolean {
+  const restoreFocus = ownsFocus();
+  if (offerActions.value?.open) closeOfferActions(restoreFocus);
+  else if (savedOpen.value) closeSaved(restoreFocus);
+  else if (view.value === "prices") closePrices(restoreFocus);
+  // The offer sheet is a level only in the narrow layout, where it covers the ledger.
+  else if (detailOpen.value && (panel.value?.querySelector(".mobile-back")?.getClientRects().length ?? 0) > 0) detailOpen.value = false;
+  else if (playerName.value) closePlayer(restoreFocus);
+  else if (clearQuery && (query.value || submittedQuery.value)) clearSearch();
+  else return false;
+  return true;
+}
+
+/**
+ * ⌘⌫ steps out of one Trade level per physical press, like Escape through the
+ * surface controller (HUB-120). At the listings it does nothing: it never hides
+ * Trade or edits the search.
+ */
+function onWindowBack(event: KeyboardEvent): void {
+  if (!isHubBackKey(event) || event.defaultPrevented) return;
+  event.preventDefault();
+  if (!event.repeat) stepBack(false);
+}
+
 function onWindowKeydown(event: KeyboardEvent): void {
   if (!props.visible || !props.active) return;
-  if (event.key === "Escape" && savedOpen.value) {
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    closeSaved();
-    return;
-  }
   if (
     view.value === "listings"
     &&
@@ -494,9 +530,9 @@ function openPrices(): void {
   view.value = "prices";
 }
 
-function closePrices(): void {
+function closePrices(restoreFocus = ownsFocus()): void {
   view.value = "listings";
-  void nextTick(() => pricesButton.value?.focus());
+  if (restoreFocus) void nextTick(() => pricesButton.value?.focus());
 }
 
 watch(source, (next) => {
@@ -621,6 +657,7 @@ useClassicFrame(panel);
       aria-label="Trade Chat"
       data-design-contract="trade-ledger-v1"
       :data-view="view"
+      @keydown="onWindowBack"
     >
       <header class="ui-panel-head ui-window-head window-bar" @pointerdown="startDrag">
         <div class="window-brand trade-brand" aria-hidden="true">
@@ -645,7 +682,7 @@ useClassicFrame(panel);
         v-show="view === 'prices'"
         :host="host"
         :visible="visible && view === 'prices'"
-        @back="closePrices"
+        @back="closePrices()"
       />
 
       <div v-show="view === 'listings'" class="trade-toolbar">
@@ -697,7 +734,7 @@ useClassicFrame(panel);
           {{ submittedQuery ? `Results for “${submittedQuery}”` : "Latest messages" }}
         </span>
         <span v-else class="player-summary">
-          <button class="ui-link" @click="closePlayer">
+          <button class="ui-link" @click="closePlayer()">
             ← {{ submittedQuery ? "Back to results" : "Back to offers" }}
           </button>
           <strong><TradeIcon name="player" /><bdi>{{ playerName }}</bdi></strong>
@@ -836,7 +873,7 @@ useClassicFrame(panel);
           </div>
           <footer class="inspector-actions">
             <button v-if="whispersEnabled" class="ui-button" data-variant="primary" :aria-label="`Whisper ${selected.sender}`" @click="whisperSeller(selected.sender)">Whisper seller</button>
-            <details ref="offerActions" class="offer-actions" @keydown.esc.stop.prevent="closeOfferActions">
+            <details ref="offerActions" class="offer-actions">
               <summary class="ui-button">Actions</summary>
               <div class="inspector-action-group" role="group" aria-label="Offer actions">
                 <button class="ui-button" :aria-pressed="offerSaved(selected)" :disabled="!savedReady" @click="toggleOffer(selected)">
@@ -865,14 +902,13 @@ useClassicFrame(panel);
           class="trade-saved-drawer ui-drawer ui-raised"
           role="complementary"
           aria-label="Saved trade items"
-          @keydown.esc.stop.prevent="closeSaved"
         >
           <header class="saved-drawer-head ui-drawer-head">
             <div>
               <strong>Saved</strong>
               <span>{{ savedCount }} {{ savedCount === 1 ? "item" : "items" }}</span>
             </div>
-            <button ref="savedClose" class="ui-button" data-icon aria-label="Close Saved" @click="closeSaved">×</button>
+            <button ref="savedClose" class="ui-button" data-icon aria-label="Close Saved" @click="closeSaved()">×</button>
           </header>
           <div class="ui-segment saved-tabs" data-fill role="group" aria-label="Saved item type">
             <button :aria-pressed="savedTab === 'offers'" @click="savedTab = 'offers'">Offers {{ saved.offers.length }}</button>

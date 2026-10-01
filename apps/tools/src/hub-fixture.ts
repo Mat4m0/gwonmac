@@ -174,7 +174,7 @@ export function mountHubFixture(target: HTMLElement) {
     },
     async mountTrade(element, onVisibilityChange) {
       const app = mountTradeChat(element, { host: createDemoTradeHost(), mode: 'embedded', initiallyVisible: false, onVisibilityChange });
-      return { setVisible: visible => visible ? app.show() : app.hide(), setActive: app.setActive, requestClose: app.hide, search: app.search, update() {}, dispose: app.dispose };
+      return { setVisible: visible => visible ? app.show() : app.hide(), setActive: app.setActive, requestClose: app.hide, stepBack: app.stepBack, search: app.search, update() {}, dispose: app.dispose };
     },
   });
   const travel = createHubTravel(travelHost, hub);

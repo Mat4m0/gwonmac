@@ -13,8 +13,8 @@ import { openHubMaps } from './hub-maps.js';
 import { editHubShortcut, hubPhraseReserved, manageHubShortcuts } from './hub-preferences.js';
 import { isHubShortcuts, type HubShortcut } from '../shared/hub-preferences.js';
 import { createHubCalculator } from './hub-calculator.js';
-import { armConfirmation } from './surface-controller.js';
-import { listIndexAfter, listKeyStep } from './list-keys.js';
+import { armConfirmation, closeDisclosure } from './surface-controller.js';
+import { listIndexAfter, listKeyStep } from '../shared/ui/list-keys.js';
 import { createHoverSelection } from '../shared/ui/hover-selection.js';
 import { matchHubRows, parseHubQuery, normaliseHubQuery, type HubRow, type HubSource, type HubSummary, type HubTask, type HubViewAction, type HubViewFooter, type HubViewMount } from '../shared/hub.js';
 export function createHub(parent: HTMLElement) {
@@ -29,7 +29,7 @@ export function createHub(parent: HTMLElement) {
     <section class="hub-summary" aria-label="Build to apply" hidden></section>
     <div class="hub-search"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 8 10-8 10L4 12 12 2Zm0 5v10M8 12h8"/></svg><span class="hub-scope" hidden></span><input type="text" role="combobox" aria-label="Search people, places, builds" aria-autocomplete="list" aria-controls="hub-results" aria-expanded="true" placeholder="Search people, places, builds…" autocomplete="off" spellcheck="false" maxlength="120"><span class="hub-progress" aria-hidden="true"></span></div>
     <p class="hub-hint" id="hub-hint" hidden></p><div class="hub-rate-controls" hidden></div><div class="hub-results ui-scroll" id="hub-results" role="listbox" aria-label="Results" tabindex="-1"></div>
-    <pre class="hub-preview ui-scroll" hidden></pre><div class="hub-view" hidden></div><p class="hub-status" role="status" hidden></p><p class="hub-lifecycle" hidden></p>
+    <pre class="hub-preview ui-scroll" hidden></pre><div class="hub-view" hidden></div><p class="hub-status" role="status" hidden></p><p class="hub-lifecycle" hidden></p><p class="hub-announce ui-sr-only" aria-live="polite" aria-atomic="true"></p>
     <footer class="hub-footer"><span class="hub-legend"></span><span class="hub-count"></span><button class="hub-primary ui-button" data-variant="primary"></button><button class="hub-actions ui-button" data-variant="quiet">Actions</button></footer>
     <button class="ui-window-resize hub-resize" aria-label="Resize Hub" title="Drag to resize, or use arrow keys" hidden></button>
   </section>`;
@@ -58,6 +58,7 @@ export function createHub(parent: HTMLElement) {
   const count = required<HTMLElement>('.hub-count');
   const legend = required<HTMLElement>('.hub-legend');
   const lifecycle = required<HTMLElement>('.hub-lifecycle');
+  const announcer = required<HTMLElement>('.hub-announce');
   let rows: readonly HubRow[] = [];
   let shortcutRevision = '';
   let navigationRevision = '';
@@ -77,7 +78,6 @@ export function createHub(parent: HTMLElement) {
   let viewArming: { label: string; arming: ReturnType<typeof armConfirmation> } | null = null;
   let disposeView: (() => void) | null = null;
   let viewAvailable: (() => boolean) | null = null;
-  let returnFromView: (() => void) | null = null;
   let restoreQuery = '';
   type FocusPlace = { selector: string; range?: readonly [number, number] };
   type Page = { scope: RowScope | null; query: string; selected: string | null; scroll: number; view: MountedView | null; focus: FocusPlace };
@@ -100,6 +100,9 @@ export function createHub(parent: HTMLElement) {
   };
   // List stages keep DOM focus in search; the selection moves by aria-activedescendant (D-2).
   const focusResult = () => input.focus({ preventScroll: true });
+  /** Where typing goes: the Hub search on list stages, else a list view's own search (Travel, Characters). */
+  const searchField = () => !search.hidden ? input
+    : [...content.querySelectorAll<HTMLInputElement>('input[type=search],input[role=combobox]')].find(field => field.getClientRects().length > 0 && !field.disabled) ?? null;
   /** A view's first usable control, else Back, so focus never falls to <body> (a disabled button refuses it). */
   const firstControl = () => [...content.querySelectorAll<HTMLElement>('input,select,textarea,button,[tabindex="0"]')]
     .find(control => control.getClientRects().length > 0 && !control.matches(':disabled')) ?? backButton;
@@ -163,6 +166,11 @@ export function createHub(parent: HTMLElement) {
     }
     restoreFocus(page.focus);
   }
+  /**
+   * Esc's step out of a page and a view's own way out ("Done", Travel or Characters leaving):
+   * the parent page, or a close where there is none. A page opened directly by its shortcut
+   * has no artificial Home step for Esc.
+   */
   function restoreParent() {
     const parent = history.pop();
     if (!parent) { close(); return; }
@@ -185,7 +193,18 @@ export function createHub(parent: HTMLElement) {
   let carriedFailure = '';
   /** A late task's receipt outlives the typing that ended its session; any other report replaces it. */
   let receiptInStatus = false;
-  const report = (message: string, receipt = false) => { status.textContent = message; status.hidden = !message; receiptInStatus = receipt && !!message; };
+  /**
+   * The latest progress of a running action, on its page or left behind by Back, typing or a
+   * close (KEY-19). The status line falls back to it, busy, whenever it has nothing newer to say.
+   */
+  let progress: { owner: object; message: string } | null = null;
+  let progressInStatus = false;
+  function report(message: string, receipt = false) {
+    const text = message || progress?.message || '';
+    status.textContent = text; status.hidden = !text;
+    receiptInStatus = receipt && !!message; progressInStatus = !message && !!text;
+    status.setAttribute('aria-busy', String(progressInStatus)); paintBusy();
+  }
   const dispatch = (name: string, detail?: unknown) => {
     if (window.dispatchEvent(new CustomEvent(name, { cancelable: true, detail }))) {
       throw new Error('Unavailable in the current game state.');
@@ -286,9 +305,9 @@ export function createHub(parent: HTMLElement) {
     primary.disabled = disabled;
     if (disabled && focused) (search.hidden ? firstControl() : input).focus({ preventScroll: true });
   }
-  /** `aria-busy` and the thin bar under the search while this page's action runs. */
+  /** `aria-busy` and the thin bar under the search while this page's action runs or the status line shows progress. */
   function paintBusy() {
-    const working = busy() || (viewRunning && !!viewFooter);
+    const working = busy() || (viewRunning && !!viewFooter) || progressInStatus;
     list.setAttribute('aria-busy', String(busy())); content.setAttribute('aria-busy', String(viewRunning && !!viewFooter));
     required<HTMLElement>('.hub-panel').dataset.busy = String(working);
   }
@@ -309,7 +328,7 @@ export function createHub(parent: HTMLElement) {
     }
   }
   /** "Done" steps back; it is the primary of a view that names none, so the footer never goes blank. */
-  const done: HubViewAction = { label: 'Done', run: () => back() };
+  const done: HubViewAction = { label: 'Done', run: () => restoreParent() };
   function paintViewFooter() {
     if (!viewFooter) return;
     footer.hidden = viewFooter.own;
@@ -572,17 +591,20 @@ export function createHub(parent: HTMLElement) {
   /**
    * Binds an action to the page session that starts it (HUB-004). While that page shows, the
    * action reports progress and failures in the status line and its success closes the Hub with
-   * the receipt. After the player moved on, it only reports: a receipt, or a failure receipt.
+   * the receipt. After the player moved on, it never navigates: its progress stays in the status
+   * line, and it ends with a receipt or a failure receipt.
    * An action that focuses another window (Open an account, Show Launcher) suspends its own
    * page; its success still ends the task, so the next opening starts at Home.
    */
   function startTask(): HubTask & { fail(error: unknown): void; end(): void } {
     const started = session;
     const live = () => root.open && session === started;
-    let shown = '';
+    const token = {};
     return {
       live,
-      progress: message => { if (live()) { report(message); shown = message; } },
+      // Progress repaints only over itself or an empty line (or on its own page): a newer
+      // message, e.g. a refusal or another action's failure, stays until the next report('').
+      progress: message => { progress = { owner: token, message }; if (live() || progressInStatus || status.hidden) report(''); },
       done: receipt => {
         if (live() || (!root.open && suspended && suspendedSession === started)) close(receipt);
         else if (receipt) notify(receipt);
@@ -592,7 +614,7 @@ export function createHub(parent: HTMLElement) {
         if (live()) report(message); else notify(message, 'failed');
       },
       // An action that ended without a receipt, e.g. one whose view shows its own outcome, never leaves its progress behind.
-      end: () => { if (live() && shown && status.textContent === shown) report(''); },
+      end: () => { if (progress?.owner !== token) return; progress = null; if (progressInStatus) report(''); },
     };
   }
   async function run() {
@@ -613,7 +635,7 @@ export function createHub(parent: HTMLElement) {
   }
   function resetView() {
     endSession(); restoringFocus?.disconnect(); restoringFocus = null; keepDrafts(); pressed = null; modal.pageChanged();
-    disposeView?.(); disposeView = null; activeView = null; viewAvailable = null; returnFromView = null; content.replaceChildren(); content.hidden = true;
+    disposeView?.(); disposeView = null; activeView = null; viewAvailable = null; content.replaceChildren(); content.hidden = true;
     viewFooter = null; viewRunning = false; viewArming?.arming.disarm(); viewArming = null;
     search.hidden = false; list.hidden = false; footer.hidden = false;
   }
@@ -621,28 +643,40 @@ export function createHub(parent: HTMLElement) {
     history.length = 0; resetView(); scope = null; input.value = restoreQuery;
     root.dataset.page = 'home'; caption.textContent = 'Home'; input.placeholder = 'Search people, places, builds…'; report(''); refresh(true); input.focus();
   }
-  function back() {
-    if (returnFromView) returnFromView();
-    else restoreParent();
-  }
   function atHome() { return !scope && !activeView; }
   /**
    * ⌘⌫, the Back button and the mouse back button: exactly one level up, never a close.
    * A page opened directly (⌘T, ⌘E, ⌘B) has no parent and returns to the real Home.
    */
-  function backOneLevel() {
-    if (history.length) back();
+  function back() {
+    if (history.length) restoreParent();
     else if (!atHome()) home();
+    else return;
+    announceDestination();
   }
-  /** Esc: clear a typed query, then go back one level, then close (D-4). */
+  /**
+   * Focus stays in search across Back, so nothing else tells a screen reader where it landed:
+   * the destination's title is spoken once, as the answer to the player's own press. It is
+   * never a feed update (D-15), and it stays mounted so its first message is heard (HUB-114).
+   */
+  function announceDestination() {
+    if (!root.open) return;
+    const title = activeView?.title ?? scope?.title ?? 'Home';
+    // The same destination twice in a row still changes the text, so it is spoken again.
+    announcer.textContent = announcer.textContent === title ? `${title}\u00a0` : title;
+  }
+  /**
+   * Esc once a view's own levels and an open disclosure had their say (the surface controller's
+   * one Escape rule): clear a typed query, then go back one level, then close (D-4).
+   */
   function dismiss() {
     if (!search.hidden && input.value) { endSession(); input.value = ''; report(''); refresh(true); input.focus(); return; }
-    if (history.length) back(); else close();
+    restoreParent(); announceDestination();
   }
   function close(message?: string) {
     if (root.open) frame = required<HTMLElement>('.hub-panel').getBoundingClientRect();
     suspended = null; history.length = 0; resetView(); modal.close(); for (const source of sources.keys()) source.setVisible(false); scope = null;
-    input.value = ''; restoreQuery = ''; report(''); selected = null;
+    input.value = ''; restoreQuery = ''; report(''); selected = null; announcer.textContent = '';
     if (typeof message === 'string' && message) notify(message);
   }
   /**
@@ -712,20 +746,20 @@ export function createHub(parent: HTMLElement) {
     event.stopPropagation();
     if (event.defaultPrevented) return;
     event.preventDefault();
-    if (event.repeat) return;
-    const expanded = event.target instanceof Element ? event.target.closest<HTMLDetailsElement>('details[open]') : null;
-    if (expanded && root.contains(expanded)) { expanded.open = false; expanded.querySelector('summary')?.focus(); return; }
-    backOneLevel();
+    if (event.repeat || closeDisclosure(event.target, root)) return;
+    back();
   });
-  root.addEventListener('mouseup', event => { if (event.button === 3) { event.preventDefault(); backOneLevel(); } });
+  root.addEventListener('mouseup', event => { if (event.button === 3) { event.preventDefault(); back(); } });
   root.addEventListener('keydown', event => {
     restoringFocus?.disconnect(); restoringFocus = null;
-    // Typing on a list-stage button returns to search; Space still presses the button.
-    if (!event.defaultPrevented && !search.hidden && event.target instanceof HTMLElement && event.target !== input && !content.contains(event.target)
-      && !event.target.matches('input,textarea,select') && !(event.key === ' ' && event.target.matches('button')) && resumeSearchInput(event, input)) return;
+    // Typing on a button or blank space returns to the page's search, the header's included;
+    // Space still presses the button. A form keeps its keys: a form view has no search, and
+    // a form region a view marks with data-hub-form (Travel's Customize) stays form-first.
+    const field = searchField();
+    if (!event.defaultPrevented && field && event.target instanceof HTMLElement && event.target !== field && !event.target.isContentEditable
+      && !event.target.matches('input,textarea,select') && !event.target.closest('[data-hub-form]')
+      && !(event.key === ' ' && event.target.matches('button,summary')) && resumeSearchInput(event, field)) return;
     if (event.defaultPrevented || event.isComposing || event.metaKey || event.ctrlKey || event.altKey) return;
-    // Hub owns Esc before the native cancel: one step per physical press.
-    if (event.key === 'Escape') { event.preventDefault(); if (!event.repeat) dismiss(); return; }
     const target = event.target instanceof HTMLElement ? event.target : null;
     if (!target || target === required<HTMLElement>('.hub-resize')) return;
     if (target.closest('.hub-footer')) {
@@ -746,17 +780,18 @@ export function createHub(parent: HTMLElement) {
       && !target.matches('button,a[href],summary,select,textarea,input[type=checkbox],input[type=radio],input[type=range]')) {
       event.preventDefault(); void runViewAction(viewFooter.primary, event); return;
     }
-    if (content.contains(target) && event.key === 'ArrowUp' && target.matches('input[role=combobox]')) {
-      event.preventDefault(); (backButton.hidden ? required<HTMLButtonElement>('.hub-lock') : backButton).focus(); return;
-    }
+    // ↑ ↓ step between a view's controls in screen order, within the focused control's column
+    // (a nav or a scrolled body, HUB-054), and stop at its ends. A combobox's arrows belong to
+    // its list, and a focused scroller that overflows scrolls natively (HUB-088).
     if (content.contains(target) && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
-      if (target.matches('select,input[type="range"],textarea') || target.isContentEditable) return;
-      const controls = [...content.querySelectorAll<HTMLElement>('input,select,button,a[href],summary,[tabindex="0"]')].filter(control => control.getClientRects().length && !control.matches(':disabled')).sort((a, b) => { const left = a.getBoundingClientRect(), right = b.getBoundingClientRect(); return left.top - right.top || left.left - right.left; });
+      if (target.matches('select,input[type="range"],input[role=combobox],textarea') || target.isContentEditable) return;
+      if (!target.matches('input,button,a[href],summary') && target.scrollHeight > target.clientHeight) return;
+      const column = target.parentElement?.closest<HTMLElement>('nav,.ui-scroll') ?? content;
+      const controls = [...(content.contains(column) ? column : content).querySelectorAll<HTMLElement>('input,select,button,a[href],summary,[tabindex="0"]')].filter(control => control.getClientRects().length && !control.matches(':disabled')).sort((a, b) => { const left = a.getBoundingClientRect(), right = b.getBoundingClientRect(); return left.top - right.top || left.left - right.left; });
       const index = controls.indexOf(target);
       if (index < 0) return;
       event.preventDefault();
-      if (event.key === 'ArrowUp' && index === 0) (backButton.hidden ? required<HTMLButtonElement>('.hub-lock') : backButton).focus();
-      else controls[Math.max(0, Math.min(controls.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)))]?.focus();
+      controls[Math.max(0, Math.min(controls.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)))]?.focus();
     }
   });
   function showBuildDetails(row: HubRow) {
@@ -803,7 +838,7 @@ export function createHub(parent: HTMLElement) {
   required<HTMLButtonElement>('.hub-actions').onclick = event => { if (!viewFooter) actions(); else if (event.detail <= 1) void runViewAction(viewFooter.secondary, event); };
   required<HTMLButtonElement>('.hub-close').onclick = () => close();
   // The primary acts once per click run, so a double-click on it runs its action once.
-  backButton.onclick = backOneLevel;
+  backButton.onclick = back;
   primary.onclick = event => { if (event.detail > 1) return; if (viewFooter) void runViewAction(viewFooter.primary ?? done, event); else void run(); };
   root.addEventListener('pointerdown', () => { restoringFocus?.disconnect(); restoringFocus = null; });
   // A press on blank panel space or a disabled control parks focus on the dialog
@@ -836,6 +871,8 @@ export function createHub(parent: HTMLElement) {
     /** A mounted view replaced its own page (a confirmation): a click run from before it is cancelled. */
     pageChanged: () => modal.pageChanged(),
     get visible() { return root.open; },
+    /** Whether Esc on an empty query goes back to a parent page rather than closing the Hub. */
+    get hasParent() { return history.length > 0; },
     attach(next: HubSource) {
       if (sourceEnabled(next)) enabledSources.add(next);
       sources.set(next, next.subscribe(() => refresh())); next.setVisible(root.open && sourceEnabled(next)); refresh();
@@ -857,7 +894,6 @@ export function createHub(parent: HTMLElement) {
       if (!scope) restoreQuery = input.value;
       if (fromOpenHub && !restoring) remember();
       resetView();
-      returnFromView = restoreParent;
       root.dataset.page = 'section'; caption.textContent = title;
       required<HTMLElement>('.hub-preview').hidden = true; required<HTMLElement>('.hub-rate-controls').hidden = true;
       search.hidden = true; list.hidden = true; content.hidden = false;
@@ -872,7 +908,7 @@ export function createHub(parent: HTMLElement) {
         own: () => { state.own = true; if (viewFooter === state) paintViewFooter(); },
       };
       paintViewFooter();
-      disposeView = mount(content, back, shell);
+      disposeView = mount(content, restoreParent, shell);
       restoreDrafts([...history.map(pageTitle), title].join(' › '));
       paintNavigation();
       if (!content.contains(document.activeElement)) firstControl().focus();

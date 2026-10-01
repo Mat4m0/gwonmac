@@ -337,11 +337,18 @@ like a compact working tool, consistent with Hero/Build management.
   Tab on the game canvas stays with Guild Wars; the window is entered by
   its shortcut, a click, or `/`.
 - The search field, intent filter, results, and actions have visible focus.
-- Up and Down move through results when the result list has focus.
+- The shared list keys move through results and Trader prices when the list
+  has focus: Up/Down and Control-P/N step, Page Up/Down move by a page, and
+  Home/End jump. The lists do not wrap.
 - Enter selects the focused result.
 - `/` focuses Trade search when focus is not in an input.
-- Escape closes the topmost GWonMac surface. Trade must not override it to
-  clear search.
+- Escape and Command-Backspace leave Trade's own levels first, one per press:
+  the Actions menu, then the Saved drawer, then Trader prices, the narrow offer
+  sheet or a player's listings. Then Escape clears a typed or submitted search
+  and, at the empty live feed, hides Trade through the surface controller.
+  Command-Backspace never edits the search and does nothing at the listings.
+  Closing a level returns focus inside Trade only while Trade held it; from
+  the game, the keyboard stays with the game.
 - Live arrivals are not announced one by one to assistive technology.
 - Connection changes and submitted-search result counts use one polite status
   announcement.

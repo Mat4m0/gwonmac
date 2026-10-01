@@ -169,7 +169,7 @@
 .hub-view .character-switch-head { padding:8px 20px; border:0; }
 .hub-view .character-switch-head h2 { font-size:15px; font-weight:500; }
 .hub-view .character-switch-close { display:none; }
-.hub-view .character-switch-search { order:-1; padding:8px; }
+.hub-view .character-switch-search { padding:8px; }
 .hub-view .character-switch-search svg { left:20px; width:20px; height:20px; }
 .hub-view .character-switch-search .ui-input { padding:8px 8px 8px 36px; font:var(--ui-type-window-size)/var(--ui-type-window-line) var(--ui-font-interface); }
 .hub-view .character-switch-carousel { padding:12px 16px; gap:8px; }

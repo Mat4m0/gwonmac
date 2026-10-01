@@ -5,6 +5,8 @@ import { TRAVEL_DESTINATIONS } from "../../../src/shared/travel-destinations";
 import { WHISPER_LINE_UNITS, WHISPER_MESSAGE_UNITS } from "../../../src/shared/whispers";
 import type { FriendPresence, TravelFriend } from "../../../src/shared/friends";
 import { useClassicFrame } from "./ui/use-classic-frame";
+import { isHubBackKey } from "../../../src/shared/keyboard-shortcuts";
+import { listIndexAfter, listKeyStep, listPage } from "../../../src/shared/ui/list-keys";
 import { useFloatingWindow } from "./use-floating-window";
 import {
   restoreFloatingPosition,
@@ -43,10 +45,23 @@ function dismissOptions(event: Event) {
   if (optionsMenu.value?.open && !optionsMenu.value.contains(event.target as Node)) optionsMenu.value.open = false;
 }
 function collapse() { props.session.setVisible(false); }
-function escapeOptions(event: KeyboardEvent) {
-  if (event.key === "Escape" && optionsMenu.value?.open) {
-    event.preventDefault(); event.stopPropagation(); optionsMenu.value.open = false;
+/**
+ * Esc and ⌘⌫ close the options menu first. ⌘⌫ then steps from a conversation back to the
+ * picker, one level per physical press and nothing at the picker; in the message field it
+ * keeps its native macOS meaning (delete to the line start).
+ */
+function stepBack(event: KeyboardEvent) {
+  const back = isHubBackKey(event);
+  if ((event.key !== "Escape" && !back) || event.isComposing || event.defaultPrevented) return;
+  if (back && event.target instanceof HTMLInputElement && event.target.id.startsWith("draft-")) return;
+  if (optionsMenu.value?.open) {
+    event.preventDefault(); event.stopPropagation();
+    if (event.repeat) return;
+    optionsMenu.value.open = false;
     optionsMenu.value.querySelector("summary")?.focus();
+  } else if (back) {
+    event.preventDefault();
+    if (!event.repeat && selected.value) showPicker();
   }
 }
 function showPicker() {
@@ -112,6 +127,14 @@ const suggestionDetail = (person: Person) => person.friend ? `Friend · ${presen
   : person.source === "conversation" ? "Conversation" : person.source === "recent" ? "Recent" : "Seen in chat";
 const suggestions = computed(() => findPeople(state.value, search.value).slice(0, 8)
   .map(person => ({ ...person, detail: suggestionDetail(person) })));
+/**
+ * What ↑ ↓ walk from the picker search and Enter opens: the suggestions while typing,
+ * otherwise the listed conversations, friends and recent people in screen order (HUB-079).
+ */
+const pickerPeople = computed(() => [...continuedConversations.value.map(c => c.name),
+  ...friends.value.map(friend => friend.character || friend.alias), ...recent.value.map(person => person.name)]);
+const pickerOptions = computed(() => search.value.trim() ? suggestions.value.map(person => person.name) : pickerPeople.value);
+const pickerOptionId = (index: number) => search.value.trim() ? `whisper-suggestion-${index}` : `whisper-pick-${index}`;
 const maxLength = computed(() => Math.min(WHISPER_MESSAGE_UNITS, WHISPER_LINE_UNITS - (selected.value?.name.length ?? 0) - 2));
 function open(name: string) {
   try {
@@ -132,17 +155,20 @@ function searchKeydown(event: KeyboardEvent) {
   if (event.key === "Tab" && suggestions.value.length) {
     event.preventDefault(); search.value = suggestions.value[0]!.name; suggestionIndex.value = 0; return;
   }
-  if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
-  if (!suggestions.value.length) return;
+  // Enter opens the highlighted person, also from an empty picker, whose Whisper button is disabled.
+  if (event.key === "Enter" && !event.repeat && pickerOptions.value[suggestionIndex.value] !== undefined) {
+    event.preventDefault(); open(pickerOptions.value[suggestionIndex.value]!); return;
+  }
+  // The shared list move, without wrapping; the keyboard stays in the search.
+  const step = listKeyStep(event, listPage(panel.value?.querySelector<HTMLElement>(".whisper-picker"), panel.value?.querySelector<HTMLElement>(".whisper-person-open")));
+  if (step === null || !pickerOptions.value.length) return;
   event.preventDefault();
-  suggestionIndex.value = event.key === "ArrowDown"
-    ? (suggestionIndex.value + 1) % suggestions.value.length
-    : (suggestionIndex.value <= 0 ? suggestions.value.length : suggestionIndex.value) - 1;
-  void nextTick(() => document.getElementById(`whisper-suggestion-${suggestionIndex.value}`)
+  suggestionIndex.value = listIndexAfter(suggestionIndex.value, pickerOptions.value.length, step);
+  void nextTick(() => document.getElementById(pickerOptionId(suggestionIndex.value))
     ?.scrollIntoView({ block: "nearest" }));
 }
 function submitSearch() {
-  open(suggestions.value[suggestionIndex.value]?.name ?? search.value);
+  open(pickerOptions.value[suggestionIndex.value] ?? search.value);
 }
 function draftInput(key: string, event: Event) {
   historyNavigation.delete(key);
@@ -372,14 +398,14 @@ useClassicFrame(panel);
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3C6.49 3 2 6.59 2 11c0 2.91 1.9 5.51 5 6.93V21c0 .38.21.73.55.89c.14.07.29.11.45.11c.21 0 .42-.07.6-.2l3.74-2.8c5.36-.14 9.66-3.68 9.66-8s-4.49-8-10-8"/></svg>
     <span v-if="unread" class="whisper-badge" aria-hidden="true">{{ unread > 99 ? '99+' : unread }}</span>
   </button>
-  <section v-show="visible" id="whisper-window" ref="panel" class="ui-frame ui-reading-surface whisper-window" data-variant="quiet" :style="windowStyle" :data-chat-selected="Boolean(selected)" aria-label="Whispers" @keydown="escapeOptions">
+  <section v-show="visible" id="whisper-window" ref="panel" class="ui-frame ui-reading-surface whisper-window" data-variant="quiet" :style="windowStyle" :data-chat-selected="Boolean(selected)" aria-label="Whispers" @keydown="stepBack">
     <header class="ui-panel-head ui-window-head whisper-frame-head" @pointerdown="startDrag">
       <h2 class="ui-panel-title">Whispers</h2>
       <button class="ui-window-close" aria-label="Hide Whispers" @click="session.setVisible(false)">×</button>
     </header>
     <div class="whisper-layout">
     <div v-show="!selected" class="ui-scroll whisper-picker" :data-searching="Boolean(search.trim())">
-      <form class="ui-input-group whisper-search" @submit.prevent="submitSearch"><label class="whisper-sr-only" for="whisper-person">Character name</label><input id="whisper-person" v-model="search" placeholder="Find a friend…" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="whisper-suggestions" :aria-expanded="Boolean(search.trim() && suggestions.length)" :aria-activedescendant="suggestionIndex >= 0 ? `whisper-suggestion-${suggestionIndex}` : undefined" @input="searchInput" @keydown="searchKeydown"/><button data-variant="primary" class="ui-button whisper-control" type="submit" :disabled="!search.trim()" aria-label="Whisper"><span class="whisper-compose-label">Whisper</span><svg class="whisper-compose-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5 4 4M4 20l4-1L21 6l-4-4L4 15v5Zm7-16H4v7"/></svg></button></form>
+      <form class="ui-input-group whisper-search" @submit.prevent="submitSearch"><label class="whisper-sr-only" for="whisper-person">Character name</label><input id="whisper-person" v-model="search" placeholder="Find a friend…" autocomplete="off" role="combobox" aria-autocomplete="list" :aria-controls="search.trim() ? 'whisper-suggestions' : 'whisper-people'" :aria-expanded="pickerOptions.length > 0" :aria-activedescendant="suggestionIndex >= 0 && pickerOptions[suggestionIndex] !== undefined ? pickerOptionId(suggestionIndex) : undefined" @input="searchInput" @keydown="searchKeydown"/><button data-variant="primary" class="ui-button whisper-control" type="submit" :disabled="!search.trim()" aria-label="Whisper"><span class="whisper-compose-label">Whisper</span><svg class="whisper-compose-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5 4 4M4 20l4-1L21 6l-4-4L4 15v5Zm7-16H4v7"/></svg></button></form>
       <p v-if="pickerError" class="whisper-notice" role="alert">{{ pickerError }}</p>
       <div class="whisper-source-filters" role="group" aria-label="Suggestion sources">
         <span>Suggest from</span>
@@ -394,11 +420,11 @@ useClassicFrame(panel);
         <p v-if="suggestions.length" class="whisper-completion-hint">↑↓ choose · Tab completes</p>
       </template>
       <template v-else>
-      <div class="whisper-people-grid">
+      <div id="whisper-people" class="whisper-people-grid" role="listbox" aria-label="People">
       <template v-if="continuedConversations.length">
         <h3>Conversations</h3>
-        <div v-for="conversation in continuedConversations" :key="conversation.key" class="whisper-person" :data-unread="whisperUnread(conversation) ? '' : undefined" :data-active="selected?.key === conversation.key">
-          <button data-variant="quiet" class="ui-button whisper-control whisper-person-open" @click="open(conversation.name)"><span class="whisper-person-main"><span class="whisper-avatar" aria-hidden="true">{{ initials(conversation.name) }}</span><span v-if="friendFor(conversation.name)" class="whisper-presence" :data-presence="friendFor(conversation.name)!.status" /><span class="whisper-person-copy"><strong>{{ conversation.name }}</strong><small :data-draft="Boolean(conversation.draft)">{{ conversation.draft ? 'Draft: ' + conversation.draft : conversation.messages.at(-1)?.message || 'No messages yet' }}</small></span></span><span v-if="whisperUnread(conversation)" class="whisper-count">{{ whisperUnread(conversation) }}</span></button>
+        <div v-for="(conversation, index) in continuedConversations" :key="conversation.key" class="whisper-person" :data-unread="whisperUnread(conversation) ? '' : undefined" :data-active="selected?.key === conversation.key">
+          <button :id="`whisper-pick-${index}`" data-variant="quiet" class="ui-button whisper-control whisper-person-open" role="option" :aria-selected="suggestionIndex === index" :data-highlighted="suggestionIndex === index || undefined" @click="open(conversation.name)"><span class="whisper-person-main"><span class="whisper-avatar" aria-hidden="true">{{ initials(conversation.name) }}</span><span v-if="friendFor(conversation.name)" class="whisper-presence" :data-presence="friendFor(conversation.name)!.status" /><span class="whisper-person-copy"><strong>{{ conversation.name }}</strong><small :data-draft="Boolean(conversation.draft)">{{ conversation.draft ? 'Draft: ' + conversation.draft : conversation.messages.at(-1)?.message || 'No messages yet' }}</small></span></span><span v-if="whisperUnread(conversation)" class="whisper-count">{{ whisperUnread(conversation) }}</span></button>
           <button data-variant="quiet" class="ui-button whisper-control whisper-icon" :aria-label="`Close conversation with ${conversation.name}`" :disabled="conversation.sending" @click="close(conversation.key)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button>
         </div>
       </template>
@@ -406,11 +432,11 @@ useClassicFrame(panel);
       <h3>Available friends</h3>
       <p v-if="state.friends.status !== 'ready'" class="whisper-empty">Friends are unavailable.</p>
       <p v-else-if="!friends.length" class="whisper-empty">Friends who are online appear here.</p>
-      <button v-for="friend in friends" :key="friend.key" data-variant="quiet" class="ui-button whisper-control whisper-person-open" @click="open(friend.character || friend.alias)"><span class="whisper-person-main"><span class="whisper-avatar" aria-hidden="true">{{ initials(friend.character || friend.alias) }}</span><span class="whisper-presence" :data-presence="friend.status" /><span class="whisper-person-copy"><strong>{{ friend.character || friend.alias }}</strong><small v-if="friend.character && friend.alias !== friend.character">{{ friend.alias }}</small></span></span><small class="whisper-status-copy">{{ presenceLabel(friend.status) }}</small></button>
+      <button v-for="(friend, index) in friends" :id="`whisper-pick-${continuedConversations.length + index}`" :key="friend.key" data-variant="quiet" class="ui-button whisper-control whisper-person-open" role="option" :aria-selected="suggestionIndex === continuedConversations.length + index" :data-highlighted="suggestionIndex === continuedConversations.length + index || undefined" @click="open(friend.character || friend.alias)"><span class="whisper-person-main"><span class="whisper-avatar" aria-hidden="true">{{ initials(friend.character || friend.alias) }}</span><span class="whisper-presence" :data-presence="friend.status" /><span class="whisper-person-copy"><strong>{{ friend.character || friend.alias }}</strong><small v-if="friend.character && friend.alias !== friend.character">{{ friend.alias }}</small></span></span><small class="whisper-status-copy">{{ presenceLabel(friend.status) }}</small></button>
       </template>
       <template v-if="recent.length">
         <h3>Recent people</h3>
-        <div v-for="person in recent" :key="person.key" class="whisper-person whisper-recent"><button data-variant="quiet" class="ui-button whisper-control whisper-person-open" @click="open(person.name)">{{ person.name }}</button><button data-variant="quiet" class="ui-button whisper-control whisper-icon" :aria-label="`Remove ${person.name} from recent people`" @click="session.removeRecent(person.key)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button></div>
+        <div v-for="(person, index) in recent" :key="person.key" class="whisper-person whisper-recent"><button :id="`whisper-pick-${continuedConversations.length + friends.length + index}`" data-variant="quiet" class="ui-button whisper-control whisper-person-open" role="option" :aria-selected="suggestionIndex === continuedConversations.length + friends.length + index" :data-highlighted="suggestionIndex === continuedConversations.length + friends.length + index || undefined" @click="open(person.name)">{{ person.name }}</button><button data-variant="quiet" class="ui-button whisper-control whisper-icon" :aria-label="`Remove ${person.name} from recent people`" @click="session.removeRecent(person.key)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button></div>
       </template>
       </div>
       </template>
@@ -550,7 +576,7 @@ useClassicFrame(panel);
 .whisper-latest { align-self: center; color: var(--ui-chat-incoming-accent); }
 .whisper-empty { max-width: 32ch; color: var(--ui-text-muted); margin: 8px 6px; font-size: 12px; line-height: 1.45; text-wrap: pretty; }
 .whisper-completion-hint { margin: 8px 6px 0; color: var(--ui-text-faint); font-size: 11px; }
-.whisper-suggestion[aria-selected="true"] { background: var(--whisper-incoming-fill); color: var(--ui-selection-ink); }
+.whisper-suggestion[aria-selected="true"], .whisper-person-open[data-highlighted] { background: var(--whisper-incoming-fill); color: var(--ui-selection-ink); }
 .whisper-source-filters { display: flex; align-items: center; gap: 4px; min-width: 0; margin: 8px 6px 10px; color: var(--ui-text-muted); }
 .whisper-source-filters > span { margin-right: auto; font-size: 11px; }
 .whisper-source-toggle { min-height: 24px; padding: 2px 8px; font-size: 11px; }
