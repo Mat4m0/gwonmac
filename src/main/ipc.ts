@@ -148,7 +148,7 @@ export interface IpcContext {
   showLauncher: () => void;
   openSettings: (section: LauncherSettingsSection) => void;
   requestQuit: (win: BrowserWindow) => void;
-  showQuitOrReload: (win: BrowserWindow) => Promise<void>;
+  showQuitOrReload: (win: BrowserWindow) => Promise<"stayed" | "left" | undefined>;
   reloadGame: (win: BrowserWindow, cause: GameReloadCause) => Promise<void>;
   claimRelogIntent: (win: BrowserWindow) => boolean;
   loadAccountTemplates: (win: BrowserWindow) => Promise<AccountTemplateLibrary | null>;

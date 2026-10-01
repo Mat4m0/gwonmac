@@ -35,7 +35,7 @@ const tracedKey = (key: string) => {
 interface ShortcutActions {
   run(action: ShortcutAction | "hub.toggle"): void | Promise<void>;
   edit(command: TextEditCommand): void;
-  quitOrReload(): void | Promise<void>;
+  quitOrReload(): void | Promise<unknown>;
   recordCommandQ?(
     phase: "claimed" | "repeat-contained" | "rearmed",
     reason: "none" | "keyup" | "dialog-settled" | "appkit-release" | "error",
