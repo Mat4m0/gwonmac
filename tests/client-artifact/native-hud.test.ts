@@ -1,4 +1,5 @@
 /** Executes the native HUD attachment, resource and input boundaries with controlled peers. */
+import { retainedClientFixture } from "../fixtures/retained-client.js";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
@@ -15,6 +16,7 @@ for (const channel of ["cooldowns", "keys", "effects"] as const) {
   const childId = isEffect ? 127 : channel === "keys" ? 7 : 0;
   assert.ok(process.env.GW_CLIENT_WASM);
   const input = new Uint8Array(await readFile(process.env.GW_CLIENT_WASM));
+  const clientFixture = retainedClientFixture(input);
   const output = appendNativeHud(input, 1);
   const sections = splitSections(output), bodies = parseCode(sectionById(sections, 10));
   const evidence = wasmEvidence(output); assert.ok(evidence); const module = evidence.moduleView();
@@ -22,7 +24,7 @@ for (const channel of ["cooldowns", "keys", "effects"] as const) {
   const label = exported.find((entry) => entry.name === "gwonmac_hud_label")?.index; assert.ok(label);
   const first = label - 8;
   const selected = [...Array.from({length: 7}, (_, n) => first + 2 + n), first, 6492, 6585, first + 9];
-  const peers = [17640, 6587, 294, 295, 322, 334, 6588, 6598, 6599, 6601, 6602, first + 1, 6593, 748, 17791, 17793, 1444, 1445, 1446, 1448, 1449, 1554, 1572, 6446, 1563, 1569, 1579, 1333, 1334, 1357, 264, 1559, 5595, 2249, 3137, 750];
+  const peers = [17640, 6587, 294, 295, 322, 334, 6588, 6598, 6599, 6601, 6602, first + 1, 6593, 748, 17791, 17793, 1444, 1445, 1446, 1448, 1449, 1554, 1572, 6446, 1563, 1569, 1579, 1333, 1334, 1357, 264, 1559, 5595, 2249, 3137, 750].map(index => clientFixture.functionIndex(index));
   const indices = new Map([...peers, ...selected].map((index, position) => [index, position]));
   const decoded = evidence.decodeFunctions([]);
   const rewritten = selected.map((index) => {
@@ -59,7 +61,7 @@ for (const channel of ["cooldowns", "keys", "effects"] as const) {
   const collected: number[] = [];
   let heap = 5_000_000; const allocations = new Set<number>();
   const exports: WebAssembly.Exports = new WebAssembly.Instance(new WebAssembly.Module(Uint8Array.from(fixture)), {peer: {
-    17640: () => { throw new Error("fixture cache must be initialized"); },
+    [clientFixture.functionIndex(17640)]: () => { throw new Error("fixture cache must be initialized"); },
     6587: (count: number, vectors: number) => {
       for (let n = 0; n < count; n++) {
         const vector = vectors + n * 16;
@@ -81,8 +83,8 @@ for (const channel of ["cooldowns", "keys", "effects"] as const) {
     [first + 1]: (owner: number) => { destroyed++; return owner; },
     6593: () => { invalidations++; },
     748: (handle: number) => { assert.ok(refs.has(handle), `release unknown ${handle}`); refs.delete(handle); },
-    17791: (bytes: number) => { const p = heap; heap += bytes; allocations.add(p); return p; },
-    17793: (pointer: number) => { assert.ok(allocations.delete(pointer)); },
+    [clientFixture.functionIndex(17791)]: (bytes: number) => { const p = heap; heap += bytes; allocations.add(p); return p; },
+    [clientFixture.functionIndex(17793)]: (pointer: number) => { assert.ok(allocations.delete(pointer)); },
     1444: () => create(),
     1445: () => 7_000_000,
     1446: (handle: number) => { const p = 6_000_000; meshVertices.set(handle, p); meshes++; return p; },
@@ -113,22 +115,22 @@ for (const channel of ["cooldowns", "keys", "effects"] as const) {
   const invoke = (name: string, ...args: number[]) => { const target = exports[name]; assert.equal(typeof target, "function"); if (typeof target === "function") return target(...args); };
   const scalar = (name: string, value: number) => { const target = exports[name]; assert.ok(target instanceof WebAssembly.Global); target.value = value; };
   const MODEL = 7_500_000, MODEL_TYPE = 20;
-  view.setUint32(20 + 1341168, MODEL_TYPE, true);
+  view.setUint32(20 + clientFixture.modelTypeOffset, MODEL_TYPE, true);
   const DEVICE = 7_600_000;
-  view.setUint32(2734712, DEVICE, true);
+  view.setUint32(clientFixture.graphicsDevice, DEVICE, true);
   view.setUint32(DEVICE + 460, 3, true);
   scalar("stack", 7_900_000); scalar("skillbar", 43);
   const region = 2048, atlasBytes = 8 + 1024 * 1024 * 4;
   view.setUint32(region, NATIVE_HUD_MAGIC, true); view.setUint32(region + 4, 1024, true);
   const assertQueueBusy = () => {
     for (const phase of [null, 0, 1, 2, 4]) {
-      view.setUint32(2734712, phase === null ? 0 : DEVICE, true);
+      view.setUint32(clientFixture.graphicsDevice, phase === null ? 0 : DEVICE, true);
       view.setUint32(DEVICE + 460, phase ?? 3, true);
       const before = new Uint8Array(view.buffer).slice();
       assert.equal(invoke("atlas", region, atlasBytes), 2, `queue phase ${phase} defers publishing`);
       assert.deepEqual(new Uint8Array(view.buffer), before, "busy leaves native memory unchanged");
     }
-    view.setUint32(2734712, DEVICE, true);
+    view.setUint32(clientFixture.graphicsDevice, DEVICE, true);
     view.setUint32(DEVICE + 460, 3, true);
   };
   assertQueueBusy(); assert.equal(textureCreates, 0, "first upload waits before allocating");
@@ -160,11 +162,11 @@ for (const channel of ["cooldowns", "keys", "effects"] as const) {
   u(laterPanel + 32, 18100); u(laterPanel + 40, 1); u(18100, 19004); u(18108, 1); u(19004, 779);
   u(stockKey, 1); u(stockKey + 184, 6); u(stockKey + 188, 53); u(stockKey + 296, frame + 296);
   u(stockKey + 28, 19400); u(19404, 780); // Stock keycap uses the implicit draw, without layer slots.
-  u(5913696, 1); u(5913576, 4); u(5913568, 4800); u(4800, frame); u(4804, veil); u(4808, stockKey); u(4812, laterPanel);
-  f(5910124, 1024); f(5910128, 768);
-  u(5913680, 8000); u(5913684, 16); u(5913688, 16);
+  u((clientFixture.memoryLayout === "october" ? 5923632 : 5913696), 1); u((clientFixture.memoryLayout === "october" ? 5923512 : 5913576), 4); u((clientFixture.memoryLayout === "october" ? 5923504 : 5913568), 4800); u(4800, frame); u(4804, veil); u(4808, stockKey); u(4812, laterPanel);
+  f((clientFixture.memoryLayout === "october" ? 5920060 : 5910124), 1024); f((clientFixture.memoryLayout === "october" ? 5920064 : 5910128), 768);
+  u((clientFixture.memoryLayout === "october" ? 5923616 : 5913680), 8000); u((clientFixture.memoryLayout === "october" ? 5923620 : 5913684), 16); u((clientFixture.memoryLayout === "october" ? 5923624 : 5913688), 16);
   for (let n = 0; n < 16; n++) { u(8000 + n * 16, 9000 + n * 256); u(8004 + n * 16, 64); }
-  [0, 3, 1710, 1711, 4, 8, 1712, 1713, 9, 9, 1710, 1711].forEach((v, n) => u(1420256 + n * 4, v));
+  [0, 3, 1710, 1711, 4, 8, 1712, 1713, 9, 9, 1710, 1711].forEach((v, n) => u((clientFixture.memoryLayout === "october" ? 1420176 : 1420256) + n * 4, v));
   invoke("buildCache");
   assert.equal(collected[0], 777, "stock bitmap drawing is preserved");
   assert.equal(collected.length, channel === "keys" ? 4 : 5, "only active key labels suppress the stock keycap");

@@ -34,7 +34,6 @@ const A = Object.freeze({
 });
 const MAP_ID = 200;
 const AREA_EPOCH = 7;
-const LAYOUT_ID = 1;
 const PLAYER_ID = 7;
 const WIDTH = 256;
 const HEIGHT = 64;
@@ -87,7 +86,12 @@ function trap(
   return at;
 }
 
-async function createKernel(): Promise<Kernel> {
+async function createKernel(layoutId: 1 | 2 | 3 = 1): Promise<Kernel> {
+  const layout = {
+    1: { contextRoot: 0x5a0e70, agentArray: 0x5a4de8 },
+    2: { contextRoot: 0x5a29b0, agentArray: 0x5a6928 },
+    3: { contextRoot: 5918848, agentArray: 5935096 },
+  }[layoutId];
   const bytes = await readFile("build/renderer/cartography-reachability-kernel.wasm");
   const module = new WebAssembly.Module(bytes);
   const memory = new WebAssembly.Memory({ initial: 112 });
@@ -109,7 +113,7 @@ async function createKernel(): Promise<Kernel> {
     new WebAssembly.Module(cartographyReachabilitySignatureBytes()),
     { kernel: instance.exports },
   );
-  view.setUint32(A.contextRoot, A.contexts, true);
+  view.setUint32(layout.contextRoot, A.contexts, true);
   view.setUint32(A.contexts + 6 * 4, A.game, true);
   view.setUint32(A.game + 0x14, A.mapContext, true);
   view.setUint32(A.mapContext + 0x8c, MAP_ID, true);
@@ -119,7 +123,7 @@ async function createKernel(): Promise<Kernel> {
   array(view, A.path + 0x04, A.blocked, 1);
   view.setUint32(A.maps + 0x14, 3, true);
   view.setUint32(A.maps + 0x18, A.traps, true);
-  array(view, A.agentArray, A.agents, 16);
+  array(view, layout.agentArray, A.agents, 16);
   view.setUint32(A.agents + PLAYER_ID * 4, A.player, true);
   view.setUint32(A.player + 0x2c, PLAYER_ID, true);
   view.setFloat32(A.player + 0x74, 180.5 * CELL_GAME, true);
@@ -140,14 +144,14 @@ async function createKernel(): Promise<Kernel> {
     classify(radius = 1) {
       return classify(
         A.region, CARTOGRAPHY_REACHABILITY_REGION_BYTES,
-        LAYOUT_ID, MAP_ID, AREA_EPOCH, PLAYER_ID,
+        layoutId, MAP_ID, AREA_EPOCH, PLAYER_ID,
         0, 0, WIDTH, HEIGHT, ...MAP_BOUNDS, radius,
       );
     },
     classifyShape(width, height, radius = 1, bounds = MAP_BOUNDS) {
       return classify(
         A.region, CARTOGRAPHY_REACHABILITY_REGION_BYTES,
-        LAYOUT_ID, MAP_ID, AREA_EPOCH, PLAYER_ID,
+        layoutId, MAP_ID, AREA_EPOCH, PLAYER_ID,
         0, 0, width, height, ...bounds, radius,
       );
     },
@@ -257,13 +261,13 @@ describe("Cartography reachability kernel", () => {
     assert.equal(kernel.view.getUint32(A.region + 36, true), 512);
   });
 
-  it("includes the player's connected component and excludes disconnected ground", async () => {
-    const kernel = await createKernel();
+  for (const layoutId of [1, 2, 3] as const) it(`layout ${layoutId} includes connected ground and excludes disconnected ground`, async () => {
+    const kernel = await createKernel(layoutId);
     assert.equal(kernel.classify(), 1);
     const header = new DataView(kernel.memory.buffer, A.region, 72);
     assert.equal(header.getUint32(20, true), MAP_ID);
     assert.equal(header.getUint32(24, true), AREA_EPOCH);
-    assert.equal(header.getUint32(28, true), LAYOUT_ID);
+    assert.equal(header.getUint32(28, true), layoutId);
     assert.equal(header.getUint32(44, true), 3);
     assert.equal(header.getUint32(48, true), 2);
     assert.equal(header.getUint32(52, true), 2);

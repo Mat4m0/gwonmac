@@ -179,9 +179,9 @@ export function captureCartographyEvidence(
       });
   return Object.freeze({
     source: Object.freeze({
-      layoutId: state.context?.layoutId === 1 || state.context?.layoutId === 2
+      layoutId: state.context?.layoutId === 1 || state.context?.layoutId === 2 || state.context?.layoutId === 3
         ? state.context.layoutId
-        : diagnostic?.layoutId === 1 || diagnostic?.layoutId === 2
+        : diagnostic?.layoutId === 1 || diagnostic?.layoutId === 2 || diagnostic?.layoutId === 3
           ? diagnostic.layoutId
           : null,
       gridRevision: GRID_REVISION,

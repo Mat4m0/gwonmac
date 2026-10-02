@@ -1,4 +1,5 @@
 /** The development Compass locator refuses exact-client body mutations. */
+import { retainedClientFixture } from "../fixtures/retained-client.js";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
@@ -48,7 +49,7 @@ test("certifies one named Compass frame and refuses owner mutations", {
     current.skillSlotGeometry,
   );
   assert.ok(proof);
-  assert.equal(proof.ownerFunction, 15_750);
+  assert.equal(proof.ownerFunction, retainedClientFixture(bytes).compassOwner);
   assert.deepEqual(Object.keys(proof.layout).sort(), [
     "frameArray", "frameBytes", "frameCount", "frameHashId", "frameId",
     "framePositionFlags", "frameScreenBottom", "frameScreenLeft",

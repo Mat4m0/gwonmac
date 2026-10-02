@@ -8,6 +8,18 @@ import {
 } from "../../src/main/core/wasm-binary.js";
 import { wasmEvidence } from "../../src/main/certification/wasm-evidence.js";
 
+import { NO_ENHANCEMENT_CAPABILITIES } from "../../src/shared/enhancement-contracts.js";
+
+const PREVIOUS_STABLE_CAPABILITIES = Object.freeze({
+  ...NO_ENHANCEMENT_CAPABILITIES, nativeCursor: true, targetObservation: true,
+  partyObservation: true, teamApply: true, travelAction: true, xunlaiAction: true,
+  chatAliases: true, skillSlotGeometry: true, skillCooldownObservation: true,
+  playRegionObservation: true, preGameControls: true,
+});
+
+import { rewriteTemplateSaveWasm } from "../../src/main/certification/template-save-compat.js";
+import { locateAutomaticLocalActions } from "../../src/main/certification/enhancement-local-actions-proof.js";
+
 const OCTOBER_CLIENT = "266b5a8aa88fe6440b10737d3eda27f4ceae2401d51d263debc0bca5c2075d87";
 
 test("changed native Team gate or Hero panel message refuses live integration", {
@@ -52,10 +64,56 @@ test("retaining the October record preserves the previous Stable client proof", 
     ? "GW_PREVIOUS_CLIENT_WASM must explicitly name the previous Stable fixture" : false,
 }, async () => {
   const input = new Uint8Array(await readFile(process.env.GW_PREVIOUS_CLIENT_WASM!));
-  const result = verifyLocalClientBytes(input);
-  assert.equal(isLocalClientVerification(result, result.officialSha256), true);
+  const result = verifyLocalClientBytes(input, PREVIOUS_STABLE_CAPABILITIES);
+  assert.equal(isLocalClientVerification(result, result.officialSha256, PREVIOUS_STABLE_CAPABILITIES), true);
   assert.equal(result.fileVerdict?.status, "proved");
-  for (const verdict of Object.values(result.featureVerdicts!)) {
-    assert.equal(verdict.status, "proved");
+  for (const [feature, requested] of Object.entries(PREVIOUS_STABLE_CAPABILITIES)) {
+    if (requested) assert.equal(Object.entries(result.featureVerdicts!).find(([name]) => name === feature)?.[1].status, "proved", feature);
   }
+});
+
+
+test("partial historic records preserve independently proved current actions", {
+  timeout: 120_000,
+}, async () => {
+  assert.ok(process.env.GW_CLIENT_WASM);
+  const input = new Uint8Array(await readFile(process.env.GW_CLIENT_WASM));
+  const verified = verifyLocalClientBytes(input);
+  const complete = verified.enhancementBuild;
+  assert.ok(complete?.travelAction?.guildHall && verified.templateSaveBuild);
+  const template = rewriteTemplateSaveWasm(input, verified.templateSaveBuild);
+  const partial = { ...complete };
+  delete partial.chatFiltering;
+  delete partial.quickItemMove;
+  const travel = { ...complete.travelAction };
+  delete travel.guildHall;
+  const composed = locateAutomaticLocalActions(template,
+    [complete, { ...partial, travelAction: travel }], undefined,
+    complete.observationBase?.layout, complete.playerSkillbarObservation ?? null);
+  assert.ok(composed);
+  assert.deepEqual(composed.travelAction, complete.travelAction);
+  assert.deepEqual(composed.chatFiltering, complete.chatFiltering);
+  assert.deepEqual(composed.quickItemMove, complete.quickItemMove);
+
+  const guild = complete.travelAction.guildHall;
+  assert.equal(isLocalClientVerification({ ...verified, enhancementBuild: {
+    ...complete, travelAction: { ...complete.travelAction, guildHall: {
+      ...guild, enterMessageId: 0x10000180,
+    } },
+  } }, verified.officialSha256), false, "old Guild Hall IDs must not cross the boundary");
+
+  // A valid change to the Guild Hall producer must withdraw only Guild Hall.
+  const sections = splitSections(input);
+  const bodies = parseCode(sectionById(sections, 10));
+  const imported = wasmEvidence(input)!.moduleView().functionImportCount;
+  const changedFunction = guild.producer.functionIndex;
+  const body = bodies[changedFunction - imported]!;
+  bodies[changedFunction - imported] = concat(body.slice(0, -1), Uint8Array.of(1), body.slice(-1));
+  const changed = concat(WASM_HEADER, ...sections.map(section => encodeSection(
+    section.id === 10 ? { id: 10, body: encodeCode(bodies) } : section)));
+  assert.equal(WebAssembly.validate(Uint8Array.from(changed)), true);
+  const refused = verifyLocalClientBytes(changed);
+  assert.equal(refused.featureVerdicts?.travelAction.status, "proved");
+  assert.equal(refused.enhancementBuild?.travelAction?.guildHall, undefined);
+  assert.equal(refused.featureVerdicts?.targetObservation.status, "proved");
 });

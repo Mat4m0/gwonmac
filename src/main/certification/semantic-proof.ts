@@ -9,7 +9,7 @@
  */
 import { createHash } from "node:crypto";
 
-export const SEMANTIC_VERIFIER_ABI = 9;
+export const SEMANTIC_VERIFIER_ABI = 10;
 
 export type ProofRefusal = Readonly<{
   inputSha256: string;

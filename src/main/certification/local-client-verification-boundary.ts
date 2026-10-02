@@ -3,8 +3,8 @@
  * It rejects stale, malformed, and cross-input proof messages.
  */
 import { isAlcoholObservationProof } from "./enhancement-alcohol-proof.js";
-import { NATIVE_HUD_RENDERING_PROOF } from "./native-hud-transform.js";
-import { RESIGN_NATIVE_SENDER } from "./enhancement-resign-proof.js";
+import { isNativeHudRenderingProof } from "./native-hud-transform.js";
+import { isResignNativeSender } from "./enhancement-resign-proof.js";
 import { isDeepStrictEqual } from "node:util";
 import { isDigest } from "../../shared/digest.js";
 import {
@@ -442,6 +442,8 @@ function matchesTravelAction(
     && candidate.configureExport === expected.configureExport
     && candidate.toggleExport === expected.toggleExport
     && candidate.messageId === expected.messageId
+    && (candidate.guildHall === undefined || ENHANCEMENT_BUILDS.some(known =>
+      isDeepStrictEqual(candidate.guildHall, known.travelAction?.guildHall)))
     && isIndex(candidate.producer.functionIndex)
     && isDigest(candidate.producer.bodySha256)
     && isDeepStrictEqual(candidate.producer.params, expected.producer.params)
@@ -716,11 +718,14 @@ function isAutomaticSemanticBuild(
   ) return false;
   if (build.whisperChat !== undefined && (build.gameThread === undefined
     || build.uiDispatcher === undefined || build.chatFiltering === undefined
-    || !isDeepStrictEqual(build.whisperChat, RESIGN_NATIVE_SENDER))) return false;
+    || !isResignNativeSender(build.whisperChat))) return false;
   if (build.resignAction !== undefined && (
     !build.playRegionObservation || !build.gameThread
-    || !isDeepStrictEqual(build.resignAction, RESIGN_NATIVE_SENDER)
+    || !isResignNativeSender(build.resignAction)
   )) return false;
+  if (build.quickItemMove !== undefined && !ENHANCEMENT_BUILDS.some(baseline =>
+    baseline.sha256 === build.sha256
+    && isDeepStrictEqual(build.quickItemMove, baseline.quickItemMove))) return false;
   const hasCursor = build.cursorEvent !== undefined;
   const hasPlayRegion = build.playRegionObservation !== undefined;
   const hasObservation = build.observationBase !== undefined;
@@ -739,7 +744,7 @@ function isAutomaticSemanticBuild(
   const hasEffectIcons = build.effectIconGeometry !== undefined;
   if (build.nativeHudRendering !== undefined && (
     (!hasSkillSlotGeometry && !hasEffectIcons)
-    || !isDeepStrictEqual(build.nativeHudRendering, NATIVE_HUD_RENDERING_PROOF)
+    || !isNativeHudRenderingProof(build.nativeHudRendering)
   )) return false;
   if (!hasCursor && !hasPlayRegion && !hasObservation && !hasTarget
     && !hasTravel && !hasXunlai && !hasAliases && !hasChatFiltering

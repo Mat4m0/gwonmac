@@ -33,8 +33,21 @@ const ROLE_SPECS = Object.freeze({
   connected: [342, ["i32", "i32"], ["i32"], "f2fa4fca9b49b2646a53a99b66468a01bad47b42827f9c99730451eea87efb6a"],
 } as const);
 
+// Retain complete notification families. The October native UI messages and
+// source-line witnesses changed; all call and connection-store relations remain.
+const OCTOBER_ROLE_SPECS = Object.freeze({
+  ...ROLE_SPECS,
+  requestSent: [308, ["i32"], [], "2aeb4477289e781fb3aa57e4f7cae5aca872536b5229d15cd81553b2709905a9"],
+  loginCompleted: [842, ["i32"], [], "5126e2ae3cef548722e3ccd539f40c40c9f12754fee50856f0278dcc0b0f861e"],
+  loginStart: [386, ["i32", "i32", "i32"], [], "de4f91d3b4274e31560fa66b2daddcda4bdd9d7fa2dd088f2c5725bdcd832807"],
+  connectionEvent: [1084, ["i32", "i32", "i32", "i32", "i32"], ["i32"], "0077378d51a2d6d4ad326238337d5cd68f5a2201307b2cf1d1bf00aab0de10bc"],
+  disconnect: [70, ["i32"], [], "6f0532c66baf13c8fd305ae99973c0e528647a896c59f82263faef2b63255e1c"],
+  connected: [342, ["i32", "i32"], ["i32"], "a98901c58036ff36cd4281829bd04b2bfd045f36dde2d87b6393bf6f1a47bf27"],
+} as const);
+const ROLE_FAMILIES = Object.freeze([ROLE_SPECS, OCTOBER_ROLE_SPECS]);
+
 export const FRIEND_LIFECYCLE_SEMANTIC_SHA256 = createHash("sha256").update(JSON.stringify({
-  roles: ROLE_SPECS,
+  roles: ROLE_FAMILIES,
   contract: "request-roster-completion-user-event-envelope-dispatch-five-connection-stores-bounded-context-v3",
 })).digest("hex");
 
@@ -69,8 +82,9 @@ function uniqueRole(
   data: WasmDataEvidence,
   functions: readonly DecodedFunction[],
   role: FriendLifecycleRole,
+  specs: Readonly<Record<FriendLifecycleRole, readonly [number, readonly string[], readonly string[], string]>>,
 ): DecodedFunction | null {
-  const [bytes, params, results, fingerprint] = ROLE_SPECS[role];
+  const [bytes, params, results, fingerprint] = specs[role];
   const matches = functions.filter((fn) =>
     module.bodies[fn.functionIndex - module.functionImportCount]?.byteLength === bytes
     && signatureMatches(module, fn.functionIndex, params, results)
@@ -96,13 +110,13 @@ export function inspectFriendLifecycle(input: Uint8Array): FriendLifecycleEviden
     if (table.status !== "candidate") return unavailable("friend-record-proof-unavailable");
     const module = evidence.moduleView();
     const functions = evidence.decodeFunctions([]);
-    const found = Object.fromEntries((Object.keys(ROLE_SPECS) as FriendLifecycleRole[])
-      .map((role) => [role, uniqueRole(module, evidence.data, functions, role)])) as Record<
+    const families = ROLE_FAMILIES.map(specs => Object.fromEntries(
+      (Object.keys(ROLE_SPECS) as FriendLifecycleRole[]).map(role =>
+        [role, uniqueRole(module, evidence.data, functions, role, specs)])) as Record<
         FriendLifecycleRole, DecodedFunction | null
-      >;
-    if (Object.values(found).some((fn) => fn === null)) {
-      return unavailable("complete-friend-lifecycle-roles-not-found");
-    }
+      >).filter(found => Object.values(found).every(fn => fn !== null));
+    if (families.length !== 1) return unavailable("complete-friend-lifecycle-roles-not-found");
+    const found = families[0]!;
     const roles = found as Record<FriendLifecycleRole, DecodedFunction>;
     const records = table.candidates[0]!.recordRoles;
     const callbackCalls = [

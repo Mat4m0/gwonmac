@@ -93,7 +93,7 @@ const signatureModule = new WebAssembly.Module(
   cartographyReachabilitySignatureBytes(),
 );
 
-export type CartographyMemoryLayoutId = 1 | 2;
+export type CartographyMemoryLayoutId = 1 | 2 | 3;
 
 function exactSurface(
   actual: readonly WebAssembly.ModuleImportDescriptor[]
@@ -142,7 +142,7 @@ function decode(
     || header.getUint32(4, true) !== CARTOGRAPHY_REACHABILITY_ABI
     || header.getUint32(8, true) !== CARTOGRAPHY_REACHABILITY_REGION_BYTES
     || status < READY || status > 6 || areaEpoch === 0
-    || (layoutId !== 1 && layoutId !== 2)
+    || (layoutId !== 1 && layoutId !== 2 && layoutId !== 3)
     || !Number.isSafeInteger(cells)
     || cells <= 0 || cells > CARTOGRAPHY_REACHABILITY_MAX_CELLS
   ) return null;

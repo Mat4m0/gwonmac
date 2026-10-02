@@ -348,7 +348,7 @@ function cartographyEvidence(value: JsonRecord): JsonRecord {
       chain.memoryLayout,
       `cartography.chains[${index}].memoryLayout`,
     );
-    if (memoryLayout !== "official" && memoryLayout !== "relocated") {
+    if (memoryLayout !== "official" && memoryLayout !== "relocated" && memoryLayout !== "october") {
       throw new Error("Cartography memory layout is not closed");
     }
     return Object.freeze({

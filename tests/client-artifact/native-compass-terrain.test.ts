@@ -1,4 +1,5 @@
 /** Executes emitted native terrain ownership and upload code against controlled peers. */
+import { retainedClientFixture } from "../fixtures/retained-client.js";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
@@ -11,7 +12,8 @@ import { NATIVE_COMPASS_CLIP_RADIUS, NATIVE_COMPASS_TERRAIN_MAGIC, NATIVE_COMPAS
 test("native terrain owns bounded resources, follows its Canvas and refuses invalid uploads", async () => {
   assert.ok(process.env.GW_CLIENT_WASM);
   const input = new Uint8Array(await readFile(process.env.GW_CLIENT_WASM));
-  const output = transformCartographySpikeWasm(input, "relocated");
+  const fixture = retainedClientFixture(input);
+  const output = transformCartographySpikeWasm(input, fixture.memoryLayout);
   const sections = splitSections(output); const bodies = parseCode(sectionById(sections, 10));
   const evidence = wasmEvidence(output); assert.ok(evidence); const module = evidence.moduleView();
   const exported = parseExports(sectionById(sections, 7));
@@ -39,7 +41,7 @@ test("native terrain owns bounded resources, follows its Canvas and refuses inva
     || ["gwonmac_cartography_context_area_epoch", "gwonmac_cartography_context_status"].includes(entry.name)));
   const section = (id: number, body: Uint8Array) => encodeSection({id, body});
   const labels = ["hide", "destroy", "init", "attach", "update", "publish"];
-  const fixture = concat(WASM_HEADER,
+  const capsule = concat(WASM_HEADER,
     section(1, sectionById(sections, 1)),
     section(2, concat(uleb(peers.length), ...peers.map((index) => concat(encodeName("peer"), encodeName(String(index)), Uint8Array.of(0), uleb(module.functionTypeIndices[index]!))))),
     section(3, concat(uleb(selected.length), ...selected.map((index) => uleb(module.functionTypeIndices[index]!)))),
@@ -52,7 +54,7 @@ test("native terrain owns bounded resources, follows its Canvas and refuses inva
     section(10, encodeCode(rewritten)));
   const released: number[] = []; const vertices: number[] = []; const indicesAllocated: number[] = [];
   let textureCreates = 0; let attachments = 0;
-  const { exports } = new WebAssembly.Instance(new WebAssembly.Module(Uint8Array.from(fixture)), {peer: {
+  const { exports } = new WebAssembly.Instance(new WebAssembly.Module(Uint8Array.from(capsule)), {peer: {
     1444: (format: number, flags: number) => { assert.deepEqual([format, flags], [265, 0]); return 11; },
     1445: (handle: number, count: number) => { assert.equal(handle, 11); indicesAllocated.push(count); return 131072; },
     1446: (handle: number, count: number) => { assert.equal(handle, 11); vertices.push(count); return 65536; },
@@ -80,9 +82,9 @@ test("native terrain owns bounded resources, follows its Canvas and refuses inva
   const scalar = (name: string, value: number) => { const target = exports[name]; assert.ok(target instanceof WebAssembly.Global); target.value = value; };
   const invoke = (name: string, ...args: number[]) => { const target = exports[name]; assert.equal(typeof target, "function"); if (typeof target === "function") return target(...args); };
   const MODEL = 196608 + 4096; const MODEL_TYPE = 20;
-  view.setUint32(20 + 1341168, MODEL_TYPE, true);
+  view.setUint32(20 + fixture.modelTypeOffset, MODEL_TYPE, true);
   const DEVICE = 400_000;
-  view.setUint32(2734712, DEVICE, true);
+  view.setUint32(fixture.graphicsDevice, DEVICE, true);
   view.setUint32(DEVICE + 460, 3, true);
   scalar("stack", 196608); scalar("gwonmac_cartography_context_status", 1); scalar("gwonmac_cartography_context_area_epoch", 7);
   const owner = 256; const camera = 768; const direction = 784; const region = 2048; const bytes = 32 + 64 * 64 * 4;
@@ -97,13 +99,13 @@ test("native terrain owns bounded resources, follows its Canvas and refuses inva
   };
   const assertQueueBusy = () => {
     for (const phase of [null, 0, 1, 2, 4]) {
-      view.setUint32(2734712, phase === null ? 0 : DEVICE, true);
+      view.setUint32(fixture.graphicsDevice, phase === null ? 0 : DEVICE, true);
       view.setUint32(DEVICE + 460, phase ?? 3, true);
       const before = new Uint8Array(view.buffer).slice();
       assert.equal(invoke("publish", region, bytes), 2, `queue phase ${phase} defers publishing`);
       assert.deepEqual(new Uint8Array(view.buffer), before, "busy leaves native memory unchanged");
     }
-    view.setUint32(2734712, DEVICE, true);
+    view.setUint32(fixture.graphicsDevice, DEVICE, true);
     view.setUint32(DEVICE + 460, 3, true);
   };
   header(); assert.equal(invoke("publish", region, bytes), 0); assert.equal(textureCreates, 0);

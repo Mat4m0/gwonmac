@@ -419,7 +419,7 @@ export function validateCartographyEvidence(value: unknown): string[] {
   ]) && typeof value.source.applicationVersion === "string"
     && VERSION.test(value.source.applicationVersion)
     && (value.source.clientSha256 === null || digest(value.source.clientSha256))
-    && (value.source.layoutId === null || value.source.layoutId === 1 || value.source.layoutId === 2)
+    && (value.source.layoutId === null || value.source.layoutId === 1 || value.source.layoutId === 2 || value.source.layoutId === 3)
     && positiveUint(value.source.gridRevision)
     && digest(value.source.toolboxSha256)
     && (value.source.kernelSha256 === null || digest(value.source.kernelSha256));

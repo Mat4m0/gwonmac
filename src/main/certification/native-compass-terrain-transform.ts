@@ -7,8 +7,9 @@ import {
   parseIndexVector, sectionById, sleb, splitSections, uleb, vectorPayload, WASM_HEADER,
 } from "../core/wasm-binary.js";
 import { encodeName } from "./cartography-transform-internals.js";
-import { NATIVE_RENDER_REFERENCE_FUNCTIONS, nativeGraphicsBusy, nativeModelBusy } from "./native-render-reference.js";
-import { functionBodySha256, wasmEvidence } from "./wasm-evidence.js";
+import { NATIVE_RENDER_REFERENCE_FUNCTIONS, nativeGraphicsBusy, nativeModelBusy,
+  resolveNativeRenderBindings, type NativeRenderBindings } from "./native-render-reference.js";
+import { wasmEvidence } from "./wasm-evidence.js";
 import { NATIVE_PUBLISH_BUSY } from "../../shared/native-publish.js";
 import {
   NATIVE_COMPASS_CLIP_RADIUS, NATIVE_COMPASS_TERRAIN_HEADER_BYTES,
@@ -60,12 +61,13 @@ export function appendNativeCompassTerrain(input: Uint8Array): Uint8Array {
   const evidence = wasmEvidence(input);
   if (!evidence) throw new Error("invalid native Compass terrain input");
   const module = evidence.moduleView();
-  if (CHECKED.some(([index, hash]) => functionBodySha256(module, index) !== hash)) return input;
-  return appendCompassSurface(appendCompassSurface(input, false), true);
+  const bindings = resolveNativeRenderBindings(module, CHECKED);
+  if (!bindings) return input;
+  return appendCompassSurface(appendCompassSurface(input, false, bindings), true, bindings);
 }
 
 /** Both Compass consumers share exact Canvas lifetime and bitmap ownership. */
-function appendCompassSurface(input: Uint8Array, screenSpace: boolean): Uint8Array {
+function appendCompassSurface(input: Uint8Array, screenSpace: boolean, bindings: NativeRenderBindings): Uint8Array {
   const evidence = wasmEvidence(input);
   if (!evidence) throw new Error("invalid Compass surface input");
   const module = evidence.moduleView();
@@ -90,18 +92,18 @@ function appendCompassSurface(input: Uint8Array, screenSpace: boolean): Uint8Arr
   const contextValid = () => concat(g(3), i(0), op(0x4a), g(3), op(0x23), uleb(epoch), op(0x46, 0x71), op(0x23), uleb(status), i(1), op(0x46, 0x71));
   const finite = (value: Uint8Array, limit: number) => concat(value, op(0x8b), f(limit), op(0x5f));
   const hide = concat(op(0), g(3), op(0x04, 0x40), i(0), put(3),
-    g(1), op(0x04, 0x40), g(1), i(0), call(1445), op(0x1a), g(1), call(1448), op(0x0b, 0x0b, 0x0b));
+    g(1), op(0x04, 0x40), g(1), i(0), call(bindings.functionIndex(1445)), op(0x1a), g(1), call(bindings.functionIndex(1448)), op(0x0b, 0x0b, 0x0b));
   const destroy = concat(op(0), l(0), g(0), op(0x46), g(0), i(0), op(0x47, 0x71, 0x04, 0x40),
-    call(hideIndex), g(2), call(748), g(1), call(748),
+    call(hideIndex), g(2), call(bindings.functionIndex(748)), g(1), call(bindings.functionIndex(748)),
     ...[0, 1, 2, 3, 4, 9].map((index) => concat(i(0), put(index))), increment(8), op(0x0b, 0x0b));
   // Clone only this Canvas's retained draw object, then replace its one mesh.
   // The constructor hook runs after the native transform has been established.
   const init = concat(op(0), g(0), call(destroyIndex), l(0), put(0),
-    i(265), i(0), call(1444), put(1), l(0), load(144), call(1556), put(2),
-    g(2), i(0), g(1), call(1565), g(2), i(0), call(1579), increment(7), op(0x0b));
+    i(265), i(0), call(bindings.functionIndex(1444)), put(1), l(0), load(144), call(bindings.functionIndex(1556)), put(2),
+    g(2), i(0), g(1), call(bindings.functionIndex(1565)), g(2), i(0), call(bindings.functionIndex(1579)), increment(7), op(0x0b));
   const attach = concat(op(1, 1, 0x7f),
     l(0), g(0), op(0x46), g(2), i(0), op(0x47, 0x71, 0x04, 0x40), stack(2, 16),
-    l(2), g(2), save(0), l(1), i(1), l(2), i(4), call(6827), unstack(2, 16), op(0x0b, 0x0b));
+    l(2), g(2), save(0), l(1), i(1), l(2), i(4), call(bindings.functionIndex(6827)), unstack(2, 16), op(0x0b, 0x0b));
 
   const vertexStores: Uint8Array[] = [];
   const points: Readonly<{ x: number; y: number; edge: boolean }>[] = [{x: 0, y: 0, edge: false}];
@@ -159,11 +161,11 @@ function appendCompassSurface(input: Uint8Array, screenSpace: boolean): Uint8Arr
     l(11), g(11), f(4500), op(0x93, 0x5f, 0x71), l(11), g(11), g(12), op(0x93), f(4500), op(0x92, 0x60, 0x71),
     ]),
     op(0x45, 0x04, 0x40), call(hideIndex), op(0x0f, 0x0b),
-    stack(3, 32), g(1), i(points.length), call(1446), s(4), g(1), i(SEGMENTS * 9), call(1445), s(5),
+    stack(3, 32), g(1), i(points.length), call(bindings.functionIndex(1446)), s(4), g(1), i(SEGMENTS * 9), call(bindings.functionIndex(1445)), s(5),
     ...vertexStores, ...indexStores,
     ...[0, 4, 8].map((offset) => concat(l(3), f(0), save(offset, true))),
     ...[12, 16, 20].map((offset) => concat(l(3), l(6), l(7), op(0x97), save(offset, true))),
-    g(1), l(3), l(3), i(12), op(0x6a), call(1449), g(1), call(1448),
+    g(1), l(3), l(3), i(12), op(0x6a), call(bindings.functionIndex(1449)), g(1), call(bindings.functionIndex(1448)),
     g(4), put(19), increment(5), unstack(3, 32), op(0x0b));
 
   // A copied bitmap is the only write capability. Validate its complete region
@@ -172,8 +174,8 @@ function appendCompassSurface(input: Uint8Array, screenSpace: boolean): Uint8Arr
   // The texture swap below asserts while the renderer holds the model; this
   // runs from the host's frame, so report busy before hiding or allocating.
   const publish = concat(op(1, 6, 0x7f),
-    nativeGraphicsBusy(7), op(0x04, 0x40), i(NATIVE_PUBLISH_BUSY), op(0x0f, 0x0b),
-    g(2), op(0x04, 0x40), nativeModelBusy(g(2), 7), op(0x04, 0x40), i(NATIVE_PUBLISH_BUSY), op(0x0f, 0x0b, 0x0b),
+    nativeGraphicsBusy(7, bindings), op(0x04, 0x40), i(NATIVE_PUBLISH_BUSY), op(0x0f, 0x0b),
+    g(2), op(0x04, 0x40), nativeModelBusy(g(2), 7, bindings), op(0x04, 0x40), i(NATIVE_PUBLISH_BUSY), op(0x0f, 0x0b, 0x0b),
     call(hideIndex),
     l(0), i(0), op(0x4b), l(0), i(3), op(0x71, 0x45, 0x71),
     l(1), i(NATIVE_COMPASS_TERRAIN_HEADER_BYTES), op(0x4f, 0x71), memoryEnd(i(NATIVE_COMPASS_TERRAIN_HEADER_BYTES)), op(0x71),
@@ -191,10 +193,10 @@ function appendCompassSurface(input: Uint8Array, screenSpace: boolean): Uint8Arr
     op(0x45, 0x04, 0x40), i(0), op(0x0f, 0x0b), stack(4, 32),
     l(4), l(0), i(NATIVE_COMPASS_TERRAIN_HEADER_BYTES), op(0x6a), save(0),
     l(4), l(5), save(8), l(4), l(5), save(12),
-    l(4), i(0), l(4), i(8), op(0x6a), i(1), i(112), call(2249), s(2),
+    l(4), i(0), l(4), i(8), op(0x6a), i(1), i(112), call(bindings.functionIndex(2249)), s(2),
     l(4), l(2), save(16), l(4), i(screenSpace ? 4 : 7), save(20), l(4), i(482), save(24),
-    i(1), l(4), i(16), op(0x6a), l(4), i(20), op(0x6a), l(4), i(24), op(0x6a), i(0), i(0), i(33555424), i(screenSpace ? 4 : 11), call(3137), s(3),
-    g(2), i(0), l(3), call(1569), l(3), call(748), l(2), call(748),
+    i(1), l(4), i(16), op(0x6a), l(4), i(20), op(0x6a), l(4), i(24), op(0x6a), i(0), i(0), i(33555424), i(screenSpace ? 4 : 11), call(bindings.functionIndex(3137)), s(3),
+    g(2), i(0), l(3), call(bindings.functionIndex(1569)), l(3), call(bindings.functionIndex(748)), l(2), call(bindings.functionIndex(748)),
     l(0), load(16, true), put(10), l(0), load(20, true), put(11), l(0), load(24, true), put(12),
     l(5), put(9), l(0), load(28), put(4), l(6), put(3), increment(6), unstack(4, 32), i(1), op(0x0b));
 
@@ -204,7 +206,7 @@ function appendCompassSurface(input: Uint8Array, screenSpace: boolean): Uint8Arr
     [14126, 3, concat(l(0), l(1), call(attachIndex))],
     [14137, 17, concat(l(0), l(1), l(2), call(updateIndex))],
   ] as const) {
-    const local = index - module.functionImportCount; const body = bodies[local]!;
+    const local = bindings.functionIndex(index) - module.functionImportCount; const body = bodies[local]!;
     let insertion = offset;
     if (screenSpace && index === 14126) {
       const terrainPublish = exported.find((entry) => entry.name === "gwonmac_compass_terrain_publish")?.index;

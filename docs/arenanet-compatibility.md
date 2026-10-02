@@ -145,7 +145,7 @@ function-index and static-data relocation without weakening input binding.
 ## Current implementation limits
 
 The rules above are the required design, not a promise that every existing
-locator already meets the final relocation-resistant bar. At verifier ABI 9:
+locator already meets the final relocation-resistant bar. At verifier ABI 10:
 
 - Template-saving proof binds relocated helper calls to their decoded sites,
   signatures, and reviewed complete callee bodies. Other instruction spans and
@@ -158,6 +158,9 @@ locator already meets the final relocation-resistant bar. At verifier ABI 9:
   roles still contain exact function-index and body bindings. Unrelated client
   changes recover locally; a reindex or equivalent body rewrite can still
   require a stronger semantic locator; and
+- Quick Item Move still requires reviewed item and trade fields for the exact
+  post-template input. Its native move-message identifier belongs to that
+  certificate, not to a shared constant; and
 - friend observation accepts relocated functions and static addresses when all
   semantic relationships still reproduce, but its exact role shapes can refuse
   after an equivalent compiler rewrite.
@@ -168,6 +171,26 @@ must remain local to that feature and its declared dependants, but restoring it
 can still require a source change until the remaining locators are migrated to
 independent semantic witnesses. Do not describe the current implementation as
 automatically surviving every routine rebuild.
+
+The October recovery retains complete reviewed families for chat, effects,
+character controls, native rendering, friend lifecycle, and map surfaces. Select
+one coherent family. Do not mix matching functions from different families.
+Message identifiers and native guard operands can change independently. A
+matching whole function binds its operands; a shared numerical shift does not.
+
+Compiled feature records can be partial. Compose independently derived values
+per feature. An absent historic field must not erase a proved current feature.
+Conflicting non-null values refuse that feature and its declared dependants.
+Guild Hall has a separate proof inside Travel. A changed Guild Hall producer
+withdraws Guild Hall while ordinary Travel remains available. A changed shared
+Travel helper can withdraw both.
+
+The offline release check must exercise every shipped profile through template,
+Enhancement, Friends, Cartography, double-click, memory selection, and cache
+reuse. A list of proved Enhancement verdicts alone does not establish this
+complete chain. Native publisher tests must also execute the current queue and
+model guards, resource cleanup, clipping, and draw ordering. Live appearance,
+input feel, and command completion still require Matthias's Abnahme.
 
 ## Patch-day playbook
 

@@ -26,6 +26,7 @@ const SHA256 = /^[0-9a-f]{64}$/;
 const MEMORY_LAYOUT_IDS: readonly CartographyMemoryLayoutId[] = [
   "official",
   "relocated",
+  "october",
 ];
 
 export interface CartographySpikeBuild {
@@ -90,7 +91,7 @@ export function isCartographySpikeBuild(
     && build.inputSha256 === inputSha256
     && SHA256.test(build.inputSha256)
     && build.transformAbi === CARTOGRAPHY_SPIKE_TRANSFORM_ABI
-    && (build.memoryLayout === "official" || build.memoryLayout === "relocated")
+    && (build.memoryLayout === "official" || build.memoryLayout === "relocated" || build.memoryLayout === "october")
     && typeof build.outputSha256 === "string"
     && SHA256.test(build.outputSha256);
 }

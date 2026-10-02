@@ -15,8 +15,10 @@ import {
 import { deriveSkillSlotGeometry } from "./enhancement-skill-slot-geometry-proof.js";
 import type { KnownEnhancementBuild } from "./enhancement-builds.js";
 
-const COMPASS_OWNER_BODY_SHA256 =
-  "9df419f84c93ec674540ef60dc74cae03495e3308843ab3fcc594cad93e97043";
+const COMPASS_OWNER_BODY_HASHES = Object.freeze([
+  "9df419f84c93ec674540ef60dc74cae03495e3308843ab3fcc594cad93e97043",
+  "968c145474ccf26e7b2b8bd64ee11c06cecd0e9d0af011474560111c421cf209",
+]);
 
 type PreGameProof = NonNullable<KnownEnhancementBuild["preGameControls"]>;
 type SkillFrameProof = NonNullable<KnownEnhancementBuild["skillSlotGeometry"]>;
@@ -60,11 +62,11 @@ export function deriveCompassFrameSpikeProof(
   if (owners.length !== 1) return null;
   const owner = owners[0]!;
   const currentGeometry = deriveSkillSlotGeometry(context);
+  const ownerHash = functionBodySha256(module, owner.functionIndex);
   if (
     currentGeometry === null
     || !signatureMatches(module, owner.functionIndex, ["i32", "i32"], [])
-    || functionBodySha256(module, owner.functionIndex)
-      !== COMPASS_OWNER_BODY_SHA256
+    || !COMPASS_OWNER_BODY_HASHES.includes(ownerHash)
   ) return null;
   const shared = preGame.layout;
   const retainedGeometry = skillFrame.layout;
@@ -81,7 +83,7 @@ export function deriveCompassFrameSpikeProof(
     labelAddress: named.labelAddress,
     labelHash: named.labelHash,
     ownerFunction: owner.functionIndex,
-    ownerBodySha256: COMPASS_OWNER_BODY_SHA256,
+    ownerBodySha256: ownerHash,
     layout: Object.freeze({
       frameArray: geometry.frameArray,
       frameCount: geometry.frameCount,
