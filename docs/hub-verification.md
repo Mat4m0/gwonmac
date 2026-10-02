@@ -801,52 +801,50 @@ does not certify the later signed assets. Signed qualification, Stable/Beta
 round-trip and the exact-draft live checklist in
 [Release verification](release-verification.md) remain release gates.
 
+## Hub polish — 1 October 2026
 
-## Hub polish — Performance and Accessibility
+The Hub polish closes the 2026-09-26 Hub audit. Its 255 findings are mapped to
+the stacked pull requests that close them; each fix has a regression that fails
+without it. Product decisions taken for it: the Hub never dims the game; the
+minimum Hub size is 340×380; Command-R stays the Hub's while the Hub uses it
+(rebinding is a later feature); light custom palettes derive their unchanged
+controls from the window colour; Whispers opens beside an open Trade until the
+player places it; there is no Command-Return secondary action.
 
-The [branch ledger](../internals/hub-polish-perf-a11y-ledger.md) records scope,
-regression backouts, visual inspections and unresolved performance requirements.
-Current local evidence is offline. Empty status regions, named result groups,
-carousel positions and conversation logs have browser structural proof. This does
-not establish VoiceOver speech or AZERTY behavior. Live gameplay and input feel
-remain Matthias's checks.
+Verification on the final source: `pnpm check` and `pnpm build` pass. The full
+Tools browser suite (779 cases, two workers) and the untargeted Electron suite
+(183 cases) ran once on the stack. Each failure was rerun alone and diagnosed:
+load-sensitive timing (clipboard editing, the root typing budget, the narrow
+Characters carousel) passed alone; stale locators after deliberate renames were
+updated; `character-switch-background` also fails on `main` in this
+environment. The keyboard matrix was regenerated once after all behaviour
+changes; its observer names Settings controls by their row label.
 
-Root build/team matches are capped. The complete Library still creates all rich
-row DOM on entry. Its measured entry and long task exceed the requested scale
-budget; the ledger keeps that requirement deferred. Do not treat faster isolated
-measurements or incomplete observer delivery as acceptance.
+A 1,000-build Library opens in about 16–21 ms with no long task: rows beyond
+the first 50 render over the next frames, and selection, End and a restored
+scroll position render the rows they need first.
 
-## Visual consistency verification
-
-The visual regression spec covers shared search geometry, compact Home builds,
-folder glyphs, named calculator copy targets, grouped digits, and Settings → Maps.
-It checks native child controls without changing their saved values.
-
-The style matrix compares the frame and search box across both styles, six fonts,
-and 65% and 94% opacity. Text size uses existing typography tokens from 100%
-to 200%. It does not zoom the game. Regression backouts and verification counts
-are recorded in [the visual ledger](../internals/hub-polish-visual-ledger.md).
-
-These fixture checks do not verify the live game, input feel, VoiceOver, or AZERTY.
+These are offline fixture and Electron checks. Live gameplay, input feel,
+VoiceOver, physical AZERTY/QWERTZ and signed exact-draft QA remain Matthias's
+checks before acceptance.
 
 
-## Hub polish integration verification
+## Hosted CI repair — 2 October 2026
 
-The [integration review](../internals/hub-polish-review.md) accounts for all 255
-plan findings and links every draft. The
-[integration ledger](../internals/hub-polish-integration-ledger.md) records merge
-resolutions, red/green proofs, mistakes and unresolved limits.
+Wall-clock Hub scale, Travel and clipboard budgets use three times their local
+limits on shared CI runners. Local limits stay unchanged. DOM mutation counts,
+selection, copied values and lifecycle assertions retain their exact limits.
+The margin reduces scheduling noise but can admit smaller timing regressions.
 
-The full Tools browser suite ran once with two workers. It passed 708 cases
-initially; all 40 failed cases passed individually after fixes and assertion
-reconciliation. The touched Electron specs passed 17 cases initially; all 23
-failed cases passed individually. New owner regressions passed separately.
+The Build Library session test waits for each key to move the selection before
+sending the next key. The calculator save fixture holds its response for one
+second so consecutive Command-Return presses exercise the pending save.
 
-The repository gate, build, kernel integrity checks, integration tests and
-release tests pass. Hosted application verification remains blocked by the
-existing dependency audit. Consult the integration draft's current checks.
+Markdown-only changes under `internals/` use the fast check. Other file types
+retain full verification, including deletion of the polish findings JSON.
 
-Live game, input feel, VoiceOver, physical AZERTY and signed exact-draft QA remain
-Matthias's checks. Custom-palette contrast, full Library entry cost and the
-explicit design decisions remain open. Do not use offline closure as release
-acceptance.
+The previous full flake sweep was interrupted. Targeted reruns are historical
+evidence; they do not establish a complete pass. Matthias requested hosted
+verification for this repair. Each published head must pass Application
+verification before the stack merges. No local tests or app launches are needed
+for this repair. Live and signed-draft acceptance limits above still apply.
