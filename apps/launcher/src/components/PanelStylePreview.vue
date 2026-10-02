@@ -2,10 +2,10 @@
 import { computed } from "vue";
 import type { LauncherSettings } from "@shared/launcher-contracts";
 import { defaultCustomUiTheme } from "@shared/ui-theme";
-import { accessibleForeground, compositeColor, contrastRatio } from "@shared/ui-color";
+import { accessibleForeground, compositeColor, contrastRatio, renderedCustomTheme } from "@shared/ui-color";
 
 const props = defineProps<{ settings: LauncherSettings }>();
-const theme = computed(() => props.settings.uiStyle === "custom" ? props.settings.uiCustomTheme : defaultCustomUiTheme(props.settings.uiStyle === "obsidian" ? "modern" : "classic"));
+const theme = computed(() => props.settings.uiStyle === "custom" ? renderedCustomTheme(props.settings.uiCustomTheme) : defaultCustomUiTheme(props.settings.uiStyle === "obsidian" ? "modern" : "classic"));
 const backgrounds = computed(() => [compositeColor(theme.value.window, "#FFFFFF", props.settings.uiPanelOpacity / 100), compositeColor(theme.value.window, "#000000", props.settings.uiPanelOpacity / 100), theme.value.titlebar, theme.value.surface, theme.value.recessed]);
 const ink = computed(() => accessibleForeground(theme.value.text, backgrounds.value));
 const muted = computed(() => accessibleForeground(theme.value.mutedText, backgrounds.value));

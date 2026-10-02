@@ -199,6 +199,8 @@ for (const [name, appearance, scene] of [
   ['Classic 94% over snow', { uiStyle: 'guild-wars', uiPanelOpacity: 94 }, CHECKERBOARD],
   ['Classic 65% over snow', { uiStyle: 'guild-wars', uiPanelOpacity: 65 }, CHECKERBOARD],
   ['a blue custom accent at 94% over night', { uiStyle: 'custom', uiPanelOpacity: 94, uiCustomTheme: BLUE_ACCENT }, NIGHT],
+  // A light window with otherwise default colours: its controls follow the window.
+  ['a white custom window at 100% over night', { uiStyle: 'custom', uiPanelOpacity: 100, uiCustomTheme: { ...BLUE_ACCENT, accent: '#E6C882', selected: '#1B3554', window: '#FFFFFF' } }, NIGHT],
 ] as const) {
   test(`every Hub text role reads at 4.5:1 in ${name}`, async ({ page }) => {
     const media = await page.context().newCDPSession(page);
@@ -256,7 +258,8 @@ test('Reduce Transparency makes the Hub opaque without hiding the game or re-ink
     await reduce('reduce');
     await expect.poll(() => page.locator('.hub-panel').evaluate(element => getComputedStyle(element, '::before').backgroundColor), uiStyle).not.toMatch(/0\.65\)/);
     const reduced = await look();
-    // The scrim is not a material: the game stays exactly as visible around the Hub.
+    // Neither style dims the game behind the Hub, with or without Reduce Transparency.
+    expect(translucent.backdrop, uiStyle).toBe('rgba(0, 0, 0, 0)');
     expect(reduced.backdrop, uiStyle).toBe(translucent.backdrop);
     expect(reduced.outside, uiStyle).toEqual(translucent.outside);
     // The opaque panel keeps its designed inks, as at 100 %.
@@ -268,7 +271,7 @@ test('Reduce Transparency makes the Hub opaque without hiding the game or re-ink
 
 const PANEL_FONTS = ['guild-wars', 'inter', 'system', 'georgia', 'avenir', 'palatino'] as const;
 
-for (const [name, viewport, hub] of [['a narrow window', { width: 390, height: 800 }, null], ['the smallest Hub', { width: 1280, height: 800 }, { width: 340, height: 300 }]] as const) {
+for (const [name, viewport, hub] of [['a narrow window', { width: 390, height: 800 }, null], ['the smallest Hub', { width: 1280, height: 800 }, { width: 340, height: 380 }]] as const) {
   test(`the footer stays one line while arrowing in ${name}`, async ({ page }) => {
     await page.setViewportSize(viewport);
     await page.goto('/?hub');
@@ -288,6 +291,9 @@ for (const [name, viewport, hub] of [['a narrow window', { width: 390, height: 8
       expect([...heights][0], `${uiFont} footer`).toBeLessThanOrEqual(52);
       // The full label stays the primary's name even where it ends in an ellipsis.
       expect(await primary.getAttribute('title')).toBe(await primary.locator('.hub-primary-label').textContent());
+      // The smallest Hub still shows three whole results (HUB-238).
+      if (hub) expect(await page.locator('#hub-results').evaluate(list => { const box = list.getBoundingClientRect();
+        return [...list.querySelectorAll('.hub-row')].filter(row => { const rect = row.getBoundingClientRect(); return rect.top >= box.top - 1 && rect.bottom <= box.bottom + 1; }).length; }), `${uiFont} rows`).toBeGreaterThanOrEqual(3);
     }
   });
 }

@@ -1,5 +1,15 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
+test('the smallest Hub keeps room for three results (HUB-238)', async ({ page }) => {
+  await page.goto('/?hub');
+  await page.getByRole('button', { name: 'Lock Hub position', exact: true }).click();
+  const corner = (await page.getByRole('button', { name: 'Resize Hub', exact: true }).boundingBox())!;
+  await page.mouse.move(corner.x + 10, corner.y + 10);
+  await page.mouse.down(); await page.mouse.move(corner.x - 1000, corner.y - 1000, { steps: 4 }); await page.mouse.up();
+  const box = (await page.locator('.hub-panel').boundingBox())!;
+  expect({ width: Math.round(box.width), height: Math.round(box.height) }).toEqual({ width: 340, height: 380 });
+});
+
 test('Hub has a locked frame, invisible corner hit area and bounded movable geometry', async ({ page }, info) => {
   await page.goto('/?hub');
   const panel = page.locator('.hub-panel');

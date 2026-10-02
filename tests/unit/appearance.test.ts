@@ -7,7 +7,7 @@ import {
   appearanceVariables,
   applyAppearance,
 } from "../../src/renderer/appearance.js";
-import { accessibleForeground, compositeColor, contrastRatio, parseRgb, readableForeground, readableSharedForeground } from "../../src/shared/ui-color.js";
+import { accessibleForeground, compositeColor, contrastRatio, customThemeReadable, parseRgb, readableForeground, readableSharedForeground, renderedCustomTheme } from "../../src/shared/ui-color.js";
 import {
   DEFAULT_SETTINGS,
   type AppSettings,
@@ -278,20 +278,28 @@ describe("panel text legibility over the game", () => {
     }
   });
 
-  it("includes unchanged control paint when a custom window turns white", () => {
-    // A white window previously made muted text dark on unchanged controls.
-    // Opposing surfaces cannot all reach AA with one ink; protect the actual
-    // best compromise rather than claiming the panel-only result is readable.
-    const variables = appearanceVariables({
-      ...DEFAULT_SETTINGS, uiStyle: "custom", uiPanelOpacity: 100,
-      uiCustomTheme: { ...DEFAULT_SETTINGS.uiCustomTheme, window: "#FFFFFF" },
-    });
-    for (const name of Object.keys(inkRoles)) {
-      assert.equal(variables[name], "#5F5F5F", name);
-      for (const background of ["#FFFFFF", "#898989", "#353739", "#090907"] as const) {
-        assert.ok(contrastRatio(variables[name] as UiThemeColor, background) >= 1.8, `${name} on ${background}`);
+  it("lets a light custom window's unchanged controls follow it, so every role reads at 4.5:1", () => {
+    // One ink cannot pass on a white panel and the default dark controls, so the
+    // controls the player left unchanged follow the window (decided 2026-10-01).
+    for (const material of ["classic", "modern"] as const) {
+      const theme = { ...defaultCustomUiTheme(material), window: "#FFFFFF" as UiThemeColor };
+      const variables = appearanceVariables({ ...DEFAULT_SETTINGS, uiStyle: "custom", uiPanelOpacity: 100, uiCustomTheme: theme });
+      const rendered = renderedCustomTheme(theme);
+      const surfaces = [rendered.window, rendered.titlebar, rendered.surface, rendered.recessed];
+      for (const name of Object.keys(inkRoles)) {
+        for (const background of surfaces) {
+          assert.ok(contrastRatio(variables[name] as UiThemeColor, background) >= 4.5, `${material} ${name} ${variables[name]} on ${background}`);
+        }
       }
+      assert.ok(contrastRatio(variables["--ui-selection-ink"] as UiThemeColor, rendered.selected) >= 4.5, `${material} selection`);
     }
+    // A dark custom window and a colour the player chose keep their exact paint.
+    const dark = { ...DEFAULT_SETTINGS.uiCustomTheme, window: "#101820" as UiThemeColor };
+    assert.deepEqual(renderedCustomTheme(dark), dark);
+    const chosen = { ...DEFAULT_SETTINGS.uiCustomTheme, window: "#FFFFFF" as UiThemeColor, recessed: "#123456" as UiThemeColor };
+    assert.equal(renderedCustomTheme(chosen).recessed, "#123456");
+    // Only those deliberately opposing colours make the editor warn.
+    assert.deepEqual([DEFAULT_SETTINGS.uiCustomTheme, { ...chosen, recessed: "#F0F0F0" as UiThemeColor }, chosen].map(customThemeReadable), [true, true, false]);
   });
 
   it("moves each ink only a little per opacity step", () => {

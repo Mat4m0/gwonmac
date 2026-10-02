@@ -22,6 +22,8 @@ export function useFloatingWindow(options: {
   minHeight: number;
   viewportMargin?: number;
   placementStorageKey?: string;
+  /** A window the never-placed panel opens beside rather than over, when there is room. */
+  beside?: () => DOMRect | null;
 }) {
   const panel = ref<HTMLElement | null>(null);
   const resizeGrip = ref<HTMLButtonElement | null>(null);
@@ -87,10 +89,20 @@ export function useFloatingWindow(options: {
     if (width !== panel.value.offsetWidth || height !== panel.value.offsetHeight) {
       size.value = { width, height };
     }
+    const preferred = besidePosition(width) ?? options.initialPosition;
     position.value = {
-      left: Math.max(margin, Math.min(window.innerWidth - width - margin, options.initialPosition.left)),
-      top: Math.max(margin, Math.min(window.innerHeight - height - margin, options.initialPosition.top)),
+      left: Math.max(margin, Math.min(window.innerWidth - width - margin, preferred.left)),
+      top: Math.max(margin, Math.min(window.innerHeight - height - margin, preferred.top)),
     };
+  };
+  /** Right of the other window, else left of it, top-aligned; null when neither side has room. */
+  const besidePosition = (width: number): { left: number; top: number } | null => {
+    const other = options.beside?.();
+    if (!other) return null;
+    const gap = Math.max(margin, 8);
+    if (other.right + gap + width <= window.innerWidth - margin) return { left: other.right + gap, top: other.top };
+    if (other.left - gap - width >= margin) return { left: other.left - gap - width, top: other.top };
+    return null;
   };
 
   const fit = () => { void fitToViewport(); };
