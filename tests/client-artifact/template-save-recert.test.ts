@@ -45,6 +45,7 @@ import {
   signatureMatches,
   signatureEvidence,
   uniqueRoleFunction,
+  unsignedOperand,
   wasmEvidence,
 } from "../../src/main/certification/wasm-evidence.js";
 import type { ModuleShape } from "../../src/main/certification/enhancement-evidence-types.js";
@@ -139,8 +140,35 @@ function sameSignatureDestination(
   assert.fail(`no same-signature destination for function ${sourceFunction}`);
 }
 
+// Fixture coordinates follow the current native writers, not old function IDs.
+function fixtureFunction(
+  module: ModuleShape,
+  length: number,
+  params: readonly string[],
+  results: readonly string[],
+  callOperand: number,
+  proof?: Readonly<{ fingerprint: string; role: string }>,
+): number {
+  if (proof) {
+    const candidate = uniqueRoleFunction(module, semanticRole(
+      length, proof.fingerprint, [{
+        start: callOperand, end: callOperand + 5,
+        role: proof.role, addressClass: "function-index",
+      }], params, results,
+    ));
+    assert.notEqual(candidate, null, "the complete native writer fixture must be unique");
+    return candidate!;
+  }
+  const candidates = module.bodies.flatMap((body, local) =>
+    body.length === length && body[callOperand - 1] === 0x10
+      && signatureMatches(module, local + module.functionImportCount, params, results)
+      ? [local + module.functionImportCount] : []);
+  assert.equal(candidates.length, 1, "the native writer fixture must be unique");
+  return candidates[0]!;
+}
+
 test("the template-save verifier makes a fail-closed decision for a real client", {
-  timeout: 120_000,
+  timeout: 1_200_000,
 }, async () => {
   const artifact = process.env.GW_CLIENT_WASM;
   assert.ok(
@@ -378,8 +406,13 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     && paddedIndex(areaInfo).every((byte, index) => body[40 + index] === byte),
   );
   assert.notEqual(areaLookupLocal, -1);
+  const selectorLocals = parsed.bodies.flatMap((body, index) =>
+    [726, 751].includes(body.length)
+      && paddedIndex(local.enhancementBuild!.targetObservation!.layout.manualTargetAgentId)
+        .every((byte, offset) => body[132 + offset] === byte) ? [index] : []);
+  assert.equal(selectorLocals.length, 1);
   const targetMutations = [
-    { local: 7327 - derived.importCount, offset: 132, label: "target occurrence ledger", shared: false },
+    { local: selectorLocals[0]!, offset: 132, label: "target occurrence ledger", shared: false },
     { local: 5109 - derived.importCount, offset: 39, label: "map field offset", shared: true },
     { local: areaLookupLocal, offset: 36, label: "area table stride", shared: true },
   ] as const;
@@ -598,11 +631,12 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   assert.equal(dispatcherRefusal.partyObservation, false);
   assert.equal(dispatcherRefusal.teamApply, false);
 
+  const skillbar = certifiedEnhancements.playerSkillbarObservation!;
   for (const mutation of [
-    { functionIndex: 8812, operand: 983, label: "world lifecycle" },
-    { functionIndex: 8698, operand: 236, label: "skillbar update" },
-    { functionIndex: 8701, operand: 126, label: "skillbar row reader" },
-    { functionIndex: 8702, operand: 137, label: "skill slot reader" },
+    { functionIndex: skillbar.worldLifecycle.functionIndex, operand: 983, label: "world lifecycle" },
+    { functionIndex: skillbar.update.functionIndex, operand: 236, label: "skillbar update" },
+    { functionIndex: skillbar.rowReader.functionIndex, operand: 126, label: "skillbar row reader" },
+    { functionIndex: skillbar.slotReader.functionIndex, operand: 137, label: "skill slot reader" },
   ] as const) {
     const changedSkillbarProof = rewriteCode(bytes, (bodies) => {
       const body = bodies[mutation.functionIndex - derived.importCount]!;
@@ -620,10 +654,10 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     assert.equal(refusal.skillSlotGeometry, true, mutation.label);
   }
 
-  const duplicateSkillbarReader = sameSignatureDestination(parsed, 8701);
+  const duplicateSkillbarReader = sameSignatureDestination(parsed, skillbar.rowReader.functionIndex);
   const ambiguousSkillbar = rewriteCode(bytes, (bodies) => {
     bodies[duplicateSkillbarReader - derived.importCount]
-      = bodies[8701 - derived.importCount]!.slice();
+      = bodies[skillbar.rowReader.functionIndex - derived.importCount]!.slice();
   });
   assert.equal(WebAssembly.validate(new Uint8Array(ambiguousSkillbar)), true);
   const ambiguousSkillbarVerification = verifyFeatureMutation(ambiguousSkillbar);
@@ -645,7 +679,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   assert.equal(ambiguousSkillbarCapabilities.skillSlotGeometry, true);
 
   const changedRechargeReader = rewriteCode(bytes, (bodies) => {
-    const body = bodies[8704 - derived.importCount]!;
+    const body = bodies[certifiedEnhancements.skillCooldownObservation!.reader.functionIndex - derived.importCount]!;
     body[137] = 9; // certified slot bound is exactly eight
   });
   assert.equal(WebAssembly.validate(new Uint8Array(changedRechargeReader)), true);
@@ -709,16 +743,21 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   assert.equal(reindexedTravelContextCapabilities.xunlaiAction, true);
   assert.equal(reindexedTravelContextCapabilities.chatAliases, true);
 
+  const partyInfoWriter = fixtureFunction(parsed, 295, ["i32"], ["i32"], 76);
+  const partyFlagWriter = fixtureFunction(parsed, 15, ["i32", "i32"], [], 9, { fingerprint: "941d0f4ea3ce80d1787e3163e16cb06deb129a47f25ca91b398add3222a4082b", role: "party-flag.notify" });
+  const partyFunctions = decodeFunctions(parsed, []);
+  const partyFlagNotifier = partyFunctions[partyFlagWriter - derived.importCount]!
+    .calls.keys().next().value!;
   const protectedPartyCallees = new Set([
-    228, 322, 334, 6842, 9582,
+    228, 322, 334, uiDispatcher, partyFlagNotifier,
   ]);
   const partyCallRetargets = [
-    { caller: 10658, operand: 76, target: 334, label: "PartyInfo release" },
-    { caller: 10696, operand: 9, target: 9582, label: "party flag notifier" },
-    { caller: 9812, operand: 6, target: 228, label: "account unlock resolver" },
-    { caller: 8782, operand: 143, target: 6842, label: "hero flag UI" },
-    { caller: 7167, operand: 164, target: 322, label: "attribute apply" },
-    { caller: 8977, operand: 23, target: 228, label: "character unlock resolver" },
+    { caller: partyInfoWriter, operand: 76, target: 334, label: "PartyInfo release" },
+    { caller: partyFlagWriter, operand: 9, target: partyFlagNotifier, label: "party flag notifier" },
+    { caller: fixtureFunction(parsed, 19, ["i32"], [], 6, { fingerprint: "92bfe16ed2f66d3394546ca883489b0e3fc629125a99c6d8d67309bd1600677b", role: "unlocks.resolve" }), operand: 6, target: 228, label: "account unlock resolver" },
+    { caller: fixtureFunction(parsed, 150, ["i32", "i32", "i32"], [], 143, { fingerprint: "9f4ea1d46ddf8beeb429cbedcf0fc6ca45f9405e3c0f2be8ba43891721ad3375", role: "hero-flags.ui" }), operand: 143, target: 6842, label: "hero flag UI" },
+    { caller: fixtureFunction(parsed, 439, ["i32", "i32", "i32"], [], 164), operand: 164, target: 322, label: "attribute apply" },
+    { caller: fixtureFunction(parsed, 128, ["i32", "i32"], [], 23), operand: 23, target: 228, label: "character unlock resolver" },
   ] as const;
   for (const mutation of partyCallRetargets) {
     const destination = sameSignatureDestination(
@@ -856,7 +895,9 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     assert.equal(ambiguousAliasesVerdict.candidates, 2);
   }
 
-  const partyRoleFunction = 8787;
+  const partyRoleFunction = fixtureFunction(
+    parsed, 683, Array.from({ length: 15 }, () => "i32"), [], 665,
+  );
   const partyDuplicateDestination = sameSignatureDestination(
     parsed,
     partyRoleFunction,
@@ -909,7 +950,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   }
 
   const changedPartyField = rewriteCode(bytes, (bodies) => {
-    const body = bodies[8787 - derived.importCount]!;
+    const body = bodies[partyRoleFunction - derived.importCount]!;
     body[35] = body[35]! ^ 1;
   });
   assert.equal(WebAssembly.validate(new Uint8Array(changedPartyField)), true);
@@ -948,31 +989,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   assert.equal(aliasPointerRefusal.partyObservation, true);
   assert.equal(aliasPointerRefusal.teamApply, true);
 
-  const constructorOffsets = new Map<number, number>([
-    [31, 35], [30, 35], [21, 42], [93, 188],
-    [65, 43], [16, 260], [155, 36],
-  ] as const);
-  const teamBuilders = local.enhancementBuild?.teamApply?.entries.map((entry) => {
-    const offset = constructorOffsets.get(entry.opcode);
-    assert.notEqual(offset, undefined, `constructor offset for opcode ${entry.opcode}`);
-    return [entry.functionIndex, offset!] as const;
-  });
-  assert.equal(teamBuilders?.length, constructorOffsets.size);
-  const changedTeamConstructor = rewriteCode(bytes, (bodies) => {
-    for (const [functionIndex, offset] of teamBuilders!) {
-      const body = bodies[functionIndex - derived.importCount]!;
-      body[offset] = body[offset]! ^ 1;
-    }
-  });
-  assert.equal(WebAssembly.validate(new Uint8Array(changedTeamConstructor)), true);
-  const constructorRefusal = capabilitiesOf(
-    verifyFeatureMutation(changedTeamConstructor),
-  )!;
-  assert.equal(constructorRefusal.partyObservation, true);
-  assert.equal(constructorRefusal.teamApply, false);
-  assert.equal(constructorRefusal.travelAction, true);
-  assert.equal(constructorRefusal.xunlaiAction, true);
-  assert.equal(constructorRefusal.chatAliases, true);
+
 });
 
 test("template-save static relocation anchors reject coherent wrong values", {
@@ -1026,4 +1043,43 @@ test("template-save static relocation anchors reject coherent wrong values", {
     true,
   );
   assert.equal(deriveEquivalentTemplateSaveBuild(wrongScreenshotDirectory), null);
+});
+
+test("a valid same-signature Team constructor substitution refuses only Team Apply", {
+  timeout: 120_000,
+}, async () => {
+  assert.ok(process.env.GW_CLIENT_WASM, "GW_CLIENT_WASM must name the retained client");
+  const bytes = await readFile(process.env.GW_CLIENT_WASM);
+  const derived = deriveTemplateSaveBuild(bytes);
+  const parsed = wasmEvidence(bytes)!.moduleView();
+  const local = verifyLocalClientBytes(bytes);
+  const capabilitiesOf = (value: ReturnType<typeof verifyLocalClientBytes>) =>
+    value.enhancementBuild ? supportedEnhancementCapabilities(value.enhancementBuild) : null;
+  const constructorOffsets = new Map<number, number>([
+    [31, 35], [30, 35], [21, 42], [93, 188],
+    [65, 43], [16, 260], [155, 36],
+  ] as const);
+  const teamBuilders = local.enhancementBuild?.teamApply?.entries.map((entry) => {
+    const offset = constructorOffsets.get(entry.opcode);
+    assert.notEqual(offset, undefined, `constructor offset for opcode ${entry.opcode}`);
+    return [entry.functionIndex, offset!] as const;
+  });
+  assert.equal(teamBuilders?.length, constructorOffsets.size);
+  const changedTeamConstructor = rewriteCode(bytes, (bodies) => {
+    for (const [functionIndex, offset] of teamBuilders!) {
+      const body = bodies[functionIndex - derived.importCount]!;
+      const constructor = unsignedOperand(body, offset);
+      const replacement = sameSignatureDestination(parsed, constructor);
+      body.set(paddedIndex(replacement), offset);
+    }
+  });
+  assert.equal(WebAssembly.validate(new Uint8Array(changedTeamConstructor)), true);
+  const constructorRefusal = capabilitiesOf(
+    verifyLocalClientBytes(changedTeamConstructor),
+  )!;
+  assert.equal(constructorRefusal.partyObservation, true);
+  assert.equal(constructorRefusal.teamApply, false);
+  assert.equal(constructorRefusal.travelAction, true);
+  assert.equal(constructorRefusal.xunlaiAction, true);
+  assert.equal(constructorRefusal.chatAliases, true);
 });

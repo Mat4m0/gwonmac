@@ -564,6 +564,16 @@ export function uniqueRoleFunction(module: ModuleShape, role: SemanticRole): num
   return matches.length === 1 ? matches[0]! : null;
 }
 
+/** Choose one decoded function and its matching reviewed role variant. */
+export function uniqueRoleVariant(
+  module: ModuleShape,
+  roles: readonly SemanticRole[],
+): Readonly<{ functionIndex: number; role: SemanticRole }> | null {
+  const candidates = roles.flatMap((role) => roleFunctions(module, role)
+    .map((functionIndex) => ({ functionIndex, role })));
+  return candidates.length === 1 ? candidates[0]! : null;
+}
+
 const roleFunctionCache = new WeakMap<
   ModuleShape,
   WeakMap<SemanticRole, readonly number[]>

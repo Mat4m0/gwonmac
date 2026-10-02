@@ -1,4 +1,5 @@
 /** Certifies close-before-fade visibility and refuses a changed native owner. */
+import { retainedClientFixture } from "../fixtures/retained-client.js";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
@@ -19,7 +20,7 @@ test("proves the World Map display flag and rejects mismatched reads, writes, an
   const changed = (edit: (body: Uint8Array) => void) => {
     const sections = splitSections(input);
     const bodies = parseCode(sectionById(sections, 10));
-    edit(bodies[15_919 - module.functionImportCount]!);
+    edit(bodies[retainedClientFixture(input).worldVisibilityOwner - module.functionImportCount]!);
     const bytes = concat(WASM_HEADER, ...sections.map(section => encodeSection(
       section.id === 10 ? { id: 10, body: encodeCode(bodies) } : section)));
     const changedEvidence = wasmEvidence(bytes);

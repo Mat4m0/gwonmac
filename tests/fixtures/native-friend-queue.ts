@@ -13,7 +13,7 @@ const PAYLOAD = 0x780000;
 const REQUEST = 0x790000;
 const ALIAS = 0x791000;
 const UUID = 0x792000;
-const NATIVE = {
+const PREVIOUS_NATIVE = {
   splice: 222, dispatchCallbacks: 474, register: 475, initQueue: 487,
   allocateBlock: 491, append: 493, recycleBlock: 494, attachReader: 499,
   initReader: 501, disposeReader: 502, read: 503, enqueue: 876,
@@ -30,7 +30,20 @@ export async function queueFixture(input: Uint8Array, observer?: Readonly<{
 }>) {
   const originalEvidence = wasmEvidence(input);
   assert.ok(originalEvidence);
-  assert.equal(originalEvidence.inputSha256, INPUT_SHA256, "reinspect queue roles for another retained client");
+  const october = originalEvidence.inputSha256 ===
+    "266b5a8aa88fe6440b10737d3eda27f4ceae2401d51d263debc0bca5c2075d87";
+  assert.ok(october || originalEvidence.inputSha256 === INPUT_SHA256,
+    "reinspect queue roles for another retained client");
+  const NATIVE = october ? {
+    ...PREVIOUS_NATIVE, rosterEntry: 10095, completeRequest: 10079,
+    loginComplete: 10009, createFriend: 8828, growArray: 8824,
+    removeFriend: 8826, setFriendLocation: 8841, setFriendStatus: 8840,
+  } : PREVIOUS_NATIVE;
+  const moved: Readonly<Record<number, number>> = {
+    17809: 17836, 9999: 10010, 8844: 8850, 10000: 10011, 9968: 9979,
+    8823: 8829, 8824: 8830, 10329: 10340, 10242: 10253, 10264: 10275,
+  };
+  const fixtureIndex = (index: number) => october ? moved[index] ?? index : index;
   const evidence = observer ? wasmEvidence(observer.bytes) : originalEvidence;
   assert.ok(evidence);
   const module = evidence.moduleView();
@@ -42,7 +55,7 @@ export async function queueFixture(input: Uint8Array, observer?: Readonly<{
     assert.equal(calls.length, 1);
     return calls[0]!;
   };
-  const callbackIndex = observer ? clone("rosterCallback") : 8849;
+  const callbackIndex = observer ? clone("rosterCallback") : october ? 8855 : 8849;
   const observerNotifications: number[][] = [];
   const memory = new WebAssembly.Memory({ initial: 256, maximum: 256 });
   const view = new DataView(memory.buffer);
@@ -84,7 +97,7 @@ export async function queueFixture(input: Uint8Array, observer?: Readonly<{
       duringDelivery?.(id);
       if (id === 14 && !observer) sessionHooks?.completionProcessed();
     }],
-    [17809, (address, size) => {
+    [fixtureIndex(17809), (address, size) => {
       assert.ok(address !== undefined && address >= 0x800000 && address < allocated);
       assert.ok(size === 24 || size === 172); // Queue block or friend record; allocator reuse is not modeled.
     }],
@@ -93,15 +106,15 @@ export async function queueFixture(input: Uint8Array, observer?: Readonly<{
       new Uint8Array(memory.buffer, address, size).fill(0);
       return address;
     }],
-    [9999, (_array, count) => { assert.equal(count, 0, "this fixture has no account properties"); }],
+    [fixtureIndex(9999), (_array, count) => { assert.equal(count, 0, "this fixture has no account properties"); }],
     // Suppress formatting/logging of the synthetic account fields; never emit identities.
-    [8844, () => {}], [325, () => {}], [400, () => 0],
-    [10000, () => {}], [9968, () => {}],
+    [fixtureIndex(8844), () => {}], [325, () => {}], [400, () => 0],
+    [fixtureIndex(10000), () => {}], [fixtureIndex(9968), () => {}],
     // Record experiments reserve their pointer arrays up front. Hash membership
     // is outside the reader: the empty lookup bucket and these substitutes do
     // not establish native alias replacement or real hash-list ownership.
-    [8823, () => {}], [8824, () => 0], [294, unsupported], [295, unsupported],
-    [10329, unsupported], [10242, unsupported], [10264, unsupported], [334, unsupported],
+    [fixtureIndex(8823), () => {}], [fixtureIndex(8824), () => 0], [294, unsupported], [295, unsupported],
+    [fixtureIndex(10329), unsupported], [fixtureIndex(10242), unsupported], [fixtureIndex(10264), unsupported], [334, unsupported],
     [223, unsupported], [245, unsupported], [246, unsupported],
     [848, unsupported], [482, unsupported], [480, unsupported], [495, unsupported],
   ]);
@@ -179,9 +192,9 @@ export async function queueFixture(input: Uint8Array, observer?: Readonly<{
     write(list + 4, list + 4);
     write(list + 8, list - 7);
   }
-  write(5928476, CONTEXT);
-  write(5928396, 4);
-  write(5928404, REQUEST);
+  write(october ? 5938412 : 5928476, CONTEXT);
+  write(october ? 5938332 : 5928396, 4);
+  write(october ? 5938340 : 5928404, REQUEST);
   write(REQUEST + 8, 1);
   write(REQUEST + 12, 1); // Login request kind, already sent on the synthetic connection.
   write(REQUEST + 20, 3);

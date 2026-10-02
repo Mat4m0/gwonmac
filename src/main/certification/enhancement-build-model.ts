@@ -538,6 +538,7 @@ export interface KnownEnhancementBuild {
   }>;
   /** Exact inventory UI and item-model authority used by Control-click moves. */
   quickItemMove?: Readonly<{
+    moveItemMessageId: number;
     configureExport: string;
     modifierExport: string;
     inventorySlot: Readonly<{ functionIndex: number; params: readonly ["i32", "i32", "i32"]; results: readonly []; bodySha256: string }>;

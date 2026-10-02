@@ -196,9 +196,9 @@ function handlerModule(): Uint8Array {
   );
 }
 
-function storageExecutorModule(): Uint8Array {
+function storageExecutorModule(moveItemMessageId: number = 0x1000_01af): Uint8Array {
   const build = ENHANCEMENT_BUILDS[0]!;
-  const certificate = build.quickItemMove!;
+  const certificate = { ...build.quickItemMove!, moveItemMessageId };
   const layout = { ...build.preGameControls!.layout, contextRoot: 32, gameContextSlot: 0 };
   const types = concat(
     uleb(8),
@@ -281,7 +281,7 @@ function storageExecutorModule(): Uint8Array {
       quickItemMoveAvailableSource(config),
       quickItemMoveSlot(config),
       nativeMove,
-      quickItemMoveUiWrapper(globals, 2),
+      quickItemMoveUiWrapper(globals, 2, certificate.moveItemMessageId),
       quickItemMoveDispatch(globals, 14, 5),
       concat(uleb(0), i32(0), op(0x0b)),
       concat(uleb(0), quickItemMoveDrain(16, 17, globals, 13), op(0x0b)),
@@ -685,8 +685,8 @@ test("ordinary clicks pass through and unavailable destinations cannot capture o
 });
 
 
-async function storageFixture(direction = 1) {
-  const instance = await instantiate(storageExecutorModule());
+async function storageFixture(direction = 1, moveItemMessageId: number = 0x1000_01af) {
+  const instance = await instantiate(storageExecutorModule(moveItemMessageId));
   const view = new DataView((instance.exports.memory as WebAssembly.Memory).buffer);
   const state = (key: keyof typeof storageState) => instance.exports[key] as WebAssembly.Global;
   const execute = instance.exports.executor as (id: number, quantity: number, direction: number) => number;
@@ -817,10 +817,10 @@ test('invalid quantities, directions, storage pages and closed storage do not mo
   assert.equal(f.move(), 0); assert.deepEqual(f.moves(), []);
 });
 
-test('Control-Shift prompts at the source before choosing destinations', async () => {
-  const f = await storageFixture(); f.bag(8, [0, 2]); f.item(2, 18, 8);
+for (const message of [0x1000_01af, 0x1000_01b2]) test(`Control-Shift uses certified native message ${message.toString(16)} at the source`, async () => {
+  const f = await storageFixture(1, message); f.bag(8, [0, 2]); f.item(2, 18, 8);
   f.setModifiers(3); assert.equal(f.move(), 1);
-  assert.equal(f.state('uiMessage').value, 0x1000_01af);
+  assert.equal(f.state('uiMessage').value, message);
   assert.equal(f.state('uiItem').value, 1);
   assert.equal(f.state('uiQuantity').value, 0); // Source bag index.
   assert.equal(f.state('uiBag').value, 0); // Source slot.
@@ -893,12 +893,12 @@ test('confirmed quantities use the shared stack-first path exactly once', async 
   assert.deepEqual(f.moves(), [[1, 5, 7, 0], [1, 5, 7, 1]]);
 });
 
-test('cancelled prompts and unrelated native moves are never rerouted', async () => {
-  const f = await storageFixture(); f.bag(8, [0]);
+for (const message of [0x1000_01af, 0x1000_01b2]) test(`native message ${message.toString(16)} cancels prompts without rerouting unrelated moves`, async () => {
+  const f = await storageFixture(1, message); f.bag(8, [0]);
   f.setModifiers(3); f.move();
   f.confirm(1, 1, 7, 0); // An unrelated move goes to its actual destination.
   assert.equal(f.state('pending').value, 0);
-  f.ui(0x1000_01af, 32_000, 0); // A new native move cancels old prompt ownership.
+  f.ui(message, 32_000, 0); // A new native move cancels old prompt ownership.
   f.confirm(1, 2, 0, 0); f.drain();
   assert.deepEqual(f.moves(), [[1, 1, 7, 0], [1, 2, 0, 0]]);
 });

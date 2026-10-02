@@ -10,6 +10,7 @@ import {
   staticCStringHash,
   uniqueExactFunction,
   uniqueRoleFunction,
+  uniqueRoleVariant,
   valuesForRole,
 } from "./wasm-evidence.js";
 import type { ModuleShape, SemanticRole } from "./enhancement-evidence-types.js";
@@ -111,6 +112,19 @@ const PARTY_LEAF_ROLES = Object.freeze({
   ], ["i32", "i32", "i32"], []),
 });
 
+// Each reviewed upstream change retains its complete native control flow.
+// Message IDs and context fields remain exact within that role variant.
+const PARTY_CALLEE_ROLES_NOTIFYDISPATCH_VARIANTS = [PARTY_CALLEE_ROLES.notifyDispatch,
+  semanticRole(1054, "11aefb16d58b062416e00f748e1e57bb52c879322b319287dfee3f478200f9ac", PARTY_CALLEE_ROLES.notifyDispatch.spans, ["i32"], []),
+];
+const PARTY_LEAF_ROLES_FINISHFLUSH_VARIANTS = [PARTY_LEAF_ROLES.finishFlush,
+  semanticRole(4425, "11bc275741ce7dcc12a15fefd4325972cf706d7d73cf9f8b284b6fda720a71ca", PARTY_LEAF_ROLES.finishFlush.spans, ["i32", "i32", "i32"], []),
+];
+const ATTRIBUTE_COMMIT_VARIANTS = [PARTY_CALLEE_ROLES.attributeCommit,
+  semanticRole(152, "cf7aa8709af2199c7f266560d807fffa582f3573521513ef6547aadecec8d5e8", [{"start": 6, "end": 11, "role": "commit.resolve", "addressClass": "function-index"}, {"start": 21, "end": 26, "role": "commit.first", "addressClass": "function-index"}, {"start": 37, "end": 42, "role": "commit.second", "addressClass": "function-index"}, {"start": 51, "end": 56, "role": "commit.third", "addressClass": "function-index"}, {"start": 65, "end": 70, "role": "commit.context-guard", "addressClass": "function-index"}, {"start": 93, "end": 98, "role": "commit.fourth", "addressClass": "function-index"}, {"start": 111, "end": 116, "role": "commit.fifth", "addressClass": "function-index"}, {"start": 125, "end": 130, "role": "commit.sixth", "addressClass": "function-index"}], ["i32", "i32", "i32"], []),
+];
+const ATTRIBUTE_CONTEXT_GUARD_ROLE = semanticRole(20, "16968cd2810aadb90cac6a524ead33cccc3d633400cacb599770391361847b99", [{"start": 4, "end": 9, "role": "guard.resolve", "addressClass": "function-index"}], [], ["i32"]);
+
 const IMMUTABLE_HASHES = Object.freeze({
   "apply.error-a": "5407348e457aa37bbe697988235c6a8a082c28d31f5bf96b85f11f492f3385af",
   "apply.error-b": "9bde6f6e145018ed239b90184e83c6d20fa2758122ae1c91a9347fa3c6070db4",
@@ -193,20 +207,23 @@ export function derivePartyCalleeGraph(
     };
   const applyPrepare = uniqueRoleFunction(module, PARTY_APPLY_PREPARE_ROLE);
   const decodeSecond = uniqueRoleFunction(module, PARTY_DECODE_SECOND_ROLE);
+  const attributeCommitCandidate = uniqueRoleVariant(module, ATTRIBUTE_COMMIT_VARIANTS);
+  const notifyDispatchCandidate = uniqueRoleVariant(module, PARTY_CALLEE_ROLES_NOTIFYDISPATCH_VARIANTS);
+  const finishFlushCandidate = uniqueRoleVariant(module, PARTY_LEAF_ROLES_FINISHFLUSH_VARIANTS);
   const semantic = {
     unlockResolver: uniqueRoleFunction(module, PARTY_CALLEE_ROLES.unlockResolver),
     attributeApply: uniqueRoleFunction(module, PARTY_CALLEE_ROLES.attributeApply),
     partyInfoRelease: uniqueRoleFunction(module, PARTY_CALLEE_ROLES.partyInfoRelease),
     attributeFinish: uniqueRoleFunction(module, PARTY_CALLEE_ROLES.attributeFinish),
     attributeBegin: uniqueRoleFunction(module, PARTY_CALLEE_ROLES.attributeBegin),
-    attributeCommit: uniqueRoleFunction(module, PARTY_CALLEE_ROLES.attributeCommit),
-    notifyDispatch: uniqueRoleFunction(module, PARTY_CALLEE_ROLES.notifyDispatch),
+    attributeCommit: attributeCommitCandidate?.functionIndex ?? null,
+    notifyDispatch: notifyDispatchCandidate?.functionIndex ?? null,
     releaseStorage: uniqueRoleFunction(module, PARTY_RELEASE_STORAGE_ROLE),
     first: uniqueRoleFunction(module, PARTY_LEAF_ROLES.first),
     second: uniqueRoleFunction(module, PARTY_LEAF_ROLES.second),
     third: uniqueRoleFunction(module, PARTY_LEAF_ROLES.third),
     sixth: uniqueRoleFunction(module, PARTY_LEAF_ROLES.sixth),
-    finishFlush: uniqueRoleFunction(module, PARTY_LEAF_ROLES.finishFlush),
+    finishFlush: finishFlushCandidate?.functionIndex ?? null,
   } as const;
   if (applyPrepare === null || decodeSecond === null
     || Object.values(exact).some((value) => value === null)
@@ -228,9 +245,15 @@ export function derivePartyCalleeGraph(
   const begin = values(module, semantic.attributeBegin!, PARTY_CALLEE_ROLES.attributeBegin);
   const decode = values(module, attributeDecode, PARTY_CALLEE_ROLES.attributeDecode);
   const decodeCopy = soleValue(decode, "decode.copy");
-  const commit = values(module, semantic.attributeCommit!, PARTY_CALLEE_ROLES.attributeCommit);
+  const commit = values(module, semantic.attributeCommit!, attributeCommitCandidate!.role);
+  if (attributeCommitCandidate!.role === ATTRIBUTE_COMMIT_VARIANTS[1]) {
+    const guard = uniqueRoleFunction(module, ATTRIBUTE_CONTEXT_GUARD_ROLE);
+    if (guard === null || soleValue(commit, "commit.context-guard") !== guard
+      || soleValue(values(module, guard, ATTRIBUTE_CONTEXT_GUARD_ROLE), "guard.resolve")
+        !== soleValue(commit, "commit.resolve")) return null;
+  }
   const notify = values(module, partyFlagNotify, PARTY_CALLEE_ROLES.partyFlagNotify);
-  const dispatch = values(module, semantic.notifyDispatch!, PARTY_CALLEE_ROLES.notifyDispatch);
+  const dispatch = values(module, semantic.notifyDispatch!, notifyDispatchCandidate!.role);
   const releaseStorage = values(module, semantic.releaseStorage!, PARTY_RELEASE_STORAGE_ROLE);
   const releaseStaticValues = RELEASE_STATIC_STARTS.map((_, index) =>
     soleValue(releaseStorage, `release.static-${index}`));
@@ -285,7 +308,7 @@ export function derivePartyCalleeGraph(
     || !immutableValuesMatch(module, values(module, semantic.second!, PARTY_LEAF_ROLES.second), ["second.error", "second.empty"])
     || !immutableValuesMatch(module, values(module, semantic.third!, PARTY_LEAF_ROLES.third), ["third.error", "third.empty"])
     || !immutableValuesMatch(module, values(module, semantic.sixth!, PARTY_LEAF_ROLES.sixth), ["sixth.error", "sixth.empty"])
-    || !immutableValuesMatch(module, values(module, semantic.finishFlush!, PARTY_LEAF_ROLES.finishFlush), [
+    || !immutableValuesMatch(module, values(module, semantic.finishFlush!, finishFlushCandidate!.role), [
       "flush.assert-a", "flush.assert-b", "flush.assert-c", "flush.assert-d",
     ])
   ) return null;

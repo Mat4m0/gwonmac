@@ -5,8 +5,10 @@
 import { concat, encodeCode, encodeIndexVector, encodeSection, parseCode, parseExports,
   parseIndexVector, sectionById, sleb, splitSections, uleb, vectorPayload, WASM_HEADER } from "../core/wasm-binary.js";
 import { encodeName } from "./cartography-transform-internals.js";
-import { NATIVE_RENDER_REFERENCE_FUNCTIONS, nativeGraphicsBusy, nativeModelBusy } from "./native-render-reference.js";
-import { functionBodySha256, wasmEvidence } from "./wasm-evidence.js";
+import { NATIVE_RENDER_REFERENCE_FUNCTIONS, nativeGraphicsBusy, nativeModelBusy,
+  resolveNativeRenderBindings, reviewedNativeRenderFunctions, type NativeRenderFunctionBodies } from "./native-render-reference.js";
+import { isDeepStrictEqual } from "node:util";
+import { wasmEvidence } from "./wasm-evidence.js";
 import { NATIVE_PUBLISH_BUSY } from "../../shared/native-publish.js";
 import { NATIVE_HUD_MAGIC, NATIVE_HUD_ATLAS_SIZE, NATIVE_HUD_LABELS, NATIVE_HUD_QUADS,
   NATIVE_HUD_HEADER, NATIVE_HUD_KEYCAP, NATIVE_HUD_SKILLS } from "../../shared/native-hud.js";
@@ -104,14 +106,23 @@ const CHECKED = [
   ...NATIVE_RENDER_REFERENCE_FUNCTIONS,
 ] as const;
 /** Exact native draw owners and resource operations bound by local verification. */
-export const NATIVE_HUD_RENDERING_PROOF = Object.freeze({ functionBodies: CHECKED });
+export const NATIVE_HUD_RENDERING_PROOF: Readonly<{ functionBodies: NativeRenderFunctionBodies }> =
+  Object.freeze({ functionBodies: CHECKED });
 
-export function provesNativeHudRendering(evidence: NonNullable<ReturnType<typeof wasmEvidence>>): boolean {
+export function isNativeHudRenderingProof(value: unknown): boolean {
+  return [false, true].some(october => isDeepStrictEqual(value,
+    { functionBodies: reviewedNativeRenderFunctions(CHECKED, october) }));
+}
+
+export function deriveNativeHudRendering(evidence: NonNullable<ReturnType<typeof wasmEvidence>>) {
   const module = evidence.moduleView();
-  return CHECKED.every(([index, hash]) => index >= module.functionImportCount
-    && index < module.functionTypeIndices.length
-    && functionBodySha256(module, index) === hash)
-    && ["malloc", "free"].every((name) => module.exports.some((entry) => entry.kind === 0 && entry.name === name));
+  const bindings = resolveNativeRenderBindings(module, CHECKED);
+  return bindings && ["malloc", "free"].every(name =>
+    module.exports.some(entry => entry.kind === 0 && entry.name === name))
+    ? Object.freeze({ functionBodies: bindings.functionBodies }) : null;
+}
+export function provesNativeHudRendering(evidence: NonNullable<ReturnType<typeof wasmEvidence>>): boolean {
+  return deriveNativeHudRendering(evidence) !== null;
 }
 
 const op = (...v: number[]) => Uint8Array.of(...v);
@@ -131,7 +142,8 @@ const STRIDE = 316;
 export function appendNativeHud(input: Uint8Array, skillBarGlobal: number): Uint8Array {
   const evidence = wasmEvidence(input); if (!evidence) throw new Error("invalid native HUD input");
   const module = evidence.moduleView();
-  if (!provesNativeHudRendering(evidence)) throw new Error("native HUD rendering proof changed");
+  const bindings = resolveNativeRenderBindings(module, CHECKED);
+  if (!bindings || !deriveNativeHudRendering(evidence)) throw new Error("native HUD rendering proof changed");
   const sections = splitSections(input);
   const globals = vectorPayload(sectionById(sections, 6));
   const signatures = vectorPayload(sectionById(sections, 1));
@@ -155,12 +167,12 @@ export function appendNativeHud(input: Uint8Array, skillBarGlobal: number): Uint
   const each = (n: number, body: Uint8Array) => concat(g(0), op(0x04, 0x40), i(0), s(n), op(0x03, 0x40),
     body, l(n), i(1), op(0x6a), s(n), l(n), i(NATIVE_HUD_LABELS), op(0x49, 0x0d, 0, 0x0b, 0x0b));
   const record = (n: number) => concat(g(0), l(n), i(STRIDE), op(0x6c, 0x6a));
-  const release = concat(op(0), l(0), load(8), op(0x04, 0x40), call(6593),
-    l(0), load(8), call(748), l(0), load(4), call(748), increment(5), op(0x0b),
+  const release = concat(op(0), l(0), load(8), op(0x04, 0x40), call(bindings.functionIndex(6593)),
+    l(0), load(8), call(bindings.functionIndex(748)), l(0), load(4), call(bindings.functionIndex(748)), increment(5), op(0x0b),
     ...[0, 4, 8].map((at) => concat(l(0), i(0), save(at))), op(0x0b));
   const reset = concat(op(1, 1, 0x7f), each(0, concat(record(0), call(releaseIndex))),
     g(0), op(0x04, 0x40), g(0), call(free), i(0), put(0), op(0x0b),
-    g(1), op(0x04, 0x40), g(1), call(748), i(0), put(1), op(0x0b, 0x0b));
+    g(1), op(0x04, 0x40), g(1), call(bindings.functionIndex(748)), i(0), put(1), op(0x0b, 0x0b));
   // Native bitmap vertices are UI coordinates relative to the frame's origin.
   // Native UI projection is captured independently; our model is identity like 6118.
   const vertex: Uint8Array[] = [];
@@ -179,15 +191,15 @@ export function appendNativeHud(input: Uint8Array, skillBarGlobal: number): Uint
     l(0), load(8), op(0x45, 0x04, 0x40, 0x0f, 0x0b), l(0), load(0), s(1),
     l(1), load(276, true), l(1), load(268, true), op(0x93), s(7),
     l(1), load(280, true), l(1), load(272, true), op(0x93), s(8),
-    l(0), load(4), l(0), load(20), i(4), op(0x6c), call(1446), s(3),
-    l(0), load(4), l(0), load(20), i(6), op(0x6c), call(1445), s(5),
+    l(0), load(4), l(0), load(20), i(4), op(0x6c), call(bindings.functionIndex(1446)), s(3),
+    l(0), load(4), l(0), load(20), i(6), op(0x6c), call(bindings.functionIndex(1445)), s(5),
     l(0), load(20), op(0x04, 0x40), i(0), s(6), add(l(0), NATIVE_HUD_HEADER), s(4), op(0x03, 0x40), ...vertex,
     ...[0, 2, 1, 0, 3, 2].map((v, at) => concat(l(5), l(6), i(4), op(0x6c), i(v), op(0x6a, 0x3b, 1), uleb(at * 2))),
     add(l(3), 96), s(3), add(l(5), 12), s(5), add(l(4), 32), s(4), add(l(6), 1), s(6),
     l(6), l(0), load(20), op(0x49, 0x0d, 0, 0x0b, 0x0b),
     stack(2, 32), ...[0, 4, 8].map((at) => concat(l(2), f(-32768), save(at, true))),
     ...[12, 16, 20].map((at) => concat(l(2), f(32768), save(at, true))),
-    l(0), load(4), l(2), add(l(2), 12), call(1449), l(0), load(4), call(1448),
+    l(0), load(4), l(2), add(l(2), 12), call(bindings.functionIndex(1449)), l(0), load(4), call(bindings.functionIndex(1448)),
     ...([268, 272, 276, 280, 236, 240, 260, 264] as const).map((at, n) => concat(l(0), l(1), load(at, true), save(284 + n * 4, true))),
     increment(3), unstack(2, 32), op(0x0b));
   // 13162 creates the stock hotkey at child 6 of the bitmap. Suppress only
@@ -249,19 +261,19 @@ export function appendNativeHud(input: Uint8Array, skillBarGlobal: number): Uint
       // Logical skill/effect icon frames need not own a retained bitmap draw.
       // Build our own draw and capture the same native UI matrices as 6488.
       l(5), load(8), op(0x45, 0x04, 0x40),
-        l(5), l(6), save(0), l(5), i(265), i(0), call(1444), save(4),
+        l(5), l(6), save(0), l(5), i(265), i(0), call(bindings.functionIndex(1444)), save(4),
         stack(10, 176), l(10), l(5), load(4), save(160), l(10), g(1), save(164),
-        l(5), i(1), add(l(10), 160), add(l(10), 164), i(0), i(0), call(1554), save(8),
-        l(5), load(8), i(6), call(1572), unstack(10, 176), increment(4),
+        l(5), i(1), add(l(10), 160), add(l(10), 164), i(0), i(0), call(bindings.functionIndex(1554)), save(8),
+        l(5), load(8), i(6), call(bindings.functionIndex(1572)), unstack(10, 176), increment(4),
         // A recreated mesh is empty even when this icon's cached bounds still
         // match. Populate it now instead of waiting for the next timer digit.
         l(5), call(meshIndex),
       op(0x0b),
       stack(10, 160),
-      ...[0, 1, 2].map((matrix) => concat(add(l(10), matrix * 52), i(matrix), call(1333), i(52), call(264))),
-      add(l(6), 208), call(6446), l(5), load(8), call(1563),
-      i(2), call(1357), l(5), load(8), i(0), call(1579),
-      ...[0, 1, 2].map((matrix) => concat(i(matrix), add(l(10), matrix * 52), call(1334))),
+      ...[0, 1, 2].map((matrix) => concat(add(l(10), matrix * 52), i(matrix), call(bindings.functionIndex(1333)), i(52), call(bindings.functionIndex(264)))),
+      add(l(6), 208), call(bindings.functionIndex(6446)), l(5), load(8), call(bindings.functionIndex(1563)),
+      i(2), call(bindings.functionIndex(1357)), l(5), load(8), i(0), call(bindings.functionIndex(1579)),
+      ...[0, 1, 2].map((matrix) => concat(i(matrix), add(l(10), matrix * 52), call(bindings.functionIndex(1334)))),
       unstack(10, 160),
       ...([268, 272, 276, 280, 236, 240, 260, 264] as const).flatMap((at, n) => [l(5), load(284 + n * 4, true), l(6), load(at, true), op(0x5c), ...(n ? [op(0x72)] : [])]),
       op(0x04, 0x40), l(5), call(meshIndex), op(0x0b),
@@ -269,8 +281,8 @@ export function appendNativeHud(input: Uint8Array, skillBarGlobal: number): Uint
         l(12), l(7), load(48, true), op(0x94), s(12), l(7), load(296), s(7),
         l(7), op(0x04, 0x40), l(7), i(296), op(0x6b), s(7), op(0x0b),
         add(l(8), 1), s(8), l(7), i(0), op(0x47), l(8), i(16), op(0x49, 0x71, 0x0d, 0, 0x0b),
-      l(5), load(8), l(12), f(255), op(0x94, 0xa8), call(1559),
-      l(2), l(2), load(8), i(1), op(0x6a), l(2), load(8), call(5595),
+      l(5), load(8), l(12), f(255), op(0x94, 0xa8), call(bindings.functionIndex(1559)),
+      l(2), l(2), load(8), i(1), op(0x6a), l(2), load(8), call(bindings.functionIndex(5595)),
       l(2), load(0), l(2), load(8), i(4), op(0x6c, 0x6a), l(5), load(8), save(0),
       l(2), l(2), load(8), i(1), op(0x6a), save(8), i(1), s(3), op(0x0b))),
     l(3), op(0x0b));
@@ -282,17 +294,17 @@ export function appendNativeHud(input: Uint8Array, skillBarGlobal: number): Uint
   // Retexturing a record's retained model asserts while the renderer holds it;
   // this runs from the host's frame, so report busy before changing any record.
   const atlas = concat(op(1, 5, 0x7f),
-    nativeGraphicsBusy(6), op(0x04, 0x40), i(NATIVE_PUBLISH_BUSY), op(0x0f, 0x0b),
+    nativeGraphicsBusy(6, bindings), op(0x04, 0x40), i(NATIVE_PUBLISH_BUSY), op(0x0f, 0x0b),
     each(5, concat(record(5), load(8), op(0x04, 0x40),
-      nativeModelBusy(concat(record(5), load(8)), 6), op(0x04, 0x40), i(NATIVE_PUBLISH_BUSY), op(0x0f, 0x0b), op(0x0b))),
+      nativeModelBusy(concat(record(5), load(8)), 6, bindings), op(0x04, 0x40), i(NATIVE_PUBLISH_BUSY), op(0x0f, 0x0b), op(0x0b))),
     validMemory(i(atlasBytes)), l(1), i(atlasBytes), op(0x46, 0x71, 0x45, 0x04, 0x40), i(0), op(0x0f, 0x0b),
     l(0), load(0), i(NATIVE_HUD_MAGIC), op(0x47), l(0), load(4), i(NATIVE_HUD_ATLAS_SIZE), op(0x47, 0x72, 0x04, 0x40), i(0), op(0x0f, 0x0b),
     stack(2, 48), l(2), add(l(0), 8), save(0), l(2), i(NATIVE_HUD_ATLAS_SIZE), save(8), l(2), i(NATIVE_HUD_ATLAS_SIZE), save(12),
-    l(2), i(0), add(l(2), 8), i(1), i(112), call(2249), s(3),
+    l(2), i(0), add(l(2), 8), i(1), i(112), call(bindings.functionIndex(2249)), s(3),
     l(2), l(3), save(16), l(2), i(7), save(20), l(2), i(482), save(24),
-    i(1), add(l(2), 16), add(l(2), 20), add(l(2), 24), i(0), i(0), i(33555424), i(11), call(3137), s(4),
-    each(5, concat(record(5), load(8), op(0x04, 0x40), record(5), load(8), i(0), l(4), call(1569), op(0x0b))),
-    g(1), op(0x04, 0x40), g(1), call(748), op(0x0b), l(4), put(1), l(3), call(748), increment(2),
+    i(1), add(l(2), 16), add(l(2), 20), add(l(2), 24), i(0), i(0), i(33555424), i(11), call(bindings.functionIndex(3137)), s(4),
+    each(5, concat(record(5), load(8), op(0x04, 0x40), record(5), load(8), i(0), l(4), call(bindings.functionIndex(1569)), op(0x0b))),
+    g(1), op(0x04, 0x40), g(1), call(bindings.functionIndex(748)), op(0x0b), l(4), put(1), l(3), call(bindings.functionIndex(748)), increment(2),
     unstack(2, 48), i(1), op(0x0b));
   const label = concat(op(1, 4, 0x7f), validMemory(i(NATIVE_HUD_HEADER)), l(1), i(NATIVE_HUD_HEADER), op(0x4f, 0x71, 0x45, 0x04, 0x40), i(0), op(0x0f, 0x0b),
     l(0), load(8), s(2), l(0), load(20), s(3),
@@ -320,25 +332,25 @@ export function appendNativeHud(input: Uint8Array, skillBarGlobal: number): Uint
       i(0), s(4), op(0x03, 0x40), g(0), l(4), op(0x6a), i(0), save(0), add(l(4), 4), s(4), l(4), i(STRIDE * NATIVE_HUD_LABELS), op(0x49, 0x0d, 0, 0x0b, 0x0b),
     increment(8), record(2), s(5),
     l(5), load(12), l(0), load(12), op(0x47), l(5), load(16), l(0), load(16), op(0x47, 0x72, 0x04, 0x40), l(5), call(releaseIndex), op(0x0b),
-    l(5), load(24), l(0), load(24), op(0x47, 0x04, 0x40), call(6593), op(0x0b),
-    add(l(5), 12), add(l(0), 12), l(1), i(12), op(0x6b), call(264),
+    l(5), load(24), l(0), load(24), op(0x47, 0x04, 0x40), call(bindings.functionIndex(6593)), op(0x0b),
+    add(l(5), 12), add(l(0), 12), l(1), i(12), op(0x6b), call(bindings.functionIndex(264)),
     l(3), op(0x45, 0x04, 0x40), l(5), call(releaseIndex), op(0x05),
-      l(5), load(8), op(0x04, 0x40), l(5), call(meshIndex), op(0x05), call(6593), op(0x0b, 0x0b), i(1), op(0x0b));
+      l(5), load(8), op(0x04, 0x40), l(5), call(meshIndex), op(0x05), call(bindings.functionIndex(6593)), op(0x0b, 0x0b), i(1), op(0x0b));
   // 6585 owns visible frame order. Pass its next frame privately to the
   // collector so labels finish an icon subtree before later panels/tooltips.
-  const cacheBody = bodies[6585 - module.functionImportCount]!;
-  const cacheSite = evidence.decodeFunctions([]).find((row) => row.functionIndex === 6585)?.callSites.get(6492);
+  const cacheBody = bodies[bindings.functionIndex(6585) - module.functionImportCount]!;
+  const cacheSite = evidence.decodeFunctions([]).find((row) => row.functionIndex === bindings.functionIndex(6585))?.callSites.get(bindings.functionIndex(6492));
   if (cacheSite?.length !== 1) throw new Error("native HUD collection site changed");
   const site = cacheSite[0]!;
-  bodies[6585 - module.functionImportCount] = concat(cacheBody.slice(0, site.offset),
+  bodies[bindings.functionIndex(6585) - module.functionImportCount] = concat(cacheBody.slice(0, site.offset),
     add(l(2), 4), l(3), op(0x49, 0x04, 0x7f), l(2), load(4), op(0x05), i(0), op(0x0b), put(9),
     cacheBody.slice(site.offset));
-  const extraBodies = [bodies[6492 - module.functionImportCount]!, bodies[6490 - module.functionImportCount]!, release, reset, mesh, collect, destroy, atlas, label, hideStockKey];
-  bodies[6492 - module.functionImportCount] = concat(op(0), l(0), l(1), l(2), call(collectIndex), op(0x0b));
-  bodies[6490 - module.functionImportCount] = concat(op(0), l(0), call(destroyIndex), op(0x0b));
+  const extraBodies = [bodies[bindings.functionIndex(6492) - module.functionImportCount]!, bodies[bindings.functionIndex(6490) - module.functionImportCount]!, release, reset, mesh, collect, destroy, atlas, label, hideStockKey];
+  bodies[bindings.functionIndex(6492) - module.functionImportCount] = concat(op(0), l(0), l(1), l(2), call(collectIndex), op(0x0b));
+  bodies[bindings.functionIndex(6490) - module.functionImportCount] = concat(op(0), l(0), call(destroyIndex), op(0x0b));
   const extraTypes = [op(0x60, 1, 0x7f, 0), op(0x60, 0, 0), op(0x60, 2, 0x7f, 0x7f, 1, 0x7f)];
-  const functionTypes = [module.functionTypeIndices[6492]!, module.functionTypeIndices[6490]!, signatures.count,
-    signatures.count + 1, signatures.count, module.functionTypeIndices[6492]!, module.functionTypeIndices[6490]!, signatures.count + 2, signatures.count + 2, module.functionTypeIndices[6490]!];
+  const functionTypes = [module.functionTypeIndices[bindings.functionIndex(6492)]!, module.functionTypeIndices[bindings.functionIndex(6490)]!, signatures.count,
+    signatures.count + 1, signatures.count, module.functionTypeIndices[bindings.functionIndex(6492)]!, module.functionTypeIndices[bindings.functionIndex(6490)]!, signatures.count + 2, signatures.count + 2, module.functionTypeIndices[bindings.functionIndex(6490)]!];
   const extraExports = [["reset", resetIndex], ["atlas", atlasIndex], ["label", labelIndex]].map(([name, index]) => concat(encodeName(`gwonmac_hud_${name}`), op(0), uleb(Number(index))));
   for (const [index, name] of ["records", "material", "uploads", "updates", "created", "destroyed", "collections", "matched", "published"].entries()) {
     if (index >= 2) extraExports.push(concat(encodeName(`gwonmac_hud_${name}`), op(3), uleb(base + index)));

@@ -19,8 +19,8 @@ import {
   soleValue,
   staticBytes,
   staticCStringHash,
-  uniqueExactFunction,
   uniqueRoleFunction,
+  uniqueRoleVariant,
   roleFunctions,
   unsignedOperand,
   valuesForRole,
@@ -115,6 +115,38 @@ const TARGET_CALLER_ROLE = semanticRole(
   [],
 );
 
+// The October selector resets an additional native timer when manual target
+// changes. The complete new control flow remains exact. Only the observed
+// manual/automatic stores and reviewed assertion content can relocate.
+const TARGET_SELECTOR_ROLES = [
+  TARGET_SELECTOR_ROLE,
+  semanticRole(751, "89d6081789bb8fa302685b140e58a68eb24f7533ec07c7059c97523ce5060110", [
+    { start: 38, end: 43, role: "target.assert-manual", addressClass: "immutable-data" },
+    { start: 44, end: 49, role: "target.assert-file", addressClass: "immutable-data" },
+    { start: 77, end: 82, role: "target.assert-automatic", addressClass: "immutable-data" },
+    { start: 83, end: 88, role: "target.assert-file", addressClass: "immutable-data" },
+    { start: 132, end: 137, role: "target.manual", addressClass: "mutable-static" },
+    { start: 147, end: 152, role: "target.automatic", addressClass: "mutable-static" },
+    { start: 214, end: 219, role: "target.message", addressClass: "immutable-data" },
+    { start: 220, end: 225, role: "target.assert-file", addressClass: "immutable-data" },
+    { start: 266, end: 271, role: "target.message", addressClass: "immutable-data" },
+    { start: 272, end: 277, role: "target.assert-file", addressClass: "immutable-data" },
+    { start: 337, end: 342, role: "target.manual", addressClass: "mutable-static" },
+    { start: 357, end: 362, role: "target.automatic", addressClass: "mutable-static" },
+    { start: 553, end: 558, role: "target.message", addressClass: "immutable-data" },
+    { start: 559, end: 564, role: "target.assert-file", addressClass: "immutable-data" },
+    { start: 605, end: 610, role: "target.message", addressClass: "immutable-data" },
+    { start: 611, end: 616, role: "target.assert-file", addressClass: "immutable-data" },
+    { start: 661, end: 666, role: "target.manual", addressClass: "mutable-static" },
+    { start: 672, end: 677, role: "target.automatic", addressClass: "mutable-static" },
+  ], ["i32", "i32"], []),
+];
+const TARGET_CALLER_ROLES = [
+  TARGET_CALLER_ROLE,
+  semanticRole(214, "a8dcb08cbc985ec871d8537d056bb9a702c0b3dd33c1efdf19dfc6ba6cfbcd4c",
+    TARGET_CALLER_ROLE.spans, ["i32"], []),
+];
+
 const AGENT_ARRAY_LIFECYCLE_ROLE = semanticRole(
   51,
   "90bf935b288798d9383a84eefe73856cbe2048635aa7702bac56b1e0d5498436",
@@ -156,6 +188,12 @@ const AREA_TABLE_CERTIFICATES = Object.freeze([
     sentinelRows: 594,
     lookupFingerprint: "d4b96fb929317c6da37fc8f9d3c2842fd8dec4ad0d50bd1d993ef28d12a452ae",
     normalizedTableSha256: "b0030b14d2f9ad706b048ec73468beb435f83c0555d42e0a04c967d2c4c8ad7c",
+  }),
+  Object.freeze({
+    capacity: 898,
+    sentinelRows: 595,
+    lookupFingerprint: "bd4e7ffc1a5f105cac4588c61229977f7617d871438ce8c604feff9a39b4e0db",
+    normalizedTableSha256: "5bcfe11516ffb36ada1f259e55d4390443cb2d45e0d1d1886167920dbbb19019",
   }),
 ]);
 
@@ -202,6 +240,7 @@ const PLAY_REGION_SEMANTIC_ROLES = Object.freeze({
 
 type ExactTargetRole = Readonly<{
   bodySha256: string;
+  additionalBodySha256?: readonly string[];
   params: readonly string[];
   results: readonly string[];
 }>;
@@ -212,7 +251,7 @@ const EXACT_TARGET_ROLES = Object.freeze({
   mapState: { bodySha256: "35cea95a660e3e1964f2fab0342b60c9a96ebc563638feceb328231fb97b27cd", params: ["i32", "i32"], results: [] },
   currentMap: { bodySha256: "c6e2e54332d133eb208974890b255570fb2fcc9a802ea52957b4a64116f7e72c", params: [], results: ["i32"] },
   instanceType: { bodySha256: "b9898076fd712f74e586f60df2a7e551c68db82b3726025815f46b78f32b8413", params: ["i32"], results: ["i32"] },
-  playerNumber: { bodySha256: "3656f5655d9704c608247be52aaf1654141bce2db8f085c6cef4c967c7068acf", params: [], results: ["i32"] },
+  playerNumber: { bodySha256: "3656f5655d9704c608247be52aaf1654141bce2db8f085c6cef4c967c7068acf", additionalBodySha256: ["562b11e132a331b10a14d793a7b334997a6ecf2bdffd3115c9252391bbe4b0f0"], params: [], results: ["i32"] },
   worldContext: { bodySha256: "35541e26cd5badf9bbf37b1e7a57489cb762e5ecffcb0f90e4069d4c63bd4c09", params: ["i32"], results: ["i32"] },
   agentFields: { bodySha256: "b9d3e9ffd560b43d918aa004088193c11e51da699d754682f651b02b5cdb8ab4", params: ["i32"], results: [] },
   agentModel: { bodySha256: "cf152611218510e0d086fb2808834d0381f64c237c9b4ee185eabcd58a850a6b", params: ["i32", "i32", "i32"], results: ["i32"] },
@@ -242,13 +281,30 @@ function exactTargetFunction(
   module: ModuleShape,
   role: ExactTargetRole,
 ): number | null {
-  return uniqueExactFunction(module, role.bodySha256, role.params, role.results);
+  const hashes = [role.bodySha256, ...(role.additionalBodySha256 ?? [])];
+  const candidates = module.functionTypeIndices.flatMap((_, index) =>
+    index >= module.functionImportCount
+    && signatureMatches(module, index, role.params, role.results)
+    && hashes.includes(functionBodySha256(module, index)) ? [index] : []);
+  return candidates.length === 1 ? candidates[0]! : null;
 }
+
+// The October area-flags reader retains the lookup relationship and reads
+// the moved character-context area field. Table contents prove region policy.
+const AREA_FLAGS_ROLES = [
+  PLAY_REGION_SEMANTIC_ROLES.areaFlags,
+  semanticRole(23, "269ff0c564e65fb1dafdbe7b0b64f4fea54ad989a2f07deaead0ef0d9e2ff2bc",
+    PLAY_REGION_SEMANTIC_ROLES.areaFlags.spans, [], ["i32"]),
+];
 
 function playRegionFunction(
   module: ModuleShape,
   name: keyof typeof EXACT_TARGET_ROLES,
 ): number | null {
+  if (name === "areaFlags") {
+    const candidates = AREA_FLAGS_ROLES.flatMap((role) => roleFunctions(module, role));
+    return candidates.length === 1 ? candidates[0]! : null;
+  }
   if (name in PLAY_REGION_SEMANTIC_ROLES) {
     return uniqueRoleFunction(
       module,
@@ -328,10 +384,13 @@ export function inspectTargetRoleCandidates(
       lifecycleCount,
       accessorMatches.length,
       areaLookup(module) === null ? 0 : 1,
-      roleFunctions(module, TARGET_SELECTOR_ROLE).length,
+      TARGET_SELECTOR_ROLES.flatMap((role) => roleFunctions(module, role)).length,
       roleFunctions(module, TARGET_RESET_ROLE).length,
-      roleFunctions(module, TARGET_CALLER_ROLE).length,
+      TARGET_CALLER_ROLES.flatMap((role) => roleFunctions(module, role)).length,
       ...Object.entries(EXACT_TARGET_ROLES).map(([name, role]) => {
+        if (name === "areaFlags") {
+          return AREA_FLAGS_ROLES.flatMap((role) => roleFunctions(module, role)).length;
+        }
         if (name in PLAY_REGION_SEMANTIC_ROLES) {
           return roleFunctions(
             module,
@@ -342,10 +401,11 @@ export function inspectTargetRoleCandidates(
         if (exact !== null) return 1;
         // A null unique lookup means either zero or multiple. Count explicitly
         // so duplicate exact bodies are reported as ambiguous, not changed.
+        const hashes: readonly string[] = [role.bodySha256, ...("additionalBodySha256" in role ? role.additionalBodySha256 : [])];
         return module.functionTypeIndices.reduce((count, _, index) =>
           index >= module.functionImportCount
           && signatureMatches(module, index, role.params, role.results)
-          && functionBodySha256(module, index) === role.bodySha256
+          && hashes.includes(functionBodySha256(module, index))
             ? count + 1
             : count, 0);
       }),
@@ -586,15 +646,17 @@ export function locateAutomaticPlayRegion(
 function deriveTargetLayout(
   module: ModuleShape,
 ): EnhancementTargetLayout | null {
-  const selectorFunction = uniqueRoleFunction(module, TARGET_SELECTOR_ROLE);
+  const selectorCandidate = uniqueRoleVariant(module, TARGET_SELECTOR_ROLES);
+  const selectorFunction = selectorCandidate?.functionIndex ?? null;
   const resetFunction = uniqueRoleFunction(module, TARGET_RESET_ROLE);
-  const callerFunction = uniqueRoleFunction(module, TARGET_CALLER_ROLE);
+  const callerCandidate = uniqueRoleVariant(module, TARGET_CALLER_ROLES);
+  const callerFunction = callerCandidate?.functionIndex ?? null;
   if (
     selectorFunction === null || resetFunction === null || callerFunction === null
   ) return null;
-  const selector = valuesForRole(functionBody(module, selectorFunction), TARGET_SELECTOR_ROLE);
+  const selector = valuesForRole(functionBody(module, selectorFunction), selectorCandidate!.role);
   const reset = valuesForRole(functionBody(module, resetFunction), TARGET_RESET_ROLE);
-  const caller = valuesForRole(functionBody(module, callerFunction), TARGET_CALLER_ROLE);
+  const caller = valuesForRole(functionBody(module, callerFunction), callerCandidate!.role);
   const manualTargetAgentId = soleValue(selector, "target.manual");
   const automaticTargetAgentId = soleValue(selector, "target.automatic");
   if (
@@ -605,7 +667,7 @@ function deriveTargetLayout(
     || manualTargetAgentId !== automaticTargetAgentId + 4
   ) return null;
   const selectorImmutable = valuesForRole(
-    functionBody(module, selectorFunction), TARGET_SELECTOR_ROLE,
+    functionBody(module, selectorFunction), selectorCandidate!.role,
   );
   if (
     staticCStringHash(module, soleValue(selectorImmutable, "target.assert-manual"))
@@ -622,8 +684,8 @@ function deriveTargetLayout(
       !== soleValue(selectorImmutable, "target.message")
   ) return null;
   const target = verifyLayout({ manualTargetAgentId, automaticTargetAgentId }, {
-    manualTargetAgentId: { sourceRole: "target selector+reset+caller", expression: "manual target static", occurrences: [132, 312, 636, 7, 23, 40, 60] },
-    automaticTargetAgentId: { sourceRole: "target selector+reset+caller", expression: "automatic target static", occurrences: [147, 332, 647, 18, 9, 76, 93] },
+    manualTargetAgentId: { sourceRole: "target selector+reset+caller", expression: "manual target static", occurrences: selectorCandidate!.role.spans.filter((span) => span.role === "target.manual").map((span) => span.start) },
+    automaticTargetAgentId: { sourceRole: "target selector+reset+caller", expression: "automatic target static", occurrences: selectorCandidate!.role.spans.filter((span) => span.role === "target.automatic").map((span) => span.start) },
   }).layout;
   return target;
 }

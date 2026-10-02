@@ -1,4 +1,5 @@
 /** Exact-client proof for the native Cartography observer transform. */
+import { retainedClientFixture } from "../fixtures/retained-client.js";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -27,6 +28,7 @@ test("the certified context is added without intercepting native pathing", {
   const artifact = process.env.GW_CLIENT_WASM;
   assert.ok(artifact, "GW_CLIENT_WASM must name the exact official artifact");
   const official = new Uint8Array(await readFile(artifact));
+  const fixture = retainedClientFixture(official);
   const before = official.slice();
   const build = deriveCartographySpikeBuild(official);
   assert.ok(build, "the current client must prove its Cartography layout");
@@ -61,13 +63,13 @@ test("the certified context is added without intercepting native pathing", {
   );
 
   const missionMapWrapper = decoded.find((candidate) =>
-    candidate.calls.get(16_136) === 1 && candidate.calls.get(13_562) === 1
+    candidate.calls.get(fixture.missionDispatcher) === 1 && candidate.calls.get(fixture.gameplayContext) === 1
   );
   assert.ok(missionMapWrapper);
-  assert.deepEqual(evidence.tableRelations.get(missionMapWrapper.functionIndex), [4_006]);
-  assert.equal(evidence.tableRelations.get(16_136), undefined);
-  const worldMapWrapper = decoded.find((candidate) => candidate.calls.get(16_223) === 1);
+  assert.deepEqual(evidence.tableRelations.get(missionMapWrapper.functionIndex), [fixture.missionTableSlot]);
+  assert.equal(evidence.tableRelations.get(fixture.missionDispatcher), undefined);
+  const worldMapWrapper = decoded.find((candidate) => candidate.calls.get(fixture.worldDispatcher) === 1);
   assert.ok(worldMapWrapper);
-  assert.deepEqual(evidence.tableRelations.get(worldMapWrapper.functionIndex), [4_152]);
-  assert.equal(evidence.tableRelations.get(16_223), undefined);
+  assert.deepEqual(evidence.tableRelations.get(worldMapWrapper.functionIndex), [fixture.worldTableSlot]);
+  assert.equal(evidence.tableRelations.get(fixture.worldDispatcher), undefined);
 });

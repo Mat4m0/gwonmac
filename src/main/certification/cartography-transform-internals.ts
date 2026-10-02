@@ -75,6 +75,30 @@ export const WORLD_MAP_CERTIFICATE = Object.freeze({
   bottomRightY: 0x48,
 });
 
+// The current complete surface owners retain the native frame-field layouts.
+// Their callback slots come from the module's active table, not a slot delta.
+export const OCTOBER_COMPASS_CERTIFICATE = Object.freeze({
+  ...COMPASS_CERTIFICATE,
+  renderFunction: 14253,
+  renderBodySha256: "34ef07807120a3d28ca84b82553c51ed27e13145cdded2b2e6cae47cd8d66ae4",
+  mapRenderFunction: 14192,
+  mapRenderBodySha256: "7474e6aec1fed0244c9cb20d20b75dffa21ddf5f385e7ba63627561b736c2098",
+});
+export const OCTOBER_MISSION_MAP_CERTIFICATE = Object.freeze({
+  ...MISSION_MAP_CERTIFICATE,
+  eventDispatcherFunction: 16162,
+  eventDispatcherBodySha256: "683d70ac6bca6bd6284cff8fa8f1064874d5a663a6b334de5a53f5d56a1cea0f",
+  eventDispatcherTableSlot: 4020,
+  gameplayContextFunction: 13573,
+  gameplayContextBodySha256: "dd780c5268efe3915d0b925d6c587b7ba5bc5aef33789d58f70d483067a1309b",
+});
+export const OCTOBER_WORLD_MAP_CERTIFICATE = Object.freeze({
+  ...WORLD_MAP_CERTIFICATE,
+  eventDispatcherFunction: 16249,
+  eventDispatcherBodySha256: "4405773e239f4696393caf4af59abbb3f217581756ac4a6c6df5c82fc7d7bedb",
+  eventDispatcherTableSlot: 4166,
+});
+
 export const EXPLORATION_CERTIFICATE = Object.freeze({
   gameContextSlot: 6,
   worldContext: 0x2c,
@@ -127,7 +151,14 @@ export const CARTOGRAPHY_MEMORY_LAYOUTS = Object.freeze({
     areaInfo: 0x1cc700,
     agentArray: 0x5a6928,
   }),
-} satisfies Readonly<Record<"official" | "relocated", CartographyMemoryLayout>>);
+  october: Object.freeze({
+    frameArray: 5923308,
+    frameCount: 5923316,
+    contextRoot: 5918848,
+    areaInfo: 1892352,
+    agentArray: 5935096,
+  }),
+} satisfies Readonly<Record<"official" | "relocated" | "october", CartographyMemoryLayout>>);
 
 export function fail(message: string): never {
   throw new Error(`pathing spike transform: ${message}`);
@@ -186,7 +217,7 @@ export type CartographyContextCertificate = Readonly<{
   gameContextSlot: number;
   mapContext: number;
   mapId: number;
-  layoutId: 1 | 2;
+  layoutId: 1 | 2 | 3;
 }>;
 
 export type FrameGlobals = Readonly<{
@@ -493,6 +524,7 @@ export function missionMapEventWrapper(
   dispatcher: number,
   globals: MissionMapProjectionGlobals,
   pathingGeneration: number,
+  gameplayContextFunction = Number(MISSION_MAP_CERTIFICATE.gameplayContextFunction),
 ): Uint8Array {
   const refuse = (status: number) => concat(
     i32(status), globalSet(globals.status), Uint8Array.of(0x0f),
@@ -529,7 +561,7 @@ export function missionMapEventWrapper(
     globalSet(globals.nativeMapWidth),
     local(4), f32Load(MISSION_MAP_CERTIFICATE.nativeMapHeight),
     globalSet(globals.nativeMapHeight),
-    call(MISSION_MAP_CERTIFICATE.gameplayContextFunction), Uint8Array.of(0x21), uleb(0),
+    call(gameplayContextFunction), Uint8Array.of(0x21), uleb(0),
     requirePointer(0, MISSION_MAP_CERTIFICATE.zoom + 4, 6),
     local(0), f32Load(MISSION_MAP_CERTIFICATE.zoom), Uint8Array.of(0x22), uleb(5),
     f32(1), Uint8Array.of(0x60),
@@ -571,7 +603,8 @@ export function worldMapEventWrapper(
   dispatcher: number,
   globals: WorldMapGlobals,
   areaEpoch: number,
-  certificate: typeof WORLD_MAP_CERTIFICATE & Pick<CartographyMemoryLayout, "frameArray" | "frameCount">,
+  certificate: (typeof WORLD_MAP_CERTIFICATE | typeof OCTOBER_WORLD_MAP_CERTIFICATE)
+    & Pick<CartographyMemoryLayout, "frameArray" | "frameCount">,
 ): Uint8Array {
   // The dispatcher carries events that do not all contain a usable World Map
   // context. Publish only a complete reading; a rejected event must not replace

@@ -761,10 +761,13 @@ describe("local client verification boundary", () => {
   });
 
   it("accepts independent feature proof directly against official bytes", () => {
+    const proved = { ...valid().enhancementBuild! };
+    delete proved.quickItemMove;
     const officialBuild: KnownEnhancementBuild = {
-      ...valid().enhancementBuild,
+      ...proved,
       sha256: TEMPLATE.sha256,
     };
+    const requested = { ...ALL, quickItemMove: false };
     const independent: LocalClientVerification = {
       status: "proved",
       fileVerdict: REFUSED_FILE,
@@ -774,13 +777,13 @@ describe("local client verification boundary", () => {
       enhancementBuild: officialBuild,
       featureVerdicts: localFeatureVerdictsForBuild(
         TEMPLATE.sha256,
-        ALL,
+        requested,
         officialBuild,
       ),
       reasons: [],
     };
     assert.equal(
-      isLocalClientVerification(independent, TEMPLATE.sha256, ALL),
+      isLocalClientVerification(independent, TEMPLATE.sha256, requested),
       true,
     );
   });

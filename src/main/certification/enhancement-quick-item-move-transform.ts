@@ -31,7 +31,6 @@ const requireMemory = (pointer: number, bytes: number) => concat(
   op(0x6b, 0x4b, 0x72, 0x04, 0x40), ret(0), op(0x0b),
 );
 const UI_MESSAGE = Object.freeze({
-  moveItem: 0x1000_01af,
   frameMouseAction: 49,
 });
 export const QUICK_ITEM_MOVE_COMMAND = -20;
@@ -522,7 +521,7 @@ export function quickItemMoveStorageExecutor(c: QuickExecutorConfig): Uint8Array
       global(g.scratch), local(v.sourceBag), load(BAG_OFFSET.index), store(4),
       global(g.scratch), local(v.item), load8(ITEM_OFFSET.slot), store(8),
       global(g.scratch), i32(1), store(12),
-      i32(UI_MESSAGE.moveItem), global(g.scratch), i32(0), call(c.uiDispatcher), ret(1),
+      i32(c.certificate.moveItemMessageId), global(g.scratch), i32(0), call(c.uiDispatcher), ret(1),
     op(0x0b),
     local(2), i32(MOVE_DIRECTION.store), op(0x46, 0x04, 0x40),
       i32(NUMBER_PREFERENCE_STORAGE_PANE), call(c.numberPreference), i32(255), op(0x71), setLocal(v.page),
@@ -579,10 +578,10 @@ export function quickItemMoveStorageExecutor(c: QuickExecutorConfig): Uint8Array
 }
 
 /** Cancels stale prompt ownership whenever another native move UI starts. */
-export function quickItemMoveUiWrapper(g: QuickItemMoveGlobals, original: number): Uint8Array {
+export function quickItemMoveUiWrapper(g: QuickItemMoveGlobals, original: number, moveItemMessageId: number): Uint8Array {
   return concat(
     uleb(0), global(g.scratch), op(0x04, 0x40),
-      local(0), i32(UI_MESSAGE.moveItem), op(0x46, 0x04, 0x40),
+      local(0), i32(moveItemMessageId), op(0x46, 0x04, 0x40),
         global(g.scratch), i32(0), store(QUICK_ITEM_MOVE_PROMPT.item),
       op(0x0b),
     op(0x0b), local(0), local(1), local(2), call(original), op(0x0b),
@@ -818,7 +817,7 @@ export function applyQuickItemMoveTransform(options: Readonly<{
   const action = options.preGame.characterSwitchAction;
   const append = options.appendFunction;
   const uiForward = append(options.uiHook.typeIndex, options.nextBodies[options.uiHook.localIndex]!);
-  options.nextBodies[options.uiHook.localIndex] = quickItemMoveUiWrapper(options.globals, uiForward);
+  options.nextBodies[options.uiHook.localIndex] = quickItemMoveUiWrapper(options.globals, uiForward, certificate.moveItemMessageId);
   const moveOriginal = append(moveItem.typeIndex, options.nextBodies[moveItem.localIndex]!);
   options.nextBodies[moveItem.localIndex] = quickItemMoveQuantityWrapper({
     globals: options.globals, original: moveOriginal,

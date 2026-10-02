@@ -261,7 +261,7 @@ export type CartographyContextSnapshot = Readonly<{
   sequence: number;
   areaEpoch: number;
   mapId: number;
-  layoutId: 1 | 2;
+  layoutId: 1 | 2 | 3;
 }>;
 
 export type CartographyContextController = SpikeController<CartographyContextSnapshot> & Readonly<{

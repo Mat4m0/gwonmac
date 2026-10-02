@@ -233,3 +233,43 @@ use a nested template as a success criterion for the bridge.
 - Do not certify a static address without a live invariant.
 - Do not weaken a locator until it returns one result.
 - Do not make optional Tools a requirement for the official client.
+
+
+## October 2026 recovery findings
+
+Stable recovery [PR #492](https://github.com/Mat4m0/gwonmac/pull/492) restored the
+retained Stable capabilities. Its canonical release commit is
+`f6f5884c93f7bdeae981bd68e7f9180899c20e5b`. Forward-port that commit with
+`cherry-pick -x`; qualify newer `main` features separately.
+
+The newer feature review found changed native item-move, Guild Hall and effect
+messages, character-control bodies, friend notification paths, map dispatchers,
+and renderer guard operands. The official client remained unchanged. Complete
+reviewed function families restore these integrations without suppressing a
+failed gate. A shared helper change can affect several declared dependants.
+
+Retain these investigation lessons:
+
+- Treat broad operand normalization as a research lead only. It is not proof.
+- Identify generic getters through their callers and field roles. Equal raw
+  bodies can belong to unrelated cloned functions.
+- Derive each device, frame, message and table value from its own owner. Do not
+  extrapolate an index or address shift across features.
+- Compare all members of one family. A matching sender alone does not prove
+  its editor, history, packet, lifecycle or dispatcher relationship.
+- Compose partial records per feature. A missing historical field must not
+  make every current action disappear.
+- Execute emitted native code with the current fixture globals and external
+  dependencies. Old fixture coordinates can hide or invent a failure.
+- Exercise the compiled reachability kernel for each accepted layout. Adding
+  a layout exposed a Rust linker failure: division could retain static panic
+  formatting. Checked arithmetic keeps invalid input explicit and the kernel
+  reproducible with the existing compiler.
+- Verify the complete shipped chain and refusal cases after accepting facts.
+  Enhancement verdicts alone do not prove Friends or Maps.
+
+Current requirements and remaining locator limits belong to
+[ArenaNet compatibility](../../docs/arenanet-compatibility.md),
+[feature development](../../docs/enhancement-development.md), and
+[Cartography](../../docs/cartography.md). Exact values remain in code and tests.
+No offline result establishes live gameplay acceptance or signing readiness.

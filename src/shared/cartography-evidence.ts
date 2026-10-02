@@ -68,7 +68,7 @@ export type CartographyEncodedBitset = Readonly<{
 export type CartographyEvidenceSource = Readonly<{
   applicationVersion: string;
   clientSha256: string | null;
-  layoutId: 1 | 2 | null;
+  layoutId: 1 | 2 | 3 | null;
   gridRevision: number;
   toolboxSha256: string;
   kernelSha256: string | null;
@@ -166,7 +166,7 @@ export type CartographyBitsetCapture = Readonly<{
 
 export type CartographyEvidenceCapture = Readonly<{
   source: Readonly<{
-    layoutId: 1 | 2 | null;
+    layoutId: 1 | 2 | 3 | null;
     gridRevision: number;
     toolboxSha256: string;
     kernelSha256: string | null;

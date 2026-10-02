@@ -77,6 +77,9 @@ const RELOCATED_CONTEXT_ROOT: u32 = 0x5a29b0;
 const RELOCATED_AGENT_ARRAY: u32 = 0x5a6928;
 const LAYOUT_OFFICIAL: u32 = 1;
 const LAYOUT_RELOCATED: u32 = 2;
+const LAYOUT_OCTOBER: u32 = 3;
+const OCTOBER_CONTEXT_ROOT: u32 = 5918848;
+const OCTOBER_AGENT_ARRAY: u32 = 5935096;
 
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
@@ -297,6 +300,9 @@ unsafe fn context(layout_id: u32, map_id: u32, player_id: u32) -> Result<Context
         },
         LAYOUT_RELOCATED => unsafe {
             resolve_layout(RELOCATED_CONTEXT_ROOT, RELOCATED_AGENT_ARRAY, map_id, player_id)
+        },
+        LAYOUT_OCTOBER => unsafe {
+            resolve_layout(OCTOBER_CONTEXT_ROOT, OCTOBER_AGENT_ARRAY, map_id, player_id)
         },
         _ => Err(STATUS_AMBIGUOUS_LAYOUT),
     }
@@ -827,8 +833,10 @@ unsafe fn rasterize(
         if !unsafe { bit(region, REACHABLE_CELL_BITS, index).ok_or(STATUS_UNAVAILABLE)? } {
             continue;
         }
-        let x = index % width;
-        let y = index / width;
+        // Keep the PIC kernel free of Rust's static panic-formatting data even
+        // when optimization does not carry the entry-point width guard here.
+        let x = index.checked_rem(width).ok_or(STATUS_INVALID_INPUT)?;
+        let y = index.checked_div(width).ok_or(STATUS_INVALID_INPUT)?;
         let radius = reveal_radius as i32;
         for dy in -radius..=radius {
             for dx in -radius..=radius {
@@ -1213,7 +1221,7 @@ pub unsafe extern "C" fn cartography_reachability_classify(
 ) -> u32 {
     if region == 0 || region & 3 != 0 || region_bytes != REGION_BYTES
         || !contains(region, REGION_BYTES)
-        || !(layout_id == LAYOUT_OFFICIAL || layout_id == LAYOUT_RELOCATED)
+        || !(layout_id == LAYOUT_OFFICIAL || layout_id == LAYOUT_RELOCATED || layout_id == LAYOUT_OCTOBER)
         || map_id == 0 || map_id > 2_000 || area_epoch == 0
         || player_id == 0 || width == 0 || height == 0
         || width.checked_mul(height).is_none_or(|cells| cells > MAX_CELLS)

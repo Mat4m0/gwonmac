@@ -42,7 +42,8 @@ export async function observerTransformFixture(
   const events: Array<{ kind: "notification" | "native"; name: string; args: number[] }> = [];
   const handlers = new Map<Wrapper, (...args: number[]) => number | void>();
   const dependencyStubs = new Map<number, (...args: number[]) => number | void>([
-    [10241, () => {}], [10322, () => 1], [879, () => {}],
+    [certificate.lifecycle.roles.disconnect === 10251 ? 10252 : 10241, () => {}],
+    [certificate.lifecycle.roles.disconnect === 10251 ? 10333 : 10322, () => 1], [879, () => {}],
   ]);
   const stubs = new Map<number, (...args: number[]) => number | void>([
     ...[...clones].map(([role, index]) => [index, (...args: number[]) => {

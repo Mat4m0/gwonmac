@@ -13,6 +13,7 @@ import { SEMANTIC_VERIFIER_ABI } from "../../src/main/certification/semantic-pro
 import { LOCAL_FEATURE_INVARIANTS } from
   "../../src/main/certification/local-client-verification-contract.js";
 
+
 const sha256 = (value: Uint8Array | string): string =>
   createHash("sha256").update(value).digest("hex");
 

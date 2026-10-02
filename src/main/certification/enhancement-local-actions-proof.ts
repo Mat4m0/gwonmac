@@ -14,6 +14,7 @@ import {
 } from "./enhancement-target-proof.js";
 import { dataEvidence } from "./wasm-data-evidence.js";
 import {
+  PARTY_DIRTY_MESSAGE_ANCHORS,
   derivePartyObservation,
   deriveTeamApply,
   inspectPartyTeamRoleCandidates,
@@ -22,6 +23,7 @@ import { playerChatUiEvidence } from "./enhancement-structural-report.js";
 import {
   bodyMatchesRole,
   enhancementProofContext,
+  decodeFunctions,
   functionBody,
   functionBodySha256,
   isolatedProof,
@@ -39,6 +41,7 @@ import {
   staticCStringHash,
   uniqueExactFunction,
   uniqueRoleFunction,
+  uniqueRoleVariant,
   unsignedOperand,
   valuesForRole,
 } from "./wasm-evidence.js";
@@ -76,6 +79,13 @@ const GUILD_HALL_AREA_TYPE_ROLE = semanticRole(
   ["i32"],
 );
 
+const GUILD_HALL_NATIVE_MESSAGES = Object.freeze([
+  { hash: "ff6bcc8db69cbb7fddc17af6d4b7a4c052cb6cd17e335155db495c2e435290c9",
+    enter: 0x1000_0180, leave: 0x1000_0182 },
+  { hash: "fab247e15279c61c5783bc16f6c02cbf411b3056979f6a765b61763e52bc7d87",
+    enter: 0x1000_0183, leave: 0x1000_0185 },
+]);
+
 function containsBytes(body: Uint8Array, bytes: readonly number[]): boolean {
   for (let start = body.indexOf(bytes[0]!); start >= 0; start = body.indexOf(bytes[0]!, start + 1)) {
     let matched = true;
@@ -107,6 +117,9 @@ function guildHallProducer(
   const matches = module.bodies.flatMap((body, localIndex) =>
     signatureMatches(module, module.functionImportCount + localIndex, ["i32", "i32"], [])
       && containsBytes(body, enter) && containsBytes(body, leave) && containsBytes(body, area)
+      && GUILD_HALL_NATIVE_MESSAGES.some(messages =>
+        messages.enter === enterMessage && messages.leave === leaveMessage
+        && functionBodySha256(module, module.functionImportCount + localIndex) === messages.hash)
       ? [module.functionImportCount + localIndex] : []);
   return matches.length === 1 ? matches[0]! : null;
 }
@@ -314,6 +327,56 @@ const TRAVEL_UNLOCK_CONSUMER_ROLE = semanticRole(
   ["i32"],
 );
 
+// Retain each reviewed native message graph independently. No numeric delta
+// can grant a command or observation capability.
+const XUNLAI_AGENT_READER_ROLES = [
+  XUNLAI_AGENT_READER_ROLE,
+  semanticRole(418, "eeeac28028981ae6f233b2c0e6ba4cbe5cdba999bd1063c2a703bd3f6cc1f6fb",
+    XUNLAI_AGENT_READER_ROLE.spans, ["i32"], ["i32"]),
+];
+const XUNLAI_AREA_TYPE_READER_ROLES = [
+  XUNLAI_AREA_TYPE_READER_ROLE,
+  semanticRole(362, "0c2c573245b37ef4f38986a791bccd3f7700c82b3f6cfb5d9173748d8d63a599",
+    XUNLAI_AREA_TYPE_READER_ROLE.spans, ["i32"], ["i32"]),
+];
+const TRAVEL_UNLOCK_CONSUMER_ROLES = [
+  TRAVEL_UNLOCK_CONSUMER_ROLE,
+  semanticRole(360, "257c03eaa91dc6baae2768b6829ada5e8cee32df0649482ca2f6950ecc766762",
+    TRAVEL_UNLOCK_CONSUMER_ROLE.spans, ["i32"], ["i32"]),
+];
+const TRAVEL_PRODUCER_ROLES = [
+  TRAVEL_PRODUCER_ROLE,
+  semanticRole(216, "3a64401a973b9976e4158ffc4e4ad0833e091b22ffbe78987e72261187108146",
+    TRAVEL_PRODUCER_ROLE.spans, ["i32", "i32", "i32", "i32", "i32"], []),
+];
+const CHAT_ALIASES_ROLES = [
+  CHAT_ALIASES_ROLE,
+  semanticRole(380, "fa6eabfec92de162981e0cd861736dbaf8b7b4f43db37224829947441f480a73",
+    CHAT_ALIASES_ROLE.spans, ["i32", "i32"], ["i32"]),
+];
+
+// Bind Hero panel IDs to the complete native show/hide producer and its packer.
+const HERO_PANEL_ROLES = [
+  semanticRole(181, "42027129007fdd8ffb7dd34e79a3ad8a5ed0126f857ab48dfa77224170c857fa", [{"start": 78, "end": 83, "role": "panel.pack", "addressClass": "function-index"}, {"start": 141, "end": 146, "role": "panel.ui", "addressClass": "function-index"}, {"start": 163, "end": 168, "role": "panel.ui", "addressClass": "function-index"}], ["i32", "i32"], []),
+  semanticRole(181, "920bdcddd2e428f6263519e2dfbb314dd7f73439e0f2b6defdfe10c0b29b7d7e", [{"start": 78, "end": 83, "role": "panel.pack", "addressClass": "function-index"}, {"start": 141, "end": 146, "role": "panel.ui", "addressClass": "function-index"}, {"start": 163, "end": 168, "role": "panel.ui", "addressClass": "function-index"}], ["i32", "i32"], []),
+];
+const HERO_PANEL_PACKER_HASHES = ["b107cbd1f2b0c9596df848b19cab8219285e6f4ff45bb5d3bd06cd3d643afe57", "10aaa2a03010eea192af9f03466665a3036ecd2dc6b94ebe8ff8bdbc9471ba9e"];
+
+function deriveHeroPanelMessages(module: ModuleShape, dispatcher: number) {
+  const candidate = uniqueRoleVariant(module, HERO_PANEL_ROLES);
+  if (!candidate) return null;
+  const body = functionBody(module, candidate.functionIndex);
+  const values = valuesForRole(body, candidate.role);
+  const packer = soleValue(values, "panel.pack");
+  if (soleValue(values, "panel.ui") !== dispatcher
+    || !signatureMatches(module, packer, ["i32", "i32"], ["i32"])
+    || !HERO_PANEL_PACKER_HASHES.includes(functionBodySha256(module, packer))) return null;
+  return Object.freeze({
+    hideHeroPanelMessage: unsignedOperand(body, 150),
+    showHeroPanelMessage: unsignedOperand(body, 128),
+  });
+}
+
 const LOCAL_ACTION_HASHES = Object.freeze({
   frameAssertion: "1db4beca1a3d246ce3f4df09cfdd2a3e60c5cef5564d0361474f7f9cb3c95026",
   frameParameterName: "a3a3f2f40f9a261466c73f8d5ccb6cde62cfe5adce83bbb88bb8582e6b45e222",
@@ -330,9 +393,10 @@ const LOCAL_ACTION_HASHES = Object.freeze({
 
 function candidateDiagnostic(
   module: ModuleShape,
-  role: Parameters<typeof roleFunctions>[1],
+  role: Parameters<typeof roleFunctions>[1] | readonly Parameters<typeof roleFunctions>[1][],
 ): Readonly<{ status: LocalActionRoleCandidateStatus; candidateCount: number }> {
-  const candidateCount = roleFunctions(module, role).length;
+  const roles = Array.isArray(role) ? role : [role];
+  const candidateCount = roles.reduce((count, item) => count + roleFunctions(module, item).length, 0);
   return Object.freeze({
     status: candidateCount === 1
       ? "candidate"
@@ -379,10 +443,10 @@ export function inspectLocalActionRoleCandidates(
     return Object.freeze({
       gameThread: candidateDiagnostic(module, GAME_THREAD_DRAIN_ROLE),
       uiDispatcher: candidateDiagnostic(module, UI_DISPATCHER_ROLE),
-      travelAction: candidateDiagnostic(module, TRAVEL_PRODUCER_ROLE),
+      travelAction: candidateDiagnostic(module, TRAVEL_PRODUCER_ROLES),
       travelContext: candidateDiagnostic(module, TRAVEL_CONTEXT_RESOLVER_ROLE),
       xunlaiAction: candidateDiagnostic(module, XUNLAI_HANDLER_ROLE),
-      chatAliases: candidateDiagnostic(module, CHAT_ALIASES_ROLE),
+      chatAliases: candidateDiagnostic(module, CHAT_ALIASES_ROLES),
       chatFiltering: candidateDiagnostic(module, CHAT_LOG_PRODUCER_ROLE),
       partyObservation: aggregateCandidateDiagnostics(
         partyTeam.map(({ partyObservation }) => partyObservation),
@@ -425,10 +489,11 @@ export function deriveChatAliases(
 ): KnownEnhancementBuild["chatAliases"] | null {
   const expected = baseline.chatAliases;
   if (!expected) return null;
-  const parserFunction = uniqueRoleFunction(module, CHAT_ALIASES_ROLE);
+  const parserCandidate = uniqueRoleVariant(module, CHAT_ALIASES_ROLES);
+  const parserFunction = parserCandidate?.functionIndex ?? null;
   if (parserFunction === null) return null;
   const body = functionBody(module, parserFunction);
-  const values = valuesForRole(body, CHAT_ALIASES_ROLE);
+  const values = valuesForRole(body, parserCandidate!.role);
   const state = soleValue(values, "aliases.state");
   const buffer = soleValue(values, "aliases.buffer");
   const table = staticBytes(module, buffer, 104);
@@ -455,8 +520,10 @@ export function deriveChatAliases(
     ).length !== 1
     || !isChatAliasesTable(table, buffer)
     || staticBytesOccurrenceCount(module, table) !== 1
-    || unsignedOperand(body, 316) !== 0x1000_019d
-    || unsignedOperand(body, 335) !== 0x1000_019e
+    || unsignedOperand(body, 316) !== (parserCandidate!.role === CHAT_ALIASES_ROLES[1]
+      ? 0x1000_01a0 : 0x1000_019d)
+    || unsignedOperand(body, 335) !== (parserCandidate!.role === CHAT_ALIASES_ROLES[1]
+      ? 0x1000_01a1 : 0x1000_019e)
     || soleValue(values, "aliases.ui") !== uiDispatcher.functionIndex
   ) return null;
   return Object.freeze({
@@ -522,13 +589,12 @@ export function deriveXunlaiAccess(
 ): KnownEnhancementBuild["xunlaiAction"] | null {
   const expected = baseline.xunlaiAction;
   if (!expected) return null;
-  const agentFunction = uniqueRoleFunction(module, XUNLAI_AGENT_READER_ROLE);
+  const agentCandidate = uniqueRoleVariant(module, XUNLAI_AGENT_READER_ROLES);
+  const agentFunction = agentCandidate?.functionIndex ?? null;
   const accessFunction = uniqueRoleFunction(module, XUNLAI_ACCESS_READER_ROLE);
   const playerFunction = uniqueRoleFunction(module, XUNLAI_PLAYER_READER_ROLE);
-  const areaTypeFunction = uniqueRoleFunction(
-    module,
-    XUNLAI_AREA_TYPE_READER_ROLE,
-  );
+  const areaTypeCandidate = uniqueRoleVariant(module, XUNLAI_AREA_TYPE_READER_ROLES);
+  const areaTypeFunction = areaTypeCandidate?.functionIndex ?? null;
   if (
     agentFunction === null || accessFunction === null
     || playerFunction === null || areaTypeFunction === null
@@ -536,12 +602,12 @@ export function deriveXunlaiAccess(
   const agentBody = functionBody(module, agentFunction);
   const accessBody = functionBody(module, accessFunction);
   const playerBody = functionBody(module, playerFunction);
-  const agentValues = valuesForRole(agentBody, XUNLAI_AGENT_READER_ROLE);
+  const agentValues = valuesForRole(agentBody, agentCandidate!.role);
   const accessValues = valuesForRole(accessBody, XUNLAI_ACCESS_READER_ROLE);
   const playerValues = valuesForRole(playerBody, XUNLAI_PLAYER_READER_ROLE);
   const areaTypeValues = valuesForRole(
     functionBody(module, areaTypeFunction),
-    XUNLAI_AREA_TYPE_READER_ROLE,
+    areaTypeCandidate!.role,
   );
   const agentLine = soleValue(agentValues, "xunlai.source-line");
   const accessLine = soleValue(accessValues, "xunlai.source-line");
@@ -711,6 +777,9 @@ function deriveQuickItemMove(
   const resolved = entries.map((entry) =>
     uniqueExactFunction(module, entry.bodySha256, entry.params, entry.results));
   if (resolved.some((functionIndex) => functionIndex === null)) return null;
+  const inventory = decodeFunctions(module, [certificate.moveItemMessageId]).find(
+    candidate => candidate.functionIndex === resolved[0]);
+  if (inventory?.messageSites[certificate.moveItemMessageId] !== 1) return null;
   return Object.freeze({
     ...certificate,
     timer: Object.freeze({ ...certificate.timer, functionIndex: resolved[4]! }),
@@ -755,6 +824,7 @@ export function locateAutomaticLocalActions(
         expectedUi.playerChatMessage,
         ...party.nearbyPlayerMessages,
         ...party.partyDirtyMessages,
+        ...PARTY_DIRTY_MESSAGE_ANCHORS,
       ]);
       const uiEvidence = isolatedProof(() => playerChatUiEvidence(module, decoded, {
         playerChatMessage: expectedUi.playerChatMessage,
@@ -765,7 +835,9 @@ export function locateAutomaticLocalActions(
       const uiValues = uiBody ? valuesForRole(uiBody, UI_DISPATCHER_ROLE) : null;
       const uiForwarder = uiValues ? soleValue(uiValues, "ui.forwarder") : null;
       const uiAssertion = uiValues ? soleValue(uiValues, "ui.assertion") : null;
+      const heroPanel = uiFunction === null ? null : deriveHeroPanelMessages(module, uiFunction);
       const uiDispatcher = uiFunction !== null
+        && heroPanel !== null
         && uiEvidence?.dispatcherFunctionIndex === uiFunction
         && uiForwarder !== null
         && uiAssertion !== null
@@ -784,6 +856,7 @@ export function locateAutomaticLocalActions(
         ) === LOCAL_ACTION_HASHES.uiAssertionFile
         ? Object.freeze({
             ...expectedUi,
+            ...heroPanel,
             functionIndex: uiFunction,
             bodySha256: functionBodySha256(module, uiFunction),
           })
@@ -793,12 +866,12 @@ export function locateAutomaticLocalActions(
         ?? isolatedProof(() => deriveObservationLayout(module));
 
       const travelExpected = baseline.travelAction;
-      const travelFunction = travelExpected
-        ? uniqueRoleFunction(module, TRAVEL_PRODUCER_ROLE)
-        : null;
+      const travelCandidate = travelExpected
+        ? uniqueRoleVariant(module, TRAVEL_PRODUCER_ROLES) : null;
+      const travelFunction = travelCandidate?.functionIndex ?? null;
       const travelBody = travelFunction === null ? null : functionBody(module, travelFunction);
       const travelValues = travelBody
-        ? valuesForRole(travelBody, TRAVEL_PRODUCER_ROLE)
+        ? valuesForRole(travelBody, travelCandidate!.role)
         : null;
       const travelAreaReader = travelValues
         ? isolatedProof(() => soleValue(travelValues, "travel.area-reader"))
@@ -833,31 +906,35 @@ export function locateAutomaticLocalActions(
             travelExpected.unlockProof.accessor.results,
           )
         : null;
-      const unlockConsumer = travelExpected
-        ? uniqueRoleFunction(module, TRAVEL_UNLOCK_CONSUMER_ROLE)
-        : null;
+      const unlockCandidate = travelExpected
+        ? uniqueRoleVariant(module, TRAVEL_UNLOCK_CONSUMER_ROLES) : null;
+      const unlockConsumer = unlockCandidate?.functionIndex ?? null;
       const unlockConsumerValues = unlockConsumer === null
         ? null
         : valuesForRole(
             functionBody(module, unlockConsumer),
-            TRAVEL_UNLOCK_CONSUMER_ROLE,
+            unlockCandidate!.role,
           );
       const guildExpected = travelExpected?.guildHall;
       const guildKeyAccessor = guildExpected
         ? uniqueRoleFunction(module, GUILD_HALL_KEY_ACCESSOR_ROLE) : null;
       const guildAreaTypeAccessor = guildExpected
-        ? uniqueRoleFunction(module, GUILD_HALL_AREA_TYPE_ROLE) : null;
-      const guildProducer = guildExpected && guildKeyAccessor !== null
-          && guildAreaTypeAccessor !== null && uiDispatcher !== null
-        ? guildHallProducer(
-            module,
-            guildKeyAccessor,
-            guildAreaTypeAccessor,
-            uiDispatcher.functionIndex,
-            guildExpected.enterMessageId,
-            guildExpected.leaveMessageId,
-          )
-        : null;
+        ? uniqueRoleFunction(module, GUILD_HALL_AREA_TYPE_ROLE)
+          ?? (uniqueExactFunction(module,
+            "47c33ee2f7272a3a33d56b448bda7db8fcfe1e16c69048a3eff07ee0222a4c31", ["i32"], ["i32"]) === 228
+          && uniqueExactFunction(module,
+            "aacd25153c9917d4e0323b9569a0bfd58bb241b7fc068e389477727154ef636b", ["i32"], ["i32"]) === 17557
+            ? uniqueExactFunction(module,
+              "f405d7b00e65454a318152154a1bf02744fdbdd61c4ec7da800650aab8d2e2aa", [], ["i32"]) : null) : null;
+      const guildMessages = guildExpected && guildKeyAccessor !== null
+        && guildAreaTypeAccessor !== null && uiDispatcher
+        ? GUILD_HALL_NATIVE_MESSAGES.flatMap(messages => {
+          const producer = guildHallProducer(module, guildKeyAccessor, guildAreaTypeAccessor,
+            uiDispatcher.functionIndex, messages.enter, messages.leave);
+          return producer === null ? [] : [{ ...messages, producer }];
+        }) : [];
+      const guildMatch = guildMessages.length === 1 ? guildMessages[0]! : null;
+      const guildProducer = guildMatch?.producer ?? null;
       const guildHall = guildExpected && guildKeyAccessor !== null
           && guildAreaTypeAccessor !== null && guildProducer !== null
           && unsignedOperand(functionBody(module, guildKeyAccessor), 2)
@@ -866,6 +943,8 @@ export function locateAutomaticLocalActions(
             === guildExpected.layout.guildHallKey
         ? Object.freeze({
             ...guildExpected,
+            enterMessageId: guildMatch!.enter,
+            leaveMessageId: guildMatch!.leave,
             keyAccessor: Object.freeze({
               ...guildExpected.keyAccessor,
               functionIndex: guildKeyAccessor,
@@ -886,7 +965,8 @@ export function locateAutomaticLocalActions(
       const travelAction = uiDispatcher && gameThread && travelExpected && travelBody
         && observationLayout
         && travelAreaCount !== null
-        && unsignedOperand(travelBody, 169) === travelExpected.messageId
+        && unsignedOperand(travelBody, 169) === (travelCandidate?.role === TRAVEL_PRODUCER_ROLES[1]
+          ? 0x1000_0186 : 0x1000_0183)
         && travelValues !== null
         && soleValue(travelValues, "travel.area-count-bound")
           <= travelAreaCount
@@ -933,7 +1013,7 @@ export function locateAutomaticLocalActions(
             enqueueExport: travelExpected.enqueueExport,
             configureExport: travelExpected.configureExport,
             toggleExport: travelExpected.toggleExport,
-            messageId: travelExpected.messageId,
+            messageId: unsignedOperand(travelBody, 169),
             ...(guildHall ? { guildHall } : {}),
             producer: Object.freeze({
               ...travelExpected.producer,
@@ -1030,22 +1110,39 @@ export function locateAutomaticLocalActions(
       }));
     }
     if (locations.length === 0) return null;
-    const identity = (value: AutomaticLocalActionsLocation) => JSON.stringify({
-      hookFunction: value.hookFunction,
-      observationLayout: value.observationLayout,
-      uiDispatcher: value.uiDispatcher,
-      gameThread: value.gameThread,
-      travelAction: value.travelAction,
-      xunlaiAction: value.xunlaiAction,
-      chatAliases: value.chatAliases,
-      chatFiltering: value.chatFiltering,
-      partyObservation: value.partyObservation,
-      teamApply: value.teamApply,
-      quickItemMove: value.quickItemMove,
+    const first = locations[0]!;
+    if (!locations.every(location => location.hookFunction === first.hookFunction
+      && location.hookBodySha256 === first.hookBodySha256)) return null;
+    // An absent optional capability is not conflicting evidence. Combine only
+    // independently derived equal values; ambiguity withdraws its own field.
+    const unique = <Key extends keyof AutomaticLocalActionsLocation>(key: Key) => {
+      const values = locations.map(location => location[key]).filter(value => value != null);
+      return values.length > 0 && values.every(value =>
+        JSON.stringify(value) === JSON.stringify(values[0])) ? values[0]! : null;
+    };
+    const travelCandidates = locations.flatMap(location => location.travelAction ?? []);
+    const coreTravel = (value: NonNullable<AutomaticLocalActionsLocation["travelAction"]>) => {
+      const { guildHall: _guildHall, ...core } = value;
+      return core;
+    };
+    const travel = travelCandidates.length > 0 && travelCandidates.every(value =>
+      JSON.stringify(coreTravel(value)) === JSON.stringify(coreTravel(travelCandidates[0]!))) ? travelCandidates[0]! : null;
+    const guildCandidates = travelCandidates.flatMap(value => value.guildHall ?? []);
+    const guildHall = guildCandidates.length > 0 && guildCandidates.every(value =>
+      JSON.stringify(value) === JSON.stringify(guildCandidates[0]!)) ? guildCandidates[0]! : null;
+    return Object.freeze({
+      ...first,
+      observationLayout: unique("observationLayout"),
+      uiDispatcher: unique("uiDispatcher"),
+      gameThread: unique("gameThread"),
+      travelAction: travel ? { ...coreTravel(travel), ...(guildHall ? { guildHall } : {}) } : null,
+      xunlaiAction: unique("xunlaiAction"),
+      chatAliases: unique("chatAliases"),
+      chatFiltering: unique("chatFiltering"),
+      partyObservation: unique("partyObservation"),
+      teamApply: unique("teamApply"),
+      quickItemMove: unique("quickItemMove"),
     });
-    return locations.every((match) => identity(match) === identity(locations[0]!))
-      ? locations[0]!
-      : null;
   } catch {
     return null;
   }

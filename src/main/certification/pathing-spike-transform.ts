@@ -45,6 +45,9 @@ import { worldMapDisplayStateAddress } from "./world-map-visibility-proof.js";
 import {
   CARTOGRAPHY_MEMORY_LAYOUTS,
   COMPASS_CERTIFICATE,
+  OCTOBER_COMPASS_CERTIFICATE,
+  OCTOBER_MISSION_MAP_CERTIFICATE,
+  OCTOBER_WORLD_MAP_CERTIFICATE,
   EXPLORATION_CERTIFICATE,
   MISSION_MAP_CERTIFICATE,
   WORLD_MAP_CERTIFICATE,
@@ -77,7 +80,7 @@ declare const WebAssembly: {
   Module: new (bytes: Uint8Array) => object;
 };
 
-export const CARTOGRAPHY_SPIKE_TRANSFORM_ABI = 45;
+export const CARTOGRAPHY_SPIKE_TRANSFORM_ABI = 46;
 export type CartographyMemoryLayoutId = keyof typeof CARTOGRAPHY_MEMORY_LAYOUTS;
 
 const mutableI32 = () => Uint8Array.of(0x7f, 0x01, 0x41, 0x00, 0x0b);
@@ -215,20 +218,23 @@ export function transformCartographySpikeWasm(
   input: Uint8Array,
   memoryLayoutId: CartographyMemoryLayoutId,
 ): Uint8Array {
+  const nativeCompass = memoryLayoutId === "october" ? OCTOBER_COMPASS_CERTIFICATE : COMPASS_CERTIFICATE;
+  const nativeMission = memoryLayoutId === "october" ? OCTOBER_MISSION_MAP_CERTIFICATE : MISSION_MAP_CERTIFICATE;
+  const nativeWorld = memoryLayoutId === "october" ? OCTOBER_WORLD_MAP_CERTIFICATE : WORLD_MAP_CERTIFICATE;
   const memoryLayout: CartographyMemoryLayout = CARTOGRAPHY_MEMORY_LAYOUTS[memoryLayoutId];
-  const layoutId = memoryLayoutId === "official" ? 1 : 2;
+  const layoutId = memoryLayoutId === "official" ? 1 : memoryLayoutId === "relocated" ? 2 : 3;
   const compassCertificate = Object.freeze({
-    ...COMPASS_CERTIFICATE,
+    ...nativeCompass,
     frameArray: memoryLayout.frameArray,
     frameCount: memoryLayout.frameCount,
   });
   const missionCertificate = Object.freeze({
-    ...MISSION_MAP_CERTIFICATE,
+    ...nativeMission,
     frameArray: memoryLayout.frameArray,
     frameCount: memoryLayout.frameCount,
   });
   const worldCertificate = Object.freeze({
-    ...WORLD_MAP_CERTIFICATE,
+    ...nativeWorld,
     frameArray: memoryLayout.frameArray,
     frameCount: memoryLayout.frameCount,
   });
@@ -253,16 +259,16 @@ export function transformCartographySpikeWasm(
   const worldMapDisplayState = worldMapDisplayStateAddress(evidence)
     ?? fail("World Map display-state certificate changed");
   if (
-    functionBodySha256(module, COMPASS_CERTIFICATE.renderFunction)
-      !== COMPASS_CERTIFICATE.renderBodySha256
-    || functionBodySha256(module, COMPASS_CERTIFICATE.mapRenderFunction)
-      !== COMPASS_CERTIFICATE.mapRenderBodySha256
-    || functionBodySha256(module, MISSION_MAP_CERTIFICATE.eventDispatcherFunction)
-      !== MISSION_MAP_CERTIFICATE.eventDispatcherBodySha256
-    || functionBodySha256(module, MISSION_MAP_CERTIFICATE.gameplayContextFunction)
-      !== MISSION_MAP_CERTIFICATE.gameplayContextBodySha256
-    || functionBodySha256(module, WORLD_MAP_CERTIFICATE.eventDispatcherFunction)
-      !== WORLD_MAP_CERTIFICATE.eventDispatcherBodySha256
+    functionBodySha256(module, nativeCompass.renderFunction)
+      !== nativeCompass.renderBodySha256
+    || functionBodySha256(module, nativeCompass.mapRenderFunction)
+      !== nativeCompass.mapRenderBodySha256
+    || functionBodySha256(module, nativeMission.eventDispatcherFunction)
+      !== nativeMission.eventDispatcherBodySha256
+    || functionBodySha256(module, nativeMission.gameplayContextFunction)
+      !== nativeMission.gameplayContextBodySha256
+    || functionBodySha256(module, nativeWorld.eventDispatcherFunction)
+      !== nativeWorld.eventDispatcherBodySha256
   ) fail("Cartography surface certificate changed");
 
   const sections = splitSections(input);
@@ -306,12 +312,12 @@ export function transformCartographySpikeWasm(
     { params: [], results: [] },
     { params: [0x7f], results: [0x7f] },
   ];
-  const compassMapRenderLocal = COMPASS_CERTIFICATE.mapRenderFunction
+  const compassMapRenderLocal = nativeCompass.mapRenderFunction
     - module.functionImportCount;
-  const compassRenderLocal = COMPASS_CERTIFICATE.renderFunction - module.functionImportCount;
-  const missionDispatcherLocal = MISSION_MAP_CERTIFICATE.eventDispatcherFunction
+  const compassRenderLocal = nativeCompass.renderFunction - module.functionImportCount;
+  const missionDispatcherLocal = nativeMission.eventDispatcherFunction
     - module.functionImportCount;
-  const worldDispatcherLocal = WORLD_MAP_CERTIFICATE.eventDispatcherFunction
+  const worldDispatcherLocal = nativeWorld.eventDispatcherFunction
     - module.functionImportCount;
   const compassMapRenderType = functionTypes[compassMapRenderLocal]
     ?? fail("CompassMap render type is missing");
@@ -335,9 +341,9 @@ export function transformCartographySpikeWasm(
     ?? fail("Compass render body is missing");
   const expectedCompassCall = concat(
     Uint8Array.of(0x10),
-    paddedIndex(COMPASS_CERTIFICATE.mapRenderFunction),
+    paddedIndex(nativeCompass.mapRenderFunction),
   );
-  const callOffset = COMPASS_CERTIFICATE.mapRenderCallSiteOffset;
+  const callOffset = nativeCompass.mapRenderCallSiteOffset;
   if (!expectedCompassCall.every((byte, index) => compassRender[callOffset + index] === byte)) {
     fail("CompassMap render call site changed");
   }
@@ -352,7 +358,7 @@ export function transformCartographySpikeWasm(
   nextBodies[compassRenderLocal] = compassRender;
   nextBodies.push(
     cartographyContextObserver(allocated.context, contextCertificate),
-    compassMapRenderWrapper(COMPASS_CERTIFICATE.mapRenderFunction, allocated.compass),
+    compassMapRenderWrapper(nativeCompass.mapRenderFunction, allocated.compass),
     nativeFrameObserver(
       compassCertificate,
       allocated.compass,
@@ -365,9 +371,10 @@ export function transformCartographySpikeWasm(
       allocated.context.areaEpoch,
     ),
     missionMapEventWrapper(
-      MISSION_MAP_CERTIFICATE.eventDispatcherFunction,
+      nativeMission.eventDispatcherFunction,
       allocated.projection,
       allocated.context.areaEpoch,
+      nativeMission.gameplayContextFunction,
     ),
     explorationObserver(
       allocated.exploration,
@@ -381,7 +388,7 @@ export function transformCartographySpikeWasm(
       anchorCertificate,
     ),
     worldMapEventWrapper(
-      WORLD_MAP_CERTIFICATE.eventDispatcherFunction,
+      nativeWorld.eventDispatcherFunction,
       allocated.world,
       allocated.context.areaEpoch,
       worldCertificate,
@@ -464,12 +471,12 @@ export function transformCartographySpikeWasm(
       body: rewriteExactTableSlot(
         rewriteExactTableSlot(
           section.body,
-          MISSION_MAP_CERTIFICATE.eventDispatcherTableSlot,
-          MISSION_MAP_CERTIFICATE.eventDispatcherFunction,
+          nativeMission.eventDispatcherTableSlot,
+          nativeMission.eventDispatcherFunction,
           missionEventWrapperFunction,
         ),
-        WORLD_MAP_CERTIFICATE.eventDispatcherTableSlot,
-        WORLD_MAP_CERTIFICATE.eventDispatcherFunction,
+        nativeWorld.eventDispatcherTableSlot,
+        nativeWorld.eventDispatcherFunction,
         worldEventWrapperFunction,
       ),
     };

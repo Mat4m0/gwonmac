@@ -119,7 +119,10 @@ module unloading happens on the next Core launch.
 Quick Item Move wraps two exact item-slot callbacks, the native quantity-move
 helper, and the UI dispatcher already certified for Tools. Its certificate binds
 those bodies, item lookup, the storage-page reader, frame hierarchy, and clock
-to the client build. A changed or ambiguous anchor disables only this capability. The trade and item structure offsets are reviewed facts
+to the client build. The certificate also binds the native move-message
+identifier used for quantity prompts and prompt cancellation. Do not reuse an
+identifier from another client family. A changed or ambiguous anchor disables
+only this capability. The trade and item structure offsets are reviewed facts
 for the exact post-template client build, so an ArenaNet client update disables
 Quick Item Move until those facts are recertified. Ordinary storage transfers
 fill compatible stacks before using empty cells. Deposits stay in the visible

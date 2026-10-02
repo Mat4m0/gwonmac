@@ -101,7 +101,7 @@ export type CartographyState = Readonly<{
     sequence: number;
     mapId: number;
     areaEpoch: number;
-    layoutId: 1 | 2;
+    layoutId: 1 | 2 | 3;
   }> | null;
   continent: CartographyContinentState;
   currentInstance: CartographyCurrentInstanceState;

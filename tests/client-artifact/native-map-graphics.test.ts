@@ -1,4 +1,5 @@
 /** Executes native map draw ownership, matrix restoration and bitmap refusal. */
+import { retainedClientFixture } from "../fixtures/retained-client.js";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
@@ -12,7 +13,8 @@ import { NATIVE_MAP_GRAPHICS_MAGIC, NATIVE_MAP_GRAPHICS_SURFACES, NATIVE_MAP_QUA
 test("each native map owns its mesh, restores matrices and refuses stale or malformed textures", async () => {
   assert.ok(process.env.GW_CLIENT_WASM);
   const input = new Uint8Array(await readFile(process.env.GW_CLIENT_WASM));
-  const output = transformCartographySpikeWasm(input, "relocated");
+  const fixture = retainedClientFixture(input);
+  const output = transformCartographySpikeWasm(input, fixture.memoryLayout);
   const sections = splitSections(output); const bodies = parseCode(sectionById(sections, 10));
   const evidence = wasmEvidence(output); assert.ok(evidence); const module = evidence.moduleView();
   const exported = parseExports(sectionById(sections, 7)); const decoded = evidence.decodeFunctions([]);
@@ -39,7 +41,7 @@ test("each native map owns its mesh, restores matrices and refuses stale or malf
       || ["gwonmac_cartography_context_area_epoch", "gwonmac_cartography_context_status"].includes(entry.name)));
     const section = (id: number, body: Uint8Array) => encodeSection({id, body});
     const labels = ["hide", "destroy", "render", "publish"];
-    const fixture = concat(WASM_HEADER, section(1, sectionById(sections, 1)),
+    const capsule = concat(WASM_HEADER, section(1, sectionById(sections, 1)),
       section(2, concat(uleb(peers.length), ...peers.map((index) => concat(encodeName("peer"), encodeName(String(index)), Uint8Array.of(0), uleb(module.functionTypeIndices[index]!))))),
       section(3, concat(uleb(selected.length), ...selected.map((index) => uleb(module.functionTypeIndices[index]!)))),
       // Include the native model-type word and current graphics-device pointer.
@@ -51,7 +53,7 @@ test("each native map owns its mesh, restores matrices and refuses stale or malf
       section(10, encodeCode(rewritten)));
     const released: number[] = []; const matrixEvents: string[] = [];
     let textures = 0; let meshes = 0; let draws = 0;
-    const { exports } = new WebAssembly.Instance(new WebAssembly.Module(Uint8Array.from(fixture)), {peer: {
+    const { exports } = new WebAssembly.Instance(new WebAssembly.Module(Uint8Array.from(capsule)), {peer: {
       1444: (format: number, flags: number) => { assert.deepEqual([format, flags], [265, 0]); meshes += 1; return 11; },
       1445: (handle: number, indices: number) => { assert.deepEqual([handle, indices], [11, 6 * count]); return 131072; },
       1446: (handle: number, vertices: number) => { assert.deepEqual([handle, vertices], [11, 4 * count]); return 65536; },
@@ -80,9 +82,9 @@ test("each native map owns its mesh, restores matrices and refuses stale or malf
     const scalar = (name: string, value: number) => { const target = exports[name]; assert.ok(target instanceof WebAssembly.Global); target.value = value; };
     const invoke = (name: string, ...args: number[]) => { const target = exports[name]; assert.equal(typeof target, "function"); if (typeof target === "function") return target(...args); };
     const MODEL = 196608 + 4096; const MODEL_TYPE = 20;
-    view.setUint32(20 + 1341168, MODEL_TYPE, true);
+    view.setUint32(20 + fixture.modelTypeOffset, MODEL_TYPE, true);
     const DEVICE = 400_000;
-    view.setUint32(2734712, DEVICE, true);
+    view.setUint32(fixture.graphicsDevice, DEVICE, true);
     view.setUint32(DEVICE + 460, 3, true);
     scalar("stack", 196608); scalar("gwonmac_cartography_context_status", 1); scalar("gwonmac_cartography_context_area_epoch", 7);
     const owner = 256; const region = 2048; const bytes = 64 + (quads ? count * 32 : 0) + 64 * 64 * 4;
@@ -95,13 +97,13 @@ test("each native map owns its mesh, restores matrices and refuses stale or malf
     };
     const assertQueueBusy = () => {
       for (const phase of [null, 0, 1, 2, 4]) {
-        view.setUint32(2734712, phase === null ? 0 : DEVICE, true);
+        view.setUint32(fixture.graphicsDevice, phase === null ? 0 : DEVICE, true);
         view.setUint32(DEVICE + 460, phase ?? 3, true);
         const before = new Uint8Array(memory.buffer).slice();
         assert.equal(invoke("publish", region, bytes), 2, `queue phase ${phase} defers publishing`);
         assert.deepEqual(new Uint8Array(memory.buffer), before, "busy leaves native memory unchanged");
       }
-      view.setUint32(2734712, DEVICE, true);
+      view.setUint32(fixture.graphicsDevice, DEVICE, true);
       view.setUint32(DEVICE + 460, 3, true);
     };
     header(); assert.equal(invoke("publish", region, bytes), 0, "no owner before native draw event");
@@ -153,10 +155,12 @@ test("each native map owns its mesh, restores matrices and refuses stale or malf
 
 test("each map draws its surfaces in the shared order", async () => {
   assert.ok(process.env.GW_CLIENT_WASM);
-  const output = transformCartographySpikeWasm(new Uint8Array(await readFile(process.env.GW_CLIENT_WASM)), "relocated");
+  const input = new Uint8Array(await readFile(process.env.GW_CLIENT_WASM));
+  const fixture = retainedClientFixture(input);
+  const output = transformCartographySpikeWasm(input, fixture.memoryLayout);
   const exported = parseExports(sectionById(splitSections(output), 7));
   const evidence = wasmEvidence(output); assert.ok(evidence); const decoded = evidence.decodeFunctions([]);
-  for (const [map, dispatcher] of [["mission", 16136], ["world", 16224]] as const) {
+  for (const [map, dispatcher] of [["mission", fixture.functionIndex(16136)], ["world", fixture.functionIndex(16224)]] as const) {
     const renders = NATIVE_MAP_GRAPHICS_SURFACES.filter((surface) => surface.startsWith(map)).map((surface) => {
       const publish = exported.find((entry) => entry.name === `gwonmac_${surface}_graphics_publish`)?.index;
       assert.ok(publish !== undefined); return publish - 1;
@@ -169,21 +173,23 @@ test("each map draws its surfaces in the shared order", async () => {
 
 test("the map pointer answer follows the hovered frame's ancestors and refuses bad memory", async () => {
   assert.ok(process.env.GW_CLIENT_WASM);
-  const output = transformCartographySpikeWasm(new Uint8Array(await readFile(process.env.GW_CLIENT_WASM)), "relocated");
+  const input = new Uint8Array(await readFile(process.env.GW_CLIENT_WASM));
+  const fixture = retainedClientFixture(input);
+  const output = transformCartographySpikeWasm(input, fixture.memoryLayout);
   const sections = splitSections(output); const bodies = parseCode(sectionById(sections, 10));
   const evidence = wasmEvidence(output); assert.ok(evidence); const module = evidence.moduleView();
   const index = parseExports(sectionById(sections, 7)).find((entry) => entry.name === "gwonmac_map_pointer_within")?.index;
   assert.ok(index !== undefined);
   assert.equal(evidence.decodeFunctions([]).find((row) => row.functionIndex === index)?.callSites.size ?? 0, 0, "the answer calls nothing");
   const section = (id: number, body: Uint8Array) => encodeSection({id, body});
-  const fixture = concat(WASM_HEADER, section(1, sectionById(sections, 1)),
+  const capsule = concat(WASM_HEADER, section(1, sectionById(sections, 1)),
     section(3, concat(uleb(1), uleb(module.functionTypeIndices[index]!))), section(5, concat(Uint8Array.of(1, 0), uleb(96))),
     section(7, concat(uleb(2), encodeName("pointer"), Uint8Array.of(0, 0), encodeName("memory"), Uint8Array.of(2, 0))),
     section(10, encodeCode([bodies[index - module.functionImportCount]!])));
-  const { exports } = new WebAssembly.Instance(new WebAssembly.Module(Uint8Array.from(fixture)));
+  const { exports } = new WebAssembly.Instance(new WebAssembly.Module(Uint8Array.from(capsule)));
   const memory = exports.memory; assert.ok(memory instanceof WebAssembly.Memory); const view = new DataView(memory.buffer);
   const pointer = exports.pointer; assert.equal(typeof pointer, "function"); if (typeof pointer !== "function") return;
-  const UNDER_MOUSE = 5911100; const [map, panel, marker] = [65536, 131072, 196608];
+  const UNDER_MOUSE = fixture.underMouse; const [map, panel, marker] = [65536, 131072, 196608];
   const frame = (at: number, id: number, parent: number) => { view.setUint32(at + 0xbc, id, true); view.setUint32(at + 0x128, parent ? parent + 0x128 : 0, true); };
   frame(map, 77, 0); frame(panel, 90, 0); frame(marker, 12, map);
   view.setUint32(UNDER_MOUSE, 0, true); assert.equal(pointer(77), 0, "nothing hovered");

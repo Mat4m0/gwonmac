@@ -17,7 +17,7 @@
  * the process boundary. Profile state is never consulted.
  */
 import { deriveAlcoholObservation } from "./enhancement-alcohol-proof.js";
-import { NATIVE_HUD_RENDERING_PROOF, provesNativeHudRendering } from "./native-hud-transform.js";
+import { deriveNativeHudRendering, provesNativeHudRendering } from "./native-hud-transform.js";
 import { deriveWhisperChat } from "./enhancement-whisper-proof.js";
 import { deriveResignAction } from "./enhancement-resign-proof.js";
 import { createHash } from "node:crypto";
@@ -944,7 +944,7 @@ function deriveEnhancementBuild(
     ...(includePlayerEffects ? { playerEffectObservation: playerEffects! } : {}),
     ...(includeEffectIcons ? { effectIconGeometry: effectIcons! } : {}),
     ...(includeAlcohol ? { alcoholObservation } : {}),
-    ...(includeNativeHud ? { nativeHudRendering: NATIVE_HUD_RENDERING_PROOF } : {}),
+    ...(includeNativeHud ? { nativeHudRendering: deriveNativeHudRendering(context)! } : {}),
     ...skillbarBuild.beforeTeam,
     ...(includeTeam ? { teamApply: locatedLocal!.teamApply! } : {}),
     ...skillbarBuild.afterTeam,
