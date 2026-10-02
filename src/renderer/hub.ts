@@ -416,6 +416,8 @@ export function createHub(parent: HTMLElement) {
       if (picker.dataset.choices !== choices) { picker.replaceChildren(); for (const choice of basis.options) { const option = document.createElement('option'); option.value = choice.value; option.textContent = choice.label; picker.append(option); } picker.dataset.choices = choices; }
       picker.value = basis.value;
       picker.onchange = () => basis.choose(picker.value);
+      // Enter on the picker copies the card it prices, as Enter on the search does (HUB-022).
+      picker.onkeydown = event => { if (event.key === 'Enter' && !event.repeat && !event.isComposing && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) { event.preventDefault(); void run(); } };
       let details = rates.querySelector('button');
       if (!details) { details = document.createElement('button'); details.className = 'ui-button'; details.textContent = 'Details'; rates.append(details); }
       details.textContent = row.actionsLabel === 'Refresh quotes' ? 'Refresh quotes' : 'Details';
@@ -741,10 +743,14 @@ export function createHub(parent: HTMLElement) {
     const best = new Map<string, number>();
     if (ranked) for (const row of rows) best.set(row.group, Math.min(best.get(row.group) ?? Infinity, tierOf(row)));
     const groups = ["Pinned", "Calculator", "Teams", "Folders", "Builds", "Targets", "Current build", "Accounts", "Characters", "In your party", "Unlocked heroes", "Heroes", "People", "Places", "Friends", "Continue", "Tools", "Commands", "Settings", "Sources", "Trade", "Calculate", "Keys & shortcuts"];
-    const groupIndex = (group: string) => { const index = groups.indexOf(group); return index < 0 ? groups.length : index; };
-    // Keep everyday game actions ahead of account management, independent of provider order.
+    // A typed query that names a tool or command as well as places answers with the tool: the Hub
+    // has a few of those and hundreds of places (`ma` is Maps before Maguuma Stade, HUB-058).
+    const typedFirst = ranked ? ['Tools', 'Commands'] : [];
+    const groupIndex = (group: string) => { const first = typedFirst.indexOf(group); if (first >= 0) return first - typedFirst.length; const index = groups.indexOf(group); return index < 0 ? groups.length : index; };
+    // Keep everyday game actions ahead of account management, independent of provider order,
+    // and Commands, the way into everything else, first among the commands (HUB-185).
     const tools = ['travel', 'character', 'whispers', 'builds', 'trade', 'storage', 'maps', 'accounts'];
-    const priority = (row: HubRow) => { if (scope || row.group !== 'Tools') return 0; const index = tools.indexOf(row.id); return index < 0 ? tools.length : index; };
+    const priority = (row: HubRow) => { if (scope) return 0; if (row.group === 'Commands') return row.id === 'commands' ? -1 : 0; if (row.group !== 'Tools') return 0; const index = tools.indexOf(row.id); return index < 0 ? tools.length : index; };
     rows = [...rows].sort((a, b) => (ranked ? best.get(a.group)! - best.get(b.group)! : 0) || groupIndex(a.group) - groupIndex(b.group)
       || (ranked ? tierOf(a) - tierOf(b) : 0) || priority(a) - priority(b));
     const resultCount = `${rows.length} result${rows.length === 1 ? '' : 's'}`;
@@ -863,7 +869,10 @@ export function createHub(parent: HTMLElement) {
     // Clear only this loading refusal when its answer settles; unrelated failures stay.
     if (prior?.unavailable && status.textContent === prior.unavailable && rows.some(row => row.conversion && !row.unavailable)) report('');
     select((prior?.id === 'quote-state' || prior?.id === 'market-state') && !!rows[0]?.conversion ? rows[0].id : settling || replacedPlaceholder ? phraseMatches.length > 1 || (exactCount > 1 && !phraseHit) ? null : initial?.id ?? null : !revised && rows.some(row => row.id === selected) ? selected : null);
-    if (focusedRate instanceof HTMLElement && !rates.hidden && rates.isConnected) focusedRate.focus({ preventScroll: true });
+    if (focusedRate instanceof HTMLElement) {
+      if (!rates.hidden && rates.isConnected) focusedRate.focus({ preventScroll: true });
+      else focusResult();
+    }
     if (!settling && prior && !replacedPlaceholder && !rows.some(row => row.id === prior.id) && !receiptInStatus) report('The previous selection is no longer available. Choose a result.');
 
   }

@@ -21,6 +21,8 @@ actions ask for confirmation. No transition leaves focus on a removed node.
 Every page keeps the same footer. Disabled slots stay visible. The primary names
 its action and target on one line, with the complete accessible name and title.
 Views use `HubViewFooter`; they do not add another footer or Actions menu.
+Team review opens with focus on the review surface at its top. Its refusal
+appears before the roster. The footer keeps the named Apply action.
 A running primary shows progress without an Enter keycap.
 Search uses the shared grammar and ranking in `src/shared/hub.ts`.
 An owned list refreshes from its own source. Other observations update navigation

@@ -365,7 +365,7 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
     );
     await expect.poll(() => isDomActiveElement(page.getByRole("button", { name: "Stay here", exact: true }))).toBe(true);
     await page.keyboard.press("Escape");
-    await expect(page.locator(".hub-caption")).toHaveText("Characters");
+    await expect(page.getByRole("heading", { name: "Characters", exact: true })).toBeVisible();
     await expect(page.locator("body")).not.toHaveAttribute("data-character-switch-request", /.*/u);
 
     await dialog.getByRole("option", { name: /Switch to Private Beta/u }).dblclick();
@@ -466,6 +466,7 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
       window.dispatchEvent(new CustomEvent("gw:character-toggle", { cancelable: true }));
     });
     await expect(dialog).toBeVisible();
+    await expect(page.locator(".hub-status")).toHaveAttribute("role", "status");
     await expect(page.locator(".hub-status")).toContainText(
       "Switch to Private Beta stopped. Automatic switching stopped. Continue from the Guild Wars character selector.",
     );

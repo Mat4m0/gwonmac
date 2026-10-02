@@ -30,6 +30,22 @@ test.describe('game lifecycle', () => {
     await expect(page.locator('#app')).toHaveAttribute('data-action', 'Character toefte');
   });
 
+  test('Characters list arrival focuses the current card instead of its prior display setting (HUB-074)', async ({ page }) => {
+    await open(page, '&characters-ms=1500');
+    await page.keyboard.press('Meta+e');
+    await page.getByRole('button', { name: 'Character Switch settings', exact: true }).click();
+    const profession = page.getByRole('checkbox', { name: 'Show profession' });
+    await profession.focus();
+    await expect(profession).toBeFocused();
+    const before = await profession.isChecked();
+    const current = page.locator('#character-switch-list button[aria-current=true]');
+    await expect(current).toBeFocused();
+    await page.keyboard.press('Enter');
+    expect((await page.evaluate(() => window.gwNative.hubSettings.get())).settings.characterSwitchProfession).toBe(before);
+    await expect(current).toBeFocused();
+    await expect(page.locator('#app')).not.toHaveAttribute('data-action', /Character/);
+  });
+
   test('a Travel arrival moves the lifecycle to the destination outpost', async ({ page }) => {
     await open(page, '&lifecycle=pve-explorable');
     const search = page.locator('.hub-search input');
@@ -60,6 +76,23 @@ test.describe('shortcuts through commands.ts', () => {
     await expect(hub).toBeVisible();
     await expect(page.getByRole('navigation', { name: 'Hub breadcrumb' })).toHaveText('Home›Travel');
     await expect(page.getByRole('combobox', { name: 'Destination, phrase, or friend' })).toBeFocused();
+    await page.keyboard.press('Meta+r');
+    await page.keyboard.press('Meta+b');
+    const search = page.locator('.hub-search input');
+    await search.fill('smiter');
+    for (let press = 0; press < 3; press++) await page.keyboard.press('Meta+b');
+    await expect(page.locator('.hub-breadcrumbs')).toHaveText('Home›Build Library');
+    await expect(search).toHaveValue('smiter'); await expect(search).toBeFocused();
+    await page.keyboard.press('Meta+Backspace');
+    await expect(page.locator('.hub-caption')).toHaveText('Home');
+    await search.fill('settings'); await search.press('Enter');
+    await page.getByRole('button', { name: 'Maps', exact: true }).click();
+    await page.evaluate(() => window.gwHub?.openSettings());
+    await page.evaluate(() => window.gwHub?.openSettings());
+    await expect(page.locator('.hub-settings-body h2')).toHaveText('Maps');
+    await expect(page.locator('.hub-breadcrumbs')).toHaveText('Home›Settings');
+    await page.keyboard.press('Meta+Backspace');
+    await expect(page.locator('.hub-caption')).toHaveText('Home');
   });
 
   test('Command-T finds a Travel page opened from Home, and a closed Hub starts Travel fresh', async ({ page }) => {

@@ -75,6 +75,38 @@ test('Maps follows external settings and recovers from a failed save', async ({ 
   await grid.uncheck();
   await expect(grid).not.toBeChecked();
   await expect(page.locator('.hub-settings-status')).toBeEmpty();
+  // The external store answers late; the native inputs must retain every physical edit.
+  await page.goto('/?hub&settings-ms=20');
+  await search.fill('maps'); await search.press('Enter');
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: { cartographyGridEnabled: true, cartographyGridOpacity: 65 } })));
+  await expect(grid).toBeChecked(); await expect(opacity).toHaveValue('65');
+  await page.evaluate(() => {
+    const update = window.gwNative.hubSettings.update;
+    const saves: unknown[] = [];
+    Object.assign(window, { acceptanceSaves: saves });
+    window.gwNative.hubSettings.update = async change => { saves.push(change); return update(change); };
+  });
+  await grid.focus();
+  await page.keyboard.press('Space'); await expect(grid).toBeFocused();
+  await page.keyboard.press('Space'); await expect(grid).toBeFocused();
+  await expect(page.locator('.hub-settings')).not.toHaveAttribute('aria-busy', 'true');
+  expect(await page.evaluate(() => (window as typeof window & { acceptanceSaves: unknown[] }).acceptanceSaves)).toEqual([
+    { kind: 'settings', patch: { cartographyGridEnabled: false } },
+    { kind: 'settings', patch: { cartographyGridEnabled: true } },
+  ]);
+  await opacity.focus();
+  for (let step = 0; step < 5; step++) { await page.keyboard.press('ArrowRight'); await expect(opacity).toBeFocused(); }
+  await expect(page.locator('.hub-settings')).not.toHaveAttribute('aria-busy', 'true');
+  await expect(opacity).toHaveValue('70'); await expect(opacity).toBeFocused();
+  await page.goto('/?hub&settings-ms=50');
+  await search.fill('maps'); await search.press('Enter');
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: { cartographyGridEnabled: true, cartographyGridOpacity: 100 } })));
+  await expect(grid).toBeChecked();
+  await opacity.focus();
+  await expect(opacity).toHaveValue('100');
+  for (let step = 0; step < 15; step++) { await page.keyboard.press('ArrowLeft'); await expect(opacity).toBeFocused(); }
+  await expect(page.locator('.hub-settings')).not.toHaveAttribute('aria-busy', 'true');
+  await expect(opacity).toHaveValue('85'); await expect(opacity).toBeFocused();
 });
 
 // docs/settings.md: every game setting is found by its words and changes in game; the rest is one link away.

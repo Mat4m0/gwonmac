@@ -198,6 +198,12 @@ test('build option names stay concise and describe skills separately (HUB-161)',
 test('child dialog naming follows its visible title (HUB-166)', async ({ page }) => {
   await page.goto('/?hub');
   const search = page.locator('.hub-search input');
+  await expect(page.locator('#hub')).toHaveAccessibleName('Hub — Home');
+  await expect(page.locator('#hub').getByRole('heading', { name: 'Home', exact: true })).toBeVisible();
+  await search.fill('library'); await search.press('Enter');
+  await expect(page.locator('#hub')).toHaveAccessibleName('Hub — Build Library');
+  await expect(page.locator('#hub').getByRole('heading', { name: 'Build Library', exact: true })).toBeVisible();
+  await page.keyboard.press('Meta+r');
   await search.fill('settings'); await search.press('Enter');
   await expect(page.locator('#hub')).toHaveAccessibleName('Hub — Settings');
   await expect(page.locator('#hub').getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();

@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createHubTravel } from './hub-travel';
+import { TRAVEL_DESTINATIONS } from '../../../src/shared/travel';
+import { travelDestinationAvailability } from '../../../src/shared/travel-command';
+import { searchTravelDestinations } from '../../../src/shared/travel-search';
 import { createDemoTravelHost } from './travel-host';
 
 describe('Hub travel recents', () => {
@@ -28,7 +31,18 @@ describe('Hub travel recents', () => {
     try {
       travel.source.setVisible?.(true);
       await vi.waitFor(() => expect(travel.source.search('fort')[0]?.id).toBe('place:857'));
-      expect(travel.source.search('la')[0]?.id).toBe('place:55');
+      for (const destination of TRAVEL_DESTINATIONS) for (const alias of destination.aliases) {
+        const places = travel.source.search(alias).filter(row => row.group === 'Places').map(row => row.id);
+        // A place outside this character's world is left out at root, as in the Travel view (HUB-065).
+        if (travelDestinationAvailability(host.state.value, destination.mapId) === 'outside-context') expect(places, alias).not.toContain(`place:${destination.mapId}`);
+        else expect(places[0], alias).toBe(`place:${destination.mapId}`);
+        expect(searchTravelDestinations(alias)[0]?.mapId, alias).toBe(destination.mapId);
+      }
+      expect(travel.source.search('ascalon city').filter(row => row.group === 'Places').map(row => row.id)).toEqual(['place:81']);
+      for (const query of ['guild hall', 'gh']) expect(travel.source.search(query)[0]?.id).toBe('place:guild-hall');
+      for (const [query, ids] of [['la', [55, 120, 333, 334, 559, 442]], ['toa', [138]], ['kamadan', [449]], ['eye of the north', [642]], ['kmaadan', []], ['ada', []]] as const) {
+        expect(searchTravelDestinations(query).map(place => place.mapId), query).toEqual(ids);
+      }
       expect(travel.source.search('kmaadan')).toEqual([]);
       expect(travel.source.search('ada')).toEqual([]);
     } finally { travel.dispose(); }

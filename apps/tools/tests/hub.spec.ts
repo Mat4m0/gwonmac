@@ -199,6 +199,7 @@ test('team preflight is inline and an interruption is not reported as success', 
   await expect(page.getByRole('button', { name: 'Apply team GOM AFK ↵' })).toBeEnabled();
   await search.press('Enter');
   await expect(page.locator('.hub-status')).toContainText('1 change was confirmed');
+  await expect(page.locator('.hub-status')).toHaveAttribute('role', 'status');
   await expect(page.locator('#hub')).toBeVisible();
 });
 
@@ -215,6 +216,9 @@ test('calculator shows both observed trader rates and fixed conversions', async 
   await expect(page.locator('#app')).toHaveAttribute('data-action', 'Copied 1250 gold = 1.25 platinum · Fixed conversion · 1 platinum = 1,000 gold');
   // The copy names what it copied in the Hub status line (D-8).
   await expect(page.locator('#hub .hub-status')).toHaveText('Copied “1.25 platinum”');
+  await search.fill('1p in g'); await search.press('Enter');
+  await expect(page.locator('#hub .hub-status')).toHaveText('Copied “1,000 gold”');
+  await expect(page.locator('#app')).toHaveAttribute('data-action', 'Copied 1 p = 1,000 gold · Fixed conversion · 1 platinum = 1,000 gold');
   await expect(page.locator('#hub')).toBeVisible();
 });
 
@@ -481,6 +485,13 @@ test('Travel names where you are, and Customize keeps Tab and a chosen number in
   const search=page.getByRole('combobox',{name:'Destination, phrase, or friend'});
   await expect(search).toBeFocused();
   await expect(page.locator('.hub-context')).toHaveText("Fixture Monk · Lion's Arch");
+  for (const [query, key, destination] of [['', 'Home', 'Kamadan, Jewel of Istan'], ['rata', '', 'Rata Sum'], ['', '3', 'Kamadan, Jewel of Istan']] as const) {
+    await search.fill(query);
+    if (key) await search.press(key);
+    await expect(page.locator('.hub-context')).toHaveText("Fixture Monk · Lion's Arch");
+    await expect(page.locator('#hub .hub-primary')).toHaveText(`Travel to ${destination} · Any district↵`);
+  }
+
   await search.press('Tab');
   await expect(page.getByRole('button',{name:'Customize Travel'})).toBeFocused();
   await page.keyboard.press('Enter');
@@ -492,24 +503,35 @@ test('Travel names where you are, and Customize keeps Tab and a chosen number in
   await expect(page.locator('summary[aria-label="Destination for shortcut 7"]')).toBeFocused();
 });
 
-test('Travel Enter from an empty search uses the selected recent destination',async({page})=>{
+test('Travel ends the Hub task from every entry route; empty Escape returns to its parent (HUB-017)',async({page})=>{
+  for (const [route, destination] of [
+    ['search', 'Kamadan, Jewel of Istan'], ['recent', 'Kaineng Center'],
+    ['favourite', 'Ascalon City'], ['digit', 'Kamadan, Jewel of Istan'],
+    ['guild hall', 'Guild Hall'], ['shortcut', 'Kamadan, Jewel of Istan'],
+  ] as const) {
+    await page.goto('/?hub');
+    await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+    const root = page.locator('.hub-search input');
+    if (route === 'shortcut') await page.keyboard.press('Meta+t');
+    else { await root.fill('travel'); await root.press('Enter'); }
+    const search = page.locator('#travel-search-input');
+    await expect(search).toBeFocused();
+    if (route === 'search') await search.fill('kamadan');
+    if (route === 'recent') await search.press('ArrowDown');
+    if (route === 'favourite') await page.locator('#travel-favorite-0').click();
+    if (route === 'digit') await search.press('3');
+    if (route === 'guild hall') await search.fill('gh');
+    await search.press('Enter');
+    await expect(page.locator('#app')).toHaveAttribute('data-action', `TRAVEL ${destination}`);
+    await expect(page.locator('#hub')).toBeHidden();
+  }
   await page.goto('/?hub');
-  const hubSearch=page.locator('.hub-search input');
-  await hubSearch.fill('travel');await hubSearch.press('Enter');
-  const search=page.getByRole('combobox',{name:'Destination, phrase, or friend'});
-  await search.press('ArrowDown');await search.press('Enter');
-  await expect(page.locator('#hub .hub-view')).toBeHidden();
-  // A trip ends the task: the Hub closes, whether Travel opened from Home or by Command-T in an open Hub (HUB-017).
-  await expect(page.locator('#app')).toHaveAttribute('data-action','TRAVEL Kaineng Center');
-  await expect(page.locator('#hub')).toBeHidden();
-  await page.getByRole('button',{name:'Open Hub',exact:true}).click();
-  await expect(hubSearch).toBeFocused();
-  await page.keyboard.press('Meta+t');
-  await expect(search).toBeFocused();
-  await expect(page.locator('#hub .hub-primary')).toBeEnabled();
-  await search.press('Enter');
-  await expect(page.locator('#app')).toHaveAttribute('data-action',/^TRAVEL (?!Kaineng Center)/);
-  await expect(page.locator('#hub')).toBeHidden();
+  const root = page.locator('.hub-search input');
+  await root.fill('travel'); await root.press('Enter');
+  await page.locator('#travel-search-input').press('Escape');
+  await expect(page.locator('.hub-caption')).toHaveText('Home');
+  await expect(root).toHaveValue('travel');
+  await expect(root).toBeFocused();
 });
 
 test('Travel carousel arrows browse without executing and preserve query caret editing',async({page})=>{
@@ -595,6 +617,13 @@ test('account search offers explicit keep-open and replacement choices', async (
   // Keeping the running game open is row 0 and the default (D-23).
   await expect(rows.nth(0)).toContainText('Open Second');
   await expect(rows.nth(1)).toContainText('Close Main and open Second');
+  await expect(rows.nth(1).locator('.hub-detail')).toHaveText('Closes Main');
+  await expect(rows.nth(1)).toHaveAttribute('data-destructive', 'true');
+  await expect(page.locator('.hub-primary')).toHaveText('Open Second↵');
+  await search.press('ArrowDown');
+  await expect(page.locator('.hub-primary')).toHaveText('Close Main and open Second↵');
+  await expect(page.locator('.hub-primary')).toHaveAttribute('data-variant', 'danger');
+  await search.press('ArrowUp');
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', /Account/);
   await page.keyboard.press('Enter');
   await expect(page.locator('#app')).toHaveAttribute('data-action', 'Account Second open');

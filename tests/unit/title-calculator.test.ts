@@ -47,7 +47,7 @@ test('title calculations stay offline and never change progress',async()=>{
   let copied='',reads=0;const source=createHubCalculator({copy:async value=>{copied=value;},marketEnabled:()=>false,quotes:async()=>{reads++;throw new Error('Network forbidden');}});
   source.setVisible(true);const row=source.search('250 cupcakes in sweet points')[0]!;
   assert.equal(row.group,'Titles');await row.run(task);assert.match(copied,/500 Sweet Tooth points/);
-  assert.equal(source.search('10 ecto in p')[0]?.id,'quote-disabled');assert.equal(reads,0);source.setVisible(false);
+  assert.deepEqual(source.search('10 ecto in p').map(row => row.id), ['quote-disabled']);assert.equal(reads,0);source.setVisible(false);
 });
 
 test('progress accepts the same short track names as entered point quantities', () => {
@@ -55,4 +55,13 @@ test('progress accepts the same short track names as entered point quantities', 
     assert.deepEqual(calculateTitle(`${short} from 0`), calculateTitle(`${full} from 0`));
 });
 
- test('a single remaining point uses the singular unit',()=>{assert.equal(calculateTitle('sweet tooth from 9999')?.[0]?.title,'1 point remaining');});
+test('remaining points and examples use singular/plural text without duplicate examples (HUB-157)', () => {
+  const source = createHubCalculator({ copy: async () => {}, marketEnabled: () => false, quotes: async () => ({ updatedAt: 0, quotes: [] }) });
+  for (const [query, title, detail] of [
+    ['sweet tooth from 9999', '1 point remaining', 'From 9,999 entered points · Target 10,000 · Progress is not read from your character'],
+    ['sweet tooth from 9998', '2 points remaining', 'From 9,998 entered points · Target 10,000 · Progress is not read from your character'],
+    ['sweet tooth', 'Sweet Tooth', 'Enter current points: sweet tooth from 7350'],
+    ['party animal', 'Party Animal', 'Enter current points: party animal from 7350'],
+    ['zaishen', 'Zaishen', 'Enter current points: zaishen from 7350 · Or: zaishen rank 3 from 0'],
+  ] as const) assert.deepEqual(source.search(query).map(row => [row.title, row.detail]), [[title, detail]]);
+});

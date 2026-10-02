@@ -69,7 +69,11 @@ const observe = (page: Page) => page.evaluate(() => {
       : active.closest('.hub-row') ? `row:${active.closest<HTMLElement>('.hub-row')!.dataset.id}`
         : active.getAttribute('role') === 'combobox' && hub?.contains(active) ? 'search'
           : active instanceof HTMLElement && active.dataset.characterKey ? `card:${active.dataset.characterKey}`
-            : `${active.tagName.toLowerCase()}${active.id ? `#${active.id}` : ''}${active.getAttribute('aria-label') ? `[${active.getAttribute('aria-label')}]` : active.classList[0] ? `.${active.classList[0]}` : ''}`;
+            : `${active.tagName.toLowerCase()}${active.id ? `#${active.id}` : ''}${(() => {
+              // A Settings control is named by its row's visible label (aria-labelledby), not aria-label.
+              const name = active.getAttribute('aria-label') ?? (active as HTMLElement).dataset.settingLabel;
+              return name ? `[${name}]` : active.classList[0] ? `.${active.classList[0]}` : '';
+            })()}`;
   const selected = open ? document.querySelector<HTMLElement>('#hub .hub-row[aria-selected="true"]')?.dataset.id ?? '-' : '-';
   const query = open ? document.querySelector<HTMLInputElement>('#hub [role="combobox"]')?.value ?? ''
     : surface === 'whispers' ? document.querySelector<HTMLInputElement>('#whisper-person')?.value ?? '' : '';

@@ -646,7 +646,9 @@ function onListKeydown(event: KeyboardEvent): void {
   const index = rows.findIndex((message) => String(message.timestamp) === row.dataset.timestamp);
   const message = rows[index];
   if (!message) return;
-  if ((event.key === "Enter" || event.key === "NumpadEnter") && !event.altKey && !event.ctrlKey && !event.shiftKey) {
+  // A focused control inside the row, such as the seller's name, does its own job on Enter.
+  const control = event.target instanceof HTMLButtonElement && event.target !== row;
+  if ((event.key === "Enter" || event.key === "NumpadEnter") && !control && !event.altKey && !event.ctrlKey && !event.shiftKey) {
     event.preventDefault();
     if (event.repeat) return;
     select(message);

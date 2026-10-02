@@ -298,6 +298,8 @@ export function createCharacterSwitchPalette(
   let awaitingList = false;
   let arrived = false;
   const render = (preserveCharacterFocus = true) => {
+    // An arriving list takes the keyboard from waiting-state display controls (HUB-074).
+    if (awaitingList && source.characters.status === 'ready' && view.kind === 'settings' && !normaliseCharacterQuery(query)) view = Object.freeze({ kind: 'characters' });
     if (view.kind !== renderedView) {
       // A new inner page (the cards, a confirmation, the settings) cancels a
       // click run that began before it, and "Leave and switch" arms anew (HUB-242).

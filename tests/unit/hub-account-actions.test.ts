@@ -59,13 +59,17 @@ test('Hub account choices reload on rename before any account operation', async 
 
 test('Hub account actions keep the running game first and name each consequence (D-23)', async () => {
   const { createHubAccounts } = await import('../../src/renderer/hub-accounts.js');
-  const snapshot = hubAccountSnapshot(fixture().accounts, current);
-  const source = createHubAccounts({ close() {}, notify() {}, attach: () => () => {}, showView() {}, showRows() {}, direct() {} }, { get: async () => snapshot, open: async () => {} });
-  source.setVisible(true); await Promise.resolve();
-  assert.deepEqual(source.search('acc second').map(row => [row.title, row.action, !!row.destructive]), [
-    ['Open Second', 'Open Second', false],
-    ['Close Main and open Second', 'Close Main and open Second', true],
-  ]);
+  for (const [state, detail, title] of [['ready', 'Saved account', 'Open Second'], ['running', 'Running', 'Show Second']] as const) {
+    const f = fixture(); f.setState(state);
+    const snapshot = hubAccountSnapshot(f.accounts, current);
+    const source = createHubAccounts({ close() {}, notify() {}, attach: () => () => {}, showView() {}, showRows() {}, direct() {} }, { get: async () => snapshot, open: async () => {} });
+    source.setVisible(true); await Promise.resolve();
+    assert.equal(source.search('acc ').find(row => row.title === 'Second')?.detail, detail);
+    assert.deepEqual(source.search('acc second').map(row => [row.title, row.action, row.detail, !!row.destructive]), [
+      [title, title, 'Keep Main running', false],
+      ['Close Main and open Second', 'Close Main and open Second', 'Closes Main', true],
+    ]);
+  }
 });
 
 test('Hub accounts name their loading and failed reads instead of acting or finding nothing (HUB-232, HUB-233)', async () => {

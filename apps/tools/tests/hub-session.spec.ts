@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { timeBudget } from './performance-budget.js';
 
 /**
  * Async actions belong to the Hub page that started them (HUB-004, HUB-016, HUB-083,
@@ -317,6 +318,37 @@ test('an account open that focuses another window still ends the task, so the ne
   await expect(primary(page)).not.toHaveText(/Second/);
   await expect(status(page)).toBeEmpty();
   expect(await actions(page)).toEqual(['Account Second open']);
+  // Control the external account completion: reopening must beat it, not merely wait for it.
+  await page.evaluate(() => {
+    const original = window.gwNative.accounts.open;
+    window.gwNative.accounts.open = async request => {
+      await new Promise<void>(resolve => { window.addEventListener('finish-account', () => resolve(), { once: true }); });
+      return original(request);
+    };
+  });
+  await page.evaluate(() => window.gwFixtureCanvas?.clear());
+  await enter(page, 'acc s'); await primary(page).click();
+  await expect(status(page)).toHaveText('Opening Second…');
+  await page.keyboard.press('Escape'); await page.keyboard.press('Escape'); await page.keyboard.press('Escape');
+  await expect(hub(page)).toBeHidden();
+  await page.keyboard.press('Meta+r');
+  await search(page).fill('travel');
+  // Measure in the renderer; Playwright transport/locator polling is outside the 100 ms contract.
+  const elapsed = await search(page).evaluate(async input => {
+    const start = performance.now();
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true, cancelable: true }));
+    while (document.querySelector('.hub-caption')?.textContent !== 'Travel') await new Promise(requestAnimationFrame);
+    return performance.now() - start;
+  });
+  expect(elapsed).toBeLessThanOrEqual(timeBudget(100));
+  await page.getByRole('combobox', { name: 'Destination, phrase, or friend' }).fill('kam');
+  await page.evaluate(() => window.dispatchEvent(new Event('finish-account')));
+  await expect.poll(() => actions(page)).toEqual(['Account Second open', 'Account Second open']);
+  await expect(page.locator('.hub-caption')).toHaveText('Travel');
+  await expect(page.getByRole('combobox', { name: 'Destination, phrase, or friend' })).toHaveValue('kam');
+  await expect(page.getByRole('combobox', { name: 'Destination, phrase, or friend' })).toBeFocused();
+  // The fixture has renderer commands, while main owns the physical Command modifier in Electron.
+  expect(await page.evaluate(() => window.gwFixtureCanvas?.events)).toEqual([{ type: 'keydown', code: 'MetaLeft', repeat: false }]);
 });
 
 test('an invite that fails after the Hub closed names the command, now and on the next opening (PPL-17)', async ({ page }) => {

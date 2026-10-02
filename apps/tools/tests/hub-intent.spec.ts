@@ -126,6 +126,24 @@ test('Travel and Settings restore their own state after a temporary hide', async
   await page.evaluate(() => window.dispatchEvent(new Event('blur')));
   await page.getByRole('button', { name: 'Open Hub', exact: true }).click();
   await expect(page.getByLabel('Panel style', { exact: true })).toBeFocused();
+  await page.keyboard.press('Meta+r');
+  await search.fill('team gom afk'); await page.keyboard.press('Meta+j');
+  await page.getByRole('menuitem', { name: /Set search phrase/ }).click();
+  const phrase = page.getByRole('textbox', { name: 'Search phrase', exact: true });
+  await phrase.fill('smite now');
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await page.keyboard.press('Meta+r');
+  await expect(phrase).toHaveValue('smite now');
+  await expect(phrase).toBeFocused();
+  await page.keyboard.press('Meta+r');
+  await search.fill('rates'); await search.press('Enter');
+  await page.getByRole('combobox', { name: 'Rate source' }).selectOption('manual');
+  const rate = page.getByRole('textbox', { name: 'Gold per ectoplasm' });
+  await rate.fill('7500');
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await page.keyboard.press('Meta+r');
+  await expect(rate).toHaveValue('7500');
+  await expect(rate).toBeFocused();
 });
 
 test('Hub placement survives reload, stays locked, and resets durably', async ({ page }) => {
@@ -403,9 +421,11 @@ test.describe('Leave this area? before Travel (D-27, HUB-027)', () => {
 test('Resign says what it does before Enter, reads as destructive, and Cancel returns to the search (HUB-250, HUB-251)', async ({ page }) => {
   await page.goto('/?hub&lifecycle=pve-explorable');
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
-  const search = page.getByRole('combobox', { name: searchName });
+  const search = page.locator('.hub-search input');
   const row = page.locator('.hub-row[data-id="resign"]');
   await search.fill('resign');
+  await expect(row.locator('.hub-icon')).toHaveAttribute('data-kind', 'resign');
+  await expect(row.locator('.hub-icon svg path')).toHaveAttribute('d', 'M6 21V4M6 4h11l-2.5 4 2.5 4H6');
   await expect(row).toHaveAttribute('aria-selected', 'true');
   await expect(row.locator('.hub-detail')).toHaveText('Asks before sending /resign · PvE only');
   await expect(page.locator('.hub-primary')).toHaveAttribute('data-variant', 'danger');
@@ -463,7 +483,8 @@ test('Resign sends once from its armed confirmation, and says before Enter why i
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
   const search = page.getByRole('combobox', { name: searchName });
   const row = page.locator('.hub-row[data-id="resign"]');
-  await search.fill('resign'); await search.press('Enter');
+  await search.fill('resign');
+  await search.press('Enter');
   const confirm = page.locator('#resign-dialog').getByRole('button', { name: 'Resign', exact: true });
   await expect(confirm).toHaveAttribute('data-armed', '');
   await confirm.click();
@@ -814,6 +835,11 @@ test.describe('Characters: typing never switches', () => {
     await expect(page.locator('#hub')).toBeHidden();
     await page.keyboard.press('Meta+r');
     await expect(page.locator('.hub-caption')).toHaveText('Characters');
+    await page.keyboard.press('ArrowRight'); await page.keyboard.press('ArrowRight');
+    await expect(card(page, 'mesmer')).toBeFocused();
+    await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+    await page.keyboard.press('Meta+e');
+    await expect(card(page, 'mesmer')).toBeFocused();
     await page.keyboard.type('2p in g');
     await expect(page.locator('#character-switch-query')).toHaveValue('p in g');
     expect(await action(page)).toBeNull();
@@ -827,6 +853,8 @@ test.describe('Characters: typing never switches', () => {
     const closes: [string, (page: import('@playwright/test').Page) => Promise<void>][] = [
       ['Escape', async page => { await page.keyboard.press('Escape'); await page.keyboard.press('Escape'); }],
       ['the close button', page => page.getByRole('button', { name: 'Close Hub', exact: true }).click()],
+      ['expired backdrop suspension', async page => { await page.mouse.click(20, 20); await page.clock.setFixedTime(new Date(await page.evaluate(() => Date.now()) + 90_001)); }],
+      ['expired blur suspension', async page => { await page.evaluate(() => window.dispatchEvent(new Event('blur'))); await page.clock.setFixedTime(new Date(await page.evaluate(() => Date.now()) + 90_001)); }],
     ];
     for (const [name, close] of closes) {
       await page.keyboard.press('Meta+e');
@@ -864,32 +892,35 @@ test.describe('Characters: typing never switches', () => {
   });
 
   // HUB-073: a state that refuses switching says so on open, in plain words, and Enter asks nothing.
-  test('while a map loads, Characters and char rows say so before Enter and switch nothing', async ({ page }) => {
-    await page.goto('/?hub&lifecycle=map-loading');
-    await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
-    const search = page.getByRole('combobox', { name: searchName });
-    await search.fill('char toefte');
-    const row = page.locator('.hub-row[data-id="character:toefte"]');
-    await expect(row).toHaveAttribute('aria-disabled', 'true');
-    await expect(row.locator('.hub-detail')).toHaveText('Wait until Guild Wars finishes loading, then try again.');
-    await search.press('Escape');
-    await page.keyboard.press('Meta+e');
-    await expect(page.locator('.character-switch-status')).toHaveText('Wait until Guild Wars finishes loading, then try again.');
-    await expect(card(page, 'monk')).toBeFocused();
-    await page.keyboard.press('ArrowRight');
-    await expect(card(page, 'ranger')).toHaveAttribute('aria-disabled', 'true');
-    await expect(page.locator('#hub .hub-primary')).toBeDisabled();
-    await page.keyboard.press('Enter');
-    expect(await action(page)).toBeNull();
-    await expect(page.locator('#hub')).not.toContainText('(game-loading)');
-    await expect(page.locator('.character-switch-details')).toBeHidden();
+  test('loading and PvP refusals show on Characters and char rows before Enter and switch nothing (HUB-073)', async ({ page }) => {
+    for (const [lifecycle, reason] of [['map-loading', 'Wait until Guild Wars finishes loading, then try again.'], ['pvp-explorable', 'Character switching is unavailable during active PvP.']] as const) {
+      await page.goto(`/?hub&lifecycle=${lifecycle}`);
+      await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+      const search = page.locator('.hub-search input');
+      await search.fill('char toefte');
+      const row = page.locator('.hub-row[data-id="character:toefte"]');
+      await expect(row).toHaveAttribute('aria-disabled', 'true');
+      await expect(row.locator('.hub-detail')).toHaveText(reason);
+      await search.press('Escape');
+      await page.keyboard.press('Meta+e');
+      await expect(page.locator('.character-switch-status')).toHaveText(reason);
+      await expect(card(page, 'monk')).toBeFocused();
+      await page.keyboard.press('ArrowRight');
+      await expect(card(page, 'ranger')).toHaveAttribute('aria-disabled', 'true');
+      await expect(page.locator('#hub .hub-primary')).toBeDisabled();
+      await page.keyboard.press('Enter');
+      expect(await action(page)).toBeNull();
+      await expect(page.locator('#app')).toHaveAttribute('data-character-requests', '0');
+      await expect(page.locator('#hub')).not.toContainText('(game-loading)');
+      await expect(page.locator('.character-switch-details')).toBeHidden();
+    }
   });
 
   // D-30, HUB-193: a running switch covers the game with one quiet line, absorbs clicks, and answers a second request.
   test('a running switch shows its veil, keeps clicks from the game, and says a switch is running', async ({ page }) => {
     await page.goto('/?hub&switch-fail=selector-timeout&switch-ms=4000');
     await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
-    const search = page.getByRole('combobox', { name: searchName });
+    const search = page.locator('.hub-search input');
     await search.fill('char toefte'); await search.press('Enter');
     const veil = page.locator('.character-switch-veil');
     await expect(veil).toHaveText('Switching to Toefte…');
@@ -897,8 +928,14 @@ test.describe('Characters: typing never switches', () => {
     await page.evaluate(() => window.gwFixtureCanvas?.clear());
     await page.mouse.click(300, 300);
     expect(await page.evaluate(() => window.gwFixtureCanvas?.events.filter(event => event.type !== 'keydown' && event.type !== 'keyup').length)).toBe(0);
-    await page.keyboard.press('Meta+e');
-    await expect(page.locator('.hub-receipt')).toHaveText('A character switch is already running.');
+    for (const route of ['shortcut', 'sw'] as const) {
+      if (route === 'shortcut') await page.keyboard.press('Meta+e');
+      else { await page.keyboard.press('Meta+r'); await search.fill('sw'); await search.press('Enter'); }
+      await expect(page.locator('.hub-receipt')).toHaveText('A character switch is already running.');
+      await expect(page.locator('#app')).toHaveAttribute('data-action', 'Character toefte');
+      await expect(page.locator('#app')).toHaveAttribute('data-character-requests', '1');
+    }
+    await page.getByRole('button', { name: 'Close Hub', exact: true }).click();
     await expect(veil).toBeHidden({ timeout: 10_000 });
     await expect(page.locator('.hub-receipt')).toHaveText('Switch to Toefte stopped. Automatic switching stopped. Continue from the Guild Wars character selector.');
     await expect(page.locator('#app')).toHaveAttribute('data-action', 'Character toefte');
@@ -906,7 +943,7 @@ test.describe('Characters: typing never switches', () => {
 
   // HUB-197, HUB-195, HUB-194: search keeps the chosen card; badges and profession pairs read true.
   test('clearing, spacing or pasting in the search keeps the chosen card, and cards show their profession pair', async ({ page }) => {
-    await page.goto('/?hub');
+    await page.goto('/?hub&characters-extra');
     await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
     await page.keyboard.press('Escape');
     await page.keyboard.press('Meta+e');
@@ -925,40 +962,90 @@ test.describe('Characters: typing never switches', () => {
     // A search hides the number badges instead of drawing empty squares.
     await expect(card(page, 'toefte').locator('.character-switch-key')).toBeHidden();
     await expect(card(page, 'toefte').locator('.character-switch-meta')).toContainText('Mo/Me');
+    await query.fill('');
+    await card(page, 'mesmer').focus();
+    await page.keyboard.press('End');
+    const last = card(page, 'extra-5');
+    await expect(last).toHaveAttribute('aria-selected', 'true');
+    await expect(last.locator('.character-switch-key')).toBeHidden();
+    await expect(last.locator('.character-switch-meta')).toContainText('Mo/Me · PvP');
+    for (const enabled of [false, true]) {
+      await page.getByRole('button', { name: 'Character Switch settings', exact: true }).click();
+      await page.locator('#character-switch-show-profession').setChecked(enabled);
+      await page.getByRole('button', { name: 'Character Switch settings', exact: true }).click();
+      if (enabled) await expect(last.locator('.character-switch-meta')).toContainText('Mo/Me · PvP');
+      else await expect(last.locator('.character-switch-meta')).not.toContainText(/Mo|Me|PvP/);
+    }
+    await expect(page.locator('.character-switch-key:empty:visible')).toHaveCount(0);
     expect(await action(page)).toBeNull();
   });
 
   // HUB-076: a narrow Hub shows fewer, wider cards instead of five squeezed ones.
   test('a narrow Hub shows at most three cards, each at least 100 px wide', async ({ page }) => {
-    await page.goto('/?hub');
-    await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
-    await page.getByRole('button', { name: 'Lock Hub position', exact: true }).click();
-    const grip = page.getByRole('button', { name: 'Resize Hub', exact: true });
-    const corner = (await grip.boundingBox())!;
-    await page.mouse.move(corner.x + 10, corner.y + 10);
-    await page.mouse.down(); await page.mouse.move(corner.x - 900, corner.y + 10, { steps: 4 }); await page.mouse.up();
-    await page.keyboard.press('Meta+e');
-    await expect(card(page, 'monk')).toBeFocused();
-    const widths = await page.locator('#character-switch-list button[data-row]').evaluateAll(cards => cards.map(card => card.getBoundingClientRect().width));
-    expect(widths.length).toBeGreaterThan(0);
-    expect(widths.length).toBeLessThanOrEqual(3);
-    for (const width of widths) expect(width).toBeGreaterThanOrEqual(100);
+    for (const width of [340, 380, 420]) {
+      await page.goto('/?hub');
+      await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+      await page.getByRole('button', { name: 'Lock Hub position', exact: true }).click();
+      const grip = page.getByRole('button', { name: 'Resize Hub', exact: true });
+      const corner = (await grip.boundingBox())!;
+      const hub = (await page.locator('.hub-panel').boundingBox())!;
+      await page.mouse.move(corner.x + 5, corner.y + 5);
+      await page.mouse.down();
+      await page.mouse.move(corner.x + 5 + width - hub.width, corner.y + 5 + 380 - hub.height, { steps: 4 });
+      await page.mouse.up();
+      await expect.poll(async () => (await page.locator('.hub-panel').boundingBox())?.width).toBe(width);
+      await page.keyboard.press('Meta+e');
+      await expect(card(page, 'monk')).toBeFocused();
+      const bounds = await page.locator('#character-switch-list button[data-row]').evaluateAll(cards => cards.map(card => {
+        const { left, right, top, bottom, width } = card.getBoundingClientRect();
+        return { left, right, top, bottom, width };
+      }));
+      expect(bounds.length).toBeGreaterThan(0);
+      expect(bounds.length).toBeLessThanOrEqual(3);
+      for (const bound of bounds) expect(bound.width).toBeGreaterThanOrEqual(100);
+      for (let i = 0; i < bounds.length; i++) for (let j = i + 1; j < bounds.length; j++) {
+        const a = bounds[i]!, b = bounds[j]!;
+        expect(a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top).toBe(true);
+      }
+    }
   });
 
   // HUB-198, HUB-199: one name, no unsaved search toggle.
   test('Characters shows one name and keeps no unsaved search setting', async ({ page }) => {
+    await page.setViewportSize({ width: 500, height: 396 });
     await page.goto('/?hub');
     await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
     await page.keyboard.press('Escape');
     await page.keyboard.press('Meta+e');
     await expect(page.locator('.hub-caption')).toHaveText('Characters');
     await expect(page.locator('#character-switch-title')).toHaveClass(/ui-sr-only/);
+    await page.evaluate(() => window.dispatchEvent(new Event('hub-fixture-character-refusal')));
+    await expect(page.locator('.character-switch-status')).toHaveText('This character is already active.');
+    await card(page, 'monk').press('ArrowRight');
+    await expect(page.locator('.character-switch-status')).toBeEmpty();
+    const band = await page.locator('.character-switch-panel').evaluate(panel => {
+      const cards = panel.querySelector('.character-switch-carousel')!.getBoundingClientRect();
+      const bounds = panel.getBoundingClientRect();
+      return bounds.bottom - cards.bottom;
+    });
+    expect(band).toBeLessThanOrEqual(48);
+
     await page.getByRole('button', { name: 'Character Switch settings', exact: true }).click();
     await expect(page.getByText('Show search bar')).toHaveCount(0);
   });
 
   // HUB-034, HUB-075: the confirmation names the character; Stay returns to the row that asked.
   test('Leave this area names the character, and Stay returns to the search that asked', async ({ page }) => {
+    await page.goto('/?hub&lifecycle=pve-explorable');
+    await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+    await page.keyboard.press('Meta+e');
+    await expect(card(page, 'monk')).toBeFocused();
+    await page.keyboard.press('3');
+    await expect(card(page, 'mesmer')).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('heading', { name: 'Leave this area and switch to Fixture Mesmer?', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Leave and switch to Fixture Mesmer', exact: true })).toBeVisible();
+    await page.keyboard.press('Escape');
     for (const width of [1280, 390]) {
       await page.setViewportSize({width, height: 700});
       await page.goto('/?hub&lifecycle=pve-explorable');
@@ -1009,6 +1096,39 @@ test('Travel keeps selection under a still pointer and changes it only on real m
   await page.keyboard.press('Meta+t');
   await expect(search).toHaveAttribute('aria-activedescendant', 'travel-recent-449');
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', /TRAVEL/);
+  await search.press('Enter');
+  await expect(page.locator('#app')).toHaveAttribute('data-action', 'TRAVEL Kamadan, Jewel of Istan');
+  await expect(page.locator('#hub')).toBeHidden();
+  for (const [query, deltaX, deltaY, selected, destination] of [
+    ['', 250, 0, 'travel-recent-449', 'Kamadan, Jewel of Istan'],
+    ['a', 0, 120, 'travel-map-109', 'The Amnoon Oasis'],
+  ] as const) {
+    await page.goto('/?hub');
+    await page.mouse.move(0, 0);
+    await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+    await page.keyboard.press('Meta+t');
+    await search.fill(query);
+    const target = page.locator(query ? '.travel-result' : '.travel-recent').first();
+    const bounds = (await target.boundingBox())!;
+    await page.mouse.move(bounds.x + 10, bounds.y + 10);
+    if (query) {
+      const amnoon = await page.locator('.travel-result:not([disabled])').evaluateAll(rows => rows.findIndex(row => row.id === 'travel-map-109'));
+      expect(amnoon).toBeGreaterThanOrEqual(0);
+      await search.press('Home');
+      for (let step = 0; step <= amnoon; step++) await search.press('ArrowDown');
+    }
+    await search.press(query ? 'ArrowUp' : 'ArrowLeft');
+    await expect(search).toHaveAttribute('aria-activedescendant', selected);
+    const scroller = page.locator(query ? '#travel-results-panel' : '.travel-history .travel-recent-grid');
+    const before = await scroller.evaluate((element, horizontal) => horizontal ? element.scrollLeft : element.scrollTop, deltaX > 0);
+    await page.mouse.wheel(deltaX, deltaY);
+    await expect.poll(() => scroller.evaluate((element, horizontal) => horizontal ? element.scrollLeft : element.scrollTop, deltaX > 0)).toBeGreaterThan(before);
+    await expect(search).toHaveAttribute('aria-activedescendant', selected);
+    await expect(page.locator(`#${selected}`)).toHaveAttribute(query ? 'aria-selected' : 'data-active', 'true');
+    await search.press('Enter');
+    await expect(page.locator('#app')).toHaveAttribute('data-action', `TRAVEL ${destination}`);
+    await expect(page.locator('#hub')).toBeHidden();
+  }
 });
 
 test('Travel favourite arrows follow the painted columns and hold at the ends (HUB-069)', async ({ page }) => {

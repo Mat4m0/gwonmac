@@ -151,6 +151,8 @@ test('build folder search handles paths, words, quotes, prefixes and ambiguous n
     ['Skills/Root.txt', monk],
     ['Skills/Mo/Me/Panic.txt', mesmer],
     ['Skills/Moon pressure.txt', mesmer],
+    ['Skills/Prefixes/Air Protection Moon.txt', monk],
+    ['Skills/Prefixes/Deep Healer.txt', monk],
   ] as const;
   let source: import('../../../src/shared/hub').HubSource | undefined;
   let dispose: (() => void) | undefined;
@@ -179,7 +181,15 @@ test('build folder search handles paths, words, quotes, prefixes and ambiguous n
   for (const query of ['build missing monk', 'build farming/team monk', 'build folder:protection', 'build folder:template-code', 'build folder:', 'build travel monk']) expect(folders(query), query).toEqual([]);
   expect(source!.search('build folder:"Team Builds/Farming" monk')[0]).toMatchObject({ title: 'Protection', folder: 'Team Builds/Farming', action: 'Choose target' });
   // HUB-059: short codes remain additive, with actual profession matches before name prefixes.
+  for (const name of ['Air Protection Moon', 'Deep Healer', 'Moon pressure']) {
+    for (const word of name.split(' ')) for (let length = 1; length <= word.length; length++) {
+      const query = `build ${word.slice(0, length).toLowerCase()}`;
+      expect(source!.search(query).map(row => row.title), query).toContain(name);
+    }
+  }
   const professionRows = source!.search('build mo');
+  expect(professionRows.map(row => row.professions?.[0]?.code)).toEqual(['Mo', 'Mo', 'Mo', 'Mo', 'Mo', 'Mo', 'Mo', 'Mo', 'Mo', 'Me', 'Me', 'Me']);
+  expect(professionRows.slice(-3).map(row => row.title)).toEqual(['Moon pressure', 'Panic', 'Panic']);
   expect(professionRows[0]?.professions?.[0]?.code).toBe('Mo');
   expect(professionRows.map(row => row.title)).toContain('Moon pressure');
   dispose?.(); app.unmount();
@@ -303,12 +313,17 @@ test('a team apply that fails after the player moved on names the team and keeps
   const commands: string[] = [];
   const fixture = createHubGameFixture(command => commands.push(command));
   fixture.setScenario('partial');
+  let refuse = false;
+  const fixtureHost = { ...fixture.host, async applyTeam(...args: Parameters<typeof fixture.host.applyTeam>) {
+    if (refuse) fixture.host.party.value = { ...fixture.host.party.value, inOutpost: false };
+    return fixture.host.applyTeam(...args);
+  } };
   let source: import('../../../src/shared/hub').HubSource | undefined;
   let controller: import('./use-library').LibraryController | undefined;
   let review: import('../../../src/shared/hub').HubViewMount<HTMLElement> | undefined;
   const app = createApp({ setup() {
-    controller = useLibrary(fixture.host);
-    createHubLibrary(controller, fixture.host, { attach(next) { source = next; return () => {}; }, close() {}, notify() {}, showRows() {}, showView(_title, mount) { review = mount; } });
+    controller = useLibrary(fixtureHost);
+    createHubLibrary(controller, fixtureHost, { attach(next) { source = next; return () => {}; }, close() {}, notify() {}, showRows() {}, showView(_title, mount) { review = mount; } });
     return () => h('div');
   } });
   app.mount(document.createElement('div')); await nextTick(); await nextTick();
@@ -341,6 +356,19 @@ test('a team apply that fails after the player moved on names the team and keeps
   expect(done).toEqual(['GOM AFK already matches.']);
   expect(commands).toHaveLength(sent);
   expect(source!.search('team gom afk')[0]!.detail).toBe('Saved team · Hard Mode · 7 heroes');
+  fixture.host.party.value = { ...fixture.host.party.value, hardMode: false };
+  const beforeRefusal = JSON.parse(JSON.stringify({ player: fixture.host.party.value.player, heroes: fixture.host.party.value.heroes, hardMode: fixture.host.party.value.hardMode }));
+  const beforeCommands = commands.filter(command => command.startsWith('command:')).length;
+  refuse = true;
+  await expect(source!.search('team gom afk')[0]!.run(task)).rejects.toThrow('team apply preflight refused');
+  expect(commands.filter(command => command.startsWith('command:'))).toHaveLength(beforeCommands);
+  expect({ player: fixture.host.party.value.player, heroes: fixture.host.party.value.heroes, hardMode: fixture.host.party.value.hardMode }).toEqual(beforeRefusal);
+  expect(source!.search('team gom afk')[0]!.detail).toBe('Not applied · Review');
+  source!.search('team gom')[0]!.navigate!(task);
+  const refused = document.createElement('div');
+  review!(refused, () => {}, { primary() {}, secondary() {}, openActions() {} });
+  expect(refused.textContent).not.toContain('partly');
+  expect(refused.textContent).not.toContain('Completed');
   app.unmount();
 });
 
@@ -357,6 +385,16 @@ test('Library browse includes saved teams and only an exact scoped team can appl
     return () => h('div');
   } });
   app.mount(document.createElement('div')); await nextTick(); await nextTick();
+  for (const query of ['library', 'lib', 'bu', 'team', 'teams', 'skills']) {
+    const results = source!.search(query);
+    expect(results.some(row => row.unavailable === 'Build Library is loading.'), query).toBe(false);
+    const row = results.find(row => row.id === 'builds')!;
+    expect(row.detail, query).toBe('Browse saved builds and teams');
+    expect(row.unavailable, query).toBeUndefined();
+    await row.run(task);
+    expect(browse!().map(row => row.title), query).toContain('GOM AFK');
+    expect(browse!().some(row => row.unavailable === 'Build Library is loading.'), query).toBe(false);
+  }
   source!.lookup!('builds')!.run(task);
   expect(browse!().filter(row => row.group === 'Teams').map(row => row.title)).toEqual(['GOM AFK', 'Balanced vanquish', 'Classic Discordway', 'Story and missions']);
   for (const query of ['team ', 'teams ', 'team gom']) {
@@ -477,11 +515,11 @@ test('invalid team reviews name the failing slot and open the same saved team in
   const { createApp, h, nextTick } = await import('vue');
   const { useLibrary } = await import('./use-library');
   const { createHubLibrary } = await import('./hub-library');
-  const { mapTeamSlots } = await import('../../../src/shared/builds/library');
   const { host } = createHubGameFixture(() => {});
   const loaded = await host.loadLibrary();
-  const original = loaded.library.teams[0]!;
-  const invalid = { ...original, slots: mapTeamSlots(original.slots, (slot, index) => index === 7 ? { ...slot, hero: null } : slot) };
+  const { mapTeamSlots } = await import('../../../src/shared/builds/library');
+  const original = loaded.library.teams.find(team => team.name === 'Balanced vanquish')!;
+  const invalid = { ...original, slots: mapTeamSlots(original.slots, (slot, index) => index === 1 ? { ...slot, behaviour: null } : slot) };
   let source: import('../../../src/shared/hub').HubSource | undefined;
   let review: import('../../../src/shared/hub').HubViewMount<HTMLElement> | undefined;
   let edit: import('../../../src/shared/hub').HubViewAction | null = null;
@@ -492,12 +530,15 @@ test('invalid team reviews name the failing slot and open the same saved team in
     return () => h('div');
   } });
   app.mount(document.createElement('div')); await nextTick(); await nextTick();
-  const row = source!.search('team gom afk')[0]!;
-  expect(row.unavailable).toBe('Choose a hero for slot 8.');
+  const row = source!.search('team balanced vanquish')[0]!;
+  expect(row.unavailable).toBe('Choose a behavior for slot 2.\nSlot 8 has an invalid build.');
   row.navigate!(task);
   const target = document.createElement('div');
   review!(target, () => {}, { primary(action) { expect(action?.disabled).toBe(true); }, secondary(action) { edit = action; }, openActions() {} });
-  expect(target.querySelector('[role=status]')?.textContent).toBe('Choose a hero for slot 8.');
+  expect(target.querySelector('[role=status]')?.textContent).toBe('Choose a behavior for slot 2.\nSlot 8 has an invalid build.');
+  const members = target.querySelectorAll('.hub-review-roster > section');
+  expect(members[1]?.textContent).toContain('Choose a behavior for slot 2.');
+  expect(members[7]?.textContent).toContain('Slot 8 has an invalid build.');
   expect(edit).toMatchObject({ label: 'Open in Build Library' });
   if (!edit) throw new Error('Editor action missing');
   const action: import('../../../src/shared/hub').HubViewAction = edit;
@@ -577,7 +618,8 @@ test('bare team queries list every saved team for review and preserve loading ro
     }
     release(); await flushPromises();
     for (const query of ['team', 'teams']) {
-      const rows = source!.search(query);
+      const rows = source!.search(query).filter(row => row.group === 'Teams');
+      expect(source!.search(query).find(row => row.id === 'builds')?.action).toBe('Browse builds');
       expect(rows.map(row => row.title)).toEqual(['Saved team 0', 'Saved team 1', 'Saved team 2', 'Saved team 3', 'Saved team 4', 'Saved team 5', 'Saved team 6', 'Saved team 7', 'Saved team 8', 'Saved team 9']);
       expect(rows.map(row => [row.id, row.action, row.consequential])).toEqual(source!.search('team ').map(row => [row.id, row.action, row.consequential]));
       expect(rows.map(row => row.action)).toEqual(['Review Saved team 0', 'Review Saved team 1', 'Review Saved team 2', 'Review Saved team 3', 'Review Saved team 4', 'Review Saved team 5', 'Review Saved team 6', 'Review Saved team 7', 'Review Saved team 8', 'Review Saved team 9']);

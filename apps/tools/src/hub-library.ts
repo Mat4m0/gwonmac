@@ -351,11 +351,17 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
       };
 
         const mode = doc.createElement('p'); mode.textContent = `${item.value.mode === 'none' ? 'Keep difficulty' : item.value.mode === 'hard' ? 'Hard Mode' : 'Normal Mode'} · Target: current character and hero party`; description.append(mode);
+        const resolution = resolveTeamApplyPlan(item.value, controller.library.value!, controller.validate);
         item.value.slots.forEach((slot, index) => {
           if (index > 0 && slot.hero === null && slot.build === null) return;
           const build = controller.library.value?.builds.find(build => build.id === slot.build);
           const label = `${index === 0 ? playerName() : slot.hero === null ? 'Unassigned hero' : heroLabel(slot.hero)} · ${build?.name ?? 'Keep build'}${slot.behaviour ? ` · ${slot.behaviour}` : ''}`;
           if (build) showBuild(build, label); else { const text = doc.createElement('p'); text.textContent = label; description.append(text); }
+          if (!resolution.valid) for (const problem of resolution.problems) {
+            if (!('slot' in problem) || problem.slot !== index) continue;
+            const reason = doc.createElement('p'); reason.textContent = teamApplyStoredProblemMessage(problem);
+            description.lastElementChild?.append(reason);
+          }
         });
       // A refusal or the stored outcome shows under the title, before the roster, never below the fold.
       // The running apply's progress has one owner, the Hub status line (HUB-083).
@@ -445,7 +451,7 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
         const total = ordered.filter(item => item.kind === kind).length;
         return total > 8 ? [{ id: `${kind}s:more`, title: `${total - 8} more — open in Build Library`, detail: '', group: kind === 'build' ? 'Builds' : 'Teams', action: 'Open in Build Library', navigate: () => browseLibrary(parsed.term), run: () => browseLibrary(parsed.term) }] : [];
       });
-      return [...shown.map(item => {
+      return [...(['team', 'teams'].includes(query.toLowerCase()) ? [libraryRow()] : []), ...shown.map(item => {
         if (item.kind === 'build') return buildRow(item, (names.get(item.value.name) ?? 0) > 1);
         return teamRow(item, parsed.scope === 'team' && exacts.length === 1 && exacts[0] === item);
       }), ...more, ...(parsed.scope === 'build' ? templateStates() : [])];

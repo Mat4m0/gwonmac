@@ -245,6 +245,7 @@ test('mixed hero professions default to the eligible hero and keep blocked heroe
   await search.fill('hero'); await search.press('Enter');
   await expect(page.locator('.hub-row[aria-selected="true"]')).toContainText('Tahlkora');
   const blocked = page.locator('.hub-row').filter({ hasText: "Gwen's assigned build is for Monk, but the observed primary is Mesmer." });
+  await expect(blocked).toHaveAccessibleDescription("Slot 5 · Gwen's assigned build is for Monk, but the observed primary is Mesmer.. Mesmer / Monk. Skills: Patient Spirit, Guardian, Resurrection Chant, Protective Spirit, Word of Healing, Aegis, Dismiss Condition, Spirit Bond. Right Arrow opens the child page.");
   const ink = await blocked.evaluate(row => ({ title: getComputedStyle(row.querySelector('.hub-title')!).color, detail: getComputedStyle(row.querySelector('.hub-detail')!).color }));
   expect(ink.title).toBe(ink.detail);
   await blocked.click();
@@ -282,19 +283,21 @@ test('details from Choose hero show the incoming build without an empty second c
 test('library words open the loaded Library and its teams stay review-only when browsing', async ({ page }) => {
   await page.goto('/?hub');
   const search = page.locator('.hub-search input');
-  // Bare `team` and `teams` list the saved teams instead (HUB-087).
-  for (const query of ['library', 'lib', 'bu', 'skills']) {
+  // Bare `team` and `teams` also list the saved teams themselves (HUB-087).
+  for (const query of ['library', 'lib', 'bu', 'team', 'teams', 'skills']) {
     await search.fill(query);
     const entry = page.locator('.hub-row[data-id="builds"]');
     await expect(entry).toContainText('Browse saved builds and teams');
     await expect(entry).toHaveAttribute('aria-disabled', 'false');
     await expect(page.locator('.hub-primary')).toBeEnabled();
+    await entry.click();
+    await expect(page.locator('.hub-breadcrumbs')).toHaveText('Home›Build Library');
+    await expect(page.locator('#hub')).not.toContainText('Build Library is loading.');
+    await page.getByRole('button', { name: 'Home', exact: true }).click();
   }
   await search.fill('teams');
   await expect(page.locator('#hub .hub-row[data-id^="team:"]')).toHaveCount(4);
-  await expect(page.locator('#hub .hub-row[data-id="builds"]')).toHaveCount(0);
-  await search.fill('skills');
-  await search.press('Enter');
+  await search.fill('library'); await search.press('Enter');
   await expect(page.locator('.hub-breadcrumbs')).toHaveText('Home›Build Library');
   const teams = page.locator('.hub-row[data-id^="team:"]');
   await expect(teams).toHaveCount(4);
@@ -392,6 +395,13 @@ test('interrupted team Apply reopens a review with completed and remaining chang
   await actions.getByRole('menuitem', { name: 'Open in Build Library', exact: true }).click();
   await expect(page.locator('#hub')).toBeHidden();
   await expect(page.getByRole('textbox', { name: 'Team name', exact: true })).toHaveValue('GOM AFK');
+  await page.getByRole('button', { name: 'Close Build Library', exact: true }).click();
+  await page.getByRole('button', { name: 'Open Hub', exact: true }).click();
+  await page.keyboard.press('Meta+r');
+  await search.fill('team balanced vanquish'); await search.press('ArrowRight');
+  await page.keyboard.press('Meta+j');
+  await page.getByRole('menuitem', { name: 'Open in Build Library', exact: true }).click();
+  await expect(page.getByRole('textbox', { name: 'Team name', exact: true })).toHaveValue('Balanced vanquish');
 });
 
 
@@ -404,6 +414,20 @@ test('an unrelated source toggle keeps the build target page, query and selectio
   await expect(page.locator('.hub-caption')).toHaveText('Heroes');
   await expect(search).toHaveValue('Tahlkora');
   await expect(page.locator('.hub-row[aria-selected=true]')).toContainText('Tahlkora');
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-lifecycle', { detail: 'map-loading' })));
+  await expect(page.locator('.hub-caption')).toHaveText('Heroes');
+  await expect(search).toHaveValue('Tahlkora');
+  await expect(page.locator('.hub-row[aria-selected=true]')).toContainText('Tahlkora');
+
+  await page.goto('/?hub');
+  await search.fill('accounts'); await search.press('Enter');
+  await expect(page.locator('.hub-caption')).toHaveText('Accounts');
+  await page.evaluate(() => window.gwHub?.openSettings({ section: 'Tools' }));
+  await page.getByRole('button', { name: 'Tools', exact: true }).click();
+  await page.getByRole('checkbox', { name: 'Travel', exact: true }).uncheck();
+  await expect(page.locator('.hub-caption')).toHaveText('Settings');
+  await expect(page.getByRole('button', { name: 'Tools', exact: true })).toHaveAttribute('aria-current', 'true');
+  await expect(page.getByRole('checkbox', { name: 'Travel', exact: true })).not.toBeChecked();
 });
 
 test('a suspended build page cannot resume its withdrawn source or execute stale Apply', async ({ page }) => {
@@ -431,6 +455,10 @@ test('a new details view clears the previous page pin receipt', async ({ page })
   await page.keyboard.press('Meta+j');
   await page.getByRole('menuitem', { name: 'Show build details', exact: true }).click();
   await expect(page.locator('.hub-build-details')).toBeVisible();
+  await expect(page.locator('.hub-status')).toBeEmpty();
+  await page.keyboard.press('Meta+Backspace');
+  await expect(page.locator('.hub-search input')).toHaveValue('build Word of Healing');
+  await expect(page.locator('.hub-caption')).toHaveText('Home');
   await expect(page.locator('.hub-status')).toBeEmpty();
 });
 

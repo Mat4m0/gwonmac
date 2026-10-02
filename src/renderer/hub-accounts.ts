@@ -69,7 +69,7 @@ export function createHubAccounts(hub: AccountsHub, api: { get(): Promise<HubAcc
     return (['open', 'replace'] as const).map(mode => {
       const title = mode === 'replace' ? `Close ${current} and open ${profile.name}` : `${profile.state === 'running' ? 'Show' : 'Open'} ${profile.name}`;
       return { id: `account:${profile.id}:${mode}`, title,
-        detail: mode === 'replace' ? 'Save and close the current game after this account opens' : `Keep ${current} running`,
+        detail: mode === 'replace' ? `Closes ${current}` : `Keep ${current} running`,
         group: 'Accounts', action: title, consequential: true, ...(mode === 'replace' ? { destructive: true } : {}),
         // Opening waits until the new window runs; the footer and status name it meanwhile (HUB-083).
         pending: mode === 'replace' ? { label: `Checking ${profile.name}…`, again: `${profile.name} is still being checked.` }
@@ -86,7 +86,7 @@ export function createHubAccounts(hub: AccountsHub, api: { get(): Promise<HubAcc
     return list.profiles.map(profile => {
       const unavailable = profile.id === list.current ? 'Current account' : !['ready', 'failed', 'running'].includes(profile.state) ? 'This account is still opening.' : null;
       const choose = () => hub.showRows(profile.name, () => actions(profile));
-      return { id: `account:${profile.id}`, title: profile.name, detail: profile.id === list.current ? 'Current account' : profile.state === 'running' ? 'Open' : profile.state === 'ready' ? 'Saved account' : profile.state === 'failed' ? 'Retry opening' : 'Opening…',
+      return { id: `account:${profile.id}`, title: profile.name, detail: profile.id === list.current ? 'Current account' : profile.state === 'running' ? 'Running' : profile.state === 'ready' ? 'Saved account' : profile.state === 'failed' ? 'Retry opening' : 'Opening…',
         group: 'Accounts', action: 'Choose account action',
         // → follows the same availability as Enter: the current account has no actions to open (HUB-175).
         ...(unavailable ? { unavailable } : { navigate: choose }), run: choose };

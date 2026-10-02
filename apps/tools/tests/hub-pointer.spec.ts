@@ -222,6 +222,18 @@ test.describe('a navigational row', () => {
     await expect(page.locator('.hub-build-review')).toBeFocused();
     await expect(page.getByRole('heading', { name: 'GOM AFK', exact: true, level: 2 })).toBeInViewport();
     expect(await page.locator('.hub-view').evaluate(view => view.scrollTop)).toBe(0);
+    await page.getByLabel('Lifecycle state', { exact: true }).selectOption('pve-explorable');
+    await page.keyboard.press('Meta+r'); await search(page).fill('team gom afk'); await search(page).press('ArrowRight');
+    await expect(page.locator('.hub-build-review [role=status]')).toHaveText('Enter an outpost to apply this team.');
+    await expect(page.locator('.hub-build-review [role=status]')).toBeInViewport();
+    await expect(page.locator('#hub :focus')).toBeEnabled();
+    await expect(page.locator('.hub-build-review')).toBeFocused();
+    await expect(primary(page)).toBeDisabled();
+    await page.getByLabel('Lifecycle state', { exact: true }).selectOption('outpost');
+    await search(page).fill('team gom afk'); await search(page).press('ArrowRight');
+    await expect(primary(page)).toBeEnabled();
+    // HUB-084 intentionally makes the review the entry focus; the named footer remains runnable.
+    await expect(page.locator('.hub-build-review')).toBeFocused();
     expect(await ledger(page)).toEqual([]);
     await clicks(page, primary(page), 3);
     await expect.poll(() => ledger(page)).toEqual(expect.arrayContaining(['apply-team']));
@@ -494,6 +506,7 @@ test('Accounts: keeping the running game open is the default; a replace needs on
   await expect(primary(page)).toHaveText(/^Close Main and open Second/);
   await search(page).press('Enter');
   await expect(caption(page)).toHaveText('Close Main?');
+  await expect(page.locator('.hub-confirm')).toBeFocused();
   await page.keyboard.press('Meta+j');
   await expect(page.getByRole('menuitem', { name: 'Keep Main' })).toBeVisible();
   await page.keyboard.press('Escape');
@@ -517,6 +530,26 @@ test('Accounts: a double-click on an account opens its page on Open Second and r
 });
 
 test('Hub preferences: Move up keeps focus and a double-click moves the same pin twice (PTR-12)', async ({ page }) => {
+  for (const pins of [[], ['place:449'], ['place:449', 'place:194', 'place:642']]) {
+    await page.goto('/?hub');
+    await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+    await page.evaluate(pins => localStorage.setItem('hub-fixture-shortcuts', JSON.stringify(pins.map(id => ({ id, phrase: '', pinned: true })))), pins);
+    await open(page); await enter(page, 'hub preferences');
+    const active = page.locator('.hub-view :focus');
+    await expect(active).toBeEnabled(); await expect(active).toBeVisible();
+    await page.locator('.hub-back').focus(); await page.keyboard.press('ArrowDown');
+    await expect(active).toBeEnabled(); await expect(active).toBeVisible();
+    if (pins.length) {
+      const list = page.getByRole('listbox', { name: 'Pins and search phrases' });
+      await list.focus();
+      await page.keyboard.press('Meta+j');
+      await page.getByRole('menuitem', { name: 'Remove Kamadan, Jewel of Istan…', exact: true }).click();
+      await expect(primary(page)).toHaveAttribute('data-armed', '');
+      await primary(page).click();
+      await expect(caption(page)).toHaveText('Hub preferences');
+      await expect(active).toBeEnabled(); await expect(active).toBeVisible();
+    }
+  }
   await page.goto('/?hub');
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
   await page.evaluate(() => localStorage.setItem('hub-fixture-shortcuts', JSON.stringify(['place:449', 'place:194', 'place:642'].map(id => ({ id, phrase: '', pinned: true })))));
@@ -693,11 +726,35 @@ test('the footer slots keep their place from page to page', async ({ page }) => 
     const actions = page.locator('.hub-actions');
     await expect(actions).toBeVisible();
     const box = (await actions.boundingBox())!;
-    return [Math.round(box.x), Math.round(box.width), Math.round((await primary(page).boundingBox())!.x + (await primary(page).boundingBox())!.width)];
+    return [Math.round(box.y), Math.round(box.x), Math.round(box.width), Math.round((await primary(page).boundingBox())!.x + (await primary(page).boundingBox())!.width)];
   };
   const home = await slot();
-  await enter(page, 'build smiter');
-  await expect(page.getByRole('button', { name: 'Actions', exact: true })).toBeEnabled();
+  for (const query of ['commands', 'hub preferences', 'switch account', 'build library', 'build smiter', 'team gom', 'romi', 'settings', 'maps', 'conversion rates']) {
+    await page.keyboard.press('Meta+r');
+    await enter(page, query);
+    expect(await slot(), query).toEqual(home);
+  }
+  await page.keyboard.press('Meta+r'); await enter(page, 'switch account');
+  await page.locator('.hub-row').filter({ has: page.locator('.hub-title', { hasText: /^Second$/ }) }).click();
+  expect(await slot()).toEqual(home);
+  await page.keyboard.press('Meta+r'); await enter(page, 'build library');
+  await page.locator('.hub-row[data-id="game-templates"]').click();
+  expect(await slot()).toEqual(home);
+  await page.keyboard.press('Meta+r'); await enter(page, 'build smiter');
+  await page.locator('.hub-row[data-id="choose-hero"]').click();
+  expect(await slot()).toEqual(home);
+  await page.locator('.hub-row').first().focus(); await page.keyboard.press('ArrowRight');
+  await expect(caption(page)).not.toHaveText('Heroes');
+  expect(await slot()).toEqual(home);
+  await page.keyboard.press('Meta+t');
+  await page.locator('#travel-search-input').fill('kamadan');
+  await expect(primary(page)).toHaveText('Travel to Kamadan, Jewel of Istan · Any district↵');
+  expect(await slot()).toEqual(home);
+  await page.keyboard.press('Meta+e');
+  await expect(primary(page)).toHaveText('Current character↵');
+  expect(await slot()).toEqual(home);
+  await page.locator('button[data-character-key="ranger"]').click();
+  await expect(primary(page)).toHaveText('Switch to Fixture Ranger↵');
   expect(await slot()).toEqual(home);
 });
 
@@ -721,6 +778,7 @@ test('a click on blank space keeps the keyboard where it was (HUB-246)', async (
   await open(page);
   const typedInto = async (click: () => Promise<void>) => {
     await click();
+    expect(['DIALOG', 'BODY']).not.toContain(await page.evaluate(() => document.activeElement?.tagName));
     await page.keyboard.type('mo');
     return page.evaluate(() => {
       const active = document.activeElement as HTMLInputElement | null;
@@ -729,10 +787,25 @@ test('a click on blank space keeps the keyboard where it was (HUB-246)', async (
   };
   await search(page).fill('acc second');
   expect(await typedInto(() => page.locator('.hub-results').click({ position: { x: 300, y: 250 } }))).toBe('INPUT:acc secondmo');
-  await search(page).fill('');
-  expect(await typedInto(() => page.locator('.hub-group').first().click())).toBe('INPUT:mo');
+  for (const [selector, query] of [['.hub-group', ''], ['.hub-count', 'acc second'], ['.hub-caption', ''], ['.hub-search svg', '']] as const) {
+    await search(page).fill(query);
+    expect(await typedInto(() => page.locator(selector).first().click()), selector).toBe(`INPUT:${query}mo`);
+  }
+  await page.keyboard.press('Meta+r'); await enter(page, 'build smiter');
+  await search(page).fill(''); await search(page).focus();
+  expect(await typedInto(() => page.locator('.hub-summary').click({ position: { x: 4, y: 4 } }))).toBe('INPUT:mo');
   await page.keyboard.press('Meta+t');
-  expect(await typedInto(() => page.locator('#travel-panel').click({ position: { x: 300, y: 10 } }))).toBe('INPUT:mo');
+  for (const click of [() => page.locator('#travel-panel').click({ position: { x: 300, y: 10 } }), () => page.locator('#travel-favorites-title').click()]) {
+    await page.locator('#travel-search-input').fill('');
+    expect(await typedInto(click)).toBe('INPUT:mo');
+  }
+  await page.getByRole('button', { name: 'Lock Hub position', exact: true }).click();
+  const before = (await page.locator('.hub-panel').boundingBox())!;
+  const heading = (await page.locator('.hub-heading').boundingBox())!;
+  await page.mouse.move(heading.x + 40, heading.y + 10); await page.mouse.down();
+  await page.mouse.move(heading.x + 70, heading.y + 40); await page.mouse.up();
+  const after = (await page.locator('.hub-panel').boundingBox())!;
+  expect([Math.round(after.x - before.x), Math.round(after.y - before.y)]).toEqual([30, 30]);
   await page.keyboard.press('Meta+e');
   await expect(page.locator('button[data-character-key="monk"]')).toBeFocused();
   // Characters is card-first: typing from the card it returns to moves to its search.
@@ -775,10 +848,25 @@ test('Hub preferences keeps the Actions slot and opens its named actions with Co
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
   await page.evaluate(() => localStorage.setItem('hub-fixture-shortcuts', JSON.stringify([{ id: 'place:449', phrase: '', pinned: true }, { id: 'place:194', phrase: '', pinned: true }])));
   await open(page);
-  await enter(page, 'hub preferences');
+  await search(page).fill('kamadan');
+  await expect(page.locator('.hub-actions')).toHaveText('Actions⌘J');
+  let entries: string[] | undefined;
+  for (const origin of ['search', 'row']) {
+    if (origin === 'search') await search(page).focus();
+    else await page.locator('.hub-row[data-id="place:449"]').click();
+    // Hub lists use virtual row focus: DOM focus stays in search (D-2).
+    await expect(search(page)).toBeFocused();
+    await expect(search(page)).toHaveAttribute('aria-activedescendant', await page.locator('.hub-row[data-id="place:449"]').getAttribute('id')!);
+    await page.keyboard.press('Meta+j');
+    await expect(page.getByRole('menu')).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: /Travel to Kamadan/ })).toBeVisible();
+    const current = await page.getByRole('menuitem').allTextContents();
+    if (entries) expect(current).toEqual(entries); else entries = current;
+    await page.keyboard.press('Escape');
+  }
+  await page.keyboard.press('Meta+r'); await enter(page, 'hub preferences');
   await expect(page.locator('.hub-actions')).toHaveText('Actions⌘J');
   await page.keyboard.press('Meta+j');
-  await expect(page.getByRole('menu')).toBeVisible();
   await expect(page.getByRole('menuitem', { name: /Set phrase for Kamadan/ })).toBeVisible();
   await page.keyboard.press('Escape');
   await page.getByRole('option', { name: 'Kaineng Center · Pinned', exact: true }).click({ button: 'right' });
@@ -807,4 +895,19 @@ test('Clear search cannot reuse a previous Travel destination click (HUB-242)', 
   await expect(page.locator('#travel-search-input')).toHaveValue('');
   await expect(page.locator('.hub-caption')).toHaveText('Travel');
   expect(await ledger(page)).toEqual([]);
+});
+
+// HUB-052: pointer origin decides dismissal; a backdrop click suspends the mounted task.
+test('dragging out preserves the Hub query, and a backdrop click resumes the same task', async ({ page }) => {
+  await open(page); await page.keyboard.press('Meta+b'); await search(page).fill('smiter');
+  const inside = (await search(page).boundingBox())!;
+  await page.mouse.move(inside.x + 10, inside.y + 10); await page.mouse.down();
+  await page.mouse.move(20, 20, { steps: 4 }); await page.mouse.up();
+  await expect(page.locator('#hub')).toBeVisible();
+  await expect(search(page)).toHaveValue('smiter');
+  await page.mouse.click(20, 20);
+  await expect(page.locator('#hub')).toBeHidden();
+  await page.keyboard.press('Meta+r');
+  await expect(caption(page)).toHaveText('Build Library');
+  await expect(search(page)).toHaveValue('smiter'); await expect(search(page)).toBeFocused();
 });

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { PNG } from "pngjs";
 
 async function openBuild(page: Page, name = /Word of Healing/) {
   await page.getByRole("tab", { name: /Builds/ }).click();
@@ -652,6 +653,19 @@ test("projects a custom palette through the shared system without layout drift",
   expect(appearance.primaryFill).not.toBe("none");
   expect(appearance.overflow).toBeLessThanOrEqual(1);
   await expect(page.locator(".authoring-bar .skill")).toHaveCount(8);
+  const field = page.locator('#build-name');
+  await expect(field).toBeVisible();
+  const probe = await field.evaluate(el => { const box = el.getBoundingClientRect(); return { x: Math.floor(box.x + box.width / 2), y: Math.floor(box.y + box.height / 2), color: getComputedStyle(el).color }; });
+  const hide = await page.addStyleTag({ content: '#build-name { color:transparent !important; text-shadow:none !important; caret-color:transparent !important; }' });
+  const pixels = PNG.sync.read(await page.screenshot());
+  await hide.evaluate(el => el.remove());
+  const offset = (probe.y * pixels.width + probe.x) * 4;
+  const paint = [...pixels.data.subarray(offset, offset + 3)];
+  expect(paint).not.toEqual([212, 212, 212]);
+  const luminance = (rgb: number[]) => { const linear = rgb.map(channel => { const value = channel / 255; return value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4; }); return .2126 * linear[0]! + .7152 * linear[1]! + .0722 * linear[2]!; };
+  const back = luminance(paint), ink = luminance(probe.color.match(/[\d.]+/gu)!.slice(0, 3).map(Number));
+  expect((Math.max(back, ink) + .05) / (Math.min(back, ink) + .05)).toBeGreaterThanOrEqual(4.5);
+
 });
 
 test("keeps critical team and skill feedback legible", async ({ page }) => {

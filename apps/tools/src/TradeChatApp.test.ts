@@ -368,9 +368,14 @@ describe("TradeChatApp", () => {
     const wrapper = await ledger();
     const search = wrapper.get("input[type=search]").element;
     const fromGame = new KeyboardEvent("keydown", { key: "/", bubbles: true, cancelable: true });
-    document.body.dispatchEvent(fromGame);
+    const canvas = document.createElement("canvas");
+    canvas.tabIndex = 0;
+    document.body.append(canvas);
+    canvas.focus();
+    canvas.dispatchEvent(fromGame);
     expect(fromGame.defaultPrevented).toBe(false);
-    expect(document.activeElement).not.toBe(search);
+    expect(document.activeElement).toBe(canvas);
+    canvas.remove();
     const row = wrapper.get(".trade-row").element as HTMLElement;
     row.focus();
     const fromRow = new KeyboardEvent("keydown", { key: "/", bubbles: true, cancelable: true });
@@ -386,6 +391,7 @@ describe("TradeChatApp", () => {
     const search = vi.fn(demo.search);
     const wrapper = await ledger({ ...demo, search });
     const input = wrapper.get("input[type=search]");
+    expect(wrapper.get(".trade-search kbd").attributes("aria-hidden")).toBe("true");
     for (const text of ["p", "po", "polar", "polar ", "polar bear"]) await input.setValue(text);
     expect(search).not.toHaveBeenCalled();
     expect(wrapper.findAll(".trade-row").map((row) => row.attributes("aria-label"))).toEqual([

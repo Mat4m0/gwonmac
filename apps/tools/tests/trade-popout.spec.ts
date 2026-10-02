@@ -6,14 +6,14 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
  * selection keeps its seller through re-posts and new searches, and no view change
  * drops the keyboard to the page.
  */
-const hubSearch = (page: Page) => page.getByRole('combobox', { name: 'Search people, places, builds' });
+const hubSearch = (page: Page) => page.locator('.hub-search input');
 const tradeWindow = (page: Page) => page.getByRole('dialog', { name: 'Trade Chat' });
 const tradeSearch = (trade: Locator) => trade.getByRole('searchbox', { name: 'Search offers or character names' });
 const offer = (trade: Locator, sender: string) => trade.getByRole('option', { name: new RegExp(`^${sender}: `, 'u') });
 
 /** Trade opened with ⌘K from the game, its search holding the keyboard. */
-async function openTrade(page: Page) {
-  await page.goto('/?hub');
+async function openTrade(page: Page, offers?: number) {
+  await page.goto(offers ? `/?hub&trade-offers=${offers}` : '/?hub');
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
   await page.keyboard.press('Escape');
   await page.keyboard.press('Meta+k');
@@ -46,7 +46,7 @@ async function recordWhispers(page: Page) {
   return async () => (await page.evaluate(() => document.documentElement.dataset.whispers ?? '')).split('|').filter(Boolean);
 }
 
-test('↵ on a ledger row whispers its seller once, even while held (HUB-024, D-10)', async ({ page }) => {
+test('↵ whispers once while held, and Whisper is within three Tabs at any ledger size (HUB-024, D-10)', async ({ page }) => {
   const trade = await openTrade(page);
   const whispers = await recordWhispers(page);
   await page.keyboard.type('ember');
@@ -65,6 +65,20 @@ test('↵ on a ledger row whispers its seller once, even while held (HUB-024, D-
   await trade.getByRole('button', { name: 'Whisper Quiet Ember', exact: true }).dblclick();
   await expect(message).toBeFocused();
   expect(await whispers()).toEqual(['Quiet Ember', 'Quiet Ember']);
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Meta+k');
+  // External feed fixtures exercise the real Trade mount and listbox, including pagination.
+  for (const count of [1, 60]) {
+    const ledger = await openTrade(page, count);
+    const search = tradeSearch(ledger);
+    await expect(search).toHaveAccessibleName('Search offers or character names');
+    await expect(ledger.getByRole('option')).toHaveCount(count === 1 ? 1 : 25);
+    await search.focus();await page.keyboard.press('ArrowDown');
+    await expect(ledger.getByRole('option').first()).toBeFocused();
+    let tabs=0;
+    while(tabs<3 && !(await ledger.locator('.inspector-whisper').evaluate(node=>node===document.activeElement))){await page.keyboard.press('Tab');tabs++;}
+    await expect(ledger.locator('.inspector-whisper')).toBeFocused();expect(tabs).toBeLessThanOrEqual(3);
+  }
 });
 
 test('⌘↵ opens a seller\'s listings; ⌘⌫ and the mouse back button return to the same row (HUB-024, HUB-025)', async ({ page }) => {
@@ -209,6 +223,39 @@ test('a new Trade search drops a saved offer the inspector showed (HUB-118)', as
   await hubSearch(page).press('Enter');
   await expect(trade.getByText('Results for “consets”', { exact: true })).toBeVisible();
   await expect(trade.getByRole('region', { name: 'Offer from Silver Wayfarer' })).toBeVisible();
+  const whispers = await recordWhispers(page);
+  // Search, clear, player listings, source and explicitly opened saved cards.
+  for (const [transition, seller] of [
+    ['search', 'Silver Wayfarer'], ['clear', 'Rin of the Isles'],
+    ['submit', 'Silver Wayfarer'], ['typing', 'Quiet Ember'], ['player', 'Tyria Cartographer'], ['source', 'Vanguard Althea'], ['saved', 'Rin of the Isles'],
+  ]) {
+    if (transition !== 'search') {
+      await trade.getByRole('button',{name:/Saved 1/}).click();
+      await trade.getByRole('complementary',{name:'Saved trade items'}).getByRole('button',{name:/^Rin of the Isles/}).click();
+      await expect(trade.getByRole('button',{name:'Whisper Rin of the Isles',exact:true})).toBeVisible();
+    }
+    if (transition === 'clear') await trade.getByRole('button', {name:'Live feed',exact:true}).click();
+    if (transition === 'submit') {await tradeSearch(trade).fill('consets');await tradeSearch(trade).press('Enter');}
+    if (transition === 'typing') {
+      await trade.getByRole('button',{name:'Live feed',exact:true}).click();await tradeSearch(trade).fill('polar');
+      await expect(trade.getByRole('region',{name:'Offer detail',exact:true})).toContainText('Choose an offer');
+      await expect(trade.locator('.inspector-whisper')).toHaveCount(0);
+      await offer(trade,'Quiet Ember').click();
+    }
+    if (transition === 'player') {await tradeSearch(trade).fill('');}
+    if (transition === 'player') await offer(trade,'Tyria Cartographer').first().getByRole('button',{name:'Show listings from Tyria Cartographer',exact:true}).click();
+    if (transition === 'source') await trade.getByRole('button',{name:'Pre-Searing',exact:true}).click();
+    if (transition === 'saved') {
+      await trade.getByRole('button',{name:'Kamadan',exact:true}).click();
+      await trade.getByRole('button',{name:/Saved 1/}).click();
+      await trade.getByRole('complementary',{name:'Saved trade items'}).getByRole('button',{name:/^Rin of the Isles/}).click();
+    } else await expect(offer(trade,seller).first()).toBeVisible();
+    await expect(trade.locator('.inspector-whisper')).toContainText(`Whisper ${seller}`);
+    await trade.getByRole('button',{name:`Whisper ${seller}`,exact:true}).click();
+    await expect(page.getByRole('textbox',{name:`Message ${seller}`,exact:true})).toBeFocused();
+    expect((await whispers()).at(-1)).toBe(seller);
+    await page.keyboard.press('Escape');
+  }
 });
 
 test('typing narrows the loaded offers and keeps the selected one; ↵ searches the feed (D-10, HUB-013)', async ({ page }) => {
@@ -276,10 +323,16 @@ test('Trade keeps the keyboard inside as its views change (HUB-025)', async ({ p
   await page.keyboard.press('Enter');
   await expect(trade.getByRole('button', { name: /Back to offers/u })).toBeVisible();
   await expect(trade.getByRole('option').first()).toBeFocused();
+  await page.keyboard.press('Meta+Backspace');
+  // A control inside a row, here the seller's name, does its own job on Enter, not the row's whisper.
+  await tyria.getByRole('button', { name: 'Show listings from Tyria Cartographer', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(trade.getByRole('button', { name: /Back to offers/u })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Message Tyria Cartographer', exact: true })).toHaveCount(0);
 });
 
 test('narrow Trade walks the ledger without its sheet, and the sheet has focus targets (HUB-025)', async ({ page }) => {
-  await page.setViewportSize({ width: 672, height: 552 });
+  await page.setViewportSize({ width: 640, height: 552 });
   const trade = await openTrade(page);
   const inspector = trade.locator('.trade-inspector');
   await page.keyboard.press('ArrowDown');
@@ -287,6 +340,14 @@ test('narrow Trade walks the ledger without its sheet, and the sheet has focus t
   await page.keyboard.press('ArrowDown');
   await expect(offer(trade, 'Silver Wayfarer')).toBeFocused();
   await expect(inspector).toBeHidden();
+  for (let repeat = 0; repeat < 8; repeat++) await page.keyboard.down('ArrowDown');
+  await page.keyboard.up('ArrowDown');
+  await expect(trade.getByRole('option').last()).toBeFocused();
+  await expect(inspector).toBeHidden();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('textbox',{name:'Message Tyria Cartographer',exact:true})).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(trade.getByRole('option').last()).toBeFocused();
   await offer(trade, 'Acolyte Mira').click();
   await expect(trade.getByRole('button', { name: 'Whisper Acolyte Mira', exact: true })).toBeFocused();
   await trade.getByRole('button', { name: 'Back to offers', exact: true }).focus();
@@ -312,6 +373,9 @@ test('Trader prices: the item search reaches the catalogue, and ↵ opens the fi
 test('Actions is a keyboard menu: ⌘J opens it on its first item and ⌘⌫ closes only the menu (HUB-131)', async ({ page }) => {
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
   const trade = await openTrade(page);
+  await page.evaluate(() => {
+    navigator.clipboard.writeText=async value=>{document.documentElement.dataset.tradeClipboard=value;};
+  });
   const summary = trade.locator('.offer-actions > summary');
   const whispers = await recordWhispers(page);
   // Mouse and keyboard open the same menu on its first action.
@@ -344,11 +408,21 @@ test('Actions is a keyboard menu: ⌘J opens it on its first item and ⌘⌫ clo
   for (let step = 0; step < 4; step++) await page.keyboard.press('ArrowDown');
   await expect(trade.getByRole('menuitem', { name: 'Copy name' })).toBeFocused();
   await page.keyboard.press('Enter');
+  await expect(page.locator('html')).toHaveAttribute('data-trade-clipboard','Tyria Cartographer');
   await expect(trade.locator('.offer-copy-name')).toHaveText('Character name copied');
   await expect(trade.locator('.offer-copy-name')).toBeFocused();
   await expect(trade.locator('.trade-notice')).toHaveCount(0);
   await page.keyboard.press('Meta+Backspace');
   await expect(summary).toBeFocused();
+  await page.keyboard.press('Enter');
+  for (let step = 0; step < 2; step++) await page.keyboard.press('ArrowDown');
+  await expect(trade.getByRole('menuitemcheckbox',{name:'Save offer',exact:true})).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(trade.getByRole('menu',{name:'Offer actions'})).toBeHidden();
+  await expect(summary).toBeFocused();
+  await summary.press('Enter');
+  await expect(trade.getByRole('menuitemcheckbox',{name:'Save offer',exact:true})).toHaveAttribute('aria-checked','true');
+  await expect(trade.locator('.saved-count')).toHaveText('1');
 });
 
 test('Actions opens over the ledger and copy feedback stays on the action: neither moves a control (HUB-122, HUB-123)', async ({ page }) => {
@@ -381,9 +455,10 @@ test('Actions opens over the ledger and copy feedback stays on the action: neith
   await expect(trade.locator('.offer-copy-name')).toHaveText('Copy name', { timeout: 10_000 });
   await page.keyboard.press('Meta+Backspace');
   await summary.click();
+  const saveBefore = { summary: await summary.boundingBox(), whisper: await whisper.boundingBox(), list: await list.boundingBox(), inspector: await trade.locator('.trade-inspector').boundingBox() };
   await menu.getByRole('menuitemcheckbox', { name: 'Save offer' }).click();
+  expect({ summary: await summary.boundingBox(), whisper: await whisper.boundingBox(), list: await list.boundingBox(), inspector: await trade.locator('.trade-inspector').boundingBox() }).toEqual(saveBefore);
   await expect(trade.locator('.saved-count')).toHaveText('1');
-  await page.waitForTimeout(300);
   await expect(trade.locator('.trade-notice')).toHaveCount(0);
 });
 
@@ -392,6 +467,19 @@ test('beside the game Trade shows at least four offers, and a short window keeps
   const trade = await openTrade(page);
   expect((await trade.boundingBox())!.width).toBe(608);
   await expect(trade.locator('.trade-brand svg')).toBeVisible();
+  expect(await trade.locator('.trade-brand svg').evaluate(node => ({width:node.getBoundingClientRect().width,height:node.getBoundingClientRect().height}))).toEqual({width:20,height:20});
+  for (const glyph of await trade.locator('.saved-trigger > svg, .trader-prices-trigger > svg').all()) {
+    const size = await glyph.evaluate(node => ({width:node.getBoundingClientRect().width,height:node.getBoundingClientRect().height,font:parseFloat(getComputedStyle(node).fontSize)}));
+    expect(size.font).toBe(14);
+    expect(size.width).toBeCloseTo(14.7, 1);
+    expect(size.height).toBe(size.width);
+  }
+  const obsoleteEmbeddedRules = await page.evaluate(() => {
+    const selectors = (rules: CSSRuleList): string[] => [...rules].flatMap(rule =>
+      rule instanceof CSSStyleRule ? [rule.selectorText] : rule instanceof CSSGroupingRule ? selectors(rule.cssRules) : []);
+    return [...document.styleSheets].flatMap(sheet => selectors(sheet.cssRules)).filter(selector => selector.includes('embedded') && selector.includes('trade'));
+  });
+  expect(obsoleteEmbeddedRules).toEqual([]);
   const fullyVisible = await trade.getByRole('listbox', { name: 'Trade offers' }).evaluate(list => {
     const box = list.getBoundingClientRect();
     return [...list.querySelectorAll('[role=option]')].filter(row => {
@@ -403,9 +491,42 @@ test('beside the game Trade shows at least four offers, and a short window keeps
   await page.setViewportSize({ width: 1280, height: 464 });
   const frame = (await trade.boundingBox())!;
   expect(frame.height).toBe(400);
-  for (const control of [trade.locator('.inspector-whisper'), trade.locator('.offer-actions > summary')]) {
-    const box = (await control.boundingBox())!;
-    expect(box.y + box.height).toBeLessThanOrEqual(frame.y + frame.height);
+  for (const view of ['listings', 'actions', 'saved', 'player', 'prices']) {
+    if (view === 'actions') await trade.locator('.offer-actions > summary').click();
+    if (view === 'saved') {
+      await page.keyboard.press('Escape');
+      const first = offer(trade,'Tyria Cartographer').first();
+      await first.hover();await first.getByRole('button',{name:'Save offer from Tyria Cartographer',exact:true}).click();
+      await trade.getByRole('button',{name:/Saved 1/}).click();
+      await expect(trade.getByRole('complementary',{name:'Saved trade items'})).not.toHaveClass(/saved-drawer-enter-active/);
+    }
+    if (view === 'player') {
+      await page.keyboard.press('Escape');
+      await offer(trade,'Tyria Cartographer').first().getByRole('button',{name:'Show listings from Tyria Cartographer',exact:true}).click();
+      await expect(trade.getByRole('button',{name:/Back to offers/})).toBeVisible();
+    }
+    if (view === 'prices') {
+      await page.keyboard.press('Escape');
+      await trade.getByRole('button',{name:'Trader prices',exact:true}).click();
+    }
+    // Closing Saved keeps its moving controls mounted until the leave transition completes.
+    await expect(trade.locator('.saved-drawer-leave-active')).toHaveCount(0);
+    const controls = trade.locator('button:visible, input:visible, select:visible, summary:visible, a:visible, [role^=menuitem]:visible, [role=option]:visible');
+    const bounds = await controls.evaluateAll(nodes => nodes.map(node => {
+      // Capture nodes once: scrolling can hide a row's quick buttons and change :visible indexes.
+      node.scrollIntoView({block:'nearest',behavior:'instant'});
+      const rect=node.getBoundingClientRect(), frame=node.closest('.trade-window')!.getBoundingClientRect();
+      return {label:node.getAttribute('aria-label') ?? node.textContent,
+        box:{x:rect.x,y:rect.y,width:rect.width,height:rect.height},
+        frame:{x:frame.x,y:frame.y,width:frame.width,height:frame.height}};
+    }));
+    expect(bounds.length).toBeGreaterThan(0);
+    for (const {box,frame,label} of bounds) {
+      expect(box.x, `${view}: ${label}`).toBeGreaterThanOrEqual(frame.x);
+      expect(box.y, `${view}: ${label}`).toBeGreaterThanOrEqual(frame.y);
+      expect(box.x+box.width, `${view}: ${label}`).toBeLessThanOrEqual(frame.x+frame.width);
+      expect(box.y+box.height, `${view}: ${label}`).toBeLessThanOrEqual(frame.y+frame.height);
+    }
   }
 });
 

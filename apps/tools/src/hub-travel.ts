@@ -118,6 +118,8 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
       // player's Travel phrases count as names) before it keeps the best eight (HUB-010, HUB-057).
       const aliasesOf = (destination: TravelDestination) => [...destination.aliases, ...phrases(destination.mapId, query)];
       const matches = query.trim() ? TRAVEL_DESTINATIONS.flatMap(destination => {
+        // A place outside this character's world is left out, as the Travel view leaves it out (HUB-065).
+        if (travelDestinationAvailability(host.state.value, destination.mapId) === 'outside-context') return [];
         const tier = hubTier({ title: destination.name, aliases: aliasesOf(destination) }, query);
         return tier === null ? [] : [{ destination, tier }];
       }).sort((a, b) => a.tier - b.tier || a.destination.name.localeCompare(b.destination.name)) : [];
@@ -137,7 +139,7 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
       // The rest stay one step away, in Travel with the same search.
       const more: HubRow[] = matches.length > PLACES_SHOWN ? [{ id: 'places:more', title: `All ${matches.length} places`, detail: 'Open Travel with this search', group: 'Places', action: 'Show in Travel',
         navigate: () => hub.showView('Travel', page(parsed.text), available, 'travel'), run: () => hub.showView('Travel', page(parsed.text), available, 'travel') }] : [];
-      return [...guildHall, ...destinations.map(destination => {
+      return [...[...guildHall, ...destinations.map(destination => {
         const reason = refusal(destination.mapId);
         // The aliases travel with the row, so Home ranks it by them as this list did.
         return { id: `place:${destination.mapId}`, title: destination.name, aliases: aliasesOf(destination),
@@ -145,7 +147,7 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
           detail: query.trim() ? 'Outpost · Any district' : 'Recently visited · Any district',
           group: query.trim() ? 'Places' : 'Continue', action: `Travel to ${destination.name}`, consequential: true, leavesArea: explorable(),
           ...(reason ? { unavailable: reason } : {}), run: async (task: HubTask) => { await travel(destination.mapId); task.done(); } };
-      }), ...more, ...matchHubRows([toolRow()], query)];
+      })].sort((a, b) => (hubTier(a, query) ?? 3) - (hubTier(b, query) ?? 3)), ...more, ...matchHubRows([toolRow()], query)];
     },
   };
   /**

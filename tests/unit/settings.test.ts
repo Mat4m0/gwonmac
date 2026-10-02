@@ -606,14 +606,16 @@ describe("settings", () => {
     assert.deepEqual(await readdir(dir), [backup.split("/").at(-1)]);
   });
 
-  it("saves only known fields", async () => {
+  it("saves only known fields, including text size across reload (HUB-116)", async context => {
     const dir = await mkdtemp(join(tmpdir(), "gw-settings-"));
+    context.after(() => rm(dir, { recursive: true, force: true }));
     const path = join(dir, "settings.json");
     const saved = await saveSettings(path, {
       ...DEFAULT_SETTINGS,
       showDiagnostics: true,
       autoRelogAfterReload: true,
       renderScale: 1.5,
+      uiTextSize: 150,
       hubShortcuts: [],
       calculatorRates: { mode: 'automatic', ecto: '', armbrace: '', zkey: '' },
       gwonmacTools: false,
@@ -622,6 +624,8 @@ describe("settings", () => {
       travelShortcuts: DEFAULT_SETTINGS.travelShortcuts,
       targetReadout: false,
     });
+    assert.equal((await loadSettings(path)).uiTextSize, 150);
+    assert.equal((await loadSettings(path)).renderScale, 1.5);
     assert.equal(saved.showDiagnostics, true);
     assert.equal(saved.autoRelogAfterReload, true);
     assert.equal((await loadSettings(path)).autoRelogAfterReload, true);

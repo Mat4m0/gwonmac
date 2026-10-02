@@ -132,6 +132,8 @@ describe("TravelPalette", () => {
     const { wrapper } = fixture();
     await flushPromises();
 
+    expect(wrapper.get("#travel-favorites-title").text()).toBe("Favourites");
+    expect(wrapper.get(".travel-key-hints").text()).toContain("Esc");
     expect(wrapper.findAll(".travel-favorite")).toHaveLength(6);
     expect(wrapper.text()).toContain("Lion's Arch");
     expect(wrapper.findAll(".travel-favorite").map((favorite) => favorite.text())).toEqual([
@@ -259,17 +261,29 @@ describe("TravelPalette", () => {
       unlockedMapWords,
       guildHall: false, hasGuildHall: false, explorable: false,
     };
-    await wrapper.get("#travel-search-input").setValue("Kamadan");
-    const locked = wrapper.findAll('[role="option"]');
-    expect(locked).toHaveLength(1);
-    expect(locked[0]!.text()).toContain("Not unlocked by this character");
-    expect(locked[0]!.attributes("disabled")).toBeDefined();
+    for (const [query, name] of [["Kamadan", "Kamadan, Jewel of Istan"], ["rata", "Rata Sum"]]) {
+      await wrapper.get("#travel-search-input").setValue(query);
+      const locked = wrapper.findAll('[role="option"]');
+      expect(locked).toHaveLength(1);
+      expect(locked[0]!.get("strong").text()).toBe(name);
+      expect(locked[0]!.get(".travel-unavailable-reason").text()).toBe("Not unlocked by this character");
+      expect(locked[0]!.attributes("disabled")).toBeDefined();
+      await wrapper.get('[role="combobox"]').trigger("keydown", { key: "Enter" });
+      expect(travel).not.toHaveBeenCalled();
+    }
     await wrapper.get("#travel-search-input").setValue("Lion's Arch");
     const current = wrapper.findAll('[role="option"]');
     expect(current).toHaveLength(1);
     expect(current[0]!.text()).toContain("You are already in Lion's Arch");
     expect(current[0]!.attributes("disabled")).toBeDefined();
     expect(wrapper.get('[role="combobox"]').attributes("aria-activedescendant")).toBeUndefined();
+    await wrapper.get('[role="combobox"]').trigger("keydown", { key: "Enter" });
+    expect(travel).not.toHaveBeenCalled();
+    await wrapper.get("#travel-search-input").setValue("");
+    const favourite = wrapper.get("#travel-favorite-1");
+    expect(favourite.attributes("disabled")).toBeDefined();
+    expect(favourite.attributes("title")).toBe("Lion's Arch · Current location");
+    await wrapper.get('[role="combobox"]').trigger("keydown", { key: "2" });
     await wrapper.get('[role="combobox"]').trigger("keydown", { key: "Enter" });
     expect(travel).not.toHaveBeenCalled();
     wrapper.unmount();
@@ -915,7 +929,8 @@ describe("TravelPalette", () => {
     await wrapper.get('[role="combobox"]').setValue("friend");
     const results = wrapper.findAll(".travel-result");
     expect(results).toHaveLength(3);
-    expect(results[0]!.text()).toContain("Unknown location");
+    expect(results[0]!.get(".travel-match").text()).toBe("Unknown location");
+    expect(results[0]!.text()).not.toContain("Unknown map");
     expect(results[0]!.text()).toContain("Unavailable for travel");
     expect(results[1]!.text()).toContain("Old Ascalon");
     expect(results[1]!.text()).toContain("Unavailable for travel");

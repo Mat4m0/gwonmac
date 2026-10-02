@@ -42,7 +42,7 @@ export function calculate(expression: string): Fraction | null {
     if (token === '-') { const value = atom(); return fraction(-value.n, value.d); }
     if (token === '+') return atom();
     if (token === '(') { const value = sum(); if (tokens[position++] !== ')') throw new Error('Close the parentheses.'); return value; }
-    if (!token) throw new Error('Complete the calculation.');
+    if (!token || !/^(?:\d+(?:\.\d+)?|\.\d+)$/u.test(token)) throw new Error('Complete the calculation.');
     return decimal(token);
   };
   const product = (): Fraction => {

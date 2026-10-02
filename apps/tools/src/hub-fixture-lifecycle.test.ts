@@ -18,6 +18,7 @@ describe('Hub fixture lifecycle', () => {
         ['outpost', '55:0:pve', 'unknown', 'outpost', 'ready'],
         ['pve-explorable', '58:1:pve', 'unknown', 'pve-explorable', 'ready'],
         ['pvp-outpost', '188:0:pvp', 'unknown', 'outpost', 'ready'],
+        ['pvp-explorable', '188:1:pvp', 'unknown', 'pvp-explorable', 'ready'],
         // A Guild Hall is an outpost (instance 0) that is no Travel destination.
         ['guild-hall', '4:0:pve', 'unknown', 'outpost', 'ready'],
         ['map-loading', 'loading', 'loading', 'loading', 'waiting'],

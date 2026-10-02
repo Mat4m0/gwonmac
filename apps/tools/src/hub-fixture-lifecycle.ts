@@ -18,6 +18,7 @@ export const FIXTURE_LIFECYCLES = [
   ['outpost', 'Ready in outpost'],
   ['pve-explorable', 'PvE explorable area'],
   ['pvp-outpost', 'PvP outpost'],
+  ['pvp-explorable', 'Active PvP'],
   ['guild-hall', 'Guild Hall'],
   ['map-loading', 'Map loading'],
   ['character-select', 'Character select'],
@@ -39,7 +40,7 @@ export function isFixtureLifecycle(value: unknown): value is FixtureLifecycle {
 /** Where a Travel game state puts the player, read from its instance type the way the runtime reads it. */
 export function fixtureLifecycleOf(state: TravelGameState): FixtureLifecycle {
   if (state.status !== 'ready') return state.reason === 'loading' ? 'map-loading' : 'character-select';
-  if (state.explorable) return 'pve-explorable';
+  if (state.explorable) return isPvpTravelDestination(state.mapId) ? 'pvp-explorable' : 'pve-explorable';
   if (state.guildHall) return 'guild-hall';
   return isPvpTravelDestination(state.mapId) ? 'pvp-outpost' : 'outpost';
 }
@@ -92,6 +93,7 @@ export function createFixtureLifecycle(host: Pick<TravelHost, 'state' | 'updateG
     set(phase: FixtureLifecycle) {
       host.updateGameState(phase === 'map-loading' ? { status: 'waiting', reason: 'loading' }
         : phase === 'character-select' ? { status: 'waiting', reason: 'game' }
+          : phase === 'pvp-explorable' ? ready(PVP_OUTPOST, 'explorable')
           : phase === 'pve-explorable' ? ready(EXPLORABLE_MAP, 'explorable') : phase === 'guild-hall' ? ready(GUILD_HALL_MAP, 'guild-hall')
             : ready(phase === 'pvp-outpost' ? PVP_OUTPOST : outpost));
     },
