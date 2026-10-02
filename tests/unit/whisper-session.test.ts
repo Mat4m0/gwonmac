@@ -126,7 +126,9 @@ test('people search finds every known source, ranks exact names first and honour
   ]);
   const found = (query: string) => findPeople(session.state, query).map(person => `${person.source}:${person.name}${person.exact ? '!' : ''}`);
   assert.deepEqual(found('mo kai'), ['chat:Mo Kai!', 'friend:Mo Kaiser'], 'an exact chat name outranks a friend prefix');
-  assert.deepEqual(found('mo'), ['friend:Mo Kaiser', 'conversation:Mona Whisper', 'chat:Moira Chatter', 'chat:Mo Kai'], 'the most recent chat name first');
+  assert.deepEqual(found('mo'), ['friend:Mo Kaiser', 'conversation:Mona Whisper', 'chat:Mo Kai', 'chat:Moira Chatter'], 'canonical name wins within a source');
+  session.observe([{ id: 4, sender: 'Mo Kai', direction: 'participant' }]);
+  assert.deepEqual(found('mo'), ['friend:Mo Kaiser', 'conversation:Mona Whisper', 'chat:Mo Kai', 'chat:Moira Chatter'], 'chat activity cannot reorder an unchanged query');
   assert.deepEqual(found('account'), ['friend:Mo Kaiser'], 'a friend is found by the account alias');
   assert.deepEqual(found('  MO\u00a0KAI\u200b '), ['chat:Mo Kai!', 'friend:Mo Kaiser'], 'pasted spacing and invisible characters are ignored');
   assert.deepEqual(found(''), []);

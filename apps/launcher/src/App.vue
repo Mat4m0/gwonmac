@@ -14,7 +14,8 @@ import {
   Crown,
   X,
 } from "lucide-vue-next";
-import type { LauncherDestination, LauncherSnapshot } from "@shared/launcher-contracts";
+import { CONTROLLER_SYMBOL_OPTIONS, GAME_SETTINGS, RENDER_SCALE_OPTIONS, settingDetail } from "@shared/setting-copy";
+import { parseLauncherSettingsSection, type LauncherDestination, type LauncherSnapshot } from "@shared/launcher-contracts";
 import type { LauncherPreferencesPatch, LauncherSettingsPatch } from "@shared/launcher-contracts";
 import type { CacheInfo } from "@shared/contracts";
 import type { ProfileId } from "@shared/multiple-accounts";
@@ -324,7 +325,8 @@ function openSettings(section: SettingsRoute = settingsRoute.value) {
 function navigateFromMain(destination: LauncherDestination) {
   navigationRequested = true;
   if (destination === "settings") openSettings();
-  else route.value = destination;
+  else if (destination === "home" || destination === "accounts") route.value = destination;
+  else openSettings(parseLauncherSettingsSection(destination.slice("settings/".length)));
 }
 
 function selectSettings(section: SettingsRoute) {
@@ -513,10 +515,11 @@ async function resetGameFiles() {
             <h1>Game settings</h1>
             <p class="section-intro">Applies to every account. Graphics, audio, and key bindings inside Guild Wars are changed in the game.</p>
             <div class="setting-group">
-              <label><span><strong>Render quality</strong><small>Higher quality uses more graphics power. Updates open game windows immediately.</small></span><select :value="snapshot.settings.renderScale" @change="updateLauncherSettings({ renderScale: Number(($event.currentTarget as HTMLSelectElement).value) as 1 | 1.5 | 2 })"><option :value="1">Standard · 1×</option><option :value="1.5">High · 1.5×</option><option :value="2">Very high · 2×</option></select></label>
-              <label><span><strong>Extended memory</strong><small>Allow longer sessions to use more memory. Applies after an application restart.</small></span><input type="checkbox" :checked="snapshot.settings.extendedMemoryEnabled" @change="updateLauncherSettings({ extendedMemoryEnabled: checked($event) })" /></label>
-              <label><span><strong>Return to character after reload</strong><small>Automatically sign in and return to the last character after reloading the game.</small></span><input type="checkbox" :checked="snapshot.settings.autoRelogAfterReload" @change="updateLauncherSettings({ autoRelogAfterReload: checked($event) })" /></label>
-              <label><span><strong>Controller symbols</strong><small>Applies when you next open or reload a game window.</small></span><select :value="snapshot.settings.controllerPromptStyle" @change="updateLauncherSettings({ controllerPromptStyle: ($event.currentTarget as HTMLSelectElement).value as 'game-default' | 'playstation' })"><option value="game-default">Game default</option><option value="playstation">PlayStation</option></select></label>
+              <label><span><strong>{{ GAME_SETTINGS.renderScale.label }}</strong><small>{{ settingDetail(GAME_SETTINGS.renderScale) }}</small></span><select :value="snapshot.settings.renderScale" @change="updateLauncherSettings({ renderScale: Number(($event.currentTarget as HTMLSelectElement).value) as 1 | 1.5 | 2 })"><option v-for="option in RENDER_SCALE_OPTIONS" :key="option.value" :value="option.value">{{ option.label }}</option></select></label>
+              <label><span><strong>{{ GAME_SETTINGS.extendedMemoryEnabled.label }}</strong><small>{{ settingDetail(GAME_SETTINGS.extendedMemoryEnabled) }}</small></span><input type="checkbox" :checked="snapshot.settings.extendedMemoryEnabled" @change="updateLauncherSettings({ extendedMemoryEnabled: checked($event) })" /></label>
+              <label><span><strong>{{ GAME_SETTINGS.autoRelogAfterReload.label }}</strong><small>{{ settingDetail(GAME_SETTINGS.autoRelogAfterReload) }}</small></span><input type="checkbox" :checked="snapshot.settings.autoRelogAfterReload" @change="updateLauncherSettings({ autoRelogAfterReload: checked($event) })" /></label>
+              <label><span><strong>{{ GAME_SETTINGS.controllerPromptStyle.label }}</strong><small>{{ settingDetail(GAME_SETTINGS.controllerPromptStyle) }}</small></span><select :value="snapshot.settings.controllerPromptStyle" @change="updateLauncherSettings({ controllerPromptStyle: ($event.currentTarget as HTMLSelectElement).value as 'game-default' | 'playstation' })"><option v-for="option in CONTROLLER_SYMBOL_OPTIONS" :key="option.value" :value="option.value">{{ option.label }}</option></select></label>
+              <label><span><strong>{{ GAME_SETTINGS.showDiagnostics.label }}</strong><small>{{ settingDetail(GAME_SETTINGS.showDiagnostics) }}</small></span><input type="checkbox" :checked="snapshot.settings.showDiagnostics" @change="updateLauncherSettings({ showDiagnostics: checked($event) })" /></label>
             </div>
             <AppearanceSettings :settings="snapshot.settings" :save="saveCustomization" />
           </template>
@@ -536,7 +539,6 @@ async function resetGameFiles() {
           <template v-else>
             <h1>Advanced</h1>
             <div class="setting-group">
-              <label><span><strong>Diagnostics</strong><small>Show the diagnostics overlay in open game windows.</small></span><input type="checkbox" :checked="snapshot.settings.showDiagnostics" @change="updateLauncherSettings({ showDiagnostics: checked($event) })" /></label>
               <button class="secondary" @click="runAction('Logs could not be opened.', () => native?.external.revealLogs())"><FileText />Open logs</button>
             </div>
             <details class="settings-reset"><summary>Reset all app settings</summary><p>Restores launcher and game preferences, Tools, shortcuts, custom map styles, and panel colors. Original textures will be selected. Accounts and game files are kept.</p><button class="danger-button" @click="runAction('Settings could not be reset.', () => native?.settings.reset())">Reset all app settings…</button></details>

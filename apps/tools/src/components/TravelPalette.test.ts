@@ -12,6 +12,7 @@ import type {
   TravelPreferencePatch,
   TravelPreferences,
 } from "../travel-host";
+import { DEFAULT_SETTINGS } from "../../../../src/shared/contracts";
 import TravelDestinationPicker from "./TravelDestinationPicker.vue";
 import TravelPalette from "./TravelPalette.vue";
 import {
@@ -29,7 +30,7 @@ function fixture(options: Readonly<{
 }> = {}, attachTo?: Element) {
   const state = ref<TravelHost["state"]["value"]>({
     status: "ready", mapId: 55, travelContext: "world", characterKey: null, unlockedMapWords: null,
-    guildHall: false, hasGuildHall: false,
+    guildHall: false, hasGuildHall: false, explorable: false,
   });
   let preferences: TravelPreferences = Object.freeze({
     shortcuts: options.shortcuts ?? DEFAULT_TRAVEL_SHORTCUTS,
@@ -114,7 +115,7 @@ describe("TravelPalette", () => {
 
     state.value = {
       status: "ready", mapId: 55, travelContext: "world", characterKey: null,
-      unlockedMapWords: null, guildHall: false, hasGuildHall: true,
+      unlockedMapWords: null, guildHall: false, hasGuildHall: true, explorable: false,
     };
     await flushPromises();
     await wrapper.get("#travel-guild-hall").trigger("click");
@@ -138,7 +139,8 @@ describe("TravelPalette", () => {
       "2Lion's Arch",
       "3Kamadan",
       "4Kaineng",
-      "5Eye",
+      // A favourite names its place; "Eye" alone named nothing (HUB-191).
+      "5Eye of the North",
       "6Embark",
     ]);
     expect(wrapper.text()).not.toContain("Travel is the default");
@@ -189,7 +191,7 @@ describe("TravelPalette", () => {
     wrapper.unmount();
   });
 
-  it("closes after submitting a destination", async () => {
+  it("ends the task after submitting a destination", async () => {
     const { wrapper } = fixture({ synonyms: [{ term: "daily run", mapId: 480 }] });
     await flushPromises();
 
@@ -197,7 +199,8 @@ describe("TravelPalette", () => {
     await wrapper.get('[role="option"]').trigger("click");
     await flushPromises();
 
-    expect(wrapper.emitted("close")).toHaveLength(1);
+    expect(wrapper.emitted("travelled")).toHaveLength(1);
+    expect(wrapper.emitted("close")).toBeUndefined();
     wrapper.unmount();
   });
 
@@ -211,6 +214,7 @@ describe("TravelPalette", () => {
     await flushPromises();
 
     expect(test.wrapper.emitted("close")).toBeUndefined();
+    expect(test.wrapper.emitted("travelled")).toBeUndefined();
     test.wrapper.unmount();
   });
 
@@ -243,8 +247,8 @@ describe("TravelPalette", () => {
     wrapper.unmount();
   });
 
-  it("filters positively locked destinations while unlock observation is available", async () => {
-    const { wrapper, state } = fixture();
+  it("lists a locked or current destination with the reason it is no trip (HUB-067, HUB-068)", async () => {
+    const { wrapper, state, travel } = fixture();
     const unlockedMapWords = Array.from({ length: 28 }, () => 0);
     unlockedMapWords[Math.floor(55 / 32)] = 1 << (55 % 32);
     state.value = {
@@ -253,12 +257,21 @@ describe("TravelPalette", () => {
       travelContext: "world",
       characterKey: travelCharacterKey("0123456789abcdef"),
       unlockedMapWords,
-      guildHall: false, hasGuildHall: false,
+      guildHall: false, hasGuildHall: false, explorable: false,
     };
     await wrapper.get("#travel-search-input").setValue("Kamadan");
-    expect(wrapper.findAll('[role="option"]')).toHaveLength(0);
+    const locked = wrapper.findAll('[role="option"]');
+    expect(locked).toHaveLength(1);
+    expect(locked[0]!.text()).toContain("Not unlocked by this character");
+    expect(locked[0]!.attributes("disabled")).toBeDefined();
     await wrapper.get("#travel-search-input").setValue("Lion's Arch");
-    expect(wrapper.findAll('[role="option"]')).toHaveLength(1);
+    const current = wrapper.findAll('[role="option"]');
+    expect(current).toHaveLength(1);
+    expect(current[0]!.text()).toContain("You are already in Lion's Arch");
+    expect(current[0]!.attributes("disabled")).toBeDefined();
+    expect(wrapper.get('[role="combobox"]').attributes("aria-activedescendant")).toBeUndefined();
+    await wrapper.get('[role="combobox"]').trigger("keydown", { key: "Enter" });
+    expect(travel).not.toHaveBeenCalled();
     wrapper.unmount();
   });
 
@@ -280,7 +293,7 @@ describe("TravelPalette", () => {
       travelContext: "pre-searing",
       characterKey: travelCharacterKey("0123456789abcdef"),
       unlockedMapWords,
-      guildHall: false, hasGuildHall: false,
+      guildHall: false, hasGuildHall: false, explorable: false,
     };
     await flushPromises();
 
@@ -293,7 +306,8 @@ describe("TravelPalette", () => {
     expect(wrapper.get('[aria-label="Travel to Ashford Abbey, Prophecies, shortcut 1, recent"]').text()).toContain("1Recent");
     expect(wrapper.get('[aria-current="location"]').attributes("disabled")).toBeDefined();
     expect(wrapper.find(".travel-history").exists()).toBe(false);
-    expect(wrapper.find(".travel-favorites").exists()).toBe(false);
+    // The favourites stay beside the few unlocked places, and their numbers select them (HUB-192).
+    expect(wrapper.get(".travel-favorites").text()).toContain("Ashford");
     expect(wrapper.findAll(".travel-available strong").map((name) => name.text())).toEqual([
       "Ascalon City (pre-Searing)",
       "Ashford Abbey",
@@ -325,7 +339,7 @@ describe("TravelPalette", () => {
       travelContext: "world",
       characterKey: travelCharacterKey("0123456789abcdef"),
       unlockedMapWords,
-      guildHall: false, hasGuildHall: false,
+      guildHall: false, hasGuildHall: false, explorable: false,
     };
     await flushPromises();
 
@@ -343,7 +357,7 @@ describe("TravelPalette", () => {
       travelContext: "pre-searing",
       characterKey: travelCharacterKey("0123456789abcdef"),
       unlockedMapWords: null,
-      guildHall: false, hasGuildHall: false,
+      guildHall: false, hasGuildHall: false, explorable: false,
     };
     await flushPromises();
 
@@ -364,7 +378,7 @@ describe("TravelPalette", () => {
       status: "ready",
       mapId: 779,
       travelContext: "pre-searing",
-      guildHall: false, hasGuildHall: false,
+      guildHall: false, hasGuildHall: false, explorable: false,
       characterKey: travelCharacterKey("0123456789abcdef"),
       unlockedMapWords,
     };
@@ -376,7 +390,7 @@ describe("TravelPalette", () => {
     expect(wrapper.get('[aria-current="location"]').text()).toContain("Piken Square");
     expect(wrapper.get('[aria-current="location"]').attributes("disabled")).toBeDefined();
     await wrapper.get("#travel-search-input").setValue("piken");
-    expect(wrapper.findAll('[role="option"]')).toHaveLength(0);
+    expect(wrapper.get('[role="option"]').text()).toContain("You are already in Piken Square");
     wrapper.unmount();
   });
 
@@ -392,7 +406,7 @@ describe("TravelPalette", () => {
       travelContext: "world",
       characterKey: travelCharacterKey("0123456789abcdef"),
       unlockedMapWords,
-      guildHall: false, hasGuildHall: false,
+      guildHall: false, hasGuildHall: false, explorable: false,
     };
     await flushPromises();
 
@@ -410,7 +424,7 @@ describe("TravelPalette", () => {
       travelContext: "pre-searing",
       characterKey: travelCharacterKey("0123456789abcdef"),
       unlockedMapWords: Array.from({ length: 28 }, () => 0xffff_ffff),
-      guildHall: false, hasGuildHall: false,
+      guildHall: false, hasGuildHall: false, explorable: false,
     };
 
     await wrapper.get("#travel-search-input").setValue("asc");
@@ -434,7 +448,7 @@ describe("TravelPalette", () => {
       travelContext: "pre-searing",
       characterKey: travelCharacterKey("0123456789abcdef"),
       unlockedMapWords: Array.from({ length: 28 }, () => 0xffff_ffff),
-      guildHall: false, hasGuildHall: false,
+      guildHall: false, hasGuildHall: false, explorable: false,
     };
     await flushPromises();
 
@@ -454,7 +468,7 @@ describe("TravelPalette", () => {
       travelContext: "pre-searing",
       characterKey: travelCharacterKey("0123456789abcdef"),
       unlockedMapWords: Array.from({ length: 28 }, () => 0xffff_ffff),
-      guildHall: false, hasGuildHall: false,
+      guildHall: false, hasGuildHall: false, explorable: false,
     };
     await flushPromises();
 
@@ -506,12 +520,22 @@ describe("TravelPalette", () => {
     wrapper.unmount();
   });
 
-  it("uses bare number keys for Quick Travel", async () => {
+  it("selects a favourite with its number key, and only Enter travels (D-5)", async () => {
     const { wrapper, travel } = fixture();
     await flushPromises();
+    const search = wrapper.get('[role="combobox"]');
 
-    await wrapper.get('[role="combobox"]').trigger("keydown", { key: "1", code: "Digit1" });
+    await search.trigger("keydown", { key: "2", code: "Digit2" });
+    await search.trigger("keydown", { key: "1", code: "Digit1" });
+    await search.trigger("keydown", { key: "1", code: "Digit1", repeat: true });
+    await flushPromises();
+    expect(travel).not.toHaveBeenCalled();
+    expect(wrapper.get("#travel-favorite-0").attributes("data-active")).toBe("true");
+    expect(wrapper.get("#travel-favorite-1").attributes("data-active")).toBeUndefined();
+    expect(search.element).toHaveProperty("value", "");
 
+    await search.trigger("keydown", { key: "Enter", code: "Enter" });
+    expect(travel).toHaveBeenCalledTimes(1);
     expect(travel).toHaveBeenCalledWith(DEFAULT_TRAVEL_SHORTCUTS[0]);
     wrapper.unmount();
   });
@@ -540,6 +564,60 @@ describe("TravelPalette", () => {
     wrapper.getComponent(TravelDestinationPicker).vm.$emit("update:modelValue", null);
     await flushPromises();
     expect(savePreferences.mock.calls[1]?.[0].shortcuts?.[8]).toBeNull();
+    wrapper.unmount();
+  });
+
+  it("moves a destination to its new number and names what the number held (HUB-188)", async () => {
+    const { wrapper, savePreferences } = fixture();
+    await flushPromises();
+    const search = wrapper.get('[role="combobox"]');
+    await search.setValue("kamadan");
+    await wrapper.get(".travel-palette").trigger("keydown", { key: "2", code: "Digit2", metaKey: true });
+    await flushPromises();
+
+    const saved = savePreferences.mock.calls[0]?.[0].shortcuts;
+    expect(saved?.[1]).toEqual({ mapId: 449 });
+    expect(saved?.filter((entry) => entry?.mapId === 449)).toHaveLength(1);
+    expect(wrapper.text()).toContain("Kamadan, Jewel of Istan is now shortcut 2 (moved from 3, replaces Lion's Arch).");
+    // The receipt belongs to that moment: the next search starts clean.
+    await search.setValue("kaineng");
+    expect(wrapper.text()).not.toContain("is now shortcut");
+    wrapper.unmount();
+  });
+
+  it("keeps the selected destination when the game state reorders the places (HUB-011)", async () => {
+    for (const [arrows, selected, afterArrival, removedMap] of [
+      [0, "travel-recent-449", undefined, 449],
+      [2, "travel-recent-642", "travel-recent-642", 642],
+    ] as const) {
+      const { wrapper, state, travel } = fixture({ history: [449, 194, 642, 857] });
+      await flushPromises();
+      const search = wrapper.get('[role="combobox"]');
+      for (let move = 0; move < arrows; move++) await search.trigger("keydown", { key: "ArrowDown" });
+      expect(search.attributes("aria-activedescendant")).toBe(selected);
+      if (state.value.status !== "ready") throw new Error("Expected the outpost fixture");
+      state.value = { ...state.value, mapId: 449 };
+      await flushPromises();
+      expect(search.attributes("aria-activedescendant")).toBe(afterArrival);
+      state.value = { ...state.value, mapId: removedMap };
+      await flushPromises();
+      expect(search.attributes("aria-activedescendant")).toBeUndefined();
+      expect(wrapper.text()).toContain("That destination is no longer available.");
+      await search.trigger("keydown", { key: "Enter" });
+      expect(travel).not.toHaveBeenCalled();
+      wrapper.unmount();
+    }
+  });
+
+  it("puts an exact shortcut before Guild Hall, which leads only for its own words (HUB-066)", async () => {
+    const { wrapper } = fixture();
+    await flushPromises();
+    const search = wrapper.get('[role="combobox"]');
+    await search.setValue("ha");
+    expect(wrapper.findAll('[role="option"]')[0]?.attributes("id")).toBe("travel-map-330");
+    expect(search.attributes("aria-activedescendant")).toBe("travel-map-330");
+    await search.setValue("gh");
+    expect(wrapper.findAll('[role="option"]')[0]?.attributes("id")).toBe("travel-guild-hall");
     wrapper.unmount();
   });
 
@@ -667,6 +745,10 @@ describe("TravelPalette", () => {
         alias: "Romi", character: "Example Ranger" }],
     } });
     await flushPromises();
+    for (const query of ["omi", "ample", "rangre"]) {
+      await wrapper.get('[role="combobox"]').setValue(query);
+      expect(wrapper.find(".travel-player-icon").exists()).toBe(false);
+    }
     await wrapper.get('[role="combobox"]').setValue("rom ranger");
     expect(wrapper.text()).toContain("Romi");
     expect(wrapper.text()).toContain("Example Ranger");
@@ -826,18 +908,18 @@ describe("TravelPalette", () => {
       travelContext: "world",
       characterKey: travelCharacterKey("0123456789abcdef"),
       unlockedMapWords,
-      guildHall: false, hasGuildHall: false,
+      guildHall: false, hasGuildHall: false, explorable: false,
     };
     await flushPromises();
 
     await wrapper.get('[role="combobox"]').setValue("friend");
     const results = wrapper.findAll(".travel-result");
     expect(results).toHaveLength(3);
-    expect(results[0]!.text()).toContain("Unknown map (ID 9999)");
+    expect(results[0]!.text()).toContain("Unknown location");
     expect(results[0]!.text()).toContain("Unavailable for travel");
     expect(results[1]!.text()).toContain("Old Ascalon");
     expect(results[1]!.text()).toContain("Unavailable for travel");
-    expect(results[2]!.text()).toContain("Locked");
+    expect(results[2]!.text()).toContain("Not unlocked by this character");
     expect(results.every((result) => Object.hasOwn(result.attributes(), "disabled"))).toBe(true);
     expect(travel).not.toHaveBeenCalled();
     wrapper.unmount();
@@ -879,7 +961,32 @@ describe("TravelPalette", () => {
 
     await wrapper.get('[role="combobox"]').setValue("");
     await wrapper.get(".travel-palette").trigger("keydown", { key: "1", code: "Digit1" });
+    await flushPromises();
+    await wrapper.get('[role="combobox"]').trigger("keydown", { key: "Enter", code: "Enter" });
     expect(travel).toHaveBeenCalledWith(DEFAULT_TRAVEL_SHORTCUTS[0]);
     wrapper.unmount();
   });
+});
+
+
+it("conflicting stored global and Travel phrases require a destination choice and preserve both stores", async () => {
+  const settings = window.gwToolsSettings;
+  const global = [{id: "place:194", phrase: "home", pinned: true}];
+  window.gwToolsSettings = () => ({...DEFAULT_SETTINGS, hubShortcuts: global});
+  const {wrapper, travel, savePreferences} = fixture({synonyms: [{term: "home", mapId: 449}]});
+  try {
+    await flushPromises();
+    const search = wrapper.get('[role="combobox"]');
+    await search.setValue("home");
+    expect(wrapper.find("#travel-map-194").exists()).toBe(true);
+    expect(wrapper.find("#travel-map-449").exists()).toBe(true);
+    expect(search.attributes("aria-activedescendant")).toBeUndefined();
+    await search.trigger("keydown", {key: "Enter", code: "Enter"});
+    expect(travel).not.toHaveBeenCalled();
+    await search.trigger("keydown", {key: "ArrowDown", code: "ArrowDown"});
+    await search.trigger("keydown", {key: "Enter", code: "Enter"});
+    expect(travel).toHaveBeenCalledOnce();
+    expect(savePreferences).not.toHaveBeenCalled();
+    expect(window.gwToolsSettings?.().hubShortcuts).toEqual(global);
+  } finally {wrapper.unmount(); window.gwToolsSettings = settings;}
 });

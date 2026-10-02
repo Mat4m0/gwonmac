@@ -52,12 +52,13 @@ test.describe("renderer Travel input", () => {
             unlockedMapWords: Array.from({ length: 28 }, () => 0xffff_ffff),
             guildHall: false,
             hasGuildHall: false,
+            explorable: false,
           },
         });
         installation.poll();
       });
 
-      await expect(page.getByRole("dialog", { name: "Hub", exact: true })).toBeVisible();
+      await expect(page.getByRole("dialog", { name: /^Hub(?: — .+)?$/u })).toBeVisible();
     } finally {
       await closeOffline(fixture);
     }
@@ -87,10 +88,11 @@ test.describe("renderer Travel input", () => {
           unavailable: () => null,
         });
         palette.setEnabled(true);
+        window.addEventListener("test-travel-dispose", () => palette.dispose(), { once: true });
       });
 
       const canvas = page.locator("#canvas");
-      const palette = page.getByRole("dialog", { name: "Hub", exact: true });
+      const palette = page.getByRole("dialog", { name: /^Hub(?: — .+)?$/u });
       const search = page.getByRole("combobox", {
         name: "Destination, phrase, or friend",
       });
@@ -138,19 +140,18 @@ test.describe("renderer Travel input", () => {
       );
       await expect(search).toHaveAccessibleName("Destination, phrase, or friend");
       await expect(palette.locator(".travel-results")).toBeHidden();
-      await expect(palette.getByRole("heading", { name: "Favorites" })).toBeVisible();
+      await expect(palette.getByRole("heading", { name: "Favourites" })).toBeVisible();
       await expect(palette.locator(".travel-favorite-grid .travel-favorite")).toHaveCount(6);
 
-      // Every shortcut that shows a GWonMac interface is a toggle. A second
-      // Travel request closes the same palette and returns focus to the game.
+      // A direct shortcut keeps the current page open and restores its focus.
       await page.evaluate(() => {
         window.dispatchEvent(new CustomEvent("gw:travel-toggle", {
           cancelable: true,
           detail: {},
         }));
       });
-      await expect(palette).toBeHidden();
-      await expect.poll(() => isDomActiveElement(canvas)).toBe(true);
+      await expect(palette).toBeVisible();
+      await expect.poll(() => isDomActiveElement(search)).toBe(true);
       await page.evaluate(() => {
         window.dispatchEvent(new CustomEvent("gw:travel-toggle", {
           cancelable: true,
@@ -208,6 +209,12 @@ test.describe("renderer Travel input", () => {
       });
       await expect(page.locator("#stubborn-transient-dialog")).not.toHaveAttribute("open", "");
       await expect(palette).toBeVisible();
+
+      // A disposed owner must withdraw its mounted page while Hub keeps focus.
+      await page.evaluate(() => window.dispatchEvent(new Event("test-travel-dispose")));
+      await expect(search).toHaveCount(0);
+      await expect(palette).toBeVisible();
+      await expect(page.getByRole("combobox", { name: "Search people, places, builds" })).toBeFocused();
     } finally {
       await closeOffline(fixture);
     }

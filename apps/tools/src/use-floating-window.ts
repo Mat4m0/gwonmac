@@ -1,6 +1,7 @@
 /** Shared drag, resize, and viewport fitting for independent in-game windows. */
 import {
   computed,
+  nextTick,
   onBeforeUnmount,
   onMounted,
   ref,
@@ -48,6 +49,13 @@ export function useFloatingWindow(options: {
   const size = ref(restored
     ? { width: restored.width, height: restored.height }
     : null);
+  const minimum = { width: options.minWidth, height: options.minHeight };
+  /**
+   * Where the player last put the window, normalized to the viewport. A resize derives the box
+   * from it and only the player's own moves are saved, so a window that shrinks and grows back
+   * returns the panel to that place and size (HUB-109).
+   */
+  let intent: string | null = restored ? serialized : null;
   const panelStyle = computed(() => options.mode === "embedded"
     ? {
         left: `${position.value.left}px`,
@@ -58,8 +66,20 @@ export function useFloatingWindow(options: {
       }
     : undefined);
 
-  const fitToViewport = () => {
+  const fitToViewport = async () => {
     if (options.mode !== "embedded" || !panel.value) return;
+    const placed = restoreFloatingWindowPlacement(intent, viewport(), minimum);
+    if (placed) {
+      position.value = { left: placed.left, top: placed.top };
+      size.value = { width: placed.width, height: placed.height };
+      return;
+    }
+    // Never placed: the default position and natural size, squeezed only while the viewport is smaller.
+    if (size.value) {
+      size.value = null;
+      await nextTick();
+      if (!panel.value) return;
+    }
     const availableWidth = Math.max(0, window.innerWidth - margin * 2);
     const availableHeight = Math.max(0, window.innerHeight - margin * 2);
     const width = Math.min(panel.value.offsetWidth, availableWidth);
@@ -68,10 +88,12 @@ export function useFloatingWindow(options: {
       size.value = { width, height };
     }
     position.value = {
-      left: Math.max(margin, Math.min(window.innerWidth - width - margin, position.value.left)),
-      top: Math.max(margin, Math.min(window.innerHeight - height - margin, position.value.top)),
+      left: Math.max(margin, Math.min(window.innerWidth - width - margin, options.initialPosition.left)),
+      top: Math.max(margin, Math.min(window.innerHeight - height - margin, options.initialPosition.top)),
     };
   };
+
+  const fit = () => { void fitToViewport(); };
 
   const startDrag = (event: PointerEvent) => {
     if (event.button !== 0 || options.mode !== "embedded" || !panel.value) return;
@@ -97,6 +119,7 @@ export function useFloatingWindow(options: {
     };
     const finish = () => {
       delete element.dataset.dragging;
+      remember();
       handle.removeEventListener("pointermove", move);
       handle.removeEventListener("pointerup", finish);
       handle.removeEventListener("pointercancel", finish);
@@ -111,15 +134,9 @@ export function useFloatingWindow(options: {
   let disposeResize: (() => void) | null = null;
   let persistTimer: ReturnType<typeof setTimeout> | null = null;
   const persistPlacement = () => {
-    if (!storageKey || !panel.value) return;
-    const value = serializeFloatingWindowPlacement({
-      ...position.value,
-      width: size.value?.width ?? panel.value.offsetWidth,
-      height: size.value?.height ?? panel.value.offsetHeight,
-    }, viewport());
-    if (value === null) return;
+    if (!storageKey || intent === null) return;
     try {
-      window.localStorage.setItem(storageKey, value);
+      window.localStorage.setItem(storageKey, intent);
     } catch {
       // A UI preference must not make the surface unusable when storage fails.
     }
@@ -131,14 +148,20 @@ export function useFloatingWindow(options: {
       persistPlacement();
     }, 150);
   };
-  if (storageKey) {
-    watch(position, schedulePersistence);
-    watch(size, schedulePersistence);
+  /** The player moved or resized the window: that box is the placement to keep. */
+  function remember() {
+    if (!panel.value) return;
+    intent = serializeFloatingWindowPlacement({
+      ...position.value,
+      width: size.value?.width ?? panel.value.offsetWidth,
+      height: size.value?.height ?? panel.value.offsetHeight,
+    }, viewport()) ?? intent;
+    if (storageKey) schedulePersistence();
   }
   onMounted(() => {
-    window.addEventListener("resize", fitToViewport);
+    window.addEventListener("resize", fit);
     if (storageKey) window.addEventListener("pagehide", persistPlacement);
-    requestAnimationFrame(fitToViewport);
+    requestAnimationFrame(fit);
     if (options.mode !== "embedded" || !panel.value || !resizeGrip.value) return;
     disposeResize = installResizeGrip(resizeGrip.value, {
       size: () => {
@@ -151,7 +174,7 @@ export function useFloatingWindow(options: {
         maxWidth: window.innerWidth - position.value.left - margin,
         maxHeight: window.innerHeight - position.value.top - margin,
       }),
-      resize: (width, height) => { size.value = { width, height }; },
+      resize: (width, height) => { size.value = { width, height }; remember(); },
       setActive: (active) => {
         if (!panel.value) return;
         if (active) panel.value.dataset.resizing = "";
@@ -160,7 +183,7 @@ export function useFloatingWindow(options: {
     });
   });
   onBeforeUnmount(() => {
-    window.removeEventListener("resize", fitToViewport);
+    window.removeEventListener("resize", fit);
     if (storageKey) {
       window.removeEventListener("pagehide", persistPlacement);
       if (persistTimer) clearTimeout(persistTimer);
@@ -169,7 +192,7 @@ export function useFloatingWindow(options: {
     disposeResize?.();
   });
   watch(options.visible, (visible) => {
-    if (visible) requestAnimationFrame(fitToViewport);
+    if (visible) requestAnimationFrame(fit);
   });
 
   return { panel, resizeGrip, panelStyle, startDrag, fitToViewport };

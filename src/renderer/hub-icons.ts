@@ -14,22 +14,28 @@ const paths = {
   whispers: '<path d="M20 4H4v12h4l4 4v-4h8V4ZM8 8h8M8 12h5"/>',
   storage: '<path d="M3 10h18v11H3V10Zm0 0V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v3M8 3v7M16 3v7M10 10v5h4v-5"/>',
   maps: '<path d="m3 5 6-2 6 2 6-2v16l-6 2-6-2-6 2V5ZM9 3v16M15 5v16"/>',
+  game: '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>',
   settings: '<path d="M4 7h16M4 17h16"/><circle cx="8" cy="7" r="3"/><circle cx="16" cy="17" r="3"/>',
   help: '<circle cx="12" cy="12" r="9"/><path d="M9 9a3 3 0 0 1 6 0c0 2-3 2-3 5M12 17h.01"/>',
   target: '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/>',
   appearance: '<circle cx="12" cy="12" r="9"/><path d="M12 3v18a9 9 0 0 0 0-18Z" fill="currentColor"/>',
   keyboard: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 9h1m3 0h1m3 0h1m3 0h1M6 13h1m3 0h1m3 0h1m3 0h1M7 16h10"/>',
-  command: '<path d="m8 5 7 7-7 7"/>',
+  character: '<circle cx="8" cy="7" r="3"/><path d="M2 20v-2a6 6 0 0 1 12 0M16 7h6m-3-3 3 3-3 3"/>',
+  accounts: '<rect x="3" y="3" width="14" height="18" rx="2"/><path d="M7 7h6M7 11h6M14 16h8m-3-3 3 3-3 3"/>',
+  invite: '<circle cx="8" cy="7" r="3"/><path d="M2 21v-3a6 6 0 0 1 12 0M18 7v8m-4-4h8"/>',
+  command: '<path d="m9 5-6 7 6 7M13 19h8"/>',
+  resign: '<path d="M6 21V4M6 4h11l-2.5 4 2.5 4H6"/>',
 };
 export function hubIcon(document: Document, row: Pick<HubRow, 'id' | 'group' | 'icon'>): HTMLElement {
   const icon = document.createElement('span'); icon.className = 'hub-icon'; icon.setAttribute('aria-hidden', 'true');
   if (row.icon) { const image = document.createElement('img'); image.src = row.icon; image.alt = ''; icon.append(image); return icon; }
   const id = row.id.split(':')[0];
-  const kind = id === 'folder' || id === 'game-templates' ? 'folder' : row.group === 'Teams' || id === 'team' ? 'team'
+  const action = row.id.split(':').at(-1);
+  const kind = id === 'character' ? 'character' : id === 'accounts' || id === 'account' ? 'accounts' : action === 'whisper' ? 'whispers' : action === 'invite' ? 'invite' : action === 'travel' ? 'travel' : id === 'folder' || id === 'game-templates' ? 'folder' : row.group === 'Teams' || id === 'team' ? 'team'
     : row.group === 'Builds' || id === 'build' || id === 'builds' ? 'builds'
     : row.group === 'Places' || id === 'place' || id === 'travel' ? 'travel'
     : row.group === 'Accounts' || id === 'accounts' || row.group === 'People' || row.group === 'Heroes' || row.group === 'Characters' || id === 'character' ? 'person'
-    : id === 'hub-preferences' ? 'settings' : id === 'call-target' ? 'target'
+    : id === 'hub-preferences' ? 'settings'
     : id && id in paths ? id as keyof typeof paths : 'command';
   icon.dataset.kind = kind;
   icon.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${paths[kind]}</svg>`;

@@ -2,9 +2,8 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   characterCarouselRows,
-  moveCharacterSelection,
   numberedCharacterPosition,
-  orderCharacters,
+  characterRows,
   searchCharacters,
 } from "../../src/renderer/character-switch-palette.js";
 import type { CharacterSummary } from "../../src/renderer/companion-character-list-snapshot.js";
@@ -32,30 +31,22 @@ describe("character switch ordering", () => {
     character("Beta", 4),
   ]);
 
-  it("sorts alphabetically without losing live indices", () => {
+  it("keeps the observed character order without losing live indices", () => {
     assert.deepEqual(
-      orderCharacters(characters).map(({ character: row, index }) => [row.name, index]),
-      [["alpha", 1], ["Beta", 2], ["Zed", 0]],
+      characterRows(characters).map(({ character: row, index }) => [row.name, index]),
+      [["Zed", 0], ["alpha", 1], ["Beta", 2]],
     );
   });
 
-  it("maps 1–9 plus 0 for row ten and wraps arrow navigation", () => {
+  it("maps 1–9 plus 0 for row ten", () => {
     assert.equal(numberedCharacterPosition("1", 4), 0);
     assert.equal(numberedCharacterPosition("4", 4), 3);
     assert.equal(numberedCharacterPosition("5", 4), null);
     assert.equal(numberedCharacterPosition("0", 9), null);
     assert.equal(numberedCharacterPosition("0", 10), 9);
-    assert.equal(moveCharacterSelection(0, 4, -1), 3);
-    assert.equal(moveCharacterSelection(0, 4, 1), 1);
-    assert.equal(moveCharacterSelection(3, 4, 1), 0);
-    assert.equal(moveCharacterSelection(0, 4, 1, 1), 2);
-    assert.equal(moveCharacterSelection(2, 4, -1, 1), 0);
-    assert.equal(moveCharacterSelection(3, 4, 1, 0), 1);
-    assert.equal(moveCharacterSelection(0, 4, -1, 3), 2);
-    assert.equal(moveCharacterSelection(0, 1, 1, 0), 0);
   });
 
-  it("shows finite carousel ends before navigation wraps", () => {
+  it("shows finite carousel ends", () => {
     assert.deepEqual(characterCarouselRows(0, 20), [0, 1, 2, 3, 4, 5, 6]);
     assert.deepEqual(characterCarouselRows(10, 20), [7, 8, 9, 10, 11, 12, 13]);
     assert.deepEqual(characterCarouselRows(19, 20), [13, 14, 15, 16, 17, 18, 19]);
@@ -68,12 +59,12 @@ describe("character switch ordering", () => {
     assert.deepEqual(characterCarouselRows(0, 1), [0, null, null, null, null, null, null]);
   });
 
-  it("searches all 27 characters without changing their alphabetical order", () => {
+  it("searches all 27 characters without changing their observed order", () => {
     const account = Object.freeze(Array.from({ length: 27 }, (_, index) => Object.freeze({
       ...character(index === 26 ? "Rudolph Prime" : `Character ${String(index + 1).padStart(2, "0")}`),
       characterKey: (index + 1).toString(16).padStart(16, "0"),
     })));
-    const ordered = orderCharacters(account);
+    const ordered = characterRows(account);
     assert.equal(ordered.slice(0, 10).length, 10);
     assert.deepEqual(
       searchCharacters(ordered, "rud").map(({ character: row }) => row.name),
@@ -89,19 +80,19 @@ describe("character switch ordering", () => {
         ...character(`Character ${String(index + 1).padStart(2, "0")}`),
         characterKey: (index + 1).toString(16).padStart(16, "0"),
       })));
-      const ordered = orderCharacters(account);
+      const ordered = characterRows(account);
       assert.equal(searchCharacters(ordered, "").length, size);
       assert.equal(searchCharacters(ordered, "Character").length, size);
     }
   });
 
-  it("matches reordered prefixes without accent guessing while preserving alphabetical order", () => {
+  it("matches reordered prefixes without accent guessing while preserving observed order", () => {
     const account = Object.freeze([
       character("Á Candy Cane Shard", 2),
       character("Dhuum Survivor", 3),
       character("Eternal Foo", 4),
     ]);
-    const ordered = orderCharacters(account);
+    const ordered = characterRows(account);
     assert.deepEqual(
       searchCharacters(ordered, "shard candy").map(({ character: row }) => row.name),
       ["Á Candy Cane Shard"],
@@ -113,7 +104,7 @@ describe("character switch ordering", () => {
   });
 
   it("matches primary profession prefixes without searching secondaries", () => {
-    const ordered = orderCharacters(Object.freeze([
+    const ordered = characterRows(Object.freeze([
       character("Alpha", 6),
       character("Helen", 1),
       character("Gamma", 1, 6),

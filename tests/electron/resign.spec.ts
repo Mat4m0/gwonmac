@@ -56,7 +56,7 @@ test("Resign uses the shared modal and submits only on Enter or its button", asy
     await expect(confirm).toBeFocused();
     await press();
     await expect(modal).toBeVisible();
-    await modal.getByText("Resigning can end your current attempt.").click();
+    await modal.getByText("Sends /resign to your party.", {exact: false}).click();
     await confirm.focus();
     await page.keyboard.press("Space");
     await page.keyboard.press("Shift+Enter");
@@ -80,11 +80,16 @@ test("Resign uses the shared modal and submits only on Enter or its button", asy
     await cancelled();
     await press();
     await expect(modal).toBeVisible();
+    // Enter confirms once the dialog has armed; an Enter right after it opened does not.
+    await page.keyboard.press("Enter");
+    await expect(page.locator("body")).toHaveAttribute("data-resign-count", "0");
+    await expect(confirm).toHaveAttribute("data-armed", "");
     await page.screenshot({ path: test.info().outputPath("resign-dialog.png") });
     await page.keyboard.press("Enter");
     await expect(modal).not.toBeVisible();
     await expect(page.locator("body")).toHaveAttribute("data-resign-count", "1");
     await press();
+    await expect(confirm).toHaveAttribute("data-armed", "");
     await confirm.click();
     await expect(modal).not.toBeVisible();
     await expect(page.locator("body")).toHaveAttribute("data-resign-count", "2");

@@ -2,12 +2,17 @@
  * Owns lazy optional Travel presentation inside the Core Hub surface.
  * The existing Travel host remains the command and preference owner.
  */
+import { TOOL_PRESENTATION } from '../shared/tool-presentation.js';
 import { currentTravelFriend, type TravelFriend, type TravelFriends } from '../shared/friends.js';
 import type { TravelCommand, TravelGameState } from '../shared/travel-command.js';
 import type { EmbeddedToolsBundle } from '../shared/tools-bundle-contracts.js';
-import { matchHubRows, type HubSource } from '../shared/hub.js';
+import { matchHubRows, type HubRow, type HubSource, type HubViewMount } from '../shared/hub.js';
 import { ensureToolsStylesheet } from './tools-stylesheet.js';
+import { askLeaveArea, leaveAreaCopy } from './leave-area.js';
 import { requireToolsApi } from './tools-native-api.js';
+
+/** The Travel tool is switched on; a map load, character select or PvP only makes it unavailable for now. */
+const toolOn = () => !!window.gwToolsSettings?.().gwonmacTools && !!window.gwToolsSettings?.().travelPalette;
 
 export function createTravelPalette(parent: HTMLElement, command: TravelCommand) {
   const installed = window.gwHub;
@@ -32,7 +37,8 @@ export function createTravelPalette(parent: HTMLElement, command: TravelCommand)
       const specifier = './tools/tools-app.js';
       const bundle: EmbeddedToolsBundle<HTMLElement> = await import(specifier);
       if (disposed) return;
-      app = bundle.createHubTravel({ nativeApi: native, command, development: window.gwNative.init.development, hub });
+      app = bundle.createHubTravel({ nativeApi: native, command, development: window.gwNative.init.development, hub,
+        leaveArea: (place, leave) => askLeaveArea(hub, leaveAreaCopy('travel', place), leave) });
       app.update(state); app.updateFriends(friends);
       unsubscribe = app.source.subscribe(refresh);
       app.source.setVisible(enabled && hub.visible); refresh();
@@ -40,23 +46,45 @@ export function createTravelPalette(parent: HTMLElement, command: TravelCommand)
     await loading;
     return app;
   }
-  async function open() {
-    if (app) { app.open(); return; }
-    let active = true;
-    hub.showView('Travel', target => {
-      const message = target.ownerDocument.createElement('p');
-      message.className = 'hub-empty'; message.textContent = 'Loading Travel…';
-      target.append(message);
-      return () => { active = false; message.remove(); };
-    });
-    try {
-      const loaded = await load();
-      if (active && !disposed && enabled) loaded?.open();
-    } catch (error) { if (active) throw error; }
+  /**
+   * The Travel page. Before the lazy bundle has loaded, the page shows its loading line and the
+   * loaded view mounts into that same page, so the first ⌘T or `/tp` never leaves a placeholder
+   * parent behind (HUB-018).
+   */
+  function open() {
+    /** This page's Travel content, created once so Back restores its state. */
+    let page: HubViewMount<HTMLElement> | null = null;
+    hub.showView('Travel', (target, back, footer) => {
+      if (app) return (page ??= app.page())(target, back, footer);
+      let active = true;
+      let unmount = () => {};
+      const doc = target.ownerDocument;
+      const message = doc.createElement('p'); message.className = 'hub-empty'; message.setAttribute('role', 'status');
+      const retry = doc.createElement('button'); retry.type = 'button'; retry.className = 'ui-button'; retry.textContent = 'Try again'; retry.hidden = true;
+      target.append(message, retry);
+      const attempt = () => {
+        message.textContent = 'Loading Travel…'; retry.hidden = true;
+        load().then(loaded => {
+          if (!active || !loaded || !enabled) return;
+          message.remove(); retry.remove(); unmount = (page ??= loaded.page())(target, back, footer);
+          // The keyboard that waited on the loading page moves to Travel's search.
+          if (!target.contains(doc.activeElement)) target.querySelector<HTMLElement>('input[role=combobox]')?.focus();
+        }).catch(() => {
+          if (!active) return;
+          message.textContent = 'Travel could not load. Your Travel preferences are unchanged.'; retry.hidden = false; retry.focus();
+        });
+      };
+      retry.onclick = attempt; attempt();
+      return () => { active = false; message.remove(); retry.remove(); unmount(); };
+    }, () => !disposed && toolOn(), 'travel');
   }
+  /** Travel's row until the lazy bundle loads; a pin shows the same row search shows (HUB-177). */
+  const toolRow = (): HubRow => { const unavailable = command.unavailable(); return ({ ...(unavailable ? { unavailable } : {}), id: 'travel', title: TOOL_PRESENTATION['quick-travel'].label, detail: 'Outposts, favourites and recent places', group: 'Tools', keywords: 'tp teleport destination', action: 'Browse travel', navigate: open, run: open }); };
   const source: HubSource = {
     feature: 'travelPalette',
-    lookup: id => app?.source.lookup?.(id),
+    lookup: id => app ? app.source.lookup?.(id) : id === 'travel' ? toolRow() : undefined,
+    context: () => app?.source.context?.() ?? null,
+    lifecycle: () => app?.source.lifecycle?.() ?? null,
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
     setVisible(visible) {
       if (!visible) visibilityGeneration++;
@@ -64,20 +92,24 @@ export function createTravelPalette(parent: HTMLElement, command: TravelCommand)
       if (visible) void load().catch(() => { /* The explicit Travel action offers a retry. */ });
     },
     search(query) {
-      return app?.source.search(query) ?? matchHubRows([{ id: 'travel', title: 'Travel', detail: 'Outposts, favourites and recent places', group: 'Tools', keywords: 'tp teleport destination', action: 'Browse travel', navigate: open, run: open }], query);
+      return app?.source.search(query) ?? matchHubRows([toolRow()], query);
     },
   };
   const onCommand = (event: Event) => {
     if (!enabled) return;
     event.preventDefault();
-    if (app?.active && (!(event instanceof CustomEvent) || event.detail !== 'show')) { hub.close(); return; }
-    void open().catch(() => hub.showRows('Travel could not load', () => [{ id: 'retry-travel', title: 'Try again', detail: 'Your Travel preferences are unchanged', group: 'Travel', action: 'Retry', run: open }]));
+    hub.direct('travel', open);
   };
   window.addEventListener('gw:travel-toggle', onCommand);
+  // Attached for the palette's whole life: a map load, character select or PvP only makes its
+  // rows unavailable, with the command's reason, so the open page and the Home query survive
+  // (HUB-051, HUB-135). Disposal withdraws it; the Travel setting hides it.
+  detach = hub.attach(source);
   return {
     observingFriends: () => enabled && hub.visible,
     async travelToFriend(friend: TravelFriend, generation: number) {
-      if (!enabled) throw new Error('Travel is turned off');
+      const reason = command.unavailable();
+      if (reason) throw new Error(reason);
       const intent = visibilityGeneration;
       await load();
       if (intent !== visibilityGeneration) throw new Error('Travel cancelled');
@@ -88,16 +120,16 @@ export function createTravelPalette(parent: HTMLElement, command: TravelCommand)
       }
       await app.travel(current.mapId);
     },
+    /** Whether Travel can act now; the rows follow the command's reason. */
     setEnabled(next: boolean) {
       if (enabled === next) return;
       enabled = next;
-      if (next) detach = hub.attach(source);
-      else { detach?.(); detach = null; }
+      refresh();
     },
     updateFriends(next: TravelFriends) { friends = next; app?.updateFriends(next); },
     update(next: TravelGameState) { state = next; app?.update(next); },
     dispose() {
-      disposed = true; detach?.(); unsubscribe(); app?.dispose(); listeners.clear();
+      disposed = true; app?.dispose(); detach?.(); unsubscribe(); listeners.clear();
       window.removeEventListener('gw:travel-toggle', onCommand);
     },
   };

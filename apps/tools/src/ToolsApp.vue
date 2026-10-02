@@ -49,6 +49,10 @@ const emit = defineEmits<{
   ready: [];
 }>();
 
+// The Hub needs the controller immediately; its editor DOM is needed only after first open.
+// Keep it mounted thereafter so hiding a window never discards an unsaved draft.
+const workspaceMounted = ref(props.visible);
+watch(() => props.visible, visible => { if (visible) workspaceMounted.value = true; });
 const controller = useLibrary(props.host);
 const hubLibrary = props.hub ? createHubLibrary(controller, props.host, props.hub, build => {
   window.dispatchEvent(new CustomEvent('gw:tools-toggle', { detail: 'workspace', cancelable: true }));
@@ -226,15 +230,16 @@ const startBlankBuild = async () => {
   mobileView.value = "detail";
 };
 
+const isEditable = (target: EventTarget | null) =>
+  target instanceof HTMLInputElement
+  || target instanceof HTMLTextAreaElement
+  || target instanceof HTMLSelectElement
+  || (target instanceof HTMLElement && target.isContentEditable);
+
 const onKeydown = (event: KeyboardEvent) => {
   if (!props.visible || !props.active) return;
-  const editable =
-    event.target instanceof HTMLInputElement
-    || event.target instanceof HTMLTextAreaElement
-    || event.target instanceof HTMLSelectElement
-    || (event.target instanceof HTMLElement && event.target.isContentEditable);
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {
-    if (editable) return;
+    if (isEditable(event.target)) return;
     event.preventDefault();
     void controller.undo();
   }
@@ -248,11 +253,24 @@ const onKeydown = (event: KeyboardEvent) => {
   }
 };
 
+/**
+ * In the app, main claims Command-Z before the page sees it and sends the Edit
+ * menu's Undo instead (`gw:text-edit`); a field keeps Chromium's own undo.
+ */
+const onTextEdit = (event: Event) => {
+  if (!props.visible || !props.active || !(event instanceof CustomEvent)) return;
+  if (event.detail?.command !== "undo" || isEditable(document.activeElement)) return;
+  event.preventDefault();
+  void controller.undo();
+};
+
 onMounted(() => {
   window.addEventListener("keydown", onKeydown);
+  window.addEventListener("gw:text-edit", onTextEdit);
 });
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKeydown);
+  window.removeEventListener("gw:text-edit", onTextEdit);
 });
 useClassicFrame(panel);
 </script>
@@ -271,6 +289,7 @@ useClassicFrame(panel);
       aria-label="Build Library"
       role="dialog"
     >
+      <template v-if="workspaceMounted">
       <header class="ui-panel-head ui-window-head window-bar" @pointerdown="startDrag">
         <div class="window-brand" aria-hidden="true">GW</div>
         <div class="window-identity">
@@ -692,6 +711,7 @@ useClassicFrame(panel);
           </footer>
         </form>
       </UiDialog>
+      </template>
       <button
         v-if="mode === 'embedded'"
         type="button"

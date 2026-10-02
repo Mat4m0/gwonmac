@@ -22,16 +22,20 @@ available in PvE while Tools is enabled. `pnpm tools:dev` with `?whispers` opens
 the same Vue surface with local scenario controls; those controls never send
 game messages.
 
-The default **Command-D** shortcut opens Whispers inside Hub. Existing custom
-bindings and cleared shortcuts are preserved. Person search, the shortcut and the
-unread launcher use the same mounted Vue conversation component. Hub reuses the
-session and transcript owner; there is no separate quick-whisper composer.
+The default **Command-D** shortcut opens the floating Whispers surface. Existing
+custom bindings and cleared shortcuts are preserved. Person search, the shortcut
+and the unread launcher use the same mounted Vue conversation component.
+Opening it from Hub suspends the Hub page. Returning to Hub resumes that page.
+The session and transcript have one owner; there is no separate quick composer.
 
-In Hub, the people picker supports Up/Down and Enter/Right. Escape or Left at the
-start of the composer returns to people without discarding the draft. Normal text
-editing and outgoing-message history remain available. Chat options retain mute,
-sound and guarded conversation closing. Hub owns the window geometry and background;
-the standalone fixture retains floating-window placement and opacity controls.
+In Hub, the people picker uses the shared list keys. Enter opens the named primary;
+Right opens the person page. Root Actions reuses that person's named actions.
+Game actions require explicit selection when no whisper action is available.
+Unavailable chat keeps a disabled result with its waiting reason.
+
+The Whispers surface retains its saved geometry. Its single **Hide Whispers**
+control preserves conversations and drafts. Its resize grip stays outside normal
+Tab navigation. Chat options retain mute, sound and guarded conversation closing.
 
 ## Acceptance criteria
 
@@ -89,9 +93,10 @@ Wars reports acceptance or refusal in original chat.
 
 `party-invite.ts` allows an invite only in a PvE outpost with the chat mailbox
 enabled. A friend in another map cannot receive it, so the row says where the
-friend is before Enter. It points to Travel and invite only when the friend is
-in a PvE travel destination; an explorable area or PvP outpost gets no pointer
-to a row that cannot start. Travel and invite
+friend is before Enter. The caller decides whether it points to Travel and
+invite: `hub-people.ts` adds the pointer only where it shows that row and the
+row can start, so a hidden Travel palette, an unavailable Travel, an
+explorable area or a PvP outpost gets no pointer. Travel and invite
 refuses a known PvP outpost up front. It captures the character, starts the
 existing friend Travel, and invites once after a ready PvE outpost of the
 friend's map stays ready for two seconds. The first outpost after login can
@@ -106,6 +111,13 @@ invite; a non-PvE arrival withdraws it at once. Disposing Tools withdraws a
 pending arrival. The friend feed has no district, so an arrival in another
 district can fail in Guild Wars.
 
+While Travel and invite waits, Home names the pending friend and destination.
+The player can cancel the pending invite. Cancellation prevents the later invite,
+including after the arrival timer settles. It does not undo an accepted Travel.
+
+`invite ` with an empty name lists the online friends, those invitable from
+here first. No name was typed, so none is preselected and Enter alone sends
+nothing; a row the player chooses invites by character name.
 In the `invite` scope only an exact name invites: the exact typed name or an
 exact known person comes first, and the footer names the target, such as
 **Invite Mo Kai**. A prefix or "Seen in chat" match opens the person page.
@@ -113,7 +125,9 @@ Every Guild Wars character name has at least two words, so a typed single word
 never invites: it stays after known people and reads "Type the full character
 name".
 Receipts claim only the sent command: "Sent /invite Mo Kai. Guild Wars answers
-in chat."
+in chat." A refusal names the command it stopped, "/invite Mo Kai was not
+sent. Guild Wars chat is not ready.", so it still reads right when it arrives
+after Hub moved on or closed.
 
 ## Reuse and evidence
 
@@ -138,7 +152,12 @@ encoder; integration tests cover echo confirmation and clearing the draft.
 
 Incoming bubbles align left; replies align right. Both use bright text and follow the selected Tools
 UI theme and wrap long text. The header names the person; each message retains
-an accessible author label. Back opens the people list. Sound and cleanup are
+an accessible author label. Back opens the people list. Its search is a
+combobox over a listbox of the listed people (or the suggestions while typing):
+Up and Down move the selected option and Enter opens it. Feed updates keep the
+selected person by canonical name. Returning to the picker clears that selection.
+The listbox owns person options; headings and cleanup buttons stay outside it.
+Sound and cleanup are
 in the options menu. A local Background slider reduces only this messenger's
 broad panel and transcript paint to 15% of the selected global panel opacity;
 text and controls stay legible. The options menu uses an opaque theme surface,

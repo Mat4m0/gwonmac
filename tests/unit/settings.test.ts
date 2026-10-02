@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -45,6 +45,7 @@ describe("settings", () => {
       uiFont: "guild-wars",
       controllerPromptStyle: "game-default",
       uiPanelOpacity: 94,
+      uiTextSize: 100,
       cartographyEnabled: true,
       characterSwitchEnabled: true,
       resignEnabled: false,
@@ -71,6 +72,7 @@ describe("settings", () => {
       eliteSkillsEnabled: true,
       eliteMissionMapMarkers: "saved",
       hubShortcuts: [],
+      calculatorRates: { mode: 'automatic', ecto: '', armbrace: '', zkey: '' },
       gwonmacTools: false,
       buildLibrary: true,
       tradeChat: true,
@@ -172,6 +174,7 @@ describe("settings", () => {
     assert.equal("nativeCursor" in got, false);
     assert.deepEqual(got, {
       uiPanelOpacity: 94,
+      uiTextSize: 100,
       renderScale: 1,
       uiStyle: "guild-wars",
       uiCustomTheme: DEFAULT_CUSTOM_UI_THEME,
@@ -203,6 +206,7 @@ describe("settings", () => {
       eliteSkillsEnabled: true,
       eliteMissionMapMarkers: "saved",
       hubShortcuts: [],
+      calculatorRates: { mode: 'automatic', ecto: '', armbrace: '', zkey: '' },
       gwonmacTools: false,
       buildLibrary: true,
       tradeChat: true,
@@ -379,6 +383,8 @@ describe("settings", () => {
     // readable over moving art.
     assert.throws(() => parseSettings({ uiPanelOpacity: 64 }), AppError);
     assert.throws(() => parseSettings({ uiPanelOpacity: 94.5 }), AppError);
+    for (const uiTextSize of [99, 201, 100.5, "200"]) assert.throws(() => parseSettings({ uiTextSize }), AppError);
+    assert.equal(parseSettings({ uiTextSize: 200 }).uiTextSize, 200);
     assert.equal("uiTheme" in parseSettings({ uiTheme: "jade" }), false);
     assert.equal("uiDensity" in parseSettings({ uiDensity: "compact" }), false);
     assert.equal("uiBorderWidth" in parseSettings({ uiBorderWidth: 4 }), false);
@@ -609,6 +615,7 @@ describe("settings", () => {
       autoRelogAfterReload: true,
       renderScale: 1.5,
       hubShortcuts: [],
+      calculatorRates: { mode: 'automatic', ecto: '', armbrace: '', zkey: '' },
       gwonmacTools: false,
       xunlaiStorage: false,
       travelPalette: false,
@@ -625,6 +632,7 @@ describe("settings", () => {
       "autoCheckUpdates",
       "autoRelogAfterReload",
       "buildLibrary",
+      "calculatorRates",
       "callTargetEnabled",
       "cartographyCompassGridEnabled",
       "cartographyControlIdleOpacity",
@@ -683,6 +691,7 @@ describe("settings", () => {
       "uiFont",
       "uiPanelOpacity",
       "uiStyle",
+      "uiTextSize",
       "updateTrack",
       "whispersEnabled",
       "xunlaiStorage",
@@ -735,6 +744,7 @@ describe("settings", () => {
     const alpha = {
       renderScale: 1.5,
       hubShortcuts: [],
+      calculatorRates: { mode: 'automatic', ecto: '', armbrace: '', zkey: '' },
       gwonmacTools: false,
       teamManagement: true,
       xunlaiStorage: false,
@@ -754,6 +764,7 @@ describe("settings", () => {
     assert.equal("teamManagement" in loaded, false);
     assert.deepEqual(loaded, {
       uiPanelOpacity: 94,
+      uiTextSize: 100,
       renderScale: 1.5,
       uiStyle: "guild-wars",
       uiCustomTheme: DEFAULT_CUSTOM_UI_THEME,
@@ -785,6 +796,7 @@ describe("settings", () => {
       eliteSkillsEnabled: true,
       eliteMissionMapMarkers: "saved",
       hubShortcuts: [],
+      calculatorRates: { mode: 'automatic', ecto: '', armbrace: '', zkey: '' },
       gwonmacTools: false,
       buildLibrary: true,
       tradeChat: true,
@@ -927,4 +939,23 @@ describe("memory warning position", () => {
       assert.throws(() => parseSettingsPatch({ memoryWarningPosition: value }), AppError);
     }
   });
+});
+
+it('saves calculator estimates through real settings without changing unrelated player preferences', async context => {
+  const directory = await mkdtemp(join(tmpdir(), 'gwonmac-calculator-rates-'));
+  context.after(() => rm(directory, { recursive: true, force: true }));
+  const path = join(directory, 'settings.json');
+  const initial = { ...DEFAULT_SETTINGS, renderScale: 1 as const, hubShortcuts: [{ id: 'travel', phrase: 'go places', pinned: true }] };
+  await saveSettings(path, initial);
+  const patch = parseRendererSettingsPatch({ calculatorRates: { mode: 'manual', ecto: '5k', armbrace: '30', zkey: '.5' } });
+  await saveSettings(path, { ...(await loadSettings(path)), ...patch });
+  const reloaded = await loadSettings(path);
+  assert.deepEqual(reloaded.calculatorRates, { mode: 'manual', ecto: '5000', armbrace: '30', zkey: '0.5' });
+  assert.deepEqual(reloaded.hubShortcuts, [{ id: 'travel', phrase: 'go places', pinned: true }]);
+  assert.equal(reloaded.renderScale, 1);
+  for (const rates of [
+    { mode: 'manual', ecto: '-1', armbrace: '', zkey: '' },
+    { mode: 'remote', ecto: '', armbrace: '', zkey: '' },
+    { mode: 'manual', ecto: '', armbrace: '', zkey: '', extra: true },
+  ]) assert.throws(() => parseRendererSettingsPatch({ calculatorRates: rates }), /calculatorRates/);
 });

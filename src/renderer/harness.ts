@@ -456,6 +456,7 @@ function requestHeapCap() {
               throw error;
             }
           },
+          openSettings: (focus) => window.gwHub?.openSettings(focus),
         },
       );
       disposeMemoryWarningSettings();
@@ -552,6 +553,7 @@ const emptySkillKeyBindings:
     [null, null, null, null, null, null, null, null];
 window.gwToolsSettings = () => Object.freeze({
   hubShortcuts: appSettings?.hubShortcuts ?? [],
+  ...(appSettings?{calculatorRates:appSettings.calculatorRates}:{}),
   shortcutOverrides: appSettings?.shortcutOverrides ?? {},
   gwonmacTools: appSettings?.gwonmacTools ?? false,
   buildLibrary: appSettings?.buildLibrary ?? true,
@@ -1404,7 +1406,9 @@ function loadGlue(isProxyRouteLabel: (route: string) => boolean) {
     // Dialogs belong to the application shell and must work before a game
     // artifact is available. Installing their owner here also still precedes
     // the official client's input hooks when a verified client does load.
-    window.gwSurfaces = host.installSurfaceController(document);
+    window.gwSurfaces = host.installSurfaceController(document, {
+      doubleClickMs: window.gwNative.init.doubleClickMs,
+    });
     window.gwHub = (await import('./hub.js')).createHub(document.body);
     window.dispatchEvent(new Event('gw:surfaces-ready'));
     installCharacterSwitchHost = characterSwitch.installCharacterSwitchHost;

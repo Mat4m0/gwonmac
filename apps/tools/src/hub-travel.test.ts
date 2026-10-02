@@ -5,18 +5,123 @@ import { createDemoTravelHost } from './travel-host';
 describe('Hub travel recents', () => {
   it('shows actionable recents and keeps unavailable places in explicit search', () => {
     const host = createDemoTravelHost();
-    const hub = { showView: vi.fn(), showRows: vi.fn(), attach: vi.fn(), close: vi.fn() };
-    const travel = createHubTravel(host, hub);
+    const hub = { showView: vi.fn(), showRows: vi.fn(), attach: vi.fn(), close: vi.fn(), notify: vi.fn() };
+    const travel = createHubTravel(host, hub, async (_place, leave) => leave());
     try {
       const state = host.state.value;
       if (state.status !== 'ready') throw new Error('Expected outpost fixture');
       host.state.value = { ...state, mapId: 449 };
       expect(travel.source.search('').filter(row => row.group === 'Continue')).toHaveLength(3);
       expect(travel.source.search('').some(row => row.id === 'place:449')).toBe(false);
-      expect(travel.source.search('kamadan').find(row => row.id === 'place:449')?.unavailable).toBe('Current location');
+      expect(travel.source.search('kamadan').find(row => row.id === 'place:449')?.unavailable).toBe('You are already in Kamadan, Jewel of Istan');
       host.state.value = { ...state, unlockedMapWords: Array.from({ length: 28 }, () => 0) };
       expect(travel.source.search('').filter(row => row.group === 'Continue')).toHaveLength(0);
       expect(travel.source.search('kamadan').find(row => row.id === 'place:449')?.unavailable).toBe('Not unlocked by this character');
     } finally { travel.dispose(); }
   });
+
+  it('ranks official aliases and saved Travel phrases before limiting Home places', async () => {
+    const host = createDemoTravelHost();
+    await host.savePreferences({ synonyms: [{ term: 'fort', mapId: 857 }] });
+    const hub = { showView: vi.fn(), showRows: vi.fn(), attach: vi.fn(), close: vi.fn(), notify: vi.fn() };
+    const travel = createHubTravel(host, hub, async (_place, leave) => leave());
+    try {
+      travel.source.setVisible?.(true);
+      await vi.waitFor(() => expect(travel.source.search('fort')[0]?.id).toBe('place:857'));
+      expect(travel.source.search('la')[0]?.id).toBe('place:55');
+      expect(travel.source.search('kmaadan')).toEqual([]);
+      expect(travel.source.search('ada')).toEqual([]);
+    } finally { travel.dispose(); }
+  });
+
+  it('marks places consequential, flags leaving an explorable area and names the game state', () => {
+    const host = createDemoTravelHost();
+    const hub = { showView: vi.fn(), showRows: vi.fn(), attach: vi.fn(), close: vi.fn(), notify: vi.fn() };
+    const travel = createHubTravel(host, hub, async (_place, leave) => leave());
+    try {
+      const state = host.state.value;
+      if (state.status !== 'ready') throw new Error('Expected outpost fixture');
+      const places = () => travel.source.search('').filter(row => row.id.startsWith('place:'));
+      expect(places().every(row => row.consequential && !row.leavesArea)).toBe(true);
+      expect(travel.source.search('').find(row => row.id === 'travel')?.consequential).toBeUndefined();
+      expect(travel.source.context?.()).toBe("Lion's Arch");
+      expect(travel.source.lifecycle?.()).toBeNull();
+      // The certified instance type decides, not the catalogue: a Guild Hall is no Travel
+      // destination and still no explorable area.
+      host.state.value = { ...state, mapId: 4, guildHall: true };
+      expect(places().every(row => !row.leavesArea)).toBe(true);
+      expect(travel.source.context?.()).toBe('Guild Hall');
+      expect(travel.source.lifecycle?.()).toBeNull();
+      host.state.value = { ...state, mapId: 4 };
+      expect(travel.source.context?.()).toBeNull();
+      expect(places().every(row => !row.leavesArea)).toBe(true);
+      // North Kryta Province is an explorable area (instance type 1).
+      host.state.value = { ...state, mapId: 58, explorable: true };
+      expect(places().length).toBeGreaterThan(0);
+      expect(places().every(row => row.leavesArea)).toBe(true);
+      expect(travel.source.context?.()).toBe('North Kryta Province · Explorable area');
+      expect(travel.source.lifecycle?.()).toBe('Explorable area — Travel leaves this area');
+      host.state.value = { status: 'waiting', reason: 'loading' };
+      expect(travel.source.context?.()).toBe('Map loading');
+      expect(travel.source.lifecycle?.()).toBe('Map loading — Travel returns when the map has loaded');
+    } finally { travel.dispose(); }
+  });
+
+  it('names a place by its Travel search phrase as exactly as by its name, so Hub refuses that phrase for another result (HUB-062)', async () => {
+    const host = createDemoTravelHost();
+    const hub = { showView: vi.fn(), showRows: vi.fn(), attach: vi.fn(), close: vi.fn(), notify: vi.fn() };
+    const travel = createHubTravel(host, hub, async (_place, leave) => leave());
+    try {
+      await host.savePreferences({ synonyms: [{ term: 'home', mapId: 194 }] });
+      travel.source.setVisible(true);
+      await vi.waitFor(() => expect(travel.source.search('home').map(row => row.id)).toContain('place:194'));
+      expect(travel.source.search('home').find(row => row.id === 'place:194')?.aliases).toEqual(['kc', 'kaineng', 'home']);
+    } finally { travel.dispose(); }
+  });
+
+  it('reports a trip that fails after the quiet close once, and keeps success quiet (HUB-072)', () => {
+    const host = createDemoTravelHost();
+    const hub = { showView: vi.fn(), showRows: vi.fn(), attach: vi.fn(), close: vi.fn(), notify: vi.fn() };
+    const travel = createHubTravel(host, hub, async (_place, leave) => leave());
+    try {
+      host.notice.value = { message: 'Travelling to Kamadan…', level: 'info' };
+      host.notice.value = { message: 'Travel started.', level: 'success' };
+      expect(hub.notify).not.toHaveBeenCalled();
+      host.notice.value = { message: 'Travel did not start. Check that this destination is unlocked, then try again.', level: 'warning' };
+      expect(hub.notify).toHaveBeenCalledOnce();
+      expect(hub.notify).toHaveBeenCalledWith('Travel did not start. Check that this destination is unlocked, then try again.', 'failed');
+      host.notice.value = null;
+      expect(hub.notify).toHaveBeenLastCalledWith('Travel did not start. Check that this destination is unlocked, then try again.', 'cleared');
+    } finally { travel.dispose(); }
+  });
+
+  it('starts a trip from a row and ends only the Hub task that asked for it', async () => {
+    const host = createDemoTravelHost();
+    const hub = { showView: vi.fn(), showRows: vi.fn(), attach: vi.fn(), close: vi.fn(), notify: vi.fn() };
+    const travel = createHubTravel(host, hub, async (_place, leave) => leave());
+    try {
+      const done = vi.fn();
+      await travel.source.search('kamadan').find(row => row.id === 'place:449')!.run({ live: () => false, progress() {}, done });
+      expect(done).toHaveBeenCalledOnce();
+      expect(hub.close).not.toHaveBeenCalled();
+    } finally { travel.dispose(); }
+  });
+});
+
+
+it('root Guild Hall travel asks before leaving an explorable area', async () => {
+  const host = createDemoTravelHost();
+  const state = host.state.value;
+  if (state.status !== 'ready') throw new Error('Expected ready fixture');
+  host.state.value = {...state, mapId: 58, explorable: true};
+  const leave = vi.fn(async () => {throw new DOMException('Stayed in area', 'AbortError');});
+  const hub = {showView: vi.fn(), showRows: vi.fn(), attach: vi.fn(), close: vi.fn(), notify: vi.fn()};
+  const travel = createHubTravel(host, hub, leave);
+  try {
+    const row = travel.source.search('gh').find(row => row.id === 'place:guild-hall');
+    expect(row).toBeDefined();
+    await expect(row!.run({live: () => true, progress() {}, done() {}})).rejects.toMatchObject({name: 'AbortError'});
+    expect(leave).toHaveBeenCalledOnce();
+    expect(host.state.value).toMatchObject({mapId: 58, explorable: true, guildHall: false});
+  } finally {travel.dispose();}
 });

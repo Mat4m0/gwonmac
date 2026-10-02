@@ -85,21 +85,36 @@ test.describe("renderer text editing", () => {
             "toggle-trade",
             "open-xunlai-storage",
             "open-travel",
+            "open-whispers",
           ].map((id) => menu?.getMenuItemById(id)?.accelerator),
+          whispersLabel: menu?.getMenuItemById("open-whispers")?.label,
+          whispersEnabled: menu?.getMenuItemById("open-whispers")?.enabled,
           toolsLabel: menu?.getMenuItemById("toggle-tools")?.label,
           tradeLabel: menu?.getMenuItemById("toggle-trade")?.label,
         };
       })).toEqual({
         edit: [
+          { id: "edit-undo", label: "Undo", role: null, accelerator: "CmdOrCtrl+Z", hasClick: true },
+          { id: "edit-redo", label: "Redo", role: null, accelerator: "Shift+CmdOrCtrl+Z", hasClick: true },
+          { id: undefined, label: "", role: null, accelerator: null, hasClick: true },
           { id: "edit-cut", label: "Cut", role: null, accelerator: "CmdOrCtrl+X", hasClick: true },
           { id: "edit-copy", label: "Copy", role: null, accelerator: "CmdOrCtrl+C", hasClick: true },
           { id: "edit-paste", label: "Paste", role: null, accelerator: "CmdOrCtrl+V", hasClick: true },
           { id: "edit-select-all", label: "Select All", role: null, accelerator: "CmdOrCtrl+A", hasClick: true },
         ],
-        appAccelerators: [null, null, null, null],
+        appAccelerators: [null, null, null, null, null],
+        whispersLabel: "Whispers",
+        whispersEnabled: false,
         toolsLabel: "Build Library",
         tradeLabel: "Trade Chat",
       });
+      await fixture.page.evaluate(async () => {
+        await window.gwNative.hubSettings.update({kind: 'master', enabled: true});
+        await window.gwNative.hubSettings.update({kind: 'tool', tool: 'whispers', enabled: true});
+      });
+      await expect.poll(() => fixture.app.evaluate(({Menu}) => Menu.getApplicationMenu()?.getMenuItemById('open-whispers')?.enabled)).toBe(true);
+      await fixture.page.evaluate(() => window.gwNative.hubSettings.update({kind: 'tool', tool: 'whispers', enabled: false}));
+      await expect.poll(() => fixture.app.evaluate(({Menu}) => Menu.getApplicationMenu()?.getMenuItemById('open-whispers')?.enabled)).toBe(false);
     } finally {
       await closeOffline(fixture);
     }

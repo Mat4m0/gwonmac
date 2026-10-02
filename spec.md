@@ -88,15 +88,34 @@ content inside it. Respect reduced motion and text scaling.
 
 Home contains a focused search field, a short Pinned section, existing relevant
 recents, and enabled sections. Do not show dangerous actions in empty-query recents.
+In an explorable area (the certified instance type, not the Travel catalogue, so a
+Guild Hall is an outpost) a fresh Home never starts on a place, because Enter would
+leave the area; it starts on the first pin, else **Travel**. Every Hub action that
+leaves an explorable area (a trip, Travel and invite, a character switch) first asks
+the one "Leave this area?" step, which names the place or character, focuses
+**Stay here** and arms "Leave and …" before it accepts a press. The header names the
+character and area, and one quiet lifecycle line under the results says what the
+game state holds back, for example "Map loading — Travel returns when the map has
+loaded". A task report in the status line takes its place.
 Use the placeholder **Search people, places, builds…**. Use Guild Wars names for
 objects: Xunlai Storage, Guild Hall, outpost, hero, profession, skill template,
 Globs of Ectoplasm, and platinum. Prefer clear action verbs over invented lore.
 
 Every row has a stable identity, full name, type, and an explicit primary action.
 The footer names what Enter will do. Do not rely on colour or icons alone.
+Its left side is a key legend that names only keys that act in the current view,
+such as ↑↓ Select, → Open and Esc Clear, Back or Close. Footer buttons never hide;
+a secondary action that does not apply is disabled, so nothing moves under the
+pointer.
 
-- Up/Down selects rows. Enter performs the displayed action.
-- Escape closes an action menu, then goes back one level, then dismisses Hub.
+- Up/Down selects rows. Enter performs the displayed action. Every list and
+  carousel shares one list move (Up/Down, Control-P/N, Page Up/Down, Home/End)
+  and never wraps; Up at the top of a list stays.
+- Escape closes an action menu or an open disclosure, then clears a non-empty
+  query, then goes back one level, then dismisses Hub, one step per physical
+  press. Focus then returns to the previous control or the game, never to the
+  page body. Trade and Whispers popouts leave their own menu, drawer, sub-view
+  or typed search the same way before they hide.
 - A direct shortcut has no artificial Home step when Escape closes its section.
 - A visible Actions button exposes secondary actions. Tab reaches it; its menu
   supports normal arrow navigation. Do not consume text-editing arrow keys.
@@ -116,8 +135,14 @@ vanishes, clear selection and require a new choice. Never execute its replacemen
 ### Grammar
 
 Recognize a closed set of leading words: `team`, `build`, `travel`, `char`, `acc`,
-`whisper`, and `trade`. Their exact registered aliases may also select a scope.
-The rest of the input is a name query, not executable instructions.
+`whisper`, `invite`, and `trade`. Their exact registered aliases may also select a scope.
+The rest of the input is a name query, not executable instructions. A leading word
+followed by a space enters its scope with an empty query, so `invite ` lists the
+online friends and `team ` lists the saved teams; a lone word is still a search.
+An empty query resolves nothing: a row whose primary changes the game or the
+account (travel, invite, apply, switch, account) never starts selected, so
+`travel ` then Enter opens **Travel** and `invite ` then Enter invites nobody,
+while `whisper ` and `trade ` still start on their first row.
 
 Recognize conversions only when the entire input matches a supported numeric
 expression or `<amount> <unit> in <unit>`. Parse with a bounded grammar, never eval.
@@ -191,6 +216,14 @@ Retry requires a new assessment against observed state. Dismissal does not claim
 cancellation of commands already accepted; reopening shows the existing operation.
 Use the runner's existing stop conditions on client or session changes.
 
+The preview names removed heroes, roster rebuilding and difficulty changes.
+A matching team shows **Already matches**. Repeating Apply sends no changes and
+reports the named team already matches. A partial outcome remains attached to
+that team when Hub or Review closes. Reopening offers Review before another Apply.
+Completed lists confirmed runner steps; Remaining uses the current canonical plan.
+Invalid saved assignments name their slots. **Open in Build Library** opens the
+same saved team in its existing editor.
+
 ## 7. Build and template application
 
 `build smiter` searches the existing saved library and account template owner.
@@ -260,7 +293,7 @@ the independent calculator and fixed conversions can remain enabled.
 
 | Section | Presentation | Completion |
 | --- | --- | --- |
-| Travel | Existing destinations, aliases, favourites, history, Guild Hall | Explicit destination action, then quiet close |
+| Travel | Existing destinations, aliases, favourites, history, Guild Hall | Explicit destination action, then quiet close; "Leave this area?" first from an explorable area |
 | People | Identity, presence, available Whisper/Invite/Travel actions | No social or travel action without an explicit choice |
 | Whispers | Floating conversation with unread state, history, composer and delivery/retry | Send stays in conversation; Escape preserves draft |
 | Trade | Floating ledger with sources, search, filters, message detail and quotes | Contact opens addressed composer without sending |
@@ -269,7 +302,7 @@ the independent calculator and fixed conversions can remain enabled.
 | Accounts | Saved profile names and runtime state; `acc name` offers open or replace | Launch successfully before closing the source; normal sign-in |
 | Maps | Existing layer toggles, ranges, opacity, style controls | Update inline and remain open for comparison |
 | Storage | One existing named action | Dismiss and attempt; completely silent failure |
-| Resign/reload | Explicit search-only entries | Existing confirmation, never empty-query suggestions |
+| Resign/reload | Explicit search-only entries; Resign states "PvE only" and its refusal before Enter | Existing confirmation, never empty-query suggestions; cancelling Resign returns to the Hub search |
 | Settings | Explicit entry and relevant supported section links | User deliberately chooses configuration |
 
 Travel to a friend means **Travel to outpost**, not join their exact instance.
@@ -303,12 +336,43 @@ An enabled saved team may remain readable when live Apply is unavailable. Explai
 that restriction only inside its selected preview. Keep host authoring available
 where existing policy permits. Revalidate feature flags at execution, not only search.
 
+Selected saved-library authoring remains available when live observation is withdrawn.
+Apply still refuses unsupported regions. Do not present PvP refusal as temporary loading.
+List and review pages bind to their actual source. Source withdrawal removes only
+its unavailable pages, including suspended pages. Unrelated source changes preserve
+queries, selection and drafts. Recheck the source before restoring a page.
+
 When a feature is disabled while selected, remove its view and return quietly to
 the nearest available parent. Cancel unsubmitted work; use existing domain rules
 for already accepted operations. Do not redirect to Settings.
 
 Accessibility announcements should describe focused results and inline state once.
 Do not announce every feed update or create a hidden stream of toast equivalents.
+
+Root search shows at most eight matching builds and eight matching teams per group.
+A final **N more — open in Build Library** row carries the query into the complete
+Library. An explicit build or team scope remains complete.
+
+Coalesce source notifications once per animation frame. Typing updates immediately.
+Keep unchanged result DOM and update only the old and new selected rows. Explicit
+close clears result DOM; temporary suspension preserves query, selection and drafts.
+Mount the authoring workspace on first use. Populate each team slot's full build
+choices when that slot receives focus. Preserve its selected build before focus.
+
+Keep empty status regions rendered before their first message. Announce a settled
+root result count after typing pauses; Home has no result count. Announce new
+whispers only inside the selected visible conversation log. Trade offer counts
+and opacity labels are passive; sliders expose percentage value text. Named action
+outcomes and connection failures remain available to assistive technology.
+
+Label list groups with their visible headings. Name the Hub dialog with its current
+visible page title. Keep skill names in build descriptions, separate from the build
+name. Characters uses a plain container inside that dialog; its carousel exposes
+orientation, total count and each character's position.
+
+Keep **Lock Hub position** as one toggle name. Its pressed state means locked.
+When unlocked, show the move hint. Option-arrow moves 16 pixels; adding Shift
+moves 48 pixels. Breadcrumb focus leaves space around its text and focus halo.
 
 ## 11. Vocabulary, pins, and saved flows
 
@@ -321,7 +385,12 @@ Reserve grammar words and unit names in their scopes. Reject conflicts when savi
 if imported data conflicts, require result selection. Renaming an item preserves
 its alias target. Deleting it removes its searchable alias and invalidates flows.
 
-Aliases change how an object is found, not its canonical label. Provide Reset aliases.
+Aliases change how an object is found, not its canonical label. Provide one
+confirmed action that removes every search phrase and keeps the pins. A pin or
+phrase shows the same row that search shows for its object. Pins keep their
+storage owner: places and tools in settings, builds and teams in the account's
+Build Library. Each owner is one labelled group with its own order, and Home
+lists places and tools first.
 Builds, teams, characters, and private contacts must not leak across account profiles.
 
 Start custom flows with saved searches and parameterized named actions:
@@ -411,7 +480,8 @@ the search query without executing an action. Unknown item names are not guessed
 
 `Settings` opens inside the fixed Hub frame. The game’s macOS Settings menu opens
 the same view; Settings from the launcher continues to configure the launcher.
-Hub includes Tools, Appearance, Shortcuts, Maps, and Chat & characters. Tool switches
+Hub includes Game, Appearance, Tools, Shortcuts and Maps, with the same labels as
+the launcher; [Settings](docs/settings.md) owns the placement of each setting. Tool switches
 remain visible in Settings so disabled tools can be enabled, while search hides
 those tools. Changing a tool does not dismiss Settings. The Tools master switch
 reports when a restart is required; it never closes an account automatically.

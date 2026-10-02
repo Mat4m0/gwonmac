@@ -16,7 +16,6 @@ async function ledger(host: TradeHost = createDemoTradeHost()) {
       host,
       mode: "standalone",
       visible: true,
-      active: true,
     },
   });
   await flushPromises();
@@ -24,6 +23,44 @@ async function ledger(host: TradeHost = createDemoTradeHost()) {
 }
 
 describe("TradeChatApp", () => {
+  it("keeps clipboard refusals on the copy action in the error tone", async () => {
+    const demo = createDemoTradeHost();
+    const copy = vi.fn().mockRejectedValue(new Error("clipboard refused"));
+    const wrapper = await ledger({ ...demo, copy });
+    vi.useFakeTimers();
+    try {
+      await wrapper.get(".offer-actions > summary").trigger("click");
+      await wrapper.get(".offer-copy-name").trigger("click");
+      await flushPromises();
+      expect(copy).toHaveBeenCalledExactlyOnceWith("Tyria Cartographer");
+      expect(wrapper.get(".offer-actions").attributes("open")).toBeDefined();
+      expect(wrapper.get(".offer-copy-name").text()).toBe("Clipboard access was refused. Select the text and copy it manually.");
+      expect(wrapper.get(".offer-copy-name").attributes("data-tone")).toBe("error");
+      expect(wrapper.find(".trade-notice").exists()).toBe(false);
+      await vi.advanceTimersByTimeAsync(3_001);
+      expect(wrapper.get(".offer-copy-name").attributes("data-tone")).toBe("error");
+      expect(wrapper.get(".offer-copy-name").text()).toContain("Clipboard access was refused.");
+    } finally {
+      wrapper.unmount();
+      vi.useRealTimers();
+    }
+  });
+  it("a delayed copy names its original author instead of reporting on another offer's action", async () => {
+    const demo = createDemoTradeHost();
+    let complete: (() => void) | undefined;
+    const pending = new Promise<void>(resolve => { complete = resolve; });
+    const wrapper = await ledger({ ...demo, copy: () => pending });
+    await wrapper.get(".offer-actions > summary").trigger("click");
+    await wrapper.get(".offer-copy-name").trigger("click");
+    await wrapper.get('.trade-row[aria-label^="Acolyte Mira:"] .offer-cell').trigger("click");
+    await wrapper.get(".offer-actions > summary").trigger("click");
+    complete!();
+    await flushPromises();
+    expect(wrapper.get(".offer-copy-name").text()).toBe("Copy name");
+    expect(wrapper.get(".trade-notice").text()).toBe("Copied character name: Tyria Cartographer.");
+    wrapper.unmount();
+  });
+
   it("restores completed results and the selected offer without searching on show", async () => {
     const demo = createDemoTradeHost();
     const search = vi.fn(demo.search);
@@ -62,6 +99,11 @@ describe("TradeChatApp", () => {
     await wrapper.get(".trade-search").trigger("submit");
     await flushPromises();
     expect(search).not.toHaveBeenCalled();
+    // HUB-119: a search waiting through a reconnect says so and offers Try again.
+    events.publish?.({ type: "status", source: "kamadan", status: "reconnecting" });
+    await nextTick();
+    expect(wrapper.get(".trade-state").text()).toContain("Waiting for Kamadan to reconnect");
+    expect(wrapper.get(".trade-state button").text()).toBe("Try again");
     events.publish?.({ type: "status", source: "kamadan", status: "live" });
     await flushPromises();
     expect(wrapper.text()).toContain("Search could not finish");
@@ -112,7 +154,7 @@ describe("TradeChatApp", () => {
           async subscribe(source) { return { source, status: "connecting", messages: [] }; },
           onEvent(callback) { events.publish = callback; return () => { delete events.publish; }; },
         } satisfies TradeHost,
-        mode: "embedded", visible: false, active: false,
+        mode: "embedded", visible: false,
       },
     });
     wrapper.vm.search("Polar Bear");
@@ -249,6 +291,24 @@ describe("TradeChatApp", () => {
     wrapper.unmount();
   });
 
+  // HUB-226: the matched words are marked, the inspector gives a relative age, and rows kept through a reconnect look stale.
+  it("marks matches, gives the offer's age, and marks rows stale while the feed reconnects", async () => {
+    const demo = createDemoTradeHost();
+    const events: { publish?: (event: TradeEvent) => void } = {};
+    const wrapper = await ledger({ ...demo, onEvent(callback) { events.publish = callback; return () => { delete events.publish; }; } });
+    await wrapper.get("input[type=search]").setValue("polar bear");
+    await wrapper.get(".trade-search").trigger("submit");
+    await flushPromises();
+    expect(wrapper.findAll(".trade-row mark").map((mark) => mark.text())).toEqual(["Polar", "Bear"]);
+    expect(wrapper.get(".trade-row .offer-cell").text()).toBe("WTS unded Polar Bear 100a | Envoy Axe 20a | q12 Eblade 6a");
+    expect(wrapper.get(".trade-inspector time").text()).toMatch(/^6m ago · /u);
+    expect(wrapper.find(".trade-ledger[data-stale]").exists()).toBe(false);
+    events.publish?.({ type: "status", source: "kamadan", status: "reconnecting" });
+    await nextTick();
+    expect(wrapper.find(".trade-ledger[data-stale]").exists()).toBe(true);
+    wrapper.unmount();
+  });
+
   it("shows every matching listing instead of grouping by player", async () => {
     const wrapper = await ledger();
     await wrapper.get("input[type=search]").setValue("Tyria Cartographer");
@@ -264,8 +324,20 @@ describe("TradeChatApp", () => {
     wrapper.unmount();
   });
 
-  it("opens exact player listings and returns to the preserved ledger", async () => {
-    const wrapper = await ledger();
+  it("opens exact player listings once and returns to the preserved ledger", async () => {
+    const demo = createDemoTradeHost();
+    const search = vi.fn(demo.search);
+    const wrapper = await ledger({ ...demo, search });
+    await wrapper.get(".inspector-listings").trigger("click", { detail: 2 });
+    await flushPromises();
+    expect(search).not.toHaveBeenCalled();
+    await wrapper.get(".offer-actions > summary").trigger("click");
+    const listings = wrapper.findAll(".offer-menu-item").find(button => button.text().startsWith("Show listings"))!;
+    await listings.trigger("click", { detail: 2 });
+    await flushPromises();
+    expect(search).not.toHaveBeenCalled();
+    expect(wrapper.get(".offer-actions").attributes("open")).toBeDefined();
+    await wrapper.get(".offer-actions > summary").trigger("click");
     const list = wrapper.get(".trade-list");
     Object.defineProperty(list.element, "scrollTop", {
       configurable: true,
@@ -291,14 +363,38 @@ describe("TradeChatApp", () => {
     wrapper.unmount();
   });
 
-  it("uses the active window ownership for the slash search shortcut", async () => {
+  // HUB-117: `/` starts a Guild Wars chat command; only inside Trade is it Trade's search key.
+  it("takes `/` for its search only from inside Trade", async () => {
     const wrapper = await ledger();
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "/" }));
-    expect(document.activeElement).toBe(wrapper.get("input[type=search]").element);
-    await wrapper.setProps({ active: false });
-    (document.activeElement as HTMLElement).blur();
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "/" }));
-    expect(document.activeElement).not.toBe(wrapper.get("input[type=search]").element);
+    const search = wrapper.get("input[type=search]").element;
+    const fromGame = new KeyboardEvent("keydown", { key: "/", bubbles: true, cancelable: true });
+    document.body.dispatchEvent(fromGame);
+    expect(fromGame.defaultPrevented).toBe(false);
+    expect(document.activeElement).not.toBe(search);
+    const row = wrapper.get(".trade-row").element as HTMLElement;
+    row.focus();
+    const fromRow = new KeyboardEvent("keydown", { key: "/", bubbles: true, cancelable: true });
+    row.dispatchEvent(fromRow);
+    expect(fromRow.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(search);
+    wrapper.unmount();
+  });
+
+  // D-10: typing narrows the loaded rows; only ↵ asks the feed.
+  it("filters loaded rows while typing and searches the feed only on submit", async () => {
+    const demo = createDemoTradeHost();
+    const search = vi.fn(demo.search);
+    const wrapper = await ledger({ ...demo, search });
+    const input = wrapper.get("input[type=search]");
+    for (const text of ["p", "po", "polar", "polar ", "polar bear"]) await input.setValue(text);
+    expect(search).not.toHaveBeenCalled();
+    expect(wrapper.findAll(".trade-row").map((row) => row.attributes("aria-label"))).toEqual([
+      "Quiet Ember: WTS unded Polar Bear 100a | Envoy Axe 20a | q12 Eblade 6a",
+    ]);
+    await wrapper.get(".trade-search").trigger("submit");
+    await flushPromises();
+    expect(search).toHaveBeenCalledTimes(1);
+    expect(search).toHaveBeenCalledWith({ source: "kamadan", query: "polar bear", scope: "all" });
     wrapper.unmount();
   });
 
@@ -334,7 +430,7 @@ describe("TradeChatApp", () => {
     };
     const wrapper = mount(TradeChatApp, {
       attachTo: document.body,
-      props: { host, mode: "standalone", visible: true, active: true },
+      props: { host, mode: "standalone", visible: true },
     });
     await flushPromises();
     expect(wrapper.findAll(".trade-row")).toHaveLength(25);
@@ -375,11 +471,11 @@ describe("TradeChatApp", () => {
 
   it("saves offers and players, highlights them, and exposes both drawer lists", async () => {
     const wrapper = await ledger();
-    await wrapper.get(".inspector-actions button:first-child").trigger("click");
+    await wrapper.get(".offer-menu [role=menuitemcheckbox]:nth-child(3)").trigger("click");
     await flushPromises();
     expect(wrapper.get(".trade-row").attributes("data-saved-offer")).toBe("");
 
-    await wrapper.get(".inspector-actions button:nth-child(2)").trigger("click");
+    await wrapper.get(".offer-menu [role=menuitemcheckbox]:nth-child(4)").trigger("click");
     await flushPromises();
     expect(wrapper.get(".trade-row").attributes("data-saved-player")).toBe("");
 
@@ -398,7 +494,7 @@ describe("TradeChatApp", () => {
     };
     const wrapper = mount(TradeChatApp, {
       attachTo: document.body,
-      props: { host, mode: "standalone", visible: true, active: true },
+      props: { host, mode: "standalone", visible: true },
     });
     await flushPromises();
 
@@ -406,6 +502,7 @@ describe("TradeChatApp", () => {
     await flushPromises();
 
     expect(wrapper.get(".trade-notice").text()).toBe("Saved items could not be updated. Try again.");
+    expect(wrapper.get(".trade-notice").attributes("data-tone")).toBe("error");
     expect(wrapper.get(".trade-row").attributes("data-saved-offer")).toBeUndefined();
     wrapper.unmount();
   });
@@ -425,13 +522,12 @@ describe("TradeChatApp", () => {
         host: { ...demo, setSaved },
         mode: "standalone",
         visible: true,
-        active: true,
       },
     });
     await flushPromises();
 
-    await wrapper.get(".inspector-actions button:first-child").trigger("click");
-    await wrapper.get(".inspector-actions button:nth-child(2)").trigger("click");
+    await wrapper.get(".offer-menu [role=menuitemcheckbox]:nth-child(3)").trigger("click");
+    await wrapper.get(".offer-menu [role=menuitemcheckbox]:nth-child(4)").trigger("click");
     await flushPromises();
     expect(setSaved).toHaveBeenCalledTimes(1);
     writes[0]!.resolve(writes[0]!.value);
@@ -446,12 +542,12 @@ describe("TradeChatApp", () => {
     wrapper.unmount();
   });
 
-  it("keeps the inspector aligned with the active intent filter", async () => {
+  it("never shows an offer the intent filter hides", async () => {
     const wrapper = await ledger();
     expect(wrapper.get(".trade-inspector").text()).toContain("WTS arms");
     await wrapper.get(".intent-segment button:last-child").trigger("click");
     await flushPromises();
-    expect(wrapper.get(".trade-inspector").text()).toContain("WTB cupcakes");
+    expect(wrapper.get(".trade-inspector").text()).toContain("Choose an offer");
     expect(wrapper.get(".trade-inspector").text()).not.toContain("WTS arms");
     wrapper.unmount();
   });
@@ -474,7 +570,6 @@ describe("TradeChatApp", () => {
         },
         mode: "standalone",
         visible: true,
-        active: true,
       },
     });
     await flushPromises();

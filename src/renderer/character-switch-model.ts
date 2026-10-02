@@ -3,6 +3,7 @@
  * palette. Presentation never receives native coordinates or open diagnostics.
  */
 import type { CompanionCharacterListState } from "./companion-character-list-snapshot.js";
+import type { CompanionPlayRegionState } from "./companion-play-region-snapshot.js";
 
 export type CharacterSwitchContext =
   | "outpost"
@@ -148,4 +149,21 @@ export function currentCharacterIndex(
   return state.status === "ready" && source.context !== "character-select"
     ? state.selectedIndex
     : null;
+}
+
+/**
+ * The one mapping from the pre-game screen and the play region to where the
+ * player is. The certified runtime and the browser fixture both derive the
+ * context here, so a fixture lifecycle cannot drift from the game's.
+ */
+export function characterSwitchContext(
+  preGame: PreGameState,
+  region: CompanionPlayRegionState,
+): CharacterSwitchContext {
+  if (preGame === "character-select") return "character-select";
+  if (preGame === "reconnect" || preGame === "loading") return "loading";
+  if (region.status !== "ready") return "unavailable";
+  if (region.instanceType === 0) return "outpost";
+  if (region.instanceType !== 1) return "unavailable";
+  return region.playRegion === "pve" ? "pve-explorable" : "pvp-explorable";
 }

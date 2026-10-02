@@ -3,9 +3,9 @@
  * what any individual setting means.
  *
  * Unknown fields are ignored on read and are not preserved on the next write;
- * this is deliberate, not a compatibility bag. Public prereleases therefore
- * follow expand/contract release ordering: the latest Stable must already own
- * every durable key and accepted value a beta or RC can write. A malformed
+ * this is deliberate, not a compatibility bag. The signed release proof protects
+ * every Stable-owned field. Returning to an older Stable can discard additive
+ * candidate preferences; release planning must disclose that loss. A malformed
  * known value is refused. A format version this build does not recognise is
  * moved aside intact and defaults are used, so an unreadable profile costs a
  * player their preferences and never their downloaded game data.
@@ -25,6 +25,8 @@ import {
   UPDATE_TRACKS,
   UI_PANEL_OPACITY_MAX,
   UI_PANEL_OPACITY_MIN,
+  UI_TEXT_SIZE_MIN,
+  UI_TEXT_SIZE_MAX,
   UI_FONTS,
   UI_STYLES,
   type AppSettings,
@@ -34,6 +36,7 @@ import {
 import { isDigest } from "../../shared/digest.js";
 import { isEliteMissionMapMarkers } from "../../shared/elite-map-settings.js";
 import { AppError } from "../../shared/errors.js";
+import { parseCalculatorRates } from '../../shared/hub-calculator.js';
 import { isHubShortcuts } from '../../shared/hub-preferences.js';
 import { isShortcutOverrides } from "../../shared/keyboard-shortcuts.js";
 import {
@@ -170,6 +173,7 @@ export function parseSettings(raw: unknown): AppSettings {
     }
     out.controllerPromptStyle = src.controllerPromptStyle as AppSettings["controllerPromptStyle"];
   }
+  if ("uiTextSize" in src) out.uiTextSize = asBoundedInteger(src.uiTextSize, "uiTextSize", UI_TEXT_SIZE_MIN, UI_TEXT_SIZE_MAX);
   if ("uiPanelOpacity" in src) {
     out.uiPanelOpacity = asBoundedInteger(
       src.uiPanelOpacity,
@@ -239,6 +243,10 @@ export function parseSettings(raw: unknown): AppSettings {
       throw new AppError("bad_settings", "settings.eliteMissionMapMarkers is invalid");
     }
     out.eliteMissionMapMarkers = src.eliteMissionMapMarkers;
+  }
+  if ("calculatorRates" in src) {
+    try { out.calculatorRates = parseCalculatorRates(src.calculatorRates); }
+    catch { throw new AppError("bad_settings", "settings.calculatorRates is invalid"); }
   }
   if ("hubShortcuts" in src) {
     if (!isHubShortcuts(src.hubShortcuts) || src.hubShortcuts.some(entry => /^(build|team):/u.test(entry.id))) throw new AppError("bad_settings", "Invalid Hub shortcuts");

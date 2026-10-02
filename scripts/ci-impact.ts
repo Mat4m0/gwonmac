@@ -51,6 +51,7 @@ function isWellFormedRepositoryPath(path: string): boolean {
 function isFastOnlyPath(path: string): boolean {
   if (EXACT_FAST_PATHS.has(path)) return true;
   if (path.startsWith("docs/")) return true;
+  if (path.startsWith("internals/") && path.endsWith(".md")) return true;
   if (path.startsWith(".github/ISSUE_TEMPLATE/")) return true;
 
   if (path.startsWith("apps/website/")) {

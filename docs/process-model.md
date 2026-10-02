@@ -194,6 +194,20 @@ Command modifier, so pressing or releasing Command cannot interrupt another
 key that is still physically held. A real focus loss remains the final cleanup
 for interrupted input.
 
+A press that starts on a GWonMac surface (the Hub, a popout or a dialog) owns
+its repeats and its release. When that press closes the surface and focus
+returns to the canvas, the surface controller keeps the remaining repeats and
+the key-up out of the game, because Guild Wars never saw the key-down. A fresh
+press after the close reaches the game normally. The buffered character-select
+Enter accepts only a fresh press, never a repeat. On a surface, a held Enter
+activates a control once: the controller marks each auto-repeated Enter handled,
+so it never presses a button, submits a form or toggles a disclosure again.
+
+A native sheet cannot be armed like a surface confirmation: its default button
+takes the next Return, auto-repeat included. The Hub row "Quit or Reload Game…"
+therefore asks main for the Quit-or-Reload sheet only after its Enter is
+released and its click run can add no further click.
+
 When Guild Wars moves focus from the canvas into one of its hidden text proxies,
 the renderer releases canvas-owned W, A, S, and D at that boundary. This keeps
 movement state out of chat without changing later text input or releasing any
@@ -229,12 +243,21 @@ recycling so camera movement can continue. The host normalizes supported
 physical keyboard positions before the official client receives them. Text
 fields still use the active macOS input source.
 
-Main claims physical Command-A/C/X/V before the renderer can hold their base
-keys and runs the edit immediately. The claim contains physical repeats and
-releases while allowing the translated Control chord through. Edit menu clicks
-use the same semantic command and focused-window route. A hidden Guild Wars
-text proxy claims the command. An ordinary gwonmac input declines it so
-Chromium edits normally. Copy and Cut send only non-password proxy text to
+Main claims Command-A/C/X/V/Z and Shift-Command-Z before the renderer can hold
+their base keys and runs the edit immediately. As with every app shortcut, a
+letter chord is the letter the active keyboard layout types: AZERTY Command-A
+selects all and Command-Q quits wherever those keys sit. An input source
+without Latin letters keeps the US letter position, as macOS does. Digits,
+punctuation and named keys stay physical, so Command-1…9 is the digit row on
+every layout. The claim contains the pressed key's repeats and releases while
+allowing the translated Control chord through. An assigned app shortcut whose
+tool is off stays claimed and does nothing, because Guild Wars acts on the base
+key whatever modifier is held. Edit menu clicks use the same semantic command
+and focused-window route. Leaving Hub Settings cancels only its window’s native
+shortcut capture. A hidden Guild Wars text proxy claims the command. An
+ordinary gwonmac input declines it so Chromium edits normally. Undo and Redo
+edit only such an input: the game keeps its own text, so its proxy declines
+them, and outside a field the open Build Library undoes its last change. Copy and Cut send only non-password proxy text to
 main. Main writes Cut text to the pasteboard before it sends Guild Wars
 Control-X. Paste validates the clipboard in main and sends Guild Wars a
 Control-V chord, which also produces Chromium's trusted native Paste edit
@@ -291,7 +314,8 @@ candidate in the packaged app on macOS:
    in a Guild Wars text field.
 3. Confirm native repeated keydowns, trusted proxy edits, and visible Guild Wars
    changes at the macOS repeat cadence.
-4. Use physical Command-A/C/X/V and each matching Edit menu item.
+4. Use physical Command-A/C/X/V and each matching Edit menu item; on a
+   non-US layout, use the keys whose keycaps show those letters.
 5. Confirm Copy and Cut update the pasteboard, Paste preserves Unicode and
    multiline text, and Select All changes the visible Guild Wars editor.
 6. Release Command before the editing key. Repeat with the editing key released
@@ -410,8 +434,11 @@ work, flushes diagnostics, and exits through one bounded cleanup path.
 Command-Q opens an account-owned native dialog while a game window is active.
 Reload and Quit Game affect that account only. The launcher keeps the
 ordinary application Quit command because it has no game account to reload.
-The physical Q claim lasts only until that dialog settles; Cancel re-arms the
-shortcut even when AppKit consumed the original key-up.
+The Q claim lasts only until that dialog settles; Cancel re-arms the
+shortcut even when AppKit consumed the original key-up. Other claims end at the
+key-up, or at the next fresh press of the same key: Chromium never delivers the
+key-up of a key-down that main prevented, so a non-repeat press is decided
+again instead of being contained as a repeat.
 
 Main-to-renderer events stop after the window or its `webContents` is destroyed.
 The app attempts renderer recovery only after unexpected renderer loss. It does

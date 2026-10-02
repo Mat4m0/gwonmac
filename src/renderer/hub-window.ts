@@ -7,13 +7,21 @@ import { installResizeGrip } from '../shared/ui/resize.js';
 
 export function installHubWindow(panel: HTMLElement, heading: HTMLElement, lock: HTMLButtonElement, grip: HTMLElement) {
   const storageKey = 'gwonmac.hub-window-placement';
+  const hint = heading.ownerDocument.createElement('span'); hint.className = 'hub-move-hint'; hint.id = 'hub-move-hint'; hint.textContent = '⌥ arrows move · ⇧ 48 px'; heading.insertBefore(hint, lock);
   const viewport = () => ({ width: window.innerWidth, height: window.innerHeight, margin: 8 });
   let locked = true;
   let placed = false;
+  /**
+   * Where the player last put the Hub, normalized to the viewport. A resize derives the box from
+   * it, so a window that shrinks and grows back returns the Hub to that place and size (HUB-109).
+   */
+  let intent: string | null = null;
   let finishDrag: (() => void) | null = null;
   const paint = () => {
     panel.dataset.locked = String(locked);
-    lock.setAttribute('aria-label', locked ? 'Unlock Hub position' : 'Lock Hub position');
+    lock.setAttribute('aria-label', 'Lock Hub position');
+    hint.hidden = locked;
+    if (locked) lock.removeAttribute('aria-describedby'); else lock.setAttribute('aria-describedby', hint.id);
     lock.title = locked ? 'Unlock to move and resize' : 'Lock position and size. Option + arrows here moves the Hub; arrows on the corner resize it.';
     lock.setAttribute('aria-pressed', String(locked));
     grip.hidden = locked;
@@ -27,20 +35,19 @@ export function installHubWindow(panel: HTMLElement, heading: HTMLElement, lock:
       top: `${Math.max(8, Math.min(top, window.innerHeight - height - 8))}px`,
       width: `${width}px`, height: `${height}px` });
   };
+  const minimum = { width: 340, height: 300 };
+  /** Only the player's own moves and resizes are saved, never a box a small window squeezed. */
   const save = () => {
     if (!placed) return;
-    const value = serializeFloatingWindowPlacement(panel.getBoundingClientRect(), viewport());
-    try { if (value) localStorage.setItem(storageKey, value); } catch { /* Placement remains usable when storage is unavailable. */ }
+    intent = serializeFloatingWindowPlacement(panel.getBoundingClientRect(), viewport());
+    try { if (intent) localStorage.setItem(storageKey, intent); } catch { /* Placement remains usable when storage is unavailable. */ }
   };
-  try {
-    const stored = restoreFloatingWindowPlacement(localStorage.getItem(storageKey), viewport(), { width: 340, height: 300 });
-    if (stored) place(stored.left, stored.top, stored.width, stored.height);
-  } catch { /* Use the default geometry when storage is unavailable. */ }
   const fit = () => {
-    if (!placed) return;
-    const box = panel.getBoundingClientRect();
-    if (box.width && box.height) place(box.left, box.top, box.width, box.height);
+    const box = placed ? restoreFloatingWindowPlacement(intent, viewport(), minimum) : null;
+    if (box) place(box.left, box.top, box.width, box.height);
   };
+  try { intent = localStorage.getItem(storageKey); } catch { /* Use the default geometry when storage is unavailable. */ }
+  if (restoreFloatingWindowPlacement(intent, viewport(), minimum)) { placed = true; fit(); } else intent = null;
   const toggle = () => { finishDrag?.(); locked = !locked; paint(); };
   const drag = (event: PointerEvent) => {
     if (locked || event.button !== 0 || (event.target as Element).closest('button, a, input, select')) return;
@@ -65,8 +72,9 @@ export function installHubWindow(panel: HTMLElement, heading: HTMLElement, lock:
     if (locked || !event.altKey || !event.key.startsWith('Arrow')) return;
     event.preventDefault(); event.stopPropagation();
     const box = panel.getBoundingClientRect();
-    place(box.left + (event.key === 'ArrowRight' ? 16 : event.key === 'ArrowLeft' ? -16 : 0),
-      box.top + (event.key === 'ArrowDown' ? 16 : event.key === 'ArrowUp' ? -16 : 0), box.width, box.height);
+    const step = event.shiftKey ? 48 : 16;
+    place(box.left + (event.key === 'ArrowRight' ? step : event.key === 'ArrowLeft' ? -step : 0),
+      box.top + (event.key === 'ArrowDown' ? step : event.key === 'ArrowUp' ? -step : 0), box.width, box.height);
     save();
   };
   const disposeResize = installResizeGrip(grip, {
@@ -85,10 +93,10 @@ export function installHubWindow(panel: HTMLElement, heading: HTMLElement, lock:
   panel.closest('dialog')?.addEventListener('toggle', onShow);
   paint();
   const reset = () => {
-    finishDrag?.(); placed = false; locked = true;
+    finishDrag?.(); placed = false; locked = true; intent = null;
     try { localStorage.removeItem(storageKey); } catch { /* Reset still restores this session. */ }
     for (const property of ['left', 'top', 'width', 'height', 'transform']) panel.style.removeProperty(property);
     paint();
   };
-  return { reset, dispose() { panel.closest('dialog')?.removeEventListener('toggle', onShow); finishDrag?.(); disposeResize(); grip.removeEventListener('keyup', saveResize); lock.removeEventListener('click', toggle); lock.removeEventListener('keydown', moveWithKeys); heading.removeEventListener('pointerdown', drag); window.removeEventListener('resize', fit); } };
+  return { reset, dispose() { hint.remove(); panel.closest('dialog')?.removeEventListener('toggle', onShow); finishDrag?.(); disposeResize(); grip.removeEventListener('keyup', saveResize); lock.removeEventListener('click', toggle); lock.removeEventListener('keydown', moveWithKeys); heading.removeEventListener('pointerdown', drag); window.removeEventListener('resize', fit); } };
 }

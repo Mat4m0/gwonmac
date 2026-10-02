@@ -13,7 +13,7 @@ import {
 } from "../../../src/shared/builds/team-apply";
 import type { LibraryController } from "./use-library";
 import type { Team } from "./model";
-import { teamApplyRuntimePresentation } from "./team-apply-presentation";
+import { teamApplyStoredProblemMessage, teamApplyStoredProblemGuidance, teamApplyRuntimePresentation } from "./team-apply-presentation";
 
 export interface TeamApplyIssue {
   readonly id: string;
@@ -37,30 +37,6 @@ export interface TeamBuildOptionGroup {
 const issueSummary = (issues: readonly TeamApplyIssue[]) => issues.length === 1
   ? issues[0]!.message
   : `${issues.length} issues need attention before applying.`;
-
-const storedProblemMessage = (problem: TeamApplyProblem): string => {
-  switch (problem.rule) {
-    case "player-slot": return "The player slot contains hero-only settings.";
-    case "missing-hero": return `Choose a hero for slot ${problem.slot + 1}.`;
-    case "missing-behaviour": return `Choose a behavior for slot ${problem.slot + 1}.`;
-    case "unknown-hero": return `Slot ${problem.slot + 1} names an unknown hero.`;
-    case "duplicate-hero": return "The same hero is assigned more than once.";
-    case "party-gap": return "Move configured heroes above empty party slots.";
-    case "invalid-build": return `Slot ${problem.slot + 1} has an invalid build.`;
-  }
-};
-
-const storedProblemGuidance = (problem: TeamApplyProblem): string | null => {
-  switch (problem.rule) {
-    case "player-slot": return "Clear the hero-only settings from the player slot.";
-    case "missing-hero": return "Choose a hero or clear the build from this slot.";
-    case "missing-behaviour": return "Choose Fight, Guard, or Avoid.";
-    case "unknown-hero": return "Replace the unknown hero in this slot.";
-    case "duplicate-hero": return "Choose a different hero for one of these slots.";
-    case "party-gap": return "Move this hero above the first empty hero slot.";
-    case "invalid-build": return "Open the build to repair it, or choose another build.";
-  }
-};
 
 const storedProblemControl = (problem: TeamApplyProblem): TeamApplyIssue["control"] => {
   switch (problem.rule) {
@@ -138,8 +114,8 @@ export function useTeamApplyAssessment(
     if (!resolution.valid) {
       resolution.problems.forEach((problem, index) => issues.push({
         id: `stored-${problem.rule}-${"slot" in problem ? problem.slot : index}`,
-        message: storedProblemMessage(problem),
-        guidance: storedProblemGuidance(problem),
+        message: teamApplyStoredProblemMessage(problem),
+        guidance: teamApplyStoredProblemGuidance(problem),
         slots: storedProblemSlots(problem),
         control: storedProblemControl(problem),
       }));

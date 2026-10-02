@@ -14,6 +14,7 @@ import { travelContextRefusal } from "../../../src/shared/travel-command";
 import {
   DEFAULT_TRAVEL_SHORTCUTS,
   TRAVEL_DESTINATIONS,
+  isPvpTravelDestination,
   travelDestination,
   type TravelRequest,
   type TravelUserPreferences,
@@ -323,7 +324,7 @@ export function createDemoTravelHost(): TravelHost {
   const characterKey = travelCharacterKey("0123456789abcdef");
   const state = ref<TravelGameState>({
     status: "ready", mapId: 55, travelContext: "world", characterKey, unlockedMapWords,
-    guildHall: false, hasGuildHall: true,
+    guildHall: false, hasGuildHall: true, explorable: false,
   });
   const friends = ref<TravelFriends>({ status: "waiting", reason: "unavailable" });
   const attempt = ref<TravelAttempt>({ status: "idle" });
@@ -346,7 +347,15 @@ export function createDemoTravelHost(): TravelHost {
     attempt,
     notice,
     history,
-    unavailable: null,
+    // The production command's answers for the synthetic game state, so a map load or a PvP
+    // outpost reads here as it does in game (HUB-135).
+    get unavailable() {
+      const current = state.value;
+      if (current.status !== "ready") {
+        return current.reason === "loading" ? "Travel is unavailable while a map is loading" : "Travel is waiting for Guild Wars";
+      }
+      return isPvpTravelDestination(current.mapId) ? "Travel is unavailable during PvP play" : null;
+    },
     guildHallUnavailable: null,
     async loadPreferences() {
       return current;
@@ -363,7 +372,7 @@ export function createDemoTravelHost(): TravelHost {
         history.value = recordVisitedTravel(history.value, request.mapId);
         state.value = {
           status: "ready", mapId: request.mapId, travelContext: "world",
-          characterKey, unlockedMapWords, guildHall: false, hasGuildHall: true,
+          characterKey, unlockedMapWords, guildHall: false, hasGuildHall: true, explorable: false,
         };
         attempt.value = { status: "idle" };
       }, 600);

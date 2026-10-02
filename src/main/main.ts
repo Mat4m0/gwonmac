@@ -134,7 +134,7 @@ import {
   bootstrapAccountWorkspace,
   loadAccountMode,
 } from "./core/multiple-accounts.js";
-import { refreshNativeAccountsMenu } from "./window-menu.js";
+import { refreshNativeAccountsMenu, showQuitOrReloadGame } from "./window-menu.js";
 import { createLauncherWindow, prepareLauncherWindowState } from "./accounts-window.js";
 import { MultipleAccountsController } from "./multiple-accounts-controller.js";
 import { WindowCoordinator } from "./window-coordinator.js";
@@ -163,7 +163,7 @@ import {
   allGlobalToolsPatch,
   globalToolPatch,
 } from "./core/launcher-tools.js";
-import { captureLauncherShortcut } from "./launcher-shortcut-capture.js";
+import { cancelAppShortcutCapture, captureLauncherShortcut } from "./launcher-shortcut-capture.js";
 import { TexturePackManager } from "./core/texture-pack-manager.js";
 import { createTexturePackActions } from "./texture-pack-actions.js";
 
@@ -1041,6 +1041,8 @@ if (primaryInstance) void app.whenReady().then(async () => {
     loadAccountTemplates: (win) => accounts.loadTemplates(win),
     saveAccountTemplates: (win, entries) => accounts.saveTemplates(win, entries),
     requestQuit: requestGameQuit,
+    // The Hub's "Quit or Reload Game…" opens the same sheet as Command-Q (HUB-001).
+    showQuitOrReload: (win) => showQuitOrReloadGame(host, win),
     hubAccountsGet: win => {
       const context = windowRegistry.contextForWebContents(win.webContents.id);
       if (context?.role !== 'game') throw new Error('Game account required');
@@ -1063,9 +1065,10 @@ if (primaryInstance) void app.whenReady().then(async () => {
         else await preferences.replaceShortcut(change.action, change.binding);
       },
       capture: (win, action) => captureLauncherShortcut(win, action, () => currentSettings ?? settings),
+      cancelCapture: win => cancelAppShortcutCapture(win),
     },
     showLauncher: () => host.revealLauncher(),
-    openSettings: () => host.revealLauncher("settings"),
+    openSettings: (section) => host.revealLauncher(`settings/${section}`),
     reloadGame: (win, cause) => host.reloadGame(win, cause),
     claimRelogIntent: (win) => host.claimRelogIntent(win),
   });

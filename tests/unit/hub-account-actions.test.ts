@@ -3,8 +3,9 @@ import { test } from 'node:test';
 import { activateHubAccount, hubAccountSnapshot } from '../../src/main/hub-account-actions.js';
 import { parseHubAccountRequest } from '../../src/main/accounts-ipc-values.js';
 import { parseProfileId } from '../../src/shared/multiple-accounts.js';
-import type { HubRow } from '../../src/shared/hub.js';
+import type { HubRow, HubTask } from '../../src/shared/hub.js';
 import type { LauncherProfileSummary } from '../../src/shared/launcher-contracts.js';
+const task: HubTask = { live: () => true, progress() {}, done() {} };
 const current = parseProfileId('9e1bd41c-cfc0-4ca8-a57f-2f0ca159c72d');
 const second = parseProfileId('e98a37bc-5211-4bc5-8094-0b1286b3c42d');
 function fixture() {
@@ -46,12 +47,37 @@ test('Hub account choices reload on rename before any account operation', async 
   let snapshot = hubAccountSnapshot(fixture().accounts, current);
   let displayed: readonly HubRow[] = [];
   let opened = false;
-  const source = createHubAccounts({ close() {}, attach: () => () => {}, showView() {}, showRows(_title, rows) { displayed = rows(); } }, { get: async () => snapshot, open: async () => { opened = true; } });
+  const source = createHubAccounts({ close() {}, notify() {}, attach: () => () => {}, showView() {}, showRows(_title, rows) { displayed = rows(); }, direct(_destination, open) { open(); } }, { get: async () => snapshot, open: async () => { opened = true; } });
   source.setVisible(true); await Promise.resolve();
   const action = source.search('acc second')[0]!;
   snapshot = { ...snapshot, profiles: snapshot.profiles.map(profile => profile.id === second ? { ...profile, name: 'Renamed' } : profile) };
-  await assert.rejects(async () => action.run(), /Accounts changed/u);
+  await assert.rejects(async () => action.run(task), /Accounts changed/u);
   assert.equal(opened, false);
   assert.ok(displayed.some(row => row.title === 'Renamed'));
   assert.ok(source.search('acc renamed').some(row => row.title.includes('Renamed')));
+});
+
+test('Hub account actions keep the running game first and name each consequence (D-23)', async () => {
+  const { createHubAccounts } = await import('../../src/renderer/hub-accounts.js');
+  const snapshot = hubAccountSnapshot(fixture().accounts, current);
+  const source = createHubAccounts({ close() {}, notify() {}, attach: () => () => {}, showView() {}, showRows() {}, direct() {} }, { get: async () => snapshot, open: async () => {} });
+  source.setVisible(true); await Promise.resolve();
+  assert.deepEqual(source.search('acc second').map(row => [row.title, row.action, !!row.destructive]), [
+    ['Open Second', 'Open Second', false],
+    ['Close Main and open Second', 'Close Main and open Second', true],
+  ]);
+});
+
+test('Hub accounts name their loading and failed reads instead of acting or finding nothing (HUB-232, HUB-233)', async () => {
+  const { createHubAccounts } = await import('../../src/renderer/hub-accounts.js');
+  const hub = { close() {}, notify() {}, attach: () => () => {}, showView() {}, showRows() {}, direct() {} };
+  let fail!: (error: Error) => void;
+  const events: string[] = [];
+  const source = createHubAccounts(hub, { get: () => new Promise((_resolve, reject) => { fail = reject; }), open: async () => {}, manage: async () => { events.push('launcher'); } });
+  source.setVisible(true);
+  // Enter on the loading row is refused by its unavailable reason; it never shows the Launcher.
+  assert.deepEqual(source.search('acc ').map(row => [row.title, row.unavailable]), [['Loading accounts…', 'Accounts are still loading.']]);
+  fail(new Error('offline')); await Promise.resolve(); await Promise.resolve();
+  for (const query of ['acc ', 'acc second']) assert.deepEqual(source.search(query).map(row => row.title), ['Retry accounts']);
+  assert.deepEqual(events, []);
 });

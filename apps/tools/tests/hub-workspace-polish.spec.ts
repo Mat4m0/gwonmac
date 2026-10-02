@@ -3,9 +3,9 @@ import { expect, test } from '@playwright/test';
 test('Trade gives the ledger space and retains its offer through actions and reopening', async ({ page }, info) => {
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await search.fill('trade'); await search.press('Enter');
-  await expect(page.getByRole('list', { name: 'Trade offers' })).toBeVisible();
+  await expect(page.getByRole('listbox', { name: 'Trade offers' })).toBeVisible();
   const fullyVisible = await page.locator('.trade-list').evaluate(list => {
     const box = list.getBoundingClientRect();
     return [...list.querySelectorAll('.trade-row')].filter(row => {
@@ -14,11 +14,11 @@ test('Trade gives the ledger space and retains its offer through actions and reo
     }).length;
   });
   expect(fullyVisible).toBeGreaterThanOrEqual(5);
-  await page.getByRole('button', { name: 'Inspect offer from Silver Wayfarer', exact: true }).click();
+  await page.getByRole('option', { name: /^Silver Wayfarer:/u }).click();
   const inspector = page.getByRole('region', { name: 'Offer from Silver Wayfarer' });
   await expect(inspector).toContainText('105 consets');
   await page.locator('.offer-actions > summary').click();
-  await expect(page.getByRole('button', { name: 'Copy offer', exact: true })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Copy offer', exact: true })).toBeVisible();
   await page.locator('.offer-actions > summary').press('Escape');
   await expect(page.locator('.offer-actions')).not.toHaveAttribute('open');
   await expect(inspector).toBeVisible();
@@ -33,7 +33,7 @@ test('Trade gives the ledger space and retains its offer through actions and reo
 test('team authoring prioritizes the roster while options and persisted edits stay available', async ({ page }, info) => {
   await page.setViewportSize({ width: 1280, height: 720 });
   await page.goto('/?hub');
-  const search = page.getByRole('combobox', { name: 'Search people, places, builds' });
+  const search = page.locator('.hub-search input');
   await page.getByRole('button', { name: 'Close Hub', exact: true }).click(); await page.keyboard.press('Meta+b');
   await page.getByRole('button', { name: /Favourite GOM AFK/ }).click();
   await expect(page.locator('.team-options')).not.toHaveAttribute('open');

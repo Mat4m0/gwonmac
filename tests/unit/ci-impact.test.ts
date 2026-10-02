@@ -9,6 +9,7 @@ test("proved documentation and website-only changes use the fast gate", () => {
   const fastPaths = [
     "README.md",
     "docs/release-verification.md",
+    "internals/hub-polish-review.md",
     ".github/ISSUE_TEMPLATE/bug.yml",
     ".github/PULL_REQUEST_TEMPLATE.md",
     ".github/dependabot.yml",
@@ -77,6 +78,7 @@ test("runtime, packaging, dependency, and unknown changes use the full gate", ()
     "LICENSE",
     "THIRD-PARTY-NOTICES.md",
     "unknown-root-file.txt",
+    "internals/runtime.ts",
   ];
 
   assert.equal(requiresRuntimeVerification([]), true);

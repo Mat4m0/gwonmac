@@ -85,7 +85,7 @@ test("a 27-character account uses the Hub carousel and preserves search, identit
       window.dispatchEvent(new CustomEvent("gw:character-toggle", { cancelable: true }));
     });
 
-    const dialog = page.getByRole("dialog", { name: "Switch Character" });
+    const dialog = page.locator("#character-switch-root");
     const search = page.getByRole("combobox", { name: "Search characters" });
     const list = dialog.locator("#character-switch-list");
     await expect(dialog).toBeVisible();
@@ -106,10 +106,13 @@ test("a 27-character account uses the Hub carousel and preserves search, identit
     expect(firstCardOffset).toBeLessThanOrEqual(1);
     await page.evaluate(() => window.dispatchEvent(new Event("test-character-all")));
     await expect(list.getByRole("option")).toHaveCount(carouselCapacity);
+    // The carousel stops at its ends; End and Home jump there.
     await page.keyboard.press("ArrowLeft");
+    await expect(selected).toContainText("Character 01");
+    await page.keyboard.press("End");
     await expect(selected).toContainText("Rudolph Prime");
     await expect(list.locator(".character-switch-slot")).toHaveCount(0);
-    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("Home");
     await expect(selected).toContainText("Character 01");
     await page.keyboard.press("ArrowRight");
     await expect(selected).toContainText("Character 02");
@@ -142,21 +145,14 @@ test("a 27-character account uses the Hub carousel and preserves search, identit
     await dialog.getByRole("button", { name: "Character Switch settings" }).click();
     const horizontalLayout = dialog.getByRole("radio", { name: /Horizontal/u });
     const verticalLayout = dialog.getByRole("radio", { name: /Vertical/u });
-    const searchSetting = dialog.getByRole("checkbox", { name: /Show search bar/u });
     await expect(horizontalLayout).toBeHidden();
     await expect(verticalLayout).toBeHidden();
-    await expect(searchSetting).toBeChecked();
-    await searchSetting.uncheck();
-    await page.keyboard.press("Escape");
-    await expect(search).toBeHidden();
-    await expect.poll(() => isDomActiveElement(selected)).toBe(true);
-
-    await dialog.getByRole("button", { name: "Character Switch settings" }).click();
-    await searchSetting.check();
+    // The search always shows; an unsaved toggle for it is gone (HUB-198).
+    await expect(dialog.getByRole("checkbox", { name: /Show search bar/u })).toHaveCount(0);
 
     await page.keyboard.press("Escape");
     await expect(search).toBeVisible();
-    await expect(dialog).toHaveAttribute("data-layout", "horizontal");
+    await expect(dialog.locator(".character-switch-panel")).toHaveAttribute("data-layout", "horizontal");
     await expect(list.getByRole("option")).toHaveCount(carouselCapacity);
     await expect(list.locator("img")).toHaveCount(carouselCapacity);
     await expect(list.locator(".character-switch-meta").first()).toContainText("Lv 20");
@@ -220,7 +216,7 @@ test("a 27-character account uses the Hub carousel and preserves search, identit
       (await dialog.locator(".character-switch-panel").boundingBox())?.y ?? -1
     ).toBeGreaterThanOrEqual(7);
     expect((compactBounds?.y ?? 0) + (compactBounds?.height ?? 0)).toBeLessThanOrEqual(248);
-    await expect(dialog.locator(".character-switch-footer")).toBeInViewport();
+    await expect(page.locator("#hub .hub-footer")).toBeInViewport();
     await page.setViewportSize({ width: 1280, height: 720 });
 
     await search.fill("Character");
@@ -249,7 +245,13 @@ test("a 27-character account uses the Hub carousel and preserves search, identit
     ));
     await expect(selected).toContainText("Character 01");
     await expect.poll(() => isDomActiveElement(selected)).toBe(true);
+    // A digit selects and reveals its card; only Enter switches (D-5, HUB-002).
     await selected.press("0");
+    const tenth = list.locator('button[data-row="9"]');
+    await expect(tenth).toHaveAttribute("aria-selected", "true");
+    await expect.poll(() => isDomActiveElement(tenth)).toBe(true);
+    await expect(page.locator("body")).not.toHaveAttribute("data-character-switch-request", /.*/u);
+    await tenth.press("Enter");
     await expect(page.locator("body")).toHaveAttribute("data-character-switch-request", "9");
     await expect(dialog).toBeHidden();
     await page.evaluate(() => window.dispatchEvent(
@@ -337,7 +339,7 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
       });
     });
 
-    const dialog = page.getByRole("dialog", { name: "Switch Character" });
+    const dialog = page.locator("#character-switch-root");
     const search = page.getByRole("combobox", { name: "Search characters" });
     await page.evaluate(() => window.dispatchEvent(
       new CustomEvent("gw:character-toggle", { cancelable: true }),
@@ -354,30 +356,32 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
     await page.evaluate(() => window.dispatchEvent(
       new CustomEvent("gw:character-toggle", { cancelable: true }),
     ));
-    await dialog.getByRole("option", { name: /Switch to Private Beta/u }).click();
-    await expect(page.getByRole("heading", { name: "Leave this area?" })).toBeVisible();
+    // A click selects a card; its own double-click (or Enter) switches (D-24).
+    await dialog.getByRole("option", { name: /Switch to Private Beta/u }).dblclick();
+    await expect(page.getByRole("heading", { name: "Leave this area and switch to Private Beta?" })).toBeVisible();
     await expect(page.locator("#character-switch-root")).toHaveAttribute(
       "aria-describedby",
       "character-switch-confirm-copy",
     );
-    await expect.poll(() => isDomActiveElement(page.getByRole("button", { name: "Stay here" }))).toBe(true);
+    await expect.poll(() => isDomActiveElement(page.getByRole("button", { name: "Stay here", exact: true }))).toBe(true);
     await page.keyboard.press("Escape");
-    await expect(page.getByRole("heading", { name: "Switch Character" })).toBeVisible();
+    await expect(page.locator(".hub-caption")).toHaveText("Characters");
     await expect(page.locator("body")).not.toHaveAttribute("data-character-switch-request", /.*/u);
 
-    await dialog.getByRole("option", { name: /Switch to Private Beta/u }).click();
-    await page.getByRole("button", { name: "Stay here" }).click();
+    await dialog.getByRole("option", { name: /Switch to Private Beta/u }).dblclick();
+    await page.getByRole("button", { name: "Stay here", exact: true }).click();
     await expect(dialog).toBeVisible();
     await expect(page.locator("body")).not.toHaveAttribute("data-character-switch-request", /.*/u);
 
-    await dialog.getByRole("option", { name: /Switch to Private Beta/u }).click();
+    await dialog.getByRole("option", { name: /Switch to Private Beta/u }).dblclick();
     await page.evaluate(() => {
       const target = window as typeof window & {
         __characterSwitchTestRefreshCharacters(): void;
       };
       target.__characterSwitchTestRefreshCharacters();
     });
-    await page.getByRole("button", { name: "Leave and switch" }).click();
+    await expect(page.getByRole("button", { name: "Leave and switch to Private Beta", exact: true })).toHaveAttribute("data-armed", "");
+    await page.getByRole("button", { name: "Leave and switch to Private Beta", exact: true }).click();
     await expect(dialog).toBeHidden();
     await expect(page.locator("body")).toHaveAttribute("data-character-switch-request", "0000000000000002");
 
@@ -391,7 +395,7 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
       window.dispatchEvent(new CustomEvent("gw:character-toggle", { cancelable: true }));
     });
     await expect(dialog).toBeVisible();
-    await dialog.getByRole("option", { name: /Switch to Private Alpha/u }).click();
+    await dialog.getByRole("option", { name: /Switch to Private Alpha/u }).dblclick();
     await expect(dialog).toBeHidden();
     await expect(page.locator("body")).toHaveAttribute(
       "data-character-switch-request",
@@ -399,7 +403,7 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
     );
 
     // Hub selects directly at the selector without opening Switch Character.
-    const hub = page.getByRole("dialog", { name: "Hub", exact: true });
+    const hub = page.getByRole("dialog", { name: /^Hub(?: — .+)?$/u });
     const hubSearch = hub.getByRole("combobox", { name: "Search people, places, builds" });
     await page.evaluate(() => {
       const target = window as typeof window & {
@@ -410,7 +414,7 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
       window.gwHub?.show();
     });
     await hubSearch.fill("char Private Beta");
-    await hub.locator('[data-id="character:0000000000000002"]').click();
+    await hub.locator('[data-id="character:0000000000000002"]').dblclick();
     await expect(page.locator("body")).toHaveAttribute(
       "data-character-switch-request",
       "0000000000000002",
@@ -418,7 +422,7 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
     await expect(hub).toBeHidden();
     await expect(dialog).toBeHidden();
 
-    // A refused Hub request is reported in Hub instead of opening the palette.
+    // A refused Hub row states its reason before any request.
     await page.evaluate(() => {
       const target = window as typeof window & {
         __characterSwitchTestSet(phase: "idle" | "confirming" | "switching" | "failed", context: CharacterSwitchContext): void;
@@ -428,8 +432,9 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
       window.gwHub?.show();
     });
     await hubSearch.fill("char Private Beta");
-    await hub.locator('[data-id="character:0000000000000002"]').click();
-    await expect(hub.locator(".hub-status")).toContainText("Automatic switching stopped.");
+    await expect(hub.locator('[data-id="character:0000000000000002"]')).toHaveAttribute("aria-disabled", "true");
+    await expect(hub.locator('[data-id="character:0000000000000002"]')).toContainText("loading");
+    await hubSearch.press("Enter");
     await expect(dialog).toBeHidden();
     await expect(page.locator("body")).not.toHaveAttribute("data-character-switch-request", /.*/u);
     await page.getByRole("button", { name: "Close Hub", exact: true }).click();
@@ -444,9 +449,10 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
       window.gwHub?.show();
     });
     await hubSearch.fill("char Private Beta");
-    await hub.locator('[data-id="character:0000000000000002"]').click();
-    await expect(page.getByRole("heading", { name: "Leave this area?" })).toBeVisible();
-    await page.getByRole("button", { name: "Leave and switch" }).click();
+    await hub.locator('[data-id="character:0000000000000002"]').dblclick();
+    await expect(page.getByRole("heading", { name: "Leave this area and switch to Private Beta?" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Leave and switch to Private Beta", exact: true })).toHaveAttribute("data-armed", "");
+    await page.getByRole("button", { name: "Leave and switch to Private Beta", exact: true }).click();
     await expect(hub).toBeHidden();
     await expect(page.locator("body")).toHaveAttribute(
       "data-character-switch-request",
@@ -460,9 +466,10 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
       window.dispatchEvent(new CustomEvent("gw:character-toggle", { cancelable: true }));
     });
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByRole("status")).toContainText(
-      "Automatic switching stopped. Continue from the Guild Wars character selector.",
+    await expect(page.locator(".hub-status")).toContainText(
+      "Switch to Private Beta stopped. Automatic switching stopped. Continue from the Guild Wars character selector.",
     );
+    await expect(dialog.locator(".character-switch-status")).toBeEmpty();
     await page.getByRole("button", { name: "Close Hub", exact: true }).click();
     await expect(dialog).toBeHidden();
 
@@ -483,7 +490,7 @@ test("the modal confirms PvE departure, blocks click-through, and retains post-l
       palette.setEnabled(true);
       window.dispatchEvent(new CustomEvent("gw:travel-toggle", { cancelable: true, detail: {} }));
     });
-    const travel = page.getByRole("dialog", { name: "Hub", exact: true });
+    const travel = page.getByRole("dialog", { name: /^Hub(?: — .+)?$/u });
     await expect(travel).toBeVisible();
     await page.evaluate(() => window.dispatchEvent(
       new CustomEvent("gw:character-toggle", { cancelable: true }),

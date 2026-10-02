@@ -3,6 +3,7 @@ import type { GwNativeApi } from "../../../src/shared/contracts";
 import type { TeamApplyPlan } from "../../../src/shared/builds/team-apply";
 import { liveParty } from "../../../src/shared/builds/live-party";
 import type { TeamApplyCommands } from "../../../src/shared/builds/team-apply-runner";
+import { createHubGameFixture } from "./hub-game-fixture";
 import { demoLibrary, demoParty } from "./fixtures";
 import { createDemoHost, createNativeHost } from "./host";
 
@@ -68,7 +69,7 @@ describe("native Tools host diagnostics", () => {
   it("publishes bounded evidence when Team Apply refuses", async () => {
     const command = vi.fn();
     const commands: TeamApplyCommands = {
-      cancelPending: command,
+      cancelPending: vi.fn(),
       setHardMode: command,
       setPlayerSecondary: command,
       setPlayerSkills: command,
@@ -111,6 +112,9 @@ describe("native Tools host diagnostics", () => {
         expect.objectContaining({ slot: 1 }),
       ]),
     });
+    host.party.value = { ...createHubGameFixture(() => {}).host.party.value, inOutpost: false };
+    await expect(host.applyBuild(demoLibrary.builds[0]!, null)).rejects.toThrow('Enter an outpost to apply this build. 0 changes were confirmed.');
+    expect(command).not.toHaveBeenCalled();
   });
 
   it("emits bounded Apply lifecycle evidence only in development", async () => {

@@ -351,9 +351,11 @@ test("configures a fresh team and explains why Apply is waiting", async ({ page 
   await expect(page.locator(".team-slots > li")).toHaveCount(8);
   await expect(page.locator(".team-slot--compact")).toHaveCount(7);
   await expect(hero.getByText("Available slot")).toBeVisible();
+  await player.locator(".build-picker select").focus();
   await player.locator(".build-picker select").selectOption("b-barrage");
   await hero.locator(".hero-picker select").selectOption("6");
   await expect(page.locator(".team-slot--compact")).toHaveCount(6);
+  await hero.locator(".build-picker select").focus();
   await hero.locator(".build-picker select").selectOption("b-discord");
   await hero.locator(".behavior-picker select").selectOption("guard");
 

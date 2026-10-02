@@ -23,25 +23,34 @@ export type PartyInvite = ReturnType<typeof createPartyInvite>;
 
 const inOutpost = (region: CompanionPlayRegionState) =>
   region.status === 'ready' && region.playRegion === 'pve' && region.instanceType === 0;
-const TRAVELLING = 'Travelling. The invite follows on arrival.';
 const NEEDS_PVE = 'Invites from Hub need a PvE outpost';
 
 export function createPartyInvite(input: PartyInviteInput) {
   const settleMs = input.settleMs ?? 2_000;
   const arrivalTimeoutMs = input.arrivalTimeoutMs ?? 60_000;
   /** Withdraws the one pending arrival; null while nothing waits. */
-  let pending: (() => void) | null = null;
-  /** Why an invite cannot be sent now. A friend elsewhere cannot receive it from here. */
-  function unavailable(friend?: TravelFriend): string | null {
+  let pending: { details: Readonly<{ name: string; place: string }>; cancelled: boolean; cancel(): void } | null = null;
+  const listeners = new Set<() => void>();
+  const refresh = () => { for (const listener of listeners) listener(); };
+  const travelling = () => pending ? `Travelling to ${pending.details.place}. The invite to ${pending.details.name} follows on arrival.` : null;
+  function cancel(expected?: Readonly<{ name: string; place: string }>) {
+    const request = pending;
+    if (expected && request?.details !== expected) throw new Error('This pending invite changed. Select it again.');
+    if (!request) return;
+    request.cancelled = true; request.cancel(); pending = null; refresh();
+  }
+  /**
+   * Why an invite cannot be sent now. A friend elsewhere cannot receive it from here;
+   * the reason points to Travel and invite only when the caller offers that action.
+   */
+  function unavailable(friend?: TravelFriend, travelOffered = false): string | null {
     const region = input.region();
-    if (pending) return TRAVELLING;
+    if (pending) return travelling();
     if (!inOutpost(region)) return 'Invite players from an outpost';
     if (!input.chatReady()) return 'Guild Wars chat is not ready';
     if (friend && region.status === 'ready' && friend.mapId !== region.mapId) {
-      // Point to Travel and invite only where it can start: a PvE travel destination.
-      const place = travelDestination(friend.mapId);
-      const travelable = !!input.travel && !!place && !isPvpTravelDestination(friend.mapId);
-      return `${friend.character || friend.alias} is in ${place?.name ?? 'another map'}.${travelable ? ' Use Travel and invite.' : ''}`;
+      const place = travelDestination(friend.mapId)?.name ?? 'another map';
+      return `${friend.character || friend.alias} is in ${place}.${travelOffered ? ' Use Travel and invite.' : ''}`;
     }
     return null;
   }
@@ -50,7 +59,7 @@ export function createPartyInvite(input: PartyInviteInput) {
     if (!input.travel) return 'Travel is unavailable';
     if (isPvpTravelDestination(friend.mapId)) return NEEDS_PVE;
     if (region.status === 'ready' && region.mapId === friend.mapId) return 'You are already in this outpost';
-    return pending ? TRAVELLING : null;
+    return travelling();
   }
 
   /**
@@ -67,8 +76,11 @@ export function createPartyInvite(input: PartyInviteInput) {
     let cancel = () => {};
     const promise = new Promise<void>((resolve, reject) => {
       let known = characterKey;
+      let finished = false;
       let settle: ReturnType<typeof setTimeout> | null = null;
       const finish = (error?: Error) => {
+        if (finished) return;
+        finished = true;
         unsubscribe(); clearTimeout(timeout); if (settle) clearTimeout(settle);
         if (error) reject(error); else resolve();
       };
@@ -100,6 +112,9 @@ export function createPartyInvite(input: PartyInviteInput) {
   }
 
   return {
+    get pending() { return pending?.details ?? null; },
+    subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; },
+    cancel,
     unavailable,
     /** Why Travel and invite cannot start now, or null. */
     travelUnavailable,
@@ -118,15 +133,21 @@ export function createPartyInvite(input: PartyInviteInput) {
       const name = friend.character;
       if (!name) throw new Error('This friend is offline');
       const arrived = arrival(friend.mapId, region.characterKey);
-      pending = arrived.cancel;
+      const request = { details: Object.freeze({ name, place: travelDestination(friend.mapId)?.name ?? 'the outpost' }), cancelled: false, cancel: arrived.cancel };
+      pending = request; refresh();
+      const clear = () => { if (pending === request) { pending = null; refresh(); } };
       try { await travel(friend, generation); } catch (error) {
-        pending = null; arrived.cancel(); throw error;
+        clear(); arrived.cancel(); throw error;
       }
-      const invited = arrived.promise.finally(() => { pending = null; }).then(() => invite(name));
+      const invited = arrived.promise.finally(clear).then(() => {
+        // Cancellation can follow the settle timer before its promise continuation runs.
+        if (request.cancelled) throw new Error('Travel and invite stopped. The invite was not sent.');
+        return invite(name);
+      });
       invited.catch(() => {});
       return { invited };
     },
     /** Tools are leaving: a pending arrival never invites later. */
-    dispose() { pending?.(); },
+    dispose() { cancel(); listeners.clear(); },
   };
 }

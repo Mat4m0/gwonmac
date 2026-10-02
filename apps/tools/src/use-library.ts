@@ -32,6 +32,7 @@ import {
   validateBuildFor,
 } from "../../../src/shared/builds/validate";
 import { resolveTeamApplyPlan } from "../../../src/shared/builds/team-apply";
+import type { TeamApplyEvent } from "../../../src/shared/builds/team-apply-runner";
 import { captureParty } from "../../../src/shared/builds/live-party";
 import type { ToolsHost } from "./host";
 import {
@@ -625,7 +626,7 @@ export function useLibrary(host: ToolsHost) {
     }
   };
 
-  const applyTeam = async (team: Team) => {
+  const applyTeam = async (team: Team, onEvent?: (event: TeamApplyEvent) => void) => {
     if (!library.value || saving.value) return null;
     saving.value = true;
     applying.value = true;
@@ -649,6 +650,7 @@ export function useLibrary(host: ToolsHost) {
         return null;
       }
       const result = await host.applyTeam(resolution.plan, (event) => {
+        onEvent?.(event);
         applyStatus.value = {
           teamId: team.id,
           tone: "progress",

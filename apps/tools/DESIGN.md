@@ -146,9 +146,10 @@ tracking behavior belong in
   focus.
 
 The saved interface style is `guild-wars`, `obsidian`, or `custom`. Font and
-panel opacity remain independent. Panel opacity is from 65% through 100%.
-These preferences must not change component markup, layout density, or
-behavior. Every player-facing Settings and Tools stylesheet consumes the
+panel opacity and Text size remain independent. Text size scales the existing
+type ramp from 100% to 200%. It does not zoom the game.
+Panel opacity is from 65% through 100%. Style and opacity must not change
+component markup, layout density, or behavior. Every player-facing Settings and Tools stylesheet consumes the
 shared tokens; local palette literals are not allowed.
 
 ## Window and interaction rules
@@ -160,8 +161,23 @@ shared tokens; local palette literals are not allowed.
 - Start a Tools drag only from title-bar furniture.
 - Do not start a drag from an interactive child.
 - Keep a non-modal surface open when the player clicks Guild Wars behind it.
-- Escape closes the topmost GWonMac surface before Guild Wars receives it.
-- Tab enters the topmost open GWonMac surface and wraps inside its controls.
+- Escape follows one rule on every GWonMac surface, before Guild Wars receives
+  it: the surface that holds focus answers first, innermost level first (its
+  menu, drawer, prompt or typed search), then an open disclosure closes, and
+  only then the surface steps back or hides. From the game, Escape reaches the
+  topmost surface, which still leaves an open inner level first. One step per
+  physical press; an Escape during composition belongs to the input method.
+- Every list and carousel moves one selection with the shared list keys:
+  Up/Down and Control-P/N step, Page Up/Down move by the visible rows, Home/End
+  jump, and no list wraps. Up at the top of a list stays; it never jumps to
+  Back or the window chrome.
+- A press that starts on a GWonMac surface owns its repeats and release. A held
+  Enter activates a surface control once, and a key that closes a surface never
+  continues into Guild Wars.
+- Tab wraps inside the topmost open GWonMac surface's controls. It never
+  leaves the game canvas (D-12): while Guild Wars has the keyboard, Tab and
+  the keys after it stay in the game. A player enters a popout through its
+  shortcut, a click, or `/` inside the panel.
 - Keep native confirmation dialogs above non-modal Tools and Travel surfaces.
 - Open Travel with Quick Travel destinations only; reveal the full catalogue as
   the player searches.
@@ -196,10 +212,15 @@ shared tokens; local palette literals are not allowed.
   It is non-modal at wide widths and an in-window sheet when narrow. Its entry
   and exit share the right edge, focus returns to its trigger, and reduced
   motion replaces translation with a brief cross-fade.
-- Reveal compact save and follow actions on ledger-row hover or keyboard focus;
-  keep them visible for touch input. Keep Whisper seller visible in the bottom inspector. Put save, follow, copy,
-  and source commands under Actions. Escape closes Actions before leaving the
-  current view. The message remains the visual focus.
+- Reveal compact save and follow actions on ledger-row hover; keep them visible
+  for touch input. Keep **Whisper** and **Show listings**, named for the selected
+  author, visible in the bottom inspector; while a ledger row has focus they show
+  Return and Command-Return. Actions (Command-J) is a menu over the ledger that
+  repeats both and adds save, follow, copy and source commands; opening it and
+  its feedback move no control. Escape and Command-Backspace close Actions,
+  then the Saved drawer, then Trader prices, the narrow offer sheet or a
+  player's listings, before Escape hides Trade; Command-Backspace does nothing
+  at the listings. The message remains the visual focus.
 - Scroll to revealed Trade Chat messages smoothly by default and instantly
   when reduced motion is active.
 - Keep scrolling flex and grid children shrinkable.
@@ -228,6 +249,37 @@ Settings dialog too. Body text must have a contrast ratio of at least 4.5:1.
 Large text must have a ratio of at least 3:1. Test minimum opacity over bright,
 detailed game artwork.
 
+### Legibility model
+
+[`appearance.ts`](../../src/renderer/appearance.ts) owns one worst-case model
+for every text role. It measures the inks `tokens.css` paints, or the colours a
+player chose, against the panel at its effective opacity over snow and over a
+black scene, each with and without the accent hover layer. It includes actual
+title, raised and recessed paint, unchanged controls, and translucent wells.
+Tests pin default paint to `tokens.css`. Reduce Transparency makes the
+effective opacity 1; the saved opacity stays unchanged.
+
+Opposing custom surfaces can make 4.5:1 impossible for one shared ink. The
+existing neutral fallback maximises the minimum contrast; it does not guarantee
+AA for those palettes. Separate surface inks or palette limits need a design
+decision. The saved palette remains unchanged.
+
+- Text, bright, muted, faint and the accent used as text move separately and
+  only as far as they must. One opacity step never re-inks a whole role, and
+  faint stays apart from muted wherever both read.
+- At low opacity over snow the inks converge. Hierarchy then comes from type
+  role and size: row detail, counts and hints use the smaller Reading role,
+  keycaps the Data role, and headings the Display role.
+- `--ui-accent-text` is the accent used as text: group headings, the scope
+  chip, the build summary label, links, progress and the current-character
+  marker. Only its lightness moves, so gold stays gold. Fills, rails, icons
+  and the primary button keep the exact `--ui-accent`.
+- The Classic head sits on painted metal that the model cannot measure, so its
+  secondary copy (crumbs, caption, context) uses the text ink with the Classic
+  text shadow.
+- Reduce Transparency changes panel material only. A modal scrim keeps its
+  value, so the game stays visible around the opaque panel.
+
 ## Compact reading surfaces
 
 Whispers uses the shared `.ui-frame` with `data-variant="quiet"`: the theme's
@@ -252,15 +304,37 @@ places with their reason. User pins keep their existing order and availability.
 Tool rows show meaningful descriptions and resolved shortcut keycaps.
 
 The top bar shows clickable ancestor breadcrumbs and an understated Back arrow.
-Backspace returns to the previous page when no text is being edited; an empty
-search can also go Back. History restores query, selection, scroll and the actual
-focused row/control. First entry and restoration are separate: character cards,
+Esc closes an open disclosure, then clears a typed query, then goes back one page,
+then closes Hub; a page opened directly by its shortcut has no artificial Home step
+for Esc.
+Command-Backspace returns to the previous page from any focus in Hub, one page per
+physical press; a page opened directly by its shortcut returns to Home, and Home
+ignores it. The press bubbles to Hub, so a mounted view with its own inner level
+(a confirmation, Character Switch settings, Travel Customize) steps out of it first,
+the way Esc does, and marks the press handled. Travel and Characters, which keep
+their own footer, list Command-Backspace there and name what Esc does now (clear,
+back or close). Backspace only edits text and never navigates; typing or Backspace
+on a button, the header or blank space edits the page's search: Hub search on list
+stages, the view's own search in Travel and Characters. A form view has none, and
+Travel's Customize panel keeps its keys like a form. History restores
+query, selection, scroll and the focused control. The search field's description
+leads with the page title, so a screen reader that stays in search after Back
+hears where it landed. In a view, Up/Down step between controls in screen order
+within the focused control's column (Settings sections or the section body), stop
+at its ends and leave a scrolled region such as Build details to scroll natively.
+Settings sections are a list: Right enters the first usable control and Left
+returns to the section. Esc at a shortcut conflict answers it like Cancel. The
+Characters search leads its Tab order, and the cards are one Tab stop on the
+selected card. In a form, Command-Enter runs the view's named primary from any
+field, as Enter does in a text field. Form fields keep their draft for
+the session by page path and field name, unless the stored value they started from
+changed meanwhile. Hub lists keep focus in search and move the active descendant. First entry and restoration are separate: character cards,
 account choices and action lists start on their useful item; search stays optional.
 Fresh Home starts in search. Temporary app blur and popout handoffs retain the
 session task; explicit closure starts a fresh task next time. Resume refreshes
 current facts before execution. Account replacement invalidates prior targets.
 Arrow keys connect results, search, navigation and actions. Character cards use
-Left/Right; Up returns to search, then to Back. Native text editing, range and
+Left/Right; Up returns to search and stays there. Native text editing, range and
 select controls retain their own keys. Actions only opens contextual actions. Known query scopes stay visible, and typing a command name offers one
 relevant example. Neither examples nor typing execute an action.
 
@@ -286,10 +360,15 @@ Team authoring keeps the roster first; Team options expands difficulty and tags,
 with the current difficulty visible in its summary.
 
 Floating Trade keeps connection state beside result counts. Common filters share
-a row when width permits. Secondary actions expand inside the inspector without
-replacing the ledger. Opening a seller's Whisper leaves the Trade query and
-selected offer intact. Floating windows share visual and keyboard stacking.
-Escape closes an expanded Actions menu before its window.
+a row when width permits. Secondary actions open in a menu anchored to the
+inspector's Actions, over the ledger. Opening a seller's Whisper leaves the Trade query and
+selected offer intact, and closing it returns the keyboard to the row or button
+that opened it. Floating windows share visual and keyboard stacking.
+Escape closes an expanded Actions menu before its window. In the Whispers
+picker, Escape clears typed text before it hides the window, and Up/Down walk
+the listed conversations, friends and recent people while focus stays in the
+search. Command-Backspace returns from a conversation to the picker, except in
+the message field, where it keeps its macOS meaning.
 
 Only Hub starts locked. Its subtle top-bar lock enables dragging by
 the header and resizing through a 36px corner hit area. Floating tools have no
@@ -307,13 +386,21 @@ Whispers paints its background once across the complete frame interior. Its
 title is vertically centered, and conversation controls sit above the picker
 or transcript. There is no docking control or embedded Hub chat layout.
 
+Maps opens Settings → Maps. There is no separate Maps page.
 Maps pairs each native switch with its opacity control. Disabled layers retain
 but disable opacity controls. External settings updates repaint the same view;
 failed writes restore saved state and show a recoverable inline error.
 
 ### Compact build metadata
 
-Hub build results keep the skill bar and invested attribute ranks in each row.
+Empty Home uses compact 40 px rows for pinned and recent builds.
+Search and Build Library keep skill bars and invested attribute ranks.
+Mixed team/build results reserve comparison space across selections.
+
+Hub uses one search box geometry across Home, Travel and Characters.
+Material changes frame artwork; content keeps the same horizontal inset.
+The grammar hint shares the reserved footer status slot. Failures take priority.
+Price basis stays inside the conversion card and retains keyboard focus.
 There is no separate lower preview for individual builds and no visible template
 file path. Profession codes remain beside the title, such as Protection
 Mo/Me, in smaller muted text. Native templates also show a folder icon and
@@ -350,10 +437,10 @@ typing. Unknown folders return no results. Imported build provenance is not a
 current template folder. File identities and the reread-before-apply guard stay
 unchanged; folder searches never apply a build automatically.
 
-Typing a printable character while a Hub result has keyboard focus resumes the
-search at its saved caret or selection. This also applies on target-selection
+Typing a printable character or Backspace while a Hub result has keyboard focus
+resumes the search at its saved caret or selection. This also applies on target-selection
 pages. Arrows still navigate results; Enter activates the selected result;
-Backspace from a result still goes back in Hub history.
+Command-Backspace from a result goes back in Hub history.
 
 ### Build continuity and completion
 
@@ -370,6 +457,9 @@ build's Details can open its canonical record in the authoring workspace.
 
 Apply shows progress and explicit partial failures through the existing runner.
 Confirmed completion closes Hub with a brief receipt naming the build and target.
+The receipt stands where the Hub's footer was, not as a window toast, and ends
+when Hub opens again. An outcome that arrives while Hub is open, such as the
+invite after Travel and invite, goes to the status line instead.
 The library controller retains up to three recent build/hero references for this
 renderer session; Continue reopens the named target for review. Native files and
 live targets are revalidated before applying again. Saved build usage updates the

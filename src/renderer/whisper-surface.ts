@@ -2,7 +2,7 @@
  * Owns input isolation and Vue lifetime for the optional whisper surface.
  * Temporary region withdrawal hides the view without losing its placement.
  */
-import { toggleHubWhispers } from './hub-whisper.js';
+import { toggleHubWhispers, whisperFocusReturn } from './hub-whisper.js';
 import type { WhisperSession } from "../shared/whisper-session.js";
 import type { EmbeddedToolsBundle } from "../shared/tools-bundle-contracts.js";
 import { createNonActivatingSurface } from "./non-activating-surface.js";
@@ -40,12 +40,13 @@ export function createWhisperSurface(parent: HTMLElement, session: WhisperSessio
   let enabled = true;
   let disposed = false;
   let app: { dispose(): void } | null = null;
+  const returnFocus = whisperFocusReturn(root, nonActivating.releaseKeyboard);
   const unsubscribe = session.subscribe(state => {
     surface.setOpen(enabled && state.visible);
     if (state.visible === visible) return;
     visible = state.visible;
     if (visible && document.pointerLockElement) document.exitPointerLock();
-    if (!visible) nonActivating.releaseKeyboard();
+    returnFocus(visible);
   });
   // Reparenting during a press cancels the click and pointer capture in Chromium.
   root.addEventListener("pointerdown", () => surface.raise(), true);

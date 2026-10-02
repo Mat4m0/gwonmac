@@ -20,7 +20,9 @@ import type { EliteWikiRequest } from "./elite-wiki.js";
 import type { EliteMissionMapMarkers } from "./elite-map-settings.js";
 import type { EliteTracking, EliteUpdate } from "./elite-skills.js";
 import type { HubSettingsApi } from "./hub-settings.js";
+import type { LauncherSettingsSection } from "./launcher-contracts.js";
 import type { MarketSnapshot } from "./market-rates.js";
+import { DEFAULT_CALCULATOR_RATES, type CalculatorRates } from './hub-calculator.js';
 import type { HubShortcut } from './hub-preferences.js';
 import type {
   DiagnosticSummary,
@@ -378,6 +380,8 @@ export const DIAGNOSTIC_PROFILES = [
 export type DiagnosticProfile = (typeof DIAGNOSTIC_PROFILES)[number];
 export const UI_PANEL_OPACITY_MIN = 65;
 export const UI_PANEL_OPACITY_MAX = 100;
+export const UI_TEXT_SIZE_MIN = 100;
+export const UI_TEXT_SIZE_MAX = 200;
 export const LAST_UPDATE_CHECK_AT_MAX = 8_640_000_000_000_000;
 
 export interface AppSettings {
@@ -395,6 +399,8 @@ export interface AppSettings {
    * game behind them. This is presentation only and never reaches the game.
    */
   uiPanelOpacity: number;
+  /** Interface text size in percent; never scales Guild Wars. */
+  uiTextSize: number;
   /** Enable map guidance and its controls without changing saved layer visibility. */
   cartographyEnabled: boolean;
   /** Show certified walkability on the native Compass and Mission Map. */
@@ -461,6 +467,8 @@ export interface AppSettings {
   /** Player changes to the app-owned shortcuts; missing entries use defaults. */
   shortcutOverrides: ShortcutOverrides;
   hubShortcuts: readonly HubShortcut[];
+  /** Optional estimates and selected source, shared across game windows. */
+  calculatorRates: CalculatorRates;
   /** Display-only labels that mirror the player's eight Guild Wars bindings. */
   skillKeyBindings: SkillKeyBindings;
   /** Show the configured skill-key labels over the eight player skill slots. */
@@ -557,6 +565,7 @@ export const RENDERER_WRITABLE_SETTINGS = [
   "characterSwitchLevel",
   "characterSwitchLocation",
   "hubShortcuts",
+  "calculatorRates",
 ] as const satisfies readonly (keyof AppSettings)[];
 type RendererWritableSetting = (typeof RENDERER_WRITABLE_SETTINGS)[number];
 
@@ -602,6 +611,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   uiFont: "guild-wars",
   controllerPromptStyle: "game-default",
   uiPanelOpacity: 94,
+  uiTextSize: 100,
   cartographyEnabled: true,
   cartographyOverlayEnabled: false,
   cartographyGridEnabled: false,
@@ -640,6 +650,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   targetReadout: false,
   shortcutOverrides: {},
   hubShortcuts: [],
+  calculatorRates: DEFAULT_CALCULATOR_RATES,
   skillKeyBindings: EMPTY_SKILL_KEY_BINDINGS,
   skillKeyLabelsEnabled: false,
   chatFiltersEnabled: false,
@@ -998,6 +1009,11 @@ export interface RendererInit {
   templateFsTrace: boolean;
   /** Opaque, immutable generation selected when this game window opened. */
   texturePackGeneration: string | null;
+  /**
+   * The player's macOS double-click interval in milliseconds, read when this
+   * game window opened; null when unset, which means the system default.
+   */
+  doubleClickMs: number | null;
 }
 
 /**
@@ -1040,7 +1056,7 @@ export type RendererCommand =
   | { type: "hub.settings" }
   | { type: "input.reset" }
   | { type: "input.release"; code: string }
-  | { type: "text.edit"; command: GameTextEditCommand }
+  | { type: "text.edit"; command: TextEditCommand }
   | { type: "accounts.settings.open" }
   | { type: "tools.toggle" }
   | { type: "trade.toggle" }
@@ -1144,7 +1160,9 @@ export const CORE_IPC = {
   hubSettingsGet: "gw:hub:settings:get",
   hubSettingsUpdate: "gw:hub:settings:update",
   hubShortcutCapture: "gw:hub:shortcut:capture",
+  hubShortcutCaptureCancel: "gw:hub:shortcut:captureCancel",
   appRequestQuit: "gw:app:requestQuit",
+  appShowQuitOrReload: "gw:app:showQuitOrReload",
   appReloadGame: "gw:app:reloadGame",
   appClaimRelogIntent: "gw:app:claimRelogIntent",
   clipboardWriteText: "gw:clipboard:writeText",
@@ -1234,6 +1252,11 @@ export type GameTextEditRequest =
   | { command: "selectAll" };
 
 export type GameTextEditCommand = GameTextEditRequest["command"];
+/**
+ * A macOS Edit command. Undo and Redo edit only an ordinary gwonmac field;
+ * the Guild Wars editor keeps its own text, so they never reach it.
+ */
+export type TextEditCommand = GameTextEditCommand | "undo" | "redo";
 
 export const GAME_RELOAD_CAUSES = [
   "memory-warning",
@@ -1356,8 +1379,11 @@ export interface CoreGwNativeApiBase {
     openExternal(kind: ExternalLinkKind): Promise<void>;
     /** Reveal a named app directory in Finder. */
     reveal(kind: RevealKind): Promise<void>;
-    openSettings(): Promise<void>;
+    /** Opens the launcher at a Settings section, for settings the Hub links to. */
+    openSettings(section: LauncherSettingsSection): Promise<void>;
     requestQuit(): Promise<void>;
+    /** The account's Quit-or-Reload confirmation sheet, the same one Command-Q opens. */
+    showQuitOrReload(): Promise<void>;
     reloadGame(cause: GameReloadCause): Promise<void>;
     claimRelogIntent(): Promise<boolean>;
   };

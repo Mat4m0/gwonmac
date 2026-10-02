@@ -13,7 +13,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { loadBuildLibrary } from "../../src/main/core/build-library.ts";
 import { loadSettings, parseSettings } from "../../src/main/core/settings.ts";
-import { HUB_CALCULATOR_UNITS, HUB_RESERVED_WORDS, hubPhraseReserved } from "../../src/renderer/hub-preferences.ts";
+import { HUB_CALCULATOR_UNITS, HUB_RESERVED_WORDS, hubPhraseReserved } from "../../src/shared/hub-preferences.ts";
 import { parseBuildLibrary } from "../../src/shared/builds/parse-library.ts";
 import { LIBRARY_VERSION } from "../../src/shared/builds/library.ts";
 import { HUB_SCOPES } from "../../src/shared/hub.ts";
@@ -72,9 +72,22 @@ test("stored phrases are refused only for shape, id, length and uniqueness", () 
   ]) assert.equal(isHubShortcuts(invalid), false, JSON.stringify(invalid).slice(0, 80));
 });
 
-test("the phrase editor still refuses a new phrase that the grammar reads first", () => {
-  for (const phrase of ["invite x", "Invite", "acc second", "team gom afk", "ecto", "1p in g", "1 p in g", "10e in p", "2+2"]) {
-    assert.equal(hubPhraseReserved(phrase), true, phrase);
+test("the phrase editor still refuses a new phrase that the grammar reads first, and says how it reads it", () => {
+  const reads = {
+    "invite x": "command", "Invite": "command", "acc second": "command", "team gom afk": "command",
+    "ecto": "unit", "P": "unit", "k": "unit", "a": "unit", "armbrace of truth": "unit", "zkeys": "unit", "zaishen keys": "unit", "iron": "unit",
+    "1p in g": "calculation", "1 p in g": "calculation", "10e in p": "calculation", "2+2": "calculation",
+    "": null, "my route": null, "inviter": null, "romi": null, "ranger": null,
+  };
+  for (const [phrase, reading] of Object.entries(reads)) assert.equal(hubPhraseReserved(phrase), reading, phrase);
+});
+
+
+test("utility pins persist through the closed shortcut validator without accepting executable ids", () => {
+  const pins = ['commands', 'settings', 'accounts'].map(id => ({ id, phrase: '', pinned: true }));
+  assert.equal(isHubShortcuts(pins), true);
+  assert.deepEqual(parseSettings({ ...settings(''), hubShortcuts: pins }).hubShortcuts, pins);
+  for (const id of ['javascript:quit()', 'command:arbitrary', 'accounts:replace']) {
+    assert.equal(isHubShortcuts([{ id, phrase: '', pinned: true }]), false, id);
   }
-  for (const phrase of ["", "my route", "inviter", "romi", "ranger"]) assert.equal(hubPhraseReserved(phrase), false, phrase);
 });

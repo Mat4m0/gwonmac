@@ -4,7 +4,7 @@
  * import these shapes directly instead of restating them on either side.
  */
 import type { EliteMapHandle, EliteMapHost } from "./elite-map.js";
-import type { HubPresenter, HubSource } from "./hub.js";
+import type { HubPresenter, HubSource, HubViewMount } from "./hub.js";
 import type { WhisperSession } from "./whisper-session.js";
 import type { TravelFriends } from "./friends.js";
 import type { ToolboxObservation } from "./builds/live-party.js";
@@ -57,10 +57,11 @@ export type TravelPaletteHandle = Readonly<{
 
 export type TradeChatHandle = Readonly<{
   search: (query: string) => void;
+  /** Escape's step out of one Trade level (menu, Saved drawer, sub-view, then a typed search); false at the empty listings. */
+  stepBack: () => boolean;
   show: () => void;
   hide: () => void;
   toggle: () => void;
-  setActive: (active: boolean) => void;
   dispose: () => void;
 }>;
 
@@ -79,10 +80,13 @@ export type EmbeddedToolsBundle<Target> = Readonly<{
     target: Target,
     options: ToolsAppMountOptions & Readonly<{ nativeApi: ToolsGwNativeApi; hub?: HubPresenter<Target> }>,
   ) => ToolsAppHandle;
-  createHubTravel: (options: { nativeApi: ToolsGwNativeApi; command: TravelCommand; development: boolean; hub: HubPresenter<Target> }) => {
+  /** `leaveArea` asks "Leave this area?" before a trip out of an explorable area and rejects with an AbortError when the player stays. */
+  createHubTravel: (options: { nativeApi: ToolsGwNativeApi; command: TravelCommand; development: boolean; hub: HubPresenter<Target>; leaveArea(place: string, leave: () => Promise<void>): Promise<void> }) => {
     source: HubSource;
     readonly active: boolean;
     open(): void;
+    /** A new Travel page's content, for a page that was shown before the bundle loaded. */
+    page(): HubViewMount<Target>;
     travel(mapId: number): Promise<void>;
     update(state: TravelGameState): void;
     updateFriends(friends: TravelFriends): void;

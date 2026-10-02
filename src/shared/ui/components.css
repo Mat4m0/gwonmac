@@ -81,8 +81,12 @@
   padding: var(--ui-art-surface-width);
   border-radius: var(--ui-art-surface-radius);
   background: var(--ui-art-surface-fill);
-  mask: var(--ui-art-surface-mask);
+  /* The shorthands reset the composite to `add`; restate the ring's cut-out
+   * or Modern paints `--ui-frame` over the whole panel. */
   -webkit-mask: var(--ui-art-surface-mask);
+  -webkit-mask-composite: xor;
+  mask: var(--ui-art-surface-mask);
+  mask-composite: exclude;
   z-index: var(--ui-art-surface-z);
 }
 .ui-frame.ui-art-frame::after { display: var(--ui-art-corners); }
@@ -96,6 +100,8 @@
   border-radius: var(--ui-art-head-radius);
   background: var(--ui-art-head-fill);
   box-shadow: var(--ui-art-head-shadow);
+  --ui-text-muted: var(--ui-art-head-muted);
+  --ui-text-faint: var(--ui-art-head-faint);
 }
 .ui-frame.ui-art-frame > .ui-window-head .ui-panel-title {
   font-size: var(--ui-art-title-size);
@@ -529,7 +535,7 @@
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--ui-accent);
+  color: var(--ui-accent-text);
   font: inherit;
   cursor: pointer;
   text-decoration: none;
@@ -908,7 +914,7 @@
   text-wrap: pretty;
 }
 
-.ui-status-line[data-tone="progress"] { color: var(--ui-accent); }
+.ui-status-line[data-tone="progress"] { color: var(--ui-accent-text); }
 .ui-status-line[data-tone="success"] {
   color: color-mix(in srgb, var(--ui-success) 74%, var(--ui-text-bright));
 }
@@ -1433,9 +1439,10 @@ button.ui-chip[aria-disabled="true"] {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-chat-outgoing-accent) 24%, transparent);
 }
 
-/* Window chrome keeps large interaction targets without a second painted button. */
+/* Window chrome keeps large interaction targets without a second painted button.
+ * These are buttons, so the UA sheet would drop the head's text shadow. */
 .ui-window-close, .ui-window-lock, .hub-crumb {
-  appearance:none; border:0; background:transparent; box-shadow:none; color:var(--ui-text-muted);
+  appearance:none; border:0; background:transparent; box-shadow:none; color:var(--ui-text-muted); text-shadow:inherit;
   display:inline-flex; align-items:center; justify-content:center; padding:0; flex:none;
   cursor:pointer; font:inherit; min-width:28px; min-height:28px;
 }

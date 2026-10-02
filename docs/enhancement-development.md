@@ -30,16 +30,14 @@ Current integrated features are:
   action outside the palette. A saved Command-R override takes priority; Scry
   remains available from View. Its default is not serialized as a new shortcut
   key because older settings readers reject unknown keys.
-- **Character Switch** (Core): Command-Shift-R opens an account-character palette
-  independently of Tools. Its default horizontal layout follows Guild Wars'
-  character-selection order, opens on the current character, and wraps only
-  after navigation reaches a visible end. Its alternative vertical layout is
-  alphabetical. Accounts that fit inside the visible carousel are centered and
-  shown in full. Bounded name and primary-profession search is shown by default
-  for every account size and can be hidden. Profession search matches a
-  substring of the canonical profession name and does not search the secondary
-  profession. Character focus remains primary until typing starts a search.
-  Direct 1–9 and 0 shortcuts select the first ten characters. The exact
+- **Character Switch** (Core): Command-E opens Characters in the Hub
+  independently of Tools. Its Hub carousel follows Guild Wars'
+  character-selection order, opens on the current character, and holds at
+  both navigation ends. Accounts that fit inside the visible carousel are centered
+  and shown in full. Bounded name and primary-profession search always shows.
+  Search matches word prefixes and excludes secondary professions. Character focus remains primary until typing starts a search.
+  The 1–9 and 0 keys select and reveal the first ten characters; only Enter
+  switches (D-5). The exact
   companion projection owns the live records. Reload Guild Wars is in the View
   menu.
 
@@ -47,7 +45,8 @@ Current integrated features are:
   is unassigned by default and opens a small in-game confirmation before sending the fixed `/resign` command
   through the certified native chat sender in PvE. It does not type into chat.
   Turning off Resign or Tools disables the command and cancels a queued request.
-  Enter or the Resign button confirms. Escape, Cancel, the close button, an
+  Enter or the Resign button confirms once the dialog has armed (~400 ms after
+  it opens; a multi-click never confirms). Escape, Cancel, the close button, an
   outside click, and losing window focus dismiss without sending.
   A changed native chat path withdraws Resign until its exact bodies are reviewed.
 
@@ -70,7 +69,7 @@ Current integrated features are:
   Partner offers are never changed. The feature has one live Settings switch,
   is off by default, and withdraws during confirmed PvP play.
 - **Travel**: Command-T or `/tp` opens host-owned destination
-  autocomplete and 1–9 shortcuts. Search filters positively locked maps from
+  autocomplete and 1–9 shortcuts that select a favourite; only Enter travels. Search filters positively locked maps from
   the current character's bounded unlock set, and Recent persists certified map
   observations per privacy-safe character key. A named, bounded Travel action
   rechecks the unlock at the game-thread drain. While the palette is open,
@@ -294,7 +293,9 @@ accepted. That one window-local transaction then owns the native action channel
 through Logout, Selector, and Play, including while the window is unfocused or
 hidden. Completion, failure, timeout, and disposal disable the channel and clear
 pending native work. Focus alone never enables it. The existing context, target
-identity, selection proof, and deadline checks still apply; automatic return
+identity, selection proof, and deadline checks still apply. The game-thread
+executor rechecks the Selector target immediately before Play. It refuses a
+changed selection without another click. Automatic return
 after reload retains its separate focus policy.
 
 Run the unpackaged developer probe with:

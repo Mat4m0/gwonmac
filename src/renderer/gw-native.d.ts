@@ -97,6 +97,8 @@ declare global {
 
   interface GwonmacSurfaceHandle {
     setOpen(open: boolean): void;
+    /** A new page replaced the content: a click run that began before it is cancelled. */
+    pageChanged(): void;
     raise(): void;
     dispose(): void;
   }
@@ -104,6 +106,8 @@ declare global {
   interface GwonmacDialogHandle {
     show(): void;
     close(): void;
+    /** A new page replaced the content: a click run that began before it is cancelled. */
+    pageChanged(): void;
     dispose(): void;
   }
 
@@ -113,15 +117,21 @@ declare global {
       priority: number;
       transient?: boolean;
       dismiss(): void;
+      /** What Escape does once no inner level answered it; `dismiss` when absent. */
+      escape?(): void;
     }>): GwonmacSurfaceHandle;
     registerDialog(dialog: Readonly<{
       root: HTMLDialogElement;
       priority: number;
       transient?: boolean;
       dismiss(): void;
+      /** What a click on the backdrop does; `dismiss` when absent. */
+      backdrop?(): void;
       restoreFocus(): HTMLElement | null;
     }>): GwonmacDialogHandle;
     dismissTransient(): void;
+    /** Resolves once the press that activated a control has ended, before a native sheet opens. */
+    afterPress(): Promise<void>;
   }
 
   type InputTraceEntry = SharedInputTraceEntry;
@@ -302,6 +312,7 @@ declare global {
     gwToolsSettings(): Readonly<{
       shortcutOverrides?: ShortcutOverrides;
       hubShortcuts?: AppSettings['hubShortcuts'];
+      calculatorRates?: AppSettings['calculatorRates'];
       gwonmacTools: boolean;
       buildLibrary: boolean;
       tradeChat: boolean;

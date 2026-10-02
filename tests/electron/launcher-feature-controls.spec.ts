@@ -12,7 +12,7 @@ test("feature controls preserve preferences and validate native commands", async
     });
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     await page.getByRole("button", { name: "Tools", exact: true }).click();
-    await expect(page.getByRole("checkbox", { name: "Character Switch", exact: true })).toBeEnabled();
+    await expect(page.getByRole("checkbox", { name: "Switch Character", exact: true })).toBeEnabled();
     await expect(page.getByRole("button", { name: "Maps", exact: true })).toHaveCount(1);
     await page.evaluate(() => window.launcherNative.tools.setFeature({ tool: "character-switch", enabled: false }));
     await expect.poll(() => page.evaluate(async () => (await window.launcherNative.state.get()).tools.features["character-switch"].enabled)).toBe(false);

@@ -168,6 +168,7 @@ test("the launch argument prefix comes from the contracts too", () => {
       diagnosticProfile: "standard",
       templateFsTrace: false,
       texturePackGeneration: null,
+      doubleClickMs: null,
     },
   );
   assert.deepEqual(

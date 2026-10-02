@@ -517,7 +517,7 @@ async function completeSyntheticClientStartup(page: Page) {
     if (!Module) throw new Error("the renderer published no Module");
     Module.setStartupProgress("complete", undefined, undefined, undefined, undefined);
   });
-  await page.waitForSelector("#loading.gone");
+  await page.waitForSelector("#loading.gone", { state: "attached" });
 }
 
 export async function driveHarnessRuntime(page: Page) {
@@ -609,8 +609,11 @@ export async function assertPackagedOffSession() {
       () =>
         performance.getEntriesByName("gw.runtime.initialized").length > 0,
     );
+    // The host's Double-click speed passes through unchanged; null when never set.
+    const { doubleClickMs, ...init } = await fixture.page.evaluate(() => window.gwNative.init);
+    assert.ok(doubleClickMs === null || doubleClickMs > 0);
     assert.deepEqual(
-      await fixture.page.evaluate(() => window.gwNative.init),
+      init,
       {
         development: false,
         enhancementProgram: "none",

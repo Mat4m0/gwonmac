@@ -10,10 +10,10 @@ test("searches and inspects the Kamadan ledger", async ({ page }) => {
   await expect(dialog).toBeVisible();
   await expect(dialog.locator(".trade-row")).toHaveCount(7);
   await dialog.getByRole("searchbox").fill("Polar Bear");
-  await dialog.getByRole("button", { name: "Search", exact: true }).click();
+  await dialog.getByRole("searchbox").press("Enter");
   await expect(dialog.locator(".trade-row")).toHaveCount(1);
   await dialog.locator(".offer-cell").click();
-  await expect(dialog.getByText("Quiet Ember")).toHaveCount(2);
+  await expect(dialog.getByRole("region", { name: "Offer from Quiet Ember" })).toContainText("unded Polar Bear");
   await dialog.getByRole("button", { name: "Live feed" }).click();
   await expect(dialog.locator(".trade-row")).toHaveCount(7);
 });
@@ -22,7 +22,7 @@ test("searches character names and returns to live when cleared", async ({ page 
   const dialog = page.getByRole("dialog", { name: "Trade Chat" });
   const search = dialog.getByRole("searchbox", { name: "Search offers or character names" });
   await search.fill("Tyria Cartographer");
-  await dialog.getByRole("button", { name: "Search", exact: true }).click();
+  await search.press("Enter");
   const rows = dialog.locator(".trade-row");
   await expect(rows).toHaveCount(2);
   await expect(rows.first()).toContainText("Tyria Cartographer");
@@ -49,10 +49,10 @@ test("keeps Pre-Searing separate and adapts to a narrow window", async ({ page }
 test("opens a player's listings and returns to the prior results", async ({ page }) => {
   const dialog = page.getByRole("dialog", { name: "Trade Chat" });
   await dialog.getByRole("searchbox").fill("arms");
-  await dialog.getByRole("button", { name: "Search", exact: true }).click();
+  await dialog.getByRole("searchbox").press("Enter");
   await expect(dialog.locator(".trade-row")).toHaveCount(1);
 
-  await dialog.getByRole("list", { name: "Trade offers" })
+  await dialog.getByRole("listbox", { name: "Trade offers" })
     .getByRole("button", { name: "Show listings from Tyria Cartographer" }).click();
   await expect(dialog.locator(".trade-row")).toHaveCount(2);
   await expect(dialog.getByText("Earlier trade listing, now superseded")).toBeVisible();
@@ -114,10 +114,9 @@ test("filters selling and buying without relying on chip colour", async ({ page 
 test("saves offers and players in an anchored drawer", async ({ page }) => {
   const dialog = page.getByRole("dialog", { name: "Trade Chat" });
   const firstOffer = dialog.locator(".trade-row").first();
-  const firstRow = firstOffer.locator("..");
   await firstOffer.hover();
-  await firstRow.getByRole("button", { name: "Save offer from Tyria Cartographer" }).click();
-  await firstRow.getByRole("button", { name: "Follow Tyria Cartographer" }).click();
+  await firstOffer.getByRole("button", { name: "Save offer from Tyria Cartographer" }).click();
+  await firstOffer.getByRole("button", { name: "Follow Tyria Cartographer" }).click();
   await dialog.getByRole("button", { name: /Saved 2/ }).click();
   const drawer = dialog.getByRole("complementary", { name: "Saved trade items" });
   await expect(drawer).toContainText("Tyria Cartographer");

@@ -95,6 +95,13 @@ function rendererInit() {
         && /^[0-9a-f]{32}$/.test(parsed.texturePackGeneration)
         ? parsed.texturePackGeneration
         : null,
+    doubleClickMs:
+      typeof parsed.doubleClickMs === "number"
+        && Number.isFinite(parsed.doubleClickMs)
+        && parsed.doubleClickMs > 0
+        && parsed.doubleClickMs <= 10_000
+        ? parsed.doubleClickMs
+        : null,
   };
 }
 
@@ -231,6 +238,7 @@ const api = {
     get: () => ipcRenderer.invoke(IPC.hubSettingsGet),
     update: change => ipcRenderer.invoke(IPC.hubSettingsUpdate, change),
     capture: action => ipcRenderer.invoke(IPC.hubShortcutCapture, action),
+    cancelCapture: () => ipcRenderer.invoke(IPC.hubShortcutCaptureCancel),
   },
   accounts: {
     get: () => ipcRenderer.invoke(IPC.hubAccountsGet),
@@ -240,8 +248,9 @@ const api = {
     openExternal: (kind) => ipcRenderer.invoke(IPC.appOpenExternal, kind),
     reveal: (kind) => ipcRenderer.invoke(IPC.appRevealPath, kind),
     showLauncher: () => ipcRenderer.invoke(IPC.appShowLauncher),
-    openSettings: () => ipcRenderer.invoke(IPC.appOpenSettings),
+    openSettings: (section) => ipcRenderer.invoke(IPC.appOpenSettings, section),
     requestQuit: () => ipcRenderer.invoke(IPC.appRequestQuit),
+    showQuitOrReload: () => ipcRenderer.invoke(IPC.appShowQuitOrReload),
     reloadGame: (cause) => ipcRenderer.invoke(IPC.appReloadGame, cause),
     claimRelogIntent: () => ipcRenderer.invoke(IPC.appClaimRelogIntent),
   },

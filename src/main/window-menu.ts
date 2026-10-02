@@ -22,7 +22,7 @@ import type { LauncherDestination, LauncherProfileSummary } from "../shared/laun
 import {
   EXTERNAL_URLS,
   type AppSettings,
-  type GameTextEditCommand,
+  type TextEditCommand,
 } from "../shared/contracts.js";
 import { errorCode } from "../shared/errors.js";
 import { featureActivationRequested, type FeatureId } from "../shared/feature-contracts.js";
@@ -36,6 +36,7 @@ import {
   toggleTravel,
   toggleCharacterSwitch,
   toggleTrade,
+  toggleWhispers,
   toggleTools,
 } from "./renderer-commands.js";
 import { isDevBuild } from "./protocol.js";
@@ -120,9 +121,10 @@ export function installNativeApplicationMenu(
 
 type ToolMenuSettings = Pick<AppSettings,
   "gwonmacTools" | "buildLibrary" | "tradeChat" | "xunlaiStorage"
-  | "travelPalette" | "characterSwitchEnabled" | "resignEnabled" | "shortcutOverrides">;
+  | "whispersEnabled" | "travelPalette" | "characterSwitchEnabled" | "resignEnabled" | "shortcutOverrides">;
 const TOOL_MENU_FEATURES: Readonly<Record<string, { feature: FeatureId; action: ShortcutAction }>> = {
   "toggle-tools": { feature: "buildLibrary", action: "tools.toggle" },
+  "open-whispers": { feature: "whispers", action: "whispers.toggle" },
   "toggle-trade": { feature: "tradeChat", action: "trade.toggle" },
   "open-xunlai-storage": { feature: "xunlaiStorage", action: "storage.open" },
   "open-travel": { feature: "travel", action: "travel.open" },
@@ -151,7 +153,7 @@ export function updateToolsMenuItems(settings: ToolMenuSettings): void {
 
 async function editFocusedText(
   suppliedWindow: BaseWindow | undefined,
-  command: GameTextEditCommand,
+  command: TextEditCommand,
 ): Promise<void> {
   const win = suppliedWindow
     ? BrowserWindow.fromId(suppliedWindow.id)
@@ -166,7 +168,7 @@ function editMenuItem(
   id: string,
   label: string,
   accelerator: string,
-  command: GameTextEditCommand,
+  command: TextEditCommand,
 ): MenuItemConstructorOptions {
   return {
     id,
@@ -402,7 +404,7 @@ export function installApplicationMenu(actions: ApplicationMenuActions, settings
               {
                 id: "check-for-updates",
                 label: "Check for Updates…",
-                click: () => revealLauncher("settings"),
+                click: () => revealLauncher("settings/general"),
               },
               {
                 id: "show-settings",
@@ -431,6 +433,9 @@ export function installApplicationMenu(actions: ApplicationMenuActions, settings
     {
       label: "Edit",
       submenu: [
+        editMenuItem("edit-undo", "Undo", "CmdOrCtrl+Z", "undo"),
+        editMenuItem("edit-redo", "Redo", "Shift+CmdOrCtrl+Z", "redo"),
+        { type: "separator" as const },
         editMenuItem("edit-cut", "Cut", "CmdOrCtrl+X", "cut"),
         editMenuItem("edit-copy", "Copy", "CmdOrCtrl+C", "copy"),
         editMenuItem("edit-paste", "Paste", "CmdOrCtrl+V", "paste"),
@@ -472,6 +477,12 @@ export function installApplicationMenu(actions: ApplicationMenuActions, settings
           label: "Trade Chat",
           enabled: false,
           click: withGameOwner((win) => toggleTrade(win)),
+        },
+        {
+          id: "open-whispers",
+          label: "Whispers",
+          enabled: false,
+          click: withGameOwner((win) => toggleWhispers(win)),
         },
         {
           id: "open-xunlai-storage",

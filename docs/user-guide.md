@@ -46,7 +46,8 @@ position in place. The cutover does not copy, move, or delete that data.
 The launcher hides after every selected account opens successfully. It stays
 visible if an account needs attention. Use **Window → Show Launcher** to open
 another account. You can also right-click the Dock icon and choose **Show
-Launcher**. **Settings…** opens launcher Settings directly. Closing one game
+Launcher**. **Settings…** opens Settings in the Hub when a game window is in
+front, and launcher Settings otherwise. Closing one game
 affects only that account. Closing the last game shows the launcher. Clicking
 the Dock icon restores the most recent launcher or game window that you used.
 If that window has closed, the next most recent game window is restored.
@@ -131,8 +132,8 @@ Skill labels only change the displayed labels, not Guild Wars key bindings.
 Character Switch has its own switch, shortcut, and display settings here.
 It is a Core feature and does not require **Enable Tools**.
 Inside Hub, Character Switch uses compact horizontal cards in character-selection
-order. Its settings control search, profession, level and known-location display.
-The search bar is shown by default and can be hidden for the current app session.
+order. Its settings control profession, level and known-location display; the
+search bar always shows.
 
 Build Library defaults to **Command-B**. **Control-Shift-Space** remains a
 Guild Wars control for calling the selected target without attacking.
@@ -145,7 +146,7 @@ not run while typing or on login and character-selection screens. Existing
 custom Command-G shortcuts keep their binding; choose another Call target
 shortcut if Command-G was already assigned.
 
-Shortcuts use macOS Command combinations such as Command-T. Normal editing and
+Shortcuts can use Command, Control, Option, or function keys. Normal editing and
 application shortcuts such as Command-C, Command-V, Command-Q, and Command-W
 remain reserved. If a new or restored shortcut conflicts with any feature,
 the launcher asks before replacing it. This includes disabled features.
@@ -199,12 +200,64 @@ styles. Deleting a custom style requires confirmation.
 ## Hub command palette
 
 Press **Command-R** to search people, outposts, tools, and commands. Type a name, use Up and Down,
-and press Enter for the action shown in the footer. The **Actions** button opens secondary actions. **Command-K** opens Trade. Escape goes back or
-closes the palette. The game keeps running while Hub is open.
+and press Enter for the action shown in the footer. Every list in Hub, Travel,
+Trade and Whispers moves the same way: Up and Down or Control-P and Control-N
+step, Page Up and Page Down move by a page, and Home and End jump to the first
+and last result. Lists stop at both ends instead of wrapping, and Up at the top
+stays where it is. A click opens a tool or
+page at once. A click on a result that changes the game or your account (travel,
+apply a build, switch character, invite, open an account) only selects it: press
+Enter, click the footer action, or double-click that result. Moving the pointer
+over other results on the way to the footer keeps the one you clicked; hover
+selects again after the pointer leaves the list or a key moves the selection.
+A double-click never runs anything on the page its first click opened, and it
+never reaches the game after Hub closes. The **Actions** button, **Command-J**, or a right-click on a result, opens secondary actions. A right-click on a Travel destination or a character card only selects it. **Command-K** opens Trade. Escape first closes an open menu or disclosure, then
+clears typed text, then goes back, then closes the palette; a page you opened
+with its own shortcut closes without a stop at Home. A held Escape takes one
+step. In Settings, Up and Down stay in the section list or in the section; Right
+enters a section and Left returns to its name. Escape at a shortcut conflict
+cancels the prompt. **Command-Backspace** goes back one level from anywhere in
+Hub, including a text field, and never closes it; the Back arrow and the mouse
+back button do the same, and VoiceOver speaks the title of the page you return
+to. Inside a page it first leaves that page's own level:
+it cancels a "Leave this area?" confirmation and closes Character Switch
+settings or Travel's Customize view. A form you leave keeps what you typed until
+you quit the game. Backspace alone only deletes text; on a focused result, card or
+button, including the top bar, it deletes from the page's search (Travel and
+Character Switch use their own) and returns you there, and so does typing.
+Forms keep their keys, Customize Travel included. The game keeps
+running while Hub is open. The footer's left side lists the keys that work in
+the current view, and every page keeps it: a review, a confirmation or a form
+names its action there, for example **Apply team GOM AFK** or **Save phrase**,
+and Enter runs it. Settings and Maps save as you change them; **Done** goes back.
+In **Hub preferences**, choose a pin and use **Move up**, **Move down**, or
+Option-Command-Up and Down to reorder it. **Remove …** in the footer asks first.
 
-With Travel enabled, search an outpost or your custom Travel phrase. Travel,
-favourites, recent places, and Guild Hall stay in the same window. Command-T
-and `/tp` also open Travel inside Hub.
+The header shows your character and where you are, including a Guild Hall. In
+an explorable area, Hub opens on **Travel** instead of a recent place, so Enter
+never leaves the area by accident, and a quiet line explains that Travel leaves
+the area. While a map loads, the same line says when Travel returns. Rows that
+cannot act during a load, at character selection or in PvP stay in place and say
+why before Enter; what you typed and the page you are on stay through the load.
+
+With Travel enabled, search an outpost or your custom Travel phrase. Travel
+finds a destination by the start of its words (`kam`, `jewel istan`), an
+official shortcut (`ha`, `eotn`) or your phrase; it never guesses from a typo or
+a campaign. Travel, favourites, recent places, and Guild Hall stay in the same
+window, and the header shows where you are. A click on a
+destination selects it; press Enter, click **Travel to …** in the footer, or
+double-click the destination to travel. With an empty search, the number keys
+1–9 select that favourite; press Enter to travel. A trip closes Hub. The outpost
+you are in and places this character has not unlocked stay in the list with the
+reason, and cannot be chosen. The selection stays on its destination while the
+game state changes; if that destination goes away, nothing else is selected.
+Command-1 to Command-9 saves the selected destination under that number; a
+destination has one number, and the note names what the number held before.
+From an explorable area, every trip from Hub first asks "Leave this area and
+travel to …?": a place row, the Travel view, a friend's **Travel to outpost** and
+**Travel and invite**. **Stay here** is selected, so Enter stays; **Leave and
+travel to …** accepts a click only after a brief moment.
+Command-T and `/tp` also open Travel inside Hub.
 
 Search a friend's alias or character name and press Enter to choose an action.
 With Whispers enabled, people search also finds your conversations, recent
@@ -223,7 +276,12 @@ Password and email fields receive the clipboard unchanged.
 
 Whispers uses one conversation interface for person search, the Whispers shortcut,
 and the unread launcher. Messages, drafts, history, mute and unread state stay in
-that view. Escape or Left at the start of a draft returns to people; closing Hub
+that view. Escape hides Whispers and keeps the draft.
+Left in the message field moves the caret. In **Find a
+friend…**, Escape clears the text before it hides Whispers, and Up and Down walk
+your conversations, friends and recent people; Enter opens the highlighted one.
+Command-Backspace returns from a conversation to that list, except in the
+message field, where it deletes to the start of the line as usual. Hiding Whispers
 keeps drafts for the game session. Character changes, leaving the game, or turning
 off Whispers clear the session.
 
@@ -232,27 +290,50 @@ In an outpost, choose **Invite to party** on a person, or type
 a partial name or a name seen in chat opens that person's actions instead.
 Character names have at least two words, so a single typed word stays below
 known people and says **Type the full character name**. The
-footer names who is invited, for example **Invite Mo Kai**. Guild Wars answers
-the invite in chat.
+footer names who is invited, for example **Invite Mo Kai**. Type `invite `
+with a space to list your online friends, those you can invite from here first.
+None is selected until you choose one, so Enter alone invites nobody.
+Guild Wars answers the invite in chat.
 For a friend elsewhere, **Invite to party** says where they are. For a PvE
-outpost, use **Travel and invite**: it travels there (Any district) and invites them once you
-arrive. If you change character first, no invite is sent. It is unavailable
-for PvP outposts such as Random Arenas. If you land in
+outpost, when the Travel tool is on, use **Travel and invite**: it travels there (Any district) and invites them once you
+arrive. If you change character or return to character selection first, no
+invite is sent. It is unavailable for PvP outposts such as Random Arenas. If you land in
 a different district, Guild Wars cannot find them; Hub then shows the game's
 answer in chat. Both actions need Whispers enabled.
 
-Build Library, Trade Chat, Characters, and Whispers open inside Hub. Detach a tool
-when you want to keep it beside the game. Disabled tools are absent from search.
+Build Library and Characters open inside Hub. Trade Chat and Whispers open in
+floating windows beside the game. Opening either suspends Hub; reopening Hub
+resumes its page. Disabled tools are absent from search.
 Storage opens quietly and does not show a failure popup.
 
 Use `team gom afk` to review and apply that saved team, or `build smiter` to load
 an exact saved build on your character. Prefixes open a review first; duplicate
 names require selection. Builds can also target an existing hero without replacing
-your team. `10 ecto in p` shows labelled NPC trader buy and sell estimates with
+your team. The footer names the build and its target before Enter, for example
+**Apply Smiter to Fixture Monk** or **Review GOM AFK**. While an apply,
+invite or account opening runs, the footer names it (**Applying GOM AFK…**),
+the status line counts the changes (**Applying GOM AFK… 5/16**) and a thin bar
+runs under the search; a click or another Enter never starts a second action.
+When it ends on the page that started it, Hub closes with a receipt such as
+"GOM AFK applied." If you typed, went back or closed Hub meanwhile, the action
+keeps running and never closes or changes the page you are on: its counted
+progress stays in the status line while you type, a newer message such as a
+refusal keeps the line until your next key, and the receipt replaces it there,
+or appears where Hub stood if it is closed. An account that
+opens in its own window still finishes the task: the next Command-R starts at
+Home. A failure after
+Hub closed names what stopped, such as "GOM AFK partly applied. Open Hub to
+review.", and waits in the status line of the next opening; the team's row then
+reads **Partly applied · Review**. A team apply that fails on its open review
+shows the cause under the review's title and clears the progress from the status
+line. A Travel trip that did not start or arrive and
+a character switch that failed are reported the same way, and Command-E then
+opens on the character you tried. `10 ecto in p` shows labelled NPC trader buy and sell estimates with
 observation times. Fixed gold/platinum conversions work offline. Amounts accept attached or spaced
 units: `1p`, `1 p`, `100k`, `.5e`, `2a`, and `10zkeys`. Use `in` or `to`.
 Stacks, mixed sums and multiplication work too: `1 stack ecto in p`,
-`100k + 10e in a`, `250 * 1.5e in p`, or `14a/stk in e each`.
+`100k + 10e in a`, `250 * 1.5e in p`, or `14a/stk in e each`. Enter copies the
+result, and the Hub's status line names what it copied.
 
 Armbrace and Zaishen key conversions automatically use recent Kamadan advertisements
 when enough consistent evidence exists. Results start with `~` and explain that
@@ -267,14 +348,18 @@ selector. Material names and common aliases such as iron, feathers, dust and
 obby shards use Trade's catalogue and its quoted batch quantities. Fractional
 item results are labelled Equivalent value.
 
-Use Actions to pin a result or give it an exact search phrase. A new phrase cannot
-start with a command word such as `team` or `invite`, or read as a calculation. A
-phrase saved before its first word became a command word keeps its pin but no
-longer matches. Search **Hub
-preferences** to reorder pins, remove saved actions, or reset aliases. Search `resign` for its existing
-confirmation, or `reload` for the account's Quit or Reload dialog.
+Use Actions (Command-J) to pin a result or give it an exact search phrase, on Home
+or inside a page such as a Build Library folder. A new phrase cannot start with a
+command word such as `team` or `invite`, read as a calculation, or equal another
+result's name, such as `maps`. Command-Enter saves the phrase. A phrase saved
+before its first word became a command word keeps its pin but no longer matches.
+Search **Hub preferences** to reorder pins, remove saved actions, or remove all
+search phrases after a confirmation. Places and tools come first, then this
+account's builds and teams; each group keeps its own order. Search `resign` for its confirmation in a PvE area, or `reload` for the account's Quit or Reload dialog. The `reload`
+row opens the same dialog as Command-Q and never quits on its own. Call target
+has no Hub row; use its shortcut while the game has keyboard focus.
 
-A custom shortcut already using Command-R takes priority. Use **View → Hub**
+A custom shortcut already using Command-R takes priority. Use **View → Hub — Command Palette**
 in that case. Existing custom shortcuts and cleared bindings are preserved.
 
 ## Switch Character
@@ -284,20 +369,37 @@ the Guild Wars character-selection screen. You can also search for a character
 in Hub and select it to switch directly. On the character-selection screen,
 every character can be selected, and the switch enters it without a logout.
 The search bar is shown for every account size. Initial focus remains on the
-current character. Press Left or Up for the previous character. Press Right or
-Down for the next character. Start typing a character name or primary profession
-to move focus to search. Secondary professions are not searched. The number keys
-1–9 and 0 switch to the first ten characters. Use **View → Reload Guild Wars**
+current character. Press Left for the previous character and Right or Down for
+the next; Up moves to the search. Control-N and Control-P step too, Page Up and Page
+Down move by the visible cards, and Home and End jump to the first and last
+character; the carousel stops at both ends instead of wrapping. Start typing a character name or primary profession
+to move focus to search. Secondary professions are not searched. A search keeps
+the chosen card while it still matches, and clearing it returns to the card you
+chose before. Each card shows the profession pair, such as `Mo/Me`, and marks a
+PvP character. The number keys
+1–9 and 0 select one of the first ten characters and scroll its card into view;
+they never switch. A click on a card selects it; press Enter, click
+**Switch to …** in the footer, or double-click the card to switch. In an
+explorable area Hub asks "Leave this area and switch to …?" with the name.
+**Leave and switch to …** accepts a click only after a brief moment. Opening
+Switch Character again always starts on the current character. While a map
+loads or in active PvP, Switch Character says so when it opens and on each
+`char` row, and Enter switches nothing. While a switch runs, a thin line
+"Switching to …" covers the game and ignores clicks; a second request says that
+a switch is already running. Use **View → Reload Guild Wars**
 to reload.
 
 Enable **Resign** in **Settings → Tools**. It is off by default and requires
 Tools. Its shortcut is unassigned by default and can be assigned or cleared
 in the same row. Turning off Resign or Tools disables it immediately.
 
-Press the shortcut for **Resign** in PvE. Press Enter to confirm sending
-`/resign`, or click **Resign** in the in-game dialog. Escape, **Cancel**, the close
-button, and clicking outside cancel. Close text fields first.
-The action stops if chat contains text or you interrupt it.
+Press the shortcut for **Resign** in PvE. The dialog says that everyone must
+resign before the party returns to the outpost. Press Enter to confirm sending
+`/resign`, or click the red **Resign** button in the in-game dialog. The dialog accepts a
+confirmation only after a brief moment, so the press that opened it cannot also
+confirm it. Escape, **Cancel**, the close
+button, and clicking outside cancel. Return focus to Guild Wars and finish or clear your chat draft first.
+Resign is available only in a PvE outpost or explorable area.
 
 Character names and search text are not saved.
 
@@ -404,18 +506,26 @@ calculations from your entered numbers, not observed character progress.
 See [title calculators](hub-title-calculators.md) for supported items and syntax.
 
 
-Inside Hub, recent Travel destinations form a horizontal carousel and Favorites
-stay in a compact grid. With an empty query, arrows choose and Enter travels.
+Inside Hub, recent Travel destinations form a horizontal carousel and Favourites
+stay in a compact grid. With an empty query, arrows choose and Enter travels;
+the selection stops at the first and last destination.
 Escape returns to Hub. While editing a query, Left/Right preserve caret movement;
-Right at the end can activate a search result. Tab reaches Travel settings.
+Right preserves the caret at the end too; Enter runs the named Travel action. Tab reaches Travel settings.
 Hub keeps the same size and position across results and tools; content scrolls inside.
 
-Type `char Toefte` in Hub and press Enter on **Switch to Toefte**. Switching from
-an explorable area retains the existing leave-area confirmation. The current
-character is labelled and cannot be switched to again.
+Type `char Toefte` in Hub and press Enter on **Switch to Toefte**. A search
+switches directly only on an exact name or a single match. When the words match
+several characters, such as `char fixture r`, the result reads
+**Show … in Characters**: it opens Switch Character on that card and switches
+nothing. Switching from an explorable area retains the existing leave-area
+confirmation; **Stay here** or Escape returns to the search that asked. The
+current character is labelled and cannot be switched to again.
 
-Type `acc second` to choose **Close Main and open Second** or **Open Second**.
-The first opens the target successfully before saving and closing the current
-game; the second keeps both accounts open. Already-open accounts are shown instead
+Type `acc second` to choose **Open Second** or **Close Main and open Second**.
+**Open Second** comes first and is selected, and keeps both accounts open. The
+second, shown in red, asks **Close Main?** before it does anything; confirm it
+after a brief moment with Enter or its button, or go back with **Keep Main**,
+Escape or Command-Backspace. It then opens the target successfully before saving
+and closing the current game. The footer names the selected choice. Already-open accounts are shown instead
 of launched twice. Search **Switch Account** to browse all saved accounts. Sign-in
 stays in the normal Guild Wars window.

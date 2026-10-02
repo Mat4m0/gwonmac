@@ -35,6 +35,10 @@
   --ui-art-head-radius: 0;
   --ui-art-head-fill: transparent;
   --ui-art-head-shadow: none;
+  /* The Classic head sits on painted metal, which the ink guard cannot
+   * measure, so its secondary copy uses the text ink. */
+  --ui-art-head-muted: var(--ui-text);
+  --ui-art-head-faint: var(--ui-text);
   --ui-art-title-size: var(--ui-type-body-size);
   --ui-art-head-control-height: 26px;
   --ui-art-head-detail-display: none;
@@ -126,21 +130,23 @@
   --ui-target-min: 24px;
   --ui-gap: var(--ui-space-2);
 
+  --ui-text-scale: 1;
+
   /* Dense utility typography, matching the supplied Guild Wars reference. */
-  --ui-font-size: 14px;
-  --ui-font-size-sm: 12px;
-  --ui-font-size-lg: 16px;
-  --ui-line-height: 20px;
-  --ui-type-caption-size: 12px;
-  --ui-type-caption-line: 16px;
-  --ui-type-body-size: 14px;
-  --ui-type-body-line: 20px;
-  --ui-type-subtitle-size: 16px;
-  --ui-type-subtitle-line: 22px;
-  --ui-type-title-size: 20px;
-  --ui-type-title-line: 26px;
-  --ui-type-window-size: 18px;
-  --ui-type-window-line: 24px;
+  --ui-font-size: var(--ui-type-body-size);
+  --ui-font-size-sm: var(--ui-type-caption-size);
+  --ui-font-size-lg: var(--ui-type-subtitle-size);
+  --ui-line-height: var(--ui-type-body-line);
+  --ui-type-caption-size: calc(12px * var(--ui-text-scale, 1));
+  --ui-type-caption-line: calc(16px * var(--ui-text-scale, 1));
+  --ui-type-body-size: calc(14px * var(--ui-text-scale, 1));
+  --ui-type-body-line: calc(20px * var(--ui-text-scale, 1));
+  --ui-type-subtitle-size: calc(16px * var(--ui-text-scale, 1));
+  --ui-type-subtitle-line: calc(22px * var(--ui-text-scale, 1));
+  --ui-type-title-size: calc(20px * var(--ui-text-scale, 1));
+  --ui-type-title-line: calc(26px * var(--ui-text-scale, 1));
+  --ui-type-window-size: calc(18px * var(--ui-text-scale, 1));
+  --ui-type-window-line: calc(24px * var(--ui-text-scale, 1));
   --ui-font: "QTFrizQuad", "Palatino Linotype", "Book Antiqua", Palatino,
     "URW Palladio L", Georgia, serif;
   --ui-font-display: var(--ui-font);
@@ -169,6 +175,9 @@
   --ui-text-faint: #948e7e;
   --ui-display-text: var(--ui-text-bright);
   --ui-accent: #e6c882;
+  /* The accent used as text. appearance.ts re-inks only this role when the
+   * accent would read below 4.5:1; fills, rails and icons keep --ui-accent. */
+  --ui-accent-text: var(--ui-accent);
   --ui-accent-hover: var(--gw-gold-bright);
   --ui-accent-strong: #8a7433;
   --ui-accent-ink: #171613;
@@ -184,6 +193,9 @@
   --ui-warning: #e3a94a;
   --ui-danger: #e0574e;
   --ui-success: #4ad84a;
+  /* The switch veil preserves the game while it contains pointer presses. */
+  --ui-character-switch-veil-fill: oklch(0 0 0 / 18%);
+  --ui-character-switch-veil-text-shadow: 0 1px 2px oklch(0 0 0 / 80%);
   --ui-overlay-fill: color-mix(in srgb, var(--ui-outline) 78%, transparent);
   --ui-well-strong-fill: color-mix(in srgb, var(--ui-well-fill) 95%, var(--ui-outline));
   --ui-well-overlay-fill: color-mix(in srgb, var(--ui-outline) 72%, var(--ui-well-fill));
@@ -210,6 +222,8 @@
   --ui-well: #090907;
   --ui-well-fill: var(--gw-sunk);
   --ui-hover: rgb(230 200 130 / 9%);
+  /* Hover over a selectable row stays clearly weaker than the selection it may turn into. */
+  --ui-row-hover: var(--ui-hover);
   --ui-selection-fill: linear-gradient(rgb(38 55 74 / 62%), rgb(22 36 52 / 62%));
   --ui-selection-hover-fill: linear-gradient(rgb(48 69 91 / 74%), rgb(28 45 64 / 74%));
   --ui-selection-ink: var(--ui-text-bright);
@@ -373,6 +387,8 @@
   --ui-art-head-radius: var(--ui-radius);
   --ui-art-head-fill: var(--ui-title-fill) padding-box, var(--ui-frame) border-box;
   --ui-art-head-shadow: var(--ui-title-shadow);
+  --ui-art-head-muted: var(--ui-text-muted);
+  --ui-art-head-faint: var(--ui-text-faint);
   --ui-art-title-size: var(--ui-type-window-size);
   --ui-art-head-control-height: var(--ui-control-height);
   --ui-art-head-detail-display: block;
@@ -406,6 +422,8 @@
   --ui-well: oklch(0.105 0.004 80);
   --ui-well-fill: oklch(0.105 0.004 80 / 0.78);
   --ui-hover: oklch(0.79 0.105 83 / 0.1);
+  /* Modern's selection is a warm fill; a warm hover read as a second selection (PTR playtest), so row hover is a faint neutral lift. */
+  --ui-row-hover: oklch(0.92 0.005 83 / 0.04);
   --ui-selection-fill: linear-gradient(oklch(0.3 0.035 78 / 0.82), oklch(0.27 0.025 78 / 0.82));
   --ui-selection-hover-fill: linear-gradient(oklch(0.35 0.04 78 / 0.9), oklch(0.3 0.03 78 / 0.9));
   --ui-selection-ink: var(--ui-text-bright);
@@ -446,11 +464,12 @@
 }
 
 /* Accessibility changes the rendered material, never the player's saved
- * preference. Returning to the ordinary system setting restores their value. */
+ * preference. Returning to the ordinary system setting restores their value.
+ * A modal scrim is not a material: it keeps its value, so the game stays
+ * visible around an opaque panel. */
 @media (prefers-reduced-transparency: reduce) {
   :root {
     --ui-effective-panel-opacity: 1;
-    --ui-overlay-fill: #080807;
   }
 }
 

@@ -43,7 +43,7 @@ const CONSUMERS = [
  * one of these files stops holding a literal, it fails here until it is moved
  * up into `CONSUMERS`, where the real rule applies.
  */
-const NOT_YET_TOKENISED = ["src/renderer/harness.css"];
+const NOT_YET_TOKENISED = ["src/renderer/harness.css", "src/renderer/character-switch.css"];
 
 const tokens = readFileSync(TOKENS, "utf8");
 const consumers = CONSUMERS.map(

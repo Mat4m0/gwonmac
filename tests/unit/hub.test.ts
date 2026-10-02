@@ -11,10 +11,10 @@ test('search ranks exact names and prefixes before keywords without executing an
   assert.deepEqual(matchHubRows(rows, 'RANGER romi').map(row => row.id), ['prefix']);
   assert.equal(matchHubRows(rows, 'unknown').length, 0);
 });
-test('ordered search keeps source order after exact names', () => {
+test('search ranks a name that starts with the query first; ordered search keeps source order within a tier', () => {
   const rows = [row('third', 'Zed Mesmer'), row('first', 'Ada Monk'), row('exact', 'Mo')];
-  assert.deepEqual(matchHubRows(rows, 'm').map(row => row.id), ['first', 'exact', 'third']);
-  assert.deepEqual(matchHubRows(rows, 'm', true).map(row => row.id), ['third', 'first', 'exact']);
+  assert.deepEqual(matchHubRows(rows, 'm').map(row => row.id), ['exact', 'first', 'third']);
+  assert.deepEqual(matchHubRows(rows, 'm', true).map(row => row.id), ['exact', 'third', 'first']);
   assert.deepEqual(matchHubRows(rows, 'mo', true).map(row => row.id), ['exact', 'first']);
 });
 test('Hub and Switch Character defaults preserve custom and cleared overrides', () => {
@@ -50,6 +50,9 @@ test('explicit scopes never reinterpret the remaining words as another action', 
   assert.deepEqual(parseHubQuery(' TEAM  gom AFK '), { scope: 'team', term: 'gom afk', text: 'gom AFK' });
   assert.deepEqual(parseHubQuery('build smiter'), { scope: 'build', term: 'smiter', text: 'smiter' });
   assert.deepEqual(parseHubQuery('team'), { scope: null, term: 'team', text: 'team' });
+  assert.deepEqual(parseHubQuery(' team'), { scope: null, term: 'team', text: 'team' }, 'a lone word is still a search');
+  assert.deepEqual(parseHubQuery('Invite '), { scope: 'invite', term: '', text: '' }, 'a scope word and a space enter the scope');
+  assert.deepEqual(parseHubQuery('invites '), { scope: null, term: 'invites', text: 'invites' });
   assert.deepEqual(parseHubQuery('gmo afk'), { scope: null, term: 'gmo afk', text: 'gmo afk' });
   assert.deepEqual(parseHubQuery('Whisper  Mo Kai'), { scope: 'whisper', term: 'mo kai', text: 'Mo Kai' }, 'names keep their capitalisation');
 });
@@ -61,3 +64,16 @@ test('saved phrases reject duplicates and private references in global settings'
   assert.throws(() => parseRendererSettingsPatch({ hubShortcuts: [{ id: 'build:private', phrase: 'my build', pinned: true }] }), /Invalid Hub/);
 });
 
+test('scope aliases preserve their canonical scope and typed argument (HUB-142)', () => {
+  for (const [alias, scope] of [['tp', 'travel'], ['builds', 'build'], ['teams', 'team'], ['character', 'char'], ['account', 'acc']]) {
+    assert.deepEqual(parseHubQuery(`${alias} Toefte`), { scope, term: 'toefte', text: 'Toefte' });
+    assert.deepEqual(parseHubQuery(`${alias} `), { scope, term: '', text: '' });
+  }
+});
+
+test('search folds typographic punctuation and matches parenthesised name words (HUB-143)', () => {
+  const rows = [row('place', "Lion's Arch"), row('pre', 'Ascalon City (pre-Searing)')];
+  for (const [query, expected] of [['lion’s arch', ['place']], ['pre–searing', ['pre']], ['pre-searing', ['pre']]] as const) {
+    assert.deepEqual(matchHubRows(rows, query).map(row => row.id), expected);
+  }
+});

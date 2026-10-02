@@ -1,5 +1,17 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type ElectronApplication } from "@playwright/test";
 import { closeOffline, launchOffline } from "./fixtures.mjs";
+
+/** Main passes the host's macOS Double-click speed through; null when never set. */
+const hostDoubleClickMs = (app: ElectronApplication) =>
+  app.evaluate(({ systemPreferences }) => {
+    const seconds = systemPreferences.getUserDefault(
+      "com.apple.mouse.doubleClickThreshold",
+      "double",
+    );
+    return Number.isFinite(seconds) && seconds > 0
+      ? Math.round(seconds * 1000)
+      : null;
+  });
 
 test.describe("sandbox boundary", () => {
   test("exposes only the frozen application capabilities", async () => {
@@ -36,6 +48,7 @@ test.describe("sandbox boundary", () => {
           diagnosticProfile: "standard",
           templateFsTrace: false,
           texturePackGeneration: null,
+          doubleClickMs: await hostDoubleClickMs(fixture.app),
         },
         enhancementSelectionFrozen: true,
         enhancementPresent: false,
@@ -230,6 +243,7 @@ test.describe("sandbox boundary", () => {
         diagnosticProfile: "standard",
         templateFsTrace: false,
         texturePackGeneration: null,
+        doubleClickMs: await hostDoubleClickMs(fixture.app),
       });
       await expect(fixture.page.locator("#enhancement")).toHaveCount(0);
     } finally {
@@ -291,6 +305,7 @@ test.describe("sandbox boundary", () => {
         diagnosticProfile: "standard",
         templateFsTrace: true,
         texturePackGeneration: null,
+        doubleClickMs: await hostDoubleClickMs(fixture.app),
       });
       await expect(fixture.page.locator("#enhancement")).toHaveCount(0);
     } finally {

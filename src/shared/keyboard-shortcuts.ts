@@ -2,6 +2,8 @@
  * Canonical app-shortcut actions, defaults, persistence shapes, and pure operations.
  * Main and renderer consume this one model so interception and presentation agree.
  */
+import { TOOL_PRESENTATION } from "./tool-presentation.js";
+
 export const SHORTCUT_ACTIONS = [
   "game.call-target",
   "game.resign",
@@ -17,7 +19,10 @@ export const SHORTCUT_ACTIONS = [
 export type ShortcutAction = (typeof SHORTCUT_ACTIONS)[number];
 
 export interface ShortcutBinding {
-  /** Lowercase physical key identifier; letters retain their existing saved form. */
+  /**
+   * Lowercase key identifier. A letter is the letter the player's keyboard
+   * layout types; every other key is its physical key (see `shortcutKey`).
+   */
   key: string;
   shift: boolean;
   option: boolean;
@@ -51,20 +56,23 @@ export const DEFAULT_SHORTCUTS = Object.freeze({
 
 export const SHORTCUT_LABELS: Readonly<Record<ShortcutAction, string>> =
   Object.freeze({
-    "game.call-target": "Call target",
-    "game.resign": "Resign",
-    "character.switch": "Switch Character",
-    "tools.toggle": "Build Library",
-    "trade.toggle": "Trade Chat",
-    "whispers.toggle": "Whispers",
-    "storage.open": "Open Xunlai storage",
-    "travel.open": "Travel",
+    "game.call-target": TOOL_PRESENTATION["call-target"].label,
+    "game.resign": TOOL_PRESENTATION["resign"].label,
+    "character.switch": TOOL_PRESENTATION["character-switch"].label,
+    "tools.toggle": TOOL_PRESENTATION["build-management"].label,
+    "trade.toggle": TOOL_PRESENTATION["trade-chat"].label,
+    "whispers.toggle": TOOL_PRESENTATION["whispers"].label,
+    "storage.open": TOOL_PRESENTATION["xunlai-storage"].label,
+    "travel.open": TOOL_PRESENTATION["quick-travel"].label,
     "cartography.grid.toggle": "Exploration grid",
     "cartography.walkability.toggle": "Walkable terrain",
   });
 
 export interface ShortcutInput {
+  /** The physical key (`KeyboardEvent.code`, Electron `Input.code`). */
   code: string;
+  /** The character the active layout produces (`KeyboardEvent.key`, Electron `Input.key`). */
+  key: string;
   meta: boolean;
   control: boolean;
   shift: boolean;
@@ -175,26 +183,46 @@ export function shortcutMatches(
 ): boolean {
   return input.meta === (binding.command ?? true)
     && input.control === (binding.control ?? false)
-    && shortcutKey(input.code) === binding.key
+    && shortcutKey(input) === binding.key
     && input.shift === binding.shift
     && input.alt === binding.option;
 }
 
 export function shortcutFromInput(input: ShortcutInput): ShortcutBinding | null {
-  const key = shortcutKey(input.code);
+  const key = shortcutKey(input);
   if (key === null || (!input.meta && !input.control && !input.alt && !/^f(?:[1-9]|1[0-9]|2[0-4])$/u.test(key))) return null;
   return { key, shift: input.shift, option: input.alt, ...(!input.meta ? { command: false } : {}), ...(input.control ? { control: true } : {}) };
 }
 
-function shortcutKey(code: string): string | null {
-  if (/^Key[A-Z]$/u.test(code)) return code.slice(3).toLowerCase();
+/**
+ * The binding key a press names. macOS key equivalents are character-based, so
+ * a letter is the letter the active layout types: AZERTY Command-A is A wherever
+ * that key sits, and never the Q at the same position. An input source without
+ * Latin letters (Cyrillic, Greek) keeps the US letter position, as macOS does.
+ * A letter position that types punctuation (AZERTY M types a comma) names no
+ * letter. Digits, function keys, punctuation and named keys stay physical, so
+ * Command-1…9 is the digit row on every layout.
+ */
+function shortcutKey({ code, key }: Pick<ShortcutInput, "code" | "key">): string | null {
+  if (/^[a-z]$/iu.test(key)) return key.toLowerCase();
+  if (/^Key[A-Z]$/u.test(code)) {
+    return /^[\x21-\x7e]$/u.test(key) ? null : code.slice(3).toLowerCase();
+  }
   if (/^Digit[0-9]$/u.test(code)) return code.slice(5);
   if (/^F(?:[1-9]|1[0-9]|2[0-4])$/u.test(code)) return code.toLowerCase();
   if (/^Numpad[0-9]$/u.test(code)) return `num${code.slice(6)}`;
   return SPECIAL_KEYS[code]?.[0] ?? null;
 }
 
+/** The Hub's Back chord (⌘⌫); no game shortcut may take it. */
+export const HUB_BACK_SHORTCUT: ShortcutBinding = Object.freeze({ key: "backspace", shift: false, option: false });
+/** A ⌘⌫ press, matched by key so every layout agrees; never during composition. */
+export function isHubBackKey(event: Readonly<{ key: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean; isComposing: boolean }>): boolean {
+  return event.key === "Backspace" && event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && !event.isComposing;
+}
+
 const RESERVED_SHORTCUTS: readonly ShortcutBinding[] = [
+  HUB_BACK_SHORTCUT,
   // Editing and application lifecycle shortcuts must remain dependable.
   ...["a", "c", "h", "m", "q", "v", "w", "x", "z"].map((key) => ({
     key,

@@ -89,7 +89,8 @@ export function characterActionEnqueue(
     getLocal(0), i32(CHARACTER_ACTION.logout), Uint8Array.of(0x49),
     getLocal(0), i32(CHARACTER_ACTION.play), Uint8Array.of(0x4b, 0x72, 0x04, 0x40),
       i32(0), Uint8Array.of(0x0f, 0x0b),
-    getLocal(0), i32(CHARACTER_ACTION.select), Uint8Array.of(0x46, 0x04, 0x40),
+    getLocal(0), i32(CHARACTER_ACTION.select), Uint8Array.of(0x46),
+    getLocal(0), i32(CHARACTER_ACTION.play), Uint8Array.of(0x46, 0x72, 0x04, 0x40),
       getLocal(1), i32(64), Uint8Array.of(0x4f, 0x04, 0x40),
         i32(0), Uint8Array.of(0x0f, 0x0b),
       Uint8Array.of(0x0b),
@@ -306,7 +307,10 @@ export function characterActionExecute(config: CharacterActionConfig): Uint8Arra
       getLocal(2), i32(0), store(0), getLocal(2), i32(1), store(4),
       i32(config.logoutMessageId), getLocal(2), i32(0), Uint8Array.of(0x10), uleb(config.dispatcherFunctionIndex),
       result(RESULT.sent), Uint8Array.of(0x0b),
-    getLocal(0), i32(CHARACTER_ACTION.select), Uint8Array.of(0x46, 0x04, 0x40),
+    // Both Select and Play prove the live target through the same bounded
+    // Selector query. Play never corrects a changed selection with a click.
+    getLocal(0), i32(CHARACTER_ACTION.select), Uint8Array.of(0x46),
+    getLocal(0), i32(CHARACTER_ACTION.play), Uint8Array.of(0x46, 0x72, 0x04, 0x40),
       i32(layout.characterArrayCount), load(), setLocal(3),
       getLocal(3), i32(1), Uint8Array.of(0x49), getLocal(3), i32(64), Uint8Array.of(0x4b, 0x72),
       getLocal(1), getLocal(3), Uint8Array.of(0x4f, 0x72, 0x04, 0x40), result(RESULT.invalid), Uint8Array.of(0x0b),
@@ -326,6 +330,12 @@ export function characterActionExecute(config: CharacterActionConfig): Uint8Arra
       frameProof(PROOF.selectedIndexValid),
       resolveSelectorTarget(),
       getLocal(9), getLocal(16), Uint8Array.of(0x4f, 0x04, 0x40), result(RESULT.selectorIndex), Uint8Array.of(0x0b),
+      getLocal(0), i32(CHARACTER_ACTION.play), Uint8Array.of(0x46),
+      getLocal(9), getLocal(5), Uint8Array.of(0x47, 0x71, 0x04, 0x40),
+        result(RESULT.selectionUnconfirmed),
+      Uint8Array.of(0x0b),
+    Uint8Array.of(0x0b),
+    getLocal(0), i32(CHARACTER_ACTION.select), Uint8Array.of(0x46, 0x04, 0x40),
       // A Selector click is applied after this synchronous game-thread call.
       // Confirm the previous adjacent step on the next drain before issuing
       // another one, so an unchanged index can never repeat an ambiguous click.
@@ -382,7 +392,6 @@ export function characterActionExecute(config: CharacterActionConfig): Uint8Arra
       // both ID fields, MouseUp activates it, and wparam owns the button value.
       getLocal(2), i32(0), store(24),
       getLocal(2), getLocal(6), load(layout.frameBytes - 4), store(28),
-      getLocal(2), i32(0), store(FIELD.selectedIndex),
       getLocal(2), getLocal(6), load(layout.frameChildOffsetId), store(0),
       getLocal(2), getLocal(6), load(layout.frameChildOffsetId), store(4),
       getLocal(2), i32(7), store(8),

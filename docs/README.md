@@ -7,6 +7,7 @@ its rules.
 | Question | Current document |
 | --- | --- |
 | How does a player use or recover the app? | [User guide](user-guide.md) |
+| Where does each setting live, and when does a change apply? | [Settings](settings.md) |
 | Which process owns this work? | [Process model](process-model.md) |
 | How do account profiles adopt and isolate player data? | [Account profiles](multiple-accounts.md) |
 | How do ArenaNet client files and game data update? | [Content pipeline](content-pipeline.md) |
@@ -26,7 +27,7 @@ its rules.
 | How do elite capture markers and character plans work? | [Elite skills](elite-skills.md) |
 | How do I certify every cartography layer in a live game? | [Live cartography certification](live-cartography-certification.md) |
 | What remains to research for party and hostile effects? | [Future effect and debuff research](future-effect-durations.md) |
-| How should Hub search and operate tools, teams, builds, and conversions? | [Hub specification](../spec.md) and [verification evidence](hub-verification.md) |
+| How should Hub search and operate tools, teams, builds, and conversions? | [Hub interaction contract](hub-contract.md), [specification](../spec.md), and [verification evidence](hub-verification.md) |
 | How do application releases, Stable, and Beta work? | [Release verification](release-verification.md) |
 | Which UI tokens and components must Tools use? | [Tools design](../apps/tools/DESIGN.md) |
 

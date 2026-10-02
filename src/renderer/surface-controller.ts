@@ -3,9 +3,26 @@
  *
  * Tools deliberately stays open when a player clicks Guild Wars, so DOM focus
  * alone cannot decide which surface Escape or Tab belongs to. This
- * controller keeps one ordered list of visible host surfaces. Escape dismisses
- * the topmost one and Tab enters or wraps within it. Dialogs use the platform's
- * modal behavior, with one shared backdrop, dismissal, and focus lifecycle.
+ * controller keeps one ordered list of visible host surfaces and owns the one
+ * Escape rule: a surface that holds focus answers Escape itself, innermost
+ * level first (its own menu, drawer or cleared search), then an open
+ * disclosure closes, and only then the surface steps back or hides. Escape
+ * from outside every surface dismisses the topmost one. Tab wraps within the
+ * topmost surface; Tab on the game canvas stays with the game (D-12). Dialogs
+ * use the platform's modal behavior, with one shared backdrop, dismissal, and
+ * focus lifecycle.
+ * A press that starts on a surface owns its repeats and release, so a key that
+ * closes a surface never continues into the game, and a held Enter activates
+ * a surface control only once.
+ *
+ * The pointer has the same rule for a click run (HUB-242, HUB-244). Chromium
+ * counts the clicks of one run in `detail`; a run belongs to the surface page
+ * its first press landed on. When that page changes or the surface closes
+ * before a later press of the run, the rest of the run is swallowed wherever
+ * it lands, the game canvas included, so a double-click never runs what its
+ * first click revealed and never reaches Guild Wars as a world click.
+ * Destructive confirmations share one arming rule for the same reason, and a
+ * native sheet opens only after the press that asked for it has ended.
  */
 
 type Surface = Readonly<{
@@ -13,6 +30,8 @@ type Surface = Readonly<{
   priority: number;
   transient?: boolean;
   dismiss(): void;
+  /** What Escape does once no inner level answered it; `dismiss` when absent. */
+  escape?(): void;
 }>;
 
 type OpenSurface = Surface & { order: number };
@@ -22,6 +41,8 @@ type ModalDialog = Readonly<{
   priority: number;
   transient?: boolean;
   dismiss(): void;
+  /** What a click on the backdrop does; `dismiss` when absent. */
+  backdrop?(): void;
   restoreFocus(): HTMLElement | null;
 }>;
 
@@ -35,25 +56,101 @@ const FOCUSABLE = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(",");
 
-function focusableElements(root: HTMLElement): HTMLElement[] {
-  return [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((element) =>
-    !element.hidden
+/**
+ * A pointerdown belongs to the previous press of a cancelled run only within
+ * the system double-click interval and this close. macOS lets a player slow
+ * the interval (Accessibility › Double-click speed) and Chromium counts clicks
+ * by it, so main passes the player's setting; 500 ms is the macOS default.
+ */
+const DEFAULT_DOUBLE_CLICK_MS = 500;
+const CLICK_RUN_SLOP = 8;
+/** How long a destructive confirmation waits before it accepts an activation. */
+export const CONFIRMATION_ARMING_MS = 400;
+/** The keys that activate a control; their held press is what a native sheet must not inherit. */
+const ACTIVATION_KEYS = new Set(["Enter", "NumpadEnter", "Space"]);
+/** A lost key-up never keeps a native sheet from opening. */
+const PRESS_WAIT_LIMIT_MS = 5000;
+
+/**
+ * Arms a destructive confirmation (Resign, Leave and switch, account replace):
+ * it accepts nothing until ~400 ms after it was shown, and never the later
+ * click of a multi-click, so the gesture that opened it cannot also confirm it.
+ * `data-armed` marks the button once it accepts.
+ */
+export function armConfirmation(button: HTMLElement) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const disarm = () => {
+    clearTimeout(timer);
+    delete button.dataset.armed;
+  };
+  return Object.freeze({
+    arm() {
+      disarm();
+      timer = setTimeout(() => { button.dataset.armed = ""; }, CONFIRMATION_ARMING_MS);
+    },
+    disarm,
+    accepts: (event?: Event) => button.dataset.armed !== undefined
+      && !(event instanceof MouseEvent && event.detail > 1),
+  });
+}
+
+/**
+ * Closes the open disclosure (a menu or `<details>`) that holds the target and
+ * returns focus to its summary: the innermost level of Escape and ⌘⌫.
+ */
+export function closeDisclosure(target: EventTarget | null, root: Element): boolean {
+  const expanded = target instanceof Element ? target.closest<HTMLDetailsElement>("details[open]") : null;
+  if (!expanded || !root.contains(expanded)) return false;
+  expanded.open = false;
+  expanded.querySelector("summary")?.focus({ preventScroll: true });
+  return true;
+}
+
+/**
+ * The one rule for a control the keyboard can use now: shown, enabled, not
+ * hidden or inert. Tab wrapping and every "first usable control" focus share it,
+ * so focus never goes to a disabled button, which refuses it and leaves <body>.
+ */
+export function focusable(element: Element): element is HTMLElement {
+  return element instanceof HTMLElement
+    && element.matches(FOCUSABLE)
+    && !element.matches(":disabled")
+    && !element.hidden
     && element.getAttribute("aria-hidden") !== "true"
     && element.closest("[hidden], [inert]") === null
-    && element.getClientRects().length > 0
-  );
+    && element.getClientRects().length > 0;
+}
+
+/** The usable controls in `root`, in document order. */
+export function focusableElements(root: ParentNode): HTMLElement[] {
+  return [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(focusable);
 }
 
 export function installSurfaceController(
   document: Document,
+  options: Readonly<{ doubleClickMs?: number | null }> = {},
 ): GwonmacSurfaceController {
+  const clickRunMs = options.doubleClickMs ?? DEFAULT_DOUBLE_CLICK_MS;
   const surfaces = new Map<symbol, OpenSurface>();
+  // Each registered root's page generation. It advances when the surface
+  // opens, closes or reports a page change.
+  const pages = new WeakMap<Element, { generation: number }>();
   const suppressedKeyUps = new Set<string>();
+  // Physical keys whose press began on a surface (HUB-003). The game never saw
+  // the key-down, so a repeat or release that lands off the surface after it
+  // closed must not reach the game either.
+  const ownedPresses = new Set<string>();
+  const onSurface = (target: EventTarget | null) =>
+    target instanceof Element && target.closest("[data-gwonmac-surface]") !== null;
   let order = 0;
 
   const topmost = () => [...surfaces.values()].sort((left, right) =>
     right.priority - left.priority || right.order - left.order
   )[0] ?? null;
+  const openRoot = (target: EventTarget | null) => {
+    const root = target instanceof Element ? target.closest("[data-gwonmac-surface]") : null;
+    return root !== null && [...surfaces.values()].some((surface) => surface.root === root);
+  };
 
   const dismissTransient = (except?: symbol) => {
     const open = [...surfaces.entries()]
@@ -75,18 +172,28 @@ export function installSurfaceController(
   };
 
   const onKeyDown = (event: KeyboardEvent) => {
+    if (!event.repeat) {
+      if (onSurface(event.target)) ownedPresses.add(event.code);
+      else ownedPresses.delete(event.code);
+    } else if (ownedPresses.has(event.code) && !onSurface(event.target)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    } else if (event.key === "Enter" && onSurface(event.target)) {
+      // A held Enter activates once: its auto-repeat never presses a button,
+      // submits a form or toggles a disclosure again (HUB-130). Surface
+      // handlers still see the repeat, already marked handled.
+      event.preventDefault();
+    }
     const nativeModal = document.querySelector("dialog:modal");
     const surface = topmost();
     if (!surface || (nativeModal !== null && nativeModal !== surface.root)) return;
 
     if (event.key === "Escape") {
-      if (nativeModal !== null) return; // The native cancel event owns dismissal.
+      // A focused surface answers in the bubble phase (`escapeAtRoot`); a composition keeps its Escape.
+      if (event.isComposing || nativeModal !== null || openRoot(event.target)) return;
       claim(event);
-      const expanded = (event.target instanceof Element ? event.target.closest<HTMLDetailsElement>('details[open]') : null);
-      if (expanded && surface.root.contains(expanded)) {
-        expanded.open = false; expanded.querySelector('summary')?.focus(); return;
-      }
-      surface.dismiss();
+      if (!event.repeat) (surface.escape ?? surface.dismiss)();
       return;
     }
     if (
@@ -96,6 +203,14 @@ export function installSurfaceController(
       || event.metaKey
     ) return;
 
+    const active = document.activeElement;
+    // Tab is a Guild Wars key while the game has the keyboard (D-12): an open
+    // popout never takes it from the canvas, and neither does Chromium's own
+    // focus step. Other page focus keeps its native Tab.
+    if (active !== null && active !== document.body && !onSurface(active)) {
+      if (active instanceof HTMLCanvasElement) event.preventDefault();
+      return;
+    }
     const elements = focusableElements(surface.root);
     if (elements.length === 0) {
       claim(event);
@@ -103,10 +218,11 @@ export function installSurfaceController(
     }
     const first = elements[0]!;
     const last = elements.at(-1)!;
-    const active = document.activeElement;
     if (!surface.root.contains(active)) {
       claim(event);
-      (event.shiftKey ? last : first).focus({ preventScroll: true });
+      // A surface may name where Tab enters it, such as Trade's search (HUB-225).
+      const entry = surface.root.querySelector("[data-surface-entry]");
+      (event.shiftKey ? last : entry && focusable(entry) ? entry : first).focus({ preventScroll: true });
     } else if (event.shiftKey && active === first) {
       claim(event);
       last.focus({ preventScroll: true });
@@ -117,7 +233,8 @@ export function installSurfaceController(
   };
 
   const onKeyUp = (event: KeyboardEvent) => {
-    if (!suppressedKeyUps.delete(event.code)) return;
+    const owned = ownedPresses.delete(event.code) && !onSurface(event.target);
+    if (!suppressedKeyUps.delete(event.code) && !owned) return;
     event.preventDefault();
     event.stopImmediatePropagation();
   };
@@ -127,14 +244,110 @@ export function installSurfaceController(
   window.addEventListener("gw:input-release", (event) => {
     if (event instanceof CustomEvent && typeof event.detail === "string") {
       suppressedKeyUps.delete(event.detail);
+      ownedPresses.delete(event.detail);
     }
   });
   const clearSuppressedKeyUps = () => suppressedKeyUps.clear();
-  window.addEventListener("blur", clearSuppressedKeyUps);
-  window.addEventListener("pagehide", clearSuppressedKeyUps);
+  // An input reset releases the game's keys; a surface press stays owned
+  // through it, because the action it runs may reset input before release.
+  const clearPresses = () => { clearSuppressedKeyUps(); ownedPresses.clear(); };
+  window.addEventListener("blur", clearPresses);
+  window.addEventListener("pagehide", clearPresses);
   window.addEventListener("gw:input-reset", clearSuppressedKeyUps);
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "hidden") clearSuppressedKeyUps();
+    if (document.visibilityState === "hidden") clearPresses();
+  });
+
+  // The one click-run owner. It listens first on the window capture phase,
+  // before `input.ts`, the native double-click flag and any surface, so a
+  // swallowed press never reaches the game's held-button ledger, never counts
+  // as input that cancels a pending focus, and never moves focus.
+  type ClickRun = {
+    page: { generation: number } | null;
+    generation: number;
+    x: number;
+    y: number;
+    at: number;
+    cancelled: boolean;
+  };
+  let run: ClickRun | null = null;
+  // The current press continues a cancelled run: its remaining events are swallowed.
+  let swallowingPress = false;
+  const pageOf = (target: EventTarget | null) => {
+    const root = target instanceof Element ? target.closest("[data-gwonmac-surface]") : null;
+    return root ? pages.get(root) ?? null : null;
+  };
+  const stale = (current: ClickRun) => {
+    if (!current.cancelled && current.page !== null && current.page.generation !== current.generation) {
+      current.cancelled = true;
+    }
+    return current.cancelled;
+  };
+  const swallow = (event: Event) => {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  };
+  const primary = (event: MouseEvent) => event.isTrusted && event.button === 0;
+  window.addEventListener("pointerdown", (event) => {
+    if (!primary(event)) return;
+    swallowingPress = false;
+    // A pointerdown carries no click count, so it is paired with a stale run by
+    // time and place and kept from every later listener. It is not cancelled:
+    // that would also drop the mousedown of a fresh press, which alone says
+    // whether this press continues the run.
+    if (run !== null && (stale(run) || (run.page !== null && pageOf(event.target) !== run.page))
+      && event.timeStamp - run.at <= clickRunMs
+      && Math.hypot(event.clientX - run.x, event.clientY - run.y) <= CLICK_RUN_SLOP) {
+      event.stopImmediatePropagation();
+    }
+  }, true);
+  window.addEventListener("mousedown", (event) => {
+    if (!primary(event)) return;
+    if (event.detail <= 1) {
+      const page = pageOf(event.target);
+      run = { page, generation: page?.generation ?? 0, x: event.clientX, y: event.clientY, at: event.timeStamp, cancelled: false };
+      return;
+    }
+    if (run === null) return;
+    run.at = event.timeStamp;
+    // A run that began on a surface never continues somewhere else, the game included.
+    if (run.page !== null && pageOf(event.target) !== run.page) run.cancelled = true;
+    if (!stale(run)) return;
+    swallowingPress = true;
+    swallow(event);
+  }, true);
+  for (const type of ["pointerup", "mouseup"] as const) {
+    window.addEventListener(type, (event) => {
+      if (!primary(event)) return;
+      if (run) run.at = event.timeStamp;
+      if (swallowingPress) swallow(event);
+    }, true);
+  }
+  for (const type of ["click", "dblclick"] as const) {
+    window.addEventListener(type, (event) => {
+      // A keyboard activation (detail 0) is never part of a click run.
+      if (!primary(event) || event.detail === 0) return;
+      if (swallowingPress || (event.detail > 1 && run !== null && stale(run))) swallow(event);
+    }, true);
+  }
+
+  /**
+   * A native sheet (Quit or Reload) cannot be armed like a DOM confirmation: its
+   * default button takes the next Return, auto-repeat included, and a click on it.
+   * So a surface opens one only after the press that asked for it has ended: no
+   * activation key that began on a surface is still held, and its click run can
+   * add no further click.
+   */
+  const afterPress = () => new Promise<void>((resolve) => {
+    const deadline = performance.now() + PRESS_WAIT_LIMIT_MS;
+    const check = () => {
+      const now = performance.now();
+      const held = [...ownedPresses].some((code) => ACTIVATION_KEYS.has(code))
+        || (run !== null && now - run.at <= clickRunMs);
+      if (!held || now > deadline) resolve();
+      else setTimeout(check, 50);
+    };
+    check();
   });
 
   const register = (surface: Surface): GwonmacSurfaceHandle => {
@@ -144,16 +357,38 @@ export function installSurfaceController(
     // marker carries no UI text or selector, and lets a player distinguish
     // "Guild Wars received the click" from "a GWonMac surface owned it".
     surface.root.dataset.gwonmacSurface = "";
+    const page = { generation: 0 };
+    pages.set(surface.root, page);
+    // The one Escape rule for a focused surface, after its own controls had their say:
+    // an inner level that answered keeps the press; then a disclosure closes; then
+    // the surface steps back or hides. One step per physical press, never into the game.
+    // For a native dialog, handling the key-down also withholds Chromium's cancel, whose
+    // second consecutive request could not be cancelled and would close the dialog (HUB-005).
+    const escapeAtRoot = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.isComposing || !open) return;
+      if (event.defaultPrevented) {
+        event.stopPropagation();
+        return;
+      }
+      claim(event);
+      if (event.repeat || closeDisclosure(event.target, surface.root)) return;
+      (surface.escape ?? surface.dismiss)();
+    };
+    surface.root.addEventListener("keydown", escapeAtRoot);
     return Object.freeze({
       setOpen(next: boolean) {
         if (next === open) return;
         open = next;
+        page.generation++;
         if (next) {
           if (surface.transient) dismissTransient(id);
           surfaces.set(id, { ...surface, order: order++ });
           if (!(surface.root instanceof HTMLDialogElement)) surface.root.style.zIndex = String(100 + order);
         }
         else surfaces.delete(id);
+      },
+      pageChanged() {
+        page.generation++;
       },
       raise() {
         const current = surfaces.get(id);
@@ -163,7 +398,10 @@ export function installSurfaceController(
       },
       dispose() {
         open = false;
+        page.generation++;
         surfaces.delete(id);
+        pages.delete(surface.root);
+        surface.root.removeEventListener("keydown", escapeAtRoot);
         delete surface.root.dataset.gwonmacSurface;
       },
     });
@@ -185,6 +423,7 @@ export function installSurfaceController(
         priority: dialog.priority,
         ...(dialog.transient === undefined ? {} : { transient: dialog.transient }),
         dismiss: dismissForReplacement,
+        escape: dialog.dismiss,
       });
       let disposed = false;
 
@@ -199,11 +438,18 @@ export function installSurfaceController(
         event.preventDefault();
         dialog.dismiss();
       };
+      // A backdrop click is one whose press also began on the backdrop: a text
+      // selection or a drag that starts in the panel and ends outside it (Chromium
+      // sends that click to the dialog) never dismisses (HUB-052).
+      let pressedBackdrop = false;
+      const onPointerDown = (event: PointerEvent) => { pressedBackdrop = event.target === dialog.root; };
       const onClick = (event: MouseEvent) => {
         if (event.target !== dialog.root) return;
         event.preventDefault();
         event.stopPropagation();
-        dialog.dismiss();
+        const began = pressedBackdrop;
+        pressedBackdrop = false;
+        if (began) (dialog.backdrop ?? dialog.dismiss)();
       };
       const onClose = () => {
         // Chromium queues `close`. The dialog may already have reopened by
@@ -222,6 +468,7 @@ export function installSurfaceController(
         "mousedown", "mouseup", "mousemove", "click", "wheel", "contextmenu",
       ] as const;
       dialog.root.addEventListener("cancel", onCancel);
+      dialog.root.addEventListener("pointerdown", onPointerDown);
       dialog.root.addEventListener("click", onClick);
       dialog.root.addEventListener("close", onClose);
       for (const name of isolatedEvents) dialog.root.addEventListener(name, stop);
@@ -244,12 +491,14 @@ export function installSurfaceController(
           // now so a same-turn reopen receives a fresh modal claim.
           surface.setOpen(false);
         },
+        pageChanged: surface.pageChanged,
         dispose() {
           if (disposed) return;
           disposed = true;
           if (dialog.root.open) dialog.root.close();
           surface.dispose();
           dialog.root.removeEventListener("cancel", onCancel);
+          dialog.root.removeEventListener("pointerdown", onPointerDown);
           dialog.root.removeEventListener("click", onClick);
           dialog.root.removeEventListener("close", onClose);
           for (const name of isolatedEvents) dialog.root.removeEventListener(name, stop);
@@ -257,5 +506,6 @@ export function installSurfaceController(
       });
     },
     dismissTransient,
+    afterPress,
   });
 }

@@ -4,8 +4,8 @@
  */
 import { isAppShortcutCaptureActive } from "./launcher-shortcut-capture.js";
 import type { BrowserWindow } from "electron";
-import type { AppSettings, GameTextEditCommand } from "../shared/contracts.js";
-import { featureActivationRequested } from "../shared/feature-contracts.js";
+import type { AppSettings, GameTextEditCommand, TextEditCommand } from "../shared/contracts.js";
+import { featureActivationRequested, type FeatureId } from "../shared/feature-contracts.js";
 import {
   resolveShortcuts,
   HUB_SHORTCUT,
@@ -13,6 +13,7 @@ import {
   shortcutFromInput,
   shortcutMatches,
   type ShortcutAction,
+  type ShortcutBinding,
   type ShortcutCaptureResult,
 } from "../shared/keyboard-shortcuts.js";
 import { recordMainInput } from './input-trace.js';
@@ -33,7 +34,7 @@ const tracedKey = (key: string) => {
 
 interface ShortcutActions {
   run(action: ShortcutAction | "hub.toggle"): void | Promise<void>;
-  edit(command: GameTextEditCommand): void;
+  edit(command: TextEditCommand): void;
   quitOrReload(): void | Promise<void>;
   recordCommandQ?(
     phase: "claimed" | "repeat-contained" | "rearmed",
@@ -41,41 +42,65 @@ interface ShortcutActions {
   ): void;
 }
 
-type ClaimedKey = 'capture' | 'skill-capture' | 'shortcut' | GameTextEditCommand;
+/**
+ * `quit` and `sheet` hold a key while the native sheet it opened is up
+ * (Command-Q, Resign). A Guild Wars edit command names the edit whose
+ * translated Control chord may reuse the key.
+ */
+type ClaimedKey = 'capture' | 'skill-capture' | 'shortcut' | 'quit' | 'sheet' | GameTextEditCommand;
 
 const claimedDecision = (claim: ClaimedKey): 'capture' | 'shortcut' =>
   claim === 'capture' || claim === 'skill-capture' ? 'capture' : 'shortcut';
 
 const isTextEditClaim = (claim: ClaimedKey): claim is GameTextEditCommand =>
-  claim !== 'capture' && claim !== 'skill-capture' && claim !== 'shortcut';
+  claim !== 'capture' && claim !== 'skill-capture' && claim !== 'shortcut' && claim !== 'quit' && claim !== 'sheet';
 
 const isModifierCode = (code: string): boolean =>
   /^(?:Meta|Control|Shift|Alt)(?:Left|Right)$/u.test(code);
 
-const textEditCommand = (input: Electron.Input): GameTextEditCommand | null => {
-  if (!input.meta || input.control || input.shift || input.alt) return null;
-  if (input.code === 'KeyA') return 'selectAll';
-  if (input.code === 'KeyC') return 'copy';
-  if (input.code === 'KeyV') return 'paste';
-  if (input.code === 'KeyX') return 'cut';
-  return null;
-};
+const commandChord = (key: string, shift = false): ShortcutBinding => ({ key, shift, option: false });
+/** The macOS Edit chords, matched like every app shortcut by the letter the layout types. */
+const TEXT_EDIT_CHORDS: readonly (readonly [ShortcutBinding, TextEditCommand])[] = [
+  [commandChord("a"), "selectAll"],
+  [commandChord("c"), "copy"],
+  [commandChord("v"), "paste"],
+  [commandChord("x"), "cut"],
+  [commandChord("z"), "undo"],
+  [commandChord("z", true), "redo"],
+];
+const QUIT_CHORD = commandChord("q");
+
+const textEditCommand = (input: Electron.Input): TextEditCommand | null =>
+  TEXT_EDIT_CHORDS.find(([binding]) => shortcutMatches(binding, input))?.[1] ?? null;
+
+/** Undo and Redo stay in Chromium; only these reach Guild Wars as a translated Control chord. */
+const isGameTextEditCommand = (command: TextEditCommand): command is GameTextEditCommand =>
+  command !== "undo" && command !== "redo";
+
+/** The feature whose activation lets each shortcut action run. */
+const SHORTCUT_FEATURES = [
+  ["game.call-target", "callTarget"],
+  ["game.resign", "resign"],
+  ["character.switch", "characterSwitch"],
+  ["tools.toggle", "buildLibrary"],
+  ["whispers.toggle", "whispers"],
+  ["trade.toggle", "tradeChat"],
+  ["storage.open", "xunlaiStorage"],
+  ["travel.open", "travel"],
+  ["cartography.grid.toggle", "cartography"],
+  ["cartography.walkability.toggle", "cartography"],
+] as const satisfies readonly (readonly [ShortcutAction, FeatureId])[];
 
 class WindowShortcuts {
   #hubAvailable = true;
   readonly #actions: ShortcutActions;
-  #shortcuts = resolveShortcuts({
-    "game.call-target": null,
-    "game.resign": null,
-    "character.switch": null,
-    "tools.toggle": null,
-    "trade.toggle": null,
-    "whispers.toggle": null,
-    "storage.open": null,
-    "travel.open": null,
-    "cartography.grid.toggle": null,
-    "cartography.walkability.toggle": null,
-  });
+  /**
+   * Every assigned chord stays claimed, and only an enabled action runs: Guild
+   * Wars acts on the base key whatever modifier is held, so a disabled tool's
+   * Command-S would otherwise walk the character backward.
+   */
+  #shortcuts = resolveShortcuts({});
+  #enabled = new Set<ShortcutAction>();
   #capture: ((result: ShortcutCaptureResult) => void) | null = null;
   #skillCapture: ((result: SkillKeyCaptureResult) => void) | null = null;
   #claimedCodes = new Map<string, ClaimedKey>();
@@ -104,13 +129,22 @@ class WindowShortcuts {
         });
         if (decision) {
           this.#claimedCodes.delete(input.code);
-          if (input.code === "KeyQ") this.#recordCommandQ("rearmed", "keyup");
+          if (decision === 'quit') this.#recordCommandQ("rearmed", "keyup");
           event.preventDefault();
         }
         return;
       }
       if (input.type !== "keyDown") return;
-      const claimed = this.#claimedCodes.get(input.code);
+      let claimed = this.#claimedCodes.get(input.code);
+      // Chromium drops the key-up of a key-down main prevented, and the AppKit
+      // release monitor sees only Command chords, so a claim can outlive its
+      // press. A fresh press of the same key is a new press and is decided
+      // again. Only a native sheet keeps its key until the sheet settles.
+      if (claimed && !input.isAutoRepeat && claimed !== 'sheet' && claimed !== 'quit'
+        && !(isTextEditClaim(claimed) && input.control && !input.meta)) {
+        this.#claimedCodes.delete(input.code);
+        claimed = undefined;
+      }
       if (claimed) {
         // The translated Guild Wars chord deliberately reuses A or X while
         // the physical Command shortcut remains claimed. Let only that exact
@@ -129,7 +163,7 @@ class WindowShortcuts {
           decision: claimedDecision(claimed),
         });
         event.preventDefault();
-        if (input.code === "KeyQ") {
+        if (claimed === 'quit') {
           this.#recordCommandQ("repeat-contained", "none");
         }
         return;
@@ -189,24 +223,18 @@ class WindowShortcuts {
           key: tracedKey(input.key), repeat: input.isAutoRepeat,
           decision: 'shortcut',
         });
-        this.#claimedCodes.set(input.code, edit);
+        this.#claimedCodes.set(input.code, isGameTextEditCommand(edit) ? edit : 'shortcut');
         this.#actions.edit(edit);
         return;
       }
-      if (
-        input.meta &&
-        !input.control &&
-        !input.shift &&
-        !input.alt &&
-        input.code === "KeyQ"
-      ) {
+      if (shortcutMatches(QUIT_CHORD, input)) {
         event.preventDefault();
         recordMainInput(win, {
           source: 'main', kind: 'native-key', phase: 'down',
           key: tracedKey(input.key), repeat: input.isAutoRepeat,
           decision: 'shortcut',
         });
-        this.#claimedCodes.set(input.code, 'shortcut');
+        this.#claimedCodes.set(input.code, 'quit');
         this.#recordCommandQ("claimed", "none");
         if (!input.isAutoRepeat) {
           // AppKit gives the native sheet ownership before the physical Q-up
@@ -234,6 +262,10 @@ class WindowShortcuts {
         return;
       }
       if (this.#hubAvailable && shortcutMatches(HUB_SHORTCUT, input)) {
+        recordMainInput(win, {
+          source: 'main', kind: 'native-key', phase: 'down',
+          key: tracedKey(input.key), repeat: input.isAutoRepeat, decision: 'shortcut',
+        });
         event.preventDefault();
         this.#claimedCodes.set(input.code, 'shortcut');
         if (!input.isAutoRepeat) void this.#actions.run("hub.toggle");
@@ -246,8 +278,9 @@ class WindowShortcuts {
             key: tracedKey(input.key), repeat: input.isAutoRepeat, decision: 'shortcut',
           });
           event.preventDefault();
-          this.#claimedCodes.set(input.code, 'shortcut');
-          if (!input.isAutoRepeat) {
+          const runs = this.#enabled.has(action as ShortcutAction);
+          this.#claimedCodes.set(input.code, runs && action === "game.resign" ? 'sheet' : 'shortcut');
+          if (!input.isAutoRepeat && runs) {
             const operation = this.#actions.run(action as ShortcutAction);
             if (action === "game.resign") {
               // Native sheets can consume the physical key-up, as with Command-Q.
@@ -282,30 +315,9 @@ class WindowShortcuts {
     | "cartographyEnabled"
   >): void {
     this.#hubAvailable = hubShortcutAvailable(settings.shortcutOverrides);
-    const resolved = resolveShortcuts(settings.shortcutOverrides);
-    this.#shortcuts = {
-      "game.call-target": featureActivationRequested("callTarget", settings) ? resolved["game.call-target"] : null,
-      "game.resign": featureActivationRequested("resign", settings) ? resolved["game.resign"] : null,
-      "character.switch": featureActivationRequested("characterSwitch", settings)
-        ? resolved["character.switch"] : null,
-      "tools.toggle": featureActivationRequested("buildLibrary", settings)
-        ? resolved["tools.toggle"]
-        : null,
-      "whispers.toggle": featureActivationRequested("whispers", settings) ? resolved["whispers.toggle"] : null,
-      "trade.toggle": featureActivationRequested("tradeChat", settings)
-        ? resolved["trade.toggle"]
-        : null,
-      "storage.open": featureActivationRequested("xunlaiStorage", settings)
-        ? resolved["storage.open"]
-        : null,
-      "travel.open": featureActivationRequested("travel", settings)
-        ? resolved["travel.open"]
-        : null,
-      "cartography.grid.toggle": featureActivationRequested("cartography", settings)
-        ? resolved["cartography.grid.toggle"] : null,
-      "cartography.walkability.toggle": featureActivationRequested("cartography", settings)
-        ? resolved["cartography.walkability.toggle"] : null,
-    };
+    this.#shortcuts = resolveShortcuts(settings.shortcutOverrides);
+    this.#enabled = new Set(SHORTCUT_FEATURES.filter(([, feature]) => featureActivationRequested(feature, settings))
+      .map(([action]) => action));
   }
 
   capture(): Promise<ShortcutCaptureResult> {
@@ -342,8 +354,9 @@ class WindowShortcuts {
   }
 
   release(code: string): void {
-    const claimed = this.#claimedCodes.delete(code);
-    if (claimed && code === "KeyQ") {
+    const claimed = this.#claimedCodes.get(code);
+    this.#claimedCodes.delete(code);
+    if (claimed === 'quit') {
       this.#recordCommandQ("rearmed", "appkit-release");
     }
   }

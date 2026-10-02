@@ -331,10 +331,18 @@ export function createCharacterSwitchController(options: Readonly<{
     // character, so it must not be misused as carousel confirmation here.
     await delay(300);
     if (!switching()) return;
+    const beforePlay = options.characters.state;
+    const target = beforePlay.status === "ready" ? beforePlay.characters[matches[0]!] : undefined;
+    if (beforePlay.status !== "ready" || !sameAccount(initialKeys, beforePlay)
+      || target?.characterKey !== targetKey || target.name !== targetName) {
+      fail("target-missing");
+      return;
+    }
     publish({ status: "switching", stage: "play" }, "selection:sent");
-    const play = await send("play", 0, 2_000);
+    const play = await send("play", matches[0]!, 2_000);
     if (play !== "sent") {
       fail(play === "refused" ? "play-refused"
+          : (play === "selection-unconfirmed" || play.startsWith("selector-")) ? "selection-not-confirmed"
           : play === "play-frame" ? "play-frame-missing"
             : play === "play-parent" ? "play-parent-invalid"
           : play === "invalid" ? "play-invalid" : "play-timeout");

@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { calculateTitle } from '../../src/shared/title-calculator.js';
 import { createHubCalculator } from '../../src/renderer/hub-calculator.js';
+/** Calculator rows copy without navigating, so any live task serves. */
+const task: import('../../src/shared/hub.js').HubTask = { live: () => true, progress() {}, done() {} };
 
 test('known items convert only into their own title using base points',()=>{
   for(const [query,answer] of [['250 cupcakes in sweet points','500 Sweet Tooth points'],['1 stack grog in drunk points','750 Drunkard points'],['250 hunters ale to drunkard points','250 Drunkard points'],['2 stacks zkeys in zaishen points','2,500 Zaishen points'],['1 frosty tonic in party points','2 Party Animal points']])assert.equal(calculateTitle(query!)?.[0]?.title,answer);
@@ -42,8 +44,15 @@ test('explicit offers compare price per point without implying a market quote',(
   assert.match(calculateTitle('250 party points for 0p')![0]!.title,/greater than zero/);
 });
 test('title calculations stay offline and never change progress',async()=>{
-  let copied='';const source=createHubCalculator({copy:async value=>{copied=value;},marketEnabled:()=>false,quotes:async()=>{throw new Error('Network forbidden');}});
+  let copied='',reads=0;const source=createHubCalculator({copy:async value=>{copied=value;},marketEnabled:()=>false,quotes:async()=>{reads++;throw new Error('Network forbidden');}});
   source.setVisible(true);const row=source.search('250 cupcakes in sweet points')[0]!;
-  assert.equal(row.group,'Titles');await row.run();assert.match(copied,/500 Sweet Tooth points/);
-  assert.equal(source.search('10 ecto in p').length,0);source.setVisible(false);
+  assert.equal(row.group,'Titles');await row.run(task);assert.match(copied,/500 Sweet Tooth points/);
+  assert.equal(source.search('10 ecto in p')[0]?.id,'quote-disabled');assert.equal(reads,0);source.setVisible(false);
 });
+
+test('progress accepts the same short track names as entered point quantities', () => {
+  for (const [short, full] of [['sweet', 'sweet tooth'], ['drunk', 'drunkard'], ['party', 'party animal']] as const)
+    assert.deepEqual(calculateTitle(`${short} from 0`), calculateTitle(`${full} from 0`));
+});
+
+ test('a single remaining point uses the singular unit',()=>{assert.equal(calculateTitle('sweet tooth from 9999')?.[0]?.title,'1 point remaining');});

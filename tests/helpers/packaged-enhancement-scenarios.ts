@@ -980,13 +980,14 @@ export async function assertToolboxFoundationLifecycle() {
         const deadline = performance.now() + 2_000;
         const observe = () => {
           if (
-            toolboxCount() === 0
+            toolboxCount() === 1
+            && document.querySelector<HTMLElement>("#toolbox-trade")?.dataset.open !== "true"
             && tradeConfigurations.at(-1) === 0
             && pendingTradeToggles === 0
             && tradeAliasDispatches === 1
           ) resolve();
           else if (performance.now() >= deadline) {
-            reject(new Error("PvP policy did not withdraw Tools and Trade Chat"));
+            reject(new Error("PvP policy did not retain saved authoring and withdraw Trade Chat"));
           } else requestAnimationFrame(observe);
         };
         requestAnimationFrame(observe);
@@ -996,6 +997,8 @@ export async function assertToolboxFoundationLifecycle() {
         tradeAliasDispatches,
         toolboxCount: toolboxCount(),
         tradeConfiguration: tradeConfigurations.at(-1),
+        authoringOpen: document.querySelector<HTMLElement>("#toolbox-foundation")?.dataset.open === "true",
+        tradeClosed: document.querySelector<HTMLElement>("#toolbox-trade")?.dataset.open !== "true",
       };
 
       view.setUint32(area + layout.areaInfoFlags, 0, true);
@@ -1007,11 +1010,11 @@ export async function assertToolboxFoundationLifecycle() {
           const root = document.querySelector<HTMLElement>("#toolbox-foundation");
           if (
             root !== null
-            && root.dataset.open !== "true"
+            && root.dataset.open === "true"
             && tradeConfigurations.at(-1) === 1
           ) resolve();
           else if (performance.now() >= deadline) {
-            reject(new Error("Tools did not recover closed after leaving PvP"));
+            reject(new Error("Saved authoring did not remain open after leaving PvP"));
           } else requestAnimationFrame(observe);
         };
         requestAnimationFrame(observe);
@@ -1020,7 +1023,7 @@ export async function assertToolboxFoundationLifecycle() {
         "#toolbox-foundation",
       );
       const recovered = {
-        closed: recoveredRoot !== null && recoveredRoot.dataset.open !== "true",
+        authoringOpen: recoveredRoot !== null && recoveredRoot.dataset.open === "true",
         tradeAliasDispatches,
         toolboxCount: toolboxCount(),
         tradeConfiguration: tradeConfigurations.at(-1),
@@ -1200,11 +1203,13 @@ export async function assertToolboxFoundationLifecycle() {
     assert.deepEqual(result.pvp, {
       pendingTradeToggles: 0,
       tradeAliasDispatches: 1,
-      toolboxCount: 0,
+      toolboxCount: 1,
       tradeConfiguration: 0,
+      authoringOpen: true,
+      tradeClosed: true,
     });
     assert.deepEqual(result.recovered, {
-      closed: true,
+      authoringOpen: true,
       tradeAliasDispatches: 1,
       toolboxCount: 1,
       tradeConfiguration: 1,

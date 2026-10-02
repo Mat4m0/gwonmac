@@ -25,6 +25,7 @@ export function mountTravelPalette(
       visible: visible.value,
       ...(options.nativeDialog === undefined ? {} : { nativeDialog: options.nativeDialog }),
       onClose: () => setVisible(false),
+      onTravelled: () => setVisible(false),
     }),
   });
   app.mount(target);

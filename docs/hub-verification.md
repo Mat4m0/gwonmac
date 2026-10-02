@@ -10,22 +10,54 @@ Run `pnpm hub:dev` from the repository root. Open
 
 This uses the production Hub shell, Builds, Trade, Travel, Characters and Whispers
 presentation. Only the game/native/network boundary is synthetic. Prices are sample
-NPC quotes and synthetic player advertisements, never live prices. The scenario selector exposes an outpost,
-an explorable area, interrupted application, duplicate names, and **People to
-invite**. Reset fixture clears only fixture data. The fixture is excluded from
-the embedded entry point.
+NPC quotes and synthetic player advertisements, never live prices; calculator cards
+built from either say "(sample)". Reset fixture clears only fixture data. The fixture is excluded
+from the embedded entry point.
 
-The fixture wires the production party invite to a synthetic play region that
-follows the demo Travel host. A trip reads as the game's unavailable state, which
-the live game can publish for a moment during a zone change. The player starts in Lion's Arch; Romi Ranger is
-in Kamadan. **People to invite** adds the chat names Mo Kaiser and Kai Mo Bearer,
-four online friends named Zed (Kamadan, Ascalon City, Lion's Arch, Kaineng
-Center), and Arena Ace in Random Arenas. The app element records each sent
-invite in `data-invites` and the last action in `data-action`, such as
-`PARTY.INVITE Mo Kai`, `PARTY.TRAVEL Romi Ranger` or `FRIEND.TRAVEL Zed Beta`.
+The fixture controls are:
+
+- **Fixture scenario** for build data: standard builds, interrupted application,
+  duplicate names, nested template folders and mixed hero professions.
+- **Lifecycle state**: `outpost` (Lion's Arch), `pve-explorable` (North Kryta
+  Province), `pvp-outpost` (Random Arenas), `guild-hall` (Warrior's Isle, an
+  outpost outside the Travel catalogue), `map-loading` and `character-select`.
+  One synthetic Travel game state feeds the play region, the party, Travel and the
+  character-switch context, the way the game does. A zone change first reads as
+  the game's unavailable state for a moment, as the live game can publish it, so
+  Travel and invite must survive it. A Travel arrival moves it to the destination
+  outpost. Characters asks "Leave this area and switch to …?" in an explorable area
+  and refuses while a map loads.
+- **Injected party**: the production party invite with the chat names Mo Kaiser
+  and Kai Mo Bearer, four online friends named Zed (Kamadan, Ascalon City, Lion's
+  Arch, Kaineng Center) and Arena Ace in Random Arenas. Romi Ranger is always a
+  friend in Lion's Arch, so `invite Romi` is ready to send from the starting
+  outpost; Zed Alpha in Kamadan covers Travel and invite.
+- **Canvas input** counts every key and pointer event that reached the synthetic
+  game canvas, which fills the window as in production. The events themselves are in
+  `window.gwFixtureCanvas.events`.
+
+URL switches set the same state at load: `?hub&lifecycle=pve-explorable`,
+`?hub&party` and `?hub&library=1000` (a deterministic library of 1,000 builds and
+50 teams that is kept in memory only). Slow and failing game answers exercise the
+Hub session races: `?slow-apply` lands each apply command half a second after it
+was sent on the real confirmation clock (a GOM AFK apply takes about 16 seconds),
+`?accounts-ms=1500` and `?invite-ms=4000` delay opening an account and sending an
+invite, `?templates-ms=1200` delays each read of the Guild Wars template files,
+`?travel-load-ms=800` attaches Travel late, as the game loads its lazy bundle, `?invite-fail=<reason>` makes the invite fail with that reason, and
+`?switch-fail=<code>` makes a character switch run for a second and then fail
+with that failure code. Tests can also dispatch
+`hub-fixture-lifecycle`, `hub-fixture-party` and `hub-fixture-scenario` events.
+
+Shortcuts follow the production path. The fixture claims keys the way the main
+process does, including repeats and key-ups, and delivers them as renderer commands
+through `commands.ts`. Command-Q opens a model of the native Quit-or-Reload sheet;
+its Quit closes the synthetic game window, as does the Hub's `requestQuit`. The app
+element records each sent invite in `data-invites` and the last action in
+`data-action`, such as `PARTY.INVITE Mo Kai`, `PARTY.TRAVEL Zed Alpha`,
+`Character toefte` or `Game quit`.
 
 Try `team gom afk`, `build smiter`, `10 ecto in p`, `trade ecto`, `char war`,
-and `invite Mo Kai`.
+`invite Romi` and `invite Mo Kai`.
 Build and team previews use the existing planner and observed execution runner.
 
 ## Verified behavior
@@ -33,9 +65,9 @@ Build and team previews use the existing planner and observed execution runner.
 - 27 Hub browser journeys: deterministic search, keyboard navigation, team and
   build application, duplicate refusal, preflight and partial failures, conversion,
   saved phrases and pins, disabled capabilities, silent Storage, character choice,
-  Trade query transfer, detachment, and inline Maps controls.
+  Trade query transfer, detachment, and Settings → Maps controls.
 - Browser visual exploration: home and conversion states, both themes, 390px width,
-  reduced motion. Raycast-style hierarchy with category icons, 54px rows, a spacious
+  reduced motion. Raycast-style hierarchy with category icons, compact Home rows, a spacious
   search area, rounded selection, conversion cards and a compact action footer.
 - 1,692 unit tests passed, including bounded calculator arithmetic, late quotes,
   stale rates, private/global phrase validation and single-build target guards.
@@ -98,7 +130,7 @@ A focused test and the browser conversion journey cover this distinction.
 
 Hub and its embedded controls share the system font token. Recent Travel
 destinations and characters use horizontal carousels; Travel retains a compact
-Favorites grid. Empty-query arrows browse without executing, Enter activates and
+Favourites grid. Empty-query arrows browse without executing, Enter activates and
 Escape returns. Search retains caret editing. Settings stay keyboard-accessible.
 Existing Travel and character tests retain refusal and preference coverage.
 
@@ -288,7 +320,9 @@ favourites and its action hints reachable.
 [Appearance checks](../apps/tools/tests/hub-appearance.spec.ts) include minimum
 opacity, a bright checkerboard backdrop, reduced motion, font changes, Custom
 Classic, Modern round trips and device-pixel density. Composed screenshot pixels
-under Hub result labels meet 4.5:1. The Workbench suite separately checks critical
+under Hub result labels meet 4.5:1. A custom theme with the Modern flat finish is
+checked by pixel in the Hub (four borders, 65–100 % opacity), Trade, the Build
+Library window and Hub Settings: the first row's centre is never the border colour. The Workbench suite separately checks critical
 team and skill feedback contrast. These are bounded contrast checks, not an
 exhaustive accessibility certification. [Hub Electron checks](../tests/electron/input-hub.spec.ts)
 exercise actual 200% window zoom and the `gw://app` artwork route. Native
@@ -712,7 +746,9 @@ Verification on the final runtime source:
   (`/tmp/gwonmac-refinement-final-electron.log`,
   `/tmp/gwonmac-refinement-character-final.log`).
 - Native editing exercises physical Meta+A/Meta+V through Electron's input owner,
-  clipboard isolation, query selection, undo/redo and Delete. Chromium composition
+  clipboard isolation, query selection, undo/redo and Delete. (Until HUB-134 the
+  undo/redo step used Playwright's injected editing commands, which bypass main;
+  it now sends Command-Z through `sendInputEvent`.) Chromium composition
   is exercised with dead-key/IME events; this does not test the macOS input-source
   chooser or certify every physical keyboard layout.
 - Computer-use inspection covered Classic/Modern presentation, mixed-profession
@@ -764,3 +800,53 @@ The existing developer game session was preserved. Acceptance of that session
 does not certify the later signed assets. Signed qualification, Stable/Beta
 round-trip and the exact-draft live checklist in
 [Release verification](release-verification.md) remain release gates.
+
+
+## Hub polish — Performance and Accessibility
+
+The [branch ledger](../internals/hub-polish-perf-a11y-ledger.md) records scope,
+regression backouts, visual inspections and unresolved performance requirements.
+Current local evidence is offline. Empty status regions, named result groups,
+carousel positions and conversation logs have browser structural proof. This does
+not establish VoiceOver speech or AZERTY behavior. Live gameplay and input feel
+remain Matthias's checks.
+
+Root build/team matches are capped. The complete Library still creates all rich
+row DOM on entry. Its measured entry and long task exceed the requested scale
+budget; the ledger keeps that requirement deferred. Do not treat faster isolated
+measurements or incomplete observer delivery as acceptance.
+
+## Visual consistency verification
+
+The visual regression spec covers shared search geometry, compact Home builds,
+folder glyphs, named calculator copy targets, grouped digits, and Settings → Maps.
+It checks native child controls without changing their saved values.
+
+The style matrix compares the frame and search box across both styles, six fonts,
+and 65% and 94% opacity. Text size uses existing typography tokens from 100%
+to 200%. It does not zoom the game. Regression backouts and verification counts
+are recorded in [the visual ledger](../internals/hub-polish-visual-ledger.md).
+
+These fixture checks do not verify the live game, input feel, VoiceOver, or AZERTY.
+
+
+## Hub polish integration verification
+
+The [integration review](../internals/hub-polish-review.md) accounts for all 255
+plan findings and links every draft. The
+[integration ledger](../internals/hub-polish-integration-ledger.md) records merge
+resolutions, red/green proofs, mistakes and unresolved limits.
+
+The full Tools browser suite ran once with two workers. It passed 708 cases
+initially; all 40 failed cases passed individually after fixes and assertion
+reconciliation. The touched Electron specs passed 17 cases initially; all 23
+failed cases passed individually. New owner regressions passed separately.
+
+The repository gate, build, kernel integrity checks, integration tests and
+release tests pass. Hosted application verification remains blocked by the
+existing dependency audit. Consult the integration draft's current checks.
+
+Live game, input feel, VoiceOver, physical AZERTY and signed exact-draft QA remain
+Matthias's checks. Custom-palette contrast, full Library entry cost and the
+explicit design decisions remain open. Do not use offline closure as release
+acceptance.

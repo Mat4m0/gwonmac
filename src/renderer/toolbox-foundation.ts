@@ -12,16 +12,14 @@ type ToolboxState = ToolboxObservation;
 
 const OVERLAY_CSS = `
 #toolbox-foundation {
-  position: fixed;
-  inset: 0;
-  z-index: auto;
-  box-sizing: border-box;
+  /* No box and no stacking context: each tool host stacks at the root, beside Whispers (HUB-108). */
+  display: contents;
   pointer-events: none;
   color: #e8e4d8;
   font: 12px/1.45 -apple-system, "SF Pro Text", "Segoe UI", sans-serif;
 }
 #toolbox-foundation > [data-role] {
-  position: absolute;
+  position: fixed;
   inset: 0;
   pointer-events: none;
 }
@@ -31,6 +29,8 @@ export interface MountedTool {
   setVisible(visible: boolean): void;
   setActive?(active: boolean): void;
   requestClose(): void;
+  /** Steps out of one inner level (a menu, drawer or sub-view); false when none is open. */
+  stepBack?(): boolean;
   search?(query: string): void;
   update(state: ToolboxState): void;
   dispose(): void;
@@ -90,9 +90,11 @@ export function createToolboxFoundation(
   let disposed = false;
   let active: Slot | null = null;
   let focusFrame: number | undefined;
+  let pendingFocus: Slot | null = null;
   const cancelPendingFocus = () => {
     if (focusFrame !== undefined) cancelAnimationFrame(focusFrame);
     focusFrame = undefined;
+    pendingFocus = null;
   };
   window.addEventListener("keydown", cancelPendingFocus, true);
   window.addEventListener("pointerdown", cancelPendingFocus, true);
@@ -119,6 +121,8 @@ export function createToolboxFoundation(
         root: element,
         priority: 4,
         dismiss: () => requestClose(slot),
+        // Escape leaves the tool's innermost level first, even while the game holds focus (HUB-120).
+        escape: () => { if (!slot.tool?.stepBack?.()) requestClose(slot); },
       }),
     };
     return slot;
@@ -152,6 +156,10 @@ export function createToolboxFoundation(
         mounted?.setVisible(slot.visible);
         mounted?.setActive?.(active === slot);
         if (slot.name === "builds") mounted?.update(state);
+        if (pendingFocus === slot) {
+          if (mounted) focusFloating(slot);
+          else pendingFocus = null;
+        }
       });
   };
 
@@ -188,17 +196,29 @@ export function createToolboxFoundation(
   const openFloating = (slot: Slot) => {
     window.gwHub?.suspend();
     setOpen(slot, true); activate(slot);
-    // A later surface change or user input owns focus over this deferred handoff.
+    // Keep the request through lazy mounting; a later press or surface change cancels it.
+    pendingFocus = slot;
+    focusFloating(slot);
+  };
+  function focusFloating(slot: Slot) {
+    if (focusFrame !== undefined) cancelAnimationFrame(focusFrame);
     focusFrame = requestAnimationFrame(() => {
       focusFrame = undefined;
-      if (!disposed && slot.visible && active === slot) [...slot.host.querySelectorAll<HTMLInputElement>('input')].find(input => !input.disabled && input.getClientRects().length)?.focus();
+      if (pendingFocus !== slot || disposed || !slot.visible || active !== slot) return;
+      const input = [...slot.host.querySelectorAll<HTMLInputElement>('input')]
+        .find(input => !input.disabled && input.getClientRects().length);
+      if (input) {
+        pendingFocus = null;
+        input.focus();
+      }
     });
-  };
+  }
   const onBuildsCommand = (event: Event) => {
     if (!availability.builds) return;
     event.preventDefault();
     if (event instanceof CustomEvent && event.detail === 'workspace') openFloating(builds);
-    else if (window.gwHub?.visible) window.gwHub.browseBuilds();
+    // An open Hub, or one suspended on the Build Library's pages, takes ⌘B as a direct shortcut.
+    else if (window.gwHub?.visible || window.gwHub?.suspendedOn('builds')) window.gwHub.browseBuilds();
     else if (event instanceof CustomEvent && event.detail === "show") openFloating(builds);
     else toggle(builds);
   };
@@ -209,8 +229,10 @@ export function createToolboxFoundation(
       if (trade.tool) trade.tool.search?.(event.detail.query);
       else trade.query = event.detail.query;
     }
-    if (window.gwHub?.visible || event instanceof CustomEvent && (event.detail === "show" || typeof event.detail?.query === "string")) openFloating(trade);
-    else toggle(trade);
+    // ⌘K opens Trade with its search focused, from the game as from the Hub, and hides it only
+    // when the Hub is not open (HUB-128, HUB-036).
+    if (window.gwHub?.visible || !trade.visible || event instanceof CustomEvent && (event.detail === "show" || typeof event.detail?.query === "string")) openFloating(trade);
+    else requestClose(trade);
   };
 
   const stopAtOverlay = (event: Event) => event.stopPropagation();

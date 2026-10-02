@@ -32,7 +32,8 @@ resolve ambiguity, or understand a materially different operation.
 
 1. Press the resolved Hub shortcut (default `⌘R`). A fresh Hub opens with search focused.
 2. Type `sw`. Switch Character appears before Switch Account in ordinary tool ordering.
-3. Press Down to focus the selected Switch Character result; Enter opens it.
+3. Switch Character is the selected result; Enter opens it. Search keeps focus
+   and Down moves the selection (D-2).
 4. The current character card owns focus immediately. Left/Right moves through
    this account's characters. There is no extra Down or Tab just to start browsing.
 5. Enter on another available character performs the visibly named switch action.
@@ -40,8 +41,8 @@ resolve ambiguity, or understand a materially different operation.
 6. Up from the cards focuses optional character search. Up from that search
    reaches Back. Down returns to the remembered card. Normal typing from a card
    starts/refines character search without losing the first character.
-7. Back restores the parent query `sw`, the Switch Character row, its keyboard
-   focus, and the previous scroll position. It does not put focus in search.
+7. Back restores the parent query `sw`, the selected Switch Character row, and
+   the previous scroll position, with focus in search.
 
 The direct Characters shortcut (default `⌘E`) opens the same card-first view,
 without a fabricated Home history entry. Explicit `char <name>` searches may
@@ -55,14 +56,14 @@ Switch Account already exists in `src/renderer/hub-accounts.ts`; extend that own
 1. Select Switch Account from Hub results and press Enter.
 2. Focus an eligible account row immediately. Show the current account clearly;
    it must not be the default executable choice for switching to itself.
-3. Enter on an account opens its actions, with the default Switch Account action
-   focused. Label both the target account and the current account affected.
-4. Keep Show/Open separately available for keeping the current game running.
-   Do not introduce another confirmation over the existing explicit action choice.
+3. Enter on an account opens its actions with "Open <name> · Keep <current>
+   running" first and selected (D-23). Label both the target account and the
+   current account affected; the footer names the selected row's consequence.
+4. The replace ("Close <current> and open <name>") comes second, reads as
+   destructive, and opens an armed "Close <current>?" confirmation first.
 5. Back from actions returns to the same account row in the account picker.
 6. Back again returns to the Switch Account command in the original Hub results,
-   preserving query, scroll, and row focus. Up moves through those results to
-   search; when the command is the first/only result, one Up reaches search.
+   preserving query, scroll, and selection. Focus stays in search throughout.
 
 An exact `acc <name>` can continue exposing that account's named actions directly.
 Do not manufacture intermediate pages when the player already supplied the target.
@@ -101,7 +102,7 @@ always expose the consequence of Enter before it can change the game.
 | Fresh Hub | Global search | Already focused | Visible selected result action |
 | Character carousel | Current/explicitly selected character | Up or type from card | Switch to named character |
 | Account picker | First eligible alternative account | Up/type from rows | Open named account actions |
-| Account actions | Switch action for the chosen account | Available but not required | Named switch/show/open operation |
+| Account actions | "Open X · Keep Main running"; the replace comes second and reads as destructive (D-23) | Available but not required | The selected row's own consequence, e.g. "Close Main and open Second" |
 | Travel | Existing destination search with a useful selected destination | Already focused | Travel to named destination |
 | Build Library/folder | First available folder/build row | Up/type from rows | Open folder or choose build target |
 | Build target page | Apply to me | Up/type from rows | Apply to named player, or open hero picker |
@@ -117,18 +118,45 @@ do not focus a decorative heading or disabled primary action.
 
 - Up/Down follows each view's meaningful vertical order; Left/Right remains
   spatial for characters and native for text, sliders, and selects.
-- For list/carousel browsing, Up at the top reaches search; Up from search reaches
-  Back. Travel may retain search focus while moving active destinations, but must
-  provide that upward escape at the first destination instead of wrapping forever.
+- Hub lists keep DOM focus in the search combobox and move
+  `aria-activedescendant` (D-2). Up, Down, Control-P, Control-N, Page Up, Page
+  Down, Home and End move the one selection without wrapping; Up at the top is a
+  no-op. Characters stay card-first and forms stay form-first. For carousels, Up at
+  the top reaches search, and Up in search stays. Travel, Trade, Trader prices,
+  Settings sections and the Whispers picker share the same list move
+  (`src/shared/ui/list-keys.ts`); none wraps, and none jumps to Back or the
+  window chrome.
 - Right on a navigational result opens its child. Use a quiet child cue where
   needed. Right must never execute a world-changing command.
-- Enter executes the displayed primary action. A click does the same for the
-  clicked row. A separate details affordance may inspect without executing.
+- Enter executes the displayed primary action. A click does the same for a
+  navigational row. A row whose action changes the game or the account
+  (`consequential`: apply, travel, switch, invite, account) is only selected by a
+  click; the footer primary or a double-click that started on that row runs it
+  (D-24). This holds for Hub rows, Travel destinations and character cards, and
+  each of those footers names the primary. A double-click never runs what its
+  first click revealed: one window-capture owner in `surface-controller.ts`
+  ties a click run to the surface page its first press landed on, and any page
+  change, closed surface or move to another surface swallows the rest of the run
+  wherever it lands, the game canvas included (HUB-242, HUB-244). A press counts
+  as part of the run within the player's own macOS Double-click speed, which
+  main passes to the renderer, as Chromium counts it. Rapid clicks on
+  an unchanged page still count. Footer slots disable instead of hiding, so
+  nothing slides under a resting pointer. Hover selects only on real pointer
+  movement: a view that appears under a resting pointer, a wheel scroll or the
+  trailing click of a double-click never moves the selection the footer names,
+  in Hub lists and Travel alike (HUB-012). Right-click on a row selects it and
+  opens its Actions. Right-click on a Travel destination or a character card
+  selects it like a click and runs nothing; they have no Actions of their own.
+  A separate details affordance may inspect without executing.
+- Destructive confirmations (Resign, "Leave and switch", closing the running
+  account) share one arming helper: they accept nothing until ~400 ms after they
+  appear, never the later click of a multi-click, and mark `data-armed` once
+  they accept.
 - Backspace deletes while editing nonempty text. Outside editing, or in empty
   search, it returns one stage. No navigation during composition. Empty textareas
   and ordinary form fields retain native editing rather than becoming Back controls.
-- Escape closes the top submenu/details first, then goes back a stage, then
-  dismisses Hub. X dismisses Hub directly. Direct entry has no fake parent.
+- Escape closes the top submenu/details first, then clears a non-empty query,
+  then goes back a stage, then dismisses Hub. X dismisses Hub directly. Direct entry has no fake parent.
 - Tab/Shift+Tab continues reaching controls. Arrow behavior must not trap focus.
 - Typing from browse controls returns to search, preserving query, selection range,
   and caret. An empty optional search starts with the typed character. Do not replace
@@ -141,6 +169,15 @@ do not focus a decorative heading or disabled primary action.
   a stationary pointer must not immediately overwrite the restored selection.
 - Background updates preserve stable identities. Held keys cannot chain an Enter
   into a newly opened destructive/action stage or leak movement into the game.
+- The Hub footer stays in every view with its key legend. A view names its
+  primary and secondary through the presenter (`HubViewFooter`): the team
+  review's "Apply team GOM AFK", a confirmation's armed destructive primary and
+  its "Keep …" secondary, "Save phrase", "Set phrase for …" and "Remove …". Enter
+  outside a control that Enter activates itself runs the named primary. A form
+  that saves as it changes (Settings, Maps) shows "Done", which steps back.
+  Travel and Characters name their primary in their own footer. Hub preferences
+  keeps one selected pin; Move up and Move down stay in place, so a double-click
+  moves the same pin twice, and ⌥⌘↑/↓ move it from the list.
 
 ## 4. History stores the player's place
 
@@ -172,12 +209,21 @@ global store. Do not retain detached DOM nodes as durable navigation identity.
 
 ### Dismissal and lifetime
 
-- Back restores the exact prior stage, including row focus.
+- Back restores the exact prior stage, including the selected row.
 - Temporary app blur hides Hub and releases game input, but retains session context.
   Reopening after that temporary hide resumes the stage and revalidates live facts.
 - Explicit X, closing from Home, or toggling Hub closed ends that Hub navigation
   task. The next fresh `⌘R` starts in global search. Successful terminal actions
   also end the task. Persistent tool drafts/filters survive independently.
+- A running action belongs to the page session that started it. Typing, any page
+  change, closing or suspending ends that session: the action keeps running, its
+  progress stays in the status line (busy) on every page and through typing (it
+  never paints over a newer message, which keeps the line until the next repaint), and
+  its completion only reports (status line, or the receipt after Hub closed) and
+  never closes, navigates or wipes a newer page. A late failure is a named failure
+  receipt that also waits in the status line of the next opening. An action that
+  focuses another window (opening an account, Show Launcher) suspends its own
+  page; its success still ends the task, so the next `⌘R` starts in global search.
 - Popout handoffs retain a return location during the session; reopening Hub may
   resume that location. Repeated shortcuts focus the existing destination as defined
   by that feature rather than creating duplicate windows or history entries.
@@ -333,6 +379,9 @@ view. Shared code should emerge only for shared responsibilities, not visual sim
 | Direct `char`/`acc`/team intent | No fake parent or redundant picker; explicit visible action |
 | Native text after browsing | First character, paste, Option/dead keys, IME, selection, undo/delete work in Electron |
 | Mouse + keyboard + held keys | Hover cannot undo restored focus; key repeat cannot execute the next page |
+| Pointer: single, double and triple click at 0/120/450 ms | A consequential row selects on a click and runs once on its own double-click; a navigational row opens exactly one level; nothing on the next page runs, toggles or selects |
+| Pointer: press moved to another row, second press on another row, right-click | Nothing activates; right-click selects and opens Actions |
+| Pointer: a click run that closes the Hub, with the canvas at full size | No trailing `pointerdown`, `mousedown`, `mouseup`, `click` or `dblclick` reaches the canvas; focus and typing stay in a handoff's destination |
 | Async removal/reordering | Selected identity remains stable; vanished target cannot become another executable choice |
 | Blur/resume and account change | Read-only place resumes; live targets refresh; another account never inherits them |
 | Nested/duplicate/invalid templates | Hierarchical browsing, consistent syntax, source distinction, and recoverable failure |
@@ -341,6 +390,33 @@ view. Shared code should emerge only for shared responsibilities, not visual sim
 | Trade → Whisper → return | Offer/search/scroll and draft survive; no automatic send |
 | Geometry and appearance | Lock scope, reset, restart persistence, viewport recovery, Classic/Modern/Custom readability |
 | Optional Tools unavailable | Core game stays usable; host authoring remains available under existing rules |
+
+The keyboard contract is a golden matrix
+(`apps/tools/tests/hub-keyboard-contract.spec.ts`): every key in every view of the
+browser fixture, each cell in a fresh browser context, compared with
+`apps/tools/tests/keyboard-contract.golden.json`. A cell records the surface,
+focus, selection, query, last game action (including `TRAVEL <place>`), the
+lifecycle afterwards, and the key-downs, key-ups and pointer events that reached
+the canvas. The table records current behaviour, including known defects. A change
+that alters keyboard behaviour regenerates it with `KEYBOARD_GOLDEN=update` and
+commits the reviewed table diff.
+The Electron `tests/electron/hub-input-contract.spec.ts` covers the native half:
+main claims Command-R, Command-B, Command-T, Command-D and Command-Q before the Hub,
+their releases stay out of the game after focus returns to the canvas, direct
+scopes open in the open Hub, and the Quit or Reload sheet takes priority over it.
+Cases that document a current leak are marked `fixme` until their fix lands.
+The pointer contract is `apps/tools/tests/hub-pointer.spec.ts` (human click runs
+in the browser fixture) with the gate's unit test in
+`apps/tools/src/surface-click-runs.test.ts`; `tests/electron/input-hub.spec.ts`
+checks that a closing double-click or triple-click never reaches the game canvas,
+also through Electron's native mouse input on a closing row, × and the backdrop,
+where the input trace shows no later press and no double-click flag. The
+fixture's `?double-click-ms=` models a slower Double-click speed. The Travel and
+Apply double-clicks (TRV-09, BLD-12) are covered in the fixture, with the canvas
+exactly empty and a fresh click a second later reaching it; in Electron they are
+live checks, because the offline playable client has no logged-in character to
+travel or apply a build with, and its native click-run path is the one the
+closing-row case above already drives.
 
 Extend existing fixtures with realistic mixed professions, missing observations,
 long names, empty/large folders, and account state changes. Measure large-list typing

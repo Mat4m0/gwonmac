@@ -5,8 +5,8 @@
  * assumptions stay beside the affected tables. These are protocol values,
  * not presentation: getting one wrong does not produce a visibly broken build,
  * it produces a build that loads the wrong skill on the wrong hero. So this file
- * transcribes and does nothing else — no fallbacks, no derived guesses, no
- * "sensible default" for a value the source did not state.
+ * keeps protocol facts separate from the readable English fallback labels.
+ * No presentation label supplies a missing numeric or gameplay fact.
  *
  * `library.ts` owns the model (`Profession`, `Attribute`, `AttributeRank`,
  * `HeroId`); this file owns the numbers behind it. That split is why the two
@@ -24,7 +24,8 @@
  *
  * 1. **Hero display names.** Read from the client at runtime and localised
  * (`Resources.cpp:1213-1221`); there is no English list to copy. The
- * internal name is the stable identifier and the honest degraded label, so
+ * internal name is the stable identifier; `heroLabel` owns English fallback
+ * labels only. They do not claim to be observed or localised client names, so
  * a hero with no catalogue entry shows `Norgu`, never `Hero 1`.
  * 2. **Hero professions.** Live in `GW::HeroInfo` (`Hero.h:40-41`) and are
  * never mirrored into a Toolbox table. Every hero needs a live read; what
@@ -156,28 +157,23 @@ export const HERO_BY_ID: ReadonlyMap<HeroId, Hero> = new Map(
 );
 
 /**
- * The fallback label for a hero id: the `HeroID` identifier with its words
- * separated, so `GhostOfAlthea` reads as `Ghost Of Althea`.
- *
- * Deliberately *not* a display-name table. The real display name is localised
- * and belongs to the client, and this file's header says so — adding an English
- * name column here would be a second answer to what a hero is called, and the
- * wrong one in nine languages. This is the derived spelling of the identifier
- * the table already holds, which is why it is a function over `HEROES` and not
- * a column in it.
- *
- * It lives here rather than in the panel because capture writes hero names into
- * the stored library. A library holding `GhostOfAlthea` beside a list showing
- * `Ghost Of Althea` is one hero rendered as two, and that outlives the session.
- *
- * An id the table does not know keeps its number rather than going blank: a
- * hero we cannot name is still a hero, and hiding the id hides the evidence.
+ * English fallback spelling for the audited names (HUB-182). Protocol identifiers
+ * and saved IDs stay unchanged; mercenary account names still need observation.
+ * ArenaNet's wiki confirms Master of Whispers and M.O.X.:
+ * https://wiki.guildwars.com/wiki/Master_of_Whispers
+ * https://wiki.guildwars.com/wiki/M.O.X.
  */
+const HERO_FALLBACK_LABELS: Readonly<Partial<Record<HeroName, string>>> = {
+  MasterOfWhispers: 'Master of Whispers', MOX: 'M.O.X.',
+  Merc1: 'Mercenary 1', Merc2: 'Mercenary 2', Merc3: 'Mercenary 3', Merc4: 'Mercenary 4',
+  Merc5: 'Mercenary 5', Merc6: 'Mercenary 6', Merc7: 'Mercenary 7', Merc8: 'Mercenary 8',
+};
+/** Owns readable fallback labels for pickers and new captures, never rewriting saved records. */
 export function heroLabel(hero: HeroId): string {
   const known = HERO_BY_ID.get(hero);
   return known === undefined
     ? `Hero ${hero}`
-    : known.name.replace(/([a-z])([A-Z])/gu, "$1 $2");
+    : HERO_FALLBACK_LABELS[known.name] ?? known.name.replace(/([a-z])([A-Z])/gu, "$1 $2");
 }
 
 /**

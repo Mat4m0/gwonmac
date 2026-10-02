@@ -69,12 +69,7 @@
   vertical-align: -0.15em;
 }
 
-.trade-search {
-  display: grid;
-  min-width: 0;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: var(--ui-space-2);
-}
+.trade-search { min-width: 0; }
 
 .trade-search .ui-input-group { min-width: 0; }
 
@@ -89,12 +84,21 @@
   font-variant-numeric: tabular-nums;
 }
 
-.trade-summary > span:first-child {
+.trade-summary-label {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: var(--ui-space-3);
+}
+.trade-summary-label > span {
   overflow: hidden;
   color: var(--ui-text);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.trade-summary .ui-link { flex: none; white-space: nowrap; }
+.trade-summary .ui-kbd,
+.inspector-actions .ui-kbd { margin-left: var(--ui-space-1); }
 
 .player-summary {
   display: flex;
@@ -117,8 +121,10 @@
 .trade-ledger {
   position: relative;
   display: flex;
-  min-height: 150px;
-  flex: 1 1 auto;
+  /* The ledger fills what the inspector leaves, down to one row, so a short window
+     keeps the offer and its actions inside the frame (HUB-127). */
+  min-height: calc(var(--ui-space-2) * 11);
+  flex: 1 1 0;
   flex-direction: column;
   overflow: hidden;
 }
@@ -148,9 +154,8 @@
   overflow: auto;
 }
 
-.trade-row-shell { position: relative; }
-
 .trade-row {
+  position: relative;
   width: 100%;
   min-height: 44px;
   padding: var(--ui-space-1) var(--ui-space-3);
@@ -159,7 +164,9 @@
   color: var(--ui-text);
   font: inherit;
   text-shadow: var(--ui-text-shadow);
+  cursor: pointer;
 }
+.trade-row:focus-visible { outline: var(--ui-border-width) solid var(--ui-focus); outline-offset: calc(-1 * var(--ui-border-width)); }
 
 .row-quick-actions {
   display: flex;
@@ -170,8 +177,7 @@
   transition: opacity 120ms var(--ui-ease-out);
 }
 
-.trade-row-shell:hover .row-quick-actions,
-.trade-row-shell:focus-within .row-quick-actions {
+.trade-row:hover .row-quick-actions {
   opacity: 1;
   pointer-events: auto;
 }
@@ -223,22 +229,17 @@
   cursor: pointer;
 }
 .character-cell bdi { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.character-cell:hover bdi { color: var(--ui-accent); text-decoration: underline; text-underline-offset: 3px; }
+.character-cell:hover bdi { color: var(--ui-accent); text-decoration: underline; text-underline-offset: calc(var(--ui-space-3) / 4); }
 .message-cell {
   color: var(--ui-text-muted);
   font-family: var(--ui-font-reading);
 }
-.offer-cell {
-  display: block;
-  padding: var(--ui-space-1) 0;
-  border: 0;
-  background: transparent;
-  font: inherit;
-  text-align: left;
-  text-shadow: inherit;
-  cursor: pointer;
-}
-.offer-cell:hover { color: var(--ui-text-bright); }
+.offer-cell { display: block; padding: var(--ui-space-1) 0; }
+.trade-row:hover .offer-cell { color: var(--ui-text-bright); }
+/* The match is marked without changing the text it copies (trade-discovery.md). */
+.trade-match { background: none; color: var(--ui-text-bright); font-weight: var(--ui-font-weight-medium); text-decoration: underline; text-decoration-color: var(--ui-accent); text-underline-offset: calc(var(--ui-space-3) / 4); }
+/* Mark retained rows stale without reducing the contrast of their text. */
+.trade-ledger[data-stale] { box-shadow: var(--ui-shadow-inset), 0 0 0 var(--ui-border-width) var(--ui-warning-border); }
 .age-cell {
   color: var(--ui-text-faint);
   font-size: var(--ui-font-size-sm);
@@ -277,7 +278,7 @@
   display: flex;
   min-height: 0;
   max-height: 180px;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   flex-direction: column;
   gap: var(--ui-space-2);
   margin-top: var(--ui-space-2);
@@ -314,13 +315,7 @@
   min-width: 0;
   align-items: center;
   gap: var(--ui-space-1);
-  padding: 0;
-  border: 0;
-  background: transparent;
-  font: inherit;
-  cursor: pointer;
 }
-.inspector-player:hover bdi { text-decoration: underline; text-underline-offset: 3px; }
 
 .inspector-actions {
   display: flex;
@@ -329,16 +324,17 @@
   justify-content: space-between;
   gap: var(--ui-space-4);
 }
-.inspector-action-group {
+.inspector-primary {
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: var(--ui-space-2);
 }
-.inspector-action-group[data-utility] {
-  justify-content: flex-end;
-}
-.inspector-actions .ui-button { min-height: 34px; gap: var(--ui-space-1); }
-.inspector-actions .ui-link { padding-inline: var(--ui-space-1); white-space: nowrap; }
+.inspector-actions .ui-button { min-height: var(--ui-control-height); gap: var(--ui-space-1); white-space: nowrap; }
+.inspector-whisper { min-width: 0; max-width: calc(var(--ui-space-1) * 65); }
+.inspector-whisper bdi { overflow: hidden; text-overflow: ellipsis; }
+.inspector-actions .ui-kbd[data-hidden] { visibility: hidden; }
+.inspector-reason { color: var(--ui-text-muted); font-size: var(--ui-font-size-sm); white-space: nowrap; }
 .trade-inspector .mobile-back { display: none; }
 
 .trade-saved-drawer {
@@ -405,7 +401,14 @@
 .saved-drawer-enter-from,
 .saved-drawer-leave-to { opacity: 0; transform: translateX(24px) scale(0.98); }
 
-.trade-notice { right: var(--ui-space-4); bottom: var(--ui-space-4); }
+.trade-notice {
+  /* Over the window, never in its flow: feedback moves no control (HUB-122). */
+  position: absolute;
+  z-index: var(--ui-z-toast);
+  right: var(--ui-space-4);
+  bottom: var(--ui-space-4);
+  pointer-events: none;
+}
 
 /* ------------------------------------------------------- trader prices */
 
@@ -738,42 +741,21 @@
 
 @container (max-width: 700px) {
   .trade-window { min-width: 0; }
-  .trade-toolbar {
-    grid-template-columns: 1fr;
-    align-items: stretch;
-  }
-  .source-segment,
-  .intent-segment { width: 100%; }
-  .trade-toolbar-actions { align-items: stretch; }
-  .intent-segment { flex: 1; }
-  .trade-search { grid-template-columns: minmax(0, 1fr) auto; }
-  .trade-search .ui-button:last-child { grid-column: 1 / -1; }
+  /* Two toolbar rows and two-line rows keep four offers in view beside the game (HUB-126). */
   .trade-columns { display: none; }
   .trade-row {
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: var(--ui-space-1) var(--ui-space-3);
-    padding-block: var(--ui-space-3);
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    gap: 0 var(--ui-space-2);
+    min-height: calc(var(--ui-space-2) * 7);
+    padding-block: var(--ui-space-1);
   }
-  .row-quick-actions {
-    position: absolute;
-    top: var(--ui-space-2);
-    right: 48px;
-    opacity: 1;
-    pointer-events: auto;
-  }
-  .intent-cell { grid-column: 1; grid-row: 1; }
-  .age-cell { grid-column: 2; grid-row: 1; }
-  .character-cell { grid-column: 1 / -1; grid-row: 2; }
-  .message-cell {
-    grid-column: 1 / -1;
-    grid-row: 3;
-    white-space: normal;
-  }
-  .message-cell bdi {
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-  }
+  .row-quick-actions { opacity: 1; pointer-events: auto; }
+  .row-quick-action { width: calc(var(--ui-control-height-compact) - var(--ui-space-1)); height: calc(var(--ui-control-height-compact) - var(--ui-space-1)); }
+  .intent-cell { grid-column: 1; grid-row: 1; flex-wrap: nowrap; }
+  .character-cell { grid-column: 2; grid-row: 1; }
+  .row-quick-actions { grid-column: 3; grid-row: 1; }
+  .age-cell { grid-column: 4; grid-row: 1; }
+  .message-cell { grid-column: 1 / -1; grid-row: 2; padding-block: 0; }
   .trade-inspector { display: none; }
   .trade-stage[data-detail-open] .trade-toolbar,
   .trade-stage[data-detail-open] .trade-summary,
@@ -790,13 +772,8 @@
     display: inline-flex;
     align-self: flex-start;
   }
-  .inspector-actions {
-    min-width: 0;
-    align-items: flex-start;
-    flex-direction: column;
-  }
-  .inspector-action-group { flex-wrap: wrap; }
-  .inspector-action-group[data-utility] { justify-content: flex-start; }
+  .inspector-actions { min-width: 0; align-items: flex-start; }
+  .inspector-primary { flex-wrap: wrap; }
   .trade-saved-drawer {
     top: 68px;
     right: 10px;
@@ -838,21 +815,56 @@
   .row-quick-actions { opacity: 1; pointer-events: auto; }
 }
 
-/* Keep common filters on one row; secondary offer commands expand on demand. */
+/* Keep common filters on one row; offer commands open in a menu over the inspector. */
 .trade-toolbar-actions .intent-segment { width:auto; flex:none; }
 .trade-toolbar-actions .saved-trigger { margin-left:auto; }
 .offer-actions { min-width:0; }
-.offer-actions > summary { list-style:none; cursor:pointer; }
+.offer-actions > summary { list-style:none; cursor:pointer; anchor-name:--trade-offer-actions; }
 .offer-actions > summary::-webkit-details-marker { display:none; }
-.offer-actions > summary::after { content:' ▾'; }
-.offer-actions[open] { flex-basis:100%; }
-.offer-actions[open] > summary::after { content:' ▴'; }
-.offer-actions .inspector-action-group { flex-wrap:wrap; margin-top:var(--ui-space-2); }
+/* The menu stands over the ledger, anchored to its summary; opening it moves nothing (HUB-123). */
+.offer-menu {
+  position:absolute;
+  z-index:var(--ui-z-status);
+  position-anchor:--trade-offer-actions;
+  right:anchor(right);
+  bottom:anchor(top);
+  position-try-fallbacks:flip-block;
+  display:grid;
+  width:max-content;
+  min-width:calc(var(--ui-space-1) * 55);
+  max-width:min(calc(var(--ui-space-6) * 10), calc(100% - var(--ui-space-4)));
+  margin-block:calc(var(--ui-space-3) / 2);
+  padding:calc(var(--ui-space-3) / 2);
+}
+.offer-menu-item {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:var(--ui-space-4);
+  min-height:var(--ui-space-6);
+  padding:var(--ui-space-1) var(--ui-space-2);
+  border:0;
+  border-radius:var(--ui-radius-sm);
+  background:none;
+  color:var(--ui-text);
+  font:inherit;
+  text-align:left;
+  cursor:pointer;
+}
+.offer-menu-item > span { display:inline-flex; min-width:0; align-items:center; gap:var(--ui-space-1); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.offer-menu-item:hover:not(:disabled),
+.offer-menu-item:focus-visible { background:var(--ui-selection-fill); color:var(--ui-selection-ink); outline:none; }
+.offer-menu-item:disabled { color:var(--ui-text-muted); cursor:default; }
+.offer-menu-check { color:var(--ui-text-bright); }
 .inspector-copy p { overflow-wrap:anywhere; }
 @container (max-width: 460px) {
+  .trade-toolbar { grid-template-columns: 1fr; }
   .trade-toolbar-actions .intent-segment { width:100%; }
   .trade-toolbar-actions .saved-trigger { margin-left:0; }
 }
 
-.hub-view .trade-window[data-view="listings"] > .window-bar { display:none; }
 .trade-result-status { display:flex; align-items:center; gap:var(--ui-space-3); white-space:nowrap; }
+
+/* Copy reports on the action that owns it; a refused clipboard request stays readable. */
+.offer-menu-item[data-tone="error"] { color: var(--ui-danger); }
+.offer-menu-item[data-tone="error"] > span { white-space: normal; }

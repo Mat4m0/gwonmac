@@ -55,6 +55,7 @@ export const fixtureSnapshot: LauncherSnapshot = {
     uiFont: DEFAULT_SETTINGS.uiFont,
     uiCustomTheme: DEFAULT_SETTINGS.uiCustomTheme,
     uiPanelOpacity: DEFAULT_SETTINGS.uiPanelOpacity,
+    uiTextSize: DEFAULT_SETTINGS.uiTextSize,
     controllerPromptStyle: DEFAULT_SETTINGS.controllerPromptStyle,
     autoRelogAfterReload: DEFAULT_SETTINGS.autoRelogAfterReload,
     characterSwitchProfession: DEFAULT_SETTINGS.characterSwitchProfession,

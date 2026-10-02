@@ -57,31 +57,40 @@ describe("keyboard shortcuts", () => {
   it("matches only Command and keeps Control chords in the game", () => {
     const binding = { key: "k", shift: true, option: false };
     assert.equal(shortcutMatches(binding, {
-      code: "KeyK", meta: true, control: false, shift: true, alt: false,
+      code: "KeyK", key: "k", meta: true, control: false, shift: true, alt: false,
     }), true);
     assert.equal(shortcutMatches(binding, {
-      code: "KeyK", meta: false, control: true, shift: true, alt: false,
+      code: "KeyK", key: "k", meta: false, control: true, shift: true, alt: false,
     }), false);
     assert.equal(shortcutMatches(binding, {
-      code: "KeyK", meta: true, control: true, shift: true, alt: false,
+      code: "KeyK", key: "k", meta: true, control: true, shift: true, alt: false,
     }), false);
     assert.equal(shortcutMatches(binding, {
-      code: "KeyK", meta: true, control: false, shift: false, alt: false,
+      code: "KeyK", key: "k", meta: true, control: false, shift: false, alt: false,
     }), false);
+  });
+
+  it("records a letter as the layout types it and other keys by position (HUB-014)", () => {
+    const command = { meta: true, control: false, shift: false, alt: false };
+    // AZERTY: the A keycap sits where US has Q; the digit row types & without Shift.
+    assert.deepEqual(shortcutFromInput({ ...command, code: "KeyQ", key: "a" }), { key: "a", shift: false, option: false });
+    assert.deepEqual(shortcutFromInput({ ...command, code: "Semicolon", key: "m" }), { key: "m", shift: false, option: false });
+    assert.equal(shortcutFromInput({ ...command, code: "KeyM", key: "," }), null);
+    assert.deepEqual(shortcutFromInput({ ...command, code: "Digit1", key: "&" }), { key: "1", shift: false, option: false });
   });
 
   it("normalizes physical Command chords across Option-modified layouts", () => {
     assert.deepEqual(shortcutFromInput({
-      code: "KeyK", meta: true, control: false, shift: true, alt: true,
+      code: "KeyK", key: "k", meta: true, control: false, shift: true, alt: true,
     }), { key: "k", shift: true, option: true });
     assert.deepEqual(shortcutFromInput({
-      code: "F1", meta: true, control: false, shift: false, alt: false,
+      code: "F1", key: "F1", meta: true, control: false, shift: false, alt: false,
     }), { key: "f1", shift: false, option: false });
     assert.equal(shortcutFromInput({
-      code: "KeyK", meta: false, control: false, shift: false, alt: false,
+      code: "KeyK", key: "k", meta: false, control: false, shift: false, alt: false,
     }), null);
     assert.deepEqual(shortcutFromInput({
-      code: "KeyK", meta: true, control: true, shift: false, alt: false,
+      code: "KeyK", key: "k", meta: true, control: true, shift: false, alt: false,
     }), { key: "k", shift: false, option: false, control: true });
   });
 
@@ -90,6 +99,9 @@ describe("keyboard shortcuts", () => {
     assert.equal(shortcutReserved({ key: "c", shift: true, option: false }), false);
     assert.equal(shortcutReserved({ key: "1", shift: false, option: false }), true);
     assert.equal(shortcutReserved({ key: "0", shift: false, option: false }), false);
+    // The Hub owns Command-Backspace as Back.
+    assert.equal(shortcutReserved({ key: "backspace", shift: false, option: false }), true);
+    assert.equal(shortcutReserved({ key: "backspace", shift: false, option: false, command: false, control: true }), false);
     assert.equal(shortcutReserved({ key: "r", shift: false, option: false }), false);
     assert.equal(shortcutReserved({ key: "r", shift: true, option: false }), false);
     assert.equal(shortcutConflict(
@@ -123,7 +135,7 @@ describe("keyboard shortcuts", () => {
 
 it('captures, persists and exactly matches every modifier combination', () => {
   for (const meta of [false,true]) for (const control of [false,true]) for (const alt of [false,true]) for (const shift of [false,true]) {
-    const input = { code:'KeyJ', meta, control, alt, shift };
+    const input = { code:'KeyJ', key:'j', meta, control, alt, shift };
     const binding = shortcutFromInput(input);
     if (!meta && !control && !alt) { assert.equal(binding,null); continue; }
     assert.ok(binding); assert.ok(isShortcutOverrides({'character.switch':binding}));
@@ -135,14 +147,14 @@ it('captures, persists and exactly matches every modifier combination', () => {
   assert.equal(shortcutEquals({key:'j',option:false,shift:false},{key:'j',option:false,shift:false,command:true,control:false}),true);
 });
 it('supports function, navigation, punctuation and numpad keys through the same model', () => {
-  for (const code of ['F1','F24','Space','Tab','Enter','ArrowLeft','ArrowUp','Home','End','PageUp','PageDown','Minus','Equal','BracketLeft','Backslash','Semicolon','Numpad0','NumpadAdd']) {
-    const input = { code, meta:false, control:true, alt:true, shift:false };
+  for (const [code, key] of [['F1','F1'],['F24','F24'],['Space',' '],['Tab','Tab'],['Enter','Enter'],['ArrowLeft','ArrowLeft'],['ArrowUp','ArrowUp'],['Home','Home'],['End','End'],['PageUp','PageUp'],['PageDown','PageDown'],['Minus','-'],['Equal','='],['BracketLeft','['],['Backslash','\\'],['Semicolon',';'],['Numpad0','0'],['NumpadAdd','+']] as const) {
+    const input = { code, key, meta:false, control:true, alt:true, shift:false };
     const binding = shortcutFromInput(input); assert.ok(binding,code);
     assert.equal(shortcutMatches(binding,input),true,code);
     assert.equal(isShortcutOverrides({'travel.open':binding}),true,code);
     assert.ok(shortcutAccelerator(binding)?.startsWith('Control+Alt+'));
     assert.deepEqual(shortcutKeycaps(binding).slice(0,2).map(cap=>cap.name),['Control','Option']);
   }
-  assert.deepEqual(shortcutFromInput({code:'F12',meta:false,control:false,alt:false,shift:false}),{key:'f12',shift:false,option:false,command:false});
-  assert.equal(shortcutFromInput({code:'F25',meta:true,control:false,alt:false,shift:false}),null);
+  assert.deepEqual(shortcutFromInput({code:'F12',key:'F12',meta:false,control:false,alt:false,shift:false}),{key:'f12',shift:false,option:false,command:false});
+  assert.equal(shortcutFromInput({code:'F25',key:'F25',meta:true,control:false,alt:false,shift:false}),null);
 });
