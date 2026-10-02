@@ -254,6 +254,7 @@ test('a view whose first buttons are disabled still takes focus, and Command-Bac
 test('Command-Backspace goes back one Build Library level, restores the parent and speaks its title (BLD-24)', async ({ page }) => {
   await page.goto('/?hub');
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  await page.clock.install();
   const search = page.locator('.hub-search input');
   const announced = page.locator('#hub .hub-announce');
   await expect(announced).toHaveAttribute('aria-live', 'polite');
@@ -281,6 +282,8 @@ test('Command-Backspace goes back one Build Library level, restores the parent a
   await expect(search).toHaveValue('build smi');
   expect(await search.evaluate((field: HTMLInputElement) => [field.selectionStart, field.selectionEnd])).toEqual([7, 7]);
   await expect(page.locator('#hub .hub-row[aria-selected="true"]')).toContainText('Smiter');
+  // A delayed result count must not replace the destination spoken for Back.
+  await page.clock.runFor(550);
   await expect(announced).toHaveText('Home');
   // The same destination twice still changes the region's text, so it is spoken again.
   await search.press('Enter');
