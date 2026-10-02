@@ -13,14 +13,17 @@ publicHoistPattern:
 confirmModulesPurge: false
 blockExoticSubdeps: false
 overrides:
-  "brace-expansion@": 5.0.9
-  fast-uri: 3.1.6
+  # Keep Forge's legacy minimatch graph on its patched brace-expansion majors.
+  "brace-expansion@1": 1.1.20
+  "brace-expansion@2": 2.1.6
+  "brace-expansion@5": 5.0.11
+  fast-uri: 3.1.7
   ip-address: 10.3.1
   nanoid: 3.3.18
   tar: 7.5.21
   tmp: 0.2.7
-  "undici@7": 7.29.0
-  "undici@8": 8.9.0
+  "undici@7": 7.29.1
+  "undici@8": 8.10.2
   # Forge's Packager 18 still names the retired extractor. Electron's hardened
   # drop-in keeps that API while rejecting symlink escapes.
   extract-zip: "npm:@electron-internal/extract-zip@1.0.4"
@@ -41,9 +44,7 @@ allowBuilds:
   fs-xattr: true
   macos-alias: true
   vue-demi: true
-# Electron Forge's packaging-only legacy minimatch graph requires
-# brace-expansion 1/2; forcing the incompatible major 5 is not a fix.
-# Its DMG maker likewise reaches image-size 0.7 through appdmg's callback API.
+# Electron Forge's DMG maker reaches image-size 0.7 through appdmg's callback API.
 # The affected ICNS/JXL/HEIF parsers never receive input: appdmg measures the
 # repository-owned PNG background and copies the ICNS icon without parsing it.
 auditConfig:
@@ -53,3 +54,9 @@ auditConfig:
     # The affected esbuild serve-directory path exists only on Windows. Owned
     # automation runs on macOS/Linux, and fontless invokes only transform.
     - GHSA-g7r4-m6w7-qqqr
+    # listhen 1.10.1 creates development HTTPS certificates with node-forge.
+    # It signs certificates but never calls the affected RSA verifier. Node's
+    # TLS implementation handles network verification. No patch is published.
+    # Remove this exception when upstream publishes a patched node-forge, or
+    # reassess it before adding a consumer that verifies signatures with forge.
+    - GHSA-86w9-cpqp-85rv

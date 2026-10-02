@@ -307,3 +307,24 @@ The Versioned release workflow accepts only `release/YYYY.M.PATCH`. It reuses
 the exact commit's required Application verification result. It does not rerun
 that complete macOS gate. The signed build still qualifies the current ArenaNet
 client and runs the release-only package, Keychain, and updater checks.
+
+
+## Dependency audit exceptions
+
+`pnpm-workspace.yaml` owns the exact advisory exceptions. The release policy
+test rejects additional exceptions unless that allowlist changes explicitly.
+
+The `node-forge` RSA signature-verification advisory is temporarily excluded
+from the audit. The locked consumer is `listhen` 1.10.1, reached through the
+website's Nuxt development tooling. Its certificate helper creates keys, signs
+certificates and reads local key material. It does not call the affected RSA
+signature verifier. Node handles network TLS verification. The Electron app's
+production dependency allowlist contains only `pngjs` and `ws`.
+
+On 2 October 2026, npm had no patched `node-forge` release. The
+[upstream advisory](https://github.com/advisories/GHSA-86w9-cpqp-85rv) reports
+no patch. The [upstream fix](https://github.com/digitalbazaar/forge/pull/1152)
+remains unmerged. Remove the exception when a patched release is available.
+Reassess it before changing the consumer or adding forge signature verification.
+The package remains vulnerable; the exception records this repository's unused
+affected path, not a security fix.
