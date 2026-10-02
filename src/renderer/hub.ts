@@ -951,6 +951,7 @@ export function createHub(parent: HTMLElement) {
    */
   function announceDestination() {
     if (!root.open) return;
+    clearTimeout(announceTimer);
     const title = activeView?.title ?? scope?.title ?? 'Home';
     // The same destination twice in a row still changes the text, so it is spoken again.
     announcer.textContent = announcer.textContent === title ? `${title}\u00a0` : title;

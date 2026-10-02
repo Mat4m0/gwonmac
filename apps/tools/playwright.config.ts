@@ -5,6 +5,8 @@ export default defineConfig({
   outputDir: "../../test-results/tools-e2e",
   testDir: "./tests",
   timeout: 20_000,
+  // Timing budgets need one browser worker without competing test workloads.
+  workers: 1,
   fullyParallel: true,
   ...(process.env.CI ? { maxFailures: 1 } : {}),
   forbidOnly: !!process.env.CI,
