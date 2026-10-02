@@ -827,3 +827,24 @@ scroll position render the rows they need first.
 These are offline fixture and Electron checks. Live gameplay, input feel,
 VoiceOver, physical AZERTY/QWERTZ and signed exact-draft QA remain Matthias's
 checks before acceptance.
+
+
+## Hosted CI repair — 2 October 2026
+
+Wall-clock Hub scale, Travel and clipboard budgets use three times their local
+limits on shared CI runners. Local limits stay unchanged. DOM mutation counts,
+selection, copied values and lifecycle assertions retain their exact limits.
+The margin reduces scheduling noise but can admit smaller timing regressions.
+
+The Build Library session test waits for each key to move the selection before
+sending the next key. The calculator save fixture holds its response for one
+second so consecutive Command-Return presses exercise the pending save.
+
+Markdown-only changes under `internals/` use the fast check. Other file types
+retain full verification, including deletion of the polish findings JSON.
+
+The previous full flake sweep was interrupted. Targeted reruns are historical
+evidence; they do not establish a complete pass. Matthias requested hosted
+verification for this repair. Each published head must pass Application
+verification before the stack merges. No local tests or app launches are needed
+for this repair. Live and signed-draft acceptance limits above still apply.
