@@ -54,3 +54,9 @@ auditConfig:
     # The affected esbuild serve-directory path exists only on Windows. Owned
     # automation runs on macOS/Linux, and fontless invokes only transform.
     - GHSA-g7r4-m6w7-qqqr
+    # listhen 1.10.1 creates development HTTPS certificates with node-forge.
+    # It signs certificates but never calls the affected RSA verifier. Node's
+    # TLS implementation handles network verification. No patch is published.
+    # Remove this exception when upstream publishes a patched node-forge, or
+    # reassess it before adding a consumer that verifies signatures with forge.
+    - GHSA-86w9-cpqp-85rv
