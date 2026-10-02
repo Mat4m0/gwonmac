@@ -25,6 +25,8 @@ const answers: [query: string, primary: RegExp, finding: string][] = [
   ['trader prices', /^Open Trade Chat/, 'HUB-224: trader finds Trade Chat'],
   ['rate', /^Choose rates/, 'HUB-063: the rates editor by its word'],
   ['title', /^Open calculator/, 'HUB-063: the title calculator by its word'],
+  ['shortcuts', /^Open Shortcuts settings/, 'HUB-064: a Settings section by its name'],
+  ['theme', /^Open Appearance settings/, 'HUB-064: a Settings section by its words'],
   ['10 ecto', /^Copy 60 platinum/, 'HUB-102: a conversion without its target uses the labelled default, runs nothing'],
 ];
 
@@ -35,6 +37,28 @@ test('a typed search selects its best answer', async ({ page }) => {
     await expect(primary(page), finding).toHaveText(expected);
     await expect(primary(page), finding).toBeEnabled();
   }
+  expect(await page.locator('#app').getAttribute('data-action')).toBeNull();
+});
+
+test('a Settings section result opens that section (HUB-064)', async ({ page }) => {
+  await open(page);
+  for (const [query, section] of [['shortcuts', 'Shortcuts'], ['theme', 'Appearance']] as const) {
+    await search(page).fill(query);
+    await search(page).press('Enter');
+    await expect(page.locator('.hub-settings nav [aria-current="true"]')).toHaveText(section);
+    await page.keyboard.press('Meta+Backspace');
+    await expect(page.locator('.hub-caption')).not.toHaveText('Settings');
+  }
+});
+
+test('travel <friend> offers the trip to that friend\'s outpost after the places (HUB-142)', async ({ page }) => {
+  await page.goto('/?hub&party');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
+  await search(page).fill('travel zed alpha');
+  const row = page.locator('#hub .hub-row[data-id="person:travel:alpha"]');
+  await expect(row).toContainText('Zed Alpha');
+  await row.click();
+  await expect(primary(page)).toHaveText(/^Travel to Kamadan, Jewel of Istan/);
   expect(await page.locator('#app').getAttribute('data-action')).toBeNull();
 });
 

@@ -12,7 +12,7 @@ const KAISER = 'Kai Account|Mo Kaiser · Online · Kamadan, Jewel of Istan';
 
 type Harness = {
   search(query: string): string[]; source: HubSource; session: ReturnType<typeof createWhisperSession>;
-  page(): readonly HubRow[]; receipts: string[]; setFriends(friends: readonly TravelFriend[]): void;
+  page(): readonly HubRow[]; dispose(): void; receipts: string[]; setFriends(friends: readonly TravelFriend[]): void;
 };
 type FriendTravel = Parameters<typeof createHubPeople>[2];
 let currentReceipts: string[] = [];
@@ -45,7 +45,7 @@ function withPeople(settings: Record<string, boolean>, run: (people: Harness) =>
     };
     setFriends([{ key: 'f', character: 'Mo Kaiser', alias: 'Kai Account', status: 'online', mapId: 449 }]);
     session.observe([{ id: 1, sender: 'Moira Chatter', direction: 'participant' }]);
-    const result = run({ source: source!, session, receipts, page: () => page(), setFriends,
+    const result = run({ source: source!, session, receipts, dispose: people.dispose, page: () => page(), setFriends,
       search: query => source!.search(query).map(row => `${row.title}|${row.detail}`) });
     if (result instanceof Promise) return result.finally(finish);
   } catch (error) { finish(); throw error; }
@@ -81,7 +81,7 @@ test('Hub without Whispers keeps friend search only', () => withPeople({ gwonmac
 const invitePort = (overrides: Partial<PartyInvite> = {}) => {
   const calls: string[] = [];
   const party: PartyInvite = {
-    pending: null, subscribe: () => () => {}, cancel() {},
+    pending: null, subscribe: () => () => {}, cancel() {}, travelFailed() {},
     unavailable: () => null, travelUnavailable: () => null,
     invite: async name => { calls.push(`invite:${name}`); },
     travelAndInvite: async (friend) => { calls.push(`travel:${friend.character}`); return { invited: Promise.resolve() }; },
@@ -306,4 +306,61 @@ test('Home retains the named pending invite and Cancel never invites after arriv
     assert.equal(source.search('').some(row => row.id === 'pending-invite'), false);
   }, party);
   party.dispose();
+});
+
+// Wrong behavior: a refused trip leaves the invite waiting for its separate 60 s timeout.
+test('Travel failure withdraws the pending invite within five seconds with its own reason', async context => {
+  context.mock.timers.enable({ apis: ['setTimeout'] });
+  const region: CompanionPlayRegionState = { status: 'ready', sequence: 1, mapId: 55, instanceType: 0, playRegion: 'pve', travelContext: 'world', characterKey: 'a', unlockedMapWords: null, guildHall: false, hasGuildHall: false };
+  const sent: string[] = [];
+  const listeners = new Set<() => void>();
+  const party = createPartyInvite({ region: () => region, subscribeRegion: listener => { listeners.add(listener); return () => listeners.delete(listener); },
+    chatReady: () => true, invite: async name => { sent.push(name); }, travel: async () => {} });
+  await withPeople(ALL_TOOLS, async ({ source, page, receipts }) => {
+    try {
+      source.search('mo kaiser')[0]!.run(task);
+      await page().find(row => row.id === 'person:travel-invite')!.run(task);
+      receipts.length = 0;
+      context.mock.timers.tick(3_000);
+      // Travel's canonical host signal after its own queued-trip timeout.
+      window.dispatchEvent(new CustomEvent('gw:travel-failed', { detail: {
+        mapId: 449, message: 'Travel did not start. Check that this destination is unlocked, then try again.',
+      } }));
+      await new Promise<void>(resolve => setImmediate(resolve));
+      assert.deepEqual(receipts, ['Travel did not start. Check that this destination is unlocked, then try again.']);
+      assert.equal(party.pending, null);
+      assert.equal(listeners.size, 0);
+      context.mock.timers.tick(60_000);
+      assert.deepEqual(sent, []);
+      assert.deepEqual(receipts, ['Travel did not start. Check that this destination is unlocked, then try again.']);
+    } finally { party.dispose(); }
+  }, party);
+});
+
+// Wrong behavior: disposal cancels arrival but its rejected promise shows an obsolete receipt.
+test('disposing People mid-arrival sends no invite and no notification', async context => {
+  context.mock.timers.enable({ apis: ['setTimeout'] });
+  let region: CompanionPlayRegionState = { status: 'ready', sequence: 1, mapId: 55, instanceType: 0, playRegion: 'pve', travelContext: 'world', characterKey: 'a', unlockedMapWords: null, guildHall: false, hasGuildHall: false };
+  const listeners = new Set<() => void>();
+  const sent: string[] = [];
+  const party = createPartyInvite({ region: () => region, subscribeRegion: listener => { listeners.add(listener); return () => listeners.delete(listener); },
+    chatReady: () => true, invite: async name => { sent.push(name); }, travel: async () => {} });
+  await withPeople(ALL_TOOLS, async ({ source, page, receipts, dispose }) => {
+    source.search('mo kaiser')[0]!.run(task);
+    await page().find(row => row.id === 'person:travel-invite')!.run(task);
+    assert.deepEqual(receipts, ['Travelling to Kamadan, Jewel of Istan. Hub sends /invite Mo Kaiser on arrival.']);
+    receipts.length = 0;
+    // Tools dispose the arrival owner before People, in the same turn.
+    party.dispose();
+    dispose();
+    await new Promise<void>(resolve => setImmediate(resolve));
+    assert.ok(region.status === 'ready');
+    region = { ...region, mapId: 449 };
+    for (const listener of listeners) listener();
+    context.mock.timers.tick(60_000);
+    assert.deepEqual(sent, []);
+    assert.deepEqual(receipts, []);
+    assert.equal(party.pending, null);
+    assert.equal(listeners.size, 0);
+  }, party);
 });

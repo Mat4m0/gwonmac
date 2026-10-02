@@ -102,11 +102,13 @@ export function createNativeTravelHost(
         || attempt.value.kind !== "map"
         || attempt.value.mapId !== mapId) return;
       settleAttempt(mapId, "loading");
-      notice.value = {
-        message: "Guild Wars did not confirm arrival. Travel is ready to try again.",
-        level: "warning",
-      };
+      failTravel(mapId, "Guild Wars did not confirm arrival. Travel is ready to try again.", "warning");
     }, 30_000);
+  };
+  // People must withdraw an arrival invite from the same failure that Travel displays.
+  const failTravel = (mapId: number, message: string, level: "warning" | "danger") => {
+    notice.value = { message, level };
+    window.dispatchEvent(new CustomEvent("gw:travel-failed", { detail: { mapId, message } }));
   };
   let currentPreferences: TravelPreferences | null = null;
   const remember = (next: TravelPreferences): TravelPreferences => {
@@ -157,20 +159,14 @@ export function createNativeTravelHost(
             || attempt.value.kind !== "map"
             || attempt.value.mapId !== request.mapId) return;
           settleAttempt(request.mapId, "queued");
-          notice.value = {
-            message: "Travel did not start. Check that this destination is unlocked, then try again.",
-            level: "warning",
-          };
+          failTravel(request.mapId, "Travel did not start. Check that this destination is unlocked, then try again.", "warning");
         }, 3_000);
         if (development) {
           console.debug(`[tools:dev] travel.queued ${JSON.stringify({ mapId: request.mapId })}`);
         }
       } catch (error) {
         clearAttempt();
-        notice.value = {
-          message: "Travel could not start. Check Guild Wars, then try again.",
-          level: "danger",
-        };
+        failTravel(request.mapId, "Travel could not start. Check Guild Wars, then try again.", "danger");
         if (development) {
           console.debug(`[tools:dev] travel.refused ${JSON.stringify({
             mapId: request.mapId,
@@ -286,17 +282,11 @@ export function createNativeTravelHost(
       if (current.status !== "loading") return;
       if (next.status === "waiting") {
         settleAttempt(current.mapId, "loading");
-        notice.value = {
-          message: "Travel was interrupted. Travel is ready to try again.",
-          level: "warning",
-        };
+        failTravel(current.mapId, "Travel was interrupted. Travel is ready to try again.", "warning");
         return;
       }
       settleAttempt(current.mapId, "loading");
-      notice.value = {
-        message: "Guild Wars did not confirm arrival. Travel is ready to try again.",
-        level: "warning",
-      };
+      failTravel(current.mapId, "Guild Wars did not confirm arrival. Travel is ready to try again.", "warning");
     },
     dispose() {
       historyObservation.dispose();

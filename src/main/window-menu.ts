@@ -190,7 +190,9 @@ function withGameOwner(
   };
 }
 
-const activeQuitOrReloadDialogs = new WeakMap<BrowserWindow, Promise<void>>();
+/** Whether this game window keeps playing after the Quit-or-Reload sheet. */
+export type QuitOrReloadOutcome = "stayed" | "left";
+const activeQuitOrReloadDialogs = new WeakMap<BrowserWindow, Promise<unknown>>();
 const AUTO_RELOG_LABEL = "Return to my character automatically";
 
 async function readAutoRelogPreference(host: WindowHost): Promise<boolean | null> {
@@ -230,9 +232,10 @@ async function reloadGameOrShowError(
   host: WindowHost,
   win: BrowserWindow,
   cause: "menu" | "command-q",
-): Promise<void> {
+): Promise<QuitOrReloadOutcome> {
   try {
     await host.reloadGame(win, cause);
+    return "left";
   } catch {
     await dialog.showMessageBox(win, {
       type: "error",
@@ -240,15 +243,17 @@ async function reloadGameOrShowError(
       message: "Guild Wars could not reload",
       detail: "Your account stayed open. Try Reload Guild Wars again.",
     });
+    return "stayed";
   }
 }
 
-function runExclusiveReloadDialog(
+function runExclusiveReloadDialog<Outcome>(
   win: BrowserWindow,
-  show: () => Promise<void>,
-): Promise<void> {
+  show: () => Promise<Outcome>,
+): Promise<Outcome | undefined> {
+  // A second request joins the open sheet; its outcome belongs to whoever opened it.
   const active = activeQuitOrReloadDialogs.get(win);
-  if (active) return active;
+  if (active) return active.then(() => undefined);
   const operation = show().finally(() => {
     if (activeQuitOrReloadDialogs.get(win) === operation) {
       activeQuitOrReloadDialogs.delete(win);
@@ -258,11 +263,15 @@ function runExclusiveReloadDialog(
   return operation;
 }
 
-/** The one Quit-or-Reload workflow used by the menu and physical Command-Q. */
+/**
+ * The one Quit-or-Reload workflow used by the menu and physical Command-Q. It settles
+ * "stayed" when this window keeps playing (Cancel, or a reload that could not start), so
+ * the Hub row that asked can hand its task back (HUB-250).
+ */
 export function showQuitOrReloadGame(
   host: WindowHost,
   win: BrowserWindow,
-): Promise<void> {
+): Promise<QuitOrReloadOutcome | undefined> {
   return runExclusiveReloadDialog(
     win,
     () => showQuitOrReloadGameOnce(host, win),
@@ -307,7 +316,7 @@ function showReloadGame(host: WindowHost, win: BrowserWindow): Promise<void> {
 async function showQuitOrReloadGameOnce(
   host: WindowHost,
   win: BrowserWindow,
-): Promise<void> {
+): Promise<QuitOrReloadOutcome> {
   const ownerId = windowRegistry.requireDiagnosticOwnerForWindow(win);
   const recordDialog = (
     phase: "requested" | "opened" | "settled",
@@ -367,9 +376,9 @@ async function showQuitOrReloadGameOnce(
       )
     ) {
       await showAutoRelogSettingsError(win);
-      return;
+      return "stayed";
     }
-    await reloadGameOrShowError(host, win, "command-q");
+    return reloadGameOrShowError(host, win, "command-q");
   } else if (result.response === 1) {
     if (autoRelogAfterReload !== null) {
       await saveAutoRelogPreference(
@@ -379,6 +388,7 @@ async function showQuitOrReloadGameOnce(
       );
     }
     host.requestQuit(win);
+    return "left";
   } else if (autoRelogAfterReload !== null) {
     await saveAutoRelogPreference(
       host,
@@ -386,6 +396,7 @@ async function showQuitOrReloadGameOnce(
       result.checkboxChecked,
     );
   }
+  return "stayed";
 }
 
 export function installApplicationMenu(actions: ApplicationMenuActions, settings?: ToolMenuSettings): void {
@@ -424,7 +435,7 @@ export function installApplicationMenu(actions: ApplicationMenuActions, settings
                 id: "quit-or-reload-game",
                 label: "Quit or Reload Game…",
                 accelerator: "CommandOrControl+Q",
-                click: withGameOwner((win) => showQuitOrReloadGame(host, win)),
+                click: withGameOwner(async (win) => { await showQuitOrReloadGame(host, win); }),
               },
             ],
           },

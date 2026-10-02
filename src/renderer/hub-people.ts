@@ -4,7 +4,7 @@
  */
 import { currentTravelFriend, presenceLabel, type TravelFriend, type TravelFriends } from '../shared/friends.js';
 import { travelDestination } from '../shared/travel.js';
-import { parseHubQuery, type HubRow, type HubSource, type HubTask } from '../shared/hub.js';
+import { hubTier, parseHubQuery, type HubRow, type HubSource, type HubTask } from '../shared/hub.js';
 import { normaliseCharacterName } from '../shared/player-text.js';
 import { findPeople, whisperPersonKey, whisperUnread, type Person, type WhisperSession } from '../shared/whisper-session.js';
 import { isCharacterName, isFullCharacterName } from '../shared/whispers.js';
@@ -26,6 +26,7 @@ export function createHubPeople(hub: Pick<Hub, 'attach' | 'showRows' | 'notify'>
   travel: FriendTravel | null, party: PartyInvite | null = null) {
   let friends: TravelFriends = { status: 'waiting', reason: 'unavailable' };
   let enabled = false;
+  let disposed = false;
   let detach: (() => void) | null = null;
   const listeners = new Set<() => void>();
   const refresh = () => { for (const listener of listeners) listener(); };
@@ -45,6 +46,13 @@ export function createHubPeople(hub: Pick<Hub, 'attach' | 'showRows' | 'notify'>
     whisper(event.detail);
   };
   window.addEventListener('gw:whisper-person', contact);
+  const travelFailed = (event: Event) => {
+    if (!(event instanceof CustomEvent)) return;
+    const detail: unknown = event.detail;
+    if (detail && typeof detail === 'object' && 'mapId' in detail && typeof detail.mapId === 'number'
+      && 'message' in detail && typeof detail.message === 'string') party?.travelFailed(detail.mapId, detail.message);
+  };
+  window.addEventListener('gw:travel-failed', travelFailed);
   /** Why Travel to a friend cannot start; `current` is false once the selected friend changed. */
   function travelReason(friend: TravelFriend | undefined, current: boolean): string | null {
     return !friend ? 'Waiting for a fresh friend location'
@@ -98,9 +106,10 @@ export function createHubPeople(hub: Pick<Hub, 'attach' | 'showRows' | 'notify'>
             ...(travelInvite ? { unavailable: travelInvite } : {}), run: async task => {
               if (!selectedFriend || selectedFeed.status !== 'ready') throw new Error('Friend travel is unavailable');
               const { invited } = await party.travelAndInvite(selectedFriend, selectedFeed.generation);
+              if (disposed) return;
               task.done(`Travelling to ${place}. Hub sends /invite ${target} on arrival.`);
-              invited.then(() => hub.notify(`Sent /invite ${target}. Guild Wars answers in chat.`),
-                error => hub.notify(error instanceof Error ? error.message : 'The invite was not sent.', 'failed'));
+              invited.then(() => { if (!disposed) hub.notify(`Sent /invite ${target}. Guild Wars answers in chat.`); },
+                error => { if (!disposed) hub.notify(error instanceof Error ? error.message : 'The invite was not sent.', 'failed'); });
             } });
         }
       }
@@ -116,6 +125,17 @@ export function createHubPeople(hub: Pick<Hub, 'attach' | 'showRows' | 'notify'>
     search(query) {
       const whispersEnabled = toolEnabled('whispersEnabled');
       const parsed = parseHubQuery(query);
+      // `travel <friend>` offers the trip to that friend's outpost, the row their page offers,
+      // after the places Travel lists for the same words (HUB-142).
+      if (parsed.scope === 'travel') {
+        if (!parsed.term || friends.status !== 'ready') return [];
+        return friends.friends.filter(friend => friend.status !== 'offline' && hubTier({ title: friend.character || friend.alias, aliases: [friend.alias] }, parsed.term) !== null)
+          .slice(0, MAX_PEOPLE).flatMap(friend => {
+            const name = friend.character || friend.alias;
+            const trip = personRows(name, friend.key)().find(row => row.id === 'person:travel');
+            return trip ? [{ ...trip, id: `person:travel:${friend.key}`, title: name, group: 'Friends' }] : [];
+          });
+      }
       // `whisper` and `invite` address one person; both need the Whispers chat mailbox.
       const addressed = parsed.scope === 'whisper' || (parsed.scope === 'invite' && !!party);
       if (parsed.scope && (!addressed || !whispersEnabled)) return [];
@@ -207,6 +227,6 @@ export function createHubPeople(hub: Pick<Hub, 'attach' | 'showRows' | 'notify'>
       else { detach?.(); detach = null; friends = { status: 'waiting', reason: 'unavailable' }; }
     },
     updateFriends(next: TravelFriends) { friends = next; refresh(); },
-    dispose() { window.removeEventListener('gw:whisper-person', contact); detach?.(); unsubscribe(); unsubscribeParty?.(); listeners.clear(); },
+    dispose() { disposed = true; window.removeEventListener('gw:travel-failed', travelFailed); window.removeEventListener('gw:whisper-person', contact); detach?.(); unsubscribe(); unsubscribeParty?.(); listeners.clear(); },
   };
 }

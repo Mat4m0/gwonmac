@@ -237,6 +237,11 @@ test('a saved search phrase and pin survive reload and resolve the original item
   await expect(page.locator('#hub .hub-group')).toHaveText(['Teams']);
   await search.press('Enter');
   await expect(page.getByRole('heading', { name: 'GOM AFK', level: 2 })).toBeVisible();
+  // In the team scope the phrase names the team as exactly as its name: Enter applies it (HUB-062).
+  await page.keyboard.press('Meta+Backspace');
+  await search.fill('team evening team');
+  await expect(page.locator('#hub .hub-primary')).toHaveText(/^Apply team GOM AFK/);
+  expect(await page.locator('#app').getAttribute('data-action')).toBeNull();
 });
 
 test('a pinned Travel or team row is the row search shows, and → opens it (HUB-177)', async ({ page }) => {

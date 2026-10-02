@@ -93,8 +93,9 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
   const revision = (item: Item) => JSON.stringify(item.kind === 'team' ? [item.value, controller.library.value?.builds] : item.value);
   const playerName = () => { const source = window.gwCharacterSwitch; const state = source?.characters; return source && ['outpost', 'pve-explorable', 'pvp-explorable'].includes(source.context) && state?.status === 'ready' && state.selectedIndex !== null ? state.characters[state.selectedIndex]?.name ?? 'Your character' : 'Your character'; };
   const targetName = (hero: HeroId | null) => hero === null ? playerName() : heroLabel(hero);
+  const sentenceTarget = (hero: HeroId | null) => { const target = targetName(hero); return target === 'Your character' ? 'your character' : target; };
   /** The footer names the build and its target before Enter: "Apply Smiter to Fixture Monk". */
-  const applyAction = (build: Build, hero: HeroId | null) => { const target = targetName(hero); return `Apply ${build.name} to ${target === 'Your character' ? 'your character' : target}`; };
+  const applyAction = (build: Build, hero: HeroId | null) => `Apply ${build.name} to ${sentenceTarget(hero)}`;
   const skillPreview = (build: Pick<Build, 'skills'>) => build.skills.map(id => {
     const skill = id === null ? null : host.skills.get(id);
     return { name: skill?.name ?? (id === null ? 'Empty slot' : `Unknown skill ${id}`), iconUrl: skill?.iconUrl ?? null, elite: skill?.elite ?? false, description: skill?.description ?? null };
@@ -238,8 +239,9 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
       landed = result.completedChanges;
       if (result.skippedSkills.length) throw new Error(`Partly applied. Not equipped: ${result.skippedSkills.map(id => host.skills.get(skillId(id)).name).join(', ')}. Review before retrying.`);
       const saved = next.kind === 'build' ? await controller.recordBuildUse(next.value.id, hero) : true;
-      if (next.kind === 'team' && result.completedChanges === 0) { task.done(`${name} already matches.`); return; }
-      task.done(`${name} applied${next.kind === 'build' ? ` to ${targetName(hero)}` : ''}.${saved ? '' : ' Recent use could not be saved.'}`);
+      const receipt = result.completedChanges === 0 ? `${name} already matches.`
+        : `${name} applied${next.kind === 'build' ? ` to ${sentenceTarget(hero)}` : ''}.`;
+      task.done(`${receipt}${saved ? '' : ' Recent use could not be saved.'}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Application stopped.';
       const partial = landed > 0;
@@ -414,19 +416,22 @@ export function createHubLibrary(controller: LibraryController, host: ToolsHost,
       visible = next;
     },
     search(query) {
-      const parsed = parseHubQuery(query);
+      const parsed = parseHubQuery(['team', 'teams'].includes(query.trim().toLowerCase()) ? 'team ' : query);
       if (parsed.scope && parsed.scope !== 'team' && parsed.scope !== 'build') return [];
       if (parsed.scope === 'team' && controller.loading.value) return [{ id: 'teams-loading', title: 'Loading teams…', detail: '', group: 'Teams', action: 'Loading teams', unavailable: 'Build Library is loading.', run() {} }];
-      // `team ` lists every team; the build scope and library words open the library instead.
-      if ((!parsed.term && parsed.scope !== 'team') || ['build', 'builds', 'build library', 'templates', 'library', 'lib', 'bu', 'team', 'teams', 'skills'].includes(query.trim().toLowerCase()) && parsed.scope !== 'team') return [libraryRow(), ...(!query.trim() ? controller.recentBuilds.value.flatMap(recent => { const item = all().find((item): item is Item & { kind: 'build' } => item.kind === 'build' && item.value.id === recent.id); return item ? [{ ...buildRow(item), id: `recent:${recent.id}:${recent.hero ?? 'me'}`, detail: `Recently applied to ${targetName(recent.hero)}`, group: 'Continue', run: () => chooseBuild(item, recent.hero), navigate: () => chooseBuild(item, recent.hero) }] : []; }) : templateStates())];
+      // Bare and scoped team queries list every team; build and library words open the library.
+      if ((!parsed.term && parsed.scope !== 'team') || ['build', 'builds', 'build library', 'templates', 'library', 'lib', 'bu', 'skills'].includes(query.trim().toLowerCase()) && parsed.scope !== 'team') return [libraryRow(), ...(!query.trim() ? controller.recentBuilds.value.flatMap(recent => { const item = all().find((item): item is Item & { kind: 'build' } => item.kind === 'build' && item.value.id === recent.id); return item ? [{ ...buildRow(item), id: `recent:${recent.id}:${recent.hero ?? 'me'}`, detail: `Recently applied to ${targetName(recent.hero)}`, group: 'Continue', run: () => chooseBuild(item, recent.hero), navigate: () => chooseBuild(item, recent.hero) }] : []; }) : templateStates())];
       const items = all();
       const names = new Map<string, number>();
       for (const item of items) if (item.kind === 'build') names.set(item.value.name, (names.get(item.value.name) ?? 0) + 1);
+      // A team's own saved phrase names it as exactly as its name, so `team <phrase>` applies it (HUB-062).
+      const phrase = (item: Item) => (controller.library.value?.hubShortcuts ?? []).find(entry => entry.id === `${item.kind}:${item.value.id}`)?.phrase || null;
+      const phrases = (item: Item) => item.kind === 'team' && phrase(item) ? [phrase(item)!] : [];
       const matchesBuild = buildMatcher(query);
       const matches = items.filter(item => (!parsed.scope || item.kind === parsed.scope)
-        && (item.kind === 'build' ? matchesBuild(item.value) : hubMatch(item.value.name, parsed.term, item.value.tags) !== null));
+        && (item.kind === 'build' ? matchesBuild(item.value) : hubMatch(item.value.name, parsed.term, [...(item.value.tags ?? []), ...phrases(item)]) !== null));
       // Only a scoped team query can apply directly; root and build searches never need this proof.
-      const exacts = parsed.scope === 'team' ? matches.filter(item => hubMatch(item.value.name, parsed.term) === 'exact') : [];
+      const exacts = parsed.scope === 'team' ? matches.filter(item => hubMatch(item.value.name, parsed.term, phrases(item)) === 'exact') : [];
       // A short profession query remains additive, but actual primary-profession matches lead it (HUB-059).
       const profession = Object.keys(PROFESSIONS).find(code => code.toLowerCase() === parsed.term);
       // Resolve exact names once instead of normalizing them again for every sort comparison.

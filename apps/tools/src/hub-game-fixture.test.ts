@@ -74,7 +74,7 @@ test('Hub exposes a ready exact team from the shared controller', async () => {
   } });
   app.mount(document.createElement('div')); await nextTick(); await nextTick();
   expect(source!.search('team gom afk')[0]?.unavailable).toBeUndefined();
-  for (const query of ['library', 'lib', 'bu', 'team', 'teams', 'skills', 'build library']) {
+  for (const query of ['build', 'builds', 'library', 'lib', 'bu', 'skills', 'build library']) {
     const rows = source!.search(query);
     expect(rows.filter(row => row.id === 'builds'), query).toHaveLength(1);
     expect(rows.find(row => row.id === 'builds')?.detail).toBe('Browse saved builds and teams');
@@ -322,7 +322,7 @@ test('a team apply that fails after the player moved on names the team and keeps
   source!.search('team gom afk')[0]!.run(task);
   const target = document.createElement('div');
   let primary: import('../../../src/shared/hub').HubViewAction | null = null;
-  review!(target, () => {}, { primary(next) { primary = next; }, secondary() {}, openActions() {}, own() {} });
+  review!(target, () => {}, { primary(next) { primary = next; }, secondary() {}, openActions() {} });
   expect(target.querySelector('[role=status]')?.textContent).toMatch(/^Team partly applied\. Synthetic interruption/);
   expect(target.textContent).toContain('Completed');
   expect(target.textContent).toContain('Enabling Hard Mode confirmed.');
@@ -496,7 +496,7 @@ test('invalid team reviews name the failing slot and open the same saved team in
   expect(row.unavailable).toBe('Choose a hero for slot 8.');
   row.navigate!(task);
   const target = document.createElement('div');
-  review!(target, () => {}, { primary(action) { expect(action?.disabled).toBe(true); }, secondary(action) { edit = action; }, openActions() {}, own() {} });
+  review!(target, () => {}, { primary(action) { expect(action?.disabled).toBe(true); }, secondary(action) { edit = action; }, openActions() {} });
   expect(target.querySelector('[role=status]')?.textContent).toBe('Choose a hero for slot 8.');
   expect(edit).toMatchObject({ label: 'Open in Build Library' });
   if (!edit) throw new Error('Editor action missing');
@@ -504,4 +504,87 @@ test('invalid team reviews name the failing slot and open the same saved team in
   await action.run(task);
   expect(selected).toEqual(invalid);
   app.unmount();
+});
+
+
+test('single-build receipts distinguish changes from reapplication and use the sentence target (HUB-183)', async () => {
+  const { createApp, h, nextTick } = await import('vue');
+  const { useLibrary } = await import('./use-library');
+  const { createHubLibrary } = await import('./hub-library');
+  localStorage.removeItem('hub-fixture-library');
+  const commands: string[] = [];
+  const { host } = createHubGameFixture(command => commands.push(command));
+  let failSave = false;
+  const fixtureHost = { ...host, async saveLibrary(value: Parameters<typeof host.saveLibrary>[0]) {
+    if (failSave) throw new Error('Synthetic save refusal');
+    return host.saveLibrary(value);
+  } };
+  let source: import('../../../src/shared/hub').HubSource | undefined;
+  let rows: (() => readonly import('../../../src/shared/hub').HubRow[]) | undefined;
+  const app = createApp({ setup() {
+    createHubLibrary(useLibrary(fixtureHost), fixtureHost, { attach(next) { source = next; return () => {}; }, close() {}, notify() {}, showRows(_title, next) { rows = next; }, showView() {} });
+    return () => h('div');
+  } });
+  app.mount(document.createElement('div')); await nextTick(); await nextTick();
+  const receipts: string[] = [];
+  const apply = async () => {
+    await source!.search('build smiter')[0]!.run(task);
+    expect(rows!()[0]!.action).toBe('Apply Smiter to your character');
+    await rows!()[0]!.run({ live: () => true, progress() {}, done: receipt => { if (receipt) receipts.push(receipt); } });
+  };
+  try {
+    await apply();
+    expect(receipts).toEqual(['Smiter applied to your character.']);
+    const changed = host.party.value.player;
+    const sent = commands.length;
+    await apply();
+    expect(receipts).toEqual(['Smiter applied to your character.', 'Smiter already matches.']);
+    expect(commands.slice(sent)).toEqual(['apply-build']);
+    failSave = true;
+    await apply();
+    expect(receipts.at(-1)).toBe('Smiter already matches. Recent use could not be saved.');
+    host.party.value = { ...host.party.value, player: { ...changed!, attributes: {} } };
+    await apply();
+    expect(receipts.at(-1)).toBe('Smiter applied to your character. Recent use could not be saved.');
+  } finally { app.unmount(); }
+});
+
+
+test('bare team queries list every saved team for review and preserve loading rows (HUB-087)', async () => {
+  const { createApp, h, nextTick } = await import('vue');
+  const { flushPromises } = await import('@vue/test-utils');
+  const { useLibrary } = await import('./use-library');
+  const { createHubLibrary } = await import('./hub-library');
+  const commands: string[] = [];
+  const { host } = createHubGameFixture(command => commands.push(command));
+  // More than eight teams catches accidental use of the unscoped result cap.
+  const { library } = await host.loadLibrary();
+  const { teamId } = await import('../../../src/shared/builds/library');
+  const teams = Array.from({ length: 10 }, (_, index) => ({ ...library.teams[0]!, id: teamId(`team-${index}`), name: `Saved team ${index}` }));
+  let release = () => {};
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  let source: import('../../../src/shared/hub').HubSource | undefined;
+  const reviews: string[] = [];
+  const app = createApp({ setup() {
+    createHubLibrary(useLibrary({ ...host, loadLibrary: async () => { await gate; return { library: { ...library, teams }, recovered: false }; } }), host,
+      { attach(next) { source = next; return () => {}; }, close() {}, notify() {}, showRows() {}, showView(title) { reviews.push(title); } });
+    return () => h('div');
+  } });
+  app.mount(document.createElement('div')); await nextTick();
+  try {
+    for (const query of ['team', 'teams']) {
+      expect(source!.search(query).map(row => [row.title, row.unavailable])).toEqual([['Loading teams…', 'Build Library is loading.']]);
+    }
+    release(); await flushPromises();
+    for (const query of ['team', 'teams']) {
+      const rows = source!.search(query);
+      expect(rows.map(row => row.title)).toEqual(['Saved team 0', 'Saved team 1', 'Saved team 2', 'Saved team 3', 'Saved team 4', 'Saved team 5', 'Saved team 6', 'Saved team 7', 'Saved team 8', 'Saved team 9']);
+      expect(rows.map(row => [row.id, row.action, row.consequential])).toEqual(source!.search('team ').map(row => [row.id, row.action, row.consequential]));
+      expect(rows.map(row => row.action)).toEqual(['Review Saved team 0', 'Review Saved team 1', 'Review Saved team 2', 'Review Saved team 3', 'Review Saved team 4', 'Review Saved team 5', 'Review Saved team 6', 'Review Saved team 7', 'Review Saved team 8', 'Review Saved team 9']);
+      expect(rows.every(row => row.group === 'Teams' && !row.consequential)).toBe(true);
+      for (const row of rows) await row.run(task);
+    }
+    expect(reviews).toHaveLength(20);
+    expect(commands).toEqual([]);
+  } finally { release(); app.unmount(); }
 });

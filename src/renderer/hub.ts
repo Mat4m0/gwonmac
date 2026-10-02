@@ -8,7 +8,7 @@ import { resumeSearchInput } from './search-input.js';
 import { installHubWindow } from './hub-window.js';
 import { attachClassicFrame } from '../shared/ui/frame.js';
 import { isHubBackKey, resolveShortcuts, shortcutKeycaps, type ShortcutAction } from '../shared/keyboard-shortcuts.js';
-import { FINDABLE_SETTINGS, focusHubSetting, openHubSettings, type HubSettingsFocus } from "./hub-settings.js";
+import { FINDABLE_SECTIONS, FINDABLE_SETTINGS, focusHubSetting, openHubSettings, type HubSettingsFocus } from "./hub-settings.js";
 import { createHubAccounts } from './hub-accounts.js';
 import { hubIcon } from "./hub-icons.js";
 import { editHubShortcut, manageHubShortcuts } from './hub-preferences.js';
@@ -123,8 +123,8 @@ export function createHub(parent: HTMLElement) {
   let scope: RowScope | null = null;
   type MountedView = { title: string; mount: HubViewMount<HTMLElement>; available?: () => boolean; destination?: HubDestination; owner?: HubSource };
   let activeView: MountedView | null = null;
-  /** The mounted view's footer: its named primary and secondary, or its own footer (Travel, Characters). */
-  type ViewFooter = { primary: HubViewAction | null; secondary: HubViewAction | null; own: boolean };
+  /** The mounted view's footer: its named primary and secondary. */
+  type ViewFooter = { primary: HubViewAction | null; secondary: HubViewAction | null };
   let viewFooter: ViewFooter | null = null;
   let viewRunning = false;
   let viewArming: { label: string; arming: ReturnType<typeof armConfirmation> } | null = null;
@@ -299,7 +299,7 @@ export function createHub(parent: HTMLElement) {
       run: () => { if (id === 'storage') { close(); window.dispatchEvent(new CustomEvent(event, { cancelable: true })); } else dispatch(event, 'show'); },
     }] : [];
     return [
-      ...tool('travel', TOOL_PRESENTATION['quick-travel'].label, 'Outposts, favourites and recent places', 'outpost destination teleport tp', settings?.gwonmacTools && settings.travelPalette, 'gw:travel-toggle'),
+      // Travel's row comes from its owner, attached for its whole life with the command's refusal (HUB-135).
       ...tool('trade', TOOL_PRESENTATION['trade-chat'].label, 'Find offers and contact sellers', 'kamadan prices trading market trader', settings?.gwonmacTools && settings.tradeChat, 'gw:trade-toggle'),
       ...tool('whispers', TOOL_PRESENTATION['whispers'].label, 'Conversations, friends and drafts', 'friends people message chat', settings?.gwonmacTools && settings.whispersEnabled, 'gw:whispers-toggle'),
       ...(settings?.characterSwitchEnabled ? [{ id: 'character', title: TOOL_PRESENTATION['character-switch'].label, detail: 'Choose another character', keywords: 'relog profession characters alts', group: 'Tools', action: 'Choose character', navigate: () => dispatch('gw:character-toggle'), run: () => dispatch('gw:character-toggle') }] : []),
@@ -318,9 +318,11 @@ export function createHub(parent: HTMLElement) {
         // Resign's row comes from its owner, with its refusal before Enter (resign.ts).
         // Quit or Reload opens the account's confirmation sheet, never a direct quit (HUB-001).
         // The sheet waits for the press that asked for it, so its repeat or trailing click never answers it.
-        { id: 'reload', title: 'Quit or Reload Game…', detail: 'Opens confirmation for this account', keywords: 'restart reconnect', group: 'Commands', action: 'Review options', run: async () => { close(); await window.gwSurfaces.afterPress(); await window.gwNative.app.showQuitOrReload(); } },
+        // Cancel hands the task back with its search, as Resign's confirmation does (HUB-250).
+        { id: 'reload', title: 'Quit or Reload Game…', detail: 'Opens confirmation for this account', keywords: 'restart reconnect', group: 'Commands', action: 'Review options', run: async () => { suspend(); await window.gwSurfaces.afterPress(); if (await window.gwNative.app.showQuitOrReload() === 'stayed') show(); else close(); } },
         // Settings are found by their own words and open with their control focused (HUB-063).
         // They follow the commands, so a command's own word keeps its row first.
+        ...(normaliseHubQuery(query).length < 3 ? [] : FINDABLE_SECTIONS).map(({ section, keywords }) => ({ id: `settings:${section}`, title: section, detail: 'Settings section', keywords, group: 'Settings', action: `Open ${section} settings`, run: () => openSettings({ section }) })),
         ...(normaliseHubQuery(query).length < 3 ? [] : FINDABLE_SETTINGS).filter(setting => !setting.shown || (settings && setting.shown(settings))).map(setting => ({ id: `setting:${setting.label}`, title: setting.label, detail: `Settings › ${setting.section}`, keywords: `setting ${setting.keywords ?? ''}`, group: 'Settings', action: 'Open setting', run: () => openSettings({ section: setting.section, control: setting.label }) })),
       ]),
     ];
@@ -353,7 +355,7 @@ export function createHub(parent: HTMLElement) {
    */
   function commandExamples(): HubRow[] {
     const enabled = new Set(commands(true).map(row => row.id));
-    if (lookup('builds')) enabled.add('builds');
+    for (const owned of ['builds', 'travel']) if (lookup(owned)) enabled.add(owned);
     const example = (group: string, tool: string, title: string, fill: string, detail: string) => ({ group, tool, title, fill, detail });
     const examples = [
       example('Places', 'travel', 'travel <place>', 'travel ', 'Find an outpost by name or alias'),
@@ -482,7 +484,6 @@ export function createHub(parent: HTMLElement) {
   const done: HubViewAction = { label: 'Done', run: () => restoreParent() };
   function paintViewFooter() {
     if (!viewFooter) return;
-    footer.hidden = viewFooter.own;
     const action = viewFooter.primary ?? done;
     primaryText(action.label);
     // Enter runs a named primary, so only that one carries the keycap, and not while it runs.
@@ -727,7 +728,8 @@ export function createHub(parent: HTMLElement) {
     // A phrase saved before its words joined the grammar stays stored but no longer matches.
     const saved = shortcuts().filter(entry => !parsed.term ? entry.pinned : entry.phrase === parsed.term && !hubPhraseReserved(entry.phrase))
       .filter(entry => !parsed.scope || entry.id.startsWith(`${parsed.scope === 'travel' ? 'place' : parsed.scope}:`));
-    const savedRows = saved.flatMap(entry => { const row = lookup(entry.id); return row ? [{ ...row, group: parsed.term ? row.group : 'Pinned' }] : []; });
+    // A phrase answers with the row its owner gives this query (a scoped team applies), else the stored row.
+    const savedRows = saved.flatMap(entry => { const row = extra.find(candidate => candidate.id === entry.id) ?? lookup(entry.id); return row ? [{ ...row, group: parsed.term ? row.group : 'Pinned' }] : []; });
     const ids = new Set([...extra, ...savedRows].map(row => row.id));
     rows = scope ? matchHubRows(extra, input.value) : [...savedRows, ...extra.filter(row => !savedRows.some(saved => saved.id === row.id)), ...(parsed.term && parsed.scope ? commands().filter(row => !ids.has(row.id) && normaliseHubQuery(row.title) === normaliseHubQuery(input.value)) : matchHubRows(commands().filter(row => !ids.has(row.id)), input.value))];
     // A typed root search orders sections by their best answer, then by the usual group order,
@@ -738,7 +740,7 @@ export function createHub(parent: HTMLElement) {
     const tierOf = (row: HubRow) => phraseIds.has(row.id) ? -1 : row.conversion || row.group === 'Calculator' ? 0 : hubTier(row, parsed.term) ?? 3;
     const best = new Map<string, number>();
     if (ranked) for (const row of rows) best.set(row.group, Math.min(best.get(row.group) ?? Infinity, tierOf(row)));
-    const groups = ["Pinned", "Calculator", "Teams", "Folders", "Builds", "Targets", "Current build", "Accounts", "Characters", "In your party", "Unlocked heroes", "Heroes", "People", "Places", "Continue", "Tools", "Commands", "Settings", "Sources", "Trade", "Calculate", "Keys & shortcuts"];
+    const groups = ["Pinned", "Calculator", "Teams", "Folders", "Builds", "Targets", "Current build", "Accounts", "Characters", "In your party", "Unlocked heroes", "Heroes", "People", "Places", "Friends", "Continue", "Tools", "Commands", "Settings", "Sources", "Trade", "Calculate", "Keys & shortcuts"];
     const groupIndex = (group: string) => { const index = groups.indexOf(group); return index < 0 ? groups.length : index; };
     // Keep everyday game actions ahead of account management, independent of provider order.
     const tools = ['travel', 'character', 'whispers', 'builds', 'trade', 'storage', 'maps', 'accounts'];
@@ -916,7 +918,7 @@ export function createHub(parent: HTMLElement) {
     endSession(); restoringFocus?.disconnect(); restoringFocus = null; keepDrafts(); pressed = null; modal.pageChanged(); closeMenu(false);
     disposeView?.(); disposeView = null; activeView = null; content.replaceChildren(); content.hidden = true;
     viewFooter = null; viewRunning = false; actionFocus = null; viewArming?.arming.disarm(); viewArming = null;
-    search.hidden = false; list.hidden = false; footer.hidden = false;
+    search.hidden = false; list.hidden = false;
   }
   function home() {
     history.length = 0; resetView(); scope = null; input.value = restoreQuery;
@@ -1301,14 +1303,13 @@ export function createHub(parent: HTMLElement) {
     required<HTMLElement>('.hub-preview').hidden = true; required<HTMLElement>('.hub-rate-controls').hidden = true; required<HTMLElement>('.hub-hint').hidden = true;
     search.hidden = true; list.hidden = true; content.hidden = false;
     activeView = view;
-    const state: ViewFooter = { primary: null, secondary: null, own: false };
+    const state: ViewFooter = { primary: null, secondary: null };
     viewFooter = state;
     // A disposed view's late update never repaints the next page's footer.
     const shell: HubViewFooter = {
       primary: next => { state.primary = next; if (viewFooter === state) paintViewFooter(); },
       secondary: next => { state.secondary = next; if (viewFooter === state) paintViewFooter(); },
       openActions: () => { if (viewFooter === state) openMenu(); },
-      own: () => { state.own = true; if (viewFooter === state) paintViewFooter(); },
     };
     paintViewFooter();
     disposeView = view.mount(content, restoreParent, shell);

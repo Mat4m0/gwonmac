@@ -268,7 +268,10 @@ test('the Hub "Quit or Reload Game…" row opens the same native sheet and quits
     await clearCanvasKeys(page);
     await page.keyboard.press('Enter');
     await expect.poll(dialogs).toEqual(['Quit or reload Guild Wars?']);
-    await expect(hubOf(page)).toBeHidden();
+    // Cancel resumes the originating task, as the browser contract already asserts.
+    await expect(hubOf(page)).toBeVisible();
+    await expect(searchOf(page)).toHaveValue('reload');
+    await expect(searchOf(page)).toBeFocused();
     expect(await openWindows(fixture)).toBeGreaterThan(0);
     expect(page.isClosed()).toBe(false);
     expect(await canvasKeysFor(page, 'Enter')).toEqual([]);
@@ -276,8 +279,8 @@ test('the Hub "Quit or Reload Game…" row opens the same native sheet and quits
 });
 
 // PTR-28 (HUB-001, HUB-242): a human double-click on the row or on the footer
-// primary, or one click on the row, asks for the sheet once. The Hub closes on
-// the first click, so the second lands on the game canvas and must stay there.
+// primary, or one click on the row, asks for the sheet once. Cancel restores
+// the task without replaying the trailing click into the game.
 test('clicks on the "Quit or Reload Game…" row or its footer primary show the sheet once and quit nothing', async () => {
   const fixture = await launch();
   try {
@@ -294,7 +297,7 @@ test('clicks on the "Quit or Reload Game…" row or its footer primary show the 
       ['footer double-click', 2, () => hub.locator('.hub-primary')],
     ];
     for (const [name, count, target] of cases) {
-      await chord(fixture, 'R', ['meta']);
+      await page.evaluate(() => window.gwHub?.show());
       await expect(hub).toBeVisible();
       await searchOf(page).fill('reload');
       await expect(hub.locator('.hub-primary'), name).toContainText('Review options');
@@ -302,7 +305,9 @@ test('clicks on the "Quit or Reload Game…" row or its footer primary show the 
       await sheet.clear();
       await page.evaluate(() => { (window as RecordingWindow).__hubContractPointer?.splice(0); });
       await nativeClickRun(fixture, x, y, count);
-      await expect(hub, name).toBeHidden();
+      await expect(hub, name).toBeVisible();
+      await expect(searchOf(page), name).toHaveValue('reload');
+      await expect(searchOf(page), name).toBeFocused();
       await expect.poll(sheet.dialogs, { message: name }).toEqual(['Quit or reload Guild Wars?']);
       // Past the double-click interval, so a second request or a trailing click would have arrived.
       await page.waitForTimeout(800);
@@ -310,7 +315,6 @@ test('clicks on the "Quit or Reload Game…" row or its footer primary show the 
       expect(await canvasPointer(page), name).toEqual([]);
       expect(await openWindows(fixture), name).toBeGreaterThan(0);
       expect(page.isClosed(), name).toBe(false);
-      expect(await page.evaluate(([px, py]) => document.elementFromPoint(px!, py!)?.id, [x, y]), name).toBe('canvas');
     }
   } finally { await closeOffline(fixture); }
 });

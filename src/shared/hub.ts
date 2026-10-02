@@ -143,7 +143,7 @@ export type HubViewAction = Readonly<{ label: string; run(task: HubTask): void |
  * back. Every mounted view uses this same footer owner.
  * A view can open that same menu for its selected item through openActions().
  */
-export type HubViewFooter = Readonly<{ primary(action: HubViewAction | null): void; secondary(action: HubViewAction | null): void; openActions(): void; own(): void }>;
+export type HubViewFooter = Readonly<{ primary(action: HubViewAction | null): void; secondary(action: HubViewAction | null): void; openActions(): void }>;
 export type HubViewMount<Target> = (target: Target, back: () => void, footer: HubViewFooter) => () => void;
 
 /**

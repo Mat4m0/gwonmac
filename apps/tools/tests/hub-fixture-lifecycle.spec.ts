@@ -108,12 +108,12 @@ test.describe('shortcuts through commands.ts', () => {
   });
 
   // HUB-001: the row promises the confirmation sheet, so it opens it and quits nothing.
-  test('the Quit or Reload row opens the confirmation sheet', async ({ page }) => {
+  // HUB-250: Cancel hands the task back with its search, as Resign's confirmation does.
+  test('the Quit or Reload row opens the confirmation sheet, and Cancel returns to the search', async ({ page }) => {
     await open(page);
     const search = page.locator('.hub-search input');
     const sheet = page.getByRole('dialog', { name: 'Quit or reload Guild Wars?' });
     for (const word of ['reload', 'quit', 'restart']) {
-      if (!await page.locator('#hub').isVisible()) await page.keyboard.press('Meta+r');
       await search.fill(word);
       await expect(page.locator('#hub .hub-primary')).toContainText('Review options');
       await search.press('Enter');
@@ -122,6 +122,9 @@ test.describe('shortcuts through commands.ts', () => {
       await page.keyboard.press('Escape');
       await expect(sheet).toBeHidden();
       await expect(page.locator('#app')).toHaveAttribute('data-action', 'Quit or reload cancelled');
+      await expect(page.locator('#hub')).toBeVisible();
+      await expect(search).toHaveValue(word);
+      await expect(search).toBeFocused();
     }
   });
 

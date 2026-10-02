@@ -109,26 +109,26 @@ function createQuitOrReloadSheet(record: (action: string) => void, resetInput: (
     + '<div style="display:flex;gap:8px;justify-content:flex-end"><button class="ui-button" value="cancel">Cancel</button>'
     + '<button class="ui-button" value="quit">Quit Game</button><button class="ui-button" data-variant="primary" value="reload">Reload Guild Wars</button></div></form>';
   document.body.append(dialog);
-  let settle: (() => void) | null = null;
+  let settle: ((outcome: 'stayed' | 'left') => void) | null = null;
   dialog.addEventListener('close', () => {
     const choice = dialog.returnValue === 'reload' || dialog.returnValue === 'quit' ? dialog.returnValue : 'cancel';
     if (choice === 'quit') quitFixtureGame(record);
     else record(choice === 'reload' ? 'Game reload' : 'Quit or reload cancelled');
-    settle?.(); settle = null;
+    settle?.(choice === 'cancel' ? 'stayed' : 'left'); settle = null;
   });
   return {
     get open() { return dialog.open; },
-    /** Resolves when the sheet settles; a second request joins the open sheet (`runExclusiveReloadDialog`). */
-    async show() {
+    /** Settles with the outcome; a second request joins the open sheet without one (`runExclusiveReloadDialog`). */
+    async show(): Promise<'stayed' | 'left' | undefined> {
       // Every request is counted, joined or not, so a test can require exactly one.
       dialog.dataset.requests = String(Number(dialog.dataset.requests ?? 0) + 1);
-      if (dialog.open) return;
+      if (dialog.open) return undefined;
       await resetInput();
       dialog.returnValue = '';
-      const settled = new Promise<void>(resolve => { settle = resolve; });
+      const settled = new Promise<'stayed' | 'left'>(resolve => { settle = resolve; });
       dialog.showModal();
       dialog.querySelector<HTMLButtonElement>('button[value="reload"]')?.focus();
-      await settled;
+      return settled;
     },
   };
 }
