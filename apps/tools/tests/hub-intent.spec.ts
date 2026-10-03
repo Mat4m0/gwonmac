@@ -996,7 +996,8 @@ test.describe('Characters: typing never switches', () => {
       await expect.poll(async () => (await page.locator('.hub-panel').boundingBox())?.width).toBe(width);
       await page.keyboard.press('Meta+e');
       await expect(card(page, 'monk')).toBeFocused();
-      const bounds = await page.locator('#character-switch-list button[data-row]').evaluateAll(cards => cards.map(card => {
+      // The carousel may replace cards between evaluateAll's query and callback.
+      const bounds = await page.evaluate(() => Array.from(document.querySelectorAll('#character-switch-list button[data-row]'), card => {
         const { left, right, top, bottom, width } = card.getBoundingClientRect();
         return { left, right, top, bottom, width };
       }));
