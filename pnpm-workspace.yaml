@@ -60,3 +60,13 @@ auditConfig:
     # Remove this exception when upstream publishes a patched node-forge, or
     # reassess it before adding a consumer that verifies signatures with forge.
     - GHSA-86w9-cpqp-85rv
+    # Forge reaches http-cache-semantics only in build-time download clients.
+    # The app does not ship it or expose a shared authenticated response cache.
+    # No patch is published. Remove when a patched release becomes available,
+    # or reassess before adding an authenticated shared-cache consumer.
+    - GHSA-ch52-4w7c-c8xp
+    # braces receives repository-owned build glob patterns through Forge,
+    # Nuxt, and i18n tooling. Player input never becomes a glob pattern.
+    # No patch is published. Remove when a patched release becomes available,
+    # or reassess before accepting untrusted glob patterns.
+    - GHSA-vfj7-8cjw-p6xm
