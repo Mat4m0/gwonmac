@@ -24,16 +24,9 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
     Object.freeze({
       sha256:
         "484f7f20691c912c372b7e265a1cc4a4d26b37bfbd52c838b3137d5f29b67d3b",
-      // Recomputed from the exact current JSPI artifact when the independent
-      // play-region capability landed. The retained output is the complete
-      // product profiles proved by the current semantic verifier.
-      //
-      // `pnpm check` cannot catch a stale value here. The transform input is a
-      // derived game binary this repository does not contain, so nothing in the
-      // suite can run the transform; the first thing that notices is a launch
-      // that installs no enhancement at all. Recompute by running
-      // `transformEnhancementWasm` against the real derived module whenever
-      // ENHANCEMENT_TRANSFORM_ABI or any config word changes.
+      // Historical output measurements for this retained predecessor. They are
+      // regression evidence, never runtime authority. The semantic verifier
+      // derives fresh profile outputs using the current transform ABI.
       outputSha256: Object.freeze({
         "features-601":
           "01fbd2857f9df5456237f1182c898d2edc541e438018d08b6fd85edc1223da99",
@@ -722,18 +715,18 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
     Object.freeze({
       sha256: "b5f10d50833ed9390ce4faa49fb9a8c009416989e07f20690c27b39b5ef048ad",
       outputSha256: Object.freeze({
-        "features-fffff": "8ca301bb9ca8f7dd2fab32719548f4603f7946aed6b841d5e8b8fedceb396801",
-        "features-01": "4fd40b09523895ea8a387b0a82486e5ab36d28d9e2807499c8536946570cc4fa",
-        "features-e01": "e30d26a86f7377dad91a0b86744cf003cffc5777b267cff11c9acc5438cee9b2",
-        "features-601": "6a37e02ad48a9f13945954c2871766b3394eb995d5b660605b34ee54f1a86eab",
-        "features-200": "fdcc9ed6b41d77aedd20c58591e0222b30e59f0cfdc1588304e1b3d313995e0b",
-        "features-202": "fd87adcebce8ff32d1f36e82e527c682c20333455fda0a7ea46114fd752061be",
-        "features-284": "a7d0a66dad19f05e2e1cb6b84dd2a6cd7ac7851e5aa55059e31c08b4a512b64f",
-        "features-285": "2d56460ecc76f4eb9993eb81391e09e1022a2291c5c41ec523576006c794608d",
-        "features-270": "56802eb209fb1f4e3e225057015a2796eba73d2b8001a2ee41dd17f3e8c5f6bf",
-        "features-2fc": "cf3bc0632be4749a46b0b0d76ed7c44180d37f59aed8039bb0d0cb1cc75ebe5a",
-        "features-c200": "e072080394957aee191c66658b3bc9bcf35d8e1ca03e7a11e274bae211644268",
-        "features-c204": "8b8556e7697d751d3ef1232cbcb389b9968fc7462cd7661bf43c48122350ff9a",
+        "features-fffff": "83eb5a8d26ca091e1dde0e23eeb6cb20da22d58c1930011c11a160b0c84943b9",
+        "features-01": "f2a0ca659d0d2fb0ca86b7fc082a027e2066cb2bc7fe0910e9c9a36826d389f7",
+        "features-e01": "589d9e075c6b331d618f53b73a8e5baff9b3d0dde05a47423837e5e28f0d1893",
+        "features-601": "45387b972824c410ce85c94dc8939bbac8c9cfd29b88aa4321d6584f1f752f9e",
+        "features-200": "d0a77026487e2e482456736c976a58e7966baefca648c132754c4f030f8b2b9c",
+        "features-202": "1711cc244a677529a3e4fb7e1b39f4c967160af2add1bb66fba5b628d0146885",
+        "features-284": "5864c033b6faf1046c60fb142a6011a713bbaf6aa3047b61349b313742411a67",
+        "features-285": "dacf76c783bad62e2389296701a945b9e83f0730e1c36c86bde4233b112acbda",
+        "features-270": "f164dabf6a0a5451f4e18a3170f22ad6842d1fe4eb48c8be3157c820d732f21e",
+        "features-2fc": "35f8f1dcce202a84857740c963bfc2ecaf8b82d2fe6943d9e492c668da2f662b",
+        "features-c200": "0eecb4cf253187cbc5a5eb62ef1433bd359c2c078310817f739ec2275fbaf18d",
+        "features-c204": "b8b516409179a39fb84707c89624aad6c35751cc31c11d588fa2088e25ce6006",
       }),
       programId: 1,
       buildId: 644569738,

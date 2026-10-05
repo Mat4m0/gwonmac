@@ -22,8 +22,8 @@ test("native terrain owns bounded resources, follows its Canvas and refuses inva
   const publishIndex = exported.find((entry) => entry.name === `${prefix}_publish`)?.index;
   assert.ok(publishIndex !== undefined);
   const first = publishIndex - 5;
-  const selected = Array.from({length: 6}, (_, index) => first + index);
-  const peers = [1444, 1445, 1446, 1448, 1449, 1556, 1565, 1579, 748, 6827, 2249, 3137, 1569, 750];
+  const selected = Array.from({length: 8}, (_, index) => first + index);
+  const peers = [1444, 1445, 1446, 1448, 1449, 1556, 1565, 1579, 748, 6827, 2249, 3137, 1569, 750, 6593];
   const indices = new Map([...peers, ...selected].map((index, position) => [index, position]));
   const decoded = evidence.decodeFunctions([]);
   const rewritten = selected.map((index) => {
@@ -40,7 +40,7 @@ test("native terrain owns bounded resources, follows its Canvas and refuses inva
   const globals = exported.filter((entry) => entry.kind === 3 && (entry.name.startsWith(`${prefix}_`)
     || ["gwonmac_cartography_context_area_epoch", "gwonmac_cartography_context_status"].includes(entry.name)));
   const section = (id: number, body: Uint8Array) => encodeSection({id, body});
-  const labels = ["hide", "destroy", "init", "attach", "update", "publish"];
+  const labels = ["hide", "destroy", "init", "attach", "update", "publish", "reap", "ensure"];
   const capsule = concat(WASM_HEADER,
     section(1, sectionById(sections, 1)),
     section(2, concat(uleb(peers.length), ...peers.map((index) => concat(encodeName("peer"), encodeName(String(index)), Uint8Array.of(0), uleb(module.functionTypeIndices[index]!))))),
@@ -56,14 +56,22 @@ test("native terrain owns bounded resources, follows its Canvas and refuses inva
   let textureCreates = 0; let attachments = 0;
   const { exports } = new WebAssembly.Instance(new WebAssembly.Module(Uint8Array.from(capsule)), {peer: {
     1444: (format: number, flags: number) => { assert.deepEqual([format, flags], [265, 0]); return 11; },
-    1445: (handle: number, count: number) => { assert.equal(handle, 11); indicesAllocated.push(count); return 131072; },
+    1445: (handle: number, count: number) => { assert.equal(handle, 11); assert.equal(view.getUint32(MODEL + 152, true), 0, "never rewrite queued Compass indices"); indicesAllocated.push(count); return 131072; },
     1446: (handle: number, count: number) => { assert.equal(handle, 11); vertices.push(count); return 65536; },
     1448: (handle: number) => { assert.equal(handle, 11); },
     1449: (handle: number, min: number, max: number) => { assert.equal(handle, 11); assert.equal(view.getFloat32(min, true), 0); assert.ok(view.getFloat32(max, true) > 0); },
     1556: (handle: number) => { assert.equal(handle, 7); return 12; },
     1565: (draw: number, index: number, buffer: number) => { assert.deepEqual([draw, index, buffer], [12, 0, 11]); },
     1579: (draw: number, index: number) => { assert.deepEqual([draw, index], [12, 0]); },
-    748: (handle: number) => { released.push(handle); },
+    6593: () => { view.setUint32(MODEL + 24, 0, true); },
+    748: (handle: number) => {
+      if (handle === 12) {
+        assert.equal(view.getUint32(MODEL + 152, true), 0, "never close a queued Compass model");
+        assert.equal(view.getUint32(MODEL + 24, true), 0, "never close a cached Compass model");
+        assert.equal(view.getUint32(DEVICE + 460, true), 3, "never close during a Compass flush");
+      }
+      released.push(handle);
+    },
     6827: (frame: number, count: number, pointer: number, slot: number) => { assert.deepEqual([frame, count, view.getUint32(pointer, true), slot], [43, 1, 12, 4]); attachments += 1; },
     2249: (mips: number, format: number, dimensions: number, levels: number, flags: number) => {
       assert.deepEqual([view.getUint32(mips, true), format, view.getUint32(dimensions, true), view.getUint32(dimensions + 4, true), levels, flags], [2080, 0, 64, 64, 1, 112]);
@@ -109,6 +117,10 @@ test("native terrain owns bounded resources, follows its Canvas and refuses inva
     view.setUint32(DEVICE + 460, 3, true);
   };
   header(); assert.equal(invoke("publish", region, bytes), 0); assert.equal(textureCreates, 0);
+  view.setUint32(DEVICE + 460, 0, true);
+  invoke("init", owner); invoke("destroy", owner);
+  assert.deepEqual(released, [], "a Canvas destroyed before deferred creation owns no handles");
+  view.setUint32(DEVICE + 460, 3, true);
   invoke("init", owner); invoke("attach", owner, 43); assert.equal(attachments, 1);
   assertQueueBusy(); assert.equal(textureCreates, 0, "first upload waits before allocating");
   assert.equal(invoke("publish", region, bytes), 1); assert.deepEqual(released.splice(0), [22, 21]);
@@ -137,6 +149,13 @@ test("native terrain owns bounded resources, follows its Canvas and refuses inva
   view.setFloat32(camera, 100, true); invoke("update", owner, camera, direction);
   assert.equal(indicesAllocated.length, allocationsBeforeIdle + (surface === "ranges" ? 0 : 1),
     "only world-anchored terrain responds to camera movement");
+  const updatesBeforeHeld: number = vertices.length;
+  view.setUint32(MODEL + 152, 1, true); rectangle(400, 192);
+  invoke("update", owner, camera, direction);
+  assert.equal(vertices.length, updatesBeforeHeld, "queued geometry changes wait without caching new bounds");
+  view.setUint32(MODEL + 152, 0, true);
+  invoke("update", owner, camera, direction);
+  assert.equal(vertices.length, updatesBeforeHeld + 1, "geometry retries after drain");
   for (const [offset, value] of [[0, 0], [8, 6], [12, 63], [12, 4096], [28, 0]] as const) {
     header(); view.setUint32(region + offset, value, true); assert.equal(invoke("publish", region, bytes), 0);
   }
@@ -145,6 +164,53 @@ test("native terrain owns bounded resources, follows its Canvas and refuses inva
   header(); assert.equal(invoke("publish", region, bytes), 1); released.length = 0;
   scalar("gwonmac_cartography_context_area_epoch", 8); invoke("update", owner, camera, direction);
   assert.equal(indicesAllocated.at(-1), 0);
+  const writesAfterHide: number = indicesAllocated.length;
+  invoke("update", owner, camera, direction); invoke("hide");
+  assert.equal(indicesAllocated.length, writesAfterHide, "idle hidden geometry is cleared only once");
+  scalar("gwonmac_cartography_context_area_epoch", 7);
+  for (const held of ["model", "flush"] as const) {
+    for (const retire of ["destroy", "replace"] as const) {
+      view.setUint32(MODEL + 24, 1, true);
+      view.setUint32(MODEL + 152, held === "model" ? 1 : 0, true);
+      view.setUint32(DEVICE + 460, held === "flush" ? 0 : 3, true);
+      const writesBeforeHide: number = indicesAllocated.length;
+      invoke("hide"); invoke("update", owner, camera, direction);
+      assert.equal(indicesAllocated.length, writesBeforeHide, "host hide defers busy mesh changes");
+      if (retire === "destroy") { invoke("destroy", owner); invoke("destroy", owner); }
+      else { invoke("init", owner); invoke("init", owner); }
+      assert.deepEqual(released, [], "retirement retains queue-held Compass resources");
+      const attachmentsBefore: number = attachments;
+      invoke("attach", owner, 43);
+      assert.equal(attachments, attachmentsBefore, "retired Compass does not attach");
+      header(); assert.equal(invoke("publish", region, bytes), 2, "retirement blocks texture changes");
+      view.setUint32(MODEL + 152, 0, true); view.setUint32(DEVICE + 460, 3, true);
+      invoke("init", owner);
+      assert.deepEqual(released.splice(0), [12, 11], "next Canvas reaps the pair once");
+      header(); assert.equal(invoke("publish", region, bytes), 1);
+      released.length = 0;
+      invoke("update", owner, camera, direction);
+    }
+  }
   invoke("destroy", owner); invoke("destroy", owner); assert.deepEqual(released, [12, 11]);
   }
+});
+
+
+test("changed native cache invalidation refuses Compass drawing while maps remain available", async () => {
+  assert.ok(process.env.GW_CLIENT_WASM);
+  const input = new Uint8Array(await readFile(process.env.GW_CLIENT_WASM));
+  const fixture = retainedClientFixture(input);
+  const evidence = wasmEvidence(input); assert.ok(evidence);
+  const sections = splitSections(input), bodies = parseCode(sectionById(sections, 10));
+  const local = 6593 - evidence.moduleView().functionImportCount;
+  const original = bodies[local]!;
+  bodies[local] = concat(original.slice(0, -1), Uint8Array.of(0x01, 0x0b));
+  const changed = concat(WASM_HEADER, ...sections.map((section) => encodeSection(section.id === 10
+    ? {id: 10, body: encodeCode(bodies)} : section)));
+  const output = transformCartographySpikeWasm(changed, fixture.memoryLayout);
+  assert.ok(WebAssembly.validate(Uint8Array.from(output)));
+  const exported = parseExports(sectionById(splitSections(output), 7));
+  assert.equal(exported.some(entry => entry.name.startsWith("gwonmac_compass_terrain_")), false);
+  assert.equal(exported.some(entry => entry.name.startsWith("gwonmac_compass_ranges_")), false);
+  assert.equal(exported.some(entry => entry.name === "gwonmac_mission_graphics_publish"), true);
 });
