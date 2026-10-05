@@ -17,6 +17,8 @@ import { TradeChatService } from "./core/trade-chat-service.js";
 import { TradeSavedStore } from "./core/trade-saved-store.js";
 import { TravelHistoryStore } from "./core/travel-history.js";
 import { registerToolsIpcHandlers } from "./tools-ipc.js";
+import { CartographyMapKnowledgeStore } from "./core/cartography-map-knowledge.js";
+import type { ClientSession } from "../shared/contracts.js";
 import { Mutex } from "./core/mutex.js";
 
 export interface ToolsRuntime {
@@ -31,7 +33,10 @@ export function createToolsRuntime(input: Readonly<{
   accounts: MultipleAccountsController;
   preferences: PreferencesCoordinator;
   initialSettings: AppSettings;
+  clientFingerprint(): string | undefined;
+  getClientSession(win: BrowserWindow): ClientSession;
 }>): ToolsRuntime {
+  const cartographyMapKnowledge = new CartographyMapKnowledgeStore(input.paths.cartographyMapKnowledge);
   const eliteTracking = new EliteTrackingStore();
   const elitePath = (win: BrowserWindow) => join(dirname(input.accounts.buildLibraryPathFor(win)), "elite-tracking.json");
   const buildLibraries = new BuildLibraryCoordinator();
@@ -54,6 +59,16 @@ export function createToolsRuntime(input: Readonly<{
 
   registerToolsIpcHandlers({
     windows: input.windows,
+    getSettings: () => input.preferences.getSettings(),
+    getClientSession: input.getClientSession,
+    getCartographyMapKnowledge: (kernelSha256) => {
+      const fingerprint = input.clientFingerprint();
+      return fingerprint ? cartographyMapKnowledge.get(fingerprint, kernelSha256) : Promise.resolve([]);
+    },
+    recordCartographyMapKnowledge: (value) => {
+      const fingerprint = input.clientFingerprint();
+      return fingerprint ? cartographyMapKnowledge.record(fingerprint, value) : Promise.resolve([]);
+    },
     isFeatureEnabled,
     runFeature: (feature, label, operation) => fileGates[feature].run(async () => {
       if (!isFeatureEnabled(feature)) {

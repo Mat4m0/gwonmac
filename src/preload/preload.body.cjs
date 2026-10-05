@@ -226,14 +226,6 @@ const api = {
       ipcRenderer.invoke(IPC.diagnosticsVisualSubmit, value),
     setProfile: (value) => ipcRenderer.invoke(IPC.diagnosticsProfileSet, value),
   },
-  cartography: {
-    getMapKnowledge: (kernelSha256) =>
-      ipcRenderer.invoke(IPC.cartographyMapKnowledgeGet, kernelSha256),
-    recordMapKnowledge: (value) =>
-      ipcRenderer.invoke(IPC.cartographyMapKnowledgeRecord, value),
-    exportEvidence: (value) =>
-      ipcRenderer.invoke(IPC.cartographyEvidenceExport, value),
-  },
   hubSettings: {
     get: () => ipcRenderer.invoke(IPC.hubSettingsGet),
     update: change => ipcRenderer.invoke(IPC.hubSettingsUpdate, change),

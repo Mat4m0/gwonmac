@@ -8,6 +8,14 @@
  * @param {<T>(channel: string, callback: (value: T) => void) => () => void} listen
  */
 function installToolsApi(api, ipcRenderer, IPC, listen) {
+api.cartography = {
+  getMapKnowledge: (kernelSha256) =>
+    ipcRenderer.invoke(IPC.cartographyMapKnowledgeGet, kernelSha256),
+  recordMapKnowledge: (value) =>
+    ipcRenderer.invoke(IPC.cartographyMapKnowledgeRecord, value),
+  exportEvidence: (value) =>
+    ipcRenderer.invoke(IPC.cartographyEvidenceExport, value),
+};
 api.eliteTracking = {
   openWiki: (value) => ipcRenderer.invoke(IPC.eliteWikiOpen, value),
   get: (value) => ipcRenderer.invoke(IPC.eliteTrackingGet, value),

@@ -25,6 +25,11 @@ Opacity and line width have a slider and a numeric field. Slider values preview
 while dragging and save on release. Saved changes update every open game window
 without a reload when Tools and Maps are active.
 
+A Core launch installs no Maps or Compass native hooks, imports no Maps renderer
+implementation, and exposes no Maps IPC. Tools mode installs the certified hooks;
+its Maps switch then controls live activity. Turning Tools off stops activity
+immediately; restart the application to load the Core client without those hooks.
+
 Maps settings remain available when Tools are off. The page explains how to
 enable Maps and whether an application restart is needed. An illustrative
 preview shows the selected colors, border, and remaining markers without a game
@@ -154,9 +159,13 @@ tile, style, opacity, or interface scale changes. Movement within a tile and
 camera rotation update only native mesh coordinates. Optional Compass inspection
 repaints when its selected player cell changes; it does not follow every subcell
 movement in the CPU painter. The texture has a fixed
-size limit, and its input buffer is released after the native copy. The Canvas
-owns the retained mesh and material until its destructor runs. Missing native
-support or stale map identity hides Compass terrain without changing settings.
+size limit, and its input buffer is released after the native copy.
+The Canvas owns its retained mesh and model. Destruction detaches ownership
+and invalidates the native UI cache. It retains queued handles until the
+certified model-reference and graphics-phase guards permit release. A replacement
+Canvas waits before creating another pair; its native callback then retries.
+Host withdrawal and native camera updates also defer queue-held mesh writes.
+Missing native support or stale map identity hides Compass terrain without changing settings.
 Stationary Compass geometry is reused; range geometry changes only with its
 Canvas rectangle or artwork, not camera motion.
 
@@ -188,10 +197,17 @@ the visible rectangle. Small pans reuse it. Zoom moves it continuously through
 the native camera; raster detail changes in eighth-octave steps. Textures are
 bounded to 2048 pixels per edge. Hover and Shift inspection use independent
 small textures, so moving the pointer does not rebuild terrain or remaining
-markers. Closing a map withdraws its drawing; native destruction releases its
-retained handles. Graphics resets invalidate uploads, and loader disposal frees
+markers. Closing a map withdraws its drawing. Native destruction retires its
+mesh and model without closing a queued model. Later native rendering, withdrawal, or
+publishing reaps the pair once it is safe. Owner replacement and uploads wait
+while retirement is pending. Native draws also defer view-state capture and
+resubmission while that model remains queued. A closed surface can retain one
+bounded pair until its next callback or the client runtime ends. Graphics resets
+invalidate uploads, and loader disposal frees
 its detached canvases and listeners. Failed installation releases each resource
 already acquired; one failed native withdrawal does not stop other cleanup.
+The lifecycle reports a disposal failure once, clears ownership, and continues
+renderer shutdown. Failure to load optional Maps code does not stop the game.
 Missing native support hides that surface and skips its CPU painter. Compass
 geometry remains available for a healthy Mission Map projection.
 

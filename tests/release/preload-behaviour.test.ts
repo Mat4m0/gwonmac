@@ -485,6 +485,7 @@ test("every exposed capability is exercised by this file", () => {
 test("the Core preload exposes no optional Tools namespace or channel", () => {
   const { api } = load([], coreSource);
   for (const namespace of [
+    "cartography",
     "trade",
     "travelPreferences",
     "travelHistory",
@@ -498,7 +499,7 @@ test("the Core preload exposes no optional Tools namespace or channel", () => {
     );
   }
   for (const channel of Object.values(IPC).filter((channel) =>
-    /gw:(?:trade|trader|travel|buildLibrary):/u.test(channel)
+    /gw:(?:cartography|eliteWiki|eliteTracking|trade|trader|travel|buildLibrary):/u.test(channel)
   )) {
     assert.doesNotMatch(coreSource, new RegExp(channel.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"), "u"));
   }

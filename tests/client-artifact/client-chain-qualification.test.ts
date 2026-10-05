@@ -125,7 +125,7 @@ test("every shipped runtime profile reproduces the real client chain", {
           return friendProof ? deriveFriendObserverBuild(input) : null;
         },
       },
-      cartographySpike: {
+      ...(launch === "tools" ? { cartographySpike: {
         cacheRoot: join(cacheRoot, "cartography"),
         verifyLocally: async ({ wasmPath, inputSha256 }) => {
           const input = new Uint8Array(await readFile(wasmPath));
@@ -133,6 +133,7 @@ test("every shipped runtime profile reproduces the real client chain", {
           return deriveCartographySpikeBuild(input);
         },
       },
+      } : {}),
       nativeDoubleClickCacheRoot: join(cacheRoot, "double-click"),
       extendedMemoryCacheRoot: join(cacheRoot, "memory"),
       extendedMemoryEnabled: true,
@@ -153,7 +154,10 @@ test("every shipped runtime profile reproduces the real client chain", {
       const prepared = await prepare();
       assert.equal(prepared.failure, null);
       assert.equal(prepared.friendObserver.status, capabilities.travelAction ? "active" : "disabled");
-      assert.deepEqual(prepared.cartography, { status: "active" });
+      assert.deepEqual(prepared.cartography, { status: launch === "tools" ? "active" : "disabled" });
+      const finalExports = wasmEvidence(new Uint8Array(await readFile(prepared.wasmPath)))!.moduleView().exports;
+      assert.equal(finalExports.some((entry) => entry.name === "gwonmac_cartography_context_observe"), launch === "tools",
+        "Core must serve no optional Maps native hooks");
       assert.equal(prepared.nativeDoubleClick, true);
       assert.equal(prepared.extendedMemory.status, "active");
       assert.deepEqual(prepared.effectiveCapabilities, capabilities);
@@ -164,7 +168,7 @@ test("every shipped runtime profile reproduces the real client chain", {
       await writeFile(prepared.wasmPath, "stale release qualification cache");
       const rebuilt = await prepare();
       assert.equal(rebuilt.failure, null);
-      assert.deepEqual(rebuilt.cartography, { status: "active" });
+      assert.deepEqual(rebuilt.cartography, { status: launch === "tools" ? "active" : "disabled" });
       assert.equal(rebuilt.nativeDoubleClick, true);
       assert.equal(rebuilt.extendedMemory.status, "active");
       assert.equal(rebuilt.wasmSha256, prepared.wasmSha256);

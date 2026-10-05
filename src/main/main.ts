@@ -139,7 +139,6 @@ import { createLauncherWindow, prepareLauncherWindowState } from "./accounts-win
 import { MultipleAccountsController } from "./multiple-accounts-controller.js";
 import { WindowCoordinator } from "./window-coordinator.js";
 import { GameReloader } from "./game-reload.js";
-import { CartographyMapKnowledgeStore } from "./core/cartography-map-knowledge.js";
 import { updateToolsMenuItems } from "./window-menu.js";
 import { resolveAdoptedProfileStorage } from "./core/profile-storage.js";
 import {
@@ -689,9 +688,8 @@ if (primaryInstance) void app.whenReady().then(async () => {
     cachedOnly: process.env.GW_REQUIRE_CACHED_CLIENT === "1",
     enhancementCapabilities,
     enhancementProgram,
-    // Cartography is a certified product transform. The official diagnostic
-    // profile is the one intentional path that serves an untouched client.
-    cartographySpike: !diagnosticPolicy.officialClient,
+    // Maps native hooks belong to the selected Tools launch, even when hidden.
+    cartographySpike: enhancementSelection.tools,
     extendedMemoryEnabled: settings.extendedMemoryEnabled,
     diagnosticProfile,
     onProgress: setProgress,
@@ -786,6 +784,15 @@ if (primaryInstance) void app.whenReady().then(async () => {
     allowUnreadyLaunch,
   });
   await accounts.resumePendingDeletions();
+  const getClientSession = (win: BrowserWindow) => rendererClientSessions.session(
+    {
+      owner: win,
+      documentId: win.webContents.mainFrame.routingId,
+      generation: clientRuntime.active?.generation ?? 0,
+    },
+    clientRuntime.session(HOST_VERSION),
+  );
+
   const toolsRuntime = enhancementSelection.tools
     ? (await import("./tools-runtime.js")).createToolsRuntime({
         paths,
@@ -793,13 +800,12 @@ if (primaryInstance) void app.whenReady().then(async () => {
         accounts,
         preferences,
         initialSettings: settings,
+        clientFingerprint: () => clientRuntime.active?.clientFingerprint,
+        getClientSession,
       })
     : null;
   applyToolsSettings = toolsRuntime?.applySettings ?? null;
   await toolsRuntime?.applySettings(settings);
-  const cartographyMapKnowledge = new CartographyMapKnowledgeStore(
-    paths.cartographyMapKnowledge,
-  );
 
   launcherOrchestrator = new LauncherOrchestrator({
     accounts,
@@ -995,18 +1001,6 @@ if (primaryInstance) void app.whenReady().then(async () => {
     getSnapshotMetadata: () => clientRuntime.snapshotMetadata(),
     getSettings: () => preferences.getSettings(),
     updateSettings: (patch) => preferences.updateRendererSettings(patch),
-    getCartographyMapKnowledge: (kernelSha256) => {
-      const fingerprint = clientRuntime.active?.clientFingerprint;
-      return fingerprint
-        ? cartographyMapKnowledge.get(fingerprint, kernelSha256)
-        : Promise.resolve([]);
-    },
-    recordCartographyMapKnowledge: (value) => {
-      const fingerprint = clientRuntime.active?.clientFingerprint;
-      return fingerprint
-        ? cartographyMapKnowledge.record(fingerprint, value)
-        : Promise.resolve([]);
-    },
     setDiagnosticProfile: async (profile) => {
       diagnosticProfile = await saveDiagnosticProfile(
         paths.diagnosticProfile,
@@ -1016,14 +1010,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     },
     confirmClientHealthy: (token) =>
       clientRuntime.confirmCandidateHealthy(token),
-    getClientSession: (win) => rendererClientSessions.session(
-      {
-        owner: win,
-        documentId: win.webContents.mainFrame.routingId,
-        generation: clientRuntime.active?.generation ?? 0,
-      },
-      clientRuntime.session(HOST_VERSION),
-    ),
+    getClientSession,
     recordClientFeatureFailure: (win, features) => {
       rendererClientSessions.recordFailures(
         {
