@@ -183,6 +183,24 @@ test('exact build has a visible target and does not apply while typing', async (
   await expect(page.locator('#hub')).not.toBeVisible();
 });
 
+test('preview pane is reserved only when a row can fill it', async ({ page }) => {
+  await page.goto('/?hub');
+  const search = page.locator('.hub-search input');
+  const preview = page.locator('.hub-preview');
+  const previewHeight = () => preview.evaluate(element => Math.round(element.getBoundingClientRect().height));
+  await search.fill('team');
+  const mixed: number[] = [];
+  for (let row = 0; row < 5; row += 1) {
+    mixed.push(await previewHeight());
+    if (row === 0) await expect(preview).toBeHidden();
+    await search.press('ArrowDown');
+  }
+  expect(mixed).toEqual([144, 144, 144, 144, 144]);
+  await search.fill('build mo');
+  await expect(preview).toBeHidden();
+  expect(await previewHeight()).toBe(0);
+});
+
 test('team preflight is inline and an interruption is not reported as success', async ({ page }) => {
   await page.goto('/?hub');
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');

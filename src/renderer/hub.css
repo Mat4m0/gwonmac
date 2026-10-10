@@ -394,8 +394,8 @@
 /* Empty results keep their old list position without becoming a listbox child. */
 .hub-empty { flex:1; min-height:0; padding-inline:24px; }
 
-/* Reserve comparison space across team/build selection without shrinking the list per row. */
-.hub-results.hub-build-list ~ .hub-preview { flex:0 0 144px; height:144px; max-height:144px; }
+/* Reserve the preview for any list with a preview, so moving the selection never resizes the list. */
+.hub-results.hub-preview-list:not([hidden]) ~ .hub-preview { flex:0 0 144px; height:144px; max-height:144px; }
 .hub-build-compact { min-height:40px; padding-block:4px; grid-template-columns:34px auto minmax(0,1fr) calc(9 * var(--ui-type-caption-size)); }
 .hub-build-compact > .hub-title { grid-column:2; grid-row:1; }
 .hub-build-compact > .hub-row-type { grid-column:4; grid-row:1; }
@@ -412,7 +412,7 @@
 .hub-view .character-switch-list { scroll-padding-inline:var(--ui-space-4); }
 #hub .travel-recent[data-active],#hub .travel-favorite[data-active],#hub .travel-result[aria-selected=true],#hub .character-switch-row[data-selected=true] { position:relative; background:var(--ui-selection-fill); box-shadow:var(--ui-shadow-selected); }
 .hub-view .travel-recent[data-active]::before,.hub-view .travel-favorite[data-active]::before,.hub-view .travel-result[aria-selected=true]::before,.hub-view .character-switch-row[data-selected=true]::before { content:''; position:absolute; left:0; top:8px; bottom:8px; width:calc(var(--ui-space-1) / 2); background:var(--ui-selection-marker); }
-.hub-results.hub-build-list ~ .hub-preview[hidden] { display:block!important; visibility:hidden; }
+.hub-results.hub-preview-list:not([hidden]) ~ .hub-preview[hidden] { display:block!important; visibility:hidden; }
 
 /* Three existing query owners share one field geometry inside the Hub. */
 #hub .ui-hub-search { position:relative; display:flex; align-items:center; gap:var(--ui-space-3); margin:8px 8px 12px; padding:10px 12px; min-height:48px; flex-shrink:0; border:0; border-radius:var(--ui-radius-sm); background:var(--ui-well-fill); box-shadow:var(--ui-shadow-inset); }

@@ -786,7 +786,7 @@ export function createHub(parent: HTMLElement) {
     list.before(rates);
     const compactBuilds = !scope && !input.value.trim();
     // Reserve the preview from the complete result set, before deferred rows reach the DOM.
-    list.classList.toggle('hub-build-list', !compactBuilds && rows.some(row => !!row.skills));
+    list.classList.toggle('hub-preview-list', !compactBuilds && rows.some(row => !!row.preview));
     const paintRow = (row: HubRow, index: number) => {
       const compact = !!row.skills && compactBuilds;
       const retained = !shortcutsChanged && mounted.get(row.id)?.classList.contains('hub-build-compact') === compact && samePaint(row, previousById.get(row.id)) ? mounted.get(row.id) : undefined;
