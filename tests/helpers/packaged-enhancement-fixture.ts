@@ -146,6 +146,7 @@ export const TARGET_ONLY: EnhancementCapabilities = Object.freeze({
     nativeHudRendering: false,
     resignAction: false,
     whisperChat: false,
+    chatPrint: false,
 });
 export const TOOLBOX_PROGRAM_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
@@ -168,6 +169,7 @@ export const TOOLBOX_PROGRAM_CAPABILITIES: EnhancementCapabilities = Object.free
     nativeHudRendering: false,
     resignAction: false,
     whisperChat: false,
+    chatPrint: false,
 });
 export const PRODUCT_TOOLS_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
@@ -190,6 +192,7 @@ export const PRODUCT_TOOLS_CAPABILITIES: EnhancementCapabilities = Object.freeze
     nativeHudRendering: false,
     resignAction: false,
     whisperChat: false,
+    chatPrint: false,
 });
 export const TARGET_OFF_PRODUCT_CAPABILITIES: EnhancementCapabilities = Object.freeze({
   nativeCursor: true,
@@ -212,6 +215,7 @@ export const TARGET_OFF_PRODUCT_CAPABILITIES: EnhancementCapabilities = Object.f
     nativeHudRendering: false,
     resignAction: false,
     whisperChat: false,
+    chatPrint: false,
 });
 export const CONFIG_BYTES =
   ENHANCEMENT_CONFIG_WORD_COUNT * Uint32Array.BYTES_PER_ELEMENT;

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { CHARACTER_DETAILS, CHAT_FILTERS } from "@shared/setting-copy";
+import { CHARACTER_DETAILS, CHAT_FILTERS, REMINDER_GROUPS, REMINDER_SOUND, REMINDER_TIMING } from "@shared/setting-copy";
 import { DEFAULT_ALCOHOL_TIMER_POSITION } from "@shared/alcohol-timer";
 import { computed, ref } from "vue";
 import { GLOBAL_TOOLS, type GlobalTool, type LauncherNativeApi, type LauncherSettingsPatch, type LauncherSnapshot } from "@shared/launcher-contracts";
@@ -23,6 +23,9 @@ async function perform(action: () => Promise<unknown> | undefined, nativeSave = 
   }
   catch { message.value = "This setting could not be saved. Try again."; }
 }
+// With no group or no timing chosen, Reminders stays on but prints nothing.
+const remindersSilent = computed(() => !REMINDER_GROUPS.some(group => props.snapshot.settings[group.key])
+  || !REMINDER_TIMING.some(timing => props.snapshot.settings[timing.key]));
 function customColor(value: string) {
   if (isSkillCooldownCustomHex(value)) void perform(() => props.save({ skillCooldownColor: { kind: "custom", value } }));
 }
@@ -54,6 +57,16 @@ function customColor(value: string) {
         <div v-if="tool === 'chat-filters'" class="chat-filter-details">
           <label v-for="filter in CHAT_FILTERS" :key="filter.key"><span>{{ filter.label }}</span><input type="checkbox" :checked="snapshot.settings[filter.key]" @change="perform(() => save({ [filter.key]: ($event.target as HTMLInputElement).checked }))" /></label>
         </div>
+        <div v-if="tool === 'reminders'" class="reminder-details">
+          <fieldset><legend>Remind me about</legend>
+            <label v-for="group in REMINDER_GROUPS" :key="group.key"><span>{{ group.label }}<small>{{ group.detail }}</small></span><input type="checkbox" :checked="snapshot.settings[group.key]" @change="perform(() => save({ [group.key]: ($event.target as HTMLInputElement).checked }))" /></label>
+          </fieldset>
+          <fieldset><legend>When</legend>
+            <label v-for="timing in REMINDER_TIMING" :key="timing.key"><span>{{ timing.label }}</span><input type="checkbox" :checked="snapshot.settings[timing.key]" @change="perform(() => save({ [timing.key]: ($event.target as HTMLInputElement).checked }))" /></label>
+          </fieldset>
+          <label><span>{{ REMINDER_SOUND.label }}<small>{{ REMINDER_SOUND.detail }}</small></span><input type="checkbox" :checked="snapshot.settings[REMINDER_SOUND.key]" @change="perform(() => save({ [REMINDER_SOUND.key]: ($event.target as HTMLInputElement).checked }))" /></label>
+          <p v-if="remindersSilent" class="reminder-note">Choose at least one item and one time, or no reminder appears.</p>
+        </div>
         <template v-if="tool === 'skill-cooldowns'">
           <label><span>Timer color</span><select :value="snapshot.settings.skillCooldownColor.kind === 'preset' ? snapshot.settings.skillCooldownColor.preset : 'custom'" @change="perform(() => save({ skillCooldownColor: ($event.target as HTMLSelectElement).value === 'custom' ? { kind: 'custom', value: '#e35a4f' } : { kind: 'preset', preset: ($event.target as HTMLSelectElement).value as typeof SKILL_COOLDOWN_PRESETS[number] } }))"><option v-for="preset in SKILL_COOLDOWN_PRESETS" :key="preset" :value="preset">{{ preset }}</option><option value="custom">Custom</option></select></label>
           <div v-if="snapshot.settings.skillCooldownColor.kind === 'custom'" class="setting-row"><span>Custom timer color</span><ColorControl label="Custom timer color" :value="skillCooldownCssColor(snapshot.settings.skillCooldownColor)" @change="customColor" /></div>
@@ -68,8 +81,13 @@ function customColor(value: string) {
 .feature-setting { margin-bottom: 0; }
 .tools-state { margin: 0 0 16px; font-size: 14px; }
 .character-details label,
-.chat-filter-details label { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; }
+.chat-filter-details label,
+.reminder-details label { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; }
 .feature-details { padding: 0 0 16px; }
+.reminder-details fieldset { margin: 0; padding: 0; border: 0; }
+.reminder-details legend { padding: 12px 0 0; font-size: 13px; font-weight: 600; }
+.reminder-details label small { display: block; }
+.reminder-note { margin: 0 0 16px; font-size: 14px; }
 .feature-details button + button { margin-left: 8px; }
 .feature-details p { margin-bottom: 0; }
 </style>

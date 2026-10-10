@@ -38,6 +38,7 @@ function generation(wasmPath: string, size: number): ClientGeneration {
         nativeHudRendering: { status: "off" },
         resignAction: { status: "off" },
         whisperChat: { status: "off" },
+        chatPrint: { status: "off" },
       },
     },
     extendedMemory: supported

@@ -120,7 +120,8 @@ every account. The launcher exposes:
 - **Target Distance** — show distance to the selected target in PvE;
 - **Skill Key Labels** — label the eight skill slots with your controls;
 - **Skill Cooldowns** — show numeric recharge timers with a preset or custom color;
-- **Effect Timers** — show exact remaining time on your own native Effects icons in PvE.
+- **Effect Timers** — show exact remaining time on your own native Effects icons in PvE;
+- **Reminders** — a `[gwonmac]` line in your own chat a minute before a con, pcon or your alcohol runs out, and when it has. Choose cons, pcons and alcohol, the two times, and an optional chime. Only you see these lines.
 
 Quick Travel keeps a reviewed current outpost visible and disabled in its small
 catalogue, even when a character was ferried there without unlocking map travel.

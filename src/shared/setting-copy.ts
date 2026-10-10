@@ -49,6 +49,18 @@ export const CHAT_FILTERS = [
   { key: "chatFilterTitleAchievements", label: "Hide player title achievements" },
 ] as const;
 
+/** Reminders options, shown under that tool: what to remind about, when, and how. */
+export const REMINDER_GROUPS = [
+  { key: "reminderCons", label: "Cons", detail: "Essence of Celerity, Grail of Might, Armor of Salvation" },
+  { key: "reminderPcons", label: "Pcons", detail: "Cupcakes, candies, Rock Candy, War Supplies, Lunar Blessing and more" },
+  { key: "reminderAlcohol", label: "Alcohol", detail: "An estimate, so its lines say \"about\"" },
+] as const;
+export const REMINDER_TIMING = [
+  { key: "reminderBeforeEnd", label: "1 minute before it runs out" },
+  { key: "reminderAtEnd", label: "When it has run out" },
+] as const;
+export const REMINDER_SOUND = { key: "reminderSound", label: "Play a sound", detail: "One short chime, even when several reminders arrive together" } as const;
+
 /** The full note for a setting: its description, then when it applies. */
 export function settingDetail(copy: Copy): string {
   return [copy.detail, SETTING_APPLIES_NOTE[copy.applies]].filter(Boolean).join(" ");

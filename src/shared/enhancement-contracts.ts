@@ -222,7 +222,7 @@ export const ENHANCEMENT_CAPABILITY_FIELDS = Object.freeze(
 export type EnhancementCapabilities = Readonly<Record<EnhancementCapability, boolean>>;
 
 const MAX_CAPABILITY_MASK = (1 << ENHANCEMENT_CAPABILITY_FIELDS.length) - 1;
-const CAPABILITY_PROFILE = /^features-([0-9a-f]{2,5})$/;
+const CAPABILITY_PROFILE = /^features-([0-9a-f]{2,6})$/;
 
 /** A compact transform identity whose hex mask follows the registry order. */
 export type EnhancementCapabilityProfile = `features-${string}`;
@@ -376,7 +376,7 @@ export const ENHANCEMENT_CAPABILITY_PRESETS = Object.freeze({
   // Developer-only session: exact player effects plus the already-certified
   // roster projection needed to correlate later party-effect evidence.
   effectObserver: capabilitiesFromMask(0xc204),
-  all: capabilitiesFromMask(0xfffff),
+  all: capabilitiesFromMask(0x1fffff),
 });
 
 /** The two capability sets shipped by Core and Tools release launches. */
@@ -391,7 +391,7 @@ export {
   ENHANCEMENT_LAYOUT_WORD_COUNT,
   ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT,
 } from "./enhancement-config.js";
-export const ENHANCEMENT_TRANSFORM_ABI = 71;
+export const ENHANCEMENT_TRANSFORM_ABI = 72;
 
 export const ENHANCEMENT_CHAT_FILTER_MASKS = Object.freeze({
   allyDrops: 1,
