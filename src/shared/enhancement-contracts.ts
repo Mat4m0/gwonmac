@@ -197,6 +197,16 @@ const CAPABILITY_DEFINITIONS = Object.freeze([
     configOwners: [],
     hooks: [],
   },
+  {
+    // Display-only: the current character's mission, vanquish and
+    // Cartographer progress plus the static AreaInfo rows the Hub derives
+    // its lists from. It never gains a command export.
+    id: "progressObservation",
+    requiresAll: ["playRegionObservation"],
+    requiresAny: [],
+    configOwners: ["observation", "progress"],
+    hooks: [],
+  },
 ] as const);
 for (const contract of CAPABILITY_DEFINITIONS) {
   Object.freeze(contract.requiresAll);
@@ -295,6 +305,7 @@ export const NO_ENHANCEMENT_CAPABILITIES: EnhancementCapabilities = Object.freez
   alcoholObservation: false,
   nativeHudRendering: false,
   chatPrint: false,
+  progressObservation: false,
 });
 
 function isExactBooleanRecord<Key extends string>(
@@ -340,6 +351,7 @@ export function parseEnhancementCapabilities(
     alcoholObservation: value.alcoholObservation,
     nativeHudRendering: value.nativeHudRendering,
     chatPrint: value.chatPrint,
+    progressObservation: value.progressObservation,
   });
 }
 
@@ -376,7 +388,7 @@ export const ENHANCEMENT_CAPABILITY_PRESETS = Object.freeze({
   // Developer-only session: exact player effects plus the already-certified
   // roster projection needed to correlate later party-effect evidence.
   effectObserver: capabilitiesFromMask(0xc204),
-  all: capabilitiesFromMask(0x1fffff),
+  all: capabilitiesFromMask(0x3fffff),
 });
 
 /** The two capability sets shipped by Core and Tools release launches. */
@@ -391,7 +403,7 @@ export {
   ENHANCEMENT_LAYOUT_WORD_COUNT,
   ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT,
 } from "./enhancement-config.js";
-export const ENHANCEMENT_TRANSFORM_ABI = 72;
+export const ENHANCEMENT_TRANSFORM_ABI = 73;
 
 export const ENHANCEMENT_CHAT_FILTER_MASKS = Object.freeze({
   allyDrops: 1,

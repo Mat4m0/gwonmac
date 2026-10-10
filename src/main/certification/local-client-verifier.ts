@@ -21,6 +21,7 @@ import { deriveNativeHudRendering, provesNativeHudRendering } from "./native-hud
 import { deriveWhisperChat } from "./enhancement-whisper-proof.js";
 import { deriveResignAction } from "./enhancement-resign-proof.js";
 import { deriveChatPrint } from "./enhancement-chat-filter-proof.js";
+import { deriveProgressObservation } from "./enhancement-progress-proof.js";
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import {
@@ -722,6 +723,13 @@ function deriveEnhancementBuild(
       ))
     : null;
   const includeChatPrint = chatPrint != null && includePlayRegion;
+  // Display-only: a moved or changed accessor withdraws only progressObservation.
+  const progressObservation = requestedCapabilities.progressObservation
+    ? deriveProgressObservation(context.moduleView(), ENHANCEMENT_BUILDS) : null;
+  // WorldContext comes from the observation layout another feature located.
+  const includeProgress = progressObservation !== null && includePlayRegion
+    && (includeTarget || includeParty || includeTravel || includeXunlai || includeChatFiltering
+      || includePlayerEffects || skillbar.includeCooldown);
   const resignAction = requestedCapabilities.resignAction
     ? deriveResignAction(context.moduleView()) : null;
   const includeResign = resignAction !== null && includePlayRegion
@@ -762,6 +770,8 @@ function deriveEnhancementBuild(
       ? { whisperChat: changedFeature("whisperChat", "whisper.native-chat-path") } : {}),
     ...(requestedCapabilities.resignAction && !includeResign
       ? { resignAction: changedFeature("resignAction", "resign.native-chat-path") } : {}),
+    ...(requestedCapabilities.progressObservation && !includeProgress
+      ? { progressObservation: changedFeature("progressObservation", "progress.field-accessors") } : {}),
     ...(requestedCapabilities.chatPrint && !includeChatPrint
       ? { chatPrint: changedFeature("chatPrint", "chat.print-validator") } : {}),
     ...(requestedCapabilities.preGameControls && !includePreGame
@@ -940,6 +950,7 @@ function deriveEnhancementBuild(
     ...(includeWhispers ? { whisperChat: whisperChat! } : {}),
     ...(includeResign ? { resignAction: resignAction! } : {}),
     ...(includeChatPrint ? { chatPrint: chatPrint! } : {}),
+    ...(includeProgress ? { progressObservation: progressObservation! } : {}),
     ...(includeWhispers || includeResign || includeChatPrint || includeTeam || includeTravel || includeXunlai || includeCharacterSwitch
       ? { gameThread: locatedLocal!.gameThread! }
       : {}),
@@ -984,6 +995,7 @@ function deriveEnhancementBuild(
     resignAction: includeResign,
     whisperChat: includeWhispers,
     chatPrint: includeChatPrint,
+    progressObservation: includeProgress,
   });
   const effective = intersectEnhancementCapabilities(requestedCapabilities, maximum);
   const profile = enhancementCapabilityProfile(effective);

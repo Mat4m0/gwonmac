@@ -450,6 +450,11 @@ function resolveEnhancementTransform(
       }
     }
   }
+  if (capabilities.progressObservation) {
+    for (const [name, fact] of Object.entries(build.progressObservation!.accessors)) {
+      resolveCertifiedHook(`progress ${name} accessor`, fact, "certified identity");
+    }
+  }
   const packetSender = capabilities.teamApply
     ? resolveHook(
         "traced packet sender",

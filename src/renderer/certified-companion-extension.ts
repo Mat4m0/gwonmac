@@ -93,6 +93,7 @@ export type PreparedCompanionExtension = Readonly<{
     friends: KernelRegion;
     whispers?: KernelRegion;
     alcohol?: KernelRegion;
+    progress?: KernelRegion;
     friendRoot: number;
   }>;
   activate(context: CompanionExtensionActivation): CompanionExtensionSession;

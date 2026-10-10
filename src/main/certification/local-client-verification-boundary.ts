@@ -155,6 +155,7 @@ function featureFailuresFromVerdicts(
   const whisperChat = refusalForFeature("whisperChat", verdicts.whisperChat);
   const resignAction = refusalForFeature("resignAction", verdicts.resignAction);
   const chatPrint = refusalForFeature("chatPrint", verdicts.chatPrint);
+  const progressObservation = refusalForFeature("progressObservation", verdicts.progressObservation);
   const chatAliases = refusalForFeature("chatAliases", verdicts.chatAliases);
   const chatFiltering = refusalForFeature(
     "chatFiltering",
@@ -211,6 +212,7 @@ function featureFailuresFromVerdicts(
     || whisperChat === null
     || resignAction === null
     || chatPrint === null
+    || progressObservation === null
   ) return null;
   return Object.freeze({
     ...(nativeCursor ? { nativeCursor } : {}),
@@ -234,6 +236,7 @@ function featureFailuresFromVerdicts(
     ...(alcoholObservation ? { alcoholObservation } : {}),
     ...(resignAction ? { resignAction } : {}),
     ...(chatPrint ? { chatPrint } : {}),
+    ...(progressObservation ? { progressObservation } : {}),
   });
 }
 
@@ -703,6 +706,12 @@ function matchesPlayerSkillbarObservation(
     && isDeepStrictEqual(candidate.partyLayout, expected.partyLayout);
 }
 
+/** Accessor identities with the build-specific function index removed. */
+function withoutIndices(accessors: object): unknown {
+  return Object.fromEntries(Object.entries(accessors)
+    .map(([name, accessor]) => [name, { ...(accessor as object), functionIndex: 0 }]));
+}
+
 function isAutomaticSemanticBuild(
   value: unknown,
   inputSha256: string,
@@ -731,6 +740,12 @@ function isAutomaticSemanticBuild(
     || !isIndex(build.chatPrint.validator?.functionIndex)
     || !ENHANCEMENT_BUILDS.some(baseline => baseline.chatPrint !== undefined && isDeepStrictEqual(
       { ...build.chatPrint!.validator, functionIndex: 0 }, { ...baseline.chatPrint.validator, functionIndex: 0 })))) return false;
+  // Accessors may move between builds; their exact bodies and layout may not.
+  if (build.progressObservation !== undefined && (!build.playRegionObservation || !build.observationBase
+    || !ENHANCEMENT_BUILDS.some(baseline => baseline.progressObservation !== undefined
+      && isDeepStrictEqual(build.progressObservation!.layout, baseline.progressObservation.layout)
+      && isDeepStrictEqual(withoutIndices(build.progressObservation!.accessors),
+        withoutIndices(baseline.progressObservation.accessors))))) return false;
   if (build.quickItemMove !== undefined && !ENHANCEMENT_BUILDS.some(baseline =>
     baseline.sha256 === build.sha256
     && isDeepStrictEqual(build.quickItemMove, baseline.quickItemMove))) return false;
