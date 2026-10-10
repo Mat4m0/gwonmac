@@ -32,7 +32,7 @@ test("timer dragging, cancellation, stable corner, locking and reload", async ()
     const { page } = fixture;
     await showTimer(page);
     const root = page.locator("#status-bar");
-    const handle = root.getByRole("button", { name: /^Move alcohol/ });
+    const handle = root.getByRole("button", { name: /^Move status bar/ });
     const initial = (await root.boundingBox())!;
     await expect(root).toContainText("2:03");
     const canvasBounds = (await page.locator("#canvas").boundingBox())!;
@@ -91,7 +91,7 @@ test("timer picks the bottom-right corner and preserves gaps through resize and 
     await showTimer(page);
     await page.evaluate(() => window.alcoholFixture.setSettings({ corner: "top-left", x: 4, y: 58, locked: false }, true));
     const root = page.locator("#status-bar");
-    const handle = root.getByRole("button", { name: /^Move alcohol/ });
+    const handle = root.getByRole("button", { name: /^Move status bar/ });
     const bounds = (await page.locator("#canvas").boundingBox())!;
     const initial = (await root.boundingBox())!;
     const left = bounds.x + bounds.width - initial.width - 8;
@@ -120,6 +120,31 @@ test("timer picks the bottom-right corner and preserves gaps through resize and 
       window.alcoholFixture.setAlcohol({ status: "ready", sequence: 4, gameTimer: 0, remainingMs: 0 });
     });
     expect(await root.boundingBox()).toEqual(smaller);
+  } finally { await closeOffline(fixture); }
+});
+
+test("consumables join the row in a fixed order and turn amber in their last minute", async () => {
+  const fixture = await launchOffline("gw-status-consumables-");
+  try {
+    const { page } = fixture;
+    await showTimer(page);
+    const root = page.locator("#status-bar");
+    const effects = (gameTimer: number) => page.evaluate(gameTimer => window.alcoholFixture.setEffects({
+      status: "ready", sequence: 2, generation: 1, gameTimer, playerAgentId: 7, effects: [
+        { effectId: 1, skillId: 2521, attributeLevel: 0, maintainerAgentId: 0, durationMs: 1_800_000, appliedAtGameMs: 0 },
+        { effectId: 2, skillId: 2522, attributeLevel: 0, maintainerAgentId: 0, durationMs: 1_800_000, appliedAtGameMs: 60_000 },
+      ] }), gameTimer);
+    await effects(60_000);
+    await expect(root).toHaveText(/^2:03\s*Essence\s*30:00\s*Grail\s*29:00$/, { useInnerText: true });
+    await page.screenshot({ path: test.info().outputPath("status-bar-consumables.png") });
+    await effects(1_750_000);
+    const grail = root.locator("[title='Grail of Might']");
+    await expect(grail).toHaveCSS("color", "rgb(229, 189, 117)");
+    await expect(root.locator("[title='Essence of Celerity']")).toHaveCSS("color", "rgb(234, 220, 194)");
+    await page.evaluate(() => window.alcoholFixture.setAlcohol({ status: "ready", sequence: 4, gameTimer: 0, remainingMs: 0 }));
+    await expect(root).toHaveText(/^Essence\s*1:50\s*Grail\s*0:50$/, { useInnerText: true });
+    await effects(1_900_000);
+    await expect(root).toBeHidden();
   } finally { await closeOffline(fixture); }
 });
 

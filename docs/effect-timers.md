@@ -88,11 +88,22 @@ No alcohol state is saved to disk.
 The renderer places a small beer icon and `m:ss` near the game viewport’s
 top-left corner by default, below one standard Effects row. Its position stays
 fixed when Effects icons appear, disappear, or move.
-The readout turns amber in the last 15 seconds and disappears at zero. There
-are no sounds or animations. Locked mode passes all pointer input to the game.
+The readout turns amber in the last 15 seconds and disappears at zero.
+
+Running consumables follow the alcohol readout in the same row, each as a short
+name and `m:ss`: Essence of Celerity, Grail of Might, Armor of Salvation, and
+the common pcons (Birthday Cupcake, War Supplies, Golden Egg, Candy Apple, Candy
+Corn, Slice of Pumpkin Pie, Drake Kabob, Bowl of Skalefin Soup, Pahnai Salad,
+the three Rock Candies, and Lunar Blessing). Their times come from the same
+player-effects snapshot as Effect Timers, so the Status bar estimates nothing.
+The order is fixed, so chips never trade places. A chip turns amber in its last
+minute and disappears when its effect ends or is removed; loading hides all
+chips. The row is hidden while nothing runs.
+
+There are no sounds or animations. Locked mode passes all pointer input to the game.
 
 Enable **Settings → Tools → Status bar**, then select **Adjust position**.
-An unlocked placeholder permits adjustment while sober. Drag the readout and
+An unlocked placeholder permits adjustment while nothing runs. Drag the readout and
 select its lock, or focus it and use arrows, Shift+arrows, and Enter. Escape,
 lost pointer capture, or window blur cancels a drag. **Reset position** restores
 the initial placement and lock. Like the chat icon, dragging picks the nearest
@@ -104,9 +115,9 @@ preference is shared by the launcher's game windows. Earlier developer-build
 offsets convert once at their current visible position when geometry is available.
 
 Automated evidence covers native countdown corrections, clock wrap, identity
-changes, notification rejection, snapshot validation, dragging, cancellation,
+changes, notification rejection, snapshot validation, consumable chips, dragging, cancellation,
 locking, saved offsets, and launcher controls. A Developer Build still needs
-live QA for real drink types, map travel, visual alignment, and input feel.
+live QA for real drink types, a real consumable in the effects feed, map travel, visual alignment, and input feel.
 
 ## Native drawing
 

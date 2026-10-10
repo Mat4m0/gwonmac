@@ -353,14 +353,15 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
   });
   const snapshot = () => source.snapshot;
   const policy = () => snapshot().policy;
-  const alcoholRequested = () => capabilities.alcoholObservation && snapshot().settings.gwonmacTools && snapshot().settings.statusBarEnabled;
+  const statusBarRequested = () => snapshot().settings.gwonmacTools && snapshot().settings.statusBarEnabled;
+  const alcoholRequested = () => capabilities.alcoholObservation && statusBarRequested();
   const playerEffectsActive = () => capabilities.playerEffectObservation
     && (program === "effect-observer"
       || (((capabilities.nativeHudRendering && policy().effectTimers)
-        || (alcoholRequested() && policy().statusBar)) && capabilities.effectIconGeometry));
+        || (statusBarRequested() && policy().statusBar)) && capabilities.effectIconGeometry));
   const effectIconsActive = () => capabilities.effectIconGeometry
     && (program === "effect-observer" || (capabilities.nativeHudRendering && policy().effectTimers)
-      || (alcoholRequested() && policy().statusBar));
+      || (statusBarRequested() && policy().statusBar));
   const playRegion = () => snapshot().playRegion;
   let companionState: CompanionSnapshot | null = null;
   let party: ToolboxObservation | null = null;
@@ -380,9 +381,8 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
   let aliasEnabled: boolean | null = null;
   let lastTrace = "";
   let observingFriends = false;
-  let alcoholOverlay: ReturnType<typeof createStatusBarOverlay> | null = null;
-  let unsubscribeAlcohol: (() => void) | null = null;
-  let unsubscribeAlcoholGeometry: (() => void) | null = null;
+  let statusBar: ReturnType<typeof createStatusBarOverlay> | null = null;
+  let unsubscribeStatusBar: (() => void)[] = [];
   let effectOverlay: ReturnType<typeof createEffectTimerOverlayConsumer> | null = null;
   let unsubscribeEffects: (() => void) | null = null;
   let unsubscribeEffectIcons: (() => void) | null = null;
@@ -424,7 +424,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
       () => { unsubscribeEffects?.(); unsubscribeEffects = null; },
       () => { unsubscribeEffectIcons?.(); unsubscribeEffectIcons = null; },
       () => { effectOverlay?.dispose(); effectOverlay = null; },
-      () => { unsubscribeAlcohol?.(); unsubscribeAlcoholGeometry?.(); alcoholOverlay?.dispose(); alcoholOverlay = null; },
+      () => { for (const unsubscribe of unsubscribeStatusBar) unsubscribe(); unsubscribeStatusBar = []; statusBar?.dispose(); statusBar = null; },
       () => hud?.dispose(),
       () => { resign?.dispose(); },
       () => { partyInvite?.dispose(); partyInvite = null; },
@@ -475,10 +475,10 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
     if (!(canvas instanceof HTMLCanvasElement)) {
       throw new Error("Enhancement effect overlay target is missing");
     }
-    if (capabilities.alcoholObservation) {
-      alcoholOverlay = createStatusBarOverlay(document.body, canvas, statusBarPosition => window.gwNative.settings.set({ statusBarPosition }));
-      unsubscribeAlcohol = alcohol.subscribe(alcoholOverlay.setAlcohol);
-      unsubscribeAlcoholGeometry = effectIcons.subscribe(alcoholOverlay.setGeometry);
+    if (capabilities.alcoholObservation || capabilities.playerEffectObservation) {
+      statusBar = createStatusBarOverlay(document.body, canvas, statusBarPosition => window.gwNative.settings.set({ statusBarPosition }));
+      unsubscribeStatusBar = [alcohol.subscribe(statusBar.setAlcohol),
+        playerEffects.subscribe(statusBar.setEffects), effectIcons.subscribe(statusBar.setGeometry)];
     }
     if (!hud) return;
     effectOverlay = createEffectTimerOverlayConsumer(document.body, canvas, hud);
@@ -593,7 +593,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
     syncTarget();
     skills.sync(snapshot().settings, policy());
     alcohol.setActive(alcoholRequested());
-    alcoholOverlay?.setSettings(snapshot().settings.statusBarPosition, policy().statusBar && alcoholRequested());
+    statusBar?.setSettings(snapshot().settings.statusBarPosition, policy().statusBar && statusBarRequested());
     playerEffects.setActive(playerEffectsActive());
     effectIcons.setActive(effectIconsActive());
     effectOverlay?.setEnabled(policy().effectTimers && effectIconsActive());

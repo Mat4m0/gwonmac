@@ -1,11 +1,13 @@
 /**
- * Owns the quiet alcohol readout and explicit positioning mode. Its saved
- * position keeps a fixed distance from the nearest game-window corner.
+ * Owns the quiet row of timers (alcohol first, then consumables) and its
+ * explicit positioning mode. Its saved position keeps a fixed distance from
+ * the nearest game-window corner.
  */
 import { DEFAULT_STATUS_BAR_POSITION, formatStatusTimer, type StatusBarPosition } from "../shared/status-bar.js";
 import { captureCornerPosition, restoreCornerPosition, isCornerPosition } from "../shared/corner-position.js";
 import type { AlcoholState } from "./companion-alcohol-snapshot.js";
-import type { CompanionEffectIconState } from "./companion-effect-snapshot.js";
+import type { CompanionEffectIconState, CompanionPlayerEffectState } from "./companion-effect-snapshot.js";
+import { activeConsumables, CONSUMABLE_WARNING_MS } from "./status-bar-consumables.js";
 import { createNonActivatingSurface } from "./non-activating-surface.js";
 
 export function legacyStatusBarAnchor(geometry: CompanionEffectIconState, bounds: DOMRect) {
@@ -28,11 +30,11 @@ export function createStatusBarOverlay(parent: HTMLElement, canvas: HTMLCanvasEl
   const view = document.defaultView!;
   const root = document.createElement("div");
   root.id = "status-bar";
-  root.style.cssText = "position:fixed;width:max-content;display:none;align-items:center;gap:5px;z-index:4;pointer-events:none;color:#eadcc2;font:500 14px/1 system-ui,sans-serif;font-variant-numeric:tabular-nums;text-shadow:0 1px 2px #000,0 0 3px #000;user-select:none";
+  root.style.cssText = "position:fixed;width:max-content;display:none;align-items:center;z-index:4;pointer-events:none;color:#eadcc2;font:500 14px/1 system-ui,sans-serif;font-variant-numeric:tabular-nums;text-shadow:0 1px 2px #000,0 0 3px #000;user-select:none";
   const handle = document.createElement("button");
   handle.type = "button";
   handle.setAttribute("aria-label", "Move status bar. Drag or use arrow keys. Shift moves farther. Enter locks. Escape cancels.");
-  handle.style.cssText = "display:flex;align-items:center;gap:6px;color:inherit;font:inherit;text-shadow:inherit;padding:5px 4px;border:0;border-radius:3px;background:transparent;touch-action:none";
+  handle.style.cssText = "display:flex;align-items:center;gap:12px;color:inherit;font:inherit;text-shadow:inherit;padding:5px 4px;border:0;border-radius:3px;background:transparent;touch-action:none";
   const mug = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   mug.setAttribute("viewBox", "0 0 512 512"); mug.setAttribute("width", "16"); mug.setAttribute("height", "16"); mug.setAttribute("aria-hidden", "true");
   const mugPath = document.createElementNS(mug.namespaceURI, "path");
@@ -40,9 +42,26 @@ export function createStatusBarOverlay(parent: HTMLElement, canvas: HTMLCanvasEl
   mugPath.setAttribute("d", "M392 208h-24v-5.74A63.93 63.93 0 0 0 321.65 96a111 111 0 0 0-27.59-47.29A108.62 108.62 0 0 0 216 16c-29.91 0-57.78 12.28-79 34.68a56 56 0 0 0-67.51 77.54A63.91 63.91 0 0 0 80 231.39V440a56.06 56.06 0 0 0 56 56h176a56.06 56.06 0 0 0 56-56v-8h24a72.08 72.08 0 0 0 72-72v-80a72.08 72.08 0 0 0-72-72M176 416a16 16 0 0 1-32 0V256a16 16 0 0 1 32 0Zm64 0a16 16 0 0 1-32 0V256a16 16 0 0 1 32 0Zm64 0a16 16 0 0 1-32 0V256a16 16 0 0 1 32 0Zm16-224c-8.33 0-20.55-5.18-26.69-11.31A16 16 0 0 0 282 176H160a16 16 0 0 0-15 10.53c-6.83 18.68-23.6 21.47-33 21.47a32 32 0 0 1 0-64c.09 0 9.12.34 16.4 5.8a16 16 0 1 0 19.2-25.6A63.7 63.7 0 0 0 112 112a63.6 63.6 0 0 0-14 1.57A24 24 0 0 1 120 80a23.78 23.78 0 0 1 19.38 9.84a51.4 51.4 0 0 1 4.71 7.9A16 16 0 0 0 176 96c0-6.77-3.61-15.17-10.76-25c-.46-.63-1-1.25-1.45-1.86C178.39 55.44 196.64 48 216 48a76.86 76.86 0 0 1 55.23 23.18A80.2 80.2 0 0 1 292.61 142a16 16 0 0 0 12.73 18.71a16.3 16.3 0 0 0 3 .28a16 16 0 0 0 15.7-13a112 112 0 0 0 1.96-19.42a32 32 0 0 1-6 63.43m112 168a40 40 0 0 1-40 40h-24V240h24a40 40 0 0 1 40 40Z");
   mugPath.setAttribute("fill", "currentColor");
   mug.append(mugPath);
+  const timeStyle = "display:inline-block;min-width:4ch;text-align:right";
+  const alcoholChip = document.createElement("span");
+  alcoholChip.style.cssText = "display:flex;align-items:center;gap:6px";
   const time = document.createElement("span");
-  time.style.cssText = "display:inline-block;width:4ch;text-align:right";
-  handle.append(mug, time);
+  time.style.cssText = timeStyle;
+  alcoholChip.append(mug, time);
+  handle.append(alcoholChip);
+  // One chip per running consumable, reused while it counts down.
+  const consumableChips = new Map<number, { chip: HTMLSpanElement; time: HTMLSpanElement }>();
+  const consumableChip = (skillId: number, label: string, name: string) => {
+    const existing = consumableChips.get(skillId); if (existing) return existing;
+    const chip = document.createElement("span");
+    chip.style.cssText = "display:flex;align-items:baseline;gap:5px";
+    chip.title = name;
+    const text = document.createElement("span");
+    text.textContent = label; text.style.cssText = "font-size:12px;opacity:.8";
+    const time = document.createElement("span"); time.style.cssText = timeStyle;
+    chip.append(text, time);
+    const created = { chip, time }; consumableChips.set(skillId, created); return created;
+  };
   const lock = document.createElement("button"); lock.type = "button";
   lock.setAttribute("aria-label", "Lock status bar position");
   lock.title = "Lock position";
@@ -67,6 +86,7 @@ export function createStatusBarOverlay(parent: HTMLElement, canvas: HTMLCanvasEl
   let pendingSave = Promise.resolve();
   let geometry: CompanionEffectIconState = { status: "waiting", reason: "memory" };
   let alcohol: AlcoholState = { status: "waiting" };
+  let effects: CompanionPlayerEffectState = { status: "waiting", reason: "memory" };
   let drag: { id: number; x: number; y: number; left: number; top: number; before: StatusBarPosition } | null = null;
   const viewport = () => {
     const bounds = canvas.getBoundingClientRect();
@@ -80,14 +100,28 @@ export function createStatusBarOverlay(parent: HTMLElement, canvas: HTMLCanvasEl
   const render = () => {
     const bounds = canvas.getBoundingClientRect();
     const legacyAnchor = isCornerPosition(position) ? null : legacyStatusBarAnchor(geometry, bounds);
+    const remaining = alcohol.status === "ready" ? alcohol.remainingMs : 0;
+    const consumables = activeConsumables(effects);
     const visible = enabled && bounds.width > 0 && bounds.height > 0
       && (isCornerPosition(position) || legacyAnchor !== null)
-      && (!position.locked || (alcohol.status === "ready" && alcohol.remainingMs > 0));
+      && (!position.locked || remaining > 0 || consumables.length > 0);
     root.style.display = visible ? "flex" : "none";
     if (!visible) return;
-    const remaining = alcohol.status === "ready" ? alcohol.remainingMs : 0;
+    const amber = (warn: boolean) => warn ? "#e5bd75" : "";
+    // An unlocked row with nothing running keeps the alcohol placeholder as its handle.
+    alcoholChip.style.display = remaining === 0 && consumables.length > 0 ? "none" : "flex";
     time.textContent = remaining > 0 ? formatStatusTimer(remaining) : "—:—";
-    root.style.color = remaining > 0 && remaining <= 15_000 ? "#e5bd75" : "#eadcc2";
+    alcoholChip.style.color = amber(remaining > 0 && remaining <= 15_000);
+    const running = new Set(consumables.map(({ skillId }) => skillId));
+    for (const [skillId, { chip }] of consumableChips) {
+      if (!running.has(skillId)) { chip.remove(); consumableChips.delete(skillId); }
+    }
+    for (const { skillId, label, name, remainingMs } of consumables) {
+      const { chip, time: chipTime } = consumableChip(skillId, label, name);
+      chipTime.textContent = formatStatusTimer(remainingMs);
+      chip.style.color = amber(remainingMs <= CONSUMABLE_WARNING_MS);
+      handle.append(chip);
+    }
     handle.disabled = position.locked;
     handle.style.pointerEvents = position.locked ? "none" : "auto";
     handle.style.cursor = position.locked ? "default" : drag ? "grabbing" : "grab";
@@ -164,6 +198,7 @@ export function createStatusBarOverlay(parent: HTMLElement, canvas: HTMLCanvasEl
   view.addEventListener("blur", cancel); view.addEventListener("resize", render);
   return {
     setAlcohol(next: AlcoholState) { alcohol = next; render(); },
+    setEffects(next: CompanionPlayerEffectState) { effects = next; render(); },
     setGeometry(next: CompanionEffectIconState) { geometry = next; if (!isCornerPosition(position)) render(); },
     setSettings(next: StatusBarPosition, active: boolean) {
       const changed = !samePosition(next, receivedPosition);

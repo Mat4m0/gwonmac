@@ -19,6 +19,6 @@ export const TOOL_PRESENTATION: Record<GlobalTool, { label: string; description:
   "skill-key-labels": { label: "Skill Key Labels", description: "Show your own control labels on the eight skill slots." },
   "skill-cooldowns": { label: "Skill Cooldowns", description: "Show numeric recharge timers on the skill bar." },
   "chat-filters": { label: "Chat Filters", description: "Hide selected system notices before they enter chat." },
-  "status-bar": { label: "Status bar", description: "A quiet, movable row of timers. Shows alcohol for now. Hidden when nothing is active; amber near the end." },
+  "status-bar": { label: "Status bar", description: "A quiet, movable row of timers for alcohol, cons and pcons. Hidden when nothing runs; amber near the end." },
   "effect-timers": { label: "Effect Timers", description: "Show exact remaining time on your native Effects icons." },
 };
