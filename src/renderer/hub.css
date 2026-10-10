@@ -115,7 +115,7 @@
 .hub-rate-controls select { font:inherit; min-height:32px; }
 .hub-conversion .hub-title { white-space:normal; overflow-wrap:anywhere; }
 
-.hub-view:has(.travel-palette) { overflow:hidden; }
+.hub-view:has(.travel-palette),.hub-view:has(.progress-view) { overflow:hidden; }
 .hub-view .travel-palette { position:relative; inset:auto; width:100%; height:100%; max-height:none; transform:none; border:0; background:transparent; box-shadow:none; animation:none; font:var(--ui-type-body-size)/var(--ui-type-body-line) var(--ui-font-interface); }
 
 .hub-view .travel-header-actions { top:4px; right:8px; }

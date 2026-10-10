@@ -42,7 +42,9 @@ import { createHubGameFixture } from './hub-game-fixture';
 import { mountToolsApp } from './mount';
 import { mountWhispers } from './whispers-mount';
 import { createWhisperSession } from '../../../src/shared/whisper-session';
+import { watch } from 'vue';
 import { createHubTravel } from './hub-travel';
+import { progressFixture } from './progress-fixture';
 import { createDemoTravelHost } from './travel-host';
 import { travelDestination } from '../../../src/shared/travel';
 import { estimateMarketRates } from '../../../src/shared/market-rates';
@@ -225,6 +227,8 @@ export function mountHubFixture(target: HTMLElement) {
     },
   });
   const travel = createHubTravel(travelHost, hub, (place, leave) => askLeaveArea(hub, leaveAreaCopy('travel', place), leave));
+  // Progress follows the fixture's map, as the companion republishes it after each map change.
+  watch(() => travelHost.state.value, state => travel.updateProgress(state.status === 'ready' ? progressFixture(state.mapId) : { status: 'waiting', reason: state.reason === 'loading' ? 'loading' : 'unavailable' }), { immediate: true });
   // `?travel-load-ms=` attaches Travel late, as the game loads its lazy bundle after the Hub opened.
   const travelLoadMs = Number(params.get('travel-load-ms')) || 0;
   if (travelLoadMs) setTimeout(() => hub.attach(travel.source), travelLoadMs); else hub.attach(travel.source);

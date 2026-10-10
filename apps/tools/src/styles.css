@@ -509,6 +509,158 @@
   to { opacity: 1; filter: blur(0); transform: translate(-50%, 0); }
 }
 
+/* Progress: one goal's missing missions, areas or outposts. */
+.progress-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.progress-campaigns {
+  margin: var(--ui-space-3) var(--ui-space-4) 0;
+}
+
+.progress-here {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--ui-radius-pill);
+  background: var(--ui-accent-fill);
+}
+
+.progress-goals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--ui-space-2);
+  padding: var(--ui-space-3) var(--ui-space-4) 0;
+}
+
+.progress-goal {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-content: start;
+  gap: var(--ui-space-1) var(--ui-space-2);
+  padding: var(--ui-space-2);
+  border: 1px solid var(--ui-line-soft);
+  border-radius: var(--ui-radius);
+  background: transparent;
+  color: var(--ui-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.progress-goal:hover { background: var(--ui-hover); }
+
+.progress-goal[aria-selected="true"] {
+  border-color: var(--ui-selection-marker);
+  background: var(--ui-selection-fill);
+  color: var(--ui-selection-ink);
+}
+
+.progress-goal-name {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.progress-goal .ui-progress { grid-column: 1 / -1; }
+.progress-goal small { align-self: end; text-align: right; }
+
+.progress-goal small,
+.progress-goal-minor .progress-goal-name { color: var(--ui-text-muted); }
+
+.progress-goal-name { font-weight: var(--ui-font-weight-semibold); }
+.progress-goal-count {
+  color: var(--ui-text-bright);
+  font-size: var(--ui-font-size-lg);
+  font-variant-numeric: tabular-nums;
+}
+
+.progress-rule {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-space-3);
+  margin: var(--ui-space-2) var(--ui-space-4) 0;
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-sm);
+}
+
+.progress-rule p { margin: 0; }
+.progress-rule .ui-check { flex: none; }
+
+.progress-list {
+  flex: 1;
+  min-height: 0;
+  padding: var(--ui-space-2) var(--ui-space-4);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.progress-region {
+  margin: var(--ui-space-3) 2px var(--ui-space-1);
+  color: var(--ui-text-faint);
+  font-size: var(--ui-font-size-sm);
+  font-weight: var(--ui-font-weight-semibold);
+}
+
+.progress-region:first-child { margin-top: 0; }
+
+.progress-row {
+  width: 100%;
+  justify-content: space-between;
+  text-align: left;
+}
+
+.progress-row-name {
+  display: grid;
+  min-width: 0;
+}
+
+.progress-row-name strong {
+  overflow: hidden;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.progress-row-name small {
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-sm);
+}
+
+.progress-status {
+  flex: none;
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-sm);
+}
+
+/* Status reads in words; the colour only repeats it. */
+.progress-status[data-mark="ok"] { color: var(--ui-success); }
+.progress-status[data-mark="need"] { color: var(--ui-warning); }
+
+.progress-cartographer {
+  display: grid;
+  gap: var(--ui-space-2);
+  padding: var(--ui-space-3) var(--ui-space-4);
+}
+
+.progress-carto-row {
+  display: grid;
+  grid-template-columns: 80px 1fr 64px;
+  gap: var(--ui-space-3);
+  align-items: center;
+}
+
+.progress-carto-row strong {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.progress-empty { flex: 1; }
+
 @media (max-width: 560px) {
   .travel-palette { top: 16px; max-height: calc(100vh - 32px); }
   .travel-search {
