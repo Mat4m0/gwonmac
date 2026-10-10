@@ -654,6 +654,10 @@ test("runtime package entries and audit exceptions stay explicit", () => {
       "GHSA-86w9-cpqp-85rv",
       "GHSA-ch52-4w7c-c8xp",
       "GHSA-vfj7-8cjw-p6xm",
+      "GHSA-v5rq-49vh-5v5c",
+      "GHSA-x6jw-m9v5-85vh",
+      "GHSA-g4wm-2vf7-vfgr",
+      "GHSA-858h-whjf-mvg5",
     ],
   );
   assert.match(

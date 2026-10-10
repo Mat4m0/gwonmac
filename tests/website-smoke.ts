@@ -306,8 +306,11 @@ try {
   assert.match(html, /window\.plausible\.init\(\)/);
   assert.match(html, /Apple Silicon Macs/i);
   assert.match(html, /signed and notarized/i);
-  assert.doesNotMatch(html, /(?:60|120)\s*(?:–|-|to)?\s*(?:120\s*)?FPS/i);
-  assert.doesNotMatch(html, /(?:4K|5K)/i);
+  // Claims are checked in visible text only: hashed asset names such as
+  // `W5kLGFTm2.js` would otherwise match by chance.
+  const text = html.replace(/<(script|style)\b[\s\S]*?<\/\1>|<[^>]*>/gi, " ");
+  assert.doesNotMatch(text, /(?:60|120)\s*(?:–|-|to)?\s*(?:120\s*)?FPS/i);
+  assert.doesNotMatch(text, /\b[45]K\b/i);
 
   // Hero and final CTA.
   assert.equal(downloadLinks(html).length, 2);
