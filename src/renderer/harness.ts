@@ -826,7 +826,7 @@ Module = {
                 if (appSettings === null) throw new Error('cartography installed before settings');
                 return appSettings;
               },
-              persist: (patch) => native().settings.set(patch),
+              persist: (patch) => api.settings.set(patch),
               exportEvidence: (capture) => api.cartography.exportEvidence(capture),
               getMapKnowledge: (kernelSha256) =>
                 api.cartography.getMapKnowledge(kernelSha256),

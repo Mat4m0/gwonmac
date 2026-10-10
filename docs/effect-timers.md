@@ -143,13 +143,10 @@ each 56-unit skill icon. The stock 24-unit tile has seven transparent units abov
 and left. Their size and corner inset follow the interface scale without
 fixed pixel limits. Long chords shrink only when needed to fit the icon.
 The game's key bindings and icon artwork stay unchanged.
-Native icon destruction, disabling the feature, and graphics reset retire the
-owned drawing immediately. Retired records stop collecting and restore stock
-keycaps. Their handles remain in bounded storage while a native render reference
-or graphics flush prevents release. Native collection and later publications
-recheck retirement and release each resource once it is safe. Graphics reset
-retains the shared material and storage until all pending draws are released.
-Geometry changes and icon replacements report busy until retained models are safe.
-A native cache rebuild reuses a queued HUD draw with its existing matrices and
-geometry. It captures new state only after the render reference drains.
+Native icon destruction, disabling the feature, and graphics reset hide the
+drawing at once and restore the stock keycaps. A model the game still holds in
+its render queue is not freed yet: it waits in bounded storage, and a later
+native callback frees it when the queue and graphics phase allow. Until then,
+geometry changes and icon replacements wait, and a cache rebuild redraws the
+queued model unchanged.
 Missing native drawing support produces no browser fallback.

@@ -24,9 +24,16 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
     Object.freeze({
       sha256:
         "484f7f20691c912c372b7e265a1cc4a4d26b37bfbd52c838b3137d5f29b67d3b",
-      // Historical output measurements for this retained predecessor. They are
-      // regression evidence, never runtime authority. The semantic verifier
-      // derives fresh profile outputs using the current transform ABI.
+      // Recomputed from the exact current JSPI artifact when the independent
+      // play-region capability landed. The retained output is the complete
+      // product profiles proved by the current semantic verifier.
+      //
+      // `pnpm check` cannot catch a stale value here. The transform input is a
+      // derived game binary this repository does not contain, so nothing in the
+      // suite can run the transform; the first thing that notices is a launch
+      // that installs no enhancement at all. Recompute by running
+      // `transformEnhancementWasm` against the real derived module whenever
+      // ENHANCEMENT_TRANSFORM_ABI or any config word changes.
       outputSha256: Object.freeze({
         "features-601":
           "01fbd2857f9df5456237f1182c898d2edc541e438018d08b6fd85edc1223da99",

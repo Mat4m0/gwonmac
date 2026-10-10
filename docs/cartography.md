@@ -160,13 +160,12 @@ camera rotation update only native mesh coordinates. Optional Compass inspection
 repaints when its selected player cell changes; it does not follow every subcell
 movement in the CPU painter. The texture has a fixed
 size limit, and its input buffer is released after the native copy.
-The Canvas owns its retained mesh and model. Destruction detaches ownership
-and invalidates the native UI cache. It retains queued handles until the
-certified model-reference and graphics-phase guards permit release. A replacement
-Canvas waits before creating another pair; its native callback then retries.
-Host withdrawal and native camera updates also defer queue-held mesh writes.
-Each native update still publishes the Compass camera and rectangle first: the
-host sizes its first terrain tile from them, before any terrain context exists.
+The Canvas owns its mesh and model. The game can still hold that model in
+its render queue after the Canvas closes, so the model is never freed or
+written while it is queued: closing detaches it at once, and a later frame
+frees it when the queue and graphics phase allow. A new Canvas waits for that
+release and then retries. Each native update publishes the Compass camera and
+rectangle first, because the host sizes the first terrain tile from them.
 Missing native support or stale map identity hides Compass terrain without changing settings.
 Stationary Compass geometry is reused; range geometry changes only with its
 Canvas rectangle or artwork, not camera motion.
@@ -199,13 +198,11 @@ the visible rectangle. Small pans reuse it. Zoom moves it continuously through
 the native camera; raster detail changes in eighth-octave steps. Textures are
 bounded to 2048 pixels per edge. Hover and Shift inspection use independent
 small textures, so moving the pointer does not rebuild terrain or remaining
-markers. Closing a map withdraws its drawing. Native destruction retires its
-mesh and model without closing a queued model. Later native rendering, withdrawal, or
-publishing reaps the pair once it is safe. Owner replacement and uploads wait
-while retirement is pending. Native draws also defer view-state capture and
-resubmission while that model remains queued. A closed surface can retain one
-bounded pair until its next callback or the client runtime ends. Graphics resets
-invalidate uploads, and loader disposal frees
+markers. Closing a map withdraws its drawing. As on the Compass, a model that
+is still in the render queue is retired, not freed: the next native callback
+frees it once the queue lets go, and new uploads wait until then. A closed map
+holds at most one such mesh and model. Graphics resets invalidate uploads, and
+loader disposal frees
 its detached canvases and listeners. Failed installation releases each resource
 already acquired; one failed native withdrawal does not stop other cleanup.
 The lifecycle reports a disposal failure once, clears ownership, and continues
