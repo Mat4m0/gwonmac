@@ -671,7 +671,7 @@ to permit their use in free software.
 
 ## Ionicons beer icon
 
-The Alcohol Timer uses the beer SVG from [Ionicons](https://github.com/ionic-team/ionicons), designed by Ben Sperry.
+The Status bar uses the beer SVG from [Ionicons](https://github.com/ionic-team/ionicons), designed by Ben Sperry.
 [Upstream license](https://github.com/ionic-team/ionicons/blob/main/LICENSE):
 
 The MIT License (MIT)
