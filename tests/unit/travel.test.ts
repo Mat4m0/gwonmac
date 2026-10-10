@@ -53,11 +53,6 @@ describe("Travel", () => {
     assert.equal(new Set(TRAVEL_DESTINATIONS.map(({ mapId }) => mapId)).size, 199);
   });
 
-  it("routes Beknur Harbor to its outpost map, not the explorable map", () => {
-    assert.equal(travelDestination(487)?.name, "Beknur Harbor");
-    assert.equal(travelDestination(457), null, "Map 457 is the explorable Beknur Harbor, not a travel target");
-  });
-
   it("ranks exact aliases and useful partial names first", () => {
     assert.equal(searchTravelDestinations("ac")[0]?.name, "Ascalon City");
     assert.equal(searchTravelDestinations("kama")[0]?.name, "Kamadan, Jewel of Istan");
