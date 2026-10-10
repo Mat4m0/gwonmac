@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { CHARACTER_DETAILS, CHAT_FILTERS } from "@shared/setting-copy";
-import { DEFAULT_ALCOHOL_TIMER_POSITION } from "@shared/alcohol-timer";
+import { DEFAULT_STATUS_BAR_POSITION } from "@shared/status-bar";
 import { computed, ref } from "vue";
 import { GLOBAL_TOOLS, type GlobalTool, type LauncherNativeApi, type LauncherSettingsPatch, type LauncherSnapshot } from "@shared/launcher-contracts";
 import { TOOL_PRESENTATION as features } from "@shared/tool-presentation";
@@ -49,7 +49,7 @@ function customColor(value: string) {
           <label v-for="detail in CHARACTER_DETAILS" :key="detail.key"><span>{{ detail.label }}</span><input type="checkbox" :checked="snapshot.settings[detail.key]" @change="perform(() => save({ [detail.key]: ($event.target as HTMLInputElement).checked }))" /></label>
         </details>
         <div v-if="tool === 'maps'" class="feature-details"><button class="secondary" @click="emit('maps')">Customize Maps</button><p>Choose layers, styles, and shortcuts. Map shortcuts are unassigned by default.</p></div>
-        <div v-if="tool === 'alcohol-timer'" class="feature-details"><button class="secondary" @click="perform(() => save({ alcoholTimerPosition: { ...snapshot.settings.alcoholTimerPosition, locked: false } }))">Adjust position</button><button class="secondary" @click="perform(() => save({ alcoholTimerPosition: DEFAULT_ALCOHOL_TIMER_POSITION }))">Reset position</button><p>Drag the timer in a game window, then select its lock. Position stays fixed to the nearest game-window corner.</p></div>
+        <div v-if="tool === 'status-bar'" class="feature-details"><button class="secondary" @click="perform(() => save({ statusBarPosition: { ...snapshot.settings.statusBarPosition, locked: false } }))">Adjust position</button><button class="secondary" @click="perform(() => save({ statusBarPosition: DEFAULT_STATUS_BAR_POSITION }))">Reset position</button><p>Drag the timer in a game window, then select its lock. Position stays fixed to the nearest game-window corner.</p></div>
         <SkillLabelsSettings v-if="tool === 'skill-key-labels'" :bindings="snapshot.settings.skillKeyBindings" :save="save" />
         <div v-if="tool === 'chat-filters'" class="chat-filter-details">
           <label v-for="filter in CHAT_FILTERS" :key="filter.key"><span>{{ filter.label }}</span><input type="checkbox" :checked="snapshot.settings[filter.key]" @change="perform(() => save({ [filter.key]: ($event.target as HTMLInputElement).checked }))" /></label>

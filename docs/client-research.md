@@ -10,7 +10,7 @@ runtime authority. Do not create another reader for an already accepted fact.
 | Need | Start here | Executable example |
 | --- | --- | --- |
 | Format or position an existing effect observation | [Effect timers](effect-timers.md) | [Snapshot and presentation tests](../tests/unit/companion-effect-snapshot.test.ts) |
-| Position a persistent overlay without following changing icons | [Effect timers](effect-timers.md) | [Alcohol positioning in offline Electron](../tests/electron/alcohol-timer.spec.ts), using [corner positioning](../src/shared/corner-position.ts) |
+| Position a persistent overlay without following changing icons | [Effect timers](effect-timers.md) | [Alcohol positioning in offline Electron](../tests/electron/status-bar.spec.ts), using [corner positioning](../src/shared/corner-position.ts) |
 | Extend map presentation | [Cartography](cartography.md) | [Compass ranges](../tests/unit/compass-range-indicators.test.ts) |
 | Read a new native collection | [Friend-reader evidence](../internal/research/friend-reader-proof.md) | [Structural candidate tests](../tests/client-artifact/friend-table-evidence.test.ts) |
 | Change a named command | [Feature development](enhancement-development.md) | Search `tests/` for `quick-item-move`, `travel`, or `character-switch` |

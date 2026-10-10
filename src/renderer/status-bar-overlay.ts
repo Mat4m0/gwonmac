@@ -2,13 +2,13 @@
  * Owns the quiet alcohol readout and explicit positioning mode. Its saved
  * position keeps a fixed distance from the nearest game-window corner.
  */
-import { DEFAULT_ALCOHOL_TIMER_POSITION, formatAlcoholTimer, type AlcoholTimerPosition } from "../shared/alcohol-timer.js";
+import { DEFAULT_STATUS_BAR_POSITION, formatStatusTimer, type StatusBarPosition } from "../shared/status-bar.js";
 import { captureCornerPosition, restoreCornerPosition, isCornerPosition } from "../shared/corner-position.js";
 import type { AlcoholState } from "./companion-alcohol-snapshot.js";
 import type { CompanionEffectIconState } from "./companion-effect-snapshot.js";
 import { createNonActivatingSurface } from "./non-activating-surface.js";
 
-export function legacyAlcoholTimerAnchor(geometry: CompanionEffectIconState, bounds: DOMRect) {
+export function legacyStatusBarAnchor(geometry: CompanionEffectIconState, bounds: DOMRect) {
   if (geometry.status !== "ready" || bounds.width <= 0 || bounds.height <= 0) return null;
   const scaleX = bounds.width / geometry.viewportWidth;
   const scaleY = bounds.height / geometry.viewportHeight;
@@ -22,16 +22,16 @@ export function legacyAlcoholTimerAnchor(geometry: CompanionEffectIconState, bou
     y: bounds.top + (geometry.viewportHeight - bottom) * scaleY, scaleX, scaleY };
 }
 
-export function createAlcoholTimerOverlay(parent: HTMLElement, canvas: HTMLCanvasElement,
-  savePosition: (value: AlcoholTimerPosition) => Promise<unknown>) {
+export function createStatusBarOverlay(parent: HTMLElement, canvas: HTMLCanvasElement,
+  savePosition: (value: StatusBarPosition) => Promise<unknown>) {
   const document = parent.ownerDocument;
   const view = document.defaultView!;
   const root = document.createElement("div");
-  root.id = "alcohol-timer-overlay";
+  root.id = "status-bar";
   root.style.cssText = "position:fixed;width:max-content;display:none;align-items:center;gap:5px;z-index:4;pointer-events:none;color:#eadcc2;font:500 14px/1 system-ui,sans-serif;font-variant-numeric:tabular-nums;text-shadow:0 1px 2px #000,0 0 3px #000;user-select:none";
   const handle = document.createElement("button");
   handle.type = "button";
-  handle.setAttribute("aria-label", "Move alcohol timer. Drag or use arrow keys. Shift moves farther. Enter locks. Escape cancels.");
+  handle.setAttribute("aria-label", "Move status bar. Drag or use arrow keys. Shift moves farther. Enter locks. Escape cancels.");
   handle.style.cssText = "display:flex;align-items:center;gap:6px;color:inherit;font:inherit;text-shadow:inherit;padding:5px 4px;border:0;border-radius:3px;background:transparent;touch-action:none";
   const mug = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   mug.setAttribute("viewBox", "0 0 512 512"); mug.setAttribute("width", "16"); mug.setAttribute("height", "16"); mug.setAttribute("aria-hidden", "true");
@@ -44,7 +44,7 @@ export function createAlcoholTimerOverlay(parent: HTMLElement, canvas: HTMLCanva
   time.style.cssText = "display:inline-block;width:4ch;text-align:right";
   handle.append(mug, time);
   const lock = document.createElement("button"); lock.type = "button";
-  lock.setAttribute("aria-label", "Lock alcohol timer position");
+  lock.setAttribute("aria-label", "Lock status bar position");
   lock.title = "Lock position";
   lock.style.cssText = "position:absolute;top:0;left:calc(100% + 5px);width:28px;height:28px;padding:5px;border:1px solid #eadcc255;border-radius:3px;background:#18231dbb;color:inherit;cursor:pointer;pointer-events:auto";
   const lockIcon = document.createElementNS(mug.namespaceURI, "svg");
@@ -56,10 +56,10 @@ export function createAlcoholTimerOverlay(parent: HTMLElement, canvas: HTMLCanva
   error.style.cssText = "position:absolute;top:100%;left:0;white-space:nowrap;font-size:12px";
   root.append(handle, lock, error); parent.append(root);
   const surface = createNonActivatingSurface(root, () => canvas);
-  let position: AlcoholTimerPosition = DEFAULT_ALCOHOL_TIMER_POSITION;
+  let position: StatusBarPosition = DEFAULT_STATUS_BAR_POSITION;
   let receivedPosition = position;
-  const queuedPositions = new Set<AlcoholTimerPosition>();
-  const samePosition = (a: AlcoholTimerPosition, b: AlcoholTimerPosition) => a.x === b.x && a.y === b.y && a.locked === b.locked
+  const queuedPositions = new Set<StatusBarPosition>();
+  const samePosition = (a: StatusBarPosition, b: StatusBarPosition) => a.x === b.x && a.y === b.y && a.locked === b.locked
     && (isCornerPosition(a) ? a.corner : null) === (isCornerPosition(b) ? b.corner : null);
   let savedPosition = position;
   let enabled = false;
@@ -67,7 +67,7 @@ export function createAlcoholTimerOverlay(parent: HTMLElement, canvas: HTMLCanva
   let pendingSave = Promise.resolve();
   let geometry: CompanionEffectIconState = { status: "waiting", reason: "memory" };
   let alcohol: AlcoholState = { status: "waiting" };
-  let drag: { id: number; x: number; y: number; left: number; top: number; before: AlcoholTimerPosition } | null = null;
+  let drag: { id: number; x: number; y: number; left: number; top: number; before: StatusBarPosition } | null = null;
   const viewport = () => {
     const bounds = canvas.getBoundingClientRect();
     return { width: bounds.width, height: bounds.height, margin: 0 };
@@ -79,14 +79,14 @@ export function createAlcoholTimerOverlay(parent: HTMLElement, canvas: HTMLCanva
   };
   const render = () => {
     const bounds = canvas.getBoundingClientRect();
-    const legacyAnchor = isCornerPosition(position) ? null : legacyAlcoholTimerAnchor(geometry, bounds);
+    const legacyAnchor = isCornerPosition(position) ? null : legacyStatusBarAnchor(geometry, bounds);
     const visible = enabled && bounds.width > 0 && bounds.height > 0
       && (isCornerPosition(position) || legacyAnchor !== null)
       && (!position.locked || (alcohol.status === "ready" && alcohol.remainingMs > 0));
     root.style.display = visible ? "flex" : "none";
     if (!visible) return;
     const remaining = alcohol.status === "ready" ? alcohol.remainingMs : 0;
-    time.textContent = remaining > 0 ? formatAlcoholTimer(remaining) : "—:—";
+    time.textContent = remaining > 0 ? formatStatusTimer(remaining) : "—:—";
     root.style.color = remaining > 0 && remaining <= 15_000 ? "#e5bd75" : "#eadcc2";
     handle.disabled = position.locked;
     handle.style.pointerEvents = position.locked ? "none" : "auto";
@@ -108,7 +108,7 @@ export function createAlcoholTimerOverlay(parent: HTMLElement, canvas: HTMLCanva
     root.style.left = `${bounds.left + point.left}px`; root.style.top = `${bounds.top + point.top}px`;
     lock.style.left = point.left + size().width + 33 <= bounds.width ? "calc(100% + 5px)" : "-33px";
   };
-  const commit = (fallback?: AlcoholTimerPosition) => {
+  const commit = (fallback?: StatusBarPosition) => {
     const next = { ...position };
     queuedPositions.add(next);
     pendingSave = pendingSave.then(async () => {
@@ -165,7 +165,7 @@ export function createAlcoholTimerOverlay(parent: HTMLElement, canvas: HTMLCanva
   return {
     setAlcohol(next: AlcoholState) { alcohol = next; render(); },
     setGeometry(next: CompanionEffectIconState) { geometry = next; if (!isCornerPosition(position)) render(); },
-    setSettings(next: AlcoholTimerPosition, active: boolean) {
+    setSettings(next: StatusBarPosition, active: boolean) {
       const changed = !samePosition(next, receivedPosition);
       receivedPosition = next;
       const ownEcho = [...queuedPositions].some(value => samePosition(value, next));

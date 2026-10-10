@@ -200,7 +200,7 @@ export function openHubSettings(hub: Hub, focus?: HubSettingsFocus) {
           for (const option of options) { settingToggle(option.label, option.key); body.lastElementChild?.classList.add('hub-setting-option'); }
         }
         const note = doc.createElement('p'); note.textContent = 'Whisper sound and pop-out opacity are in Whispers › Chat options.'; body.append(note);
-        launcherLink('Skill key labels and timer color', 'What each skill key shows, the cooldown timer color and the Alcohol Timer position.', 'tools');
+        launcherLink('Skill key labels and timer color', 'What each skill key shows, the cooldown timer color and the status bar position.', 'tools');
       } else if (page === 'Appearance') {
         const resetPosition = doc.createElement('button'); resetPosition.className = 'ui-button'; resetPosition.textContent = 'Reset';
         resetPosition.onclick = () => { hub.resetPosition(); status.textContent = 'Hub position and size reset. Window locked.'; };

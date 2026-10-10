@@ -14,7 +14,7 @@
  * because a silently ignored key is indistinguishable to the renderer from a
  * setting that did not stick.
  */
-import { isAlcoholTimerPosition } from "../../shared/alcohol-timer.js";
+import { isStatusBarPosition } from "../../shared/status-bar.js";
 import { readFile } from "node:fs/promises";
 import {
   DEFAULT_SETTINGS,
@@ -124,11 +124,24 @@ function asBool(v: unknown, field: string): boolean {
  * this build does not know is refused rather than reinterpreted; `loadSettings`
  * then moves it aside intact instead of trusting a shape it cannot read.
  */
+/**
+ * Public betas v2026.9.2-beta.1 and v2026.10.0-beta.1 saved the Status bar
+ * under `alcoholTimer*` keys. Map them once, and only when the new key is
+ * absent, so a newer save always wins. Remove with its entry in
+ * internals/migrations.md.
+ */
+function withLegacyStatusBarKeys(src: Record<string, unknown>): Record<string, unknown> {
+  const out = { ...src };
+  if (!("statusBarEnabled" in src) && "alcoholTimerEnabled" in src) out.statusBarEnabled = src.alcoholTimerEnabled;
+  if (!("statusBarPosition" in src) && "alcoholTimerPosition" in src) out.statusBarPosition = src.alcoholTimerPosition;
+  return out;
+}
+
 export function parseSettings(raw: unknown): AppSettings {
   if (raw === null || raw === undefined || typeof raw !== "object" || Array.isArray(raw)) {
     throw new AppError("bad_settings", "settings must be an object");
   }
-  const src = raw as Record<string, unknown>;
+  const src = withLegacyStatusBarKeys(raw as Record<string, unknown>);
   if (src.formatVersion !== undefined && src.formatVersion !== SETTINGS_FORMAT) {
     throw new AppError(
       "bad_settings",
@@ -322,15 +335,15 @@ export function parseSettings(raw: unknown): AppSettings {
     "skillKeyLabelsEnabled",
     "skillCooldownOverlayEnabled",
     "effectTimersEnabled",
-    "alcoholTimerEnabled",
+    "statusBarEnabled",
     "extendedMemoryEnabled",
     "autoRelogAfterReload",
   ] as const) {
     if (setting in src) out[setting] = asBool(src[setting], setting);
   }
-  if ("alcoholTimerPosition" in src) {
-    if (!isAlcoholTimerPosition(src.alcoholTimerPosition)) throw new AppError("bad_settings", "Alcohol timer position is invalid");
-    out.alcoholTimerPosition = { ...src.alcoholTimerPosition };
+  if ("statusBarPosition" in src) {
+    if (!isStatusBarPosition(src.statusBarPosition)) throw new AppError("bad_settings", "Status bar position is invalid");
+    out.statusBarPosition = { ...src.statusBarPosition };
   }
   if ("memoryWarningPosition" in src) {
     const position = src.memoryWarningPosition;

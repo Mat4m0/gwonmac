@@ -66,9 +66,9 @@ Party awareness and hostile-agent effects remain separate authority decisions.
 They must not reuse this player's capability or infer exact durations from broad
 condition/hex state flags. See [Future effect and debuff research](future-effect-durations.md).
 
-## Alcohol Timer
+## Status bar
 
-Alcohol Timer is a separate, optional PvE Tool. It observes the certified native
+Status bar is a separate, optional PvE Tool. It observes the certified native
 post-processing notification without changing the message or the game's visual
 effects. The proof fixes the tint/intensity payload and its level conversion.
 A changed producer or dispatch destination withdraws this capability.
@@ -91,7 +91,7 @@ fixed when Effects icons appear, disappear, or move.
 The readout turns amber in the last 15 seconds and disappears at zero. There
 are no sounds or animations. Locked mode passes all pointer input to the game.
 
-Enable **Settings → Tools → Alcohol Timer**, then select **Adjust position**.
+Enable **Settings → Tools → Status bar**, then select **Adjust position**.
 An unlocked placeholder permits adjustment while sober. Drag the readout and
 select its lock, or focus it and use arrows, Shift+arrows, and Enter. Escape,
 lost pointer capture, or window blur cancels a drag. **Reset position** restores

@@ -3,7 +3,7 @@
  * the shared kernel transaction and calls this extension only in Tools mode.
  */
 import { createAlcoholObservationInstallation, readCompanionAlcohol } from "./companion-alcohol-snapshot.js";
-import { createAlcoholTimerOverlay } from "./alcohol-timer-overlay.js";
+import { createStatusBarOverlay } from "./status-bar-overlay.js";
 import { createNativeHudLayer } from "./native-hud-layer.js";
 import { createEliteMapInstallation } from "./elite-map-installation.js";
 import { COMPANION_ABI, COMPANION_DISPATCH_KINDS, COMPANION_FEATURE_BITS } from "../shared/companion-abi.js";
@@ -353,14 +353,14 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
   });
   const snapshot = () => source.snapshot;
   const policy = () => snapshot().policy;
-  const alcoholRequested = () => capabilities.alcoholObservation && snapshot().settings.gwonmacTools && snapshot().settings.alcoholTimerEnabled;
+  const alcoholRequested = () => capabilities.alcoholObservation && snapshot().settings.gwonmacTools && snapshot().settings.statusBarEnabled;
   const playerEffectsActive = () => capabilities.playerEffectObservation
     && (program === "effect-observer"
       || (((capabilities.nativeHudRendering && policy().effectTimers)
-        || (alcoholRequested() && policy().alcoholTimer)) && capabilities.effectIconGeometry));
+        || (alcoholRequested() && policy().statusBar)) && capabilities.effectIconGeometry));
   const effectIconsActive = () => capabilities.effectIconGeometry
     && (program === "effect-observer" || (capabilities.nativeHudRendering && policy().effectTimers)
-      || (alcoholRequested() && policy().alcoholTimer));
+      || (alcoholRequested() && policy().statusBar));
   const playRegion = () => snapshot().playRegion;
   let companionState: CompanionSnapshot | null = null;
   let party: ToolboxObservation | null = null;
@@ -380,7 +380,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
   let aliasEnabled: boolean | null = null;
   let lastTrace = "";
   let observingFriends = false;
-  let alcoholOverlay: ReturnType<typeof createAlcoholTimerOverlay> | null = null;
+  let alcoholOverlay: ReturnType<typeof createStatusBarOverlay> | null = null;
   let unsubscribeAlcohol: (() => void) | null = null;
   let unsubscribeAlcoholGeometry: (() => void) | null = null;
   let effectOverlay: ReturnType<typeof createEffectTimerOverlayConsumer> | null = null;
@@ -476,7 +476,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
       throw new Error("Enhancement effect overlay target is missing");
     }
     if (capabilities.alcoholObservation) {
-      alcoholOverlay = createAlcoholTimerOverlay(document.body, canvas, alcoholTimerPosition => window.gwNative.settings.set({ alcoholTimerPosition }));
+      alcoholOverlay = createStatusBarOverlay(document.body, canvas, statusBarPosition => window.gwNative.settings.set({ statusBarPosition }));
       unsubscribeAlcohol = alcohol.subscribe(alcoholOverlay.setAlcohol);
       unsubscribeAlcoholGeometry = effectIcons.subscribe(alcoholOverlay.setGeometry);
     }
@@ -593,7 +593,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
     syncTarget();
     skills.sync(snapshot().settings, policy());
     alcohol.setActive(alcoholRequested());
-    alcoholOverlay?.setSettings(snapshot().settings.alcoholTimerPosition, policy().alcoholTimer && alcoholRequested());
+    alcoholOverlay?.setSettings(snapshot().settings.statusBarPosition, policy().statusBar && alcoholRequested());
     playerEffects.setActive(playerEffectsActive());
     effectIcons.setActive(effectIconsActive());
     effectOverlay?.setEnabled(policy().effectTimers && effectIconsActive());

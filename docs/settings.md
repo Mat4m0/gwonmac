@@ -62,7 +62,7 @@ Both surfaces use these sections for game settings, in this order.
 |---|---|---|---|
 | Game | Render quality, Extended memory, Controller symbols, Return to character after reload, Diagnostics overlay | All | All |
 | Appearance | Panel style, Panel font, Text size (100–200%), Panel opacity, Reset Hub position (Hub only) | All; custom colors link to the launcher | All, with the custom theme editor |
-| Tools | Enable Tools, every tool, and each tool's options (Character Switch details, chat filters, timer color, skill key labels, Alcohol Timer position) | Switches and options; skill key labels and timer color link to the launcher | All |
+| Tools | Enable Tools, every tool, and each tool's options (Character Switch details, chat filters, timer color, skill key labels, Status bar position) | Switches and options; skill key labels and timer color link to the launcher | All |
 | Shortcuts | The ten app shortcuts | All | Shown beside their tools, as today |
 | Maps | Grid, walkable terrain, compass ranges, Elite skills and their opacity | One Settings renderer; children disable with their layer; styles link to the launcher | All, with the style editor |
 

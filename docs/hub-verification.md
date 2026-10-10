@@ -241,7 +241,7 @@ never sends a real whisper. Fn/media keys are outside the supported capture mode
 
 The Hub source at `8e369cb9` was integrated into current main `13c82c09`
 in the isolated `feat/hub-overhaul-foundation` worktree. Conflict resolutions
-retain main's elite map mounting, native map composition, alcohol timer and
+retain main's elite map mounting, native map composition, status bar and
 font owners alongside Hub navigation and account actions.
 
 The integrated baseline passed typecheck, lint, Markdown links, 1,756 unit

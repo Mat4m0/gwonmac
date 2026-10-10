@@ -54,7 +54,7 @@ export function enhancementRuntimePolicy(
     skillCooldowns: selected("skillCooldowns"),
     chatFilters: selected("chatFilters"),
     quickItemMove: selected("quickItemMove"),
-    alcoholTimer: selected("alcoholTimer"),
+    statusBar: selected("statusBar"),
     effectTimers: selected("effectTimers", program === "effect-observer"),
   } satisfies Record<FeatureId, boolean>);
 }

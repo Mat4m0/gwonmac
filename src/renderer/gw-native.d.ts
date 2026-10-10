@@ -8,7 +8,7 @@
  * checked against one description of that surface rather than against each
  * other's assumptions.
  */
-import type { AlcoholTimerPosition } from "../shared/alcohol-timer.js";
+import type { StatusBarPosition } from "../shared/status-bar.js";
 import type { ShortcutOverrides } from "../shared/keyboard-shortcuts.js";
 import type {
   AppSettings,
@@ -338,8 +338,8 @@ declare global {
       chatFilterTitleAchievements: boolean;
       quickItemMove: boolean;
       effectTimersEnabled: boolean;
-      alcoholTimerEnabled: boolean;
-      alcoholTimerPosition: AlcoholTimerPosition;
+      statusBarEnabled: boolean;
+      statusBarPosition: StatusBarPosition;
       skillCooldownColor: AppSettings['skillCooldownColor'];
     }>;
     gwLoading: LoadingController;

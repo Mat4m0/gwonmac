@@ -100,7 +100,7 @@ export class LauncherOrchestrator {
         characterSwitchLocation: settings.characterSwitchLocation,
         skillKeyBindings: settings.skillKeyBindings,
         skillCooldownColor: settings.skillCooldownColor,
-        alcoholTimerPosition: settings.alcoholTimerPosition,
+        statusBarPosition: settings.statusBarPosition,
         chatFilterAllyDrops: settings.chatFilterAllyDrops,
         chatFilterHallOfHeroes: settings.chatFilterHallOfHeroes,
         chatFilterTitleAchievements: settings.chatFilterTitleAchievements,

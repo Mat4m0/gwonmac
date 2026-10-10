@@ -93,8 +93,8 @@ describe("settings", () => {
       skillCooldownOverlayEnabled: true,
       quickItemMove: false,
       effectTimersEnabled: false,
-      alcoholTimerEnabled: false,
-      alcoholTimerPosition: { corner: "top-left", x: 4, y: 58, locked: true },
+      statusBarEnabled: false,
+      statusBarPosition: { corner: "top-left", x: 4, y: 58, locked: true },
       skillCooldownColor: { kind: "preset", preset: "red" },
       extendedMemoryEnabled: false,
       autoRelogAfterReload: false,
@@ -227,8 +227,8 @@ describe("settings", () => {
       skillCooldownOverlayEnabled: true,
       quickItemMove: false,
       effectTimersEnabled: false,
-      alcoholTimerEnabled: false,
-      alcoholTimerPosition: { corner: "top-left", x: 4, y: 58, locked: true },
+      statusBarEnabled: false,
+      statusBarPosition: { corner: "top-left", x: 4, y: 58, locked: true },
       skillCooldownColor: { kind: "preset", preset: "red" },
       extendedMemoryEnabled: false,
       autoRelogAfterReload: false,
@@ -631,8 +631,6 @@ describe("settings", () => {
     assert.equal((await loadSettings(path)).autoRelogAfterReload, true);
     const disk = JSON.parse(await readFile(path, "utf8"));
     assert.deepEqual(Object.keys(disk).sort(), [
-      "alcoholTimerEnabled",
-      "alcoholTimerPosition",
       "autoCheckUpdates",
       "autoRelogAfterReload",
       "buildLibrary",
@@ -686,6 +684,8 @@ describe("settings", () => {
       "skillCooldownOverlayEnabled",
       "skillKeyBindings",
       "skillKeyLabelsEnabled",
+      "statusBarEnabled",
+      "statusBarPosition",
       "targetReadout",
       "teamManagement",
       "tradeChat",
@@ -821,8 +821,8 @@ describe("settings", () => {
       skillCooldownOverlayEnabled: true,
       quickItemMove: false,
       effectTimersEnabled: false,
-      alcoholTimerEnabled: false,
-      alcoholTimerPosition: { corner: "top-left", x: 4, y: 58, locked: true },
+      statusBarEnabled: false,
+      statusBarPosition: { corner: "top-left", x: 4, y: 58, locked: true },
       skillCooldownColor: { kind: "preset", preset: "red" },
       extendedMemoryEnabled: false,
       autoRelogAfterReload: false,
@@ -962,4 +962,23 @@ it('saves calculator estimates through real settings without changing unrelated 
     { mode: 'remote', ecto: '', armbrace: '', zkey: '' },
     { mode: 'manual', ecto: '', armbrace: '', zkey: '', extra: true },
   ]) assert.throws(() => parseRendererSettingsPatch({ calculatorRates: rates }), /calculatorRates/);
+});
+
+describe("status bar settings migration", () => {
+  const tagged = { corner: "bottom-right", x: 10, y: 20, locked: false };
+  const untagged = { x: 30, y: 40, locked: true };
+  const newer = { corner: "top-right", x: 1, y: 2, locked: true };
+  const cases: Array<{ name: string; raw: Record<string, unknown>; enabled: boolean; position: unknown }> = [
+    { name: "beta keys map to new keys", raw: { alcoholTimerEnabled: true, alcoholTimerPosition: tagged }, enabled: true, position: tagged },
+    { name: "untagged beta position is kept", raw: { alcoholTimerEnabled: true, alcoholTimerPosition: untagged }, enabled: true, position: untagged },
+    { name: "new keys win over beta keys", raw: { statusBarEnabled: false, statusBarPosition: newer, alcoholTimerEnabled: true, alcoholTimerPosition: tagged }, enabled: false, position: newer },
+    { name: "no keys gives defaults", raw: {}, enabled: DEFAULT_SETTINGS.statusBarEnabled, position: DEFAULT_SETTINGS.statusBarPosition },
+  ];
+  for (const { name, raw, enabled, position } of cases) {
+    it(name, () => {
+      const parsed = parseSettings(raw);
+      assert.equal(parsed.statusBarEnabled, enabled);
+      assert.deepEqual(parsed.statusBarPosition, position);
+    });
+  }
 });

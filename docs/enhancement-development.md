@@ -190,7 +190,7 @@ pure unit or transform test
 
 Presentation using supplied observations can be checked without a playable
 client. The [offline Electron fixture](../tests/electron/fixtures.mts) and
-[alcohol positioning tests](../tests/electron/alcohol-timer.spec.ts) show that
+[alcohol positioning tests](../tests/electron/status-bar.spec.ts) show that
 boundary. Use the playable fixture when client readiness itself matters, and a
 live scenario when actual native behavior cannot be established offline.
 

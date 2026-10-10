@@ -1,6 +1,14 @@
 # Active migrations
 
-## Alcohol Timer corner placement
+## Status bar settings keys
+
+- Why: public betas v2026.9.2-beta.1 and v2026.10.0-beta.1 saved the feature under `alcoholTimerEnabled` and `alcoholTimerPosition`. The feature now uses `statusBarEnabled` and `statusBarPosition`.
+- Introduced: 2026-10-10.
+- Depends on it: settings files saved by those two public betas. Keys in the new names always win over the legacy keys.
+- Remove when: the legacy keys are no longer read from any supported settings file. Remove `withLegacyStatusBarKeys` in `src/main/core/settings.ts`, its test cases in `tests/unit/settings.test.ts`, and this entry together.
+- Related issue: none yet.
+
+## Status bar corner placement
 
 - Why: earlier developer builds saved offsets relative to live Effects icons.
   The timer now saves fixed pixel gaps from a game-window corner. The renderer
@@ -10,7 +18,7 @@
 - Depends on it: developer profiles that saved `{ x, y, locked }` before this
   change; the feature has not been published from this worktree.
 - Remove when: all known developer profiles have saved a `corner` field before
-  the first release of Alcohol Timer. Remove the untagged settings alternative,
+  the first release of the status bar. Remove the untagged settings alternative,
   legacy anchor helper, conversion tests, and this entry together. Rollback to
   the earlier developer build requires restoring the previous settings backup.
 - Related issue: none yet.

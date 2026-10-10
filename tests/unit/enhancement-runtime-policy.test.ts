@@ -22,7 +22,7 @@ const off = Object.freeze({
   chatFiltersEnabled: false,
   quickItemMove: false,
   effectTimersEnabled: false,
-  alcoholTimerEnabled: false,
+  statusBarEnabled: false,
 });
 
 test("developer programs replace saved optional-tool selection in PvE", () => {
@@ -44,7 +44,7 @@ test("developer programs replace saved optional-tool selection in PvE", () => {
     chatFilters: false,
     quickItemMove: false,
     effectTimers: false,
-    alcoholTimer: false,
+    statusBar: false,
   });
   assert.deepEqual(enhancementRuntimePolicy("toolbox-commands", off, "pve"), {
     characterSwitch: false,
@@ -64,7 +64,7 @@ test("developer programs replace saved optional-tool selection in PvE", () => {
     chatFilters: false,
     quickItemMove: false,
     effectTimers: false,
-    alcoholTimer: false,
+    statusBar: false,
   });
   assert.deepEqual(enhancementRuntimePolicy("xunlai-storage", off, "pve"), {
     characterSwitch: false,
@@ -84,7 +84,7 @@ test("developer programs replace saved optional-tool selection in PvE", () => {
     chatFilters: false,
     quickItemMove: false,
     effectTimers: false,
-    alcoholTimer: false,
+    statusBar: false,
   });
   assert.deepEqual(enhancementRuntimePolicy("target-observer", off, "pve"), {
     characterSwitch: false,
@@ -104,7 +104,7 @@ test("developer programs replace saved optional-tool selection in PvE", () => {
     chatFilters: false,
     quickItemMove: false,
     effectTimers: false,
-    alcoholTimer: false,
+    statusBar: false,
   });
 });
 
@@ -126,7 +126,7 @@ test("unknown regions keep local Tools while live PvE features fail closed", () 
     skillCooldownOverlayEnabled: false,
     quickItemMove: false,
     effectTimersEnabled: false,
-    alcoholTimerEnabled: false,
+    statusBarEnabled: false,
   });
   assert.deepEqual(enhancementRuntimePolicy("none", on, "unknown"), {
     characterSwitch: false,
@@ -146,7 +146,7 @@ test("unknown regions keep local Tools while live PvE features fail closed", () 
     chatFilters: true,
     quickItemMove: false,
     effectTimers: false,
-    alcoholTimer: false,
+    statusBar: false,
   });
 });
 
@@ -168,7 +168,7 @@ test("a confirmed PvP map disables every product and developer tool", () => {
     chatFiltersEnabled: true,
     quickItemMove: false,
     effectTimersEnabled: false,
-    alcoholTimerEnabled: false,
+    statusBarEnabled: false,
   });
   for (const program of [
     "none",
@@ -195,7 +195,7 @@ test("a confirmed PvP map disables every product and developer tool", () => {
       chatFilters: false,
       quickItemMove: false,
       effectTimers: false,
-    alcoholTimer: false,
+    statusBar: false,
     }, program);
   }
 });
@@ -218,7 +218,7 @@ test("product tool settings remain live once the capability is present", () => {
     chatFiltersEnabled: false,
     quickItemMove: false,
     effectTimersEnabled: false,
-    alcoholTimerEnabled: false,
+    statusBarEnabled: false,
   }, "pve"), {
     characterSwitch: false,
     resign: false,
@@ -237,7 +237,7 @@ test("product tool settings remain live once the capability is present", () => {
     chatFilters: false,
     quickItemMove: false,
     effectTimers: false,
-    alcoholTimer: false,
+    statusBar: false,
   });
 });
 
@@ -254,7 +254,7 @@ test("skill feature selection distinguishes labels from cooldowns", () => {
     skillCooldownOverlayEnabled: false,
     quickItemMove: false,
     effectTimersEnabled: false,
-    alcoholTimerEnabled: false,
+    statusBarEnabled: false,
   }, "pve");
   assert.equal(empty.skillKeyLabels, false);
   assert.equal(empty.skillCooldowns, false);
@@ -270,7 +270,7 @@ test("skill feature selection distinguishes labels from cooldowns", () => {
     skillCooldownOverlayEnabled: false,
     quickItemMove: false,
     effectTimersEnabled: false,
-    alcoholTimerEnabled: false,
+    statusBarEnabled: false,
   }, "pve");
   assert.equal(labels.skillKeyLabels, true);
   assert.equal(labels.skillCooldowns, false);
