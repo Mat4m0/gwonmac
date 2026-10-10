@@ -51,6 +51,12 @@ test('a typed search selects its best answer', async ({ page }) => {
   expect(await page.locator('#app').getAttribute('data-action')).toBeNull();
 });
 
+test('a character ranks ahead of a build that matches the same way', async ({ page }) => {
+  await open(page);
+  await search(page).fill('fixture ritua');
+  await expect(page.locator('.hub-row[aria-selected=true]')).toHaveAttribute('data-id', 'character:ritualist');
+});
+
 test('a Settings section result opens that section (HUB-064)', async ({ page }) => {
   await open(page);
   for (const [query, section] of [['shortcuts', 'Shortcuts'], ['theme', 'Appearance']] as const) {
@@ -180,7 +186,7 @@ test('an exact tool title has no scope chip and scoped Trade names the query (HU
 test('a Commands footer names the example it fills (HUB-094)', async ({ page }) => {
   await open(page);
   await search(page).fill('commands'); await search(page).press('Enter');
-  await expect(primary(page)).toHaveText(/^Fill search with build <name or profession>/);
+  await expect(primary(page)).toHaveText(/^Fill search with char <name>/);
 });
 
 
