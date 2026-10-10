@@ -35,12 +35,12 @@ function customColor(value: string) {
   <h1>Tools</h1>
   <p>Choose the features you use. Settings and shortcuts apply to every account.</p>
     <div class="setting-group tools-master">
-      <label><span><strong>Enable Tools</strong><small>Optional game features. Character Switch works independently.</small></span><input type="checkbox" :checked="snapshot.tools.configured" @change="perform(() => api?.tools.setMasterEnabled(($event.target as HTMLInputElement).checked), true)" /></label>
+      <label data-setting="gwonmacTools"><span><strong>Enable Tools</strong><small>Optional game features. Character Switch works independently.</small></span><input type="checkbox" :checked="snapshot.tools.configured" @change="perform(() => api?.tools.setMasterEnabled(($event.target as HTMLInputElement).checked), true)" /></label>
       <div v-if="snapshot.tools.restartRequired" class="restart-row"><span><strong>Restart the launcher</strong><small>{{ snapshot.tools.configured ? 'Your selection is saved. Restart the launcher to load Tools. Restarting only a game window will not enable them.' : 'Tools are off in every game window. Restart the launcher to finish unloading them.' }}</small><small v-if="hasActiveGames">Close every game window before restarting the launcher.</small></span><button class="primary" :disabled="hasActiveGames" @click="perform(() => api?.tools.restartToApply())">Restart launcher</button></div>
       <p v-else class="tools-state">{{ snapshot.tools.configured ? 'Tools are loaded. Feature switches apply immediately in supported game areas.' : 'Tools are off. Your feature preferences are kept.' }}</p>
     </div>
   <template v-for="tool in GLOBAL_TOOLS" :key="tool">
-    <div class="setting-group feature-setting">
+    <div class="setting-group feature-setting" :data-setting="`tool:${tool}`">
       <div class="feature-heading">
         <label :for="`tool-${tool}`"><strong>{{ features[tool].label }}</strong><small :id="`tool-${tool}-help`">{{ features[tool].description }}</small></label>
         <ShortcutSetting v-if="features[tool].action" :action="features[tool].action!" :shortcuts="snapshot.shortcuts" :api="api?.tools" :perform-save="performSave" :disabled="!enabled(tool)" />
@@ -49,26 +49,26 @@ function customColor(value: string) {
       <template v-if="enabled(tool)">
         <details v-if="tool === 'character-switch'" class="character-details">
           <summary>Character details</summary>
-          <label v-for="detail in CHARACTER_DETAILS" :key="detail.key"><span>{{ detail.label }}</span><input type="checkbox" :checked="snapshot.settings[detail.key]" @change="perform(() => save({ [detail.key]: ($event.target as HTMLInputElement).checked }))" /></label>
+          <label v-for="detail in CHARACTER_DETAILS" :key="detail.key" :data-setting="detail.key"><span>{{ detail.label }}</span><input type="checkbox" :checked="snapshot.settings[detail.key]" @change="perform(() => save({ [detail.key]: ($event.target as HTMLInputElement).checked }))" /></label>
         </details>
         <div v-if="tool === 'maps'" class="feature-details"><button class="secondary" @click="emit('maps')">Customize Maps</button><p>Choose layers, styles, and shortcuts. Map shortcuts are unassigned by default.</p></div>
-        <div v-if="tool === 'alcohol-timer'" class="feature-details"><button class="secondary" @click="perform(() => save({ alcoholTimerPosition: { ...snapshot.settings.alcoholTimerPosition, locked: false } }))">Adjust position</button><button class="secondary" @click="perform(() => save({ alcoholTimerPosition: DEFAULT_ALCOHOL_TIMER_POSITION }))">Reset position</button><p>Drag the timer in a game window, then select its lock. Position stays fixed to the nearest game-window corner.</p></div>
-        <SkillLabelsSettings v-if="tool === 'skill-key-labels'" :bindings="snapshot.settings.skillKeyBindings" :save="save" />
+        <div v-if="tool === 'alcohol-timer'" class="feature-details" role="group" aria-label="Alcohol Timer position" data-setting="alcoholTimerPosition"><button class="secondary" @click="perform(() => save({ alcoholTimerPosition: { ...snapshot.settings.alcoholTimerPosition, locked: false } }))">Adjust position</button><button class="secondary" @click="perform(() => save({ alcoholTimerPosition: DEFAULT_ALCOHOL_TIMER_POSITION }))">Reset position</button><p>Drag the timer in a game window, then select its lock. Position stays fixed to the nearest game-window corner.</p></div>
+        <SkillLabelsSettings v-if="tool === 'skill-key-labels'" role="group" aria-label="Skill labels" data-setting="skillKeyBindings" :bindings="snapshot.settings.skillKeyBindings" :save="save" />
         <div v-if="tool === 'chat-filters'" class="chat-filter-details">
-          <label v-for="filter in CHAT_FILTERS" :key="filter.key"><span>{{ filter.label }}</span><input type="checkbox" :checked="snapshot.settings[filter.key]" @change="perform(() => save({ [filter.key]: ($event.target as HTMLInputElement).checked }))" /></label>
+          <label v-for="filter in CHAT_FILTERS" :key="filter.key" :data-setting="filter.key"><span>{{ filter.label }}</span><input type="checkbox" :checked="snapshot.settings[filter.key]" @change="perform(() => save({ [filter.key]: ($event.target as HTMLInputElement).checked }))" /></label>
         </div>
         <div v-if="tool === 'reminders'" class="reminder-details">
           <fieldset><legend>Remind me about</legend>
-            <label v-for="group in REMINDER_GROUPS" :key="group.key"><span>{{ group.label }}<small>{{ group.detail }}</small></span><input type="checkbox" :checked="snapshot.settings[group.key]" @change="perform(() => save({ [group.key]: ($event.target as HTMLInputElement).checked }))" /></label>
+            <label v-for="group in REMINDER_GROUPS" :key="group.key" :data-setting="group.key"><span>{{ group.label }}<small>{{ group.detail }}</small></span><input type="checkbox" :checked="snapshot.settings[group.key]" @change="perform(() => save({ [group.key]: ($event.target as HTMLInputElement).checked }))" /></label>
           </fieldset>
           <fieldset><legend>When</legend>
-            <label v-for="timing in REMINDER_TIMING" :key="timing.key"><span>{{ timing.label }}</span><input type="checkbox" :checked="snapshot.settings[timing.key]" @change="perform(() => save({ [timing.key]: ($event.target as HTMLInputElement).checked }))" /></label>
+            <label v-for="timing in REMINDER_TIMING" :key="timing.key" :data-setting="timing.key"><span>{{ timing.label }}</span><input type="checkbox" :checked="snapshot.settings[timing.key]" @change="perform(() => save({ [timing.key]: ($event.target as HTMLInputElement).checked }))" /></label>
           </fieldset>
-          <label><span>{{ REMINDER_SOUND.label }}<small>{{ REMINDER_SOUND.detail }}</small></span><input type="checkbox" :checked="snapshot.settings[REMINDER_SOUND.key]" @change="perform(() => save({ [REMINDER_SOUND.key]: ($event.target as HTMLInputElement).checked }))" /></label>
+          <label :data-setting="REMINDER_SOUND.key"><span>{{ REMINDER_SOUND.label }}<small>{{ REMINDER_SOUND.detail }}</small></span><input type="checkbox" :checked="snapshot.settings[REMINDER_SOUND.key]" @change="perform(() => save({ [REMINDER_SOUND.key]: ($event.target as HTMLInputElement).checked }))" /></label>
           <p v-if="remindersSilent" class="reminder-note">Choose at least one item and one time, or no reminder appears.</p>
         </div>
         <template v-if="tool === 'skill-cooldowns'">
-          <label><span>Timer color</span><select :value="snapshot.settings.skillCooldownColor.kind === 'preset' ? snapshot.settings.skillCooldownColor.preset : 'custom'" @change="perform(() => save({ skillCooldownColor: ($event.target as HTMLSelectElement).value === 'custom' ? { kind: 'custom', value: '#e35a4f' } : { kind: 'preset', preset: ($event.target as HTMLSelectElement).value as typeof SKILL_COOLDOWN_PRESETS[number] } }))"><option v-for="preset in SKILL_COOLDOWN_PRESETS" :key="preset" :value="preset">{{ preset }}</option><option value="custom">Custom</option></select></label>
+          <label data-setting="skillCooldownColor"><span>Timer color</span><select :value="snapshot.settings.skillCooldownColor.kind === 'preset' ? snapshot.settings.skillCooldownColor.preset : 'custom'" @change="perform(() => save({ skillCooldownColor: ($event.target as HTMLSelectElement).value === 'custom' ? { kind: 'custom', value: '#e35a4f' } : { kind: 'preset', preset: ($event.target as HTMLSelectElement).value as typeof SKILL_COOLDOWN_PRESETS[number] } }))"><option v-for="preset in SKILL_COOLDOWN_PRESETS" :key="preset" :value="preset">{{ preset }}</option><option value="custom">Custom</option></select></label>
           <div v-if="snapshot.settings.skillCooldownColor.kind === 'custom'" class="setting-row"><span>Custom timer color</span><ColorControl label="Custom timer color" :value="skillCooldownCssColor(snapshot.settings.skillCooldownColor)" @change="customColor" /></div>
         </template>
       </template>

@@ -4,6 +4,7 @@ import type { LauncherNativeApi, LauncherSnapshot } from "@shared/launcher-contr
 import App from "./App.vue";
 import { fixtureSnapshot } from "./fixtures";
 import funding from "@shared/funding.json";
+import { SETTINGS } from "@shared/settings-catalogue";
 
 function installNative(overrides: Record<string, unknown>): LauncherNativeApi {
   const native = {
@@ -245,6 +246,31 @@ describe("unified launcher shell", () => {
     expect(wrapper.text()).toContain("Character Switch");
     expect(wrapper.text()).toContain("Skill Cooldowns");
     expect(wrapper.text()).toContain("Chat Filters");
+  });
+
+  it("renders exactly one control, with the same label, for every setting search can open", async () => {
+    const allOn: LauncherSnapshot = {
+      ...fixtureSnapshot,
+      tools: { ...fixtureSnapshot.tools, configured: true, features: Object.fromEntries(Object.entries(fixtureSnapshot.tools.features).map(([tool, feature]) => [tool, { ...feature, enabled: true }])) as LauncherSnapshot["tools"]["features"] },
+    };
+    installNative({ state: { get: async () => allOn, onChange: () => () => undefined }, experience: { updatePreferences: vi.fn(async () => undefined) } });
+    const wrapper = mount(App);
+    await flushPromises();
+    await wrapper.get('button[aria-label="Settings"]').trigger("click");
+    const found = new Map<string, string[]>();
+    for (const button of wrapper.findAll(".settings-page aside button")) {
+      await button.trigger("click");
+      await flushPromises();
+      for (const control of wrapper.findAll("[data-setting]")) {
+        const id = control.attributes("data-setting")!;
+        found.set(id, [...found.get(id) ?? [], `${control.attributes("aria-label") ?? ""} ${control.text()}`]);
+      }
+    }
+    for (const entry of SETTINGS) {
+      expect(found.get(entry.id), entry.id).toHaveLength(1);
+      expect(found.get(entry.id)![0], entry.id).toContain(entry.label);
+    }
+    wrapper.unmount();
   });
 
   it("saves each enabled Chat Filter category independently", async () => {
