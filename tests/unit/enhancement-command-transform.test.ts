@@ -75,6 +75,7 @@ describe("Enhancement command transform", () => {
     resignAction: false,
     whisperChat: false,
     chatPrint: false,
+    progressObservation: false,
     };
     const commandsOutput = transformEnhancementWasm(input, build, commandsOnly);
     const commandsExports = parseExports(sectionById(splitSections(commandsOutput), 7));
@@ -150,6 +151,7 @@ describe("Enhancement command transform", () => {
     resignAction: false,
     whisperChat: false,
     chatPrint: false,
+    progressObservation: false,
         }),
         null,
         "a profile without local actions must not accept their manifest",
@@ -174,6 +176,7 @@ describe("Enhancement command transform", () => {
     resignAction: false,
     whisperChat: false,
     chatPrint: false,
+    progressObservation: false,
       }),
       null,
       "manifest comparison must reject unexpected storage authority",
@@ -196,6 +199,7 @@ describe("Enhancement command transform", () => {
     resignAction: false,
     whisperChat: false,
     chatPrint: false,
+    progressObservation: false,
       }),
       null,
       "manifest comparison must reject missing storage authority",
@@ -265,6 +269,7 @@ describe("Enhancement command transform", () => {
     resignAction: false,
     whisperChat: false,
     chatPrint: false,
+    progressObservation: false,
     } as const;
     assert.equal(
       intersectEnhancementCapabilities(aliasesOnly, aliasesOnly).chatAliases,

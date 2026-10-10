@@ -100,6 +100,7 @@ export const LOCAL_FEATURE_INVARIANTS = Object.freeze({
   alcoholObservation: Object.freeze([...SHARED_FEATURE_INVARIANTS, "alcohol.post-process-producer"] as const),
   resignAction: Object.freeze([...SHARED_FEATURE_INVARIANTS, "resign.native-chat-path"] as const),
   chatPrint: Object.freeze([...SHARED_FEATURE_INVARIANTS, "chat.print-validator"] as const),
+  progressObservation: Object.freeze([...SHARED_FEATURE_INVARIANTS, "progress.field-accessors"] as const),
   chatAliases: Object.freeze([
     ...SHARED_FEATURE_INVARIANTS,
     "local.ui-dispatcher",
@@ -234,6 +235,8 @@ export interface LocalFeatureCertificateMap {
     & RequiredBuildFact<"playRegionObservation" | "gameThread" | "resignAction">;
   readonly chatPrint: Readonly<{ core: EnhancementProofCore }>
     & RequiredBuildFact<"playRegionObservation" | "gameThread" | "uiDispatcher" | "chatFiltering" | "chatPrint">;
+  readonly progressObservation: Readonly<{ core: EnhancementProofCore }>
+    & RequiredBuildFact<"playRegionObservation" | "observationBase" | "progressObservation">;
   readonly chatAliases: Readonly<{ core: EnhancementProofCore }>
     & RequiredBuildFact<"uiDispatcher" | "chatAliases">;
   readonly skillSlotGeometry: Readonly<{ core: EnhancementProofCore }>
@@ -485,6 +488,12 @@ export function localFeatureVerdictsForBuild(
       && build.uiDispatcher !== undefined && build.chatFiltering !== undefined && build.chatPrint !== undefined
     ? Object.freeze({ core, playRegionObservation: build.playRegionObservation, gameThread: build.gameThread,
         uiDispatcher: build.uiDispatcher, chatFiltering: build.chatFiltering, chatPrint: build.chatPrint }) : null;
+  const progressObservation = effective?.progressObservation && core !== null
+      && build?.playRegionObservation !== undefined && build.observationBase !== undefined
+      && build.progressObservation !== undefined
+    ? Object.freeze({ core, playRegionObservation: build.playRegionObservation,
+        observationBase: build.observationBase, progressObservation: build.progressObservation })
+    : null;
   const chatAliases = effective?.chatAliases && core !== null
       && build?.uiDispatcher !== undefined
       && build.chatAliases !== undefined
@@ -635,6 +644,10 @@ export function localFeatureVerdictsForBuild(
     chatPrint: featureVerdict<"chatPrint">(
       inputSha256, requested.chatPrint, chatPrint,
       failures.chatPrint, "chat.print-validator",
+    ),
+    progressObservation: featureVerdict<"progressObservation">(
+      inputSha256, requested.progressObservation, progressObservation,
+      failures.progressObservation, "progress.field-accessors",
     ),
     chatAliases: featureVerdict<"chatAliases">(
       inputSha256,

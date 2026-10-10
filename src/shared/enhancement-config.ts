@@ -119,6 +119,20 @@ export interface EnhancementLayout {
   effectMaintainerAgentId: number;
   effectDuration: number;
   effectTimestamp: number;
+  worldMissionsCompleted: number;
+  worldMissionsBonus: number;
+  worldMissionsCompletedHm: number;
+  worldMissionsBonusHm: number;
+  worldVanquishedAreas: number;
+  worldTitles: number;
+  titleStride: number;
+  titleProps: number;
+  titlePoints: number;
+  areaInfoThumbnail: number;
+  areaInfoX: number;
+  areaInfoY: number;
+  areaInfoName: number;
+  areaInfoIcon: number;
 }
 
 export type EnhancementPlayRegionLayout = Pick<EnhancementLayout,
@@ -149,6 +163,22 @@ export type EnhancementStorageLayout = Pick<EnhancementLayout,
 export type EnhancementTravelLayout = Pick<
   EnhancementLayout,
   "worldUnlockedMaps" | "guildContextSlot" | "guildHallKey"
+>;
+export type EnhancementProgressLayout = Pick<EnhancementLayout,
+  | "worldMissionsCompleted"
+  | "worldMissionsBonus"
+  | "worldMissionsCompletedHm"
+  | "worldMissionsBonusHm"
+  | "worldVanquishedAreas"
+  | "worldTitles"
+  | "titleStride"
+  | "titleProps"
+  | "titlePoints"
+  | "areaInfoThumbnail"
+  | "areaInfoX"
+  | "areaInfoY"
+  | "areaInfoName"
+  | "areaInfoIcon"
 >;
 export type EnhancementSkillSlotGeometryLayout = Pick<EnhancementLayout,
   | "frameArray" | "frameCount" | "frameBytes" | "frameChildOffsetId"
@@ -191,7 +221,7 @@ export type EnhancementPartyLayout = Pick<EnhancementLayout,
 
 type Owner = "play-region" | "observation" | "target" | "cursor" | "party" | "storage"
   | "travel" | "player-skillbar" | "party-skillbar" | "skill-slots" | "skill-cooldown"
-  | "character-list" | "player-effects";
+  | "character-list" | "player-effects" | "progress";
 type ConfigField =
   | Readonly<{
     source: "layout";
@@ -238,6 +268,7 @@ type ConfigField =
     owner: "player-effects";
     key: keyof EnhancementPlayerEffectLayout;
   }>
+  | Readonly<{ source: "layout"; owner: "progress"; key: keyof EnhancementProgressLayout }>
   | Readonly<{
     source: "dispatcher";
     key: "playerChatMessage" | "hideHeroPanelMessage" | "showHeroPanelMessage";
@@ -298,6 +329,9 @@ const characterList = (
 ): readonly ConfigField[] => keys.map((key) => ({
   source: "layout", key, owner: "character-list",
 }));
+const progress = (
+  ...keys: readonly (keyof EnhancementProgressLayout)[]
+): readonly ConfigField[] => keys.map((key) => ({ source: "layout", key, owner: "progress" }));
 const playerEffects = (
   ...keys: readonly (keyof EnhancementPlayerEffectLayout)[]
 ): readonly ConfigField[] => keys.map((key) => ({
@@ -355,6 +389,12 @@ export const ENHANCEMENT_CONFIG_FIELDS = Object.freeze([
   ...Array.from({ length: 4 }, (_, index): ConfigField => ({
     source: "effect-dirty", index, owner: "player-effects",
   })),
+  ...progress(
+    "worldMissionsCompleted", "worldMissionsBonus", "worldMissionsCompletedHm",
+    "worldMissionsBonusHm", "worldVanquishedAreas", "worldTitles", "titleStride",
+    "titleProps", "titlePoints", "areaInfoThumbnail", "areaInfoX", "areaInfoY",
+    "areaInfoName", "areaInfoIcon",
+  ),
 ] as const satisfies readonly ConfigField[]);
 
 export const ENHANCEMENT_LAYOUT_FIELDS = Object.freeze(

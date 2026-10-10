@@ -90,6 +90,7 @@ describe("companion kernel build contract", () => {
       { name: "companion_effect_icon_bytes", typeIndex: 2 },
       { name: "companion_alcohol_bytes", typeIndex: 2 },
       { name: "companion_whisper_bytes", typeIndex: 2 },
+      { name: "companion_progress_bytes", typeIndex: 2 },
     ]);
   });
 
@@ -160,6 +161,7 @@ describe("companion kernel build contract", () => {
       companion_character_list_bytes: 4_632,
       companion_whisper_bytes: COMPANION_ABI.whispers.bytes,
       companion_alcohol_bytes: COMPANION_ABI.alcohol.bytes,
+      companion_progress_bytes: COMPANION_ABI.progress.bytes,
       companion_friend_bytes: COMPANION_ABI.friends.bytes,
       companion_player_effect_bytes: COMPANION_ABI.playerEffects.bytes,
       companion_effect_icon_bytes: COMPANION_ABI.effectIcons.bytes,

@@ -27,6 +27,7 @@ const companionKernelSignatureModule = new WebAssembly.Module(
  */
 export const COMPANION_KERNEL_EXPORT_VALUES = Object.freeze({
   companion_alcohol_bytes: COMPANION_ABI.alcohol.bytes,
+  companion_progress_bytes: COMPANION_ABI.progress.bytes,
   companion_whisper_bytes: COMPANION_ABI.whispers.bytes,
   companion_abi: COMPANION_ABI.kernel,
   companion_config_bytes: COMPANION_ABI.config.bytes,
@@ -113,7 +114,9 @@ export const COMPANION_KERNEL_DYLINK0 = Object.freeze([
   // 3988 -> 3985: normal player-chat sender resolution adds no static state;
   //               the linker repacks the existing private data by three bytes.
   // 3985 -> 4024: alcohol continuity and Effects-frame anchor; u64 identity aligns to eight bytes.
-  0x01, 0x05, 0xb8, 0x1f, 0x03, 0x00, 0x00,
+  // 4024 -> 4724: progress publication keeps its 147-word zero record as
+  //               read-only data and adds its pointer, sequence and copy flag.
+  0x01, 0x05, 0xf4, 0x24, 0x03, 0x00, 0x00,
 ]);
 
 const WASM_PAGE_BYTES = 65_536;
