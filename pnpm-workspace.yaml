@@ -31,6 +31,14 @@ overrides:
   # family, which mismatches the 3.x API and breaks the website build/server.
   unhead: 3.2.3
   "@unhead/vue": 3.2.3
+  # Website tooling advisories, October 2026.
+  seroval: 1.6.8
+  proxy-addr: 2.0.8
+  tinypool: 2.2.0
+  shell-quote: 1.12.0
+  sharp: 0.35.5
+  "@modelcontextprotocol/sdk": 1.31.0
+  source-map-js: 1.2.2
 packageExtensions:
   "@nuxt/scripts@0.13.4":
     dependencies:
@@ -70,3 +78,12 @@ auditConfig:
     # No patch is published. Remove when a patched release becomes available,
     # or reassess before accepting untrusted glob patterns.
     - GHSA-vfj7-8cjw-p6xm
+    # Nuxt DevTools 3.x needs simple-git 3, which has no patched release, and
+    # simple-git 4 breaks DevTools at `nuxt prepare`. DevTools runs only for a
+    # local `nuxt dev` and calls fixed commands (branch, rev-parse --short HEAD,
+    # status) without caller options, so the bypassed option guards never see
+    # untrusted input. Remove when Nuxt ships a stable DevTools on simple-git 4.
+    - GHSA-v5rq-49vh-5v5c
+    - GHSA-x6jw-m9v5-85vh
+    - GHSA-g4wm-2vf7-vfgr
+    - GHSA-858h-whjf-mvg5
