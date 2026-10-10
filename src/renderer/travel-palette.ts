@@ -4,6 +4,7 @@
  */
 import { TOOL_PRESENTATION } from '../shared/tool-presentation.js';
 import { currentTravelFriend, type TravelFriend, type TravelFriends } from '../shared/friends.js';
+import type { GameProgressState } from '../shared/game-progress.js';
 import type { TravelCommand, TravelGameState } from '../shared/travel-command.js';
 import type { EmbeddedToolsBundle } from '../shared/tools-bundle-contracts.js';
 import { matchHubRows, type HubRow, type HubSource, type HubViewMount } from '../shared/hub.js';
@@ -24,6 +25,7 @@ export function createTravelPalette(parent: HTMLElement, command: TravelCommand)
   let disposed = false;
   let state: TravelGameState = { status: 'waiting', reason: 'game' };
   let friends: TravelFriends = { status: 'waiting', reason: 'unavailable' };
+  let progress: GameProgressState = { status: 'waiting', reason: 'unavailable' };
   let app: ReturnType<EmbeddedToolsBundle<HTMLElement>['createHubTravel']> | null = null;
   let loading: Promise<void> | null = null;
   let detach: (() => void) | null = null;
@@ -39,7 +41,7 @@ export function createTravelPalette(parent: HTMLElement, command: TravelCommand)
       if (disposed) return;
       app = bundle.createHubTravel({ nativeApi: native, command, development: window.gwNative.init.development, hub,
         leaveArea: (place, leave) => askLeaveArea(hub, leaveAreaCopy('travel', place), leave) });
-      app.update(state); app.updateFriends(friends);
+      app.update(state); app.updateFriends(friends); app.updateProgress(progress);
       unsubscribe = app.source.subscribe(refresh);
       app.source.setVisible(enabled && hub.visible); refresh();
     })().finally(() => { loading = null; });
@@ -127,6 +129,7 @@ export function createTravelPalette(parent: HTMLElement, command: TravelCommand)
       refresh();
     },
     updateFriends(next: TravelFriends) { friends = next; app?.updateFriends(next); },
+    updateProgress(next: GameProgressState) { progress = next; app?.updateProgress(next); },
     update(next: TravelGameState) { state = next; app?.update(next); },
     dispose() {
       disposed = true; app?.dispose(); detach?.(); unsubscribe(); listeners.clear();
