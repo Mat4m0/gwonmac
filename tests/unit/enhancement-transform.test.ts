@@ -60,6 +60,7 @@ const PARTY_ONLY: EnhancementCapabilities = Object.freeze({
     resignAction: false,
     whisperChat: false,
     chatPrint: false,
+    progressObservation: false,
 });
 
 const EFFECT_ONLY: EnhancementCapabilities = Object.freeze({
@@ -84,6 +85,7 @@ const EFFECT_ONLY: EnhancementCapabilities = Object.freeze({
     resignAction: false,
     whisperChat: false,
     chatPrint: false,
+    progressObservation: false,
 });
 
 describe("targeted Enhancement WebAssembly transform", () => {
@@ -349,6 +351,7 @@ describe("targeted Enhancement WebAssembly transform", () => {
     resignAction: false,
     whisperChat: false,
     chatPrint: false,
+    progressObservation: false,
         },
       ),
       /capability profile is not certified/,

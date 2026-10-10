@@ -308,6 +308,7 @@ export const ADDRESSES = Object.freeze({
   agentEffectRows: 0xe000,
   effectRecords: 0xe800,
   alcohol: 0x6_3000,
+  progress: 0x6_4000,
   whispers: 0x6_0000,
   friends: 0x5_0000,
   friendRoot: 0x5_4000,
@@ -561,6 +562,8 @@ export type KernelInit = (
   whisperSize: number,
   alcoholPointer: number,
   alcoholSize: number,
+  progressPointer: number,
+  progressSize: number,
 ) => number;
 export type KernelDispatch = (
   kind: number,
@@ -680,6 +683,21 @@ export async function createKernel(
     effectMaintainerAgentId: 0x0c,
     effectDuration: 0x10,
     effectTimestamp: 0x14,
+    // The progress words certified for build 2 (b5f10d50).
+    worldMissionsCompleted: 0x5cc,
+    worldMissionsBonus: 0x5dc,
+    worldMissionsCompletedHm: 0x5ec,
+    worldMissionsBonusHm: 0x5fc,
+    worldVanquishedAreas: 0x83c,
+    worldTitles: 0x81c,
+    titleStride: 0x2c,
+    titleProps: 0,
+    titlePoints: 4,
+    areaInfoThumbnail: 0x14,
+    areaInfoX: 0x40,
+    areaInfoY: 0x44,
+    areaInfoName: 0x74,
+    areaInfoIcon: 0x48,
   } as const)) {
     setConfigField(
       config,
@@ -791,6 +809,8 @@ export async function createKernel(
         overrides.whisperSize ?? ((features & COMPANION_FEATURE_BITS.whisperObservation) !== 0 ? COMPANION_ABI.whispers.bytes : 0),
         (features & COMPANION_FEATURE_BITS.alcoholObservation) !== 0 ? ADDRESSES.alcohol : 0,
         (features & COMPANION_FEATURE_BITS.alcoholObservation) !== 0 ? COMPANION_ABI.alcohol.bytes : 0,
+        (features & COMPANION_FEATURE_BITS.progressObservation) !== 0 ? ADDRESSES.progress : 0,
+        (features & COMPANION_FEATURE_BITS.progressObservation) !== 0 ? COMPANION_ABI.progress.bytes : 0,
       );
     },
     tick: (skillBarFrameId = 0, skillTimer = 0, effectsFrameHash = 0) => exports.dispatch(

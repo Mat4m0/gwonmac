@@ -36,6 +36,7 @@ const NONE: EnhancementCapabilities = Object.freeze({
     resignAction: false,
     whisperChat: false,
     chatPrint: false,
+    progressObservation: false,
   playRegionObservation: false,
     preGameControls: false,
     characterSwitchAction: false,
@@ -60,6 +61,7 @@ const ALL: EnhancementCapabilities = Object.freeze({
     resignAction: false,
     whisperChat: false,
     chatPrint: false,
+    progressObservation: false,
   playRegionObservation: true,
   preGameControls: true,
   characterSwitchAction: true,
@@ -106,6 +108,7 @@ const STORAGE: EnhancementCapabilities = Object.freeze({
     resignAction: false,
     whisperChat: false,
     chatPrint: false,
+    progressObservation: false,
 });
 const PARTY_TEAM: EnhancementCapabilities = Object.freeze({
   ...NONE,
@@ -137,6 +140,7 @@ const COOLDOWN: EnhancementCapabilities = Object.freeze({
     resignAction: false,
     whisperChat: false,
     chatPrint: false,
+    progressObservation: false,
 });
 const PROVED_FILE = Object.freeze({
   status: "proved" as const,

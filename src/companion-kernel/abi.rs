@@ -42,6 +42,7 @@ pub(crate) const FEATURE_EFFECT_ICON_GEOMETRY: u32 = 1 << 10;
 pub(crate) const FEATURE_WHISPER_OBSERVATION: u32 = 1 << 11;
 pub(crate) const FEATURE_ALCOHOL_OBSERVATION: u32 = 1 << 12;
 pub(crate) const ALCOHOL_BYTES: u32 = 32;
+pub(crate) const FEATURE_PROGRESS_OBSERVATION: u32 = 1 << 13;
 pub(crate) const KNOWN_FEATURES: u32 = FEATURE_NATIVE_CURSOR
     | FEATURE_GAME_SNAPSHOT
     | FEATURE_TOOLBOX_FOUNDATION
@@ -54,7 +55,8 @@ pub(crate) const KNOWN_FEATURES: u32 = FEATURE_NATIVE_CURSOR
     | FEATURE_PLAYER_EFFECT_OBSERVATION
     | FEATURE_EFFECT_ICON_GEOMETRY
     | FEATURE_WHISPER_OBSERVATION
-    | FEATURE_ALCOHOL_OBSERVATION;
+    | FEATURE_ALCOHOL_OBSERVATION
+    | FEATURE_PROGRESS_OBSERVATION;
 
 pub(crate) const CHARACTER_LIST_BYTES: u32 = size_of::<CharacterListSnapshot>() as u32;
 pub(crate) const CHARACTER_LIST_MAGIC: u32 = 0x4843_5747;
@@ -75,6 +77,23 @@ pub(crate) const FLAG_PLAY_REGION_UNLOCKS: u32 = 1 << 3;
 pub(crate) const FLAG_PLAY_REGION_PRE_SEARING: u32 = 1 << 4;
 pub(crate) const FLAG_PLAY_REGION_GUILD_HALL: u32 = 1 << 5;
 pub(crate) const FLAG_PLAY_REGION_HAS_GUILD_HALL: u32 = 1 << 6;
+
+pub(crate) const PROGRESS_BYTES: u32 = size_of::<ProgressSnapshot>() as u32;
+pub(crate) const PROGRESS_MAGIC: u32 = 0x5047_5747;
+pub(crate) const PROGRESS_ABI_AND_SIZE: u32 = (PROGRESS_BYTES << 16) | 1;
+pub(crate) const FLAG_PROGRESS_READY: u32 = 1 << 0;
+pub(crate) const FLAG_PROGRESS_LOADING: u32 = 1 << 1;
+pub(crate) const FLAG_PROGRESS_MISSIONS: u32 = 1 << 2;
+pub(crate) const FLAG_PROGRESS_VANQUISHES: u32 = 1 << 3;
+pub(crate) const FLAG_PROGRESS_TITLES: u32 = 1 << 4;
+pub(crate) const FLAG_PROGRESS_AREAS: u32 = 1 << 5;
+/// Completed, bonus, hard-mode completed, hard-mode bonus.
+pub(crate) const PROGRESS_MISSION_SETS: usize = 4;
+/// Cartographer of Tyria, Cantha and Elona, in that order.
+pub(crate) const PROGRESS_TITLE_IDS: [u32; 3] = [1, 2, 18];
+/// Covers every AreaInfo row the October client defines (898).
+pub(crate) const PROGRESS_AREA_ROWS: usize = 900;
+pub(crate) const PROGRESS_AREA_WORDS: usize = 5;
 
 pub(crate) const SKILL_SLOT_BYTES: u32 = size_of::<SkillSlotSnapshot>() as u32;
 pub(crate) const SKILL_SLOT_MAGIC: u32 = 0x534b_5747;
@@ -342,6 +361,22 @@ pub(crate) struct Layout {
     pub(crate) effect_duration: u32,
     pub(crate) effect_timestamp: u32,
     pub(crate) effect_dirty_messages: [u32; EFFECT_DIRTY_MESSAGE_COUNT],
+    pub(crate) world_missions_completed: u32,
+    pub(crate) world_missions_bonus: u32,
+    pub(crate) world_missions_completed_hm: u32,
+    pub(crate) world_missions_bonus_hm: u32,
+    pub(crate) world_vanquished_areas: u32,
+    pub(crate) world_titles: u32,
+    pub(crate) title_stride: u32,
+    pub(crate) title_props: u32,
+    pub(crate) title_points: u32,
+    pub(crate) area_info_thumbnail: u32,
+    pub(crate) area_info_x: u32,
+    pub(crate) area_info_y: u32,
+    pub(crate) area_info_name: u32,
+    /// Two world-map icon rectangles (left, top, right, bottom), the second
+    /// directly after the first. Explorable areas have only these, no point.
+    pub(crate) area_info_icon: u32,
 }
 
 impl Layout {
@@ -467,6 +502,20 @@ impl Layout {
         effect_duration: 0,
         effect_timestamp: 0,
         effect_dirty_messages: [0; EFFECT_DIRTY_MESSAGE_COUNT],
+        world_missions_completed: 0,
+        world_missions_bonus: 0,
+        world_missions_completed_hm: 0,
+        world_missions_bonus_hm: 0,
+        world_vanquished_areas: 0,
+        world_titles: 0,
+        title_stride: 0,
+        title_props: 0,
+        title_points: 0,
+        area_info_thumbnail: 0,
+        area_info_x: 0,
+        area_info_y: 0,
+        area_info_name: 0,
+        area_info_icon: 0,
     };
 }
 
@@ -529,6 +578,26 @@ pub(crate) struct PlayRegionSnapshot {
     pub(crate) character_key_low: u32,
     pub(crate) character_key_high: u32,
     pub(crate) unlocked_maps: [u32; TRAVEL_UNLOCK_WORDS],
+}
+
+/// One AreaInfo row: `campaign | continent << 8 | region << 16 | type << 24`,
+/// flags, name id, and world-map x/y. Bit 31 of word 0 marks a row that was
+/// read; bit 30 marks a row with a thumbnail. Unread rows stay zero.
+#[repr(C)]
+pub(crate) struct ProgressSnapshot {
+    pub(crate) magic: u32,
+    pub(crate) abi_and_size: u32,
+    pub(crate) sequence: u32,
+    pub(crate) flags: u32,
+    pub(crate) map_id: u32,
+    pub(crate) character_key_low: u32,
+    pub(crate) character_key_high: u32,
+    pub(crate) area_count: u32,
+    pub(crate) missions: [[u32; TRAVEL_UNLOCK_WORDS]; PROGRESS_MISSION_SETS],
+    pub(crate) vanquished: [u32; TRAVEL_UNLOCK_WORDS],
+    /// `props, points` per Cartographer title.
+    pub(crate) titles: [[u32; 2]; 3],
+    pub(crate) areas: [[u32; PROGRESS_AREA_WORDS]; PROGRESS_AREA_ROWS],
 }
 
 #[repr(C)]
@@ -709,7 +778,8 @@ pub(crate) struct PartySnapshot {
     pub(crate) character_skills: [u32; SKILL_UNLOCK_WORDS],
 }
 
-const _: [(); 532] = [(); size_of::<Layout>()];
+const _: [(); 588] = [(); size_of::<Layout>()];
+const _: [(); 18616] = [(); size_of::<ProgressSnapshot>()];
 const _: [(); 72] = [(); size_of::<CharacterRecord>()];
 const _: [(); 4632] = [(); size_of::<CharacterListSnapshot>()];
 const _: [(); 96] = [(); size_of::<PartySlot>()];

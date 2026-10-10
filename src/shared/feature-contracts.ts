@@ -164,6 +164,8 @@ export const FEATURE_SELECTION_POLICIES = defineFeatureSelectionPolicies({
     region: "non-pvp",
   },
   alcoholTimer: { activation: { kind: "setting", setting: "alcoholTimerEnabled", master: "gwonmacTools" }, region: "pve" },
+  // Progress is a page of the Travel app, so it follows the Travel setting.
+  progress: { activation: { kind: "setting", setting: "travelPalette", master: "gwonmacTools" }, region: "pve" },
   reminders: { activation: { kind: "setting", setting: "remindersEnabled", master: "gwonmacTools" }, region: "pve" },
   effectTimers: {
     activation: {
