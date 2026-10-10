@@ -443,6 +443,18 @@ export interface KnownEnhancementBuild {
       bodySha256: string;
     }>;
   }>;
+  /**
+   * The game's encoded-text validator that the certified chat-log producer
+   * asserts on. Local chat lines call it first, then that producer.
+   */
+  chatPrint?: Readonly<{
+    validator: Readonly<{
+      functionIndex: number;
+      params: readonly ["i32"];
+      results: readonly ["i32"];
+      bodySha256: string;
+    }>;
+  }>;
   /** Exact party-observation authority beyond the shared UI dispatcher. */
   partyObservation?: Readonly<{
     partyDirtyMessages: EnhancementPartyDirtyMessages;
@@ -664,6 +676,8 @@ export function supportedEnhancementCapabilities(
     whisperChat: playRegionObservation && gameThread && build.uiDispatcher !== undefined
       && build.chatFiltering !== undefined && build.whisperChat !== undefined,
     resignAction: playRegionObservation && gameThread && build.resignAction !== undefined,
+    chatPrint: playRegionObservation && gameThread && build.uiDispatcher !== undefined
+      && build.chatFiltering !== undefined && build.chatPrint !== undefined,
   });
   // Evidence locators decide only what they proved. The shared registry owns
   // every dependency and closes the available set in one canonical place.
@@ -752,6 +766,10 @@ export function hasValidEnhancementProfileHashes(
   if (
     build.chatFiltering !== undefined
     && (build.observationBase === undefined || build.uiDispatcher === undefined)
+  ) return false;
+  if (
+    build.chatPrint !== undefined
+    && (build.chatFiltering === undefined || build.gameThread === undefined)
   ) return false;
   if (
     build.quickItemMove !== undefined
