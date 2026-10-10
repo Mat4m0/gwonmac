@@ -49,6 +49,7 @@ function session(capabilities: EnhancementCapabilities): ClientSession {
       preGameControls: selected(capabilities.preGameControls),
       characterSwitchAction: selected(capabilities.characterSwitchAction),
       quickItemMove: selected(capabilities.quickItemMove),
+      chatPrint: selected(capabilities.chatPrint),
     },
   };
   return {
@@ -102,6 +103,7 @@ describe("effective Enhancement capability boundary", () => {
           preGameControls: off,
           characterSwitchAction: off,
           quickItemMove: off,
+          chatPrint: off,
         },
       },
     };
@@ -123,6 +125,7 @@ describe("effective Enhancement capability boundary", () => {
       nativeHudRendering: false,
       resignAction: false,
       whisperChat: false,
+      chatPrint: false,
       playRegionObservation: false,
       preGameControls: false,
       characterSwitchAction: false,

@@ -20,6 +20,7 @@ import { deriveAlcoholObservation } from "./enhancement-alcohol-proof.js";
 import { deriveNativeHudRendering, provesNativeHudRendering } from "./native-hud-transform.js";
 import { deriveWhisperChat } from "./enhancement-whisper-proof.js";
 import { deriveResignAction } from "./enhancement-resign-proof.js";
+import { deriveChatPrint } from "./enhancement-chat-filter-proof.js";
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import {
@@ -54,6 +55,7 @@ import {
 import { transformEnhancementWasm } from "./enhancement-transform.js";
 import {
   enhancementProofContext,
+  isolatedProof,
   type EnhancementProofContext,
 } from "./wasm-evidence.js";
 import {
@@ -648,7 +650,7 @@ function deriveEnhancementBuild(
     : null;
   const includePreGame = requestedCapabilities.preGameControls
     && preGameControls !== null;
-  const wantsLocal = requestedCapabilities.whisperChat || requestedCapabilities.resignAction || requestedCapabilities.partyObservation
+  const wantsLocal = requestedCapabilities.whisperChat || requestedCapabilities.resignAction || requestedCapabilities.chatPrint || requestedCapabilities.partyObservation
     || requestedCapabilities.teamApply
     || requestedCapabilities.travelAction
     || requestedCapabilities.xunlaiAction
@@ -712,6 +714,14 @@ function deriveEnhancementBuild(
     ? deriveWhisperChat(context.moduleView()) : null;
   const includeWhispers = whisperChat !== null && includePlayRegion && includeChatFiltering
     && locatedLocal?.gameThread != null;
+  // A missing or ambiguous validator withdraws only chatPrint.
+  const chatPrint = requestedCapabilities.chatPrint && includeChatFiltering
+      && locatedLocal?.gameThread != null && locatedLocal.chatFiltering != null
+    ? isolatedProof(() => deriveChatPrint(
+        context.moduleView(), locatedLocal.baseline, locatedLocal.chatFiltering!,
+      ))
+    : null;
+  const includeChatPrint = chatPrint != null && includePlayRegion;
   const resignAction = requestedCapabilities.resignAction
     ? deriveResignAction(context.moduleView()) : null;
   const includeResign = resignAction !== null && includePlayRegion
@@ -752,6 +762,8 @@ function deriveEnhancementBuild(
       ? { whisperChat: changedFeature("whisperChat", "whisper.native-chat-path") } : {}),
     ...(requestedCapabilities.resignAction && !includeResign
       ? { resignAction: changedFeature("resignAction", "resign.native-chat-path") } : {}),
+    ...(requestedCapabilities.chatPrint && !includeChatPrint
+      ? { chatPrint: changedFeature("chatPrint", "chat.print-validator") } : {}),
     ...(requestedCapabilities.preGameControls && !includePreGame
       ? {
           preGameControls: changedFeature(
@@ -927,7 +939,8 @@ function deriveEnhancementBuild(
     ...(localContributes ? { uiDispatcher: locatedLocal!.uiDispatcher! } : {}),
     ...(includeWhispers ? { whisperChat: whisperChat! } : {}),
     ...(includeResign ? { resignAction: resignAction! } : {}),
-    ...(includeWhispers || includeResign || includeTeam || includeTravel || includeXunlai || includeCharacterSwitch
+    ...(includeChatPrint ? { chatPrint: chatPrint! } : {}),
+    ...(includeWhispers || includeResign || includeChatPrint || includeTeam || includeTravel || includeXunlai || includeCharacterSwitch
       ? { gameThread: locatedLocal!.gameThread! }
       : {}),
     ...(includeTravel ? { travelAction: locatedLocal!.travelAction! } : {}),
@@ -970,6 +983,7 @@ function deriveEnhancementBuild(
     nativeHudRendering: includeNativeHud,
     resignAction: includeResign,
     whisperChat: includeWhispers,
+    chatPrint: includeChatPrint,
   });
   const effective = intersectEnhancementCapabilities(requestedCapabilities, maximum);
   const profile = enhancementCapabilityProfile(effective);

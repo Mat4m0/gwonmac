@@ -154,6 +154,7 @@ function featureFailuresFromVerdicts(
   const alcoholObservation = refusalForFeature("alcoholObservation", verdicts.alcoholObservation);
   const whisperChat = refusalForFeature("whisperChat", verdicts.whisperChat);
   const resignAction = refusalForFeature("resignAction", verdicts.resignAction);
+  const chatPrint = refusalForFeature("chatPrint", verdicts.chatPrint);
   const chatAliases = refusalForFeature("chatAliases", verdicts.chatAliases);
   const chatFiltering = refusalForFeature(
     "chatFiltering",
@@ -209,6 +210,7 @@ function featureFailuresFromVerdicts(
     || nativeHudRendering === null
     || whisperChat === null
     || resignAction === null
+    || chatPrint === null
   ) return null;
   return Object.freeze({
     ...(nativeCursor ? { nativeCursor } : {}),
@@ -231,6 +233,7 @@ function featureFailuresFromVerdicts(
     ...(whisperChat ? { whisperChat } : {}),
     ...(alcoholObservation ? { alcoholObservation } : {}),
     ...(resignAction ? { resignAction } : {}),
+    ...(chatPrint ? { chatPrint } : {}),
   });
 }
 
@@ -723,6 +726,11 @@ function isAutomaticSemanticBuild(
     !build.playRegionObservation || !build.gameThread
     || !isResignNativeSender(build.resignAction)
   )) return false;
+  // The validator may move between builds; its exact body and signature may not.
+  if (build.chatPrint !== undefined && (build.gameThread === undefined || build.chatFiltering === undefined
+    || !isIndex(build.chatPrint.validator?.functionIndex)
+    || !ENHANCEMENT_BUILDS.some(baseline => baseline.chatPrint !== undefined && isDeepStrictEqual(
+      { ...build.chatPrint!.validator, functionIndex: 0 }, { ...baseline.chatPrint.validator, functionIndex: 0 })))) return false;
   if (build.quickItemMove !== undefined && !ENHANCEMENT_BUILDS.some(baseline =>
     baseline.sha256 === build.sha256
     && isDeepStrictEqual(build.quickItemMove, baseline.quickItemMove))) return false;

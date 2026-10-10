@@ -11,7 +11,7 @@ import { TOOL_PRESENTATION } from '../shared/tool-presentation.js';
 import { listIndexAfter, listKeyStep } from '../shared/ui/list-keys.js';
 import { createTrailingSave } from './trailing-save.js';
 import { extendedMemoryView } from './extended-memory-setting.js';
-import { CHARACTER_DETAILS, CHAT_FILTERS, CONTROLLER_SYMBOL_OPTIONS, GAME_SETTINGS, RENDER_SCALE_OPTIONS, settingDetail } from '../shared/setting-copy.js';
+import { CHARACTER_DETAILS, CHAT_FILTERS, CONTROLLER_SYMBOL_OPTIONS, GAME_SETTINGS, RENDER_SCALE_OPTIONS, REMINDER_GROUPS, REMINDER_SOUND, REMINDER_TIMING, settingDetail } from '../shared/setting-copy.js';
 import type { AppSettings, ExtendedMemoryRuntimeStatus } from '../shared/contracts.js';
 import type { LauncherSettingsSection } from '../shared/launcher-contracts.js';
 import { DEFAULT_SHORTCUTS, HUB_BACK_SHORTCUT, HUB_SHORTCUT, isHubBackKey, SHORTCUT_CAPTURE_HINT, shortcutEquals, shortcutKeycaps, shortcutReserved, SHORTCUT_ACTIONS, SHORTCUT_LABELS, shortcutConflict, type ShortcutAction, type ShortcutBinding } from '../shared/keyboard-shortcuts.js';
@@ -196,7 +196,8 @@ export function openHubSettings(hub: Hub, focus?: HubSettingsFocus) {
           const info = TOOL_PRESENTATION[tool]; const on = (tool === 'character-switch' || snapshot.tools.configured) && snapshot.tools.features[tool].enabled;
           toggle(info.label, snapshot.tools.features[tool].enabled, enabled => ({ kind: 'tool', tool, enabled }), info.description, tool !== 'character-switch' && !snapshot.tools.configured);
           // A tool's own options follow it while it is on, as in the launcher.
-          const options = on && tool === 'character-switch' ? CHARACTER_DETAILS : on && tool === 'chat-filters' ? CHAT_FILTERS : [];
+          const options = !on ? [] : tool === 'character-switch' ? CHARACTER_DETAILS : tool === 'chat-filters' ? CHAT_FILTERS
+            : tool === 'reminders' ? [...REMINDER_GROUPS, ...REMINDER_TIMING, REMINDER_SOUND] : [];
           for (const option of options) { settingToggle(option.label, option.key); body.lastElementChild?.classList.add('hub-setting-option'); }
         }
         const note = doc.createElement('p'); note.textContent = 'Whisper sound and pop-out opacity are in Whispers › Chat options.'; body.append(note);

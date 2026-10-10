@@ -202,6 +202,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     alcoholObservation: false,
     resignAction: false,
     whisperChat: false,
+    chatPrint: false,
   });
   const verifyFeatureMutation = (candidate: Uint8Array) =>
     verifyLocalClientBytes(candidate, withoutCharacterSwitch);
@@ -226,6 +227,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     nativeHudRendering: true,
     resignAction: true,
     whisperChat: true,
+    chatPrint: false,
   } satisfies EnhancementCapabilities);
   // If this is a statically shipped build, the shape locator must still
   // reproduce that record exactly. Unknown builds are intentionally decided
@@ -368,6 +370,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     nativeHudRendering: true,
     resignAction: false,
     whisperChat: false,
+    chatPrint: false,
   } satisfies EnhancementCapabilities);
   assert.deepEqual(addressDecision.reasons, []);
   const addressTemplateBuild = addressDecision.templateSaveBuild;
@@ -397,6 +400,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     nativeHudRendering: true,
     resignAction: false,
     whisperChat: false,
+    chatPrint: false,
   } satisfies EnhancementCapabilities);
 
   const areaInfo = playRegionLocation.playRegionLayout.areaInfo;
