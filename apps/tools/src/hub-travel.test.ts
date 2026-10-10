@@ -4,6 +4,9 @@ import { TRAVEL_DESTINATIONS } from '../../../src/shared/travel';
 import { travelDestinationAvailability } from '../../../src/shared/travel-command';
 import { searchTravelDestinations } from '../../../src/shared/travel-search';
 import { createDemoTravelHost } from './travel-host';
+import { progressFixture } from './progress-fixture';
+import { nextTick } from 'vue';
+import type { HubViewAction } from '../../../src/shared/hub';
 
 describe('Hub travel recents', () => {
   it('shows actionable recents and keeps unavailable places in explicit search', () => {
@@ -138,4 +141,33 @@ it('root Guild Hall travel asks before leaving an explorable area', async () => 
     expect(leave).toHaveBeenCalledOnce();
     expect(host.state.value).toMatchObject({mapId: 58, explorable: true, guildHall: false});
   } finally {travel.dispose();}
+});
+
+it('offers Progress once the reader publishes, opens a goal by its word and travels from it', async () => {
+  const host = createDemoTravelHost();
+  const trip = vi.spyOn(host, 'travel');
+  const hub = {showView: vi.fn(), showRows: vi.fn(), attach: vi.fn(), close: vi.fn(), notify: vi.fn()};
+  const travel = createHubTravel(host, hub, async (_place, leave) => leave());
+  const target = document.createElement('div');
+  document.body.append(target);
+  try {
+    // A client without the certified reader never publishes, so it has no Progress row.
+    expect(travel.source.search('progress').map(row => row.id)).not.toContain('progress');
+    travel.updateProgress(progressFixture(55));
+    expect(travel.source.search('progress').map(row => row.id)).toContain('progress');
+    await travel.source.search('vq').find(row => row.id === 'progress:vanquisher')!.run({live: () => true, progress() {}, done() {}});
+    const [title, mount] = hub.showView.mock.calls.at(-1)!;
+    expect(title).toBe('Progress');
+    let primary: HubViewAction | null = null;
+    const unmount = mount(target, vi.fn(), {primary: (action: HubViewAction | null) => { primary = action; }, secondary: vi.fn(), openActions: vi.fn()});
+    await nextTick();
+    expect(target.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toContain('Vanquisher');
+    const action = primary as HubViewAction | null;
+    expect(action?.label).toMatch(/^Travel to .+ \(nearest\)$/);
+    await action!.run({live: () => true, progress() {}, done() {}});
+    expect(target.querySelector('.ui-status-line')?.textContent ?? '').toBe('');
+    expect(trip).toHaveBeenCalledOnce();
+    expect(hub.close).toHaveBeenCalledOnce();
+    unmount();
+  } finally { target.remove(); travel.dispose(); }
 });

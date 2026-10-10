@@ -1,12 +1,14 @@
 /** One Travel host serves both unified search and the existing detailed view. */
 import { TOOL_PRESENTATION } from '../../../src/shared/tool-presentation';
-import { createApp, h, watch } from 'vue';
+import { createApp, h, reactive, shallowRef, watch } from 'vue';
 import type { HubPresenter, HubRow, HubSource, HubTask, HubViewMount } from '../../../src/shared/hub';
 import { matchHubRows, parseHubQuery, hubTier, normaliseHubQuery } from '../../../src/shared/hub';
 import { TRAVEL_DESTINATIONS, isPvpTravelDestination, travelDestination, type TravelDestination } from '../../../src/shared/travel';
 import { guildWarsMapName } from '../../../src/shared/guild-wars-map-names';
 import { travelContextRefusal, travelDestinationAvailability } from '../../../src/shared/travel-command';
 import TravelPalette from './components/TravelPalette.vue';
+import ProgressView, { type ProgressViewResume } from './components/ProgressView.vue';
+import { PROGRESS_GOAL_WORDS, currentProgressCampaign, progressGoals, type GameProgressState, type ProgressCampaignId, type ProgressGoalId } from '../../../src/shared/game-progress';
 import type { TravelHost } from './travel-host';
 import { useTravelPreferences } from './travel-preferences';
 
@@ -25,9 +27,14 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
   let active = false;
   let disposed = false;
   let loadError = '';
+  const progress = shallowRef<GameProgressState>({ status: 'waiting', reason: 'unavailable' });
+  /** The goal last chosen per campaign; memory only, so a restart opens on the first goal. */
+  const progressGoalChoice = reactive(new Map<ProgressCampaignId, ProgressGoalId>());
+  /** A client without the certified progress reader never publishes, so its Hub has no Progress row. */
+  let progressReader = false;
   const listeners = new Set<() => void>();
   const refresh = () => { for (const listener of listeners) listener(); };
-  const stop = watch([host.state, host.attempt, host.history, preferences.synonyms], refresh, { flush: 'sync' });
+  const stop = watch([host.state, host.attempt, host.history, preferences.synonyms, progress], refresh, { flush: 'sync' });
   // A trip that fails after the quiet close ("did not start", "did not confirm arrival") is
   // reported once through the Hub's receipt; success stays quiet, and the open Travel view
   // shows its own notice (HUB-072).
@@ -60,6 +67,28 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
       return () => { active = false; app.unmount(); };
     };
   }
+  /**
+   * The Progress page: one goal's missing missions, areas or outposts, each one trip away.
+   * It shares Travel's trip, refusals and "Leave this area?" question.
+   */
+  function progressPage(start: Readonly<{ campaign: ProgressCampaignId; goal: ProgressGoalId }> | null = null): HubViewMount<HTMLElement> {
+    let resume: ProgressViewResume | undefined = start ? { ...start, query: '', showFinished: false } : undefined;
+    return (target, back, footer) => {
+      const app = createApp({ setup: () => () => h(ProgressView, {
+        progress, travelState: host.state, footer, hubParent: !!hub.hasParent, goalChoice: progressGoalChoice, travel,
+        ...(resume ? { resume } : {}), onRemember: (state: ProgressViewResume) => { resume = state; }, onClose: back,
+        onTravelled: () => hub.close(),
+        showInTravel: (name: string) => hub.showView('Travel', page(name), available, 'travel'),
+      }) });
+      app.mount(target);
+      return () => app.unmount();
+    };
+  }
+  /** A goal row opens on its goal: the choice it names becomes that campaign's remembered goal. */
+  function openProgress(start: Parameters<typeof progressPage>[0] = null) {
+    if (start) progressGoalChoice.set(start.campaign, start.goal);
+    hub.showView('Progress', progressPage(start), available);
+  }
   const available = () => !disposed && !!window.gwToolsSettings?.().gwonmacTools && !!window.gwToolsSettings?.().travelPalette;
   function open() { hub.showView('Travel', page(), available, 'travel'); }
   /** The certified instance type, never the catalogue: a Guild Hall or an uncatalogued outpost is no explorable area. */
@@ -86,6 +115,23 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
   /** Travel's own search phrases for one place: they find it as exactly as its name. */
   const phrases = (mapId: number, query: string) => preferences.searchSynonyms(query).filter(entry => entry.mapId === mapId).map(entry => entry.term);
   const toolRow = (): HubRow => ({ id: 'travel', title: TOOL_PRESENTATION['quick-travel'].label, detail: loadError || 'Outposts, favourites, recent places and Guild Hall', group: 'Tools', keywords: 'tp teleport destination', action: 'Browse travel', navigate: open, run: open });
+  const progressRow = (): HubRow => ({ id: 'progress', title: 'Progress', detail: progress.value.status === 'ready' ? 'Missions, vanquishes and outposts still to do' : 'Missions, vanquishes and outposts · in an outpost or explorable area',
+    group: 'Tools', keywords: 'protector guardian vanquisher cartographer title missions hm vq', action: 'Show progress', navigate: () => openProgress(), run: () => openProgress() });
+  /** A goal word ("vq", "guardian") offers that goal of the campaign the player is in. */
+  function goalRows(query: string): HubRow[] {
+    const state = progress.value;
+    if (!query.trim() || state.status !== 'ready') return [];
+    const campaign = currentProgressCampaign(state);
+    if (campaign === null) return [];
+    const travelState = host.state.value;
+    const inputs = { progress: state, unlockedMapWords: travelState.status === 'ready' ? travelState.unlockedMapWords : null };
+    return progressGoals(campaign, inputs).flatMap(goal => {
+      const row: HubRow = { id: `progress:${goal.id}`, title: goal.name, aliases: PROGRESS_GOAL_WORDS[goal.id],
+        detail: goal.percent !== null ? `${goal.percent.toFixed(1)}% explored` : goal.done === goal.total ? 'Complete' : `${goal.total - goal.done} ${goal.unit ?? ''} left`,
+        group: 'Progress', action: 'Show progress', navigate: () => openProgress({ campaign, goal: goal.id }), run: () => openProgress({ campaign, goal: goal.id }) };
+      return hubTier(row, query) === null ? [] : [row];
+    });
+  }
   const source: HubSource = {
     feature: 'travelPalette',
     context() {
@@ -105,6 +151,7 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
     // A pin or phrase shows the row search shows: its detail, its › and its → (HUB-177).
     lookup(id) {
       if (id === 'travel') return toolRow();
+      if (id === 'progress') return progressReader ? progressRow() : undefined;
       const place = travelDestination(Number(id.replace('place:', '')));
       return place ? source.search(place.name).find(row => row.id === id) : undefined;
     },
@@ -147,16 +194,16 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
           detail: query.trim() ? 'Outpost · Any district' : 'Recently visited · Any district',
           group: query.trim() ? 'Places' : 'Continue', action: `Travel to ${destination.name}`, consequential: true, leavesArea: explorable(),
           ...(reason ? { unavailable: reason } : {}), run: async (task: HubTask) => { await travel(destination.mapId); task.done(); } };
-      })].sort((a, b) => (hubTier(a, query) ?? 3) - (hubTier(b, query) ?? 3)), ...more, ...matchHubRows([toolRow()], query)];
+      })].sort((a, b) => (hubTier(a, query) ?? 3) - (hubTier(b, query) ?? 3)), ...more, ...goalRows(query), ...matchHubRows(progressReader ? [toolRow(), progressRow()] : [toolRow()], query)];
     },
   };
   /**
    * The Travel row stays through a map load, character select or PvP and says why it waits, so a
    * fresh Home never starts on it and Enter never runs a dead row (HUB-135).
    */
-  const withReason = (row: HubRow): HubRow => row.id === 'travel' && host.unavailable ? { ...row, unavailable: host.unavailable } : row;
+  const withReason = (row: HubRow): HubRow => (row.id === 'travel' || row.id === 'progress') && host.unavailable ? { ...row, unavailable: host.unavailable } : row;
   return { source: { ...source, search: (query: string) => source.search(query).map(withReason) }, open, page, travel, get active() { return active; },
-    update: host.updateGameState, updateFriends: host.updateFriends,
+    update: host.updateGameState, updateFriends: host.updateFriends, updateProgress(next: GameProgressState) { progressReader = true; progress.value = next; },
     dispose() { disposed = true; stop(); stopNotice(); listeners.clear(); host.dispose(); },
   };
 }

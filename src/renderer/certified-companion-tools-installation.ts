@@ -461,6 +461,8 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
     for (const event of wanted) queued = chatPrint.print(`${CHAT_PRINT_PREFIX}${reminderLine(event)}`) || queued;
     if (queued && snapshot().settings.reminderSound) reminderChime.play();
   };
+  // The Hub's Progress page lives in the Travel app, which already owns the trip.
+  const unsubscribeProgress = progress.subscribe(state => travel?.updateProgress(state));
   const unsubscribeReminders = [
     playerEffects.subscribe(state => {
       if (!remindersWant("cons", "pcons")) { consumableWatch = new Map(); return; }
@@ -477,7 +479,8 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
   const disposePresentation = () => runCleanupSteps(
     "Companion Tools presentation cleanup failed",
     [
-      () => { for (const unsubscribe of unsubscribeReminders) unsubscribe(); reminderChime.dispose(); chatPrint.setEnabled(false); },
+      () => { unsubscribeProgress();
+        for (const unsubscribe of unsubscribeReminders) unsubscribe(); reminderChime.dispose(); chatPrint.setEnabled(false); },
       () => { readout?.dispose(); readout = null; },
       () => toolbox?.dispose(),
       () => eliteMaps.dispose(),
