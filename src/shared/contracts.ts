@@ -1148,9 +1148,6 @@ export const CORE_IPC = {
   diagnosticsVisualSubmit: "gw:diagnostics:visualSubmit",
   diagnosticsProfileSet: "gw:diagnostics:profileSet",
   diagnosticsCurrent: "gw:diagnostics:current",
-  cartographyEvidenceExport: "gw:cartography:evidenceExport",
-  cartographyMapKnowledgeGet: "gw:cartography:mapKnowledgeGet",
-  cartographyMapKnowledgeRecord: "gw:cartography:mapKnowledgeRecord",
   appOpenExternal: "gw:app:openExternal",
   appRevealPath: "gw:app:revealPath",
   hubAccountsGet: "gw:hub:accounts:get",
@@ -1185,6 +1182,10 @@ export const CORE_IPC = {
 
 /** Channels and events that exist only in a Tools-capable launch. */
 export const TOOLS_IPC = {
+  cartographyEvidenceExport: "gw:cartography:evidenceExport",
+  cartographyMapKnowledgeGet: "gw:cartography:mapKnowledgeGet",
+  cartographyMapKnowledgeRecord: "gw:cartography:mapKnowledgeRecord",
+
   tradeSubscribe: "gw:trade:subscribe",
   tradeUnsubscribe: "gw:trade:unsubscribe",
   tradeSearch: "gw:trade:search",
@@ -1360,15 +1361,6 @@ export interface CoreGwNativeApiBase {
     submitVisualCapture(value: VisualCaptureSubmission): Promise<void>;
     setProfile(value: DiagnosticProfile): Promise<DiagnosticProfile>;
   };
-  cartography: {
-    getMapKnowledge(kernelSha256: string): Promise<readonly CartographyMapKnowledge[]>;
-    recordMapKnowledge(
-      value: CartographyMapKnowledge,
-    ): Promise<readonly CartographyMapKnowledge[]>;
-    exportEvidence(
-      value: CartographyEvidenceCapture,
-    ): Promise<CartographyEvidenceExportResult>;
-  };
   accounts: {
     get(): Promise<HubAccountsSnapshot>;
     open(request: HubAccountRequest): Promise<void>;
@@ -1438,6 +1430,16 @@ export interface CoreGwNativeApiBase {
 
 /** Optional namespaces installed only by the Tools preload extension. */
 export interface ToolsNativeApiExtension {
+  cartography: {
+    getMapKnowledge(kernelSha256: string): Promise<readonly CartographyMapKnowledge[]>;
+    recordMapKnowledge(
+      value: CartographyMapKnowledge,
+    ): Promise<readonly CartographyMapKnowledge[]>;
+    exportEvidence(
+      value: CartographyEvidenceCapture,
+    ): Promise<CartographyEvidenceExportResult>;
+  };
+
   trade: {
     subscribe(source: TradeSource): Promise<TradeSnapshot>;
     unsubscribe(): Promise<void>;
@@ -1474,6 +1476,7 @@ export interface ToolsNativeApiExtension {
 export type ToolNativeNamespace = keyof ToolsNativeApiExtension;
 
 const TOOL_NATIVE_NAMESPACE_MAP = {
+  cartography: true,
   trade: true,
   travelPreferences: true,
   travelHistory: true,

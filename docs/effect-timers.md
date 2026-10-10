@@ -143,5 +143,10 @@ each 56-unit skill icon. The stock 24-unit tile has seven transparent units abov
 and left. Their size and corner inset follow the interface scale without
 fixed pixel limits. Long chords shrink only when needed to fit the icon.
 The game's key bindings and icon artwork stay unchanged.
-Native icon destruction, disabling the feature, and graphics reset release the
-owned resources. Missing native drawing support produces no browser fallback.
+Native icon destruction, disabling the feature, and graphics reset hide the
+drawing at once and restore the stock keycaps. A model the game still holds in
+its render queue is not freed yet: it waits in bounded storage, and a later
+native callback frees it when the queue and graphics phase allow. Until then,
+geometry changes and icon replacements wait, and a cache rebuild redraws the
+queued model unchanged.
+Missing native drawing support produces no browser fallback.

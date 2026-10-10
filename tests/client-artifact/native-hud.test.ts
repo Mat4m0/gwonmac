@@ -23,7 +23,7 @@ for (const channel of ["cooldowns", "keys", "effects"] as const) {
   const exported = parseExports(sectionById(sections, 7));
   const label = exported.find((entry) => entry.name === "gwonmac_hud_label")?.index; assert.ok(label);
   const first = label - 8;
-  const selected = [...Array.from({length: 7}, (_, n) => first + 2 + n), first, 6492, 6585, first + 9];
+  const selected = [...Array.from({length: 7}, (_, n) => first + 2 + n), first, 6492, 6585, first + 9, first + 10, first + 11];
   const peers = [17640, 6587, 294, 295, 322, 334, 6588, 6598, 6599, 6601, 6602, first + 1, 6593, 748, 17791, 17793, 1444, 1445, 1446, 1448, 1449, 1554, 1572, 6446, 1563, 1569, 1579, 1333, 1334, 1357, 264, 1559, 5595, 2249, 3137, 750].map(index => clientFixture.functionIndex(index));
   const indices = new Map([...peers, ...selected].map((index, position) => [index, position]));
   const decoded = evidence.decodeFunctions([]);
@@ -40,7 +40,7 @@ for (const channel of ["cooldowns", "keys", "effects"] as const) {
   });
   const scalarExports = exported.filter((entry) => entry.kind === 3 && entry.name.startsWith("gwonmac_hud_"));
   const section = (id: number, body: Uint8Array) => encodeSection({id, body});
-  const labels = ["release", "reset", "mesh", "collect", "destroy", "atlas", "label", "originalCollect", "wrappedCollect", "buildCache", "hideStockKey"];
+  const labels = ["release", "reset", "mesh", "collect", "destroy", "atlas", "label", "originalCollect", "wrappedCollect", "buildCache", "hideStockKey", "reap", "cleanup"];
   const globalCount = vectorPayload(sectionById(sections, 6)).count;
   const fixture = concat(WASM_HEADER,
     section(1, sectionById(sections, 1)),
@@ -56,6 +56,7 @@ for (const channel of ["cooldowns", "keys", "effects"] as const) {
     section(9, concat(uleb(1), Uint8Array.of(0, 0x41, 0xae, 0x0d, 0x0b), uleb(4), ...[6598, 6599, 6601, 6602].map((index) => uleb(indices.get(index)!)))),
     section(10, encodeCode(rewritten)));
   let textureCreates = 0, invalidations = 0, meshes = 0, destroyed = 0, nextHandle = 100;
+  const draws = new Set<number>();
   const refs = new Map<number, number>(); const meshVertices = new Map<number, number>();
   const create = () => { const handle = nextHandle++; refs.set(handle, 1); return handle; };
   const collected: number[] = [];
@@ -82,7 +83,13 @@ for (const channel of ["cooldowns", "keys", "effects"] as const) {
     6602: () => {},
     [first + 1]: (owner: number) => { destroyed++; return owner; },
     6593: () => { invalidations++; },
-    748: (handle: number) => { assert.ok(refs.has(handle), `release unknown ${handle}`); refs.delete(handle); },
+    748: (handle: number) => {
+      if (draws.has(handle)) {
+        assert.equal(view.getUint32(MODEL + 152, true), 0, "never close a queued model");
+        assert.equal(view.getUint32(DEVICE + 460, true), 3, "never close during a graphics flush");
+        draws.delete(handle);
+      }
+      assert.ok(refs.has(handle), `release unknown ${handle}`); refs.delete(handle); },
     [clientFixture.functionIndex(17791)]: (bytes: number) => { const p = heap; heap += bytes; allocations.add(p); return p; },
     [clientFixture.functionIndex(17793)]: (pointer: number) => { assert.ok(allocations.delete(pointer)); },
     1444: () => create(),
@@ -90,11 +97,11 @@ for (const channel of ["cooldowns", "keys", "effects"] as const) {
     1446: (handle: number) => { const p = 6_000_000; meshVertices.set(handle, p); meshes++; return p; },
     1448: () => {}, 1449: () => {},
     1554: (count: number, mesh: number, material: number) => {
-      assert.equal(count, 1); assert.ok(refs.has(view.getUint32(mesh, true))); assert.ok(refs.has(view.getUint32(material, true))); return create();
+      assert.equal(count, 1); assert.ok(refs.has(view.getUint32(mesh, true))); assert.ok(refs.has(view.getUint32(material, true))); const draw = create(); draws.add(draw); return draw;
     },
     1572: (_draw: number, flags: number) => { assert.equal(flags, 6); },
     6446: (position: number) => { assert.equal(position, 256 + 208); },
-    1563: () => {}, 1579: () => {},
+    1563: () => { assert.equal(view.getUint32(MODEL + 152, true), 0, "never capture a queued HUD model"); }, 1579: () => {},
     1569: (draw: number) => {
       assert.ok(refs.has(draw));
       assert.equal(view.getUint32(MODEL + 152, true), 0, "a texture swap never reaches a referenced model");
@@ -211,6 +218,11 @@ for (const channel of ["cooldowns", "keys", "effects"] as const) {
   const resourcesBeforeBusy = refs.size;
   assert.equal(invoke("atlas", region, atlasBytes), 2);
   assert.equal(textureCreates, 1); assert.equal(refs.size, resourcesBeforeBusy);
+  const meshesBeforeHeldCollection: number = meshes;
+  f(frame + 276, 165);
+  assert.equal(invoke("collect", frame + 4, 9, outputVector), 1, "queued HUD collection reuses captured drawing");
+  assert.equal(meshes, meshesBeforeHeldCollection, "queued HUD collection preserves geometry");
+  f(frame + 276, 164);
   u(MODEL + 152, 0);
   assert.equal(invoke("atlas", region, atlasBytes), 1); assert.equal(textureCreates, 2);
   assert.equal(view.getFloat32(6_000_000, true), 108);
@@ -243,6 +255,50 @@ for (const channel of ["cooldowns", "keys", "effects"] as const) {
   assert.equal(refs.size, 1, "icon destruction leaves only the shared atlas material");
   invoke("reset"); invoke("reset"); assert.equal(refs.size, 0); assert.equal(allocations.size, 0);
   assert.equal(textureCreates, 2);
+  // Regression: last-reference closes must wait for the native renderer.
+  // Each operation hides retirement immediately and eventually reclaims it,
+  // including disposal when the host never publishes another label.
+  for (const scenario of ["withdraw", "rebind", "destroy", "reset"] as const) {
+    for (const held of ["model", "flush"] as const) {
+      u(region, NATIVE_HUD_MAGIC); u(region + 4, 1024);
+      assert.equal(invoke("atlas", region, atlasBytes), 1);
+      header(); assert.equal(invoke("label", region, HEADER + 32), 1);
+      assert.equal(invoke("collect", frame + 4, 9, outputVector), 1);
+      const heldResources: number = refs.size;
+      const heldStorage: number = allocations.size;
+      u(MODEL + 152, held === "model" ? 1 : 0);
+      u(DEVICE + 460, held === "flush" ? 0 : 3);
+      header(); f(region + HEADER, .125);
+      assert.equal(invoke("label", region, HEADER + 32), 2, "queued geometry updates retry");
+      if (scenario === "withdraw") {
+        header(0); assert.equal(invoke("label", region, HEADER), 1);
+      } else if (scenario === "rebind") {
+        header(); u(region + 12, 44);
+        assert.equal(invoke("label", region, HEADER + 32), 2);
+      } else if (scenario === "destroy") {
+        invoke("destroy", frame + 4);
+      } else {
+        invoke("reset"); invoke("reset");
+      }
+      assert.equal(refs.size, heldResources, `${scenario} keeps queued handles`);
+      assert.equal(allocations.size, heldStorage, `${scenario} keeps pending storage`);
+      u(outputVector + 8, 0);
+      assert.equal(invoke("collect", frame + 4, 9, outputVector), 0, "retired drawing does not collect");
+      assert.equal(view.getUint32(outputVector + 8, true), 0);
+      collected.length = 0; invoke("buildCache");
+      assert.deepEqual(collected, [777, 778, 780, 779], "retirement restores stock keys and removes label draws");
+      u(MODEL + 152, 0); u(DEVICE + 460, 3);
+      // Native collection owns cleanup even after the host has disposed.
+      invoke("collect", laterPanel + 4, 9, outputVector);
+      assert.equal(refs.size, scenario === "reset" ? 0 : 1, "drained draws release once");
+      if (scenario === "reset") assert.equal(allocations.size, 0);
+      if (scenario === "rebind") {
+        assert.equal(invoke("label", region, HEADER + 32), 1, "replacement retries after retirement");
+      }
+      invoke("reset"); invoke("reset");
+      assert.equal(refs.size, 0); assert.equal(allocations.size, 0);
+    }
+  }
   if (channel === "cooldowns") {
     const memory = exports.memory;
     const highRegion = 0x80000800;

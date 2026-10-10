@@ -810,26 +810,34 @@ Module = {
       milestone('wasm.instantiate.end');
       gameWasmInstance = result.instance;
       gameWasmModule = result.module;
-      const { createCartographyLifecycle } = await import('./cartography-lifecycle.js');
-      cartographyLifecycle?.dispose();
-      cartographyLifecycle = createCartographyLifecycle(async () => {
-        const { installCartographySpike } = await import('./cartography-spike/index.js');
-        return installCartographySpike({
-          exports: result.instance.exports,
-          parent: document.body,
-          canvas: Module.canvas,
-          settings: () => {
-            if (appSettings === null) throw new Error('cartography installed before settings');
-            return appSettings;
-          },
-          persist: (patch) => native().settings.set(patch),
-          exportEvidence: (capture) => native().cartography.exportEvidence(capture),
-          getMapKnowledge: (kernelSha256) =>
-            native().cartography.getMapKnowledge(kernelSha256),
-          recordMapKnowledge: (value) => native().cartography.recordMapKnowledge(value),
-        });
-      }, (error) => log('[err] Maps could not start:', String(error)));
-      updateCartography();
+      const api = native();
+      if (api.init.enhancementSelection.tools && "cartography" in api) {
+        // Optional module loading must not prevent the official client starting.
+        try {
+          const { createCartographyLifecycle } = await import('./cartography-lifecycle.js');
+          cartographyLifecycle?.dispose();
+          if (!rendererUnloading) cartographyLifecycle = createCartographyLifecycle(async () => {
+            const { installCartographySpike } = await import('./cartography-spike/index.js');
+            return installCartographySpike({
+              exports: result.instance.exports,
+              parent: document.body,
+              canvas: Module.canvas,
+              settings: () => {
+                if (appSettings === null) throw new Error('cartography installed before settings');
+                return appSettings;
+              },
+              persist: (patch) => api.settings.set(patch),
+              exportEvidence: (capture) => api.cartography.exportEvidence(capture),
+              getMapKnowledge: (kernelSha256) =>
+                api.cartography.getMapKnowledge(kernelSha256),
+              recordMapKnowledge: (value) => api.cartography.recordMapKnowledge(value),
+            });
+          }, (error) => log('[err] Maps could not start:', String(error)));
+          updateCartography();
+        } catch (error) {
+          log('[err] Maps could not start:', String(error));
+        }
+      }
       maybeInstallEnhancements();
       success(result.instance, result.module);
     })().catch((error) => {

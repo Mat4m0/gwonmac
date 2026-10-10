@@ -100,6 +100,8 @@ test("the Core renderer graph cannot evaluate optional Tools implementation", ()
 test("the Core main graph cannot evaluate optional stores, IPC, or network code", () => {
   const graph = staticClosure("src/main/main.ts");
   assertUnreachable(graph, [
+    "src/main/core/cartography-map-knowledge.ts",
+    "src/main/cartography-evidence-export.ts",
     "src/main/tools-runtime.ts",
     "src/main/tools-ipc.ts",
     "src/main/trade-ipc.ts",

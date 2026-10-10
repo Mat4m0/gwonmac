@@ -158,21 +158,37 @@ export function appendNativeHud(input: Uint8Array, skillBarGlobal: number): Uint
   const g = (n: number) => concat(op(0x23), uleb(base + n));
   const put = (n: number) => concat(op(0x24), uleb(base + n));
   const increment = (n: number) => concat(g(n), i(1), op(0x6a), put(n));
-  // Globals: records, material, uploads, updates, created, destroyed, collections, matched, published, next visible frame.
+  // Globals: records, material, uploads, updates, created, destroyed, collections, matched, published, next visible frame, reset pending, cleanup pending.
   const first = module.functionImportCount + bodies.length;
   const originalCollect = first, originalDestroy = first + 1, releaseIndex = first + 2;
-  const hideStockKeyIndex = first + 9;
+  const hideStockKeyIndex = first + 9, reapIndex = first + 10, cleanupIndex = first + 11;
   const resetIndex = first + 3, meshIndex = first + 4, collectIndex = first + 5;
   const destroyIndex = first + 6, atlasIndex = first + 7, labelIndex = first + 8;
   const each = (n: number, body: Uint8Array) => concat(g(0), op(0x04, 0x40), i(0), s(n), op(0x03, 0x40),
     body, l(n), i(1), op(0x6a), s(n), l(n), i(NATIVE_HUD_LABELS), op(0x49, 0x0d, 0, 0x0b, 0x0b));
   const record = (n: number) => concat(g(0), l(n), i(STRIDE), op(0x6c, 0x6a));
-  const release = concat(op(0), l(0), load(8), op(0x04, 0x40), call(bindings.functionIndex(6593)),
+  // A retired owner (-1) cannot collect again until its queued draw is safe.
+  // Keep handles in the bounded record instead of freeing a referenced model.
+  const reap = concat(op(1, 1, 0x7f), l(0), load(8), op(0x04, 0x40),
+    nativeGraphicsBusy(1, bindings), op(0x04, 0x40, 0x0f, 0x0b),
+    nativeModelBusy(concat(l(0), load(8)), 1, bindings), op(0x04, 0x40, 0x0f, 0x0b),
     l(0), load(8), call(bindings.functionIndex(748)), l(0), load(4), call(bindings.functionIndex(748)), increment(5), op(0x0b),
     ...[0, 4, 8].map((at) => concat(l(0), i(0), save(at))), op(0x0b));
-  const reset = concat(op(1, 1, 0x7f), each(0, concat(record(0), call(releaseIndex))),
+  const release = concat(op(0), l(0), i(-1), save(0), call(bindings.functionIndex(6593)),
+    l(0), call(reapIndex), i(1), put(11), op(0x0b));
+  // The cleanup flag avoids scanning every native icon when nothing retired.
+  // Native collection also reaps after host presentation has been disposed.
+  // A reset keeps the shared material and storage until every draw is released.
+  const cleanup = concat(op(1, 2, 0x7f), g(11), op(0x45, 0x04, 0x40, 0x0f, 0x0b), i(0), s(1), each(0, concat(
+    record(0), load(0), i(-1), op(0x46, 0x04, 0x40), record(0), call(reapIndex), op(0x0b),
+    l(1), record(0), load(0), i(-1), op(0x46, 0x72), s(1))),
+    l(1), put(11),
+    g(10), l(1), op(0x45, 0x71, 0x04, 0x40),
     g(0), op(0x04, 0x40), g(0), call(free), i(0), put(0), op(0x0b),
-    g(1), op(0x04, 0x40), g(1), call(bindings.functionIndex(748)), i(0), put(1), op(0x0b, 0x0b));
+    g(1), op(0x04, 0x40), g(1), call(bindings.functionIndex(748)), i(0), put(1), op(0x0b),
+    i(0), put(10), op(0x0b, 0x0b));
+  const reset = concat(op(1, 1, 0x7f), i(1), put(10), i(1), put(11), each(0, concat(
+    record(0), i(0), save(20), record(0), call(releaseIndex))), call(cleanupIndex), op(0x0b));
   // Native bitmap vertices are UI coordinates relative to the frame's origin.
   // Native UI projection is captured independently; our model is identity like 6118.
   const vertex: Uint8Array[] = [];
@@ -215,19 +231,19 @@ export function appendNativeHud(input: Uint8Array, skillBarGlobal: number): Uint
     l(3), load(296), s(4), l(4), op(0x45, 0x0d, 0), add(l(4), -296), load(188),
     ...(skillBarGlobal ? [op(0x23), uleb(skillBarGlobal)] : [i(-1)]), op(0x47, 0x0d, 0),
     l(3), load(184), s(4),
-    record(4), load(12), ...(skillBarGlobal ? [op(0x23), uleb(skillBarGlobal)] : [i(-1)]), op(0x46),
-    record(4), load(16), l(3), load(184), op(0x46, 0x71), record(4), load(20), i(0), op(0x4b, 0x71), record(4), load(24), i(NATIVE_HUD_KEYCAP), op(0x71, 0x71, 0x0f, 0x0b),
+    record(4), load(0), i(-1), op(0x47), record(4), load(12), ...(skillBarGlobal ? [op(0x23), uleb(skillBarGlobal)] : [i(-1)]), op(0x46),
+    record(4), load(16), l(3), load(184), op(0x46, 0x71), record(4), load(20), i(0), op(0x4b, 0x71), record(4), load(24), i(NATIVE_HUD_KEYCAP), op(0x71, 0x71, 0x71, 0x0f, 0x0b),
     i(0), op(0x0b));
   // Slot 9 is the native final outer-clip category for this frame. The original
   // collector runs first; no native list is overwritten or given duplicate refs.
   // 6585 stops at the first absent stock slot. A matched HUD owner must report
   // its intervening empty slots so the cache reaches our final category.
   const collect = concat(op(2, 9, 0x7f, 1, 0x7d), // args0..2; result3,n4,r5,frame6,relation7,depth8,source9,scratch10,tmp11,alpha12
-    l(0), call(hideStockKeyIndex), op(0x04, 0x7f), i(0), op(0x05), l(0), l(1), l(2), call(originalCollect), op(0x0b), s(3),
-    l(1), i(9), op(0x4b), l(1), i(9), op(0x47), l(3), op(0x71, 0x72), g(1), op(0x45, 0x72), g(0), op(0x45, 0x72, 0x04, 0x40), l(3), op(0x0f, 0x0b),
+    call(cleanupIndex), l(0), call(hideStockKeyIndex), op(0x04, 0x7f), i(0), op(0x05), l(0), l(1), l(2), call(originalCollect), op(0x0b), s(3),
+    l(1), i(9), op(0x4b), l(1), i(9), op(0x47), l(3), op(0x71, 0x72), g(1), op(0x45, 0x72), g(0), op(0x45, 0x72), g(10), op(0x72, 0x04, 0x40), l(3), op(0x0f, 0x0b),
     increment(6), l(0), i(4), op(0x6b), s(6),
     each(4, concat(record(4), s(5), op(0x02, 0x40),
-      l(5), load(20), op(0x45, 0x0d, 0),
+      l(5), load(0), i(-1), op(0x46, 0x0d, 0), l(5), load(20), op(0x45, 0x0d, 0),
       // Locate this icon through the collected frame's ancestors. Its final
       // visible descendant must draw first, including recharge/effect veils.
       l(0), i(4), op(0x6b), s(6), i(0), s(8), op(0x02, 0x40, 0x03, 0x40),
@@ -258,6 +274,11 @@ export function appendNativeHud(input: Uint8Array, skillBarGlobal: number): Uint
       l(5), load(0), i(0), op(0x47), l(5), load(0), l(6), op(0x47, 0x71, 0x0d, 0),
       l(1), i(9), op(0x49, 0x04, 0x40), i(1), op(0x0f, 0x0b),
       increment(7),
+      // A cache rebuild can reuse an already queued draw, but must not recapture
+      // its matrices or rewrite geometry until the native reference drains.
+      nativeGraphicsBusy(11, bindings), l(5), load(8), op(0x04, 0x7f),
+        nativeModelBusy(concat(l(5), load(8)), 11, bindings),
+      op(0x05), i(0), op(0x0b, 0x72, 0x45, 0x04, 0x40),
       // Logical skill/effect icon frames need not own a retained bitmap draw.
       // Build our own draw and capture the same native UI matrices as 6488.
       l(5), load(8), op(0x45, 0x04, 0x40),
@@ -281,7 +302,8 @@ export function appendNativeHud(input: Uint8Array, skillBarGlobal: number): Uint
         l(12), l(7), load(48, true), op(0x94), s(12), l(7), load(296), s(7),
         l(7), op(0x04, 0x40), l(7), i(296), op(0x6b), s(7), op(0x0b),
         add(l(8), 1), s(8), l(7), i(0), op(0x47), l(8), i(16), op(0x49, 0x71, 0x0d, 0, 0x0b),
-      l(5), load(8), l(12), f(255), op(0x94, 0xa8), call(bindings.functionIndex(1559)),
+      l(5), load(8), l(12), f(255), op(0x94, 0xa8), call(bindings.functionIndex(1559)), op(0x0b),
+      l(5), load(8), op(0x45, 0x0d, 0),
       l(2), l(2), load(8), i(1), op(0x6a), l(2), load(8), call(bindings.functionIndex(5595)),
       l(2), load(0), l(2), load(8), i(4), op(0x6c, 0x6a), l(5), load(8), save(0),
       l(2), l(2), load(8), i(1), op(0x6a), save(8), i(1), s(3), op(0x0b))),
@@ -293,7 +315,8 @@ export function appendNativeHud(input: Uint8Array, skillBarGlobal: number): Uint
   const atlasBytes = 8 + NATIVE_HUD_ATLAS_SIZE ** 2 * 4;
   // Retexturing a record's retained model asserts while the renderer holds it;
   // this runs from the host's frame, so report busy before changing any record.
-  const atlas = concat(op(1, 5, 0x7f),
+  const atlas = concat(op(1, 5, 0x7f), call(cleanupIndex),
+    g(10), op(0x04, 0x40), i(NATIVE_PUBLISH_BUSY), op(0x0f, 0x0b),
     nativeGraphicsBusy(6, bindings), op(0x04, 0x40), i(NATIVE_PUBLISH_BUSY), op(0x0f, 0x0b),
     each(5, concat(record(5), load(8), op(0x04, 0x40),
       nativeModelBusy(concat(record(5), load(8)), 6, bindings), op(0x04, 0x40), i(NATIVE_PUBLISH_BUSY), op(0x0f, 0x0b), op(0x0b))),
@@ -328,14 +351,19 @@ export function appendNativeHud(input: Uint8Array, skillBarGlobal: number): Uint
       l(0), l(4), op(0x6a), load(24, true), l(0), l(4), op(0x6a), load(16, true), op(0x60, 0x71),
       l(0), l(4), op(0x6a), load(28, true), l(0), l(4), op(0x6a), load(20, true), op(0x60, 0x71),
       op(0x45, 0x04, 0x40), i(0), op(0x0f, 0x0b), add(l(4), 32), s(4), op(0x0c, 0, 0x0b, 0x0b),
+    call(cleanupIndex), g(10), op(0x04, 0x40), i(NATIVE_PUBLISH_BUSY), op(0x0f, 0x0b),
     g(0), op(0x45, 0x04, 0x40), i(STRIDE * NATIVE_HUD_LABELS), call(malloc), put(0), g(0), op(0x45, 0x04, 0x40), i(0), op(0x0f, 0x0b),
       i(0), s(4), op(0x03, 0x40), g(0), l(4), op(0x6a), i(0), save(0), add(l(4), 4), s(4), l(4), i(STRIDE * NATIVE_HUD_LABELS), op(0x49, 0x0d, 0, 0x0b, 0x0b),
     increment(8), record(2), s(5),
-    l(5), load(12), l(0), load(12), op(0x47), l(5), load(16), l(0), load(16), op(0x47, 0x72, 0x04, 0x40), l(5), call(releaseIndex), op(0x0b),
+    l(5), load(12), l(0), load(12), op(0x47), l(5), load(16), l(0), load(16), op(0x47, 0x72, 0x04, 0x40), l(5), i(0), save(20), l(5), call(releaseIndex), op(0x0b),
+    // Withdrawal hides now; updates retry before touching retained geometry.
+    l(3), op(0x45, 0x04, 0x40), l(5), i(0), save(20), l(5), call(releaseIndex), i(1), op(0x0f, 0x0b),
+    l(5), load(8), op(0x04, 0x40),
+      nativeGraphicsBusy(4, bindings), nativeModelBusy(concat(l(5), load(8)), 4, bindings), op(0x72),
+      l(5), load(0), i(-1), op(0x46, 0x72, 0x04, 0x40), i(NATIVE_PUBLISH_BUSY), op(0x0f, 0x0b, 0x0b),
     l(5), load(24), l(0), load(24), op(0x47, 0x04, 0x40), call(bindings.functionIndex(6593)), op(0x0b),
     add(l(5), 12), add(l(0), 12), l(1), i(12), op(0x6b), call(bindings.functionIndex(264)),
-    l(3), op(0x45, 0x04, 0x40), l(5), call(releaseIndex), op(0x05),
-      l(5), load(8), op(0x04, 0x40), l(5), call(meshIndex), op(0x05), call(bindings.functionIndex(6593)), op(0x0b, 0x0b), i(1), op(0x0b));
+    l(5), load(8), op(0x04, 0x40), l(5), call(meshIndex), op(0x05), call(bindings.functionIndex(6593)), op(0x0b), i(1), op(0x0b));
   // 6585 owns visible frame order. Pass its next frame privately to the
   // collector so labels finish an icon subtree before later panels/tooltips.
   const cacheBody = bodies[bindings.functionIndex(6585) - module.functionImportCount]!;
@@ -345,12 +373,12 @@ export function appendNativeHud(input: Uint8Array, skillBarGlobal: number): Uint
   bodies[bindings.functionIndex(6585) - module.functionImportCount] = concat(cacheBody.slice(0, site.offset),
     add(l(2), 4), l(3), op(0x49, 0x04, 0x7f), l(2), load(4), op(0x05), i(0), op(0x0b), put(9),
     cacheBody.slice(site.offset));
-  const extraBodies = [bodies[bindings.functionIndex(6492) - module.functionImportCount]!, bodies[bindings.functionIndex(6490) - module.functionImportCount]!, release, reset, mesh, collect, destroy, atlas, label, hideStockKey];
+  const extraBodies = [bodies[bindings.functionIndex(6492) - module.functionImportCount]!, bodies[bindings.functionIndex(6490) - module.functionImportCount]!, release, reset, mesh, collect, destroy, atlas, label, hideStockKey, reap, cleanup];
   bodies[bindings.functionIndex(6492) - module.functionImportCount] = concat(op(0), l(0), l(1), l(2), call(collectIndex), op(0x0b));
   bodies[bindings.functionIndex(6490) - module.functionImportCount] = concat(op(0), l(0), call(destroyIndex), op(0x0b));
   const extraTypes = [op(0x60, 1, 0x7f, 0), op(0x60, 0, 0), op(0x60, 2, 0x7f, 0x7f, 1, 0x7f)];
   const functionTypes = [module.functionTypeIndices[bindings.functionIndex(6492)]!, module.functionTypeIndices[bindings.functionIndex(6490)]!, signatures.count,
-    signatures.count + 1, signatures.count, module.functionTypeIndices[bindings.functionIndex(6492)]!, module.functionTypeIndices[bindings.functionIndex(6490)]!, signatures.count + 2, signatures.count + 2, module.functionTypeIndices[bindings.functionIndex(6490)]!];
+    signatures.count + 1, signatures.count, module.functionTypeIndices[bindings.functionIndex(6492)]!, module.functionTypeIndices[bindings.functionIndex(6490)]!, signatures.count + 2, signatures.count + 2, module.functionTypeIndices[bindings.functionIndex(6490)]!, signatures.count, signatures.count + 1];
   const extraExports = [["reset", resetIndex], ["atlas", atlasIndex], ["label", labelIndex]].map(([name, index]) => concat(encodeName(`gwonmac_hud_${name}`), op(0), uleb(Number(index))));
   for (const [index, name] of ["records", "material", "uploads", "updates", "created", "destroyed", "collections", "matched", "published"].entries()) {
     if (index >= 2) extraExports.push(concat(encodeName(`gwonmac_hud_${name}`), op(3), uleb(base + index)));
@@ -358,7 +386,7 @@ export function appendNativeHud(input: Uint8Array, skillBarGlobal: number): Uint
   return concat(WASM_HEADER, ...sections.map((section) => encodeSection({id: section.id,
     body: section.id === 1 ? concat(uleb(signatures.count + extraTypes.length), signatures.entries, ...extraTypes)
       : section.id === 3 ? encodeIndexVector([...types, ...functionTypes])
-      : section.id === 6 ? concat(uleb(globals.count + 10), globals.entries, ...Array.from({length: 10}, () => concat(op(0x7f, 1), i(0), op(0x0b))))
+      : section.id === 6 ? concat(uleb(globals.count + 12), globals.entries, ...Array.from({length: 12}, () => concat(op(0x7f, 1), i(0), op(0x0b))))
       : section.id === 7 ? concat(uleb(exports.count + extraExports.length), exports.entries, ...extraExports)
       : section.id === 10 ? encodeCode([...bodies, ...extraBodies]) : section.body,
   })));
