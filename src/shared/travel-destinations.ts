@@ -173,7 +173,7 @@ export const TRAVEL_DESTINATIONS: readonly TravelDestination[] = Object.freeze([
   destination(414, "The Kodash Bazaar", "Nightfall", ["kodash"]),
   destination(450, "Gate of Torment", "Nightfall"),
   destination(398, "Basalt Grotto", "Nightfall"),
-  destination(457, "Beknur Harbor", "Nightfall"),
+  destination(487, "Beknur Harbor", "Nightfall"),
   destination(438, "Bone Palace", "Nightfall"),
   destination(376, "Camp Hojanu", "Nightfall"),
   destination(479, "Champion's Dawn", "Nightfall", ["champions dawn"]),

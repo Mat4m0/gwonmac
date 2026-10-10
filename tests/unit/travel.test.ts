@@ -31,7 +31,7 @@ describe("Travel", () => {
       297, 298, 303, 328, 329, 330, 331, 332, 333, 334, 335, 336, 337, 338, 348,
       349, 350, 368, 376, 378, 381, 387, 388, 389, 390, 391, 393, 396, 398, 403,
       407, 414, 421, 424, 425, 426, 427, 428, 431, 433, 434, 435, 438, 440, 442,
-      449, 450, 457, 467, 469, 473, 474, 476, 477, 478, 479, 480, 489, 491, 492,
+      449, 450, 467, 469, 473, 474, 476, 477, 478, 479, 480, 487, 489, 491, 492,
       493, 494, 495, 496, 497, 502, 544, 545, 554, 555, 559, 624, 638, 639, 640,
       641, 642, 643, 644, 645, 648, 650, 652, 675, 721, 779, 795, 796, 857,
     ];
@@ -51,6 +51,11 @@ describe("Travel", () => {
     assert.equal(travelDestination(266), null, "Urgoz requires passage-scroll UI");
     assert.equal(travelDestination(307), null, "The Deep requires passage-scroll UI");
     assert.equal(new Set(TRAVEL_DESTINATIONS.map(({ mapId }) => mapId)).size, 199);
+  });
+
+  it("routes Beknur Harbor to its outpost map, not the explorable map", () => {
+    assert.equal(travelDestination(487)?.name, "Beknur Harbor");
+    assert.equal(travelDestination(457), null, "Map 457 is the explorable Beknur Harbor, not a travel target");
   });
 
   it("ranks exact aliases and useful partial names first", () => {
