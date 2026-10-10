@@ -618,8 +618,9 @@ test('Hub preferences group pins where they are kept, so no enabled Move is a no
   await up.click();
   await expect(places).toHaveText([/^Travel/, /^Kamadan/]);
   await page.keyboard.press('Meta+Backspace'); await search(page).fill('');
-  const pinned = await page.locator('#hub .hub-row').evaluateAll(rows => rows.slice(0, 3).map(row => (row as HTMLElement).dataset.id));
-  expect(pinned).toEqual(['travel', 'place:449', 'team:hub-gom-afk']);
+  // Moving a pin saves in the main process; Home re-reads the order when that save lands, so poll for it.
+  const pinned = () => page.locator('#hub .hub-row').evaluateAll(rows => rows.slice(0, 3).map(row => (row as HTMLElement).dataset.id));
+  await expect.poll(pinned).toEqual(['travel', 'place:449', 'team:hub-gom-afk']);
 });
 
 test('Remove all search phrases asks first, names the count and keeps the pins (HUB-092)', async ({ page }) => {
