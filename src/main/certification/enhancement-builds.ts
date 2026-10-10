@@ -984,6 +984,16 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
           bodySha256: "af39ac84af3f910dea532421a1d27a77621d13caf6894de83b62ccf9c56841b7",
         }),
       }),
+      // The producer's `chat.valid-message` call (TextValidateCoded). Local chat
+      // lines call it first: the producer asserts on any line it rejects.
+      chatPrint: Object.freeze({
+        validator: Object.freeze({
+          functionIndex: 5881,
+          params: Object.freeze(["i32"] as const),
+          results: Object.freeze(["i32"] as const),
+          bodySha256: "1f58a402e2b2807caee4c761a61f62b060ea2c65af33eee7530f2191c727cf34",
+        }),
+      }),
       partyObservation: Object.freeze({
         partyDirtyMessages: Object.freeze([268435512, 268435513, 268435596, 268435608, 268435650, 268435729, 268435743, 268435744, 268435749, 268435751] as const),
         playerChatProducer: 8953,

@@ -189,6 +189,14 @@ const CAPABILITY_DEFINITIONS = Object.freeze([
     configOwners: [],
     hooks: [],
   },
+  {
+    // Prints through the chat-log producer that chatFiltering certifies.
+    id: "chatPrint",
+    requiresAll: ["playRegionObservation", "chatFiltering"],
+    requiresAny: [],
+    configOwners: [],
+    hooks: [],
+  },
 ] as const);
 for (const contract of CAPABILITY_DEFINITIONS) {
   Object.freeze(contract.requiresAll);
@@ -286,6 +294,7 @@ export const NO_ENHANCEMENT_CAPABILITIES: EnhancementCapabilities = Object.freez
   whisperChat: false,
   alcoholObservation: false,
   nativeHudRendering: false,
+  chatPrint: false,
 });
 
 function isExactBooleanRecord<Key extends string>(
@@ -330,6 +339,7 @@ export function parseEnhancementCapabilities(
     whisperChat: value.whisperChat,
     alcoholObservation: value.alcoholObservation,
     nativeHudRendering: value.nativeHudRendering,
+    chatPrint: value.chatPrint,
   });
 }
 
