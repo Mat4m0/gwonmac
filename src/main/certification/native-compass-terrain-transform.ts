@@ -158,8 +158,6 @@ function appendCompassSurface(input: Uint8Array, screenSpace: boolean, bindings:
   const update = concat(op(2, 3, 0x7f, 10, 0x7d),
     call(reapIndex), l(0), g(0), op(0x47, 0x04, 0x40, 0x0f, 0x0b), call(ensureIndex),
     g(20), g(2), op(0x45, 0x72, 0x04, 0x40, 0x0f, 0x0b),
-    contextValid(), op(0x45, 0x04, 0x40), call(hideIndex), op(0x0f, 0x0b),
-    nativeGraphicsBusy(3, bindings), nativeModelBusy(g(2), 3, bindings), op(0x72, 0x04, 0x40, 0x0f, 0x0b),
     l(0), load(180, true), l(0), load(172, true), op(0x93), s(6),
     l(0), load(184, true), l(0), load(176, true), op(0x93), s(7),
     l(2), load(0, true), s(8), l(2), load(4, true), s(9),
@@ -173,6 +171,12 @@ function appendCompassSurface(input: Uint8Array, screenSpace: boolean, bindings:
     op(0x04, 0x40, 0x0f, 0x0b),
     l(8), put(17), l(9), put(18),
     l(10), put(13), l(11), put(14), l(6), put(15), l(7), put(16),
+    // The host sizes its first terrain tile from the camera and rectangle
+    // above, so they are published before any context check. Without a
+    // published area the hidden mesh stays withdrawn; while the renderer holds
+    // the model, geometry waits and the cleared serial forces the next rewrite.
+    contextValid(), op(0x45, 0x04, 0x40), call(hideIndex), op(0x0f, 0x0b),
+    nativeGraphicsBusy(3, bindings), nativeModelBusy(g(2), 3, bindings), op(0x72, 0x04, 0x40), i(-1), put(19), op(0x0f, 0x0b),
     contextValid(), finite(l(6), 16384), op(0x71), l(6), f(2), op(0x5e, 0x71),
     finite(l(7), 16384), op(0x71), l(7), f(2), op(0x5e, 0x71),
     finite(l(10), 1000000), op(0x71), finite(l(11), 1000000), op(0x71),

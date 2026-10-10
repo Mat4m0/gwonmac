@@ -165,6 +165,8 @@ and invalidates the native UI cache. It retains queued handles until the
 certified model-reference and graphics-phase guards permit release. A replacement
 Canvas waits before creating another pair; its native callback then retries.
 Host withdrawal and native camera updates also defer queue-held mesh writes.
+Each native update still publishes the Compass camera and rectangle first: the
+host sizes its first terrain tile from them, before any terrain context exists.
 Missing native support or stale map identity hides Compass terrain without changing settings.
 Stationary Compass geometry is reused; range geometry changes only with its
 Canvas rectangle or artwork, not camera motion.

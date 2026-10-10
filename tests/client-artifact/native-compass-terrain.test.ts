@@ -122,6 +122,12 @@ test("native terrain owns bounded resources, follows its Canvas and refuses inva
   assert.deepEqual(released, [], "a Canvas destroyed before deferred creation owns no handles");
   view.setUint32(DEVICE + 460, 3, true);
   invoke("init", owner); invoke("attach", owner, 43); assert.equal(attachments, 1);
+  // A live Compass updates before any terrain exists. The host sizes its first
+  // tile from this rectangle, so the update must publish it without drawing.
+  const surfaceScalar = (name: string) => { const value = exports[`${prefix}_${name}`]; assert.ok(value instanceof WebAssembly.Global); return Number(value.value); };
+  invoke("update", owner, camera, direction);
+  assert.deepEqual([surfaceScalar("width"), surfaceScalar("height")], [245, 245], "the first native update publishes the Compass rectangle before any terrain");
+  assert.deepEqual([vertices, indicesAllocated], [[], []], "no geometry is written before terrain exists");
   assertQueueBusy(); assert.equal(textureCreates, 0, "first upload waits before allocating");
   assert.equal(invoke("publish", region, bytes), 1); assert.deepEqual(released.splice(0), [22, 21]);
   // While the native renderer holds the model, publishing reports busy and
@@ -152,7 +158,7 @@ test("native terrain owns bounded resources, follows its Canvas and refuses inva
   const updatesBeforeHeld: number = vertices.length;
   view.setUint32(MODEL + 152, 1, true); rectangle(400, 192);
   invoke("update", owner, camera, direction);
-  assert.equal(vertices.length, updatesBeforeHeld, "queued geometry changes wait without caching new bounds");
+  assert.equal(vertices.length, updatesBeforeHeld, "queued geometry changes wait; the cleared serial forces a rewrite");
   view.setUint32(MODEL + 152, 0, true);
   invoke("update", owner, camera, direction);
   assert.equal(vertices.length, updatesBeforeHeld + 1, "geometry retries after drain");
