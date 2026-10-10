@@ -99,6 +99,7 @@ export const LOCAL_FEATURE_INVARIANTS = Object.freeze({
   whisperChat: Object.freeze([...SHARED_FEATURE_INVARIANTS, "whisper.native-chat-path"] as const),
   alcoholObservation: Object.freeze([...SHARED_FEATURE_INVARIANTS, "alcohol.post-process-producer"] as const),
   resignAction: Object.freeze([...SHARED_FEATURE_INVARIANTS, "resign.native-chat-path"] as const),
+  chatPrint: Object.freeze([...SHARED_FEATURE_INVARIANTS, "chat.print-validator"] as const),
   chatAliases: Object.freeze([
     ...SHARED_FEATURE_INVARIANTS,
     "local.ui-dispatcher",
@@ -231,6 +232,8 @@ export interface LocalFeatureCertificateMap {
   readonly alcoholObservation: Readonly<{ core: EnhancementProofCore }> & RequiredBuildFact<"alcoholObservation">;
   readonly resignAction: Readonly<{ core: EnhancementProofCore }>
     & RequiredBuildFact<"playRegionObservation" | "gameThread" | "resignAction">;
+  readonly chatPrint: Readonly<{ core: EnhancementProofCore }>
+    & RequiredBuildFact<"playRegionObservation" | "gameThread" | "uiDispatcher" | "chatFiltering" | "chatPrint">;
   readonly chatAliases: Readonly<{ core: EnhancementProofCore }>
     & RequiredBuildFact<"uiDispatcher" | "chatAliases">;
   readonly skillSlotGeometry: Readonly<{ core: EnhancementProofCore }>
@@ -477,6 +480,11 @@ export function localFeatureVerdictsForBuild(
     ? Object.freeze({ core, playRegionObservation: build.playRegionObservation,
         gameThread: build.gameThread, resignAction: build.resignAction })
     : null;
+  const chatPrint = effective?.chatPrint && core !== null
+      && build?.playRegionObservation !== undefined && build.gameThread !== undefined
+      && build.uiDispatcher !== undefined && build.chatFiltering !== undefined && build.chatPrint !== undefined
+    ? Object.freeze({ core, playRegionObservation: build.playRegionObservation, gameThread: build.gameThread,
+        uiDispatcher: build.uiDispatcher, chatFiltering: build.chatFiltering, chatPrint: build.chatPrint }) : null;
   const chatAliases = effective?.chatAliases && core !== null
       && build?.uiDispatcher !== undefined
       && build.chatAliases !== undefined
@@ -623,6 +631,10 @@ export function localFeatureVerdictsForBuild(
     resignAction: featureVerdict<"resignAction">(
       inputSha256, requested.resignAction, resignAction,
       failures.resignAction, "resign.native-chat-path",
+    ),
+    chatPrint: featureVerdict<"chatPrint">(
+      inputSha256, requested.chatPrint, chatPrint,
+      failures.chatPrint, "chat.print-validator",
     ),
     chatAliases: featureVerdict<"chatAliases">(
       inputSha256,

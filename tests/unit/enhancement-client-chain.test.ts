@@ -38,6 +38,7 @@ const NO_CAPABILITIES = Object.freeze({
     nativeHudRendering: false,
     resignAction: false,
     whisperChat: false,
+    chatPrint: false,
 });
 describe("Enhancement client chain", () => {
   it("source-pins every executable capability profile", () => {
@@ -99,6 +100,7 @@ describe("Enhancement client chain", () => {
     nativeHudRendering: false,
     resignAction: false,
     whisperChat: false,
+    chatPrint: false,
       },
     ]) {
       assert.equal(enhancementCapabilityProfile(unsupported), null);

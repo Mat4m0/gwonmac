@@ -35,6 +35,7 @@ const CORE_CAPABILITIES = Object.freeze({
     nativeHudRendering: false,
     resignAction: false,
     whisperChat: false,
+    chatPrint: false,
   playRegionObservation: true,
   preGameControls: true,
   characterSwitchAction: true,

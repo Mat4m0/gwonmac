@@ -118,26 +118,26 @@ test("one capability plan derives hooks without losing feature identity", () => 
   ]) {
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "cursor-observer"),
-      { nativeCursor: true, targetObservation: false, partyObservation: false, teamApply: false, travelAction: false, xunlaiAction: false, chatAliases: false, skillSlotGeometry: false, skillCooldownObservation: false, playRegionObservation: false, preGameControls: false, characterSwitchAction: false, chatFiltering: false, quickItemMove: false, playerEffectObservation: false, effectIconGeometry: false, nativeHudRendering: false, alcoholObservation: false, resignAction: false, whisperChat: false },
+      { nativeCursor: true, targetObservation: false, partyObservation: false, teamApply: false, travelAction: false, xunlaiAction: false, chatAliases: false, skillSlotGeometry: false, skillCooldownObservation: false, playRegionObservation: false, preGameControls: false, characterSwitchAction: false, chatFiltering: false, quickItemMove: false, playerEffectObservation: false, effectIconGeometry: false, nativeHudRendering: false, alcoholObservation: false, resignAction: false, whisperChat: false, chatPrint: false },
     );
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "target-observer"),
-      { nativeCursor: false, targetObservation: true, partyObservation: false, teamApply: false, travelAction: false, xunlaiAction: false, chatAliases: false, skillSlotGeometry: false, skillCooldownObservation: false, playRegionObservation: true, preGameControls: false, characterSwitchAction: false, chatFiltering: false, quickItemMove: false, playerEffectObservation: false, effectIconGeometry: false, nativeHudRendering: false, alcoholObservation: false, resignAction: false, whisperChat: false },
+      { nativeCursor: false, targetObservation: true, partyObservation: false, teamApply: false, travelAction: false, xunlaiAction: false, chatAliases: false, skillSlotGeometry: false, skillCooldownObservation: false, playRegionObservation: true, preGameControls: false, characterSwitchAction: false, chatFiltering: false, quickItemMove: false, playerEffectObservation: false, effectIconGeometry: false, nativeHudRendering: false, alcoholObservation: false, resignAction: false, whisperChat: false, chatPrint: false },
     );
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "toolbox-foundation"),
-      { nativeCursor: false, targetObservation: false, partyObservation: true, teamApply: false, travelAction: false, xunlaiAction: false, chatAliases: false, skillSlotGeometry: true, skillCooldownObservation: false, playRegionObservation: true, preGameControls: false, characterSwitchAction: false, chatFiltering: false, quickItemMove: false, playerEffectObservation: false, effectIconGeometry: false, nativeHudRendering: false, alcoholObservation: false, resignAction: false, whisperChat: false },
+      { nativeCursor: false, targetObservation: false, partyObservation: true, teamApply: false, travelAction: false, xunlaiAction: false, chatAliases: false, skillSlotGeometry: true, skillCooldownObservation: false, playRegionObservation: true, preGameControls: false, characterSwitchAction: false, chatFiltering: false, quickItemMove: false, playerEffectObservation: false, effectIconGeometry: false, nativeHudRendering: false, alcoholObservation: false, resignAction: false, whisperChat: false, chatPrint: false },
     );
     // The read foundation and the write program differ by exactly this bit,
     // and no saved setting reaches the second: choosing the panel can never
     // carry the ability to send a packet in with it.
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "toolbox-commands"),
-      { nativeCursor: false, targetObservation: false, partyObservation: true, teamApply: true, travelAction: true, xunlaiAction: true, chatAliases: true, skillSlotGeometry: true, skillCooldownObservation: false, playRegionObservation: true, preGameControls: false, characterSwitchAction: false, chatFiltering: false, quickItemMove: false, playerEffectObservation: false, effectIconGeometry: false, nativeHudRendering: false, alcoholObservation: false, resignAction: false, whisperChat: false },
+      { nativeCursor: false, targetObservation: false, partyObservation: true, teamApply: true, travelAction: true, xunlaiAction: true, chatAliases: true, skillSlotGeometry: true, skillCooldownObservation: false, playRegionObservation: true, preGameControls: false, characterSwitchAction: false, chatFiltering: false, quickItemMove: false, playerEffectObservation: false, effectIconGeometry: false, nativeHudRendering: false, alcoholObservation: false, resignAction: false, whisperChat: false, chatPrint: false },
     );
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "xunlai-storage"),
-      { nativeCursor: false, targetObservation: false, partyObservation: false, teamApply: false, travelAction: true, xunlaiAction: true, chatAliases: true, skillSlotGeometry: false, skillCooldownObservation: false, playRegionObservation: true, preGameControls: false, characterSwitchAction: false, chatFiltering: false, quickItemMove: false, playerEffectObservation: false, effectIconGeometry: false, nativeHudRendering: false, alcoholObservation: false, resignAction: false, whisperChat: false },
+      { nativeCursor: false, targetObservation: false, partyObservation: false, teamApply: false, travelAction: true, xunlaiAction: true, chatAliases: true, skillSlotGeometry: false, skillCooldownObservation: false, playRegionObservation: true, preGameControls: false, characterSwitchAction: false, chatFiltering: false, quickItemMove: false, playerEffectObservation: false, effectIconGeometry: false, nativeHudRendering: false, alcoholObservation: false, resignAction: false, whisperChat: false, chatPrint: false },
     );
     assert.deepEqual(
       enhancementCapabilitiesFor(selection, "effect-observer"),
@@ -161,6 +161,7 @@ test("one capability plan derives hooks without losing feature identity", () => 
         alcoholObservation: false,
         resignAction: false,
         whisperChat: false,
+        chatPrint: false,
       },
     );
   }
@@ -169,7 +170,7 @@ test("one capability plan derives hooks without losing feature identity", () => 
 test("launch intent resolves to the canonical frozen capability profiles", () => {
   const cases = [
     [{ nativeCursor: true, tools: false }, "none", "features-e01"],
-    [{ nativeCursor: true, tools: true }, "none", "features-fffff"],
+    [{ nativeCursor: true, tools: true }, "none", "features-1fffff"],
     [{ nativeCursor: false, tools: false }, "cursor-observer", "features-01"],
     [{ nativeCursor: true, tools: false }, "target-observer", "features-202"],
     [{ nativeCursor: false, tools: false }, "toolbox-foundation", "features-284"],
@@ -221,6 +222,7 @@ test("the capability wire contract is exact and has one empty value", () => {
     alcoholObservation: true,
     resignAction: true,
     whisperChat: true,
+    chatPrint: true,
   });
   assert.ok(all);
   assert.equal(Object.isFrozen(all), true);
@@ -258,6 +260,7 @@ test("the capability wire contract is exact and has one empty value", () => {
     alcoholObservation: false,
     resignAction: false,
     whisperChat: false,
+    chatPrint: false,
   });
 
   assert.equal(parseEnhancementCapabilities({ ...all, extra: false }), null);
@@ -340,6 +343,7 @@ test("renderer consumes main's effective subset instead of launch intent", () =>
         nativeHudRendering: { status: "off" },
         resignAction: { status: "off" },
         whisperChat: { status: "off" },
+        chatPrint: { status: "off" },
       },
     },
   }), enhancementCapabilitiesForProfile("features-e07"));

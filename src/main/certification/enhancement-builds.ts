@@ -722,10 +722,10 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
     Object.freeze({
       sha256: "b5f10d50833ed9390ce4faa49fb9a8c009416989e07f20690c27b39b5ef048ad",
       outputSha256: Object.freeze({
-        "features-fffff": "8ca301bb9ca8f7dd2fab32719548f4603f7946aed6b841d5e8b8fedceb396801",
-        "features-01": "4fd40b09523895ea8a387b0a82486e5ab36d28d9e2807499c8536946570cc4fa",
-        "features-e01": "e30d26a86f7377dad91a0b86744cf003cffc5777b267cff11c9acc5438cee9b2",
-        "features-601": "6a37e02ad48a9f13945954c2871766b3394eb995d5b660605b34ee54f1a86eab",
+        "features-1fffff": "009da67dedf4308961b097d6b722186e2b0313497ff25871afe62614ea85dc0d",
+        "features-01": "46a116696d26a4171539f5ca500b13a822f45e4e1cb422313458c10b73529951",
+        "features-e01": "a76e0e6c8b2388cea4ca002be9261bc4af68fb56fda6f60609ef1bb04fafeb7a",
+        "features-601": "6b89dc25a2917f4c513e5e003f02deacd0c17d4ea2aab68356122162aabd96d3",
         "features-200": "fdcc9ed6b41d77aedd20c58591e0222b30e59f0cfdc1588304e1b3d313995e0b",
         "features-202": "fd87adcebce8ff32d1f36e82e527c682c20333455fda0a7ea46114fd752061be",
         "features-284": "a7d0a66dad19f05e2e1cb6b84dd2a6cd7ac7851e5aa55059e31c08b4a512b64f",
@@ -982,6 +982,16 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
           params: Object.freeze(["i32", "i32"] as const),
           results: Object.freeze([] as const),
           bodySha256: "af39ac84af3f910dea532421a1d27a77621d13caf6894de83b62ccf9c56841b7",
+        }),
+      }),
+      // The producer's `chat.valid-message` call (TextValidateCoded). Local chat
+      // lines call it first: the producer asserts on any line it rejects.
+      chatPrint: Object.freeze({
+        validator: Object.freeze({
+          functionIndex: 5881,
+          params: Object.freeze(["i32"] as const),
+          results: Object.freeze(["i32"] as const),
+          bodySha256: "1f58a402e2b2807caee4c761a61f62b060ea2c65af33eee7530f2191c727cf34",
         }),
       }),
       partyObservation: Object.freeze({

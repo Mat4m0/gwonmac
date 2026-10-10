@@ -20,5 +20,6 @@ export const TOOL_PRESENTATION: Record<GlobalTool, { label: string; description:
   "skill-cooldowns": { label: "Skill Cooldowns", description: "Show numeric recharge timers on the skill bar." },
   "chat-filters": { label: "Chat Filters", description: "Hide selected system notices before they enter chat." },
   "alcohol-timer": { label: "Alcohol Timer", description: "A quiet, movable alcohol countdown. Hidden when sober; amber in the last 15 seconds." },
+  reminders: { label: "Reminders", description: "Remind you in chat before cons, pcons or alcohol run out. Only you see these lines." },
   "effect-timers": { label: "Effect Timers", description: "Show exact remaining time on your native Effects icons." },
 };

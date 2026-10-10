@@ -31,6 +31,7 @@ const ALL_CAPABILITIES = Object.freeze({
     nativeHudRendering: false,
     resignAction: false,
     whisperChat: false,
+    chatPrint: false,
   playRegionObservation: true,
     preGameControls: false,
     characterSwitchAction: false,
