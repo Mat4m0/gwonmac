@@ -1,96 +1,94 @@
 # Settings
 
-This document owns how settings behave across the launcher and the in-game Hub:
-where each setting lives, what it is called, when a change takes effect, and how
-a player reaches a setting that the current surface does not show.
+This document owns how settings behave: where each setting lives, what it is
+called, when a change takes effect, and how a player reaches a setting from the
+launcher or from a game window.
 
-## The problem this solves
+## The decision
 
-A player who plays and sees "Guild Wars is running low on memory" reads that an
-experimental 4 GB limit exists. Hub › Settings does not offer it. The only
-control is Launcher › Settings › Game settings, which the player must first find
-through Window › Show Launcher. Before this change:
+gwonmac has one Settings page. The launcher draws it. Inside a game window, the
+same page opens as a Hub page, with the same labels and controls.
 
-- Hub Settings and launcher Settings were two hand-built lists with different
-  section names and seven different labels for the same stored value
-  ("Relog after reload" and "Return to character after reload").
-- Nothing in the Hub said that more settings exist in the launcher, or where.
-- Hub Settings showed a snapshot and did not follow a change made elsewhere.
-- Settings were not found by their own words in Hub search ("memory").
+The Hub page shows four in-game sections: **Tools**, **Maps**, **Appearance**
+and **Game**. You change them there, and the game updates at once. Five other
+sections need the launcher: **Texture packs**, **Game files**, **Updates**,
+**Home screen** and **Advanced**. In the Hub they show ↗. Choosing one opens the
+launcher at that section.
 
-## Jobs
-
-| Who | Job | Frequency | Situation | Must never go wrong | Target |
-|---|---|---|---|---|---|
-| Player | Turn a tool or map layer on or off | Weekly | In game, mid-session | The change applies now, in every window | ⌘R, type the name, ↵. 3 steps |
-| Player | React to a memory warning | Rare, urgent | In game, warning on screen | The player learns what the change does and when it applies | 1 step from the warning to the setting |
-| Player | Change a game-wide option (render quality, memory, controller symbols) | Rare | In game, or in the launcher before play | Honest timing: now, next game open, or app restart | Findable in both surfaces by its name |
-| Player | Change a shortcut | Rare | In game | No conflict is saved silently | Hub › Settings › Shortcuts |
-| Player | Edit custom colors or a map style | Rare, long | At a desk | Nothing lost | Launcher, one click from the Hub |
-| Player | Updates, Home content, game files, texture packs, logs, reset | Rare | Launcher | Files and accounts stay safe | Launcher only |
-
-Evidence: the reported case (memory setting unreachable in game), the audit
-findings HUB-063/064 (settings not found by their words), and the code inventory.
-Assumed, not measured: how often each setting changes.
+Hub search (⌘R) finds sections and single settings by their words. Choosing a
+result opens the Hub Settings page at that control. The control takes focus and
+is briefly highlighted. Hub search does not change a setting in place.
 
 ## Rules
 
-1. **One setting, one name, one place in the tree.** Both surfaces show the same
-   section names and the same labels and descriptions, from one shared
-   definition in `src/shared/settings-catalogue.ts`.
-2. **In game shows every game setting.** Hub › Settings holds every setting that
-   changes the game, its tools or its panels. The launcher adds only what
-   concerns the launcher, accounts and files.
-3. **Every setting says when it applies**, in the same words everywhere:
-   no note when it applies now; "Applies when you next open a game window";
-   "Applies after you restart gwonmac". A saved choice that is not active yet
-   shows its state next to the control ("Restart required. This session uses 2 GB.").
-4. **What the Hub does not show, it links to.** A section with launcher-only
-   depth ends with one named link that opens the launcher at that section
-   ("Edit custom colors in the launcher"). No dead ends.
-5. **Hub Settings follows the stored value.** A change from the launcher or
-   another game window repaints an open Hub Settings page.
-6. **Settings are found by their words.** Typing a setting's label or keyword in
-   Hub search offers "Open setting", which opens Settings at that section with
-   the control focused.
+1. **One setting, one name, one control.** `src/shared/settings-catalogue.ts`
+   lists the sections and the settings that search can open, with their stable
+   IDs, labels and keywords. Each control carries `data-setting="<id>"`.
+2. **Every setting says when it applies**, in the same words everywhere:
+   no note when it applies now; "Applies when you next open or reload a game
+   window."; "Applies after you restart GWonMac." A saved choice that is not
+   active yet shows its state next to the control ("Restart required. This
+   session still uses 2 GB.").
+3. **Changes save right away.** A change applies in every open game window. The
+   status line names the saved setting and when it applies. A failed save keeps
+   the change on screen and offers **Retry** and **Revert**.
+4. **Settings are found by their words.** Launcher Settings search (⌘F) and Hub
+   search both use the catalogue.
+5. **A game window cannot reach launcher-only actions.** Updates, game files,
+   texture packs, reset and logs run only from the launcher. The Hub page never
+   offers them.
+6. **Tools on or off needs a restart of the launcher.** The Tools section says
+   "Restart the launcher". Only the launcher offers the restart button.
+   Restarting only a game window does not load or unload Tools.
+
+## Build and trust
+
+- `apps/launcher/src/components/SettingsView.vue` draws the page for both the
+  launcher and the Hub.
+- The launcher builds the page a second time as a module for the game window:
+  `vite build --mode hub` writes `build/renderer/settings/settings-app.js` and
+  `.css` from `apps/launcher/src/hub-entry.ts`. `src/renderer/hub-settings-page.ts`
+  loads it when Settings first opens. It is not part of the optional Tools
+  bundle: Settings must work in a Core launch, because that is where Tools are
+  turned on.
+- A game window gets a bounded `hubSettings` API: `get`, `update`, `capture` and
+  `cancelCapture`. The main process checks each change with
+  `parseHubSettingsChange` against `HUB_SETTINGS_FIELDS` in
+  `src/shared/hub-settings.ts`. It refuses unknown or launcher-only controls, a
+  value of the wrong kind, and extra fields. The Hub sections come from
+  `HUB_SECTIONS` in `src/shared/settings-catalogue.ts`.
 
 ## The tree
 
-Both surfaces use these sections for game settings, in this order.
+Settings has two groups. The launcher shows both. The Hub shows only the
+in-game group.
 
-| Section | Settings | Hub | Launcher |
-|---|---|---|---|
-| Game | Render quality, Extended memory, Controller symbols, Return to character after reload, Diagnostics overlay | All | All |
-| Appearance | Panel style, Panel font, Text size (100–200%), Panel opacity, Reset Hub position (Hub only) | All; custom colors link to the launcher | All, with the custom theme editor |
-| Tools | Enable Tools, every tool, and each tool's options (Character Switch details, chat filters, timer color, skill key labels, Alcohol Timer position) | Switches and options; skill key labels and timer color link to the launcher | All |
-| Shortcuts | The ten app shortcuts | All | Shown beside their tools, as today |
-| Maps | Grid, walkable terrain, compass ranges, Elite skills and their opacity | One Settings renderer; children disable with their layer; styles link to the launcher | All, with the style editor |
-
-The Hub's former "Chat & characters" section moves into Tools, beside the tool
-each option belongs to (Character Switch, Chat Filters).
-
-Launcher only: Updates, Content, Texture packs, Game files, Advanced (logs,
-reset all settings).
+| Group | Section | In the Hub |
+|---|---|---|
+| In game | Tools | Yes |
+| In game | Maps | Yes |
+| In game | Appearance | Yes |
+| In game | Game | Yes |
+| In game | Texture packs, Game files | ↗ (launcher) |
+| GWonMac | Updates, Home screen, Advanced | ↗ (launcher) |
 
 ## Entry points
 
 | From | Opens |
 |---|---|
-| Hub › Settings, macOS Settings… in a game window | Hub Settings, last section in this session; Tools at first |
-| Hub search: a setting's name | Hub Settings at that section, control focused |
-| Memory warning › "Memory settings" | Hub Settings › Game, Extended memory focused |
-| Hub link "… in the launcher" | Launcher Settings at that section |
-| macOS Check for Updates… | Launcher Settings › Updates |
-| Launcher gear, macOS Settings… in the launcher | Launcher Settings, last section |
+| **Settings…** in a focused game window | Hub Settings page |
+| **Settings…** with no game window focused | Launcher Settings |
+| **Check for Updates…** (macOS app menu) | Launcher, Updates |
+| Hub search: a setting | Hub Settings page, that control focused and highlighted |
+| Hub search: a ↗ section | Launcher Settings, that section |
+| Memory warning › "Memory settings" | Hub Settings page, Game, Extended memory focused |
 
 ## Acceptance
 
-- In a running game: ⌘R, type `memory`, ↵ focuses Extended memory in Hub › Settings › Game. 3 steps.
-- Turning Extended memory on in the Hub shows "Restart required. This session uses 2 GB." and the launcher shows the same value.
-- The memory warning's "Memory settings" lands on the same control.
-- Every label shared by both surfaces is byte-identical (unit test over the catalogue).
-- A change made in the launcher repaints an open Hub Settings page.
-- Check for Updates… opens the Updates section.
+- In a running game: ⌘R, type `memory`, ↵. The Hub Settings page opens at Game with Extended memory focused. It says the change applies after you restart GWonMac.
+- The memory warning's "Memory settings" opens the same control.
+- Every catalogue entry has exactly one control with the same label.
+- **Check for Updates…** opens the launcher at Updates.
 
 ## Calculator estimates
 
