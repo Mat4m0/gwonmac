@@ -12,6 +12,29 @@ export interface RunningPackagedApp {
   readonly page: Page;
 }
 
+/**
+ * Opens the one Settings window from the launcher and returns its page. Settings writes
+ * (settings, Tools, game files) exist only on that window's `settingsNative` bridge.
+ */
+export async function openPackagedSettings(running: RunningPackagedApp): Promise<Page> {
+  const launcher = running.launcherPage;
+  if (!launcher) throw new Error("the packaged app did not expose the unified launcher");
+  await launcher.evaluate(() => window.launcherNative.settings.open());
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    for (const context of running.browser.contexts()) {
+      const page = context.pages().find((candidate) =>
+        candidate.url().endsWith("/launcher/settings.html"));
+      if (page) {
+        await page.waitForLoadState("domcontentloaded");
+        return page;
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error("the Settings window did not open");
+}
+
 export interface PackagedAppLaunch {
   readonly appPath: string;
   readonly productName: string;

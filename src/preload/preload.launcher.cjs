@@ -43,39 +43,15 @@ const launcherApi = {
     updatePreferences: (patch) => ipcRenderer.invoke(LAUNCHER_IPC.experienceUpdatePreferences, patch),
   },
   settings: {
-    update: (patch) => ipcRenderer.invoke(LAUNCHER_IPC.settingsUpdate, patch),
-    reset: () => ipcRenderer.invoke(LAUNCHER_IPC.settingsReset),
-  },
-  tools: {
-    setMasterEnabled: (enabled) => ipcRenderer.invoke(LAUNCHER_IPC.toolsSetMasterEnabled, enabled),
-    setFeature: (input) => ipcRenderer.invoke(LAUNCHER_IPC.toolsSetFeature, input),
-    captureShortcut: (tool) => ipcRenderer.invoke(LAUNCHER_IPC.toolsCaptureShortcut, tool),
-    replaceShortcut: (input) => ipcRenderer.invoke(LAUNCHER_IPC.toolsReplaceShortcut, input),
-    restoreDefaultShortcut: (tool) => ipcRenderer.invoke(LAUNCHER_IPC.toolsRestoreDefaultShortcut, tool),
-    restartToApply: () => ipcRenderer.invoke(LAUNCHER_IPC.toolsRestartToApply),
-  },
-  gameFiles: {
-    info: () => ipcRenderer.invoke(LAUNCHER_IPC.gameFilesInfo),
-    retryPreparation: () => ipcRenderer.invoke(LAUNCHER_IPC.gameFilesRetryPreparation),
-    repair: () => ipcRenderer.invoke(LAUNCHER_IPC.gameFilesRepair),
-    pauseDownload: () => ipcRenderer.invoke(LAUNCHER_IPC.gameFilesPauseDownload),
-    resumeDownload: () => ipcRenderer.invoke(LAUNCHER_IPC.gameFilesResumeDownload),
-    resetAndRestart: () => ipcRenderer.invoke(LAUNCHER_IPC.gameFilesResetAndRestart),
+    open: (target) => ipcRenderer.invoke(LAUNCHER_IPC.settingsOpen, target),
   },
   news: {
     open: (id) => ipcRenderer.invoke(LAUNCHER_IPC.newsOpen, id),
   },
-  texturePacks: {
-    import: () => ipcRenderer.invoke(LAUNCHER_IPC.texturePacksImport),
-    select: (id) => ipcRenderer.invoke(LAUNCHER_IPC.texturePacksSelect, id),
-    remove: (id) => ipcRenderer.invoke(LAUNCHER_IPC.texturePacksRemove, id),
-  },
   external: {
     open: (kind) => ipcRenderer.invoke(LAUNCHER_IPC.externalOpen, kind),
-    revealLogs: () => ipcRenderer.invoke(LAUNCHER_IPC.externalRevealLogs),
   },
   updates: {
-    check: () => ipcRenderer.invoke(LAUNCHER_IPC.updatesCheck),
     restartAndInstall: () => ipcRenderer.invoke(LAUNCHER_IPC.updatesRestartAndInstall),
   },
 };

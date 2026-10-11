@@ -205,7 +205,7 @@ async function textContrast(page: Page, selectors: Record<string, string>) {
 const TEXT_ROLES = {
   title: '.hub-title', detail: '.hub-row > .hub-detail', group: '.hub-group', count: '.hub-count', keycap: '.hub-row-type .ui-kbd', legend: '.hub-legend > *',
   name: '.hub-name', caption: '.hub-caption', context: '.hub-context', crumb: '.hub-crumb', separator: '.hub-breadcrumbs > span[aria-hidden]',
-  summary: '.hub-summary-label', scope: '.hub-scope:not([hidden])', placeholder: '', setting: '.hub-setting-row strong, .hub-setting-row small, .hub-settings h2',
+  summary: '.hub-summary-label', scope: '.hub-scope:not([hidden])', placeholder: '',
 };
 const BLUE_ACCENT = { material: 'classic', window: '#0B0B0B', titlebar: '#292927', surface: '#202225', recessed: '#080807', selected: '#1B3554', accent: '#4A6FA5', text: '#F1EBDD', mutedText: '#B7B09F', border: '#D8D2BF', windowGradient: true } as const;
 // Modern gold headings (HUB-249) and the Classic head (HUB-106) are the known worst cases.
@@ -445,32 +445,5 @@ test.describe('custom theme with the Modern flat finish', () => {
       await expectRowPainted(page, library, build, build.locator('.row-title'), border);
     }
     await page.screenshot({ path: info.outputPath('custom-modern-build-library.png') });
-  });
-
-  test('choosing the saved theme in Hub Settings keeps the page and focus', async ({ page }, info) => {
-    await page.goto('/?hub');
-    const search = page.locator('.hub-search input');
-    await expect(search).toBeFocused();
-    await page.evaluate(theme => window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: { uiStyle: 'guild-wars', uiCustomTheme: theme } })), customModern('#D8D2BF'));
-    await page.evaluate(() => window.gwApplyFixtureAppearance?.({ uiStyle: 'guild-wars', uiPanelOpacity: 94 }));
-    await search.fill('settings'); await search.press('Enter');
-    await page.getByRole('button', { name: 'Appearance', exact: true }).click();
-    const style = page.getByLabel('Panel style', { exact: true });
-    // A macOS select opens its native menu on ↓, so choose the option directly;
-    // the saved change re-renders the page and must hand focus back to it.
-    await style.focus(); await style.selectOption('custom');
-    await expect.poll(() => page.evaluate(() => document.documentElement.dataset.uiMaterial)).toBe('modern');
-    await expect(style).toHaveValue('custom');
-    await expect(style).toBeFocused();
-    const row = page.locator('.hub-setting-row').filter({ has: style });
-    let expectedPaint: number[] | undefined;
-    for (const border of ['#D8D2BF', '#8A7F6A', '#1B1A18']) {
-      await page.evaluate(theme => window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: { uiCustomTheme: theme } })), customModern(border));
-      expectedPaint = await expectRowPainted(page, page.locator('.hub-panel'), row, row.locator('strong'), border, expectedPaint);
-    }
-    await page.screenshot({ path: info.outputPath('custom-modern-settings.png') });
-    await style.selectOption('guild-wars');
-    await expect(page.locator('#hub > .hub-panel > .ui-frame-artwork')).toBeVisible();
-    await expect(style).toBeFocused();
   });
 });

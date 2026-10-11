@@ -10,6 +10,7 @@
  */
 const TRUSTED_PATHS = new Set(["/", "/index.html"]);
 const LAUNCHER_PATH = "/launcher/index.html";
+const SETTINGS_PATH = "/launcher/settings.html";
 
 function trustedUrl(raw: string, paths: ReadonlySet<string>): boolean {
   try {
@@ -43,3 +44,9 @@ export function isCanonicalRendererUrl(raw: string): boolean {
 export function isLauncherRendererUrl(raw: string): boolean {
   return trustedUrl(raw, new Set([LAUNCHER_PATH]));
 }
+
+/** The Settings window document: launcher code, but its own narrow bridge and role. */
+export function isSettingsRendererUrl(raw: string): boolean {
+  return trustedUrl(raw, new Set([SETTINGS_PATH]));
+}
+

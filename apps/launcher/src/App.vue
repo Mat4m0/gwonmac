@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import {
   AlertTriangle,
   Archive,
   Check,
-  FileText,
   Flame,
   Map as MapIcon,
   ScrollText,
@@ -14,112 +13,24 @@ import {
   Crown,
   X,
 } from "lucide-vue-next";
-import { CONTROLLER_SYMBOL_OPTIONS, GAME_SETTINGS, RENDER_SCALE_OPTIONS, settingDetail } from "@shared/setting-copy";
-import { parseLauncherSettingsSection, type LauncherDestination, type LauncherSnapshot } from "@shared/launcher-contracts";
-import type { LauncherPreferencesPatch, LauncherSettingsPatch } from "@shared/launcher-contracts";
-import type { CacheInfo } from "@shared/contracts";
+import type { LauncherDestination, LauncherPreferencesPatch, LauncherSnapshot } from "@shared/launcher-contracts";
+import type { SettingsSection } from "@shared/settings-catalogue";
 import type { ProfileId } from "@shared/multiple-accounts";
 import { parseProfileName, profileNameKey } from "@shared/multiple-accounts";
 import { fixtureSnapshotFor } from "./fixtures";
 import AccountsView from "./components/AccountsView.vue";
 import BaseModal from "./components/BaseModal.vue";
 import FeedbackView from "./components/FeedbackView.vue";
-import GameFilesSettings from "./components/GameFilesSettings.vue";
-import GeneralUpdateSettings from "./components/GeneralUpdateSettings.vue";
 import LauncherHeader from "./components/LauncherHeader.vue";
 import LaunchBar from "./components/LaunchBar.vue";
 import HomeView from "./components/HomeView.vue";
 import KnownIssuesView from "./components/KnownIssuesView.vue";
-import AppearanceSettings from "./components/AppearanceSettings.vue";
 import ColorControl from "./components/ColorControl.vue";
-import MapsSettings from "./components/MapsSettings.vue";
-import ToolsSettings from "./components/ToolsSettings.vue";
-import TexturePacksSettings from "./components/TexturePacksSettings.vue";
-import type { LauncherRoute, SettingsRoute } from "./routes";
+import type { LauncherRoute } from "./routes";
 
 const route = ref<LauncherRoute>("home");
-const settingsRoute = ref<SettingsRoute>("general");
-const allSettingsGroups: readonly {
-  readonly label: string;
-  readonly items: readonly { readonly id: SettingsRoute; readonly label: string }[];
-}[] = [
-  { label: "Launcher", items: [
-    { id: "general", label: "Updates" },
-    { id: "content", label: "Content" },
-    { id: "advanced", label: "Advanced" },
-  ] },
-  { label: "Game", items: [
-    { id: "game", label: "Game settings" },
-    { id: "tools", label: "Tools" },
-    { id: "maps", label: "Maps" },
-    { id: "texture-packs", label: "Texture packs" },
-    { id: "game-files", label: "Game files" },
-  ] },
-];
-// Native snapshots are replaced as a whole. Deep Vue proxies cannot cross
-// Electron's context bridge when a saved preset is reused in an edit.
 const snapshot = shallowRef<LauncherSnapshot>(fixtureSnapshotFor(window.location.search));
 const funding = computed(() => snapshot.value.funding);
-const settingsGroups = allSettingsGroups;
-const settingsContent = ref<HTMLElement | null>(null);
-const settingsSaveState = ref<"idle" | "saving" | "failed" | "saved">("idle");
-const settingsFormVersion = ref(0);
-const settingsSaveLabel = ref("Settings");
-let editedSetting = "Settings";
-let retrySettingsSave: (() => Promise<unknown>) | undefined;
-const settingsLocked = computed(() => settingsSaveState.value === "saving" || settingsSaveState.value === "failed");
-
-function identifySetting(event: Event) {
-  const control = event.target;
-  if (!(control instanceof HTMLElement) || settingsLocked.value) return;
-  editedSetting = control.getAttribute("aria-label")
-    ?? control.closest("label")?.querySelector("strong")?.textContent
-    ?? control.closest(".setting-row")?.querySelector("span")?.textContent
-    ?? control.textContent?.trim()
-    ?? "Settings";
-}
-
-// One pending operation prevents stale whole-preset edits. On failure, retain
-// the visible draft and the exact operation until the player retries or reverts.
-async function performSettingsSave(action: () => Promise<unknown>) {
-  if (settingsLocked.value) throw new Error("Finish the pending settings change first.");
-  settingsSaveLabel.value = editedSetting || "Settings";
-  settingsSaveState.value = "saving";
-  retrySettingsSave = action;
-  try {
-    await action();
-    settingsSaveState.value = "saved";
-    retrySettingsSave = undefined;
-  } catch (error) {
-    settingsSaveState.value = "failed";
-    throw error;
-  }
-}
-
-async function retrySetting() {
-  const action = retrySettingsSave;
-  if (!action) return;
-  settingsSaveState.value = "idle";
-  try { await performSettingsSave(action); settingsFormVersion.value += 1; await focusSettingsHeading(); }
-  catch { /* The persistent settings feedback owns this failure. */ }
-}
-
-function revertSetting() {
-  retrySettingsSave = undefined;
-  settingsSaveState.value = "idle";
-  settingsFormVersion.value += 1;
-  void focusSettingsHeading();
-}
-
-async function focusSettingsHeading() {
-  await nextTick();
-  const content = settingsContent.value;
-  if (!content) return;
-  content.scrollTop = 0;
-  const heading = content.querySelector("h1");
-  heading?.setAttribute("tabindex", "-1");
-  heading?.focus({ preventScroll: true });
-}
 const selected = ref<ProfileId[]>([...snapshot.value.selectedProfileIds]);
 const addOpen = ref(false);
 const appearanceProfile = ref<ProfileId | null>(null);
@@ -136,8 +47,6 @@ const setupStep = ref<1 | 2>(1);
 const updateBannerDismissed = ref(false);
 const operationError = ref("");
 const startupError = ref(false);
-const gameFilesInfo = ref<CacheInfo | null>(null);
-const gameFilesLoading = ref(false);
 const MIGRATION_NOTICE_DURATION_MS = 8_000;
 let unsubscribe: (() => void) | undefined;
 let unsubscribeNavigation: (() => void) | undefined;
@@ -315,24 +224,14 @@ async function archiveAppearanceProfile() {
   }
 }
 
-function openSettings(section: SettingsRoute = settingsRoute.value) {
-  settingsRoute.value = section;
-  route.value = "settings";
-  if (section === "game-files") void loadGameFilesInfo();
-  void focusSettingsHeading();
+/** Settings live in their own window; the launcher only asks for it, at a section when given. */
+function openSettings(section?: SettingsSection) {
+  void runAction("Settings could not be opened.", () => native?.settings.open(section ? { section } : undefined));
 }
 
 function navigateFromMain(destination: LauncherDestination) {
   navigationRequested = true;
-  if (destination === "settings") openSettings();
-  else if (destination === "home" || destination === "accounts") route.value = destination;
-  else openSettings(parseLauncherSettingsSection(destination.slice("settings/".length)));
-}
-
-function selectSettings(section: SettingsRoute) {
-  settingsRoute.value = section;
-  if (section === "game-files") void loadGameFilesInfo();
-  void focusSettingsHeading();
+  route.value = destination;
 }
 
 function retryStartup() {
@@ -350,27 +249,7 @@ async function runAction(message: string, action: () => Promise<unknown> | undef
   }
 }
 
-async function loadGameFilesInfo() {
-  if (!native) {
-    gameFilesInfo.value = { bytes: 8_400_000_000, chunks: 4200, totalBytes: 9_100_000_000, totalChunks: 4550, freeBytes: 80_000_000_000, fullDownloadShortfall: 0 };
-    return;
-  }
-  gameFilesLoading.value = true;
-  await runAction("Game file details could not be loaded.", async () => {
-    gameFilesInfo.value = await native.gameFiles.info();
-  });
-  gameFilesLoading.value = false;
-}
-
-async function runGameFilesAction(message: string, action: () => Promise<void> | undefined) {
-  if (await runAction(message, action)) await loadGameFilesInfo();
-}
-
 const profileIcons = { swords: Swords, archive: Archive, map: MapIcon, scroll: ScrollText, shield: Shield, star: Star, crown: Crown, flame: Flame } as const;
-
-function checked(event: Event): boolean {
-  return (event.currentTarget as HTMLInputElement).checked;
-}
 
 async function completeSetup(enableTools: boolean) {
   if (native) {
@@ -405,45 +284,7 @@ async function updateContent(content: NonNullable<LauncherPreferencesPatch["cont
     if (native) await native.experience.updatePreferences({ content });
     else snapshot.value = { ...snapshot.value, preferences: { content: { ...snapshot.value.preferences.content, ...content } } };
   };
-  if (route.value !== "settings") { await runAction("Content settings could not be saved.", save); return; }
-  try { await performSettingsSave(save); }
-  catch { /* Settings feedback retains the operation for retry. */ }
-}
-
-async function updateLauncherSettings(patch: LauncherSettingsPatch) {
-  try { await saveCustomization(patch); }
-  catch { /* Settings feedback retains the operation for retry. */ }
-}
-
-async function saveCustomization(patch: LauncherSettingsPatch) {
-  await performSettingsSave(async () => {
-    if (native) await native.settings.update(patch);
-    else snapshot.value = { ...snapshot.value, settings: { ...snapshot.value.settings, ...patch } };
-  });
-}
-
-async function checkLauncherUpdate() {
-  await runAction("Could not check for launcher updates.", () => native?.updates.check());
-}
-
-async function restartAndInstallUpdate() {
-  await runAction("The launcher update could not be installed.", () => native?.updates.restartAndInstall());
-}
-
-async function repairGameFiles() {
-  await runGameFilesAction("Game files could not be repaired.", () => native?.gameFiles.repair());
-}
-
-async function pauseGameDownload() {
-  await runGameFilesAction("The download could not be paused.", () => native?.gameFiles.pauseDownload());
-}
-
-async function resumeGameDownload() {
-  await runGameFilesAction("The download could not be resumed.", () => native?.gameFiles.resumeDownload());
-}
-
-async function resetGameFiles() {
-  await runAction("Game files could not be reset.", () => native?.gameFiles.resetAndRestart());
+  await runAction("Content settings could not be saved.", save);
 }
 
 </script>
@@ -451,10 +292,10 @@ async function resetGameFiles() {
 <template>
   <div v-if="startupError" class="launcher-boot launcher-error" role="alert"><AlertTriangle /><h1>The launcher could not open</h1><p>Your accounts and game files were not changed.</p><button class="primary" @click="retryStartup">Try again</button></div>
   <div v-else-if="!synchronized" class="launcher-boot" role="status">Opening launcher…</div>
-  <div v-else class="app-shell" :class="{ 'settings-shell': route === 'settings', 'accounts-shell': route === 'accounts' }">
+  <div v-else class="app-shell" :class="{ 'accounts-shell': route === 'accounts' }">
     <LauncherHeader :route="route" @navigate="route = $event" @settings="openSettings()" @external="openExternal" />
 
-    <section v-if="route !== 'settings'" class="funding-banner" aria-label="Project funding">
+    <section class="funding-banner" aria-label="Project funding">
       <div><strong>Support gwonmac</strong></div>
       <div class="funding-progress" role="progressbar" aria-label="Project funding" :aria-valuenow="Math.min(funding.raisedEuros, funding.goalEuros)" :aria-valuemax="funding.goalEuros" :aria-valuemin="0" :aria-valuetext="`€${funding.raisedEuros} of €${funding.goalEuros} funded`">
         <span>€{{ funding.raisedEuros }}</span><div><i :style="{ width: `${Math.min(100, funding.raisedEuros / funding.goalEuros * 100)}%` }" /></div><span>€{{ funding.goalEuros }}</span>
@@ -463,7 +304,7 @@ async function resetGameFiles() {
     </section>
 
     <main :class="{ 'artwork-only': route === 'home' && !snapshot.preferences.content.news && !snapshot.preferences.content.dailies }">
-      <HomeView v-if="route === 'home'" :snapshot="snapshot" @settings="openSettings('content')" @preferences="updateContent" @news="openNews" />
+      <HomeView v-if="route === 'home'" :snapshot="snapshot" @settings="openSettings('home')" @preferences="updateContent" @news="openNews" />
 
       <AccountsView
         v-else-if="route === 'accounts'"
@@ -483,69 +324,6 @@ async function resetGameFiles() {
       <KnownIssuesView v-else-if="route === 'issues'" :availability="snapshot.contentAvailability.knownIssues" @external="openExternal" />
 
       <FeedbackView v-else-if="route === 'feedback'" :availability="snapshot.contentAvailability.feedback" @external="openExternal" />
-
-      <section v-else class="settings-page">
-        <aside aria-label="Settings sections">
-          <h2>Settings</h2>
-          <div v-for="group in settingsGroups" :key="group.label" class="settings-nav-group" role="group" :aria-label="group.label">
-            <h3>{{ group.label }}</h3>
-            <button v-for="item in group.items" :key="item.id" :aria-current="settingsRoute === item.id ? 'page' : undefined" :class="{ active: settingsRoute === item.id }" @click="selectSettings(item.id)">{{ item.label }}</button>
-          </div>
-        </aside>
-        <div ref="settingsContent" class="settings-content">
-          <div v-if="settingsSaveState !== 'idle'" class="settings-feedback" :class="{ 'save-failed': settingsSaveState === 'failed', 'save-quiet': settingsSaveState !== 'failed' }" :role="settingsSaveState === 'failed' ? 'alert' : 'status'">
-            <span v-if="settingsSaveState === 'saving'">Saving…</span>
-            <span v-else-if="settingsSaveState === 'failed'"><strong>{{ settingsSaveLabel }} could not be saved.</strong> The displayed change is unsaved.</span>
-            <span v-else>Saved.</span>
-            <div v-if="settingsSaveState === 'failed'" class="save-actions"><button class="secondary" @click="retrySetting">Retry save</button><button class="secondary" @click="revertSetting">Revert change</button></div>
-          </div>
-          <fieldset :key="settingsFormVersion" class="settings-fields" :disabled="settingsLocked" :aria-busy="settingsSaveState === 'saving'" @change.capture="identifySetting" @click.capture="identifySetting">
-          <legend class="visually-hidden">Settings for every account</legend>
-          <GeneralUpdateSettings
-            v-if="settingsRoute === 'general'"
-            :settings="snapshot.settings"
-            :update="snapshot.appUpdate"
-            :save="updateLauncherSettings"
-            :check="checkLauncherUpdate"
-            :restart="restartAndInstallUpdate"
-            :open-releases="() => openExternal('releases')"
-          />
-          <template v-else-if="settingsRoute === 'content'"><h1>Content</h1><p>Choose what appears on Home. Beta release notes appear only while the Beta update track is selected.</p><div class="setting-group"><label data-setting="content.news"><span><strong>News</strong><small>Game, event, and GWonMac updates.</small></span><input type="checkbox" :checked="snapshot.preferences.content.news" @change="updateContent({ news: checked($event) })" /></label><label data-setting="content.dailies"><span><strong>Dailies</strong><small>Daily activities and the weekly schedule.</small></span><input type="checkbox" :checked="snapshot.preferences.content.dailies" @change="updateContent({ dailies: checked($event) })" /></label><label v-if="snapshot.preferences.content.news && snapshot.preferences.content.dailies"><span><strong>First Home tab</strong></span><select :value="snapshot.preferences.content.first" @change="updateContent({ first: ($event.currentTarget as HTMLSelectElement).value as 'news' | 'dailies' })"><option value="news">News</option><option value="dailies">Dailies</option></select></label></div><h2 v-if="snapshot.preferences.content.news" class="settings-subheading">News sources</h2><div v-if="snapshot.preferences.content.news" class="setting-group"><label><span><strong>Guild Wars updates</strong><small>Official game update notes from the Guild Wars Wiki.</small></span><input type="checkbox" :checked="snapshot.preferences.content.officialNews" @change="updateContent({ officialNews: checked($event) })" /></label><label v-if="snapshot.preferences.content.news"><span><strong>Upcoming events</strong><small>Important seasonal events and their dates.</small></span><input type="checkbox" :checked="snapshot.preferences.content.eventNews" @change="updateContent({ eventNews: checked($event) })" /></label><label v-if="snapshot.preferences.content.news"><span><strong>GWonMac releases</strong><small>Player-focused release notes for your update track.</small></span><input type="checkbox" :checked="snapshot.preferences.content.reforgedNews" @change="updateContent({ reforgedNews: checked($event) })" /></label><label v-if="snapshot.preferences.content.news"><span><strong>Rotate featured news</strong><small>Change the featured story every 12 seconds. Reduced Motion always disables rotation.</small></span><input type="checkbox" :checked="snapshot.preferences.content.autoRotateNews" @change="updateContent({ autoRotateNews: checked($event) })" /></label></div></template>
-          <template v-else-if="settingsRoute === 'game'">
-            <h1>Game settings</h1>
-            <p class="section-intro">Applies to every account. Graphics, audio, and key bindings inside Guild Wars are changed in the game.</p>
-            <div class="setting-group">
-              <label data-setting="renderScale"><span><strong>{{ GAME_SETTINGS.renderScale.label }}</strong><small>{{ settingDetail(GAME_SETTINGS.renderScale) }}</small></span><select :value="snapshot.settings.renderScale" @change="updateLauncherSettings({ renderScale: Number(($event.currentTarget as HTMLSelectElement).value) as 1 | 1.5 | 2 })"><option v-for="option in RENDER_SCALE_OPTIONS" :key="option.value" :value="option.value">{{ option.label }}</option></select></label>
-              <label data-setting="extendedMemoryEnabled"><span><strong>{{ GAME_SETTINGS.extendedMemoryEnabled.label }}</strong><small>{{ settingDetail(GAME_SETTINGS.extendedMemoryEnabled) }}</small></span><input type="checkbox" :checked="snapshot.settings.extendedMemoryEnabled" @change="updateLauncherSettings({ extendedMemoryEnabled: checked($event) })" /></label>
-              <label data-setting="autoRelogAfterReload"><span><strong>{{ GAME_SETTINGS.autoRelogAfterReload.label }}</strong><small>{{ settingDetail(GAME_SETTINGS.autoRelogAfterReload) }}</small></span><input type="checkbox" :checked="snapshot.settings.autoRelogAfterReload" @change="updateLauncherSettings({ autoRelogAfterReload: checked($event) })" /></label>
-              <label data-setting="controllerPromptStyle"><span><strong>{{ GAME_SETTINGS.controllerPromptStyle.label }}</strong><small>{{ settingDetail(GAME_SETTINGS.controllerPromptStyle) }}</small></span><select :value="snapshot.settings.controllerPromptStyle" @change="updateLauncherSettings({ controllerPromptStyle: ($event.currentTarget as HTMLSelectElement).value as 'game-default' | 'playstation' })"><option v-for="option in CONTROLLER_SYMBOL_OPTIONS" :key="option.value" :value="option.value">{{ option.label }}</option></select></label>
-              <label data-setting="showDiagnostics"><span><strong>{{ GAME_SETTINGS.showDiagnostics.label }}</strong><small>{{ settingDetail(GAME_SETTINGS.showDiagnostics) }}</small></span><input type="checkbox" :checked="snapshot.settings.showDiagnostics" @change="updateLauncherSettings({ showDiagnostics: checked($event) })" /></label>
-            </div>
-            <AppearanceSettings :settings="snapshot.settings" :save="saveCustomization" />
-          </template>
-          <ToolsSettings v-else-if="settingsRoute === 'tools'" :snapshot="snapshot" :api="native" :save="saveCustomization" :perform-save="performSettingsSave" @maps="selectSettings('maps')" />
-          <MapsSettings v-else-if="settingsRoute === 'maps'" :settings="snapshot.settings" :shortcuts="snapshot.shortcuts" :tools="snapshot.tools" :api="native?.tools" :save="saveCustomization" :perform-save="performSettingsSave" @tools="selectSettings('tools')" />
-          <TexturePacksSettings v-else-if="settingsRoute === 'texture-packs'" :texture-packs="snapshot.texturePacks" />
-          <GameFilesSettings
-            v-else-if="settingsRoute === 'game-files'"
-            :readiness="snapshot.readiness"
-            :info="gameFilesInfo"
-            :loading="gameFilesLoading"
-            :repair="repairGameFiles"
-            :pause="pauseGameDownload"
-            :resume="resumeGameDownload"
-            :reset="resetGameFiles"
-          />
-          <template v-else>
-            <h1>Advanced</h1>
-            <div class="setting-group" data-setting="openLogs">
-              <button class="secondary" @click="runAction('Logs could not be opened.', () => native?.external.revealLogs())"><FileText />Open logs</button>
-            </div>
-            <details class="settings-reset" data-setting="resetAllSettings"><summary>Reset all app settings</summary><p>Restores launcher and game preferences, Tools, shortcuts, custom map styles, and panel colors. Original textures will be selected. Accounts and game files are kept.</p><button class="danger-button" @click="runAction('Settings could not be reset.', () => native?.settings.reset())">Reset all app settings…</button></details>
-          </template>
-          </fieldset>
-        </div>
-      </section>
     </main>
 
     <LaunchBar
@@ -554,7 +332,6 @@ async function resetGameFiles() {
       :busy="busy"
       :operation-error="operationError"
       :update-dismissed="updateBannerDismissed"
-      :viewing-game-files="route === 'settings' && settingsRoute === 'game-files'"
       @toggle="toggleProfile"
       @play="playProfile"
         @cancel="cancelProfile"

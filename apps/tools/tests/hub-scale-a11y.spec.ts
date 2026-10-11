@@ -322,25 +322,6 @@ test('narrowing a large result list retains unchanged rows and their pointer act
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', /apply|command/);
 });
 
-test('Settings describes controls and shortcut labels cannot start a capture (HUB-115)', async ({ page }) => {
-  await page.goto('/?hub');
-  const search = page.locator('.hub-search input');
-  await search.fill('settings'); await search.press('Enter');
-  await page.getByRole('button', { name: 'Tools', exact: true }).click();
-  await expect(page.getByRole('checkbox', { name: 'Resign', exact: true })).toHaveAccessibleDescription('Ask before sending /resign in PvE. Enter confirms; Escape cancels.');
-  await page.getByRole('button', { name: 'Shortcuts', exact: true }).click();
-  const change = page.getByRole('button', { name: 'Switch Character', exact: true });
-  await page.locator('.hub-setting-row').filter({ has: change }).locator('strong').click();
-  await expect(change).not.toHaveAttribute('data-capturing', 'true');
-  await expect(page.getByRole('button', { name: 'Reset Switch Character', exact: true })).toBeDisabled();
-  await change.click(); await change.press('a');
-  await expect(page.locator('.hub-settings-status')).toContainText('That combination is not a shortcut.');
-  await change.click(); await change.press('Meta+c');
-  await expect(page.locator('.hub-settings-status')).toHaveText('Reserved by gwonmac or macOS. Choose another combination.');
-  await expect(change).toBeFocused();
-});
-
-
 test('Trade counts and opacity values are passive, with slider value text (HUB-162)', async ({ page }) => {
   await page.goto('/?hub');
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
@@ -351,13 +332,6 @@ test('Trade counts and opacity values are passive, with slider value text (HUB-1
   await expect(page.locator('.trade-status')).toHaveAttribute('role', 'status');
   await page.keyboard.press('Meta+r');
   const search = page.locator('.hub-search input');
-  await search.fill('settings'); await search.press('Enter');
-  await page.getByRole('button', { name: 'Appearance', exact: true }).click();
-  const opacity = page.getByRole('slider', { name: 'Panel opacity', exact: true });
-  await opacity.focus(); await opacity.press('ArrowLeft');
-  await expect(opacity).toHaveAttribute('aria-valuetext', `${await opacity.inputValue()}%`);
-  await expect(page.locator('.hub-setting-range output')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Home', exact: true }).click();
   await search.fill('whisper Romi'); await search.press('Enter');
   await expect(page.getByRole('textbox', { name: 'Message Romi Ranger', exact: true })).toBeVisible();
   await page.getByLabel('Chat options', { exact: true }).click();
@@ -387,16 +361,6 @@ test('status owners are rendered before their first message (HUB-114)', async ({
   await expect(status).toBeEmpty();
   await expect(status).toBeVisible();
   await expect(page.locator('.hub-receipt-announcement')).toBeVisible();
-  const search = page.locator('.hub-search input');
-  await search.fill('settings'); await search.press('Enter');
-  await expect(page.locator('.hub-settings-status')).toBeEmpty();
-  await expect(page.locator('.hub-settings-status')).toBeVisible();
-  await page.getByRole('button', { name: 'Home', exact: true }).click();
-  await search.fill('maps'); await search.press('Enter');
-  await expect(page.locator('.hub-caption')).toHaveText('Settings');
-  await expect(page.getByRole('button', {name: 'Maps', exact: true})).toHaveAttribute('aria-current', 'true');
-  await expect(page.locator('.hub-settings-status')).toBeEmpty();
-  await expect(page.locator('.hub-settings-status')).toBeVisible();
 });
 
 

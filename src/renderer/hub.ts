@@ -8,7 +8,8 @@ import { resumeSearchInput } from './search-input.js';
 import { installHubWindow } from './hub-window.js';
 import { attachClassicFrame } from '../shared/ui/frame.js';
 import { isHubBackKey, resolveShortcuts, shortcutKeycaps, type ShortcutAction } from '../shared/keyboard-shortcuts.js';
-import { FINDABLE_SECTIONS, FINDABLE_SETTINGS, focusHubSetting, openHubSettings, type HubSettingsFocus } from "./hub-settings.js";
+import { SETTINGS, SETTINGS_SECTIONS, type SettingsTarget } from "../shared/settings-catalogue.js";
+import type { GlobalTool } from "../shared/launcher-contracts.js";
 import { createHubAccounts } from './hub-accounts.js';
 import { hubIcon } from "./hub-icons.js";
 import { editHubShortcut, manageHubShortcuts } from './hub-preferences.js';
@@ -304,10 +305,10 @@ export function createHub(parent: HTMLElement) {
       ...tool('whispers', TOOL_PRESENTATION['whispers'].label, 'Conversations, friends and drafts', 'friends people message chat', settings?.gwonmacTools && settings.whispersEnabled, 'gw:whispers-toggle'),
       ...(settings?.characterSwitchEnabled ? [{ id: 'character', title: TOOL_PRESENTATION['character-switch'].label, detail: 'Choose another character', keywords: 'relog profession characters alts', group: 'Tools', action: 'Choose character', navigate: () => dispatch('gw:character-toggle'), run: () => dispatch('gw:character-toggle') }] : []),
       ...tool('storage', TOOL_PRESENTATION['xunlai-storage'].label, 'Open your storage chest', 'chest bank', settings?.gwonmacTools && settings.xunlaiStorage, 'gw:storage-open'),
-      ...(settings?.gwonmacTools && settings.cartographyEnabled ? [{ id: 'maps', title: TOOL_PRESENTATION['maps'].label, detail: 'Exploration grid, walkable terrain and compass ranges', keywords: 'grid terrain compass opacity', group: 'Tools', action: 'Adjust maps', run: () => openSettings({ section: 'Maps' }) }] : []),
+      ...(settings?.gwonmacTools && settings.cartographyEnabled ? [{ id: 'maps', title: TOOL_PRESENTATION['maps'].label, detail: 'Exploration grid, walkable terrain and compass ranges', keywords: 'grid terrain compass opacity', group: 'Tools', action: 'Adjust maps', run: openSettings({ section: 'maps' }) }] : []),
       { id: 'commands', title: 'Commands', detail: 'Search words, calculator examples and keys', aliases: ['?'], keywords: 'help guide examples cheatsheet shortcuts keys', group: 'Commands', action: 'Browse commands', run: () => presenter.showRows('Commands', commandExamples) },
       { id: 'hub-preferences', title: 'Hub preferences', detail: 'Pins and exact search phrases', keywords: 'aliases vocabulary', group: 'Commands', action: 'Adjust Hub', run: () => manageHubShortcuts(presenter, shortcutStore, hubWindow.reset) },
-      { id: 'settings', title: 'Settings', detail: 'Game, appearance, tools, shortcuts and maps', keywords: 'preferences graphics appearance hotkeys', group: 'Commands', action: 'Open Settings', run: () => openSettings() },
+      { id: 'settings', title: 'Settings', detail: 'Tools, maps, appearance, game and updates · ⌘,', keywords: 'preferences graphics appearance hotkeys shortcuts', group: 'Commands', action: 'Open Settings', run: openSettings() },
       // Launcher and the website are for a typed search; the first screen stays on the game (HUB-185).
       ...(!every && !query.trim() ? [] : [
         { id: 'launcher', title: 'Show Launcher', detail: 'Accounts, updates and game files', keywords: 'launcher administration', group: 'Commands', action: 'Show Launcher', run: async (task: HubTask) => { await window.gwNative.app.showLauncher(); task.done(); } },
@@ -322,8 +323,8 @@ export function createHub(parent: HTMLElement) {
         { id: 'reload', title: 'Quit or Reload Game…', detail: 'Opens confirmation for this account', keywords: 'restart reconnect', group: 'Commands', action: 'Review options', run: async () => { suspend(); await window.gwSurfaces.afterPress(); if (await window.gwNative.app.showQuitOrReload() === 'stayed') show(); else close(); } },
         // Settings are found by their own words and open with their control focused (HUB-063).
         // They follow the commands, so a command's own word keeps its row first.
-        ...(normaliseHubQuery(query).length < 3 ? [] : FINDABLE_SECTIONS).map(({ section, keywords }) => ({ id: `settings:${section}`, title: section, detail: 'Settings section', keywords, group: 'Settings', action: `Open ${section} settings`, run: () => openSettings({ section }) })),
-        ...(normaliseHubQuery(query).length < 3 ? [] : FINDABLE_SETTINGS).filter(setting => !setting.shown || (settings && setting.shown(settings))).map(setting => ({ id: `setting:${setting.label}`, title: setting.label, detail: `Settings › ${setting.section}`, keywords: `setting ${setting.keywords ?? ''}`, group: 'Settings', action: 'Open setting', run: () => openSettings({ section: setting.section, control: setting.label }) })),
+        ...(normaliseHubQuery(query).length < 3 ? [] : SETTINGS_SECTIONS).map(({ id, label, keywords }) => ({ id: `settings:${id}`, title: label, detail: 'Settings section', keywords, group: 'Settings', action: `Open ${label} settings`, run: openSettings({ section: id }) })),
+        ...(normaliseHubQuery(query).length < 3 ? [] : SETTINGS).map(entry => ({ id: `setting:${entry.id}`, title: entry.label, detail: `Settings › ${SETTINGS_SECTIONS.find(section => section.id === entry.section)!.label}`, keywords: `setting ${entry.keywords ?? ''}`, group: 'Settings', action: 'Open setting', run: openSettings({ section: entry.section, control: entry.id }) })),
       ]),
     ];
   };
@@ -377,17 +378,16 @@ export function createHub(parent: HTMLElement) {
     // Keys: a tool's shortcut can change in Settings; the Hub's own keys are fixed.
     const bindings = resolveShortcuts(window.gwToolsSettings?.().shortcutOverrides ?? {});
     const keys = (action: ShortcutAction) => shortcutKeycaps(bindings[action]).map(cap => cap.label).join('') || 'Not set';
+    const KEY_TOOLS: Record<string, GlobalTool> = { travel: 'quick-travel', character: 'character-switch', builds: 'build-management', trade: 'trade-chat', whispers: 'whispers' };
     const toolKeys: [string, ShortcutAction, string][] = [['travel', 'travel.open', TOOL_PRESENTATION['quick-travel'].label], ['character', 'character.switch', TOOL_PRESENTATION['character-switch'].label], ['builds', 'tools.toggle', TOOL_PRESENTATION['build-management'].label], ['trade', 'trade.toggle', TOOL_PRESENTATION['trade-chat'].label], ['whispers', 'whispers.toggle', TOOL_PRESENTATION['whispers'].label]];
-    rows.push(...toolKeys.filter(([tool]) => enabled.has(tool)).map(([tool, action, name]) => ({ id: `key:${tool}`, title: name, detail: keys(action), group: 'Keys & shortcuts', action: 'Change shortcut', run: () => openSettings({ section: 'Shortcuts' as const }) })));
+    rows.push(...toolKeys.filter(([tool]) => enabled.has(tool)).map(([tool, action, name]) => ({ id: `key:${tool}`, title: name, detail: keys(action), group: 'Keys & shortcuts', action: 'Change shortcut', run: openSettings({ section: 'tools', control: `tool:${KEY_TOOLS[tool]}` }) })));
     for (const [id, name, detail] of [['actions', 'Actions for the selected row', '⌘J'], ['back', 'Back', '⌘⌫'], ['escape', 'Clear, back, then close', '⎋'], ['open', 'Open a row with a page', '→']] as const)
       rows.push({ id: `key:${id}`, title: name, detail, group: 'Keys & shortcuts', action: 'Fixed key', unavailable: 'The Hub’s own keys do not change.', run() {} });
     return rows;
   }
-  /** Settings, optionally at one section with one control focused (search, the memory warning). */
-  function openSettings(focus?: HubSettingsFocus) {
-    direct('settings', () => openHubSettings(presenter, focus));
-    // A Settings page that was already open, suspended or lower in the path shows the target too.
-    if (focus) focusHubSetting(focus);
+  /** A row action that opens the Settings window, at a section or control when given, and closes the Hub. */
+  function openSettings(target?: SettingsTarget) {
+    return async (task: HubTask) => { await window.gwNative.app.openSettings(...(target ? [target] : [])); task.done(); };
   }
   function select(id: string | null, scroll = false) {
     const index = painting && id !== null ? painting.rows.findIndex(row => row.id === id) : -1;
@@ -1328,7 +1328,7 @@ export function createHub(parent: HTMLElement) {
     if (!content.contains(document.activeElement)) firstControl().focus();
   }
   const presenter = {
-    show, close: () => close(), suspend, openSettings, direct, suspendedOn,
+    show, close: () => close(), suspend, direct, suspendedOn,
     /** A mounted view replaced its own page (a confirmation): a click run from before it is cancelled. */
     pageChanged: () => modal.pageChanged(),
     get visible() { return root.open; },

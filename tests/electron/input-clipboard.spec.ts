@@ -1,5 +1,5 @@
 import { expect, test, type ElectronApplication, type Page } from "@playwright/test";
-import { closeOffline, launchPlayableClient } from "./fixtures.mjs";
+import { closeOffline, focusGameWindow, launchPlayableClient, openSettings } from "./fixtures.mjs";
 import { startGameInput } from "./input-helpers.js";
 
 type InputObservation = {
@@ -108,13 +108,19 @@ test.describe("renderer text editing", () => {
         toolsLabel: "Build Library",
         tradeLabel: "Trade Chat",
       });
-      await fixture.page.evaluate(async () => {
-        await window.gwNative.hubSettings.update({kind: 'master', enabled: true});
-        await window.gwNative.hubSettings.update({kind: 'tool', tool: 'whispers', enabled: true});
+      const settings = await openSettings(fixture);
+      await settings.evaluate(async () => {
+        await window.settingsNative.tools.setMasterEnabled(true);
+        await window.settingsNative.tools.setFeature({tool: 'whispers', enabled: true});
       });
-      await expect.poll(() => fixture.app.evaluate(({Menu}) => Menu.getApplicationMenu()?.getMenuItemById('open-whispers')?.enabled)).toBe(true);
-      await fixture.page.evaluate(() => window.gwNative.hubSettings.update({kind: 'tool', tool: 'whispers', enabled: false}));
-      await expect.poll(() => fixture.app.evaluate(({Menu}) => Menu.getApplicationMenu()?.getMenuItemById('open-whispers')?.enabled)).toBe(false);
+      // The menu follows the focused window; the Settings window shows the launcher menu.
+      const whispersEnabled = async () => {
+        await focusGameWindow(fixture.app);
+        return fixture.app.evaluate(({Menu}) => Menu.getApplicationMenu()?.getMenuItemById('open-whispers')?.enabled);
+      };
+      await expect.poll(whispersEnabled).toBe(true);
+      await settings.evaluate(() => window.settingsNative.tools.setFeature({tool: 'whispers', enabled: false}));
+      await expect.poll(whispersEnabled).toBe(false);
     } finally {
       await closeOffline(fixture);
     }

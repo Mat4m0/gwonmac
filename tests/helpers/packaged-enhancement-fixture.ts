@@ -394,7 +394,7 @@ export async function rendererPage(
   browser: Browser,
   child: ChildProcess,
   output: string[],
-  expectedUrl: "gw://app/" | "gw://app/launcher/index.html",
+  expectedUrl: "gw://app/" | "gw://app/launcher/index.html" | "gw://app/launcher/settings.html",
 ) {
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline && child.exitCode === null) {
@@ -855,9 +855,17 @@ export async function assertPackagedHostOnlyToolsSession() {
     );
     assert.deepEqual(enhancementRequests, []);
 
+    // Tools writes live only on the Settings window's bridge.
+    await fixture.launcher.evaluate(() => window.launcherNative.settings.open());
+    const settingsPage = await rendererPage(
+      fixture.browser,
+      fixture.child,
+      fixture.output,
+      "gw://app/launcher/settings.html",
+    );
     const setToolsEnabled = async (enabled: boolean) => {
-      await fixture.launcher.evaluate((next) =>
-        window.launcherNative.tools.setMasterEnabled(next), enabled);
+      await settingsPage.evaluate((next) =>
+        window.settingsNative.tools.setMasterEnabled(next), enabled);
     };
     await setToolsEnabled(false);
     assert.deepEqual(

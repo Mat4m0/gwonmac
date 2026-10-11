@@ -48,6 +48,7 @@ import type { WindowHost } from "./window.js";
 import { resolveShortcuts, shortcutAccelerator, type ShortcutAction } from "../shared/keyboard-shortcuts.js";
 import { windowRegistry } from "./window-registry.js";
 import type { ProfileId } from "../shared/multiple-accounts.js";
+import type { SettingsTarget } from "../shared/settings-catalogue.js";
 
 const USER_GUIDE_URL = `${EXTERNAL_URLS.github}/blob/main/docs/user-guide.md`;
 
@@ -56,10 +57,15 @@ export interface ApplicationMenuActions {
   /** Window state stays window.ts's; the menu only asks for the reset. */
   resetWindowState: (win: BrowserWindow) => Promise<void>;
   revealLauncher: LauncherReveal;
+  openSettings: SettingsOpener;
   accounts: AccountMenuActions;
 }
 
 export type LauncherReveal = (destination?: LauncherDestination) => void;
+/** Opens the one Settings window above the focused window, at a section or control when given. */
+export type SettingsOpener = (target?: SettingsTarget) => void;
+/** Command-comma opens Settings from every window (macOS convention); tools cannot claim it. */
+export const SETTINGS_ACCELERATOR = "CmdOrCtrl+,";
 
 export interface AccountMenuActions {
   profiles(): readonly LauncherProfileSummary[];
@@ -400,7 +406,7 @@ async function showQuitOrReloadGameOnce(
 }
 
 export function installApplicationMenu(actions: ApplicationMenuActions, settings?: ToolMenuSettings): void {
-  const { host, resetWindowState, revealLauncher, accounts } = actions;
+  const { host, resetWindowState, revealLauncher, openSettings, accounts } = actions;
   const isMac = process.platform === "darwin";
   const dev = isDevBuild();
 
@@ -415,16 +421,13 @@ export function installApplicationMenu(actions: ApplicationMenuActions, settings
               {
                 id: "check-for-updates",
                 label: "Check for Updates…",
-                click: () => revealLauncher("settings/general"),
+                click: () => openSettings({ section: "updates" }),
               },
               {
                 id: "show-settings",
                 label: "Settings…",
-                click: () => {
-                  const win = windowRegistry.focusedGameWindow();
-                  if (win) void sendRendererCommand(win, { type: "hub.settings" });
-                  else revealLauncher("settings");
-                },
+                accelerator: SETTINGS_ACCELERATOR,
+                click: () => openSettings(),
               },
               { type: "separator" as const },
               { role: "hide" as const },

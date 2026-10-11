@@ -7,7 +7,6 @@
  * and quit registration. Feature rules belong to the module it hands work to;
  * a feature decision that starts growing here should move to that owner.
  */
-import { hubSettingsSnapshot } from "../shared/hub-settings.js";
 import {
   app,
   autoUpdater,
@@ -134,8 +133,11 @@ import {
   bootstrapAccountWorkspace,
   loadAccountMode,
 } from "./core/multiple-accounts.js";
-import { refreshNativeAccountsMenu, showQuitOrReloadGame } from "./window-menu.js";
-import { createLauncherWindow, prepareLauncherWindowState } from "./accounts-window.js";
+import { refreshNativeAccountsMenu, showQuitOrReloadGame, type AccountMenuActions } from "./window-menu.js";
+import { createLauncherWindow, installLauncherMenu, prepareLauncherWindowState } from "./accounts-window.js";
+import { openSettingsWindow, takeSettingsTarget } from "./settings-window.js";
+import type { ProtocolDeps } from "./protocol.js";
+import type { SettingsTarget } from "../shared/settings-catalogue.js";
 import { MultipleAccountsController } from "./multiple-accounts-controller.js";
 import { WindowCoordinator } from "./window-coordinator.js";
 import { GameReloader } from "./game-reload.js";
@@ -156,14 +158,13 @@ import type {
   ShortcutReplacement,
 } from "../shared/launcher-contracts.js";
 import {
-  DEFAULT_SHORTCUTS,
 } from "../shared/keyboard-shortcuts.js";
 import { sendIfLive } from "./ipc-channel-registry.js";
 import {
   allGlobalToolsPatch,
   globalToolPatch,
 } from "./core/launcher-tools.js";
-import { cancelAppShortcutCapture, captureLauncherShortcut } from "./launcher-shortcut-capture.js";
+import { captureLauncherShortcut } from "./launcher-shortcut-capture.js";
 import { TexturePackManager } from "./core/texture-pack-manager.js";
 import { createTexturePackActions } from "./texture-pack-actions.js";
 
@@ -223,6 +224,16 @@ const windowCoordinator = new WindowCoordinator(
 );
 const INJECT_STARTUP_FAILURE =
   !app.isPackaged && process.env.GW_TEST_STARTUP_FAILURE === "1";
+
+/** Set once the protocol and account menu exist; Settings cannot open before the launcher. */
+let settingsWindowDeps: { protocol: ProtocolDeps; accounts: AccountMenuActions } | null = null;
+
+/** Opens the one Settings window above `opener` (the focused window by default). */
+function openSettings(target?: SettingsTarget, opener: BrowserWindow | null = windowRegistry.focusedWindow()): void {
+  const deps = settingsWindowDeps;
+  if (!deps) return;
+  openSettingsWindow(deps.protocol, target, opener, () => installLauncherMenu(revealLauncher, openSettings, deps.accounts));
+}
 
 function revealLauncher(destination?: LauncherDestination): boolean {
   if (!windowCoordinator.revealLauncher({ activateApp: true })) return false;
@@ -491,6 +502,7 @@ function buildWindowHost(
     revealLauncher: (destination) => {
       revealLauncher(destination);
     },
+    openSettings: (target) => openSettings(target),
     accounts: {
       profiles: () => launcherOrchestrator?.snapshot().profiles ?? [],
       activate: async (id) => {
@@ -767,6 +779,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     enhancementProgram,
     diagnosticProfile,
   );
+  settingsWindowDeps = { protocol: protocolDeps, accounts: host.accounts };
   const allowUnreadyLaunch =
     (!app.isPackaged || distributionChannel === null)
     && process.env.GW_TEST_ALLOW_UNREADY_LAUNCH === "1";
@@ -812,11 +825,13 @@ if (primaryInstance) void app.whenReady().then(async () => {
     getNews: (track, contentPreferences) => launcherNews.snapshot(track, contentPreferences),
     toolsLoaded: () => enhancementSelection.tools,
     getTexturePacks: () => texturePacks.snapshot(),
+    getExtendedMemory: () => clientRuntime.extendedMemory,
     developmentFixtures: !app.isPackaged || process.env.GW_LAUNCHER_FIXTURES === "1",
     allowUnreadyLaunch,
     publish: (snapshot) => {
-      const launcher = windowRegistry.launcherWindow();
-      if (launcher) sendIfLive(launcher, LAUNCHER_IPC.stateEvent, snapshot);
+      for (const win of [windowRegistry.launcherWindow(), windowRegistry.settingsWindow()]) {
+        if (win) sendIfLive(win, LAUNCHER_IPC.stateEvent, snapshot);
+      }
       refreshNativeAccountsMenu();
     },
   });
@@ -900,6 +915,8 @@ if (primaryInstance) void app.whenReady().then(async () => {
     },
     updatePreferences: (patch) => launcherOrchestrator!.updatePreferences(patch),
     openNews: (id) => launcherNews.open(id),
+    openSettings: (opener, target) => openSettings(target, opener),
+    takeSettingsTarget,
     updateSettings: async (patch: LauncherSettingsPatch) => {
       await preferences.updateSettings(patch);
     },
@@ -932,19 +949,12 @@ if (primaryInstance) void app.whenReady().then(async () => {
     replaceShortcut: async ({ action, binding }: ShortcutReplacement) => {
       await preferences.replaceShortcut(action, binding);
     },
-    restoreDefaultShortcut: async (action) => {
-      await preferences.replaceShortcut(action, DEFAULT_SHORTCUTS[action]);
-    },
     restartToApplyTools: async (_win) => {
       if (windowRegistry.gameWindows().length > 0) return;
       app.relaunch();
       app.quit();
     },
     cacheInfo: () => clientRuntime.cacheInfo(),
-    retryPreparation: () => clientRuntime.retryClient(() => {
-      app.relaunch();
-      app.quit();
-    }),
     repairGameFiles: async (win) => {
       if (windowRegistry.gameWindows().length > 0) {
         await dialog.showMessageBox(win, {
@@ -1056,19 +1066,8 @@ if (primaryInstance) void app.whenReady().then(async () => {
         if (!win.isDestroyed()) throw new Error('The other account is open. This account stayed open because closing was cancelled.');
       });
     },
-    hubSettings: {
-      get: async () => hubSettingsSnapshot(launcherOrchestrator!.snapshot()),
-      update: async change => {
-        if (change.kind === 'settings') await preferences.updateSettings(change.patch);
-        else if (change.kind === 'tool') await preferences.updateSettings(globalToolPatch(change.tool, change.enabled));
-        else if (change.kind === 'master') await preferences.updateSettings({ gwonmacTools: change.enabled });
-        else await preferences.replaceShortcut(change.action, change.binding);
-      },
-      capture: (win, action) => captureLauncherShortcut(win, action, () => currentSettings ?? settings),
-      cancelCapture: win => cancelAppShortcutCapture(win),
-    },
     showLauncher: () => host.revealLauncher(),
-    openSettings: (section) => host.revealLauncher(`settings/${section}`),
+    openSettings: (win, target) => openSettings(target, win),
     reloadGame: (win, cause) => host.reloadGame(win, cause),
     claimRelogIntent: (win) => host.claimRelogIntent(win),
   });
@@ -1102,6 +1101,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     windowCoordinator,
     revealLauncher,
     host.accounts,
+    openSettings,
   );
   app.dock?.setMenu(Menu.buildFromTemplate([
     {
@@ -1206,7 +1206,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
   });
   app.on("activate", () => {
     if (!windowCoordinator.restoreMostRecentWindow()) {
-      createLauncherWindow(protocolDeps, windowCoordinator, revealLauncher, host.accounts);
+      createLauncherWindow(protocolDeps, windowCoordinator, revealLauncher, host.accounts, openSettings);
     }
   });
   app.on("child-process-gone", (_event, details) => {

@@ -728,31 +728,19 @@ test('switch search prioritizes characters and Back restores the selected accoun
   await expect(search).toHaveValue('switch account');
 });
 
-test('price updates preserve focus and disabled Maps keeps its Settings controls unavailable', async ({ page }) => {
+test('price updates preserve focus on the price basis', async ({ page }) => {
   await page.goto('/?hub');
   const search = page.locator('.hub-search input');
   await search.fill('1zkey in a');
   const basis = page.getByRole('combobox', { name: 'Price basis' }); await basis.focus();
   await page.evaluate(() => window.dispatchEvent(new Event('hub-fixture-incoming')));
   await expect(basis).toBeFocused();
-  await search.fill('maps'); await search.press('Enter');
-  await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: { tradeChat: false } })));
-  await expect(page.locator('.hub-caption')).toHaveText('Settings');
-  await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: { cartographyEnabled: false } })));
-  await expect(page.getByRole('checkbox', { name: 'Exploration grid' })).toBeDisabled();
-  await expect(page.locator('.hub-settings')).toBeVisible();
 });
 
-test('disabled tool shortcuts are visible but cannot be edited; command examples respect availability', async ({ page }) => {
+test('command examples respect tool availability', async ({ page }) => {
   await page.goto('/?hub');
   const search = page.locator('.hub-search input');
-  await search.fill('settings'); await search.press('Enter');
-  await page.getByRole('checkbox', { name: 'Whispers', exact: true }).uncheck();
-  await page.getByRole('button', { name: 'Shortcuts', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Whispers', exact: true })).toBeDisabled();
-  await expect(page.getByRole('button', { name: 'Clear Whispers', exact: true })).toBeDisabled();
-  await expect(page.getByRole('button', { name: 'Reset Whispers', exact: true })).toBeDisabled();
-  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: { whispersEnabled: false } })));
   await search.fill('commands'); await search.press('Enter');
   await expect(page.locator('.hub-results')).toContainText('build <name or profession>');
   await expect(page.locator('.hub-results')).not.toContainText('whisper <name>');
@@ -783,28 +771,6 @@ test('character hint follows custom and cleared bindings', async ({ page }) => {
   await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: { shortcutOverrides: { 'character.switch': null } } })));
   await expect(page.locator('.hub-row')).not.toContainText('⌘');
 });
-
-test('shortcut recorder presents each modifier and captures without opening another tool', async ({ page }) => {
-  await page.goto('/?hub');
-  const search = page.locator('.hub-search input');
-  await search.fill('settings'); await search.press('Enter');
-  await page.getByRole('button', { name: 'Shortcuts', exact: true }).click();
-  const record = page.getByRole('button', { name: 'Switch Character', exact: true });
-  await record.click(); await page.keyboard.press('Control+Alt+Shift+F12');
-  await expect(record.locator('kbd')).toHaveText(['⌃', '⌥', '⇧', 'F12']);
-  await record.click(); await page.keyboard.press('Escape');
-  await expect(record.locator('kbd')).toHaveText(['⌃', '⌥', '⇧', 'F12']);
-  await expect(page.locator('.hub-caption')).toHaveText('Settings');
-  // The recorder takes Command-Backspace instead of going Back, and refuses it by name.
-  await record.click(); await page.keyboard.press('Meta+Backspace');
-  await expect(page.locator('.hub-view').getByText('Reserved for Back', { exact: true })).toBeVisible();
-  await expect(record.locator('kbd')).toHaveText(['⌃', '⌥', '⇧', 'F12']);
-  await expect(page.locator('.hub-caption')).toHaveText('Settings');
-  await page.getByRole('button', { name: 'Back', exact: true }).click();
-  await search.fill('switch character');
-  await expect(page.locator('.hub-row')).toContainText('⌃⌥⇧F12');
-});
-
 
 test('Hub text arrows cannot execute an action or clear a query', async ({ page }) => {
   await page.goto('/?hub');

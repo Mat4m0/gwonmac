@@ -12,6 +12,14 @@ import {
   type CachedClientOptions,
   seedCachedClient,
 } from "../helpers/cached-client.js";
+import type { SettingsNativeApi } from "../../src/shared/launcher-contracts.js";
+
+declare global {
+  // The Settings window's bridge; specs evaluate it on the page `openSettings` returns.
+  interface Window {
+    settingsNative: SettingsNativeApi;
+  }
+}
 
 export const root = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -217,4 +225,38 @@ async function stopElectron(app: ElectronApplication): Promise<void> {
 export async function closeOffline(fixture: OfflineFixture): Promise<void> {
   await stopElectron(fixture.app);
   await removeUserData(fixture.userData);
+}
+
+/**
+ * Opens the one Settings window through the launcher's real bridge and returns its page.
+ * Settings writes (tools, settings, texture packs, game files) live only on `settingsNative`.
+ */
+export async function openSettings(
+  fixture: OfflineFixture,
+  target?: { section: string; control?: string },
+): Promise<Page> {
+  const isSettings = (page: Page) => page.url().endsWith("/launcher/settings.html");
+  const launcher = fixture.app.windows().find(page => page.url().endsWith("/launcher/index.html")) ?? fixture.page;
+  const existing = fixture.app.windows().find(isSettings);
+  const opened = existing ? null : fixture.app.waitForEvent("window", { predicate: isSettings, timeout: 15_000 });
+  await launcher.evaluate(t => window.launcherNative.settings.open(t as never), target);
+  const page = existing ?? await opened!;
+  await page.waitForLoadState("domcontentloaded");
+  await page.locator(".settings-page").waitFor();
+  return page;
+}
+
+/**
+ * Brings the game window forward. The application menu follows the focused window, and the
+ * Settings window shows the launcher menu, so menu checks after a Settings write call this first.
+ */
+export async function focusGameWindow(app: ElectronApplication): Promise<void> {
+  await app.evaluate(({ BrowserWindow, app: electronApp }) => {
+    const game = BrowserWindow.getAllWindows().find(win => win.webContents.getURL() === "gw://app/");
+    if (game && !game.isFocused()) {
+      electronApp.focus({ steal: true });
+      game.show();
+      game.focus();
+    }
+  });
 }

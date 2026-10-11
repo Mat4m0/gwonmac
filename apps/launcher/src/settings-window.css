@@ -1,0 +1,68 @@
+/* The Settings window: search first, a section sidebar, one status line.
+   Rows reuse the launcher's quiet desktop-preferences styles (.settings-shell). */
+.settings-window { height: 100%; display: block; background: #181714; color: #f0e8dc; }
+.settings-window .settings-page { height: 100%; grid-template-columns: 228px minmax(0, 1fr); }
+.settings-window .settings-page aside { padding: 14px 10px; background: #12110f; }
+.settings-window .settings-page aside button { display: flex; align-items: center; gap: 10px; }
+.settings-window .settings-page aside button svg { width: 16px; height: 16px; flex: 0 0 16px; color: var(--muted); }
+.settings-window .settings-page aside button.active { color: #f4d394; background: rgba(232, 183, 92, .13); }
+.settings-window .settings-page aside button.active svg { color: var(--gold); }
+.settings-window .settings-nav-group { margin-bottom: 18px; }
+.settings-window .settings-nav-group h3 { padding-top: 4px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+
+.settings-search { position: relative; display: flex; align-items: center; margin: 0 0 18px; }
+.settings-search > svg { position: absolute; left: 10px; width: 15px; height: 15px; color: var(--muted); pointer-events: none; }
+.settings-window .settings-page .settings-search input[type="search"] { width: 100%; min-height: 32px; padding: 6px 30px 6px 32px; border: 1px solid var(--line-strong); border-radius: 7px; color: inherit; background: rgba(255, 255, 255, .05); }
+.settings-window .settings-page .settings-search input[type="search"]:focus-visible { outline: 0; border-color: var(--gold); box-shadow: 0 0 0 3px rgba(232, 183, 92, .22); }
+.settings-search input::-webkit-search-cancel-button { display: none; }
+.settings-search .icon-button { position: absolute; right: 2px; min-width: 28px; min-height: 28px; padding: 4px; color: var(--gold); }
+.settings-search .icon-button svg { width: 14px; height: 14px; }
+
+.settings-main { min-width: 0; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; }
+.settings-window .settings-content { padding: 26px 32px 32px; }
+.settings-window .settings-content h1, .settings-window .settings-fields h1 { margin: 0 0 6px; font-size: 26px; line-height: 1.2; }
+.settings-window .section-intro, .settings-window .settings-fields > p { margin: 0 0 20px; color: var(--muted); font-size: 13px; }
+.settings-status { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; min-height: 40px; padding: 8px 32px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+.settings-status.save-failed { color: #f5b7ab; background: rgba(164, 54, 35, .14); }
+.settings-status > span:first-child { flex: 1 1 260px; }
+
+/* Switches: every on/off setting in this window. */
+.settings-window .settings-page input[type="checkbox"] { appearance: none; position: relative; width: 34px; height: 20px; flex: 0 0 34px; margin: 0; border-radius: 999px; background: rgba(255, 255, 255, .18); cursor: pointer; transition: background-color .15s ease; }
+.settings-window .settings-page input[type="checkbox"]::before { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #f4efe7; box-shadow: 0 1px 2px rgba(0, 0, 0, .4); transition: transform .15s ease; }
+.settings-window .settings-page input[type="checkbox"]:checked { background: var(--gold); }
+.settings-window .settings-page input[type="checkbox"]:checked::before { transform: translateX(14px); }
+.settings-window .settings-page input[type="checkbox"]:disabled { opacity: .4; cursor: default; }
+.settings-window .feature-heading { grid-template-columns: minmax(0, 1fr) auto 34px; }
+@media (prefers-reduced-motion: reduce) { .settings-window .settings-page input[type="checkbox"], .settings-window .settings-page input[type="checkbox"]::before { transition: none; } }
+
+.settings-window .hub-setting { margin-bottom: 8px; }
+.settings-window .hub-setting .feature-heading { grid-template-columns: minmax(0, 1fr) auto auto; border-bottom: 1px solid var(--line); }
+.settings-window .hub-setting .feature-heading > span:first-child { display: grid; gap: 3px; }
+.settings-window .hub-setting small { color: var(--muted); }
+.settings-window .shortcut-keycaps { display: inline-flex; gap: 3px; }
+.settings-window .hub-setting kbd { display: grid; place-items: center; min-width: 23px; height: 25px; padding-inline: 4px; border: 1px solid var(--line-strong); border-radius: 5px; background: var(--control); font: inherit; font-size: 12px; }
+.built-in { padding: 4px 9px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 12px; }
+
+.settings-window .tool-options { margin: -4px 0 12px; }
+.settings-window .tool-options > summary { width: max-content; color: var(--gold); font-size: 13px; cursor: pointer; }
+.settings-window .tool-options[open] > summary { margin-bottom: 4px; }
+.settings-window .tool-options > :not(summary) { padding-left: 14px; border-left: 2px solid var(--line); }
+.settings-window .tool-link { margin: -4px 0 12px; }
+.settings-window .tool-link .text-link { color: var(--gold); text-decoration: none; padding: 0; }
+
+.settings-results { max-width: 840px; margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--line); }
+.settings-results button { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 8px; border-bottom: 1px solid var(--line); border-radius: 0; text-align: left; }
+.settings-results button:hover, .settings-results button:focus-visible { background: var(--surface-hover); }
+.settings-results button > span { display: grid; gap: 3px; min-width: 0; }
+.settings-results small { color: var(--muted); font-size: 13px; }
+
+.setting-state { color: var(--gold); }
+.setting-state.good { color: #a8d36d; }
+/* A gold bar and wash just outside the row, so the row's own text does not move. */
+.setting-focus { position: relative; }
+.setting-focus::before { content: ""; position: absolute; inset: 0 -10px 0 -14px; border-left: 3px solid var(--gold); border-radius: 6px; background: rgba(232, 183, 92, .1); pointer-events: none; }
+
+@media (max-width: 820px) {
+  .settings-window .settings-page { grid-template-columns: 188px minmax(0, 1fr); }
+  .settings-window .settings-content { padding-inline: 22px; }
+}

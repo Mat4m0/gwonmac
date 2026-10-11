@@ -233,6 +233,9 @@ const RESERVED_SHORTCUTS: readonly ShortcutBinding[] = [
   { key: "m", shift: true, option: false },
   { key: "h", shift: false, option: true },
   { key: "i", shift: false, option: true },
+  // ⌘, opens Settings in every window. An older saved binding keeps working: the game
+  // window claims its own shortcuts before the menu sees them.
+  { key: "comma", shift: false, option: false },
   // Travel owns Command+1…9 for quick-destination assignment.
   ..."123456789".split("").map((key) => ({
     key,

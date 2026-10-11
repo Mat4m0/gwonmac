@@ -19,8 +19,7 @@ import { DEFAULT_ALCOHOL_TIMER_POSITION, type AlcoholTimerPosition } from "./alc
 import type { EliteWikiRequest } from "./elite-wiki.js";
 import type { EliteMissionMapMarkers } from "./elite-map-settings.js";
 import type { EliteTracking, EliteUpdate } from "./elite-skills.js";
-import type { HubSettingsApi } from "./hub-settings.js";
-import type { LauncherSettingsSection } from "./launcher-contracts.js";
+import type { SettingsTarget } from "./settings-catalogue.js";
 import type { MarketSnapshot } from "./market-rates.js";
 import { DEFAULT_CALCULATOR_RATES, type CalculatorRates } from './hub-calculator.js';
 import type { HubShortcut } from './hub-preferences.js';
@@ -1069,7 +1068,6 @@ export type WasmBridgeMarkers = typeof WASM_BRIDGE_MARKERS;
  */
 export type RendererCommand =
   | { type: "hub.toggle" }
-  | { type: "hub.settings" }
   | { type: "input.reset" }
   | { type: "input.release"; code: string }
   | { type: "text.edit"; command: TextEditCommand }
@@ -1173,10 +1171,6 @@ export const CORE_IPC = {
   hubAccountOpen: "gw:hub:account:open",
   appOpenSettings: "gw:app:openSettings",
   appShowLauncher: "gw:app:showLauncher",
-  hubSettingsGet: "gw:hub:settings:get",
-  hubSettingsUpdate: "gw:hub:settings:update",
-  hubShortcutCapture: "gw:hub:shortcut:capture",
-  hubShortcutCaptureCancel: "gw:hub:shortcut:captureCancel",
   appRequestQuit: "gw:app:requestQuit",
   appShowQuitOrReload: "gw:app:showQuitOrReload",
   appReloadGame: "gw:app:reloadGame",
@@ -1389,14 +1383,14 @@ export interface CoreGwNativeApiBase {
     get(): Promise<HubAccountsSnapshot>;
     open(request: HubAccountRequest): Promise<void>;
   };
-  hubSettings: HubSettingsApi;
   app: {
     showLauncher(): Promise<void>;
     openExternal(kind: ExternalLinkKind): Promise<void>;
     /** Reveal a named app directory in Finder. */
     reveal(kind: RevealKind): Promise<void>;
     /** Opens the launcher at a Settings section, for settings the Hub links to. */
-    openSettings(section: LauncherSettingsSection): Promise<void>;
+    /** Opens the Settings window above this game window, at a section or control. */
+    openSettings(target?: SettingsTarget): Promise<void>;
     requestQuit(): Promise<void>;
     /**
      * The account's Quit-or-Reload confirmation sheet, the same one Command-Q opens. "stayed"

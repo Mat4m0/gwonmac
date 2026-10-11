@@ -41,8 +41,6 @@ const MAP_LAYERS = { 'cartography.grid.toggle': 'cartographyGridEnabled', 'carto
 
 export interface FixtureMainOptions {
   settings(): AppSettings;
-  /** The fixture's shortcut recorder owns every key while it listens, as main's capture does. */
-  capturing(): boolean;
   updateSettings(patch: Partial<AppSettings>): void;
   record(action: string): void;
 }
@@ -53,7 +51,7 @@ export function installFixtureMain(options: FixtureMainOptions) {
   const sheet = createQuitOrReloadSheet(options.record, () => run([{ type: 'input.reset' }]));
   const claim = (event: KeyboardEvent) => { event.preventDefault(); event.stopImmediatePropagation(); claimed.add(event.code); };
   const onKeyDown = (event: KeyboardEvent) => {
-    if (options.capturing() || sheet.open) return;
+    if (sheet.open) return;
     // A claimed press owns its repeats until its key-up, like `#claimedCodes`;
     // a fresh press of the same key is decided again, as main does when Chromium drops the key-up.
     if (claimed.has(event.code) && event.repeat) { event.preventDefault(); event.stopImmediatePropagation(); return; }

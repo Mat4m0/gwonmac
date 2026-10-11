@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { closeOffline, launchOffline } from "./fixtures.mjs";
+import { closeOffline, launchOffline, openSettings } from "./fixtures.mjs";
 
 test("the Vue launcher owns a narrow frozen bridge and offline subtree", async () => {
   const fixture = await launchOffline("gw-vue-launcher-security-", {
@@ -21,15 +21,33 @@ test("the Vue launcher owns a narrow frozen bridge and offline subtree", async (
       launcherKeys: [
         "experience",
         "external",
-        "gameFiles",
         "navigation",
         "news",
         "profiles",
         "settings",
         "state",
-        "texturePacks",
-        "tools",
         "updates",
+      ],
+      rootFrozen: true,
+      namespacesFrozen: true,
+      nodeRequire: "undefined",
+      nodeProcess: "undefined",
+    });
+    // The Settings window owns the writes; it has its own frozen bridge and no account access.
+    const settings = await openSettings(fixture);
+    expect(await settings.evaluate(() => ({
+      gameBridge: typeof (window as Window & { gwNative?: unknown }).gwNative,
+      launcherBridge: typeof (window as Window & { launcherNative?: unknown }).launcherNative,
+      settingsKeys: Object.keys(window.settingsNative).sort(),
+      rootFrozen: Object.isFrozen(window.settingsNative),
+      namespacesFrozen: Object.values(window.settingsNative).every(Object.isFrozen),
+      nodeRequire: typeof (globalThis as typeof globalThis & { require?: unknown }).require,
+      nodeProcess: typeof (globalThis as typeof globalThis & { process?: unknown }).process,
+    }))).toEqual({
+      gameBridge: "undefined",
+      launcherBridge: "undefined",
+      settingsKeys: [
+        "experience", "external", "gameFiles", "settings", "state", "target", "texturePacks", "tools", "updates",
       ],
       rootFrozen: true,
       namespacesFrozen: true,

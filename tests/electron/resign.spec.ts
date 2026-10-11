@@ -2,7 +2,7 @@
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
-import { closeOffline, launchPlayableClient } from "./fixtures.mjs";
+import { closeOffline, launchPlayableClient, openSettings } from "./fixtures.mjs";
 import { startGameInput } from "./input-helpers.js";
 
 test("Resign uses the shared modal and submits only on Enter or its button", async () => {
@@ -93,26 +93,25 @@ test("Resign uses the shared modal and submits only on Enter or its button", asy
     await confirm.click();
     await expect(modal).not.toBeVisible();
     await expect(page.locator("body")).toHaveAttribute("data-resign-count", "2");
-    const launcher = app.windows().find(window => window.url().endsWith("launcher/index.html"));
-    if (!launcher) throw new Error("launcher is required");
+    const settings = await openSettings(fixture);
     await press();
-    await launcher.evaluate(() => window.launcherNative.tools.setFeature({ tool: "resign", enabled: false }));
+    await settings.evaluate(() => window.settingsNative.tools.setFeature({ tool: "resign", enabled: false }));
     await expect(modal).not.toBeVisible();
     await expect.poll(() => app.evaluate(({ Menu }) => Menu.getApplicationMenu()?.getMenuItemById("resign-game")?.enabled)).toBe(false);
     await press();
     await expect(modal).not.toBeVisible();
-    await launcher.evaluate(async () => {
-      await window.launcherNative.tools.setFeature({ tool: "resign", enabled: true });
-      await window.launcherNative.tools.replaceShortcut({ action: "game.resign", binding: { key: "j", shift: true, option: false } });
+    await settings.evaluate(async () => {
+      await window.settingsNative.tools.setFeature({ tool: "resign", enabled: true });
+      await window.settingsNative.tools.replaceShortcut({ action: "game.resign", binding: { key: "j", shift: true, option: false } });
     });
     await expect.poll(() => app.evaluate(({ Menu }) => Menu.getApplicationMenu()?.getMenuItemById("resign-game")?.enabled)).toBe(true);
     await press("J");
     await expect(modal).toBeVisible();
-    await launcher.evaluate(() => window.launcherNative.tools.setMasterEnabled(false));
+    await settings.evaluate(() => window.settingsNative.tools.setMasterEnabled(false));
     await expect(modal).not.toBeVisible();
     await press("J");
     await expect(modal).not.toBeVisible();
-    await launcher.evaluate(() => window.launcherNative.tools.setMasterEnabled(true));
+    await settings.evaluate(() => window.settingsNative.tools.setMasterEnabled(true));
     await page.evaluate(() => {
       const field = document.getElementById("osk-input-text") as HTMLInputElement;
       field.value = "unfinished chat";

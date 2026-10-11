@@ -68,7 +68,6 @@ test.describe("sandbox boundary", () => {
           "credentials",
           "diagnostics",
           "dns",
-          "hubSettings",
           "init",
           "inputTrace",
           "profileTemplates",

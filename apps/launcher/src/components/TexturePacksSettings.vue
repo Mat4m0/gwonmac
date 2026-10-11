@@ -36,7 +36,7 @@ function size(bytes: number): string {
 }
 
 async function importPack() {
-  const native = window.launcherNative;
+  const native = window.settingsNative;
   if (!native || busy.value) return;
   busy.value = true;
   status.value = "Adding texture pack…";
@@ -58,7 +58,7 @@ async function importPack() {
 }
 
 async function select(id: string | null) {
-  const native = window.launcherNative;
+  const native = window.settingsNative;
   if (!native || busy.value) return;
   busy.value = true;
   status.value = "Saving your choice…";
@@ -75,7 +75,7 @@ async function select(id: string | null) {
 }
 
 async function remove(id: string) {
-  const native = window.launcherNative;
+  const native = window.settingsNative;
   if (!native || busy.value) return;
   busy.value = true;
   status.value = "";

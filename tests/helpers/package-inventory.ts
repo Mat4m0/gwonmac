@@ -11,10 +11,12 @@ type PackagerIgnore = NonNullable<ForgeConfig["packagerConfig"]>["ignore"];
 export const CORE_PRELOAD_ENTRY = "/build/preload/preload-core.cjs";
 export const TOOLS_PRELOAD_ENTRY = "/build/preload/preload-tools.cjs";
 export const LAUNCHER_PRELOAD_ENTRY = "/build/preload/preload-launcher.cjs";
+export const SETTINGS_PRELOAD_ENTRY = "/build/preload/preload-settings.cjs";
 export const PRELOAD_ENTRIES = Object.freeze([
   CORE_PRELOAD_ENTRY,
   TOOLS_PRELOAD_ENTRY,
   LAUNCHER_PRELOAD_ENTRY,
+  SETTINGS_PRELOAD_ENTRY,
 ]);
 
 export const REQUIRED_PACKAGE_FILES = Object.freeze([
@@ -39,6 +41,7 @@ export const REQUIRED_PACKAGE_FILES = Object.freeze([
   ...PRELOAD_ENTRIES,
   "/build/renderer/index.html",
   "/build/renderer/launcher/index.html",
+  "/build/renderer/launcher/settings.html",
   "/build/renderer/images/logo.webp",
   "/package.json",
 ]);

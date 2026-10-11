@@ -1,5 +1,5 @@
 /** Launcher chrome remains usable at the supported minimum size and 200% zoom. */
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import { closeOffline, launchOffline } from "./fixtures.mjs";
 
 interface Rect {
@@ -33,9 +33,10 @@ async function setLauncherSize(
 
 async function expectCurrentContentFitsHorizontally(
   fixture: Awaited<ReturnType<typeof launchOffline>>,
+  page: Page = fixture.page,
 ): Promise<void> {
-  const overflow = await fixture.page.evaluate(() => {
-    const main = document.querySelector<HTMLElement>("main");
+  const overflow = await page.evaluate(() => {
+    const main = document.querySelector<HTMLElement>("main, .settings-main");
     const content = document.querySelector<HTMLElement>(".page, .settings-page, .home-panel, .hero-panel");
     if (!main || !content) throw new Error("launcher content is required");
     return {
@@ -133,12 +134,19 @@ test("minimum window and 200% zoom keep primary launcher controls reachable", as
     await expect(fixture.page.getByRole("heading", { name: "Tell us what happened" })).toBeVisible();
     await expectCurrentContentFitsHorizontally(fixture);
 
+    // The gear opens the separate Settings window; its sections must fit that window.
+    const opened = fixture.app.waitForEvent("window", {
+      predicate: (page) => page.url().endsWith("/launcher/settings.html"),
+      timeout: 15_000,
+    });
     await fixture.page.getByRole("button", { name: "Settings" }).click();
-    await fixture.page.evaluate(() => window.launcherNative.tools.setMasterEnabled(true));
-    for (const section of ["Updates", "Content", "Advanced", "Game settings", "Tools", "Maps", "Game files"]) {
-      await fixture.page.getByRole("button", { name: section, exact: true }).click();
-      await expect(fixture.page.getByRole("heading", { name: section, exact: true })).toBeVisible();
-      await expectCurrentContentFitsHorizontally(fixture);
+    const settings = await opened;
+    await settings.locator(".settings-page").waitFor();
+    await settings.evaluate(() => window.settingsNative.tools.setMasterEnabled(true));
+    for (const section of ["Updates", "Home screen", "Advanced", "Game", "Appearance", "Tools", "Maps", "Game files"]) {
+      await settings.locator(".settings-page aside").getByRole("button", { name: section, exact: true }).click();
+      await expect(settings.locator(".settings-content").getByRole("heading", { name: section, exact: true })).toBeVisible();
+      await expectCurrentContentFitsHorizontally(fixture, settings);
     }
   } finally {
     await closeOffline(fixture);

@@ -51,15 +51,28 @@ test('a typed search selects its best answer', async ({ page }) => {
   expect(await page.locator('#app').getAttribute('data-action')).toBeNull();
 });
 
-test('a Settings section result opens that section (HUB-064)', async ({ page }) => {
+test('settings rows, Keys rows and the Settings command open the Settings window at their target and close the Hub (HUB-064)', async ({ page }) => {
   await open(page);
-  for (const [query, section] of [['shortcuts', 'Shortcuts'], ['theme', 'Appearance']] as const) {
-    await search(page).fill(query);
-    await search(page).press('Enter');
-    await expect(page.locator('.hub-settings nav [aria-current="true"]')).toHaveText(section);
-    await page.keyboard.press('Meta+Backspace');
-    await expect(page.locator('.hub-caption')).not.toHaveText('Settings');
-  }
+  const action = page.locator('#app');
+  // A setting is found by its words; Enter hands its section and control to the Settings window.
+  await search(page).fill('memory');
+  await expect(primary(page)).toHaveText(/^Open setting/);
+  await search(page).press('Enter');
+  await expect(action).toHaveAttribute('data-action', 'Settings game › extendedMemoryEnabled');
+  await expect(page.locator('#hub')).toBeHidden();
+  // A Keys row names the tool's shortcut control.
+  await page.keyboard.press('Meta+r');
+  await search(page).fill('commands'); await search(page).press('Enter');
+  await page.locator('.hub-row[data-id="key:travel"]').click();
+  await expect(action).toHaveAttribute('data-action', 'Settings tools › tool:quick-travel');
+  await expect(page.locator('#hub')).toBeHidden();
+  // The plain command opens the window without a target.
+  await page.keyboard.press('Meta+r');
+  await search(page).fill('settings');
+  await expect(page.locator('.hub-row[data-id="settings"]')).toBeVisible();
+  await page.locator('.hub-row[data-id="settings"]').click();
+  await expect(action).toHaveAttribute('data-action', 'Settings');
+  await expect(page.locator('#hub')).toBeHidden();
 });
 
 test('travel <friend> offers the trip to that friend\'s outpost after the places (HUB-142)', async ({ page }) => {

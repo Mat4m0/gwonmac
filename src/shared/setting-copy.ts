@@ -10,7 +10,7 @@ export type SettingApplies = "now" | "next-game" | "restart";
 export const SETTING_APPLIES_NOTE: Readonly<Record<SettingApplies, string>> = {
   now: "",
   "next-game": "Applies when you next open or reload a game window.",
-  restart: "Applies after you restart gwonmac.",
+  restart: "Applies after you restart GWonMac.",
 };
 
 type Copy = Readonly<{ label: string; detail: string; applies: SettingApplies; keywords?: string }>;

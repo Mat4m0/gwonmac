@@ -2,8 +2,8 @@
  * The authority that binds every native window to one immutable app context.
  *
  * IPC and lifecycle code resolve context from `webContents.id`; renderers do
- * not submit profile identifiers. The registry also enforces one launcher and
- * one game window per profile while keeping transient launch state out of disk.
+ * not submit profile identifiers. The registry also enforces one launcher, one
+ * Settings window and one game window per profile while keeping transient launch state out of disk.
  */
 import type { BrowserWindow } from "electron";
 import type { ProfileId } from "../shared/multiple-accounts.js";
@@ -14,7 +14,9 @@ export type GameWindowContext = Readonly<{
   profileId: ProfileId;
 }>;
 export type LauncherWindowContext = Readonly<{ role: "launcher" }>;
-export type WindowContext = GameWindowContext | LauncherWindowContext;
+export type SettingsWindowContext = Readonly<{ role: "settings" }>;
+export type WindowContext = GameWindowContext | LauncherWindowContext | SettingsWindowContext;
+export type WindowRole = WindowContext["role"];
 
 export interface RegisteredWindow {
   readonly webContents: {
@@ -36,8 +38,9 @@ export class WindowRegistry<Window extends RegisteredWindow = BrowserWindow> {
   readonly #profileWindows = new Map<ProfileId, Window>();
   readonly #webContentsIds = new WeakMap<Window, number>();
   #launcherWindow: Window | null = null;
+  #settingsWindow: Window | null = null;
 
-  register(win: Window, context: LauncherWindowContext): void;
+  register(win: Window, context: LauncherWindowContext | SettingsWindowContext): void;
   register(
     win: Window,
     context: GameWindowContext,
@@ -61,6 +64,11 @@ export class WindowRegistry<Window extends RegisteredWindow = BrowserWindow> {
         throw new AppError("validation", "launcher already has a window");
       }
       this.#launcherWindow = win;
+    } else if (context.role === "settings") {
+      if (this.#settingsWindow && !this.#settingsWindow.isDestroyed()) {
+        throw new AppError("validation", "settings already has a window");
+      }
+      this.#settingsWindow = win;
     } else {
       const existing = this.#profileWindows.get(context.profileId);
       if (existing && !existing.isDestroyed()) {
@@ -85,6 +93,8 @@ export class WindowRegistry<Window extends RegisteredWindow = BrowserWindow> {
     this.#webContentsIds.delete(win);
     if (entry.context.role === "launcher") {
       if (this.#launcherWindow === win) this.#launcherWindow = null;
+    } else if (entry.context.role === "settings") {
+      if (this.#settingsWindow === win) this.#settingsWindow = null;
     } else {
       if (this.#profileWindows.get(entry.context.profileId) === win) {
         this.#profileWindows.delete(entry.context.profileId);
@@ -150,6 +160,12 @@ export class WindowRegistry<Window extends RegisteredWindow = BrowserWindow> {
   launcherWindow(): Window | null {
     return this.#launcherWindow && !this.#launcherWindow.isDestroyed()
       ? this.#launcherWindow
+      : null;
+  }
+
+  settingsWindow(): Window | null {
+    return this.#settingsWindow && !this.#settingsWindow.isDestroyed()
+      ? this.#settingsWindow
       : null;
   }
 

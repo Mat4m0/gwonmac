@@ -59,6 +59,7 @@ import {
 import {
   installApplicationMenu,
   type AccountMenuActions,
+  type SettingsOpener,
   showQuitOrReloadGame,
   updateToolsMenuItems,
   showResignGame,
@@ -89,6 +90,7 @@ export interface WindowHost {
   requestQuit: (win: BrowserWindow) => void;
   prepareRendererRecovery: () => Promise<void>;
   revealLauncher: (destination?: LauncherDestination) => void;
+  openSettings: SettingsOpener;
   accounts: AccountMenuActions;
   gameWindowClosed?: () => void;
 }
@@ -665,6 +667,7 @@ export function createMainWindow(
       host,
       resetWindowState,
       revealLauncher: host.revealLauncher,
+      openSettings: host.openSettings,
       accounts: host.accounts,
     });
   };

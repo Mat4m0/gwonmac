@@ -2,7 +2,7 @@
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
-import { closeOffline, launchPlayableClient } from "./fixtures.mjs";
+import { closeOffline, launchPlayableClient, openSettings } from "./fixtures.mjs";
 import { startGameInput } from "./input-helpers.js";
 
 test("Call target sends one balanced chord, preserves held keys, and refuses text input", async () => {
@@ -61,22 +61,22 @@ test("Call target sends one balanced chord, preserves held keys, and refuses tex
 
     await page.keyboard.down("KeyW");
     await page.keyboard.down("Shift");
-    const launcher = app.windows().find(window => window.url().endsWith("launcher/index.html"))!;
-    await launcher.evaluate(() => window.launcherNative.tools.replaceShortcut({
+    const settings = await openSettings(fixture);
+    await settings.evaluate(() => window.settingsNative.tools.replaceShortcut({
       action: "game.call-target", binding: { key: "g", shift: true, option: false },
     }));
     await press("G", ["meta", "shift"]);
     await expect(body).toHaveAttribute("data-call-events", "keydown:ControlLeft:1100;keydown:Space:1100;keyup:Space:1100;keyup:ControlLeft:0100;");
     await page.keyboard.up("Shift");
     await page.keyboard.up("KeyW");
-    await launcher.evaluate(() => window.launcherNative.tools.replaceShortcut({
+    await settings.evaluate(() => window.settingsNative.tools.replaceShortcut({
       action: "game.call-target", binding: { key: "j", shift: false, option: true },
     }));
     await page.keyboard.down("Alt");
     await press("J", ["meta", "alt"]);
     await expect(body).toHaveAttribute("data-call-events", `keyup:AltLeft:0000;${chord}keydown:AltLeft:0010;`);
     await page.keyboard.up("Alt");
-    await launcher.evaluate(() => window.launcherNative.tools.replaceShortcut({
+    await settings.evaluate(() => window.settingsNative.tools.replaceShortcut({
       action: "game.call-target", binding: { key: "g", shift: false, option: false },
     }));
 
@@ -107,7 +107,7 @@ test("Call target sends one balanced chord, preserves held keys, and refuses tex
     });
     await press();
     await expect(body).toHaveAttribute("data-call-events", chord);
-    await launcher.evaluate(() => window.launcherNative.tools.setFeature({ tool: "call-target", enabled: false }));
+    await settings.evaluate(() => window.settingsNative.tools.setFeature({ tool: "call-target", enabled: false }));
     const refused = await page.evaluate(() => {
       document.body.dataset.callEvents = "";
       return window.dispatchEvent(new CustomEvent("gw:call-target", { cancelable: true }));

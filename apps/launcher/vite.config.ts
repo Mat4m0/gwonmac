@@ -16,6 +16,13 @@ export default defineConfig({
     emptyOutDir: true,
     outDir: fileURLToPath(new URL("../../build/renderer/launcher", import.meta.url)),
     sourcemap: false,
+    rollupOptions: {
+      // The launcher and the Settings window are two documents of one app (docs/settings.md).
+      input: {
+        index: fileURLToPath(new URL("./index.html", import.meta.url)),
+        settings: fileURLToPath(new URL("./settings.html", import.meta.url)),
+      },
+    },
   },
   test: {
     environment: "happy-dom",

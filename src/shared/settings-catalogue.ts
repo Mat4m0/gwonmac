@@ -5,7 +5,7 @@
  * Labels and descriptions come from their owners (setting-copy, tool-presentation), so a
  * setting has one name everywhere (docs/settings.md).
  */
-import { CHARACTER_DETAILS, CHAT_FILTERS, GAME_SETTINGS, REMINDER_GROUPS, REMINDER_SOUND, REMINDER_TIMING } from "./setting-copy.js";
+import { CHARACTER_DETAILS, CHAT_FILTERS, GAME_SETTINGS, REMINDER_GROUPS, REMINDER_SOUND, REMINDER_TIMING, type SettingApplies } from "./setting-copy.js";
 import { GLOBAL_TOOLS, type GlobalTool } from "./launcher-contracts.js";
 import { TOOL_PRESENTATION } from "./tool-presentation.js";
 
@@ -22,7 +22,7 @@ export const SETTINGS_SECTIONS = [
   { id: "advanced", label: "Advanced", group: "app", keywords: "logs reset support" },
 ] as const;
 export type SettingsSection = typeof SETTINGS_SECTIONS[number]["id"];
-export const SETTINGS_GROUP_LABELS = { game: "In game", app: "gwonmac" } as const;
+export const SETTINGS_GROUP_LABELS = { game: "In game", app: "GWonMac" } as const;
 
 export function parseSettingsSection(value: unknown): SettingsSection {
   const section = SETTINGS_SECTIONS.find(candidate => candidate.id === value);
@@ -36,6 +36,8 @@ export type SettingEntry = Readonly<{
   label: string;
   detail?: string;
   keywords?: string;
+  /** When a change takes effect; absent means now. */
+  applies?: SettingApplies;
   /** The tool whose options hold this control; it shows only while that tool is on. */
   tool?: GlobalTool;
 }>;
@@ -69,6 +71,7 @@ const game = (key: keyof typeof GAME_SETTINGS): SettingEntry => ({ id: key, sect
 
 /** Every setting a player can find by name, in display order within its section. */
 export const SETTINGS: readonly SettingEntry[] = [
+  { id: "hub", section: "tools", label: "Hub", detail: "Search everything in game. Always on, even with Tools off.", keywords: `search command palette ${KEYS}` },
   { id: "gwonmacTools", section: "tools", label: "Enable Tools", detail: "Optional game features. Character Switch works independently.", keywords: "features optional" },
   ...GLOBAL_TOOLS.map(toolEntry),
   ...option("character-switch", CHARACTER_DETAILS, "character details"),
@@ -129,4 +132,27 @@ export function settingTarget(id: string): SettingsTarget {
   const entry = SETTINGS.find(candidate => candidate.id === id);
   if (!entry) throw new Error("Unknown setting");
   return { section: entry.section, control: entry.id };
+}
+
+/**
+ * Settings whose label, words, description or section contain every typed word, best
+ * first: a label that starts with the query, then a label that contains it, then the rest.
+ */
+export function searchSettings(query: string): SettingEntry[] {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return [];
+  const phrase = words.join(" ");
+  const sectionLabel = (entry: SettingEntry) => SETTINGS_SECTIONS.find(section => section.id === entry.section)!.label;
+  const rank = (entry: SettingEntry) => {
+    const label = entry.label.toLowerCase();
+    return label.startsWith(phrase) ? 0 : label.includes(phrase) ? 1 : 2;
+  };
+  return SETTINGS
+    .filter(entry => {
+      const text = `${entry.label} ${entry.keywords ?? ""} ${entry.detail ?? ""} ${sectionLabel(entry)}`.toLowerCase();
+      return words.every(word => text.includes(word));
+    })
+    .map((entry, order) => ({ entry, order, rank: rank(entry) }))
+    .sort((a, b) => a.rank - b.rank || a.order - b.order)
+    .map(({ entry }) => entry);
 }

@@ -43,6 +43,10 @@ export function launcherPreloadPath(): string {
   );
 }
 
+export function settingsPreloadPath(): string {
+  return path.join(app.getAppPath(), "build", "preload", "preload-settings.cjs");
+}
+
 /**
  * The Guild Wars archive decoder, which is spawned rather than linked.
  *

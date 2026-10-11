@@ -380,11 +380,7 @@ const INVOCATIONS: Invocation[] = [
   { path: "accounts.get", args: [], channel: IPC.hubAccountsGet },
   { path: "accounts.open", args: [{ id: "e98a37bc-5211-4bc5-8094-0b1286b3c42d", mode: "open" }], channel: IPC.hubAccountOpen },
   { path: "app.showLauncher", args: [], channel: IPC.appShowLauncher },
-  { path: "hubSettings.get", args: [], channel: IPC.hubSettingsGet },
-  { path: "hubSettings.update", args: [{ kind: "tool", tool: "whispers", enabled: false }], channel: IPC.hubSettingsUpdate },
-  { path: "hubSettings.capture", args: ["character.switch"], channel: IPC.hubShortcutCapture },
-  { path: "hubSettings.cancelCapture", args: [], channel: IPC.hubShortcutCaptureCancel },
-  { path: "app.openSettings", args: ["game"], channel: IPC.appOpenSettings },
+  { path: "app.openSettings", args: [{ section: "game" }], channel: IPC.appOpenSettings },
   { path: "app.requestQuit", args: [], channel: IPC.appRequestQuit },
   { path: "app.showQuitOrReload", args: [], channel: IPC.appShowQuitOrReload },
   {

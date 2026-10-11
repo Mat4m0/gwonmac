@@ -64,6 +64,7 @@ import {
 import {
   closePackagedApp,
   launchPackagedApp,
+  openPackagedSettings,
   type RunningPackagedApp,
 } from "../tests/helpers/packaged-app.ts";
 import { seedCachedClient } from "../tests/helpers/cached-client.ts";
@@ -300,10 +301,9 @@ async function updateCandidateSettings(
   running: RunningPackagedApp,
   patch: LauncherSettingsPatch,
 ): Promise<unknown> {
-  const launcher = running.launcherPage;
-  if (!launcher) throw new Error("the candidate did not expose the unified launcher");
-  await launcher.evaluate(
-    (value) => window.launcherNative.settings.update(value),
+  const settings = await openPackagedSettings(running);
+  await settings.evaluate(
+    (value) => window.settingsNative.settings.update(value),
     patch,
   );
   return running.page.evaluate(() => window.gwNative.settings.get());
@@ -831,16 +831,15 @@ async function proveToolsRoundTrip(toolsCohort: Cohort): Promise<void> {
     assert.deepEqual(candidateInitial.library, initialLibrary);
     await assertWindowMatchesPersistedState(candidateWindowState, running.page);
     await roundTripProfileStore(running.page, "stable-template", "candidate-template");
-    const launcher = running.launcherPage;
-    if (!launcher) throw new Error("the candidate did not expose the unified launcher");
     await running.page.evaluate(async (library) => {
       const api = window.gwNative;
       if (!("buildLibrary" in api)) throw new Error("Tools preload is unavailable");
       await api.buildLibrary.set(library);
     }, candidateLibrary);
-    await launcher.evaluate(async () => {
-      await window.launcherNative.settings.update({ showDiagnostics: true });
-      await window.launcherNative.tools.setFeature({
+    const settings = await openPackagedSettings(running);
+    await settings.evaluate(async () => {
+      await window.settingsNative.settings.update({ showDiagnostics: true });
+      await window.settingsNative.tools.setFeature({
         tool: "build-management",
         enabled: false,
       });

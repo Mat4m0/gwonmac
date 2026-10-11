@@ -15,8 +15,10 @@ import type { WindowCoordinator } from "./window-coordinator.js";
 import { windowRegistry } from "./window-registry.js";
 import {
   installNativeApplicationMenu,
+  SETTINGS_ACCELERATOR,
   type LauncherReveal,
   type AccountMenuActions,
+  type SettingsOpener,
 } from "./window-menu.js";
 
 import { fitWindowStateToDisplays, loadWindowState, saveWindowState, type WindowState } from "./core/window-state.js";
@@ -38,7 +40,20 @@ export async function prepareLauncherWindowState(): Promise<void> {
 const LAUNCHER_URL = "gw://app/launcher/index.html";
 let protocolInstalled = false;
 
-function installLauncherMenu(revealLauncher: LauncherReveal, accounts: AccountMenuActions): void {
+/** The launcher and Settings windows share one offline session that serves only `gw://app/launcher/`. */
+export function launcherSession(deps: ProtocolDeps): Electron.Session {
+  const owner = session.fromPartition("persist:gw-launcher", { cache: false });
+  if (!protocolInstalled) {
+    installLauncherProtocolHandlerForSession(owner, deps);
+    owner.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
+    owner.setPermissionCheckHandler(() => false);
+    protocolInstalled = true;
+  }
+  return owner;
+}
+
+/** The menu of the launcher and the Settings window: no game commands. */
+export function installLauncherMenu(revealLauncher: LauncherReveal, openSettings: SettingsOpener, accounts: AccountMenuActions): void {
   installNativeApplicationMenu([
     ...(process.platform === "darwin"
       ? [{
@@ -49,13 +64,13 @@ function installLauncherMenu(revealLauncher: LauncherReveal, accounts: AccountMe
             {
               id: "check-for-updates",
               label: "Check for Updates…",
-              click: () => revealLauncher("settings"),
+              click: () => openSettings({ section: "updates" }),
             },
             {
               id: "show-settings",
               label: "Settings…",
-
-              click: () => revealLauncher("settings"),
+              accelerator: SETTINGS_ACCELERATOR,
+              click: () => openSettings(),
             },
             { type: "separator" as const },
             { role: "hide" as const },
@@ -84,20 +99,15 @@ export function createLauncherWindow(
   coordinator: WindowCoordinator<BrowserWindow>,
   revealLauncher: LauncherReveal,
   accounts: AccountMenuActions,
+  openSettings: SettingsOpener,
 ): BrowserWindow {
   const existing = windowRegistry.launcherWindow();
   if (existing) {
     coordinator.revealLauncher({ activateApp: true });
     return existing;
   }
-  const owner = session.fromPartition("persist:gw-launcher", { cache: false });
   if (BACKGROUND_LAUNCH) app.dock?.hide();
-  if (!protocolInstalled) {
-    installLauncherProtocolHandlerForSession(owner, deps);
-    protocolInstalled = true;
-  }
-  owner.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
-  owner.setPermissionCheckHandler(() => false);
+  const owner = launcherSession(deps);
   const restored = launcherPlacement ? fitWindowStateToDisplays(launcherPlacement,
     screen.getAllDisplays().map(display => display.workArea), screen.getPrimaryDisplay().workArea) : null;
   const win = new BrowserWindow({
@@ -174,9 +184,9 @@ export function createLauncherWindow(
   });
   win.on("focus", () => {
     coordinator.recordFocused(win);
-    installLauncherMenu(revealLauncher, accounts);
+    installLauncherMenu(revealLauncher, openSettings, accounts);
   });
-  installLauncherMenu(revealLauncher, accounts);
+  installLauncherMenu(revealLauncher, openSettings, accounts);
   win.on("close", (event) => {
     capturePlacement();
     void persistPlacement();
@@ -195,7 +205,7 @@ export function createLauncherWindow(
       return;
     }
     windowRegistry.unregister(win);
-    const replacement = createLauncherWindow(deps, coordinator, revealLauncher, accounts);
+    const replacement = createLauncherWindow(deps, coordinator, revealLauncher, accounts, openSettings);
     if (!win.isDestroyed()) win.destroy();
     coordinator.revealLauncher();
     replacement.focus();

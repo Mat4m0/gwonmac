@@ -34,6 +34,7 @@ export function ignorePackageFile(file: string): boolean {
     || p === "/build/preload/preload-core.cjs"
     || p === "/build/preload/preload-tools.cjs"
     || p === "/build/preload/preload-launcher.cjs"
+    || p === "/build/preload/preload-settings.cjs"
   ) return false;
   if (
     p === "/build/native"

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from "vue";
-import type { LauncherNativeApi, LauncherSettings, LauncherSettingsPatch, LauncherSnapshot } from "@shared/launcher-contracts";
+import type { SettingsNativeApi, LauncherSettings, LauncherSettingsPatch, LauncherSnapshot } from "@shared/launcher-contracts";
 import ShortcutSetting from "./ShortcutSetting.vue";
 import ColorControl from "./ColorControl.vue";
 import RangeControl from "./RangeControl.vue";
@@ -42,7 +42,7 @@ import {
 const props = defineProps<{
   settings: LauncherSettings;
   shortcuts?: LauncherSnapshot["shortcuts"];
-  api?: LauncherNativeApi["tools"] | undefined;
+  api?: SettingsNativeApi["tools"] | undefined;
   save: (patch: LauncherSettingsPatch) => Promise<void>;
   tools?: LauncherSnapshot["tools"];
   performSave?: ((action: () => Promise<unknown>) => Promise<void>) | undefined;

@@ -6,10 +6,7 @@ import { ipcMain, type BrowserWindow } from "electron";
 import { IPC, type InvokeChannel } from "../shared/contracts.js";
 import { AllowlistError, errorCode } from "../shared/errors.js";
 import { logEvent } from "./diagnostics.js";
-import {
-  isLauncherRendererUrl,
-  isCanonicalRendererUrl,
-} from "./core/renderer-trust.js";
+import { senderRefusal, type SenderRole } from "./ipc-sender.js";
 import type { WindowRegistry } from "./window-registry.js";
 
 export type Parser<In> = (args: readonly unknown[]) => In;
@@ -18,20 +15,20 @@ type Run<In, Out> = (win: BrowserWindow, input: In) => Out | Promise<Out>;
 interface ChannelDef<In, Out> {
   readonly parse: Parser<In>;
   readonly run: Run<In, Out>;
-  readonly role: "game" | "launcher" | "any";
+  readonly role: SenderRole;
 }
 
 /** Erases the invariant input type only after `channel()` checked the pair. */
 export interface AnyChannelDef {
   readonly parse: Parser<unknown>;
   readonly run: Run<never, unknown>;
-  readonly role: "game" | "launcher" | "any";
+  readonly role: SenderRole;
 }
 
 export function channel<In, Out>(
   parse: Parser<In>,
   run: Run<In, Out>,
-  role: "game" | "launcher" | "any" = "game",
+  role: SenderRole = "game",
 ): ChannelDef<In, Out> {
   return { parse, run, role };
 }
@@ -95,19 +92,12 @@ export function sendIfLive(
 function assertSender(
   registry: WindowRegistry,
   event: Electron.IpcMainInvokeEvent,
-  role: "game" | "launcher" | "any",
+  role: SenderRole,
 ): BrowserWindow {
   const win = registry.windowForWebContents(event.sender.id);
-  const context = registry.contextForWebContents(event.sender.id);
-  if (!win || !context || (role !== "any" && context.role !== role)) {
-    throw new AllowlistError("unowned ipc sender");
-  }
-  if (!event.senderFrame || event.senderFrame !== event.sender.mainFrame) {
-    throw new AllowlistError("ipc sender is not the main frame");
-  }
-  const trusted = context.role === "launcher"
-    ? isLauncherRendererUrl(event.senderFrame.url)
-    : isCanonicalRendererUrl(event.senderFrame.url);
-  if (!trusted) throw new AllowlistError("invalid ipc origin");
+  if (!win) throw new AllowlistError("unowned ipc sender");
+  const mainFrame = !!event.senderFrame && event.senderFrame === event.sender.mainFrame;
+  const refusal = senderRefusal(role, registry.contextForWebContents(event.sender.id), mainFrame, event.senderFrame?.url ?? "");
+  if (refusal) throw new AllowlistError(refusal);
   return win;
 }

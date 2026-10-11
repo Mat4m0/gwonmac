@@ -13,6 +13,7 @@ import {
   launchOffline,
   launchOfflineAt,
   root,
+  openSettings,
 } from "./fixtures.mjs";
 
 declare global {
@@ -296,13 +297,14 @@ test("applies launcher settings to every open profile and reflects in-game chang
       });
     }));
 
-    await fixture.page.evaluate(async () => {
-      await window.launcherNative.tools.setMasterEnabled(true);
-      await window.launcherNative.tools.setFeature({
+    const settings = await openSettings(fixture);
+    await settings.evaluate(async () => {
+      await window.settingsNative.tools.setMasterEnabled(true);
+      await window.settingsNative.tools.setFeature({
         tool: "quick-travel",
         enabled: true,
       });
-      await window.launcherNative.settings.update({
+      await window.settingsNative.settings.update({
         cartographyGridEnabled: true,
         cartographyCompassGridEnabled: true,
         cartographyOverlayEnabled: true,
@@ -344,7 +346,7 @@ test("applies launcher settings to every open profile and reflects in-game chang
       await expect.poll(() => game.evaluate(() => document.documentElement.style.getPropertyValue("--ui-panel-opacity"))).toBe("0.8");
     }
 
-    await fixture.page.evaluate(() => window.launcherNative.settings.update({ cartographyCompassGridEnabled: false }));
+    await settings.evaluate(() => window.settingsNative.settings.update({ cartographyCompassGridEnabled: false }));
     for (const game of games) {
       await expect.poll(() => game.evaluate(() => window.__appliedSettings)).toMatchObject({ cartographyGridEnabled: true, cartographyCompassGridEnabled: false });
     }
@@ -352,13 +354,12 @@ test("applies launcher settings to every open profile and reflects in-game chang
     await expect.poll(() => fixture.page.evaluate(() => window.launcherNative.state.get())).toMatchObject({
       settings: { cartographyGridEnabled: false },
     });
-    // Assert the subscribed launcher UI too, not only its fresh snapshot API.
+    // Assert the subscribed Settings window UI too, not only its fresh snapshot API.
     await fixture.page.evaluate(async () => {
       await window.launcherNative.experience.completeSetup({ enableTools: false });
     });
-    await fixture.page.getByRole("button", { name: "Settings", exact: true }).click();
-    await fixture.page.getByRole("button", { name: "Maps", exact: true }).click();
-    const grid = fixture.page.getByRole("checkbox", { name: /Exploration grid/ });
+    await settings.locator(".settings-page aside").getByRole("button", { name: "Maps", exact: true }).click();
+    const grid = settings.getByRole("checkbox", { name: /Exploration grid/ });
     await expect(grid).not.toBeChecked();
     await games[0]!.evaluate(() => window.gwNative.settings.set({ cartographyGridEnabled: true }));
     await expect(grid).toBeChecked();
@@ -468,12 +469,14 @@ test("Show never duplicates a game and companion close policy stays profile-loca
     await fixture.app.evaluate(({ Menu }) => {
       Menu.getApplicationMenu()?.getMenuItemById("show-settings")?.click();
     });
-    await expect(fixture.page.locator(".settings-content h1")).toHaveText("Updates");
+    const settings = await openSettings(fixture);
+    await expect(settings.locator(".settings-content h1")).toHaveText("Tools");
 
     const profileId = await fixture.page.evaluate(() =>
       window.launcherNative.state.get().then((snapshot) => snapshot.profiles[0]!.id));
     await fixture.page.evaluate((id) => window.launcherNative.profiles.show(id), profileId);
-    expect(fixture.app.windows()).toHaveLength(2);
+    // Launcher and one game; the Settings window opened above is not a duplicate game.
+    expect(fixture.app.windows().filter((page) => !page.url().endsWith("/launcher/settings.html"))).toHaveLength(2);
     await expect.poll(() => fixture.app.evaluate(({ BrowserWindow }) => {
       const game = BrowserWindow.getAllWindows()
         .find((win) => win.webContents.getURL() === "gw://app/");
@@ -515,7 +518,7 @@ test("Show never duplicates a game and companion close policy stays profile-loca
         .find((win) => win.webContents.getURL() === "gw://app/")
         ?.close();
     });
-    await expect.poll(() => fixture.app.windows().length).toBe(1);
+    await expect.poll(() => fixture.app.windows().filter((page) => !page.url().endsWith("/launcher/settings.html")).length).toBe(1);
     await expect(fixture.page.locator("body")).toBeVisible();
   } finally {
     await closeOffline(fixture);
@@ -559,17 +562,18 @@ test("global map settings live in the launcher and survive restart", async () =>
   try {
     await first.page.getByRole("button", { name: "Continue" }).click();
     await first.page.getByRole("button", { name: "Not now" }).click();
-    await first.page.getByRole("button", { name: "Settings" }).click();
-    await first.page.getByRole("button", { name: "Maps", exact: true }).click();
-    await expect(first.page.getByText("Tools are off", { exact: true })).toBeVisible();
-    await first.page.getByRole("checkbox", { name: /^Exploration grid/ }).check();
-    await first.page.getByRole("button", { name: "Customize style" }).click();
-    await expect(first.page.getByRole("region", { name: "Edit Cartographer custom" })).toBeVisible();
-    await first.page.getByRole("button", { name: "Open Tools settings" }).click();
-    await first.page.getByRole("checkbox", { name: /^Enable Tools/ }).check();
-    await first.page.getByRole("button", { name: "Maps", exact: true }).click();
-    await expect(first.page.getByRole("heading", { name: "Maps" })).toBeVisible();
-    await expect(first.page.getByText("Restart the launcher to enable Maps", { exact: true })).toBeVisible();
+    const settings = await openSettings(first);
+    const nav = (name: string) => settings.locator(".settings-page aside").getByRole("button", { name, exact: true });
+    await nav("Maps").click();
+    await expect(settings.getByText("Tools are off", { exact: true })).toBeVisible();
+    await settings.getByRole("checkbox", { name: /^Exploration grid/ }).check();
+    await settings.getByRole("button", { name: "Customize style" }).click();
+    await expect(settings.getByRole("region", { name: "Edit Cartographer custom" })).toBeVisible();
+    await settings.getByRole("button", { name: "Open Tools settings" }).click();
+    await settings.getByRole("checkbox", { name: /^Enable Tools/ }).check();
+    await nav("Maps").click();
+    await expect(settings.getByRole("heading", { name: "Maps" })).toBeVisible();
+    await expect(settings.getByText("Restart the launcher to enable Maps", { exact: true })).toBeVisible();
     const beforeRestart = await first.page.evaluate(() => window.launcherNative.state.get());
     expect(beforeRestart.settings.cartographyGridEnabled).toBe(true);
     expect(beforeRestart.settings.cartographyPresetLibrary.activePreset.kind).toBe("custom");
@@ -688,8 +692,13 @@ test("mandatory client repair blocks Play without rejecting and stays global", a
     expect(outcome.readiness.state).toBe("repair-required");
     expect(outcome.profiles[0]?.state).toBe("ready");
     expect(fixture.app.windows().filter((page) => page.url() === "gw://app/")).toHaveLength(0);
+    const opened = fixture.app.waitForEvent("window", {
+      predicate: (page) => page.url().endsWith("/launcher/settings.html"),
+      timeout: 15_000,
+    });
     await fixture.page.locator(".launchbar").getByRole("button", { name: "Open Game Files" }).click();
-    await expect(fixture.page.getByRole("button", { name: "Repair game files" })).toBeVisible();
+    const settings = await opened;
+    await expect(settings.getByRole("button", { name: "Repair game files" })).toBeVisible();
   } finally {
     await closeOffline(fixture);
   }

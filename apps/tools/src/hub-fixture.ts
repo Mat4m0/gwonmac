@@ -2,11 +2,8 @@
 import { installFixtureMain, quitFixtureGame } from './hub-fixture-main';
 // eslint-disable-next-line no-restricted-imports
 import '../../../src/renderer/commands';
-import { GLOBAL_TOOLS, GLOBAL_TOOL_FEATURES, type GlobalToolSettings } from '../../../src/shared/launcher-contracts';
-import { FEATURE_SELECTION_POLICIES } from '../../../src/shared/feature-contracts';
 import { parseCalculatorRates } from '../../../src/shared/hub-calculator';
-import { parseHubSettingsChange, type HubSettingsApi } from '../../../src/shared/hub-settings';
-import { resolveShortcuts, shortcutConflict, shortcutFromInput, shortcutReserved, withShortcutOverride } from '../../../src/shared/keyboard-shortcuts';
+import type { SettingsTarget } from '../../../src/shared/settings-catalogue';
 /** Disposable Hub workbench: synthetic state, no native IPC or game commands. */
 // Offline fixture exercises the production Hub mounting owner.
 // eslint-disable-next-line no-restricted-imports
@@ -81,46 +78,7 @@ export function mountHubFixture(target: HTMLElement) {
   try { settings.hubShortcuts = JSON.parse(localStorage.getItem('hub-fixture-shortcuts') ?? '[]'); } catch { /* Disposable fixture data. */ }
   try { const saved=localStorage.getItem('hub-fixture-calculator-rates');if(saved)settings.calculatorRates=parseCalculatorRates(JSON.parse(saved)); } catch { /* Disposable fixture data. */ }
   const settingsListeners = new Set<(value: AppSettings) => void>();
-  let capturingShortcut = false; let cancelShortcutCapture = () => {};
-  const hubSettings: HubSettingsApi = {
-    get: async () => ({ settings, tools: { configured: settings.gwonmacTools, loaded: true, restartRequired: !settings.gwonmacTools, features: Object.fromEntries(GLOBAL_TOOLS.map(tool => [tool, { enabled: settings[FEATURE_SELECTION_POLICIES[GLOBAL_TOOL_FEATURES[tool]].activation.setting] }])) as GlobalToolSettings }, shortcuts: resolveShortcuts(settings.shortcutOverrides) }),
-    // `?settings-ms=` answers every settings write late, as a busy main process does.
-    update: async raw => {
-      await delay('settings-ms');
-      const change = parseHubSettingsChange(raw);
-      if (change.kind === 'settings') settings = { ...settings, ...change.patch };
-      else if (change.kind === 'master') settings = { ...settings, gwonmacTools: change.enabled };
-      else if (change.kind === 'tool') settings = { ...settings, [FEATURE_SELECTION_POLICIES[GLOBAL_TOOL_FEATURES[change.tool]].activation.setting]: change.enabled };
-      else {
-        if (change.binding && shortcutReserved(change.binding)) throw new Error('Reserved shortcut');
-        const conflict = change.binding && shortcutConflict(change.action, change.binding, resolveShortcuts(settings.shortcutOverrides));
-        if (conflict) settings = { ...settings, shortcutOverrides: withShortcutOverride(settings.shortcutOverrides, conflict, null) };
-        settings = { ...settings, shortcutOverrides: withShortcutOverride(settings.shortcutOverrides, change.action, change.binding) };
-      }
-      window.gwApplyFixtureAppearance?.({ uiStyle: settings.uiStyle, uiPanelOpacity: settings.uiPanelOpacity, uiFont: settings.uiFont, uiTextSize: settings.uiTextSize, uiCustomTheme: settings.uiCustomTheme });
-      window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: settings }));
-    },
-    capture: () => new Promise(resolve => {
-      cancelShortcutCapture();
-      const finish = (result: Awaited<ReturnType<HubSettingsApi['capture']>>) => {
-        window.removeEventListener('keydown', onKey, true); capturingShortcut = false; cancelShortcutCapture = () => {}; resolve(result);
-      };
-      const onKey = (event: KeyboardEvent) => {
-        event.preventDefault(); event.stopImmediatePropagation();
-        if (['Meta','Shift','Alt','Control'].includes(event.key)) return;
-        if (event.key === 'Escape' && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) { finish({ status: 'cancelled' }); return; }
-        if ((event.key === 'Backspace' || event.key === 'Delete') && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) { finish({ status: 'cleared' }); return; }
-        const binding = shortcutFromInput({code:event.code, key:event.key, meta:event.metaKey, control:event.ctrlKey, shift:event.shiftKey, alt:event.altKey});
-        // Main's window capture reports what was pressed; the recorder refuses reserved chords.
-        finish(!binding ? {status:'invalid'} : {status:'captured',binding});
-      };
-      capturingShortcut = true; cancelShortcutCapture = () => finish({ status: 'cancelled' });
-      window.addEventListener('keydown', onKey, true);
-    }),
-    // Main's `cancelAppShortcutCapture`: the capture ends as cancelled and takes no further key.
-    cancelCapture: async () => cancelShortcutCapture(),
-  };
-  const fixtureMain = installFixtureMain({ settings: () => settings, capturing: () => capturingShortcut, record,
+  const fixtureMain = installFixtureMain({ settings: () => settings, record,
     updateSettings: patch => window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: patch })) });
   // A test renames an account between two reads to model a list that changed meanwhile (HUB-174).
   let secondName = 'Second';
@@ -129,9 +87,9 @@ export function mountHubFixture(target: HTMLElement) {
     // `?double-click-ms=` models a player's slower macOS Double-click speed, as main passes it.
     gwSurfaces: installSurfaceController(document, { doubleClickMs: Number(params.get('double-click-ms')) || null }),
     gwToolsSettings: () => settings,
-    gwNative: { ...window.gwNative, init: { enhancementSelection: { tools: true } }, hubSettings,
+    gwNative: { ...window.gwNative, init: { enhancementSelection: { tools: true } },
       // A session that started with the standard memory module, as a fresh launch does.
-      client: { ...window.gwNative?.client, session: async () => ({ appVersion: 'fixture', compatibility: null, extendedMemory: { requestedAtLaunch: false, status: 'standard', effectiveCapBytes: WASM_HEAP_CAP_BYTES, fallbackReason: null }, healthToken: null }) }, accounts: { get: async () => { await delay('accounts-load-ms'); return ({ current: '9e1bd41c-cfc0-4ca8-a57f-2f0ca159c72d', profiles: [{ id: '9e1bd41c-cfc0-4ca8-a57f-2f0ca159c72d', name: 'Main', state: 'running' }, { id: 'e98a37bc-5211-4bc5-8094-0b1286b3c42d', name: secondName, state: 'ready' }] }); }, open: async (request: { mode: string }) => { await delay('accounts-ms'); record(`Account Second ${request.mode}`); } }, settings: { get: async () => settings, onChange: (listener: (value: AppSettings) => void) => { settingsListeners.add(listener); return () => settingsListeners.delete(listener); }, set: async (patch: RendererSettingsPatch) => { await delay('settings-ms'); settings = { ...settings, ...patch }; localStorage.setItem('hub-fixture-shortcuts', JSON.stringify(settings.hubShortcuts)); if('calculatorRates' in patch&&patch.calculatorRates)localStorage.setItem('hub-fixture-calculator-rates',JSON.stringify(settings.calculatorRates)); for (const listener of settingsListeners) listener(settings); window.dispatchEvent(new Event('gw:tools-settings')); return settings; } }, clipboard: { writeText: async (value: string) => record(`Copied ${value}`) }, trade: { getMarketRates: async () => ({ ...estimateMarketRates(new URLSearchParams(location.search).has('market-empty') ? [] : ['WTS armbraces 30e/ea','WTB armbraces 28e/ea','WTS zkeys 1.5e/ea','WTB zkeys 1.4e/ea','WTS 20 ectos for 100k','WTB 25 ectos for 100k'].flatMap((message,group)=>Array.from({length:6},(_,index)=>({source:'kamadan' as const,message,sender:`Sample ${group} ${index}`,timestamp:Date.now()-index*60_000})))), sample: true }), getTraderQuotes: async () => ({ updatedAt: Date.now(), quotes: [{ modelId: '0b03a2', side: 'buy', price: 6000, timestamp: Date.now() }, { modelId: '0b03a2', side: 'sell', price: 5000, timestamp: Date.now() }], sample: true }) }, app: { showLauncher: async () => record('Launcher'), openSettings: async (section: string) => record(`Settings ${section}`), requestQuit: async () => quitFixtureGame(record), showQuitOrReload: () => fixtureMain.showQuitOrReload(), openExternal: async () => record('Website') } },
+      client: { ...window.gwNative?.client, session: async () => ({ appVersion: 'fixture', compatibility: null, extendedMemory: { requestedAtLaunch: false, status: 'standard', effectiveCapBytes: WASM_HEAP_CAP_BYTES, fallbackReason: null }, healthToken: null }) }, accounts: { get: async () => { await delay('accounts-load-ms'); return ({ current: '9e1bd41c-cfc0-4ca8-a57f-2f0ca159c72d', profiles: [{ id: '9e1bd41c-cfc0-4ca8-a57f-2f0ca159c72d', name: 'Main', state: 'running' }, { id: 'e98a37bc-5211-4bc5-8094-0b1286b3c42d', name: secondName, state: 'ready' }] }); }, open: async (request: { mode: string }) => { await delay('accounts-ms'); record(`Account Second ${request.mode}`); } }, settings: { get: async () => settings, onChange: (listener: (value: AppSettings) => void) => { settingsListeners.add(listener); return () => settingsListeners.delete(listener); }, set: async (patch: RendererSettingsPatch) => { await delay('settings-ms'); settings = { ...settings, ...patch }; localStorage.setItem('hub-fixture-shortcuts', JSON.stringify(settings.hubShortcuts)); if('calculatorRates' in patch&&patch.calculatorRates)localStorage.setItem('hub-fixture-calculator-rates',JSON.stringify(settings.calculatorRates)); for (const listener of settingsListeners) listener(settings); window.dispatchEvent(new Event('gw:tools-settings')); return settings; } }, clipboard: { writeText: async (value: string) => record(`Copied ${value}`) }, trade: { getMarketRates: async () => ({ ...estimateMarketRates(new URLSearchParams(location.search).has('market-empty') ? [] : ['WTS armbraces 30e/ea','WTB armbraces 28e/ea','WTS zkeys 1.5e/ea','WTB zkeys 1.4e/ea','WTS 20 ectos for 100k','WTB 25 ectos for 100k'].flatMap((message,group)=>Array.from({length:6},(_,index)=>({source:'kamadan' as const,message,sender:`Sample ${group} ${index}`,timestamp:Date.now()-index*60_000})))), sample: true }), getTraderQuotes: async () => ({ updatedAt: Date.now(), quotes: [{ modelId: '0b03a2', side: 'buy', price: 6000, timestamp: Date.now() }, { modelId: '0b03a2', side: 'sell', price: 5000, timestamp: Date.now() }], sample: true }) }, app: { showLauncher: async () => record('Launcher'), openSettings: async (target?: SettingsTarget) => record(target ? `Settings ${target.section}${target.control ? ` › ${target.control}` : ''}` : 'Settings'), requestQuit: async () => quitFixtureGame(record), showQuitOrReload: () => fixtureMain.showQuitOrReload(), openExternal: async () => record('Website') } },
   });
   const hub = createHub(document.body);
   const librarySize = Number(params.get('library'));

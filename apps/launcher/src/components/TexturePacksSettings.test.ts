@@ -1,6 +1,6 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { LauncherNativeApi } from "@shared/launcher-contracts";
+import type { SettingsNativeApi } from "@shared/launcher-contracts";
 import type { TexturePackSnapshot } from "@shared/texture-packs";
 import TexturePacksSettings from "./TexturePacksSettings.vue";
 
@@ -17,15 +17,15 @@ const pack = {
 
 const snapshot: TexturePackSnapshot = { selectedPackId: null, packs: [pack] };
 
-function installTexturePackNative(texturePacks: LauncherNativeApi["texturePacks"]): void {
-  Object.defineProperty(window, "launcherNative", {
+function installTexturePackNative(texturePacks: SettingsNativeApi["texturePacks"]): void {
+  Object.defineProperty(window, "settingsNative", {
     configurable: true,
-    value: { texturePacks } as LauncherNativeApi,
+    value: { texturePacks } as SettingsNativeApi,
   });
 }
 
 afterEach(() => {
-  Object.defineProperty(window, "launcherNative", { configurable: true, value: undefined });
+  Object.defineProperty(window, "settingsNative", { configurable: true, value: undefined });
 });
 
 describe("texture pack settings", () => {
@@ -61,7 +61,7 @@ describe("texture pack settings", () => {
     expect(wrapper.text()).not.toContain("mapping file");
   });
 
-  it("selects a pack and removes it through the narrow launcher bridge", async () => {
+  it("selects a pack and removes it through the narrow Settings bridge", async () => {
     const select = vi.fn(async () => undefined);
     const remove = vi.fn(async () => undefined);
     installTexturePackNative({

@@ -328,9 +328,18 @@ test.describe("live client", () => {
         expect(rendererStats.reads).toBeGreaterThan(0);
       });
 
+      const isSettingsWindow = (candidate: typeof launcher) =>
+        candidate.url().endsWith("/launcher/settings.html");
+      const settingsOpened = application.waitForEvent("window", {
+        predicate: isSettingsWindow,
+        timeout: 30_000,
+      });
+      await launcher.evaluate(() => window.launcherNative.settings.open());
+      const settings = await settingsOpened;
+      await settings.waitForLoadState("domcontentloaded");
       const applyScale = (renderScale: AppSettings["renderScale"]) =>
-        launcher.evaluate(async (scale) => {
-          await window.launcherNative.settings.update({ renderScale: scale });
+        settings.evaluate(async (scale) => {
+          await window.settingsNative.settings.update({ renderScale: scale });
         }, renderScale);
       const dimensions = () =>
         page.evaluate(async () => {

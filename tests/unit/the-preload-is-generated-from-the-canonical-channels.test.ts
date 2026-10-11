@@ -17,9 +17,10 @@ import type { GwNativeApi } from "../../src/shared/contracts.ts";
 import {
   PRELOAD_CONSTANTS,
   launcherPreloadSource,
+  SETTINGS_BODY,
   preloadSource,
 } from "../../scripts/generate-preload.js";
-import type { LauncherNativeApi } from "../../src/shared/launcher-contracts.ts";
+import type { LauncherNativeApi, SettingsNativeApi } from "../../src/shared/launcher-contracts.ts";
 import { LAUNCHER_IPC } from "../../src/shared/launcher-contracts.ts";
 
 const allContracts = { ...contracts, ...enhancementContracts };
@@ -254,14 +255,11 @@ test("the launcher preload exposes only its frozen launcher bridge", async () =>
   assert.deepEqual(Object.keys(launcher).sort(), [
     "experience",
     "external",
-    "gameFiles",
     "navigation",
     "news",
     "profiles",
     "settings",
     "state",
-    "texturePacks",
-    "tools",
     "updates",
   ]);
   assert.equal(Object.isFrozen(launcher), true);
@@ -270,4 +268,39 @@ test("the launcher preload exposes only its frozen launcher bridge", async () =>
   await launcher.profiles.play([]);
   await launcher.news.open("release-stable");
   assert.deepEqual(invoked, [LAUNCHER_IPC.stateGet, LAUNCHER_IPC.profilesPlay, LAUNCHER_IPC.newsOpen]);
+});
+
+test("the Settings window preload exposes settings and no account actions", async () => {
+  const invoked: string[] = [];
+  let exposedName = "";
+  let bridge: SettingsNativeApi | undefined;
+  vm.runInNewContext(launcherPreloadSource(root, SETTINGS_BODY), {
+    require(name: string) {
+      assert.equal(name, "electron");
+      return {
+        contextBridge: {
+          exposeInMainWorld(name: string, value: SettingsNativeApi) {
+            exposedName = name;
+            bridge = value;
+          },
+        },
+        ipcRenderer: {
+          invoke(channel: string) {
+            invoked.push(channel);
+            return Promise.resolve();
+          },
+          on() {},
+          removeListener() {},
+        },
+      };
+    },
+  });
+  assert.equal(exposedName, "settingsNative");
+  assert.ok(bridge);
+  assert.deepEqual(Object.keys(bridge).sort(), ["experience", "external", "gameFiles", "settings", "state", "target", "texturePacks", "tools", "updates"]);
+  assert.equal(Object.isFrozen(bridge), true);
+  assert.equal(Object.values(bridge).every(Object.isFrozen), true);
+  await bridge.target.take();
+  await bridge.settings.update({});
+  assert.deepEqual(invoked, [LAUNCHER_IPC.settingsTargetGet, LAUNCHER_IPC.settingsUpdate]);
 });

@@ -4,7 +4,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { serializeTravelPreferencesV1 } from
   "../../src/main/core/travel-preferences-v1.js";
-import { closeOffline, launchOffline } from "./fixtures.mjs";
+import { closeOffline, launchOffline, openSettings } from "./fixtures.mjs";
 
 test("Tools reset promises and clears both Travel preference owners", async () => {
   const fixture = await launchOffline(
@@ -33,7 +33,7 @@ test("Tools reset promises and clears both Travel preference owners", async () =
     },
   );
   try {
-    const { app, page, userData } = fixture;
+    const { app, userData } = fixture;
     await app.evaluate(({ app: electronApp, dialog }) => {
       globalThis.__resetRestart = {
         quit: false,
@@ -52,7 +52,8 @@ test("Tools reset promises and clears both Travel preference owners", async () =
       dialog.showMessageBox = record as typeof dialog.showMessageBox;
     });
 
-    expect(await page.evaluate(() => window.launcherNative.settings.reset()))
+    const settingsPage = await openSettings(fixture, { section: "advanced" });
+    expect(await settingsPage.evaluate(() => window.settingsNative.settings.reset()))
       .toBeUndefined();
     expect(await app.evaluate(() => globalThis.__resetRestart.options))
       .toMatchObject({

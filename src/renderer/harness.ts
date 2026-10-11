@@ -456,7 +456,7 @@ function requestHeapCap() {
               throw error;
             }
           },
-          openSettings: (focus) => window.gwHub?.openSettings(focus),
+          openSettings: () => void window.gwNative.app.openSettings({ section: 'game', control: 'extendedMemoryEnabled' }),
         },
       );
       disposeMemoryWarningSettings();

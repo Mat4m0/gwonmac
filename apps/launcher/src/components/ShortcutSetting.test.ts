@@ -1,16 +1,15 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_SHORTCUTS } from "@shared/keyboard-shortcuts";
-import type { LauncherNativeApi } from "@shared/launcher-contracts";
+import type { SettingsNativeApi } from "@shared/launcher-contracts";
 import ShortcutSetting from "./ShortcutSetting.vue";
 
 function api() {
   return {
     setMasterEnabled: vi.fn(), setFeature: vi.fn(), restartToApply: vi.fn(),
-    restoreDefaultShortcut: vi.fn(),
     captureShortcut: vi.fn(async () => ({ status: "captured" as const, binding: { key: "j", shift: false, option: false } })),
     replaceShortcut: vi.fn(async () => undefined),
-  } satisfies LauncherNativeApi["tools"];
+  } satisfies SettingsNativeApi["tools"];
 }
 describe("Shortcut setting", () => {
   it("shows the Whispers default and permits clearing it", async () => {

@@ -1,9 +1,10 @@
 /// <reference types="vite/client" />
-import type { LauncherNativeApi } from "@shared/launcher-contracts";
+import type { LauncherNativeApi, SettingsNativeApi } from "@shared/launcher-contracts";
 
 declare global {
   interface Window {
     launcherNative?: LauncherNativeApi;
+    settingsNative?: SettingsNativeApi;
   }
 }
 

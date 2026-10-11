@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from "vue";
 import { Ellipsis } from "lucide-vue-next";
-import type { LauncherNativeApi, LauncherSnapshot } from "@shared/launcher-contracts";
+import type { SettingsNativeApi, LauncherSnapshot } from "@shared/launcher-contracts";
 import { DEFAULT_SHORTCUTS, SHORTCUT_LABELS, shortcutConflict, shortcutKeycaps, SHORTCUT_CAPTURE_HINT, type ShortcutAction, type ShortcutBinding } from "@shared/keyboard-shortcuts";
 
 const props = defineProps<{
   action: ShortcutAction;
   shortcuts: LauncherSnapshot["shortcuts"];
-  api?: LauncherNativeApi["tools"] | undefined;
+  api?: SettingsNativeApi["tools"] | undefined;
   disabled?: boolean;
   performSave?: ((action: () => Promise<unknown>) => Promise<void>) | undefined;
 }>();
