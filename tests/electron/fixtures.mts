@@ -12,6 +12,7 @@ import {
   type CachedClientOptions,
   seedCachedClient,
 } from "../helpers/cached-client.js";
+import { SETTINGS_SECTIONS } from "../../src/shared/settings-catalogue.js";
 
 export const root = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -218,3 +219,22 @@ export async function closeOffline(fixture: OfflineFixture): Promise<void> {
   await stopElectron(fixture.app);
   await removeUserData(fixture.userData);
 }
+
+/**
+ * Opens the launcher's Settings page from the header gear, at `section` when given, and
+ * returns the launcher page that shows it.
+ */
+export async function openSettings(
+  fixture: OfflineFixture,
+  target?: { section: (typeof SETTINGS_SECTIONS)[number]["id"] },
+): Promise<Page> {
+  const page = fixture.app.windows().find(candidate => candidate.url().endsWith("/launcher/index.html")) ?? fixture.page;
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.locator(".settings-page").waitFor();
+  if (target) {
+    const label = SETTINGS_SECTIONS.find(section => section.id === target.section)!.label;
+    await page.locator(".settings-page aside").getByRole("button", { name: label, exact: true }).click();
+  }
+  return page;
+}
+

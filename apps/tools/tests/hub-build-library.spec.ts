@@ -51,8 +51,7 @@ test('only Hub locks, reset restores its default frame, and popouts have visible
   await page.getByRole('button', { name: 'Resize Hub', exact: true }).press('ArrowLeft');
   expect(await panel.boundingBox()).not.toEqual(initial);
   const search = page.locator('.hub-search input');
-  await search.fill('settings'); await search.press('Enter');
-  await page.getByRole('button', { name: 'Appearance', exact: true }).click();
+  await search.fill('hub preferences'); await search.press('Enter');
   await page.getByRole('button', { name: 'Reset Hub position', exact: true }).click();
   expect(await panel.boundingBox()).toEqual(initial);
   await expect(panel).toHaveAttribute('data-locked', 'true');
@@ -422,11 +421,12 @@ test('an unrelated source toggle keeps the build target page, query and selectio
   await page.goto('/?hub');
   await search.fill('accounts'); await search.press('Enter');
   await expect(page.locator('.hub-caption')).toHaveText('Accounts');
-  await page.evaluate(() => window.gwHub?.openSettings({ section: 'Tools' }));
-  await page.getByRole('button', { name: 'Tools', exact: true }).click();
+  await page.evaluate(() => window.gwHub?.openSettings({ section: 'tools' }));
+  const tools = page.locator('aside[aria-label="Settings sections"]').getByRole('button', { name: 'Tools', exact: true });
+  await tools.click();
   await page.getByRole('checkbox', { name: 'Travel', exact: true }).uncheck();
   await expect(page.locator('.hub-caption')).toHaveText('Settings');
-  await expect(page.getByRole('button', { name: 'Tools', exact: true })).toHaveAttribute('aria-current', 'true');
+  await expect(tools).toHaveAttribute('aria-current', 'page');
   await expect(page.getByRole('checkbox', { name: 'Travel', exact: true })).not.toBeChecked();
 });
 
@@ -441,7 +441,8 @@ test('a suspended build page cannot resume its withdrawn source or execute stale
   await expect(page.locator('.hub-row')).not.toContainText(['Apply to me', 'Apply to hero']);
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', /command|apply/);
   await search.fill('library');
-  await expect(page.locator('.hub-row')).toHaveCount(0);
+  // Only the Build Library setting row remains: the withdrawn source offers no page or action.
+  await expect(page.locator('.hub-row:not([data-id^="setting"])')).toHaveCount(0);
   await expect(page.locator('#hub')).not.toContainText('Build Library is loading');
 });
 

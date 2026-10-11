@@ -1,0 +1,29 @@
+/* The Settings page inside the Hub: the same page, in the Hub's theme (Classic or Modern).
+   Only tokens and the space the Hub panel gives it change; the page's own rules stay. */
+.hub-settings-host { height: 100%; min-height: 0; }
+.hub-settings-host .settings-view {
+  --settings-font: var(--ui-font-interface);
+  --settings-heading-font: var(--ui-font-display, var(--ui-font-interface));
+  --settings-font-size: var(--ui-type-body-size);
+  --settings-text: var(--ui-text);
+  --settings-muted: var(--ui-text-muted);
+  --settings-accent: var(--ui-accent);
+  --settings-focus: var(--ui-focus);
+  --settings-line: var(--ui-line-soft);
+  --settings-line-strong: var(--ui-edge);
+  --settings-control: var(--ui-well-fill);
+  --settings-hover: var(--ui-selection-fill);
+  --settings-surface: transparent;
+  --settings-surface-solid: transparent;
+  --settings-aside: transparent;
+  background: transparent;
+}
+/* The Hub panel is narrower than the launcher: a slimmer section list and tighter content. */
+.hub-settings-host .settings-view .settings-page { grid-template-columns: 196px minmax(0, 1fr); }
+.hub-settings-host .settings-view .settings-page aside button { white-space: nowrap; }
+.hub-settings-host .settings-view .settings-page aside { padding: 10px 8px; border-right: 1px solid var(--ui-line-soft); }
+.hub-settings-host .settings-view .settings-content { padding: 18px 22px 24px; }
+.hub-settings-host .settings-view .settings-content h1,
+.hub-settings-host .settings-view .settings-fields h1 { font-size: var(--ui-type-title-size, 20px); }
+.hub-settings-host .settings-view .settings-status { padding-inline: 22px; }
+.hub-settings-host .settings-view .opens-launcher { margin-left: auto; width: 13px; height: 13px; opacity: .7; }

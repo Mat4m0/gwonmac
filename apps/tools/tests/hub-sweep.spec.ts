@@ -1,41 +1,12 @@
 import { expect, test } from '@playwright/test';
 
-test('Settings retries in place and retains its failure across sections (HUB-236)', async ({page}) => {
-  await page.goto('/?hub');
-  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
-  await page.evaluate(() => {
-    const get = window.gwNative.hubSettings.get;
-    let attempts = 0;
-    window.gwNative.hubSettings.get = async () => {
-      if (++attempts === 1) throw new Error('offline fixture failure');
-      return get();
-    };
-  });
-  const search = page.locator('.hub-search input');
-  await search.fill('settings'); await search.press('Enter');
-  await expect(page.locator('.hub-settings-status')).toContainText('Settings could not load');
-  await page.getByRole('button', {name: 'Game', exact: true}).click();
-  await expect(page.locator('.hub-settings-status')).toContainText('Settings could not load');
-  await page.locator('.hub-primary').click();
-  await expect(page.locator('.hub-settings-body h2')).toHaveText('Game');
-  await expect(page.locator('.hub-settings-status')).toBeEmpty();
-  await expect(page.locator('#hub')).toBeVisible();
-  expect(await page.evaluate(() => document.activeElement?.tagName)).not.toBe('BODY');
-});
-
-
-test('Tools and Shortcuts use the same names as Hub results (HUB-180)', async ({page}) => {
+test('Tool results use their canonical names (HUB-180)', async ({page}) => {
   await page.goto('/?hub'); await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
   const search = page.locator('.hub-search input');
   for (const [query, name] of [['travel', 'Travel'], ['character', 'Switch Character'], ['storage', 'Xunlai Storage'], ['builds', 'Build Library'], ['trade', 'Trade Chat'], ['whispers', 'Whispers']]) {
     await search.fill(query === 'builds' ? 'build library' : query!);
     await expect(page.locator(`.hub-row[data-id="${query}"] .hub-title`)).toHaveText(name!);
   }
-  await search.fill('settings'); await search.press('Enter');
-  await page.getByRole('button', {name: 'Tools', exact: true}).click();
-  for (const name of ['Travel', 'Switch Character', 'Xunlai Storage', 'Build Library', 'Trade Chat', 'Whispers']) await expect(page.getByRole('checkbox', {name, exact: true})).toBeVisible();
-  await page.getByRole('button', {name: 'Shortcuts', exact: true}).click();
-  for (const name of ['Travel', 'Switch Character', 'Xunlai Storage', 'Build Library', 'Trade Chat', 'Whispers']) await expect(page.getByRole('button', {name, exact: true})).toBeVisible();
 });
 
 

@@ -113,12 +113,17 @@ export function manageHubShortcuts(hub: HubPresenter<HTMLElement>, store: HubSho
     // The order the player sees; saves run one after another with the latest order.
     let order: HubShortcut[] = [...get()];
     let saving = Promise.resolve();
+    let pending = 0;
+    // A pin saved elsewhere (Actions just before opening this page) shows once it is stored.
+    const changed = () => { if (!pending) { order = [...get()]; paint(); } };
+    window.addEventListener('gw:tools-settings', changed);
     const entries = () => order.filter(entry => lookup(entry.id));
     const title = (entry: HubShortcut) => lookup(entry.id)?.title ?? entry.id;
     const phrased = () => entries().filter(entry => entry.phrase);
     const persist = () => {
       const next = [...order];
-      saving = saving.then(() => save(next)).catch(() => { status.textContent = 'Could not save. Try again.'; order = [...get()]; paint(); });
+      pending += 1;
+      saving = saving.then(() => save(next)).catch(() => { status.textContent = 'Could not save. Try again.'; order = [...get()]; paint(); }).finally(() => { pending -= 1; });
     };
     const neighbour = (direction: -1 | 1) => {
       const visible = entries(); const index = visible.findIndex(entry => entry.id === chosen);
@@ -213,6 +218,6 @@ export function manageHubShortcuts(hub: HubPresenter<HTMLElement>, store: HubSho
     reset.onclick = confirmReset;
     position.onclick = () => { resetPosition(); status.textContent = 'Hub position and size reset. Window locked.'; };
     paint();
-    return () => view.remove();
+    return () => { window.removeEventListener('gw:tools-settings', changed); view.remove(); };
   });
 }

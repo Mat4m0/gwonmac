@@ -8,7 +8,9 @@ import { resumeSearchInput } from './search-input.js';
 import { installHubWindow } from './hub-window.js';
 import { attachClassicFrame } from '../shared/ui/frame.js';
 import { isHubBackKey, resolveShortcuts, shortcutKeycaps, type ShortcutAction } from '../shared/keyboard-shortcuts.js';
-import { FINDABLE_SECTIONS, FINDABLE_SETTINGS, focusHubSetting, openHubSettings, type HubSettingsFocus } from "./hub-settings.js";
+import { HUB_SECTIONS, SETTINGS, SETTINGS_SECTIONS, type SettingEntry, type SettingsTarget } from "../shared/settings-catalogue.js";
+import { focusHubSettings, showHubSettings } from "./hub-settings-page.js";
+import type { GlobalTool } from "../shared/launcher-contracts.js";
 import { createHubAccounts } from './hub-accounts.js';
 import { hubIcon } from "./hub-icons.js";
 import { editHubShortcut, manageHubShortcuts } from './hub-preferences.js';
@@ -149,6 +151,10 @@ export function createHub(parent: HTMLElement) {
         const value = active.getAttribute(attribute);
         if (value) { selector = `[${attribute}="${CSS.escape(value)}"]`; break; }
       }
+      // A settings control is named by the row it belongs to (the Settings page, docs/settings.md).
+      const setting = active.closest<HTMLElement>('[data-setting]');
+      if (selector === '.hub-search input' && setting?.dataset.setting)
+        selector = `[data-setting="${CSS.escape(setting.dataset.setting)}"] ${active.tagName.toLowerCase()}`;
       if (active === primary) selector = '.hub-primary';
       if (active === required('.hub-actions')) selector = '.hub-actions';
     }
@@ -304,10 +310,10 @@ export function createHub(parent: HTMLElement) {
       ...tool('whispers', TOOL_PRESENTATION['whispers'].label, 'Conversations, friends and drafts', 'friends people message chat', settings?.gwonmacTools && settings.whispersEnabled, 'gw:whispers-toggle'),
       ...(settings?.characterSwitchEnabled ? [{ id: 'character', title: TOOL_PRESENTATION['character-switch'].label, detail: 'Choose another character', keywords: 'relog profession characters alts', group: 'Tools', action: 'Choose character', navigate: () => dispatch('gw:character-toggle'), run: () => dispatch('gw:character-toggle') }] : []),
       ...tool('storage', TOOL_PRESENTATION['xunlai-storage'].label, 'Open your storage chest', 'chest bank', settings?.gwonmacTools && settings.xunlaiStorage, 'gw:storage-open'),
-      ...(settings?.gwonmacTools && settings.cartographyEnabled ? [{ id: 'maps', title: TOOL_PRESENTATION['maps'].label, detail: 'Exploration grid, walkable terrain and compass ranges', keywords: 'grid terrain compass opacity', group: 'Tools', action: 'Adjust maps', run: () => openSettings({ section: 'Maps' }) }] : []),
+      ...(settings?.gwonmacTools && settings.cartographyEnabled ? [{ id: 'maps', title: TOOL_PRESENTATION['maps'].label, detail: 'Exploration grid, walkable terrain and compass ranges', keywords: 'grid terrain compass opacity', group: 'Tools', action: 'Adjust maps', run: openSettings({ section: 'maps' }) }] : []),
       { id: 'commands', title: 'Commands', detail: 'Search words, calculator examples and keys', aliases: ['?'], keywords: 'help guide examples cheatsheet shortcuts keys', group: 'Commands', action: 'Browse commands', run: () => presenter.showRows('Commands', commandExamples) },
       { id: 'hub-preferences', title: 'Hub preferences', detail: 'Pins and exact search phrases', keywords: 'aliases vocabulary', group: 'Commands', action: 'Adjust Hub', run: () => manageHubShortcuts(presenter, shortcutStore, hubWindow.reset) },
-      { id: 'settings', title: 'Settings', detail: 'Game, appearance, tools, shortcuts and maps', keywords: 'preferences graphics appearance hotkeys', group: 'Commands', action: 'Open Settings', run: () => openSettings() },
+      { id: 'settings', title: 'Settings', detail: 'Tools, maps, appearance and game · ⌘,', keywords: 'preferences graphics appearance hotkeys shortcuts', group: 'Commands', action: 'Open Settings', run: openSettings() },
       // Launcher and the website are for a typed search; the first screen stays on the game (HUB-185).
       ...(!every && !query.trim() ? [] : [
         { id: 'launcher', title: 'Show Launcher', detail: 'Accounts, updates and game files', keywords: 'launcher administration', group: 'Commands', action: 'Show Launcher', run: async (task: HubTask) => { await window.gwNative.app.showLauncher(); task.done(); } },
@@ -320,10 +326,9 @@ export function createHub(parent: HTMLElement) {
         // The sheet waits for the press that asked for it, so its repeat or trailing click never answers it.
         // Cancel hands the task back with its search, as Resign's confirmation does (HUB-250).
         { id: 'reload', title: 'Quit or Reload Game…', detail: 'Opens confirmation for this account', keywords: 'restart reconnect', group: 'Commands', action: 'Review options', run: async () => { suspend(); await window.gwSurfaces.afterPress(); if (await window.gwNative.app.showQuitOrReload() === 'stayed') show(); else close(); } },
-        // Settings are found by their own words and open with their control focused (HUB-063).
-        // They follow the commands, so a command's own word keeps its row first.
-        ...(normaliseHubQuery(query).length < 3 ? [] : FINDABLE_SECTIONS).map(({ section, keywords }) => ({ id: `settings:${section}`, title: section, detail: 'Settings section', keywords, group: 'Settings', action: `Open ${section} settings`, run: () => openSettings({ section }) })),
-        ...(normaliseHubQuery(query).length < 3 ? [] : FINDABLE_SETTINGS).filter(setting => !setting.shown || (settings && setting.shown(settings))).map(setting => ({ id: `setting:${setting.label}`, title: setting.label, detail: `Settings › ${setting.section}`, keywords: `setting ${setting.keywords ?? ''}`, group: 'Settings', action: 'Open setting', run: () => openSettings({ section: setting.section, control: setting.label }) })),
+        // Settings are found by their own words (HUB-063). They follow the commands, so a command's own word keeps its row first.
+        ...(normaliseHubQuery(query).length < 3 ? [] : SETTINGS_SECTIONS).map(({ id, label, keywords }) => ({ id: `settings:${id}`, title: label, detail: HUB_SECTIONS.has(id) ? 'Settings section' : 'Settings section in the launcher', keywords, group: 'Settings', action: HUB_SECTIONS.has(id) ? `Open ${label} settings` : 'Open in Launcher', run: openSettings({ section: id }) })),
+        ...(normaliseHubQuery(query).length < 3 ? [] : SETTINGS).map(settingRow),
       ]),
     ];
   };
@@ -377,17 +382,32 @@ export function createHub(parent: HTMLElement) {
     // Keys: a tool's shortcut can change in Settings; the Hub's own keys are fixed.
     const bindings = resolveShortcuts(window.gwToolsSettings?.().shortcutOverrides ?? {});
     const keys = (action: ShortcutAction) => shortcutKeycaps(bindings[action]).map(cap => cap.label).join('') || 'Not set';
+    const KEY_TOOLS: Record<string, GlobalTool> = { travel: 'quick-travel', character: 'character-switch', builds: 'build-management', trade: 'trade-chat', whispers: 'whispers' };
     const toolKeys: [string, ShortcutAction, string][] = [['travel', 'travel.open', TOOL_PRESENTATION['quick-travel'].label], ['character', 'character.switch', TOOL_PRESENTATION['character-switch'].label], ['builds', 'tools.toggle', TOOL_PRESENTATION['build-management'].label], ['trade', 'trade.toggle', TOOL_PRESENTATION['trade-chat'].label], ['whispers', 'whispers.toggle', TOOL_PRESENTATION['whispers'].label]];
-    rows.push(...toolKeys.filter(([tool]) => enabled.has(tool)).map(([tool, action, name]) => ({ id: `key:${tool}`, title: name, detail: keys(action), group: 'Keys & shortcuts', action: 'Change shortcut', run: () => openSettings({ section: 'Shortcuts' as const }) })));
+    rows.push(...toolKeys.filter(([tool]) => enabled.has(tool)).map(([tool, action, name]) => ({ id: `key:${tool}`, title: name, detail: keys(action), group: 'Keys & shortcuts', action: 'Change shortcut', run: openSettings({ section: 'tools', control: `tool:${KEY_TOOLS[tool]}` }) })));
     for (const [id, name, detail] of [['actions', 'Actions for the selected row', '⌘J'], ['back', 'Back', '⌘⌫'], ['escape', 'Clear, back, then close', '⎋'], ['open', 'Open a row with a page', '→']] as const)
       rows.push({ id: `key:${id}`, title: name, detail, group: 'Keys & shortcuts', action: 'Fixed key', unavailable: 'The Hub’s own keys do not change.', run() {} });
     return rows;
   }
-  /** Settings, optionally at one section with one control focused (search, the memory warning). */
-  function openSettings(focus?: HubSettingsFocus) {
-    direct('settings', () => openHubSettings(presenter, focus));
-    // A Settings page that was already open, suspended or lower in the path shows the target too.
-    if (focus) focusHubSetting(focus);
+  /** A setting row opens Settings at its control: in the Hub, or in the launcher for the launcher's sections. */
+  function settingRow(entry: SettingEntry): HubRow {
+    const section = SETTINGS_SECTIONS.find(candidate => candidate.id === entry.section)!.label;
+    const inHub = HUB_SECTIONS.has(entry.section);
+    return { id: `setting:${entry.id}`, title: entry.label, keywords: `setting ${entry.keywords ?? ''}`, group: 'Settings',
+      detail: inHub ? `Settings › ${section}` : `Settings › ${section} in the launcher`, action: inHub ? 'Open setting' : 'Open in Launcher',
+      run: openSettings({ section: entry.section, control: entry.id }) };
+  }
+  /** A row action that shows Settings, at a section or control when given (docs/settings.md). */
+  function openSettings(target?: SettingsTarget) {
+    return async (task: HubTask) => {
+      if (target && !HUB_SECTIONS.has(target.section)) { await window.gwNative.app.openSettings(target); task.done(); return; }
+      showSettings(target);
+    };
+  }
+  /** Settings as a Hub page; a Settings page that was already open, suspended or lower in the path moves to the target. */
+  function showSettings(target?: SettingsTarget) {
+    direct('settings', () => showHubSettings(presenter, target ?? null));
+    if (target) focusHubSettings(target);
   }
   function select(id: string | null, scroll = false) {
     const index = painting && id !== null ? painting.rows.findIndex(row => row.id === id) : -1;
@@ -734,6 +754,11 @@ export function createHub(parent: HTMLElement) {
     const savedRows = saved.flatMap(entry => { const row = extra.find(candidate => candidate.id === entry.id) ?? lookup(entry.id); return row ? [{ ...row, group: parsed.term ? row.group : 'Pinned' }] : []; });
     const ids = new Set([...extra, ...savedRows].map(row => row.id));
     rows = scope ? matchHubRows(extra, input.value) : [...savedRows, ...extra.filter(row => !savedRows.some(saved => saved.id === row.id)), ...(parsed.term && parsed.scope ? commands().filter(row => !ids.has(row.id) && normaliseHubQuery(row.title) === normaliseHubQuery(input.value)) : matchHubRows(commands().filter(row => !ids.has(row.id)), input.value))];
+    // A tool or command row stands for its own setting (`Resign…`, Build Library); the setting row
+    // stays findable while the tool is off.
+    const actionName = (row: HubRow) => normaliseHubQuery(row.title.replace(/…$/, ''));
+    const actions = new Set(rows.filter(row => row.group !== 'Settings').map(actionName));
+    rows = rows.filter(row => row.group !== 'Settings' || !actions.has(actionName(row)));
     // A typed root search orders sections by their best answer, then by the usual group order,
     // and rows by the same tier (HUB-008, HUB-058). A saved phrase is the best answer of all;
     // the calculator's card answers its own grammar. Scoped lists keep their source's order.
@@ -851,7 +876,10 @@ export function createHub(parent: HTMLElement) {
     // A query that is a row's whole name, `trade chat` included, answers with that row (HUB-008).
     const phraseMatches = rows.filter(row => phraseIds.has(row.id));
     const phraseHit = (phraseMatches.length === 1 ? phraseMatches[0] : undefined) ?? (parsed.scope ? rows.find(row => normaliseHubQuery(row.title) === normaliseHubQuery(input.value)) : undefined);
-    const exactCount = parsed.term ? rows.filter(row => hubTier(row, parsed.term) === 0).length : 0;
+    // A setting named like a command or tool (`travel`) yields to it: Settings rows tie only with each other.
+    const exact = parsed.term ? rows.filter(row => hubTier(row, parsed.term) === 0) : [];
+    const exactActions = exact.filter(row => row.group !== 'Settings');
+    const exactCount = (exactActions.length ? exactActions : exact).length;
     const prior = previousRows.find(row => row.id === selected);
     const revised = prior && rows.find(row => row.id === selected)?.preview !== prior.preview;
     // A bare scope (`travel `) lists without a term, so nothing in it is an explicit result:
@@ -864,8 +892,10 @@ export function createHub(parent: HTMLElement) {
     const settling = reset || (awaitingResults && selected === null && rows.length > 0);
     if (settling) awaitingResults = !rows.length;
     // A placeholder row that goes away (a loading or state row) hands its selection to what
-    // replaced it, as a fresh query would, so Enter acts without another key (HUB-232).
-    const replacedPlaceholder = !!prior?.unavailable && !rows.some(row => row.id === prior.id);
+    // replaced it, as a fresh query would, so Enter acts without another key (HUB-232). So does a
+    // setting that yields to its tool's row arriving later (`build library` before Builds load).
+    const yielded = prior?.group === 'Settings' && actions.has(actionName(prior));
+    const replacedPlaceholder = (!!prior?.unavailable || yielded) && !rows.some(row => row.id === prior.id);
     // Clear only this loading refusal when its answer settles; unrelated failures stay.
     if (prior?.unavailable && status.textContent === prior.unavailable && rows.some(row => row.conversion && !row.unavailable)) report('');
     select((prior?.id === 'quote-state' || prior?.id === 'market-state') && !!rows[0]?.conversion ? rows[0].id : settling || replacedPlaceholder ? phraseMatches.length > 1 || (exactCount > 1 && !phraseHit) ? null : initial?.id ?? null : !revised && rows.some(row => row.id === selected) ? selected : null);
@@ -1328,7 +1358,7 @@ export function createHub(parent: HTMLElement) {
     if (!content.contains(document.activeElement)) firstControl().focus();
   }
   const presenter = {
-    show, close: () => close(), suspend, openSettings, direct, suspendedOn,
+    show, close: () => close(), suspend, openSettings: showSettings, direct, suspendedOn,
     /** A mounted view replaced its own page (a confirmation): a click run from before it is cancelled. */
     pageChanged: () => modal.pageChanged(),
     get visible() { return root.open; },

@@ -16,7 +16,9 @@ test('Hub searches, restores the query after actions, and hands off explicitly',
   const search = page.locator('.hub-search input');
   await expect(search).toBeFocused();
   await search.fill('settings');
-  await expect(page.locator('#hub').getByRole('option')).toHaveCount(1);
+  // The command, then the launcher setting whose name holds the word.
+  await expect(page.locator('#hub').getByRole('option')).toHaveCount(2);
+  await expect(page.locator('.hub-row[aria-selected=true]')).toHaveAttribute('data-id', 'settings');
   // A pinnable search result exposes its extra actions in the shared menu.
   await expect(page.getByRole('button', { name: 'Actions', exact: true })).toBeEnabled();
   await search.press('Meta+j');
@@ -24,7 +26,7 @@ test('Hub searches, restores the query after actions, and hands off explicitly',
   await page.keyboard.press('Escape');
   await search.press('Enter');
   await expect(dialog).toBeVisible();
-  await expect(page.getByRole('navigation', { name: 'Settings sections' })).toBeVisible();
+  await expect(page.getByRole('complementary', { name: 'Settings sections' })).toBeVisible();
   // A mounted Settings page has only Done; the Actions slot stays disabled (HUB-043).
   await expect(page.getByRole('button', { name: 'Actions', exact: true })).toBeDisabled();
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', 'Settings');
@@ -38,7 +40,8 @@ test('no results, editing shortcuts, dismissal and narrow layout', async ({ page
   await expect(page.getByText('No matches')).toBeVisible();
   await search.press('Meta+a');
   await search.fill('build');
-  await expect(page.locator('#hub').getByRole('option')).toContainText('Build Library');
+  // The tool, then its Tools setting of the same name.
+  await expect(page.locator('#hub').getByRole('option').first()).toContainText('Build Library');
   const panel = await page.locator('.hub-panel').boundingBox();
   expect(panel).not.toBeNull();
   expect(panel!.x).toBeGreaterThanOrEqual(0);
@@ -360,13 +363,16 @@ test('trade query opens the same floating searchable tool with the words as type
 
 test('Maps controls save inline without navigating away', async ({ page }) => {
   await page.goto('/?hub');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
   await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: { cartographyEnabled: true } })));
   const search = page.locator('.hub-search input');
   await search.fill('maps'); await search.press('Enter');
+  await expect(page.locator('.hub-caption')).toHaveText('Settings');
   await page.getByRole('checkbox', { name: 'Exploration grid' }).check();
   await expect(page.getByRole('slider', { name: 'Grid opacity' })).toBeVisible();
   await page.getByRole('slider', { name: 'Grid opacity' }).fill('45');
-  await expect(page.locator('.hub-view')).toContainText('45%');
+  await expect(page.getByRole('slider', { name: 'Grid opacity' })).toHaveValue('45');
+  await expect(page.locator('.hub-view')).toContainText('Saved: Grid opacity.');
 });
 
 test('compact armbrace conversions use explicit manual rates and original item art', async ({page})=>{
@@ -658,10 +664,13 @@ test('in-game settings stay in Hub and Show Launcher remains explicit', async ({
   const search = page.locator('.hub-search input');
   await search.fill('settings'); await search.press('Enter');
   await page.getByRole('checkbox', { name: 'Whispers', exact: true }).uncheck();
-  await expect(page.getByRole('navigation', { name: 'Settings sections' })).toBeVisible();
+  await expect(page.getByRole('complementary', { name: 'Settings sections' })).toBeVisible();
   await expect(page.getByRole('checkbox', { name: 'Whispers', exact: true })).not.toBeChecked();
   await page.getByRole('button', { name: 'Back', exact: true }).click();
-  await search.fill('whispers'); await expect(page.getByText('No matches', { exact: true })).toBeVisible();
+  // The Whispers tool leaves the Hub; its Tools setting stays findable so it can be turned back on.
+  await search.fill('whispers');
+  await expect(page.locator('.hub-row[data-id="whispers"]')).toHaveCount(0);
+  await expect(page.locator('.hub-row[data-id="setting:tool:whispers"]')).toHaveCount(1);
   await search.fill('settings'); await search.press('Enter');
   await page.getByRole('checkbox', { name: 'Whispers', exact: true }).check();
   await page.getByRole('button', { name: 'Appearance', exact: true }).click();
@@ -728,31 +737,20 @@ test('switch search prioritizes characters and Back restores the selected accoun
   await expect(search).toHaveValue('switch account');
 });
 
-test('price updates preserve focus and disabled Maps keeps its Settings controls unavailable', async ({ page }) => {
+test('price updates preserve focus on the price basis', async ({ page }) => {
   await page.goto('/?hub');
   const search = page.locator('.hub-search input');
   await search.fill('1zkey in a');
   const basis = page.getByRole('combobox', { name: 'Price basis' }); await basis.focus();
   await page.evaluate(() => window.dispatchEvent(new Event('hub-fixture-incoming')));
   await expect(basis).toBeFocused();
-  await search.fill('maps'); await search.press('Enter');
-  await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: { tradeChat: false } })));
-  await expect(page.locator('.hub-caption')).toHaveText('Settings');
-  await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: { cartographyEnabled: false } })));
-  await expect(page.getByRole('checkbox', { name: 'Exploration grid' })).toBeDisabled();
-  await expect(page.locator('.hub-settings')).toBeVisible();
 });
 
-test('disabled tool shortcuts are visible but cannot be edited; command examples respect availability', async ({ page }) => {
+test('command examples respect tool availability', async ({ page }) => {
   await page.goto('/?hub');
+  await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
   const search = page.locator('.hub-search input');
-  await search.fill('settings'); await search.press('Enter');
-  await page.getByRole('checkbox', { name: 'Whispers', exact: true }).uncheck();
-  await page.getByRole('button', { name: 'Shortcuts', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Whispers', exact: true })).toBeDisabled();
-  await expect(page.getByRole('button', { name: 'Clear Whispers', exact: true })).toBeDisabled();
-  await expect(page.getByRole('button', { name: 'Reset Whispers', exact: true })).toBeDisabled();
-  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: { whispersEnabled: false } })));
   await search.fill('commands'); await search.press('Enter');
   await expect(page.locator('.hub-results')).toContainText('build <name or profession>');
   await expect(page.locator('.hub-results')).not.toContainText('whisper <name>');
@@ -783,28 +781,6 @@ test('character hint follows custom and cleared bindings', async ({ page }) => {
   await page.evaluate(() => window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: { shortcutOverrides: { 'character.switch': null } } })));
   await expect(page.locator('.hub-row')).not.toContainText('⌘');
 });
-
-test('shortcut recorder presents each modifier and captures without opening another tool', async ({ page }) => {
-  await page.goto('/?hub');
-  const search = page.locator('.hub-search input');
-  await search.fill('settings'); await search.press('Enter');
-  await page.getByRole('button', { name: 'Shortcuts', exact: true }).click();
-  const record = page.getByRole('button', { name: 'Switch Character', exact: true });
-  await record.click(); await page.keyboard.press('Control+Alt+Shift+F12');
-  await expect(record.locator('kbd')).toHaveText(['⌃', '⌥', '⇧', 'F12']);
-  await record.click(); await page.keyboard.press('Escape');
-  await expect(record.locator('kbd')).toHaveText(['⌃', '⌥', '⇧', 'F12']);
-  await expect(page.locator('.hub-caption')).toHaveText('Settings');
-  // The recorder takes Command-Backspace instead of going Back, and refuses it by name.
-  await record.click(); await page.keyboard.press('Meta+Backspace');
-  await expect(page.locator('.hub-view').getByText('Reserved for Back', { exact: true })).toBeVisible();
-  await expect(record.locator('kbd')).toHaveText(['⌃', '⌥', '⇧', 'F12']);
-  await expect(page.locator('.hub-caption')).toHaveText('Settings');
-  await page.getByRole('button', { name: 'Back', exact: true }).click();
-  await search.fill('switch character');
-  await expect(page.locator('.hub-row')).toContainText('⌃⌥⇧F12');
-});
-
 
 test('Hub text arrows cannot execute an action or clear a query', async ({ page }) => {
   await page.goto('/?hub');

@@ -7,7 +7,6 @@ import ShortcutSetting from "./ShortcutSetting.vue";
 function api() {
   return {
     setMasterEnabled: vi.fn(), setFeature: vi.fn(), restartToApply: vi.fn(),
-    restoreDefaultShortcut: vi.fn(),
     captureShortcut: vi.fn(async () => ({ status: "captured" as const, binding: { key: "j", shift: false, option: false } })),
     replaceShortcut: vi.fn(async () => undefined),
   } satisfies LauncherNativeApi["tools"];

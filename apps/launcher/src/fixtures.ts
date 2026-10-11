@@ -25,6 +25,7 @@ export const fixtureSnapshot: LauncherSnapshot = {
     },
   },
   appUpdate: { phase: "idle", currentVersion: "2026.8.10" },
+  extendedMemory: null,
   tools: {
     configured: false,
     loaded: false,
