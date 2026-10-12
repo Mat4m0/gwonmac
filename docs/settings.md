@@ -32,7 +32,7 @@ is briefly highlighted. Hub search does not change a setting in place.
 3. **Changes save right away.** A change applies in every open game window. The
    status line names the saved setting and when it applies. A failed save keeps
    the change on screen and offers **Retry** and **Revert**.
-4. **Settings are found by their words.** Launcher Settings search (⌘F) and Hub
+4. **Settings are found by their words.** Search on the Settings page (⌘F) and Hub
    search both use the catalogue.
 5. **A game window cannot reach launcher-only actions.** Updates, game files,
    texture packs, reset and logs run only from the launcher. The Hub page never
@@ -60,8 +60,8 @@ is briefly highlighted. Hub search does not change a setting in place.
 
 ## The tree
 
-Settings has two groups. The launcher shows both. The Hub shows only the
-in-game group.
+Settings has two groups. The launcher shows both. The Hub lists every
+section but edits only the in-game ones; the others (↗) open the launcher.
 
 | Group | Section | In the Hub |
 |---|---|---|
