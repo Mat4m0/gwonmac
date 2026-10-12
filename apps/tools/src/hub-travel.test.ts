@@ -171,3 +171,27 @@ it('offers Progress once the reader publishes, opens a goal by its word and trav
     unmount();
   } finally { target.remove(); travel.dispose(); }
 });
+
+it('keeps Progress hidden until the reader publishes a ready state, then through a map load', () => {
+  const travel = createHubTravel(createDemoTravelHost(), {showView: vi.fn(), showRows: vi.fn(), attach: vi.fn(), close: vi.fn(), notify: vi.fn()}, async (_place, leave) => leave());
+  try {
+    // A client without the certified reader only ever publishes "waiting".
+    travel.updateProgress({status: 'waiting', reason: 'unavailable'});
+    expect(travel.source.search('progress').map(row => row.id)).not.toContain('progress');
+    expect(travel.source.lookup?.('progress')).toBeUndefined();
+    travel.updateProgress(progressFixture(55));
+    travel.updateProgress({status: 'waiting', reason: 'loading'});
+    expect(travel.source.search('progress').map(row => row.id)).toContain('progress');
+  } finally {travel.dispose();}
+});
+
+it('marks Progress goal rows unavailable with the reason Travel gives', () => {
+  const host = createDemoTravelHost();
+  const travel = createHubTravel(host, {showView: vi.fn(), showRows: vi.fn(), attach: vi.fn(), close: vi.fn(), notify: vi.fn()}, async (_place, leave) => leave());
+  try {
+    travel.updateProgress(progressFixture(55));
+    expect(travel.source.search('vq').find(row => row.id === 'progress:vanquisher')?.unavailable).toBeUndefined();
+    travel.update({status: 'waiting', reason: 'loading'});
+    expect(travel.source.search('vq').find(row => row.id === 'progress:vanquisher')?.unavailable).toBe('Travel is unavailable while a map is loading');
+  } finally {travel.dispose();}
+});

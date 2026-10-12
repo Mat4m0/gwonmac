@@ -8,7 +8,7 @@ import { guildWarsMapName } from '../../../src/shared/guild-wars-map-names';
 import { travelContextRefusal, travelDestinationAvailability } from '../../../src/shared/travel-command';
 import TravelPalette from './components/TravelPalette.vue';
 import ProgressView, { type ProgressViewResume } from './components/ProgressView.vue';
-import { PROGRESS_GOAL_WORDS, currentProgressCampaign, progressGoals, type GameProgressState, type ProgressCampaignId, type ProgressGoalId } from '../../../src/shared/game-progress';
+import { PROGRESS_GOAL_WORDS, currentProgressCampaign, progressGoalLeft, progressGoals, type GameProgressState, type ProgressCampaignId, type ProgressGoalId } from '../../../src/shared/game-progress';
 import type { TravelHost } from './travel-host';
 import { useTravelPreferences } from './travel-preferences';
 
@@ -30,7 +30,7 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
   const progress = shallowRef<GameProgressState>({ status: 'waiting', reason: 'unavailable' });
   /** The goal last chosen per campaign; memory only, so a restart opens on the first goal. */
   const progressGoalChoice = reactive(new Map<ProgressCampaignId, ProgressGoalId>());
-  /** A client without the certified progress reader never publishes, so its Hub has no Progress row. */
+  /** The Progress row appears once the reader has published a ready state and stays through map loads; a client without the reader only publishes "waiting". */
   let progressReader = false;
   const listeners = new Set<() => void>();
   const refresh = () => { for (const listener of listeners) listener(); };
@@ -75,7 +75,7 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
     let resume: ProgressViewResume | undefined = start ? { ...start, query: '', showFinished: false } : undefined;
     return (target, back, footer) => {
       const app = createApp({ setup: () => () => h(ProgressView, {
-        progress, travelState: host.state, footer, hubParent: !!hub.hasParent, goalChoice: progressGoalChoice, travel,
+        progress, travelState: host.state, footer, goalChoice: progressGoalChoice, travel,
         ...(resume ? { resume } : {}), onRemember: (state: ProgressViewResume) => { resume = state; }, onClose: back,
         onTravelled: () => hub.close(),
         showInTravel: (name: string) => hub.showView('Travel', page(name), available, 'travel'),
@@ -127,7 +127,7 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
     const inputs = { progress: state, unlockedMapWords: travelState.status === 'ready' ? travelState.unlockedMapWords : null };
     return progressGoals(campaign, inputs).flatMap(goal => {
       const row: HubRow = { id: `progress:${goal.id}`, title: goal.name, aliases: PROGRESS_GOAL_WORDS[goal.id],
-        detail: goal.percent !== null ? `${goal.percent.toFixed(1)}% explored` : goal.done === goal.total ? 'Complete' : `${goal.total - goal.done} ${goal.unit ?? ''} left`,
+        detail: goal.percent !== null ? `${goal.percent.toFixed(1)}% explored` : progressGoalLeft(goal, true),
         group: 'Progress', action: 'Show progress', navigate: () => openProgress({ campaign, goal: goal.id }), run: () => openProgress({ campaign, goal: goal.id }) };
       return hubTier(row, query) === null ? [] : [row];
     });
@@ -201,9 +201,9 @@ export function createHubTravel(host: TravelHost, hub: HubPresenter<HTMLElement>
    * The Travel row stays through a map load, character select or PvP and says why it waits, so a
    * fresh Home never starts on it and Enter never runs a dead row (HUB-135).
    */
-  const withReason = (row: HubRow): HubRow => (row.id === 'travel' || row.id === 'progress') && host.unavailable ? { ...row, unavailable: host.unavailable } : row;
+  const withReason = (row: HubRow): HubRow => (row.id === 'travel' || row.id.startsWith('progress')) && host.unavailable ? { ...row, unavailable: host.unavailable } : row;
   return { source: { ...source, search: (query: string) => source.search(query).map(withReason) }, open, page, travel, get active() { return active; },
-    update: host.updateGameState, updateFriends: host.updateFriends, updateProgress(next: GameProgressState) { progressReader = true; progress.value = next; },
+    update: host.updateGameState, updateFriends: host.updateFriends, updateProgress(next: GameProgressState) { if (next.status === 'ready') progressReader = true; progress.value = next; },
     dispose() { disposed = true; stop(); stopNotice(); listeners.clear(); host.dispose(); },
   };
 }

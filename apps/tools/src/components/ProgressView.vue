@@ -12,6 +12,7 @@ import {
   PROGRESS_CAMPAIGNS,
   PROGRESS_GOAL_WORDS,
   currentProgressCampaign,
+  progressGoalLeft,
   progressGoals,
   progressTravelTarget,
   type GameProgressState,
@@ -34,7 +35,6 @@ const props = defineProps<{
   progress: Ref<GameProgressState>;
   travelState: Ref<TravelGameState>;
   footer: HubViewFooter;
-  hubParent: boolean;
   resume?: ProgressViewResume;
   /** Goal last chosen per campaign, a reactive map the host keeps while the game runs. */
   goalChoice: Map<ProgressCampaignId, ProgressGoalId>;
@@ -49,6 +49,7 @@ const query = ref(props.resume?.query ?? "");
 const showFinished = ref(props.resume?.showFinished ?? false);
 const active = ref(0);
 const feedback = ref("");
+let travelling = false;
 
 const ready = computed(() => {
   const value = props.progress.value;
@@ -76,7 +77,6 @@ function chooseGoal(id: ProgressGoalId): void {
   props.goalChoice.set(campaign.value, id);
   active.value = 0;
 }
-const selectedGoal = goal;
 function chooseCampaign(id: ProgressCampaignId): void {
   campaignChosen = true;
   campaign.value = id;
@@ -93,7 +93,7 @@ const rows = computed<readonly Row[]>(() => {
   const current = inputs.value;
   if (current === null) return [];
   if (!hasQuery.value) {
-    const chosen = selectedGoal.value;
+    const chosen = goal.value;
     if (chosen === null) return [];
     // One heading per region: regions keep the order they first appear in.
     const regions = [...new Set(chosen.entries.map((entry) => entry.item.region))];
@@ -123,6 +123,7 @@ const rows = computed<readonly Row[]>(() => {
 });
 watch(rows, (next) => { if (active.value >= next.length) active.value = Math.max(0, next.length - 1); });
 watch(query, () => { active.value = 0; });
+watch(active, () => { feedback.value = ""; });
 const activeRow = computed(() => rows.value[active.value] ?? null);
 
 /** Region headings sit above the first row of each region. */
@@ -148,7 +149,8 @@ const primaryLabel = computed(() => {
 });
 const primaryDisabled = computed(() => {
   const row = activeRow.value;
-  return row !== null && row.kind === "entry" && (target.value === null || target.value.here);
+  if (row === null) return hasQuery.value;
+  return row.kind === "entry" && (target.value === null || target.value.here);
 });
 async function runActive(): Promise<void> {
   const row = activeRow.value;
@@ -159,13 +161,15 @@ async function runActive(): Promise<void> {
     return;
   }
   const to = target.value;
-  if (to === null || to.here) return;
+  if (to === null || to.here || travelling) return;
+  travelling = true;
+  feedback.value = "";
   try {
     await props.travel(to.mapId);
     emit("travelled");
   } catch (error) {
     feedback.value = error instanceof Error ? error.message : "Travel did not start.";
-  }
+  } finally { travelling = false; }
 }
 watch([primaryLabel, primaryDisabled], () => {
   props.footer.primary({ label: primaryLabel.value, disabled: primaryDisabled.value, run: runActive });
@@ -194,8 +198,7 @@ const percent = (goal: ProgressGoal) => goal.percent ?? (goal.total === 0 ? 0 : 
 const goalCount = (goal: ProgressGoal) => goal.id === "cartographer"
   ? goal.percent === null ? "Unknown" : `${goal.percent.toFixed(1)}%`
   : `${goal.done} / ${goal.total}`;
-const goalLeft = (goal: ProgressGoal) => goal.id === "cartographer" || goal.unit === null ? ""
-  : goal.done === goal.total ? "Complete" : `${goal.total - goal.done} left`;
+const goalLeft = (goal: ProgressGoal) => progressGoalLeft(goal);
 const cartographer = computed(() => PROGRESS_CAMPAIGNS.flatMap((each) => {
   if (each.cartographer === null || each.continent === null) return [];
   return [{ continent: each.continent, percent: ready.value?.cartographer?.[each.cartographer] ?? null }];
@@ -218,7 +221,7 @@ async function moveActive(step: number): Promise<void> {
 }
 function stepGoal(direction: number): void {
   const list = goals.value;
-  const index = list.findIndex((candidate) => candidate.id === selectedGoal.value?.id);
+  const index = list.findIndex((candidate) => candidate.id === goal.value?.id);
   const next = list[Math.max(0, Math.min(list.length - 1, index + direction))];
   if (next) chooseGoal(next.id);
 }
@@ -249,7 +252,7 @@ function onKeydown(event: KeyboardEvent): void {
 }
 
 onBeforeUnmount(() => {
-  emit("remember", { campaign: campaign.value, goal: selectedGoal.value?.id ?? null, query: query.value, showFinished: showFinished.value });
+  emit("remember", { campaign: campaign.value, goal: goal.value?.id ?? null, query: query.value, showFinished: showFinished.value });
   props.footer.secondary(null);
 });
 void nextTick(() => input.value?.focus());
@@ -265,13 +268,13 @@ void nextTick(() => input.value?.focus());
     <p v-else-if="unknownText" class="ui-empty progress-empty" role="status"><strong>Progress</strong><span>{{ unknownText }}</span></p>
     <template v-else>
       <div v-if="!hasQuery" class="progress-campaigns ui-segment" role="group" aria-label="Campaign">
-        <button v-for="each in PROGRESS_CAMPAIGNS" :key="each.id" type="button" :aria-pressed="each.id === campaign" @click="chooseCampaign(each.id)">
+        <button v-for="each in PROGRESS_CAMPAIGNS" :key="each.id" type="button" :aria-pressed="each.id === campaign" @mousedown.prevent @click="chooseCampaign(each.id)">
           {{ each.name }}<span v-if="each.id === here" class="progress-here" title="You are in this campaign" aria-label="(you are here)"></span>
         </button>
       </div>
 
       <div v-if="!hasQuery" class="progress-goals" role="tablist" aria-label="Goal">
-        <button v-for="each in goals" :key="each.id" type="button" role="tab" class="progress-goal" :class="{ 'progress-goal-minor': each.minor }" :aria-selected="each.id === selectedGoal?.id" tabindex="-1" @mousedown.prevent @click="chooseGoal(each.id)">
+        <button v-for="each in goals" :key="each.id" type="button" role="tab" class="progress-goal" :class="{ 'progress-goal-minor': each.minor }" :aria-selected="each.id === goal?.id" tabindex="-1" @mousedown.prevent @click="chooseGoal(each.id)">
           <span class="progress-goal-name" :title="each.name">{{ shortName(each) }}</span>
           <span class="progress-goal-count">{{ goalCount(each) }}</span>
           <small>{{ goalLeft(each) }}</small>
@@ -279,12 +282,12 @@ void nextTick(() => input.value?.focus());
         </button>
       </div>
 
-      <div v-if="!hasQuery && selectedGoal" class="progress-rule">
-        <p>{{ selectedGoal.rule }}</p>
-        <label v-if="selectedGoal.total > 0" class="ui-check"><input v-model="showFinished" type="checkbox"> Show finished</label>
+      <div v-if="!hasQuery && goal" class="progress-rule">
+        <p>{{ goal.rule }}</p>
+        <label v-if="goal.total > 0" class="ui-check"><input v-model="showFinished" type="checkbox" @mousedown.prevent> Show finished</label>
       </div>
 
-      <div v-if="!hasQuery && selectedGoal?.id === 'cartographer'" class="progress-cartographer">
+      <div v-if="!hasQuery && goal?.id === 'cartographer'" class="progress-cartographer">
         <div v-for="each in cartographer" :key="each.continent" class="progress-carto-row">
           <span>{{ each.continent }}</span>
           <span class="ui-progress" aria-hidden="true"><span class="ui-progress-fill" :style="{ width: `${each.percent ?? 0}%` }"></span></span>
@@ -308,10 +311,10 @@ void nextTick(() => input.value?.focus());
           </template>
         </div>
         <p v-else-if="hasQuery" class="ui-empty progress-empty" role="status"><strong>No match</strong><span>No mission, area or outpost is called “{{ query }}”.</span></p>
-        <p v-else class="ui-empty progress-empty" role="status"><strong>Nothing left here</strong><span>{{ selectedGoal?.name }} is complete for this character.</span></p>
+        <p v-else class="ui-empty progress-empty" role="status"><strong>Nothing left here</strong><span>{{ goal?.name }} is complete for this character.</span></p>
       </template>
     </template>
     <span class="ui-sr-only" role="status" aria-live="polite">{{ feedback }}</span>
-    <p v-if="feedback" class="ui-status-line" data-tone="warning">{{ feedback }}</p>
+    <p v-if="feedback" class="ui-status-line" data-tone="warning" aria-hidden="true">{{ feedback }}</p>
   </section>
 </template>

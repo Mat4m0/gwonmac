@@ -356,3 +356,13 @@ export function progressTravelTarget(item: ProgressItem, inputs: ProgressInputs)
     mapId: best.mapId, name: best.name, nearest: true, here: best.mapId === current,
   });
 }
+
+/**
+ * What a goal still needs, in words: empty when the goal has no count (a percent or no unit),
+ * "Complete" when nothing is left. `withUnit` names what is left ("3 missions left").
+ */
+export function progressGoalLeft(goal: ProgressGoal, withUnit = false): string {
+  if (goal.percent !== null || goal.unit === null || goal.total === 0) return "";
+  if (goal.done === goal.total) return "Complete";
+  return `${goal.total - goal.done}${withUnit ? ` ${goal.unit}` : ""} left`;
+}
