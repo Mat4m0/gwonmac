@@ -446,8 +446,9 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
   const remind = (events: readonly ReminderEvent[]) => {
     const options = reminderOptions();
     const wanted = events.filter(event => wantsReminder(options, event));
-    for (const event of wanted) chatPrint.print(`${CHAT_PRINT_PREFIX}${reminderLine(event)}`);
-    if (wanted.length > 0 && snapshot().settings.reminderSound) reminderChime.play();
+    let queued = false;
+    for (const event of wanted) queued = chatPrint.print(`${CHAT_PRINT_PREFIX}${reminderLine(event)}`) || queued;
+    if (queued && snapshot().settings.reminderSound) reminderChime.play();
   };
   const unsubscribeReminders = [
     playerEffects.subscribe(state => {
