@@ -46,13 +46,16 @@ export type EffectRecord = Readonly<{ skillId: number; durationMs: number; appli
 export type EffectObservation =
   | Readonly<{ status: "ready"; gameTimer: number; effects: readonly EffectRecord[] }>
   | Readonly<{ status: "waiting" }>;
-type TrackedEffect = Readonly<{ appliedAtGameMs: number; durationMs: number; warned: boolean; ended: boolean }>;
+type TrackedEffect = Readonly<{ appliedAtGameMs: number; durationMs: number; warned: boolean; ended: boolean; afterGap: boolean }>;
 export type ConsumableWatch = ReadonlyMap<number, TrackedEffect>;
 
 /** Folds one observation; only the longest-lasting instance of each consumable counts. */
 export function observeConsumables(watch: ConsumableWatch, observation: EffectObservation):
   { watch: ConsumableWatch; events: readonly ReminderEvent[] } {
-  if (observation.status !== "ready") return { watch, events: [] };
+  // A loading screen hides what happened meanwhile: remember the gap so the next snapshot only re-baselines.
+  if (observation.status !== "ready") {
+    return { watch: new Map([...watch].map(([skillId, tracked]) => [skillId, { ...tracked, afterGap: true }])), events: [] };
+  }
   const best = new Map<number, EffectRecord & { remainingMs: number }>();
   for (const effect of observation.effects) {
     if (!CONSUMABLE_EFFECTS.has(effect.skillId) || effect.durationMs === 0 || effect.durationMs >= 3_600_000) continue;
@@ -69,12 +72,13 @@ export function observeConsumables(watch: ConsumableWatch, observation: EffectOb
     const same = previous && previous.appliedAtGameMs === effect.appliedAtGameMs && previous.durationMs === effect.durationMs;
     let warned = same ? previous.warned : false;
     let ended = same ? previous.ended : false;
-    if (effect.remainingMs === 0 && !ended) { event("ended", skillId, 0); ended = warned = true; }
+    // Only an effect seen live before can be reported as run out; one first seen already expired is stale.
+    if (effect.remainingMs === 0 && !ended) { if (previous) event("ended", skillId, 0); ended = warned = true; }
     else if (effect.remainingMs <= REMINDER_WARNING_MS && !warned) { event("warning", skillId, effect.remainingMs); warned = true; }
-    next.set(skillId, { appliedAtGameMs: effect.appliedAtGameMs, durationMs: effect.durationMs, warned, ended });
+    next.set(skillId, { appliedAtGameMs: effect.appliedAtGameMs, durationMs: effect.durationMs, warned, ended, afterGap: false });
   }
   for (const [skillId, tracked] of watch) {
-    if (best.has(skillId) || tracked.ended) continue;
+    if (best.has(skillId) || tracked.ended || tracked.afterGap) continue;
     if (remaining(observation.gameTimer, tracked.appliedAtGameMs, tracked.durationMs) <= RAN_OUT_TOLERANCE_MS) event("ended", skillId, 0);
   }
   return { watch: next, events };
@@ -83,7 +87,7 @@ export function observeConsumables(watch: ConsumableWatch, observation: EffectOb
 export type AlcoholObservation =
   | Readonly<{ status: "ready"; gameTimer: number; remainingMs: number }>
   | Readonly<{ status: "waiting" }>;
-export type AlcoholWatch = Readonly<{ gameTimer: number; remainingMs: number; warned: boolean }> | null;
+export type AlcoholWatch = Readonly<{ gameTimer: number; remainingMs: number; warned: boolean; afterGap?: boolean }> | null;
 
 /**
  * The alcohol time is the kernel's estimate (one minute per level), so its
@@ -91,13 +95,13 @@ export type AlcoholWatch = Readonly<{ gameTimer: number; remainingMs: number; wa
  */
 export function observeAlcohol(watch: AlcoholWatch, observation: AlcoholObservation):
   { watch: AlcoholWatch; events: readonly ReminderEvent[] } {
-  if (observation.status !== "ready") return { watch, events: [] };
+  if (observation.status !== "ready") return { watch: watch && { ...watch, afterGap: true }, events: [] };
   const left = observation.remainingMs;
   const event = (kind: ReminderEvent["kind"], remainingMs: number): ReminderEvent =>
     ({ kind, group: "alcohol", name: "Alcohol", remainingMs });
   if (left === 0) {
     // A cleared estimate (character change, logout) is not wearing off.
-    const ranOut = watch !== null
+    const ranOut = watch !== null && !watch.afterGap
       && remaining(observation.gameTimer, watch.gameTimer, watch.remainingMs) <= RAN_OUT_TOLERANCE_MS;
     return { watch: null, events: ranOut ? [event("ended", 0)] : [] };
   }

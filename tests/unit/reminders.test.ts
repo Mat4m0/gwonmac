@@ -59,6 +59,20 @@ test("refreshing restarts reminders; early removal and loading stay quiet", () =
   assert.deepEqual(run(at(THIRTY - 30_000, [CELERITY, 0], [CELERITY, THIRTY - 40_000])), [], "a fresher instance keeps it alive");
 });
 
+test("an effect removed during a loading screen is re-baselined, never reported as run out", () => {
+  const loadThenAbsent = [at(THIRTY - 10_000, [CELERITY, 0]), { status: "waiting" } as const, at(THIRTY + 5_000)];
+  assert.deepEqual(run(...loadThenAbsent), ["warning:Essence of Celerity"], "gone after the gap: no has-run-out line");
+  assert.deepEqual(run(...loadThenAbsent, at(THIRTY + 6_000)), ["warning:Essence of Celerity"]);
+  assert.deepEqual(run(at(THIRTY - 10_000, [CELERITY, 0]), { status: "waiting" }, at(THIRTY - 5_000, [CELERITY, 0]),
+    at(THIRTY + 100, [CELERITY, 0])), ["warning:Essence of Celerity", "ended:Essence of Celerity"],
+    "still present after the gap: no duplicate warning, run-out still reported");
+});
+
+test("an effect first seen already expired is not reported as run out", () => {
+  assert.deepEqual(run(at(THIRTY + 5_000, [CELERITY, 0])), [], "stale on first sight");
+  assert.deepEqual(run(at(THIRTY + 5_000, [CELERITY, 0]), at(THIRTY + 6_000, [CELERITY, 0])), []);
+});
+
 test("alcohol warns about its estimate, re-arms after another drink, and ignores a cleared estimate", () => {
   assert.deepEqual(runAlcohol(drink(0, 3 * MINUTE), drink(2 * MINUTE, MINUTE), drink(2 * MINUTE + 59_000, 1_000), drink(3 * MINUTE, 0)),
     ["Alcohol wears off in about 1 minute.", "Alcohol has worn off."]);
@@ -76,4 +90,10 @@ test("options pick groups and timing; lines read plainly", () => {
   assert.equal(cupcake.group, "pcons");
   assert.equal(reminderLine(cupcake), "Birthday Cupcake ends in 13 seconds.");
   assert.equal(reminderLine({ kind: "ended", group: "cons", name: "Grail of Might", remainingMs: 0 }), "Grail of Might has run out.");
+});
+
+test("alcohol cleared during a loading screen does not report worn off", () => {
+  assert.deepEqual(runAlcohol(drink(0, 10_000), { status: "waiting" }, drink(20_000, 0)), ["Alcohol wears off in about 10 seconds."]);
+  assert.deepEqual(runAlcohol(drink(0, 3 * MINUTE), { status: "waiting" }, drink(MINUTE, 2 * MINUTE), drink(3 * MINUTE, 0)),
+    ["Alcohol has worn off."], "a gap followed by a live reading restores run-out reporting");
 });
