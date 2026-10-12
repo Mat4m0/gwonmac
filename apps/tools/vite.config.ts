@@ -24,6 +24,9 @@ export default defineConfig(({ mode }) => {
   return {
     base: "./",
     plugins: [vue(), hubSettingsModule],
+    // The Settings module loads on demand, so Vite's start-up scan would miss its dependencies and
+    // reload the page mid-test when it found them; scan it with the page.
+    optimizeDeps: { entries: ["index.html", settingsEntry] },
     // Library mode preserves dependency environment checks unless they are
     // defined explicitly. The sandboxed renderer intentionally has no Node
     // `process` global.
