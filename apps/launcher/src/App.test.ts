@@ -89,6 +89,8 @@ describe("unified launcher shell", () => {
     await home.findAll("button").find(button => button.text() === "Customize")!.trigger("click");
     await flushPromises();
     expect(home.get(".settings-fields h1").text()).toBe("Home screen");
+    // The Settings grid has no row for the funding banner.
+    expect(home.find(".funding-banner").exists()).toBe(false);
     home.unmount();
   });
 

@@ -26,7 +26,7 @@ test('Hub searches, restores the query after actions, and hands off explicitly',
   await page.keyboard.press('Escape');
   await search.press('Enter');
   await expect(dialog).toBeVisible();
-  await expect(page.getByRole('complementary', { name: 'Settings sections' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Settings sections' })).toBeVisible();
   // A mounted Settings page has only Done; the Actions slot stays disabled (HUB-043).
   await expect(page.getByRole('button', { name: 'Actions', exact: true })).toBeDisabled();
   await expect(page.locator('#app')).not.toHaveAttribute('data-action', 'Settings');
@@ -664,7 +664,7 @@ test('in-game settings stay in Hub and Show Launcher remains explicit', async ({
   const search = page.locator('.hub-search input');
   await search.fill('settings'); await search.press('Enter');
   await page.getByRole('checkbox', { name: 'Whispers', exact: true }).uncheck();
-  await expect(page.getByRole('complementary', { name: 'Settings sections' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Settings sections' })).toBeVisible();
   await expect(page.getByRole('checkbox', { name: 'Whispers', exact: true })).not.toBeChecked();
   await page.getByRole('button', { name: 'Back', exact: true }).click();
   // The Whispers tool leaves the Hub; its Tools setting stays findable so it can be turned back on.

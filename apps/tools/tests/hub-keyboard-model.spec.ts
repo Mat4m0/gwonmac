@@ -310,6 +310,66 @@ test('Characters: Escape during composition keeps the query (HUB-140)', async ({
   await expect(page.locator('.hub-caption')).toHaveText('Characters');
 });
 
+test('Settings sections: a click keeps the keyboard on the button, ↑ ↓ move without wrapping (HUB-054)', async ({ page }) => {
+  await openHub(page);
+  await hubSearch(page).fill('settings'); await page.keyboard.press('Enter');
+  const sections = page.getByRole('navigation', { name: 'Settings sections' });
+  // A section that opens the launcher also names that, so match with or without that.
+  const section = (name: string) => sections.getByRole('button', { name: new RegExp(`^${name}( opens the launcher)?$`) });
+  const heading = page.locator('.settings-fields h1');
+  await section('Appearance').click();
+  await expect(heading).toHaveText('Appearance');
+  await expect(section('Appearance')).toBeFocused();
+  await section('Tools').focus();
+  await page.keyboard.press('ArrowUp');
+  await expect(section('Tools')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(section('Maps')).toBeFocused();
+  await expect(heading).toHaveText('Maps');
+  await page.keyboard.press('ArrowDown'); await page.keyboard.press('ArrowDown');
+  await expect(section('Game')).toBeFocused();
+  await expect(heading).toHaveText('Game');
+  // The launcher's sections are reached by the same keys but only open the launcher when chosen.
+  await page.keyboard.press('ArrowDown');
+  await expect(section('Texture packs')).toBeFocused();
+  await expect(heading).toHaveText('Game');
+  await page.keyboard.press('End');
+  await expect(section('Advanced')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(section('Advanced')).toBeFocused();
+});
+
+test('Escape at a shortcut conflict cancels the prompt and returns to its shortcut (HUB-053)', async ({ page }) => {
+  await openHub(page);
+  await hubSearch(page).fill('settings'); await page.keyboard.press('Enter');
+  const record = page.getByRole('button', { name: 'Change Travel shortcut', exact: true });
+  await record.click();
+  await page.keyboard.press('Meta+e');
+  const row = page.locator('[data-setting="tool:quick-travel"]');
+  await expect(row).toContainText('Already used by Switch Character');
+  await expect(row.getByRole('button', { name: 'Replace shortcut' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(row.getByRole('button', { name: 'Replace shortcut' })).toHaveCount(0);
+  await expect(row).toContainText('Shortcut change cancelled.');
+  await expect(record).toBeFocused();
+  await expect(page.locator('.hub-caption')).toHaveText('Settings');
+});
+
+test('closing the Hub with the mouse while a shortcut records gives the next keys back to the game (HUB-038)', async ({ page }) => {
+  await openHub(page);
+  await hubSearch(page).fill('settings'); await page.keyboard.press('Enter');
+  const record = page.getByRole('button', { name: 'Change Travel shortcut', exact: true });
+  await record.click();
+  await expect(record).toContainText('Press keys…');
+  await page.getByRole('button', { name: 'Close Hub', exact: true }).click();
+  await expect(page.locator('#hub')).toBeHidden();
+  await page.evaluate(() => window.gwFixtureCanvas?.clear());
+  await page.keyboard.press('w');
+  expect(await canvasKeys(page)).toBe(2);
+  await page.keyboard.press('Meta+r');
+  await expect(hubSearch(page)).toBeFocused();
+});
+
 test('Hub Back follows the named key and composition never navigates (KEY-24)', async ({ page }) => {
   await openHub(page);
   const search = hubSearch(page);

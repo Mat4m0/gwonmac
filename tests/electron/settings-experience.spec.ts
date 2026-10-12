@@ -25,7 +25,7 @@ test("failed map edits remain visibly unsaved and can be retried or reverted at 
     });
     const hex = settings.getByRole("textbox", { name: "Shaded area color hex" });
     await hex.fill("112233"); await hex.press("Tab");
-    const feedback = settings.locator(".settings-status[role=alert]");
+    const feedback = settings.locator(".settings-status [role=alert]");
     await expect(feedback).toContainText("The change shown is not saved");
     expect(await feedback.ariaSnapshot()).toContain("could not be saved");
     expect(await feedback.evaluate(el => { const r = el.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; })).toBe(true);
@@ -69,7 +69,8 @@ test("settings navigation has one scroll owner and compact controls at supported
         await settings.locator(".settings-page aside").getByRole("button", { name: section, exact: true }).click();
         await expect.poll(() => settings.locator(".settings-content").evaluate(el => el.scrollTop)).toBe(0);
         const heading = settings.locator(".settings-content h1");
-        expect(await heading.evaluate(el => document.activeElement === el)).toBe(true);
+        // A click on a section keeps the keyboard on its button; only a programmatic open moves it to the heading.
+        await expect(settings.locator(".settings-page aside").getByRole("button", { name: section, exact: true })).toBeFocused();
         expect(await heading.evaluate(el => { const r = el.getBoundingClientRect(); const p = el.closest(".settings-content")!.getBoundingClientRect(); return r.top >= p.top && r.bottom <= p.bottom; })).toBe(true);
         expect(await settings.locator("main").evaluate(el => el.scrollHeight > el.clientHeight + 1)).toBe(false);
         if (section === "Maps" || section === "Tools") {

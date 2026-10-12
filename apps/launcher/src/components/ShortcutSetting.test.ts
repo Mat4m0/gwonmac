@@ -51,4 +51,15 @@ describe("Shortcut setting", () => {
     await flushPromises();
     expect(tools.replaceShortcut).not.toHaveBeenCalled();
   });
+  it("cancels a replace prompt with Escape and returns the keyboard to the shortcut", async () => {
+    const tools = api();
+    const wrapper = mount(ShortcutSetting, { attachTo: document.body, props: { action: "character.switch", shortcuts: { ...DEFAULT_SHORTCUTS, "character.switch": null, "cartography.grid.toggle": DEFAULT_SHORTCUTS["character.switch"] }, api: tools } });
+    await wrapper.get('[aria-label="Restore Switch Character default shortcut"]').trigger("click");
+    expect(wrapper.text()).toContain("Replace shortcut");
+    await wrapper.get(".shortcut-setting").trigger("keydown", { key: "Escape" });
+    expect(wrapper.text()).not.toContain("Replace shortcut");
+    expect(tools.replaceShortcut).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(wrapper.get(".shortcut-value").element);
+    wrapper.unmount();
+  });
 });

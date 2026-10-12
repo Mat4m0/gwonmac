@@ -82,17 +82,19 @@ describe("Settings page", () => {
 
   it("retains a refused save for an exact retry and locks conflicting edits", async () => {
     const update = vi.fn().mockRejectedValueOnce(new Error("disk")).mockResolvedValueOnce(undefined);
-    const wrapper = mountView({ settings: { update } }, { target: { section: "updates" } });
+    const wrapper = mountView({ settings: { update } }, { target: { section: "updates" }, attach: true });
     await flushPromises();
     await wrapper.get('[data-setting="autoCheckUpdates"] input').setValue(false);
     await flushPromises();
-    expect(wrapper.get('.settings-status[role="alert"]').text()).toContain("change shown is not saved");
+    expect(wrapper.get('.settings-status [role="alert"]').text()).toContain("change shown is not saved");
+    expect(wrapper.get('.settings-status [role="status"]').text()).toBe("");
+    expect(document.activeElement).toBe(wrapper.findAll(".save-actions button")[0]!.element);
     expect(wrapper.get(".settings-fields").attributes("disabled")).toBeDefined();
     await wrapper.findAll(".save-actions button").find(button => button.text() === "Retry")!.trigger("click");
     await flushPromises();
     expect(update.mock.calls).toEqual([[{ autoCheckUpdates: false }], [{ autoCheckUpdates: false }]]);
     expect(wrapper.get(".settings-fields").attributes("disabled")).toBeUndefined();
-    expect(wrapper.find('.settings-status[role="alert"]').exists()).toBe(false);
+    expect(wrapper.find('.settings-status [role="alert"]').exists()).toBe(false);
     wrapper.unmount();
   });
 
@@ -107,7 +109,7 @@ describe("Settings page", () => {
     await flushPromises();
     expect(wrapper.get<HTMLInputElement>('[data-setting="autoCheckUpdates"] input').element.checked).toBe(original);
     expect(update).toHaveBeenCalledTimes(1);
-    expect(wrapper.find('.settings-status[role="alert"]').exists()).toBe(false);
+    expect(wrapper.find('.settings-status [role="alert"]').exists()).toBe(false);
     wrapper.unmount();
   });
 
@@ -189,5 +191,50 @@ describe("Settings page", () => {
     await openSection(wrapper, "Game files");
     expect(info).toHaveBeenCalledOnce();
     expect(wrapper.text()).toContain("1.0 GB of 2.0 GB verified");
+  });
+
+  it("keeps the keyboard on a clicked section button, moves with the arrow keys without wrapping, and forgets the saved note", async () => {
+    const update = vi.fn(async () => undefined);
+    const wrapper = mountView({ settings: { update } }, { target: { section: "game" }, attach: true });
+    await flushPromises();
+    await wrapper.get('[data-setting="autoRelogAfterReload"] input').setValue(true);
+    await flushPromises();
+    expect(wrapper.get(".settings-status").text()).toContain("Saved:");
+    const nav = wrapper.get('nav[aria-label="Settings sections"]');
+    const button = (label: string) => nav.findAll("button").find(candidate => candidate.text() === label)!;
+    button("Maps").element.focus();
+    await button("Maps").trigger("click");
+    await flushPromises();
+    expect(wrapper.get(".settings-fields h1").text()).toBe("Maps");
+    expect(document.activeElement).toBe(button("Maps").element);
+    expect(wrapper.get(".settings-status").text()).not.toContain("Saved:");
+    await button("Maps").trigger("keydown", { key: "ArrowUp" });
+    await flushPromises();
+    expect(wrapper.get(".settings-fields h1").text()).toBe("Tools");
+    expect(document.activeElement).toBe(button("Tools").element);
+    await button("Tools").trigger("keydown", { key: "ArrowUp" });
+    expect(document.activeElement).toBe(button("Tools").element);
+    wrapper.unmount();
+  });
+
+  it("names each tool's Options disclosure by its tool", async () => {
+    const wrapper = mountView({}, { snapshot: allToolsOn });
+    await flushPromises();
+    const names = wrapper.findAll("details.tool-options > summary").map(summary => summary.attributes("aria-label"));
+    expect(names.length).toBeGreaterThan(1);
+    expect(new Set(names).size).toBe(names.length);
+    expect(names.every(name => name?.endsWith(" options"))).toBe(true);
+    wrapper.unmount();
+  });
+
+  it("in the Hub, says so when the launcher cannot be opened and shows this session's memory state", async () => {
+    const openInLauncher = vi.fn(async () => { throw new Error("ipc"); });
+    const { tools, shortcuts } = fixtureSnapshot;
+    const extendedMemory = { requestedAtLaunch: true, status: "standard", effectiveCapBytes: 2 ** 31, fallbackReason: "unsupported" } as unknown as NonNullable<LauncherSnapshot["extendedMemory"]>;
+    const wrapper = mount(SettingsView, { props: { snapshot: { settings: fixtureSnapshot.settings, tools, shortcuts }, native: undefined, openInLauncher, extendedMemory, target: { section: "game" } } });
+    await flushPromises();
+    expect(wrapper.find('[data-setting="extendedMemoryEnabled"] .setting-state').exists()).toBe(true);
+    await openSection(wrapper, "Updates");
+    expect(wrapper.get('p[role="alert"]').text()).toBe("The launcher could not open. Use Window › Show Launcher.");
   });
 });

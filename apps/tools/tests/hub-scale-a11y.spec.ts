@@ -335,10 +335,11 @@ test('Settings describes controls and shortcut labels cannot start a capture (HU
   await row.locator('strong').click();
   await expect(change).toBeEnabled();
   await change.click(); await change.press('a');
-  await expect(row).toContainText('That combination is not a shortcut'.slice(0, 0) + 'Press a key with Command, Control or Option');
+  await expect(row).toContainText('Press a key with Command, Control or Option');
   await expect(change).toBeFocused();
   await change.click(); await change.press('Meta+c');
-  await expect(page.locator('.settings-status')).toContainText('Switch Character could not be saved.');
+  await expect(row).toContainText('That shortcut is reserved by macOS or the application.');
+  await expect(change).toBeFocused();
 });
 
 test('Trade counts and opacity values are passive, with slider value text (HUB-162)', async ({ page }) => {
@@ -352,7 +353,7 @@ test('Trade counts and opacity values are passive, with slider value text (HUB-1
   await page.keyboard.press('Meta+r');
   const search = page.locator('.hub-search input');
   await search.fill('settings'); await search.press('Enter');
-  await page.locator('aside[aria-label="Settings sections"]').getByRole('button', { name: 'Appearance', exact: true }).click();
+  await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: 'Appearance', exact: true }).click();
   const opacity = page.getByRole('slider', { name: 'Panel opacity', exact: true });
   await opacity.focus(); await opacity.press('ArrowLeft');
   await expect(opacity).toHaveAttribute('aria-valuetext', `${await opacity.inputValue()}%`);
@@ -389,16 +390,14 @@ test('status owners are rendered before their first message (HUB-114)', async ({
   await expect(page.locator('.hub-receipt-announcement')).toBeVisible();
   const search = page.locator('.hub-search input');
   await search.fill('settings'); await search.press('Enter');
-  const settingsStatus = page.locator('.settings-status');
-  await expect(settingsStatus).toHaveAttribute('role', 'status');
-  await expect(settingsStatus).toBeVisible();
+  const settingsStatus = page.locator('.settings-status').getByRole('status');
+  await expect(settingsStatus).toBeAttached();
   await page.getByRole('button', { name: 'Home', exact: true }).click();
   await search.fill('maps'); await search.press('Enter');
   await page.evaluate(() => window.gwHub?.openSettings({ section: 'maps' }));
   await expect(page.locator('.hub-caption')).toHaveText('Settings');
-  await expect(page.locator('aside[aria-label="Settings sections"]').getByRole('button', { name: 'Maps', exact: true })).toHaveAttribute('aria-current', 'page');
-  await expect(settingsStatus).toHaveAttribute('role', 'status');
-  await expect(settingsStatus).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: 'Maps', exact: true })).toHaveAttribute('aria-current', 'page');
+  await expect(settingsStatus).toBeAttached();
 });
 
 

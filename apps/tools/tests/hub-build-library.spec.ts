@@ -422,7 +422,7 @@ test('an unrelated source toggle keeps the build target page, query and selectio
   await search.fill('accounts'); await search.press('Enter');
   await expect(page.locator('.hub-caption')).toHaveText('Accounts');
   await page.evaluate(() => window.gwHub?.openSettings({ section: 'tools' }));
-  const tools = page.locator('aside[aria-label="Settings sections"]').getByRole('button', { name: 'Tools', exact: true });
+  const tools = page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: 'Tools', exact: true });
   await tools.click();
   await page.getByRole('checkbox', { name: 'Travel', exact: true }).uncheck();
   await expect(page.locator('.hub-caption')).toHaveText('Settings');

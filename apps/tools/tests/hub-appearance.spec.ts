@@ -72,7 +72,7 @@ test('saved font and custom title material apply to the real Hub without losing 
   }
 
   await search.fill('settings'); await search.press('Enter');
-  await page.locator('aside[aria-label="Settings sections"]').getByRole('button', { name: 'Appearance', exact: true }).click();
+  await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: 'Appearance', exact: true }).click();
   await page.locator('[data-setting="uiFont"] select').selectOption('inter');
   await expect.poll(() => page.locator('.hub-name').evaluate(element => getComputedStyle(element).fontFamily)).toContain('Inter');
   await page.locator('[data-setting="uiStyle"] select').selectOption('obsidian');
@@ -257,7 +257,7 @@ for (const [name, appearance, scene] of [
     measured.push(...await textContrast(page, TEXT_ROLES));
     await page.getByRole('button', { name: 'Back', exact: true }).click();
     await search.fill('settings'); await search.press('Enter');
-    await page.locator('aside[aria-label="Settings sections"]').getByRole('button', { name: 'Appearance', exact: true }).click();
+    await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: 'Appearance', exact: true }).click();
     await expect(page.locator('.hub-crumb').first()).toBeVisible();
     expect(await page.locator('.hub-crumb').first().evaluate(el => getComputedStyle(el).textShadow)).toBe(await page.locator('.hub-caption').evaluate(el => getComputedStyle(el).textShadow));
     measured.push(...await textContrast(page, TEXT_ROLES));
@@ -352,7 +352,7 @@ test('every Settings section fits one line in all six panel fonts (HUB-253)', as
     expect(geometry.length).toBeGreaterThan(0);
     for (const row of geometry) { expect(row.height).toBe(40); expect(row.overflow).toBeLessThanOrEqual(1); expect(row.centres).toBeLessThanOrEqual(1); }
     await search.fill('settings'); await search.press('Enter');
-    const nav = page.locator('aside[aria-label="Settings sections"]');
+    const nav = page.getByRole('navigation', { name: 'Settings sections' });
     await expect(nav).toBeVisible();
     const buttons = await nav.getByRole('button').evaluateAll(buttons => buttons.map(button => ({ height: Math.round(button.getBoundingClientRect().height), overflow: button.scrollWidth - button.clientWidth })));
     expect(new Set(buttons.map(button => button.height)).size, `${uiStyle}/${uiPanelOpacity}/${uiFont}`).toBe(1);
@@ -456,7 +456,7 @@ test.describe('custom theme with the Modern flat finish', () => {
     await page.evaluate(theme => window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: { uiStyle: 'guild-wars', uiCustomTheme: theme } })), customModern('#D8D2BF'));
     await page.evaluate(() => window.gwApplyFixtureAppearance?.({ uiStyle: 'guild-wars', uiPanelOpacity: 94 }));
     await search.fill('settings'); await search.press('Enter');
-    await page.locator('aside[aria-label="Settings sections"]').getByRole('button', { name: 'Appearance', exact: true }).click();
+    await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: 'Appearance', exact: true }).click();
     const style = page.locator('[data-setting="uiStyle"] select');
     // A macOS select opens its native menu on ↓, so choose the option directly;
     // the saved change re-renders the page and must keep focus on the control.

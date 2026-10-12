@@ -69,7 +69,7 @@ test('a setting row opens Hub Settings at its control; launcher settings, Keys r
   await search(page).fill('settings');
   await page.locator('.hub-row[data-id="settings"]').click();
   await expect(page.locator('.hub-caption')).toHaveText('Settings');
-  await expect(page.getByRole('complementary', { name: 'Settings sections' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Settings sections' })).toBeVisible();
   // A Keys row names the tool's shortcut control, which is in the Hub's Tools section.
   await page.getByRole('button', { name: 'Back', exact: true }).click();
   await search(page).fill('commands'); await search(page).press('Enter');
