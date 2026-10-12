@@ -124,9 +124,3 @@ export function parseSettingsTarget(value: unknown): SettingsTarget {
   if (!SETTINGS.some(entry => entry.id === control && entry.section === parsed)) throw new Error("Unknown setting");
   return { section: parsed, control: control as string };
 }
-
-export function settingTarget(id: string): SettingsTarget {
-  const entry = SETTINGS.find(candidate => candidate.id === id);
-  if (!entry) throw new Error("Unknown setting");
-  return { section: entry.section, control: entry.id };
-}
