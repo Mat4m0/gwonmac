@@ -77,7 +77,9 @@ unsafe fn copy_areas(layout: Layout) -> u32 {
             let mut packed = 1 << 31;
             for (index, field) in [0_u32, 4, 8, 12].iter().enumerate() {
                 let value = read(*field)?;
-                if value > 0xff {
+                // The type shares its byte with the read and thumbnail flags
+                // (bits 30-31), so it has only six bits.
+                if value > if index == 3 { 0x3f } else { 0xff } {
                     return None;
                 }
                 packed |= value << (index * 8);
@@ -254,7 +256,9 @@ pub(crate) unsafe fn tick(layout: Layout) {
         // The copy happens outside a sequence window on purpose: readers see
         // the rows only through `area_count`, which the next publish sets.
         area_count = unsafe { copy_areas(layout) };
-        unsafe { AREAS_COPIED = true };
+        // An unreadable table is retried next tick instead of leaving the
+        // session without areas.
+        unsafe { AREAS_COPIED = area_count != 0 };
     }
     let progress = match state {
         GameState::Ready { game, map_id, play_region: PLAY_REGION_PVE, .. } => unsafe {

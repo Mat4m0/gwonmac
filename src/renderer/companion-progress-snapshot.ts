@@ -25,8 +25,15 @@ const AREAS_AT = TITLES_AT + ABI.titles * 8;
 const ROW_READ = 1 << 31;
 const ROW_THUMBNAIL = 1 << 30;
 
-const waiting = (reason: "loading" | "unavailable" | "snapshot") =>
-  Object.freeze({ status: "waiting", reason } as const);
+/** One shared array, so equal reads keep `sameGameProgress` on identity. */
+const NO_AREAS: readonly AreaRow[] = Object.freeze([]);
+
+const WAITING = Object.freeze({
+  loading: Object.freeze({ status: "waiting", reason: "loading" } as const),
+  unavailable: Object.freeze({ status: "waiting", reason: "unavailable" } as const),
+  snapshot: Object.freeze({ status: "waiting", reason: "snapshot" } as const),
+});
+const waiting = (reason: keyof typeof WAITING) => WAITING[reason];
 
 function bits(view: DataView, at: number): ProgressBits {
   return Object.freeze(Array.from({ length: WORDS }, (_, index) => view.getUint32(at + index * 4, true)));
@@ -109,7 +116,7 @@ export function createCompanionProgressReader() {
       missions,
       vanquished,
       cartographer,
-      areas: areas?.rows ?? Object.freeze([]),
+      areas: areas?.rows ?? NO_AREAS,
     });
   };
 }

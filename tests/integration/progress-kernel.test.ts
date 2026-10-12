@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { COMPANION_FEATURE_BITS } from "../../src/shared/companion-abi.ts";
 import { createCompanionProgressReader } from "../../src/renderer/companion-progress-snapshot.ts";
-import { ADDRESSES, createKernel, installGameGraph } from "../fixtures/enhancements.ts";
+import { ADDRESSES, POLICY_CONFIG_START, createKernel, installGameGraph } from "../fixtures/enhancements.ts";
 
 const FEATURES = COMPANION_FEATURE_BITS.playRegionObservation | COMPANION_FEATURE_BITS.progressObservation;
 const BITS = 0x1_9000;
@@ -89,4 +89,44 @@ test("a map load never shows an old or empty record", async () => {
   kernel.view.setUint32(ADDRESSES.character + 0x23c, 0, true);
   kernel.tick();
   assert.equal(state().status, "ready");
+});
+
+test("an area table beyond memory on the first ready tick is retried once it is readable", async () => {
+  const kernel = await createKernel({ partyDetail: true });
+  installGameGraph(kernel.view);
+  installProgress(kernel.view);
+  // Move the table so rows 0..139 (maps 10, 13, 14 and the current map 133)
+  // fit in memory but the other 883 rows run past its end.
+  const rows = 140 * 0x7c;
+  const base = kernel.memory.buffer.byteLength - rows;
+  new Uint8Array(kernel.memory.buffer).copyWithin(base, ADDRESSES.areaInfo, ADDRESSES.areaInfo + rows);
+  new Uint32Array(kernel.memory.buffer, ADDRESSES.config, POLICY_CONFIG_START + 1)[POLICY_CONFIG_START] = base;
+  assert.equal(kernel.init({ features: FEATURES }), 1);
+  const read = createCompanionProgressReader();
+  const state = () => read(kernel.memory.buffer, ADDRESSES.progress);
+
+  kernel.tick();
+  const first = state();
+  assert.equal(first.status, "ready");
+  if (first.status !== "ready") return;
+  assert.deepEqual(first.areas, []);
+
+  kernel.memory.grow(2);
+  kernel.tick();
+  const later = state();
+  assert.equal(later.status, "ready");
+  if (later.status !== "ready") return;
+  assert.equal(later.areas.find((row) => row.mapId === 10)?.nameId, 77);
+});
+
+test("an area type that would overflow its six bits leaves the row unread", async () => {
+  const { kernel, state } = await fixture();
+  area(kernel.view, 14, { 0x0c: 0x40 });
+  kernel.tick();
+  const ready = state();
+  assert.equal(ready.status, "ready");
+  if (ready.status !== "ready") return;
+  const rows = new Map(ready.areas.map((row) => [row.mapId, row]));
+  assert.equal(rows.has(14), false);
+  assert.equal(rows.get(10)?.type, 5);
 });

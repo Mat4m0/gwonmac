@@ -114,8 +114,9 @@ export const COMPANION_KERNEL_DYLINK0 = Object.freeze([
   // 3988 -> 3985: normal player-chat sender resolution adds no static state;
   //               the linker repacks the existing private data by three bytes.
   // 3985 -> 4024: alcohol continuity and Effects-frame anchor; u64 identity aligns to eight bytes.
-  // 4024 -> 4724: progress publication keeps its 147-word zero record as
-  //               read-only data and adds its pointer, sequence and copy flag.
+  // 4024 -> 4724: progress publication keeps its zero Progress record (150 words,
+  //               600 bytes, not the published snapshot) as read-only
+  //               data and adds its pointer, sequence and copy flag.
   0x01, 0x05, 0xf4, 0x24, 0x03, 0x00, 0x00,
 ]);
 
