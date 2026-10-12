@@ -301,7 +301,7 @@ async function updateContent(content: NonNullable<LauncherPreferencesPatch["cont
   <div v-else class="app-shell" :class="{ 'settings-shell': route === 'settings', 'accounts-shell': route === 'accounts' }">
     <LauncherHeader :route="route" @navigate="route = $event" @settings="openSettings()" @external="openExternal" />
 
-    <section class="funding-banner" aria-label="Project funding">
+    <section v-if="route !== 'settings'" class="funding-banner" aria-label="Project funding">
       <div><strong>Support gwonmac</strong></div>
       <div class="funding-progress" role="progressbar" aria-label="Project funding" :aria-valuenow="Math.min(funding.raisedEuros, funding.goalEuros)" :aria-valuemax="funding.goalEuros" :aria-valuemin="0" :aria-valuetext="`€${funding.raisedEuros} of €${funding.goalEuros} funded`">
         <span>€{{ funding.raisedEuros }}</span><div><i :style="{ width: `${Math.min(100, funding.raisedEuros / funding.goalEuros * 100)}%` }" /></div><span>€{{ funding.goalEuros }}</span>

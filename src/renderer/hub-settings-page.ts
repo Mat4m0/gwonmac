@@ -7,6 +7,8 @@ import type { EmbeddedSettings } from '../shared/hub-settings.js';
 import type { HubPresenter } from '../shared/hub.js';
 import type { SettingsTarget } from '../shared/settings-catalogue.js';
 
+/** Shown when the launcher window cannot be opened from the game. */
+export const LAUNCHER_UNAVAILABLE = 'The launcher could not open. Use Window › Show Launcher.';
 type SettingsPage = ReturnType<EmbeddedSettings<HTMLElement>['mountSettings']>;
 let module: Promise<EmbeddedSettings<HTMLElement>> | null = null;
 let shown: SettingsPage | null = null;
@@ -36,7 +38,8 @@ export function showHubSettings(hub: HubPresenter<HTMLElement>, target: Settings
       page = shown = settings.mountSettings(view, {
         api: window.gwNative.hubSettings,
         target,
-        openInLauncher: next => { void window.gwNative.app.openSettings(next); },
+        extendedMemory: () => window.gwNative.client.session().then(session => session.extendedMemory),
+        openInLauncher: next => window.gwNative.app.openSettings(next).catch(() => { throw new Error(LAUNCHER_UNAVAILABLE); }),
       });
     }).catch(() => {
       if (!disposed) view.textContent = 'Settings could not be loaded. Use Settings in the launcher.';

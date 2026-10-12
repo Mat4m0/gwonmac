@@ -67,7 +67,7 @@ function customColor(value: string) {
       </div>
       <p v-if="tool === 'maps' && enabled(tool)" class="tool-link"><button class="text-link" @click="emit('maps')">Layers, styles and map shortcuts in Maps settings</button></p>
       <details v-else-if="enabled(tool) && hasOptions(tool)" class="tool-options" :open="openOptions.has(tool)" @toggle="toggleOptions(tool, $event)">
-        <summary>Options</summary>
+        <summary :aria-label="`${features[tool].label} options`">Options</summary>
         <div v-if="tool === 'character-switch'" class="character-details">
           <label v-for="detail in CHARACTER_DETAILS" :key="detail.key" :data-setting="detail.key"><span>{{ detail.label }}</span><input type="checkbox" :checked="snapshot.settings[detail.key]" @change="perform(() => save({ [detail.key]: ($event.target as HTMLInputElement).checked }))" /></label>
         </div>

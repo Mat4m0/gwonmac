@@ -9,7 +9,7 @@ import { installHubWindow } from './hub-window.js';
 import { attachClassicFrame } from '../shared/ui/frame.js';
 import { isHubBackKey, resolveShortcuts, shortcutKeycaps, type ShortcutAction } from '../shared/keyboard-shortcuts.js';
 import { HUB_SECTIONS, SETTINGS, SETTINGS_SECTIONS, type SettingEntry, type SettingsTarget } from "../shared/settings-catalogue.js";
-import { focusHubSettings, showHubSettings } from "./hub-settings-page.js";
+import { focusHubSettings, LAUNCHER_UNAVAILABLE, showHubSettings } from "./hub-settings-page.js";
 import type { GlobalTool } from "../shared/launcher-contracts.js";
 import { createHubAccounts } from './hub-accounts.js';
 import { hubIcon } from "./hub-icons.js";
@@ -400,7 +400,10 @@ export function createHub(parent: HTMLElement) {
   /** A row action that shows Settings, at a section or control when given (docs/settings.md). */
   function openSettings(target?: SettingsTarget) {
     return async (task: HubTask) => {
-      if (target && !HUB_SECTIONS.has(target.section)) { await window.gwNative.app.openSettings(target); task.done(); return; }
+      if (target && !HUB_SECTIONS.has(target.section)) {
+        await window.gwNative.app.openSettings(target).catch(() => { throw new Error(LAUNCHER_UNAVAILABLE); });
+        task.done(); return;
+      }
       showSettings(target);
     };
   }

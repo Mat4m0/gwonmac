@@ -11,7 +11,8 @@ import { SETTING_APPLIES_NOTE } from "@shared/setting-copy";
 import { HUB_SECTIONS, SETTINGS, SETTINGS_GROUP_LABELS, SETTINGS_SECTIONS, searchSettings, type SettingsSection, type SettingsTarget } from "@shared/settings-catalogue";
 import type { LauncherNativeApi, LauncherPreferencesPatch, LauncherSettingsPatch, LauncherSnapshot } from "@shared/launcher-contracts";
 import type { InGameNative, InGamePatch, InGameSnapshot } from "../settings-host";
-import type { CacheInfo } from "@shared/contracts";
+import type { CacheInfo, ExtendedMemoryRuntimeStatus } from "@shared/contracts";
+import { listIndexAfter, listKeyStep } from "@shared/ui/list-keys";
 import AppearanceSettings from "./AppearanceSettings.vue";
 import GameFilesSettings from "./GameFilesSettings.vue";
 import GameSettings from "./GameSettings.vue";
@@ -33,7 +34,9 @@ const props = defineProps<{
   /** The launcher's own snapshot and bridge, for its sections; absent in the Hub. */
   launcher?: Readonly<{ snapshot: LauncherSnapshot; native: LauncherNativeApi | undefined }> | undefined;
   /** Hub only: shows a launcher section, at its control when named. */
-  openInLauncher?: ((target: SettingsTarget) => void) | undefined;
+  openInLauncher?: ((target: SettingsTarget) => void | Promise<unknown>) | undefined;
+  /** Hub only: what this game session uses for extended memory; the launcher reads it from its own snapshot. */
+  extendedMemory?: ExtendedMemoryRuntimeStatus | null | undefined;
   /** Where to open; a new object opens it again, even at the same control. */
   target: SettingsTarget | null;
 }>();
@@ -51,6 +54,8 @@ const icons: Record<SettingsSection, unknown> = {
 const groups = (["game", "app"] as const).map(group => ({ label: SETTINGS_GROUP_LABELS[group], items: SETTINGS_SECTIONS.filter(section => section.group === group) }));
 /** In the Hub, the launcher's sections stay listed and open the launcher. */
 const inLauncher = (id: SettingsSection) => !props.launcher && !HUB_SECTIONS.has(id);
+const nav = ref<HTMLElement | null>(null);
+const retryButton = ref<HTMLButtonElement | null>(null);
 
 const section = ref<SettingsSection>(lastSection);
 const query = ref("");
@@ -91,6 +96,8 @@ async function performSave(action: () => Promise<unknown>) {
     retrySave = undefined;
   } catch (error) {
     saveState.value = "failed";
+    // The fieldset is locked while the failure stands; Retry takes the keyboard.
+    void nextTick(() => retryButton.value?.focus());
     throw error;
   } finally {
     void nextTick(() => {
@@ -155,9 +162,18 @@ async function gameFilesAction(message: string, action: () => Promise<void> | un
   if (await run(message, action)) await loadGameFilesInfo();
 }
 
-async function select(next: SettingsSection) {
-  if (inLauncher(next)) { props.openInLauncher?.({ section: next }); return; }
+/** Asks the Hub to open the launcher; the page says so when that fails. */
+async function launch(target: SettingsTarget) {
+  actionError.value = "";
+  try { await props.openInLauncher?.(target); }
+  catch { actionError.value = "The launcher could not open. Use Window › Show Launcher."; }
+}
+
+/** `moveFocus` is for programmatic opens; a click or key on a section button keeps the keyboard on that button. */
+async function select(next: SettingsSection, moveFocus = false) {
+  if (inLauncher(next)) { void launch({ section: next }); return; }
   query.value = "";
+  if (saveState.value === "saved") saveState.value = "idle";
   section.value = lastSection = next;
   emit("section", next);
   actionError.value = "";
@@ -165,6 +181,7 @@ async function select(next: SettingsSection) {
   await nextTick();
   if (!content.value) return;
   content.value.scrollTop = 0;
+  if (!moveFocus) return;
   // A screen reader hears where it landed; Tab continues from the section's top.
   const heading = content.value.querySelector<HTMLElement>("h1");
   heading?.setAttribute("tabindex", "-1");
@@ -178,8 +195,8 @@ let highlightTimer: ReturnType<typeof setTimeout> | undefined;
  * the tool's row, then to the section heading.
  */
 async function open(target: SettingsTarget) {
-  if (inLauncher(target.section)) { props.openInLauncher?.(target); return; }
-  await select(target.section);
+  if (inLauncher(target.section)) { void launch(target); return; }
+  await select(target.section, true);
   const root = content.value;
   if (!root) return;
   const entry = SETTINGS.find(candidate => candidate.id === target.control);
@@ -199,6 +216,20 @@ async function open(target: SettingsTarget) {
   highlightTimer = setTimeout(() => row.classList.remove("setting-focus"), 2400);
 }
 
+/** The sections are a list: ↑ ↓ (and Home, End) move through them without wrapping. A section shown here opens as it is reached. */
+function onNavKey(event: KeyboardEvent) {
+  const buttons = [...nav.value?.querySelectorAll<HTMLButtonElement>("button") ?? []];
+  const current = buttons.indexOf(event.target as HTMLButtonElement);
+  const step = current < 0 || event.isComposing ? null : listKeyStep(event, buttons.length);
+  if (step === null) return;
+  event.preventDefault();
+  const next = buttons[listIndexAfter(current, buttons.length, step)];
+  if (!next || next === buttons[current]) return;
+  const id = next.dataset.section as SettingsSection;
+  if (!inLauncher(id)) next.click();
+  next.focus();
+}
+
 function onSearchKey(event: KeyboardEvent) {
   if (event.key === "Escape" && query.value) { event.preventDefault(); query.value = ""; }
   else if (event.key === "Enter" && results.value[0]) { event.preventDefault(); void openResult(results.value[0].id); }
@@ -213,6 +244,7 @@ function onKey(event: KeyboardEvent) {
   if (event.key === "f" && event.metaKey && !event.shiftKey && !event.altKey) { event.preventDefault(); searchField.value?.focus(); searchField.value?.select(); }
 }
 
+watch(query, () => { if (saveState.value === "saved") saveState.value = "idle"; });
 watch(() => props.target, target => { if (target) void open(target); });
 onMounted(() => {
   window.addEventListener("keydown", onKey);
@@ -227,16 +259,18 @@ onBeforeUnmount(() => {
 <template>
   <div class="settings-view">
     <section class="settings-page">
-      <aside aria-label="Settings sections">
+      <aside>
         <label class="settings-search">
           <Search aria-hidden="true" />
           <input ref="searchField" v-model="query" type="search" placeholder="Search settings" aria-label="Search settings" aria-controls="settings-content" @keydown="onSearchKey" />
           <button v-if="query" type="button" class="icon-button" aria-label="Clear search" @click="query = ''; searchField?.focus()"><X /></button>
         </label>
+        <nav ref="nav" aria-label="Settings sections" @keydown="onNavKey">
         <div v-for="group in groups" :key="group.label" class="settings-nav-group" role="group" :aria-label="group.label">
           <h3>{{ group.label }}</h3>
-          <button v-for="item in group.items" :key="item.id" :aria-current="!query && section === item.id ? 'page' : undefined" :class="{ active: !query && section === item.id }" @click="select(item.id)"><component :is="icons[item.id]" aria-hidden="true" />{{ item.label }}<ArrowUpRight v-if="inLauncher(item.id)" class="opens-launcher" aria-label="opens the launcher" /></button>
+          <button v-for="item in group.items" :key="item.id" :data-section="item.id" :aria-current="!query && section === item.id ? 'page' : undefined" :class="{ active: !query && section === item.id }" @click="select(item.id)"><component :is="icons[item.id]" aria-hidden="true" />{{ item.label }}<ArrowUpRight v-if="inLauncher(item.id)" class="opens-launcher" aria-label="opens the launcher" /></button>
         </div>
+        </nav>
       </aside>
       <div class="settings-main">
         <div id="settings-content" ref="content" class="settings-content">
@@ -250,10 +284,10 @@ onBeforeUnmount(() => {
           </template>
           <fieldset v-else :key="`${section}:${formVersion}`" class="settings-fields" :disabled="locked" :aria-busy="saveState === 'saving'" @change.capture="identifySetting" @click.capture="identifySetting">
             <legend class="visually-hidden">Settings for every account</legend>
-            <ToolsSettings v-if="section === 'tools'" :snapshot="snapshot" :api="native" :profiles="launcher?.snapshot.profiles" :save="saveSettings" :perform-save="performSave" @maps="select('maps')" />
-            <MapsSettings v-else-if="section === 'maps'" :settings="snapshot.settings" :shortcuts="snapshot.shortcuts" :tools="snapshot.tools" :api="native?.tools" :save="saveSettings" :perform-save="performSave" @tools="select('tools')" />
+            <ToolsSettings v-if="section === 'tools'" :snapshot="snapshot" :api="native" :profiles="launcher?.snapshot.profiles" :save="saveSettings" :perform-save="performSave" @maps="select('maps', true)" />
+            <MapsSettings v-else-if="section === 'maps'" :settings="snapshot.settings" :shortcuts="snapshot.shortcuts" :tools="snapshot.tools" :api="native?.tools" :save="saveSettings" :perform-save="performSave" @tools="select('tools', true)" />
             <template v-else-if="section === 'appearance'"><h1>Appearance</h1><AppearanceSettings :settings="snapshot.settings" :save="saveSettings" /></template>
-            <GameSettings v-else-if="section === 'game'" :snapshot="snapshot" :extended-memory="launcher?.snapshot.extendedMemory" :save="quietSave" />
+            <GameSettings v-else-if="section === 'game'" :snapshot="snapshot" :extended-memory="launcher ? launcher.snapshot.extendedMemory : extendedMemory" :save="quietSave" />
             <TexturePacksSettings v-else-if="section === 'texture-packs' && launcher" :texture-packs="launcher.snapshot.texturePacks" />
             <GameFilesSettings
               v-else-if="section === 'game-files' && launcher"
@@ -285,11 +319,9 @@ onBeforeUnmount(() => {
             <p v-if="actionError" role="alert" class="inline-message">{{ actionError }}</p>
           </fieldset>
         </div>
-        <footer class="settings-status" :class="{ 'save-failed': saveState === 'failed' }" :role="saveState === 'failed' ? 'alert' : 'status'">
-          <template v-if="saveState === 'saving'">Saving…</template>
-          <template v-else-if="saveState === 'failed'"><span><strong>{{ editedSetting.label }} could not be saved.</strong> The change shown is not saved.</span><span class="save-actions"><button class="secondary" @click="retry">Retry</button><button class="secondary" @click="revert">Revert</button></span></template>
-          <template v-else-if="saveState === 'saved'">{{ savedNote }}</template>
-          <template v-else>Changes save right away and apply in every game window.</template>
+        <footer class="settings-status" :class="{ 'save-failed': saveState === 'failed' }">
+          <span class="status-line" role="status"><template v-if="saveState === 'saving'">Saving…</template><template v-else-if="saveState === 'saved'">{{ savedNote }}</template><template v-else-if="saveState === 'idle'">Changes save right away and apply in every game window.</template></span>
+          <template v-if="saveState === 'failed'"><span class="status-alert" role="alert"><strong>{{ editedSetting.label }} could not be saved.</strong> The change shown is not saved.</span><span class="save-actions"><button ref="retryButton" class="secondary" @click="retry">Retry</button><button class="secondary" @click="revert">Revert</button></span></template>
         </footer>
       </div>
     </section>

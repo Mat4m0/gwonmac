@@ -298,7 +298,9 @@
 .settings-view .section-intro, .settings-view .settings-fields > p { margin: 0 0 20px; color: var(--settings-muted); font-size: 13px; }
 .settings-view .settings-status { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; min-height: 40px; padding: 8px 32px; border-top: 1px solid var(--settings-line); color: var(--settings-muted); font-size: 13px; }
 .settings-view .settings-status.save-failed { color: #f5b7ab; background: rgba(164, 54, 35, .14); }
-.settings-view .settings-status > span:first-child { flex: 1 1 260px; }
+.settings-view .settings-status > .status-line, .settings-view .settings-status > .status-alert { flex: 1 1 260px; }
+/* The live region stays in the page while empty; it takes no room. */
+.settings-view .settings-status > .status-line:empty { flex: 0 0 0; margin-inline-end: -16px; }
 /* Switches: every on/off setting in this window. */
 .settings-view .settings-page input[type="checkbox"] { appearance: none; position: relative; width: 34px; height: 20px; flex: 0 0 34px; margin: 0; border-radius: 999px; background: rgba(255, 255, 255, .18); cursor: pointer; transition: background-color .15s ease; }
 .settings-view .settings-page input[type="checkbox"]::before { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #f4efe7; box-shadow: 0 1px 2px rgba(0, 0, 0, .4); transition: transform .15s ease; }

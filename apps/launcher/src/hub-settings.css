@@ -27,3 +27,7 @@
 .hub-settings-host .settings-view .settings-fields h1 { font-size: var(--ui-type-title-size, 20px); }
 .hub-settings-host .settings-view .settings-status { padding-inline: 22px; }
 .hub-settings-host .settings-view .opens-launcher { margin-left: auto; width: 13px; height: 13px; opacity: .7; }
+
+/* The Settings page could not be read: a message and Retry, in the Hub's text. */
+.settings-load-error { display: grid; justify-items: start; gap: 10px; padding: 18px 22px; color: var(--ui-text); font-family: var(--ui-font-interface); }
+.settings-load-error p { margin: 0; }

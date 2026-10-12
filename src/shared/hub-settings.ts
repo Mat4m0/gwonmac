@@ -3,6 +3,7 @@
  * The existing preferences owner persists changes; launcher administration is excluded.
  */
 import { parseGlobalTool, parseLauncherSettingsPatch, type GlobalToolUpdate, type LauncherSettings, type LauncherSnapshot, type ShortcutReplacement, type LauncherShortcutCaptureResult } from './launcher-contracts.js';
+import type { ExtendedMemoryRuntimeStatus } from './contracts.js';
 import type { SettingsTarget } from './settings-catalogue.js';
 import { isShortcutBinding, parseShortcutAction, type ShortcutAction } from './keyboard-shortcuts.js';
 export const HUB_SETTINGS_FIELDS = ['extendedMemoryEnabled', 'showDiagnostics', 'uiStyle', 'uiFont', 'uiCustomTheme', 'uiPanelOpacity', 'uiTextSize', 'controllerPromptStyle', 'renderScale', 'autoRelogAfterReload', 'characterSwitchProfession', 'characterSwitchLevel', 'characterSwitchLocation', 'skillKeyBindings', 'skillCooldownColor', 'chatFilterAllyDrops', 'chatFilterHallOfHeroes', 'chatFilterTitleAchievements', 'reminderCons', 'reminderPcons', 'reminderAlcohol', 'reminderBeforeEnd', 'reminderAtEnd', 'reminderSound', 'cartographyOverlayEnabled', 'cartographyGridEnabled', 'cartographyCompassGridEnabled', 'compassRangeIndicatorsEnabled', 'compassRangeEarshotEnabled', 'compassRangeCastEnabled', 'compassRangeSpiritEnabled', 'compassRangeSpiritExtendedEnabled', 'compassRangeEarshotOpacity', 'compassRangeCastOpacity', 'compassRangeSpiritOpacity', 'compassRangeSpiritExtendedOpacity', 'compassRangeTheme', 'cartographyRevealMode', 'cartographyPresetLibrary', 'cartographyWalkabilityOpacity', 'cartographyGridOpacity', 'cartographyControlIdleOpacity', 'eliteSkillsEnabled', 'eliteMissionMapMarkers', 'alcoholTimerPosition'] as const satisfies readonly (keyof LauncherSettings)[];
@@ -44,8 +45,10 @@ export type EmbeddedSettings<Target> = Readonly<{
     api: HubSettingsApi;
     /** Where to open; `null` reopens the last section. */
     target: SettingsTarget | null;
+    /** What this game session's memory module is; the Game section says so beside Extended memory. */
+    extendedMemory(): Promise<ExtendedMemoryRuntimeStatus | null>;
     /** Shows a section only the launcher draws, at its control when named. */
-    openInLauncher(target: SettingsTarget): void;
+    openInLauncher(target: SettingsTarget): void | Promise<unknown>;
   }>): Readonly<{
     /** Shows a section, at its control when named, on the page that is already open. */
     open(target: SettingsTarget): void;
