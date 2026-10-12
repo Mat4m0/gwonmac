@@ -88,7 +88,7 @@
     "Shift+Tab": "Home | focus button[Close Hub] | sel travel | q \"\" | action - | life pve-explorable | canvas down 0 up 0 pointer 0",
     "Home": "Home | focus search | sel place:449 | q \"\" | action - | life pve-explorable | canvas down 0 up 0 pointer 0",
     "End": "Home | focus search | sel settings | q \"\" | action - | life pve-explorable | canvas down 0 up 0 pointer 0",
-    "PageDown": "Home | focus search | sel commands | q \"\" | action - | life pve-explorable | canvas down 0 up 0 pointer 0",
+    "PageDown": "Home | focus search | sel progress | q \"\" | action - | life pve-explorable | canvas down 0 up 0 pointer 0",
     "Control+n": "Home | focus search | sel character | q \"\" | action - | life pve-explorable | canvas down 0 up 0 pointer 0",
     "Meta+Enter": "Home | focus search | sel travel | q \"\" | action - | life pve-explorable | canvas down 0 up 0 pointer 0",
     "Meta+j": "Home | focus button.hub-menu-item | sel travel | q \"\" | action - | life pve-explorable | canvas down 0 up 0 pointer 0",
