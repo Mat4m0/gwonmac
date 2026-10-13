@@ -106,12 +106,6 @@ import {
   submitVisualCapture,
 } from "./visual-capture.js";
 import { parseDiagnosticProfile } from "./core/diagnostic-profile.js";
-import { exportCartographyEvidence } from "./cartography-evidence-export.js";
-import { parseCartographyEvidenceCapture } from "./cartography-evidence/capture.js";
-import {
-  parseCartographyMapKnowledge,
-  type CartographyMapKnowledge,
-} from "../shared/cartography-map-knowledge.js";
 
 export interface IpcContext {
   sockets: SocketManager;
@@ -121,12 +115,6 @@ export interface IpcContext {
   getSnapshotMetadata: () => Promise<SnapshotMetadata>;
   getSettings: () => Promise<AppSettings>;
   updateSettings: (patch: RendererSettingsPatch) => Promise<AppSettings>;
-  getCartographyMapKnowledge: (
-    kernelSha256: string,
-  ) => Promise<readonly CartographyMapKnowledge[]>;
-  recordCartographyMapKnowledge: (
-    value: CartographyMapKnowledge,
-  ) => Promise<readonly CartographyMapKnowledge[]>;
   setDiagnosticProfile: (profile: DiagnosticProfile) => Promise<DiagnosticProfile>;
   confirmClientHealthy: (token: ClientHealthToken) => Promise<void>;
   getClientSession: (win: BrowserWindow) => ClientSession;
@@ -243,11 +231,6 @@ const asFiniteNumber = (what: string) =>
     }
     return value;
   });
-
-const asDigestValue = one((value: unknown): string => {
-  if (!isDigest(value)) throw new ValidationError("invalid digest");
-  return value;
-});
 
 const asSocketPayload: Parser<{ socketId: number; bytes: Uint8Array }> = (args) => {
   exact(args, 2);
@@ -566,26 +549,6 @@ export function registerIpcHandlers(ctx: IpcContext): {
 
     diagnosticsProfileSet: channel(one(parseDiagnosticProfile), (_win, value) =>
       ctx.setDiagnosticProfile(value)),
-
-    cartographyEvidenceExport: channel(
-      one(parseCartographyEvidenceCapture),
-      (win, value) => exportCartographyEvidence(
-        win,
-        value,
-        ctx.getClientSession(win),
-        ctx.getSettings,
-      ),
-    ),
-
-    cartographyMapKnowledgeGet: channel(
-      asDigestValue,
-      (_win, kernelSha256) => ctx.getCartographyMapKnowledge(kernelSha256),
-    ),
-
-    cartographyMapKnowledgeRecord: channel(
-      one(parseCartographyMapKnowledge),
-      (_win, value) => ctx.recordCartographyMapKnowledge(value),
-    ),
 
     appOpenExternal: channel(asExternalLinkKind, async (_win, kind) => {
       await shell.openExternal(EXTERNAL_URLS[kind]);
