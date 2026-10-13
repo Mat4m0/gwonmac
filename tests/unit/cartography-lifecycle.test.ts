@@ -105,3 +105,30 @@ test("failed Maps constructors release earlier native surfaces and detached pain
     }
   }
 });
+
+// A failed native withdrawal must neither abort shutdown nor run twice.
+test("Maps reports failed disposal once without interrupting disable or unload", async (t) => {
+  for (const action of ["disable", "unload"] as const) {
+    await t.test(action, async () => {
+      const failure = new Error("native withdrawal failed");
+      const failures: unknown[] = [];
+      let installs = 0;
+      let disposals = 0;
+      const host = createCartographyLifecycle(async () => {
+        installs++;
+        return () => { disposals++; throw failure; };
+      }, error => failures.push(error));
+      host.update(true);
+      await tick();
+      assert.doesNotThrow(() => action === "disable" ? host.update(false) : host.dispose());
+      assert.deepEqual(failures, [failure]);
+      host.update(false);
+      host.dispose();
+      assert.equal(disposals, 1);
+      assert.deepEqual(failures, [failure]);
+      host.update(true);
+      await tick();
+      assert.equal(installs, 1, "an unloaded lifecycle cannot acquire resources");
+    });
+  }
+});

@@ -403,7 +403,7 @@ export {
   ENHANCEMENT_LAYOUT_WORD_COUNT,
   ENHANCEMENT_PARTY_DIRTY_MESSAGE_COUNT,
 } from "./enhancement-config.js";
-export const ENHANCEMENT_TRANSFORM_ABI = 73;
+export const ENHANCEMENT_TRANSFORM_ABI = 74;
 
 export const ENHANCEMENT_CHAT_FILTER_MASKS = Object.freeze({
   allyDrops: 1,
