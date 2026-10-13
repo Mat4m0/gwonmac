@@ -23,7 +23,7 @@ test("each native map owns its mesh, restores matrices and refuses stale or malf
     const count = quads ? 2 : 1;
     const publishIndex = exported.find((entry) => entry.name === `gwonmac_${surface}_graphics_publish`)?.index;
     assert.ok(publishIndex !== undefined);
-    const selected = Array.from({length: 4}, (_, index) => publishIndex - 3 + index);
+    const selected = Array.from({length: 5}, (_, index) => publishIndex - 3 + index);
     const peers = [1444, 1445, 1446, 1448, 1449, 1554, 1564, 1569, 1579, 1333, 1334, 1357, 264, 2956, 2249, 3137, 748, 750];
     const indices = new Map([...peers, ...selected].map((index, position) => [index, position]));
     const rewritten = selected.map((index) => {
@@ -40,7 +40,7 @@ test("each native map owns its mesh, restores matrices and refuses stale or malf
     const globals = exported.filter((entry) => entry.kind === 3 && (entry.name.startsWith(`gwonmac_${surface}_graphics_`)
       || ["gwonmac_cartography_context_area_epoch", "gwonmac_cartography_context_status"].includes(entry.name)));
     const section = (id: number, body: Uint8Array) => encodeSection({id, body});
-    const labels = ["hide", "destroy", "render", "publish"];
+    const labels = ["hide", "destroy", "render", "publish", "reap"];
     const capsule = concat(WASM_HEADER, section(1, sectionById(sections, 1)),
       section(2, concat(uleb(peers.length), ...peers.map((index) => concat(encodeName("peer"), encodeName(String(index)), Uint8Array.of(0), uleb(module.functionTypeIndices[index]!))))),
       section(3, concat(uleb(selected.length), ...selected.map((index) => uleb(module.functionTypeIndices[index]!)))),
@@ -61,7 +61,9 @@ test("each native map owns its mesh, restores matrices and refuses stale or malf
       1554: (count: number, buffer: number, material: number, flags: number, extra: number) => {
         assert.deepEqual([count, view.getUint32(buffer, true), view.getUint32(material, true), flags, extra], [1, 11, 22, 0, 0]); return 12;
       },
-      1564: (count: number, pointer: number) => { assert.deepEqual([count, view.getUint32(pointer, true)], [1, 12]); matrixEvents.push("capture-view"); },
+      1564: (count: number, pointer: number) => {
+        assert.equal(view.getUint32(MODEL + 152, true), 0, "never capture a queued map model");
+        assert.deepEqual([count, view.getUint32(pointer, true)], [1, 12]); matrixEvents.push("capture-view"); },
       1569: (draw: number, index: number, material: number) => {
         assert.equal(view.getUint32(MODEL + 152, true), 0, "a texture swap never reaches a referenced model");
         assert.deepEqual([draw, index, material], [12, 0, 22]);
@@ -76,7 +78,13 @@ test("each native map owns its mesh, restores matrices and refuses stale or malf
       2249: (mips: number, format: number, dimensions: number, levels: number, flags: number) => {
         assert.deepEqual([view.getUint32(mips, true), format, view.getUint32(dimensions, true), view.getUint32(dimensions + 4, true), levels, flags], [2112 + (quads ? count * 32 : 0), 0, 64, 64, 1, 112]); textures += 1; return 21;
       },
-      3137: () => 22, 748: (handle: number) => { released.push(handle); },
+      3137: () => 22, 748: (handle: number) => {
+        if (handle === 12) {
+          assert.equal(view.getUint32(MODEL + 152, true), 0, "never close a queued map model");
+          assert.equal(view.getUint32(DEVICE + 460, true), 3, "never close during a map flush");
+        }
+        released.push(handle);
+      },
     }});
     const memory = exports.memory; assert.ok(memory instanceof WebAssembly.Memory); const view = new DataView(memory.buffer);
     const scalar = (name: string, value: number) => { const target = exports[name]; assert.ok(target instanceof WebAssembly.Global); target.value = value; };
@@ -126,9 +134,10 @@ test("each native map owns its mesh, restores matrices and refuses stale or malf
     view.setUint32(MODEL + 152, 1, true); header();
     assert.equal(invoke("publish", region, bytes), 2); assert.equal(textures, 1); assert.deepEqual(released, []);
     const drawn = draws; invoke("render", owner);
-    assert.equal(draws, drawn + 1, "a busy publish keeps the current texture drawn");
+    assert.equal(draws, drawn, "a queue-held model waits before another capture and submission");
     view.setUint32(MODEL + 152, 0, true);
     header(); assert.equal(invoke("publish", region, bytes), 1); assert.equal(meshes, 1);
+    invoke("render", owner); assert.equal(draws, drawn + 1, "native drawing retries after drain");
     for (const [offset, value] of [[0, 0], [8, 6], [12, 63], [16, 4096], [20, 0]] as const) {
       header(); view.setUint32(region + offset, value, true); assert.equal(invoke("publish", region, bytes), 0);
     }
@@ -149,7 +158,31 @@ test("each native map owns its mesh, restores matrices and refuses stale or malf
     } else {
       scalar("gwonmac_cartography_context_area_epoch", 8); invoke("render", owner); assert.equal(draws, before);
     }
-    released.length = 0; invoke("destroy", owner); invoke("destroy", owner); assert.deepEqual(released, [12, 11]);
+    for (const held of ["model", "flush"] as const) {
+      for (const retire of ["destroy", "replace"] as const) {
+        released.length = 0;
+        const nextOwner = owner + 1024;
+        view.setUint32(nextOwner + 4, 2, true);
+        view.setUint32(MODEL + 152, held === "model" ? 1 : 0, true);
+        view.setUint32(DEVICE + 460, held === "flush" ? 0 : 3, true);
+        if (retire === "destroy") { invoke("destroy", owner); invoke("destroy", owner); }
+        else { invoke("render", nextOwner); invoke("render", nextOwner); }
+        assert.deepEqual(released, [], "retirement retains queue-held map resources");
+        header(); assert.equal(invoke("publish", region, bytes), 2, "pending retirement blocks upload");
+        const beforeRetiredDraw: number = draws;
+        invoke("render", nextOwner);
+        assert.equal(draws, beforeRetiredDraw, "retired map never draws again");
+        view.setUint32(MODEL + 152, 0, true); view.setUint32(DEVICE + 460, 3, true);
+        invoke("render", nextOwner);
+        assert.deepEqual(released, [12, 11], "native rendering reaps the old pair once");
+        scalar("gwonmac_cartography_context_area_epoch", 7);
+        // Restore the original owner so the next scenario starts with a draw.
+        view.setUint32(owner + 4, 2, true); invoke("render", owner);
+        header(); assert.equal(invoke("publish", region, bytes), 1);
+      }
+    }
+    released.length = 0; invoke("destroy", owner); invoke("destroy", owner);
+    assert.deepEqual(released, [12, 11]);
   }
 });
 

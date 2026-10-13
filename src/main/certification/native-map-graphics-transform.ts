@@ -156,7 +156,7 @@ export function appendNativeMapGraphics(input: Uint8Array): Uint8Array {
   const status = exported.find((entry) => entry.name === "gwonmac_cartography_context_status")?.index;
   if (epoch === undefined || status === undefined) return input;
   const extraBodies: Uint8Array[] = []; const extraExports: Uint8Array[] = [];
-  const scalarNames = ["owner", "buffer", "draw", "area", "serial", "uploads", "draws", "created", "destroyed", "continent"];
+  const scalarNames = ["owner", "buffer", "draw", "area", "serial", "uploads", "draws", "created", "destroyed", "continent", "retired"];
   const first = module.functionImportCount + bodies.length;
   // Later surfaces draw after earlier ones on the same map: each hook lands
   // after the calls already inserted at that original offset.
@@ -171,19 +171,26 @@ export function appendNativeMapGraphics(input: Uint8Array): Uint8Array {
     const put = (index: number) => concat(op(0x24), uleb(base + index));
     const increment = (index: number) => concat(g(index), i(1), op(0x6a), put(index));
     const hideIndex = first + extraBodies.length; const destroyIndex = hideIndex + 1;
-    const renderIndex = hideIndex + 2; const publishIndex = hideIndex + 3;
-    const hide = concat(op(0), i(0), put(3), i(0), put(4), op(0x0b));
+    const renderIndex = hideIndex + 2; const publishIndex = hideIndex + 3, reapIndex = hideIndex + 4;
+    // One bounded mesh/draw pair survives retirement until the queue releases it.
+    const reap = concat(op(1, 1, 0x7f), g(10), op(0x45, 0x04, 0x40, 0x0f, 0x0b),
+      nativeGraphicsBusy(0, bindings), op(0x04, 0x40, 0x0f, 0x0b),
+      g(2), op(0x04, 0x40), nativeModelBusy(g(2), 0, bindings), op(0x04, 0x40, 0x0f, 0x0b),
+      g(2), call(bindings.functionIndex(748)), g(1), call(bindings.functionIndex(748)), increment(8), op(0x0b),
+      ...[1, 2, 10].map((index) => concat(i(0), put(index))), op(0x0b));
+    const hide = concat(op(0), i(0), put(3), i(0), put(4), call(reapIndex), op(0x0b));
     const destroy = concat(op(0), l(0), g(0), op(0x46, 0x04, 0x40), call(hideIndex),
-      g(2), op(0x04, 0x40), g(2), call(bindings.functionIndex(748)), g(1), call(bindings.functionIndex(748)), increment(8), op(0x0b),
-      ...[0, 1, 2].map((index) => concat(i(0), put(index))), op(0x0b, 0x0b));
+      i(0), put(0), i(1), put(10), op(0x0b), call(reapIndex), op(0x0b));
     // The draw event provides trusted ownership. Native matrices 0/1 already
     // project world-map units; only our model matrix is identity, then restored.
-    const render = concat(op(1, 1, 0x7f),
-      l(0), g(0), op(0x47, 0x04, 0x40), g(0), call(destroyIndex), l(0), put(0), op(0x0b),
+    const render = concat(op(1, 1, 0x7f), call(reapIndex),
+      g(10), op(0x04, 0x40, 0x0f, 0x0b), l(0), g(0), op(0x47, 0x04, 0x40), g(0), call(destroyIndex), g(10), op(0x04, 0x40, 0x0f, 0x0b), l(0), put(0), op(0x0b),
       ...(isWorld ? [l(0), load(4), g(9), op(0x47, 0x04, 0x40), call(hideIndex), op(0x0b), l(0), load(4), put(9)] : []),
       g(3), i(0), op(0x4a), g(3), op(0x23), uleb(epoch), op(0x46, 0x71),
       op(0x23), uleb(status), i(1), op(0x46, 0x71), g(2), i(0), op(0x47, 0x71),
       op(0x45, 0x04, 0x40), call(hideIndex), op(0x0f, 0x0b),
+      // Capturing native view/model state also asserts while this model is queued.
+      nativeGraphicsBusy(1, bindings), nativeModelBusy(g(2), 1, bindings), op(0x72, 0x04, 0x40, 0x0f, 0x0b),
       stack(1, 80), l(1), i(2), call(bindings.functionIndex(1333)), i(52), call(bindings.functionIndex(264)),
       i(2), call(bindings.functionIndex(1357)), g(2), i(0), call(bindings.functionIndex(1579)),
       l(1), g(2), save(64), i(1), l(1), i(64), op(0x6a), call(bindings.functionIndex(1564)),
@@ -234,7 +241,8 @@ export function appendNativeMapGraphics(input: Uint8Array): Uint8Array {
     // A retained model's texture swap asserts while the renderer holds it; this
     // runs from the host's frame, so report busy before hiding or allocating.
     const busyScratch = quads ? 13 : 9;
-    const publish = concat(op(1, quads ? 12 : 8, 0x7f),
+    const publish = concat(op(1, quads ? 12 : 8, 0x7f), call(reapIndex),
+      g(10), op(0x04, 0x40), i(NATIVE_PUBLISH_BUSY), op(0x0f, 0x0b),
       nativeGraphicsBusy(busyScratch, bindings), op(0x04, 0x40), i(NATIVE_PUBLISH_BUSY), op(0x0f, 0x0b),
       g(2), op(0x04, 0x40), nativeModelBusy(g(2), busyScratch, bindings), op(0x04, 0x40), i(NATIVE_PUBLISH_BUSY), op(0x0f, 0x0b, 0x0b),
       call(hideIndex),
@@ -267,7 +275,7 @@ export function appendNativeMapGraphics(input: Uint8Array): Uint8Array {
       ...[48, 52, 56].map((offset) => concat(l(4), f(1000000), save(offset, true))),
       g(1), l(4), i(36), op(0x6a), l(4), i(48), op(0x6a), call(bindings.functionIndex(1449)), g(1), call(bindings.functionIndex(1448)),
       l(7), put(3), l(0), load(20), put(4), increment(5), unstack(4, 64), i(1), op(0x0b));
-    extraBodies.push(hide, destroy, render, publish);
+    extraBodies.push(hide, destroy, render, publish, reap);
     const hooks = !isWorld
       ? [[16136, 939, concat(l(0), call(renderIndex))], [16125, 3, concat(l(0), call(destroyIndex))]] as const
       : [[16224, 830, concat(l(4), load(0), call(renderIndex))], [16170, 3, concat(l(0), call(destroyIndex))]] as const;
@@ -302,7 +310,7 @@ export function appendNativeMapGraphics(input: Uint8Array): Uint8Array {
   const extraTypes = [op(0x60, 0, 0), op(0x60, 1, 0x7f, 0), op(0x60, 2, 0x7f, 0x7f, 1, 0x7f), op(0x60, 1, 0x7f, 1, 0x7f)];
   return concat(WASM_HEADER, ...sections.map((section) => encodeSection({id: section.id,
     body: section.id === 1 ? concat(uleb(signatures.count + extraTypes.length), signatures.entries, ...extraTypes)
-      : section.id === 3 ? encodeIndexVector([...types, ...NATIVE_MAP_GRAPHICS_SURFACES.flatMap(() => [0, 1, 1, 2].map((type) => signatures.count + type)), signatures.count + 3])
+      : section.id === 3 ? encodeIndexVector([...types, ...NATIVE_MAP_GRAPHICS_SURFACES.flatMap(() => [0, 1, 1, 2, 0].map((type) => signatures.count + type)), signatures.count + 3])
       : section.id === 6 ? concat(uleb(globals.count + scalarNames.length * NATIVE_MAP_GRAPHICS_SURFACES.length), globals.entries, ...Array.from({length: scalarNames.length * NATIVE_MAP_GRAPHICS_SURFACES.length}, () => concat(op(0x7f, 1), i(0), op(0x0b))))
       : section.id === 7 ? concat(uleb(exportVector.count + extraExports.length), exportVector.entries, ...extraExports)
       : section.id === 10 ? encodeCode([...bodies, ...extraBodies]) : section.body,
