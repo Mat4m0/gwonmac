@@ -29,14 +29,19 @@ function authorize(pointer: number, gate: WhisperGate, phase: number): Uint8Arra
 }
 
 export function whisperConfigure(pending: number, pointer: number, enabled: number): Uint8Array {
+  return mailboxConfigure(COMMAND, M.bytes, pending, pointer, enabled);
+}
+
+/** Sets or clears one command's mailbox pointer: `(pointer, enabled) -> 1`, or 0 when refused. */
+export function mailboxConfigure(command: number, bytes: number, pending: number, pointer: number, enabled: number): Uint8Array {
   return concat(uleb(0),
     // Disabling always cancels only this command, before the allocation is freed.
     c(0), sg(enabled),
-    g(pending), c(COMMAND), op(0x46, 0x04, 0x40), c(0), sg(pending), op(0x0b),
+    g(pending), c(command), op(0x46, 0x04, 0x40), c(0), sg(pending), op(0x0b),
     c(0), sg(pointer), l(1), op(0x45, 0x04, 0x40), c(1), op(0x0f, 0x0b),
     l(0), op(0x45), refuse, l(0), c(3), op(0x71), refuse,
     // Widen before adding: memory32 may cover all four GiB.
-    l(0), op(0xad), concat(op(0x42), sleb(M.bytes)), op(0x7c),
+    l(0), op(0xad), concat(op(0x42), sleb(bytes)), op(0x7c),
     op(0x3f, 0, 0xad), concat(op(0x42), sleb(16)), op(0x86, 0x56), refuse,
     l(0), sg(pointer), c(1), sg(enabled), c(1), op(0x0b));
 }

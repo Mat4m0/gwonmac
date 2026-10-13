@@ -46,8 +46,9 @@ position in place. The cutover does not copy, move, or delete that data.
 The launcher hides after every selected account opens successfully. It stays
 visible if an account needs attention. Use **Window → Show Launcher** to open
 another account. You can also right-click the Dock icon and choose **Show
-Launcher**. **Settings…** opens Settings in the Hub when a game window is in
-front, and launcher Settings otherwise. Closing one game
+Launcher**. **Settings…** (Command-comma) opens the Settings page. In a focused game
+window, that is the Hub Settings page. With no game window focused, it brings
+the launcher forward at Settings. Closing one game
 affects only that account. Closing the last game shows the launcher. Clicking
 the Dock icon restores the most recent launcher or game window that you used.
 If that window has closed, the next most recent game window is restored.
@@ -66,7 +67,7 @@ shows named accounts while you are playing.
 
 ## Home content
 
-Home can show News and Dailies. Open **Settings → Content** to enable either
+Home can show News and Dailies. In the launcher, open **Settings → Home screen** to enable either
 section and choose which one appears first. If only one is enabled, Home removes
 the tab switcher. If both are disabled, the artwork uses the full Home area.
 
@@ -81,7 +82,7 @@ The launcher owns game preparation, downloads, repair, and reset. There is no
 second update or Play screen inside a game window.
 
 Guild Wars can start as soon as a healthy client is ready. The remaining game
-data downloads automatically in the background and does not block Play. Open
+data downloads automatically in the background and does not block Play. In the launcher, open
 **Settings → Game files** to see the current state or pause and resume the
 background download.
 
@@ -93,7 +94,7 @@ window positions.
 
 ## Texture packs
 
-Open **Settings → Game → Texture packs** to import a classic TexMod `.tpf` UI
+In the launcher, open **Settings → Texture packs** to import a classic TexMod `.tpf` UI
 design. Import keeps the pack inactive. Select it after import, then open a new
 game window to use it. The selection is global across account profiles; game
 windows that are already open keep the appearance they started with.
@@ -111,7 +112,7 @@ every account. The launcher exposes:
 
 - **Call target** — opt in to a shortcut for calling a target without attacking;
 - **Build Library** — save and organize builds and teams;
-- **Quick Travel** — search reviewed destinations, online friends, and your Guild Hall;
+- **Quick Travel** — search reviewed destinations, online friends, and your Guild Hall. Its **Progress** page lists the missions, vanquishes and outposts a title still needs, each one trip away ([Progress](progress.md));
 - **Xunlai Storage** — open storage in supported PvE outposts;
 - **Quick Item Move** — Control-click whole stacks between inventory and an
   open Xunlai chest or player trade. Hold Shift too to choose the quantity;
@@ -120,7 +121,8 @@ every account. The launcher exposes:
 - **Target Distance** — show distance to the selected target in PvE;
 - **Skill Key Labels** — label the eight skill slots with your controls;
 - **Skill Cooldowns** — show numeric recharge timers with a preset or custom color;
-- **Effect Timers** — show exact remaining time on your own native Effects icons in PvE.
+- **Effect Timers** — show exact remaining time on your own native Effects icons in PvE;
+- **Reminders** — a `[gwonmac]` line in your own chat a minute before a con, pcon or your alcohol runs out, and when it has. Choose cons, pcons and alcohol, the two times, and an optional chime. Only you see these lines.
 
 Quick Travel keeps a reviewed current outpost visible and disabled in its small
 catalogue, even when a character was ferried there without unlocking map travel.
@@ -214,9 +216,7 @@ A double-click never runs anything on the page its first click opened, and it
 never reaches the game after Hub closes. The **Actions** button, **Command-J**, or a right-click on a result, opens secondary actions. A right-click on a Travel destination or a character card only selects it. **Command-K** opens Trade. Escape first closes an open menu or disclosure, then
 clears typed text, then goes back, then closes the palette; a page you opened
 with its own shortcut closes without a stop at Home. A held Escape takes one
-step. In Settings, Up and Down stay in the section list or in the section; Right
-enters a section and Left returns to its name. Escape at a shortcut conflict
-cancels the prompt. **Command-Backspace** goes back one level from anywhere in
+step. **Command-Backspace** goes back one level from anywhere in
 Hub, including a text field, and never closes it; the Back arrow and the mouse
 back button do the same, and VoiceOver speaks the title of the page you return
 to. Inside a page it first leaves that page's own level:
@@ -229,7 +229,7 @@ Forms keep their keys, Customize Travel included. The game keeps
 running while Hub is open. The footer's left side lists the keys that work in
 the current view, and every page keeps it: a review, a confirmation or a form
 names its action there, for example **Apply team GOM AFK** or **Save phrase**,
-and Enter runs it. Settings and Maps save as you change them; **Done** goes back.
+and Enter runs it. A page without its own action shows **Done**, which goes back.
 In **Hub preferences**, choose a pin and use **Move up**, **Move down**, or
 Option-Command-Up and Down to reorder it. **Remove …** in the footer asks first.
 
@@ -426,20 +426,27 @@ character return after reload. Render quality updates open windows immediately.
 Extended memory takes effect after an application restart. Controller symbols
 apply when you next open or reload a game window.
 
-The **In-game panels** section restores control of panel style, font, opacity,
+**Settings → Appearance** restores control of panel style, font, opacity,
 and custom colors. Each color accepts a picker or six-digit hex value. These
 changes apply to gwonmac panels in every open game window. Custom themes can be
 shared as text; switching to a built-in style keeps the saved custom palette.
 An illustrative panel preview shows the selected palette. Low-contrast text
 colors produce an explanation of the game's readability correction.
 
-Settings save automatically. If a save fails, the settings feedback identifies
-the unsaved change. Choose **Retry save** to repeat it or **Revert change** to
-restore the confirmed values. Further edits wait until that change is resolved.
-Switching sections starts at the new heading. Reopening Settings returns to the
-last section.
+Settings save as you change them. The line at the bottom of the page names
+the saved setting and when it applies. If a save fails, that line names the
+unsaved change. Choose **Retry** to repeat it or **Revert** to restore the
+confirmed value. Further edits wait until that change is resolved. In the launcher, type in the
+search field (Command-F) to find a setting by its name; Return opens the first
+result. Settings opens at the section you used last, or at the setting the Hub asked for.
 
-Open **Settings → Advanced** to show the diagnostics overlay or reveal logs.
+Hub search (⌘R) finds sections and single settings by their words. Choosing a
+result opens the Hub Settings page at that control. The control takes focus and
+is briefly highlighted. Search does not change a setting for you. Sections that
+show ↗ open the launcher instead.
+
+Open **Settings → Game** to show the diagnostics overlay, and, in the launcher, **Settings →
+Advanced** to reveal logs.
 The in-game memory warning remains available during long sessions and can reload
 only the affected profile.
 **Reset all app settings** also resets game preferences, Tools, shortcuts,

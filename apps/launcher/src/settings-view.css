@@ -1,0 +1,340 @@
+/* The launcher's Settings page: search first, a section sidebar, one status line.
+   This file is self-contained: the page is drawn in the launcher and inside the game's Hub (a
+   different document with its own global CSS), so every selector is scoped under .settings-view
+   and nothing relies on the host's :root variables, resets or element styles.
+   Element-level resets use :where(.settings-view) so they stay as weak as a global reset. */
+
+/* Tokens. The launcher values are the defaults; the Hub overrides these in hub-settings.css:
+   --settings-font, --settings-heading-font, --settings-font-size, --settings-text, --settings-muted,
+   --settings-accent, --settings-line, --settings-line-strong, --settings-control, --settings-hover,
+   --settings-surface, --settings-surface-solid, --settings-aside, --settings-focus.
+   --gold, --muted, --line, --line-strong, --control, --surface, --surface-solid and --surface-hover are
+   aliases of those, for the components' own <style scoped> blocks (they were the launcher's :root names). */
+/* Layout follows the page's own width, not the window's: the launcher draws it full width, the Hub in its panel. */
+.settings-view {
+  container: settings / inline-size;
+  --settings-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  --settings-heading-font: "GW Display", Georgia, serif;
+  --settings-font-size: 14px;
+  --settings-text: #f4efe7;
+  --settings-muted: #aaa297;
+  --settings-accent: #e8b75c;
+  --settings-line: rgba(240, 224, 197, .14);
+  --settings-line-strong: rgba(240, 224, 197, .26);
+  --settings-control: rgba(255, 255, 255, .065);
+  --settings-hover: rgba(240, 224, 197, .075);
+  --settings-surface: rgba(23, 21, 18, .92);
+  --settings-surface-solid: #181714;
+  --settings-aside: #12110f;
+  --settings-focus: #f1c875;
+  --gold: var(--settings-accent);
+  --muted: var(--settings-muted);
+  --line: var(--settings-line);
+  --line-strong: var(--settings-line-strong);
+  --control: var(--settings-control);
+  --surface: var(--settings-surface);
+  --surface-solid: var(--settings-surface-solid);
+  --surface-hover: var(--settings-hover);
+  color-scheme: dark;
+  font-family: var(--settings-font);
+  font-size: var(--settings-font-size);
+  color: var(--settings-text);
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  box-sizing: border-box;
+}
+@media (prefers-contrast: more) { .settings-view { --settings-line: rgba(255, 255, 255, .35); --settings-muted: #d4cec5; } }
+
+/* Base resets the page needs. */
+:where(.settings-view *) { box-sizing: border-box; scrollbar-color: rgba(232, 183, 92, .52) rgba(255, 255, 255, .045); scrollbar-width: thin; }
+:where(.settings-view) ::-webkit-scrollbar { width: 10px; height: 10px; }
+:where(.settings-view) ::-webkit-scrollbar-track { background: rgba(255, 255, 255, .045); }
+:where(.settings-view) ::-webkit-scrollbar-thumb { border: 2px solid #0d0d0b; border-radius: 99px; background: rgba(232, 183, 92, .52); }
+:where(.settings-view) ::selection { color: #17120b; background: #e8b75c; }
+:where(.settings-view) svg { width: 20px; height: 20px; stroke-width: 1.8; }
+:where(.settings-view) h1 { margin: 10px 0 12px; font: 48px/1.03 var(--settings-heading-font); letter-spacing: -.02em; }
+:where(.settings-view) h2 { margin: .83em 0; font-size: 1.5em; font-weight: 700; }
+:where(.settings-view) h3 { margin: 1em 0; font-size: 1.17em; font-weight: 700; }
+:where(.settings-view) p { margin: 1em 0; color: var(--settings-muted); line-height: 1.5; }
+:where(.settings-view) button, :where(.settings-view) input, :where(.settings-view) textarea, :where(.settings-view) select { font: inherit; }
+:where(.settings-view) button { color: inherit; border: 0; cursor: pointer; background: transparent; }
+:where(.settings-view) button:active { transform: scale(.985); filter: brightness(.95); }
+:where(.settings-view) button:disabled { transform: none; filter: none; cursor: default; }
+:where(.settings-view) button:focus-visible, :where(.settings-view) input:focus-visible, :where(.settings-view) textarea:focus-visible, :where(.settings-view) select:focus-visible, :where(.settings-view) summary:focus-visible { outline: 2px solid var(--settings-focus); outline-offset: 2px; }
+/* A heading focused to announce a new section is not a control: no focus ring. */
+:where(.settings-view) [tabindex="-1"]:focus { outline: none; }
+:where(.settings-view) textarea, :where(.settings-view) input:not([type="color"]):not([type="range"]):not([type="checkbox"]):not([type="radio"]), :where(.settings-view) select { width: 100%; padding: 12px 13px; border: 1px solid var(--settings-line); border-radius: 10px; color: var(--settings-text); background: #11110f; }
+:where(.settings-view) select option { color: var(--settings-text); background: var(--settings-surface-solid); }
+:where(.settings-view) textarea { resize: vertical; }
+@media (prefers-reduced-motion: no-preference) { :where(.settings-view) button { transition: transform .34s cubic-bezier(.2,.8,.2,1), opacity .25s ease, background-color .25s ease; } }
+
+/* Rules that used to live in the launcher's style.css, in their original order. Shared ones
+   (.primary, .secondary, .text-link, .inline-message, .visually-hidden) stay there too. */
+.settings-view .secondary { padding: 8px 12px; border-radius: 9px; border: 1px solid var(--settings-line); background: var(--settings-control); }
+.settings-view .text-link { display: inline-flex; align-items: center; gap: 8px; padding: 9px 0; color: #f0c56f; background: transparent; border-bottom: 1px solid rgba(232,183,92,.5); }
+.settings-view .text-link svg { width: 16px; }
+:where(.settings-view) .secondary { display: inline-flex; align-items: center; gap: 8px; }
+.settings-view .visually-hidden { position: fixed !important; width: 1px !important; height: 1px !important; overflow: hidden !important; clip: rect(0 0 0 0) !important; clip-path: inset(50%) !important; white-space: nowrap !important; }
+.settings-view .primary { display: inline-flex; align-items: center; justify-content: center; gap: 10px; padding: 13px 20px; border-radius: 12px; color: #211608; font-weight: 750; background: linear-gradient(#f7d58d, #d7973a); box-shadow: inset 0 1px rgba(255,255,255,.7); }
+.settings-view .primary:disabled { opacity: .45; cursor: default; }
+.settings-view .settings-page { grid-column: 1 / -1; min-height: 0; display: grid; grid-template-columns: 240px 1fr; }
+.settings-view .settings-page aside { display: flex; flex-direction: column; padding: 32px 22px; border-right: 1px solid var(--settings-line); }
+.settings-view .settings-page aside h2 { padding: 0 12px; }
+.settings-view .settings-page aside button { width: 100%; padding: 11px 12px; text-align: left; color: var(--settings-muted); border-radius: 9px; background: transparent; }
+.settings-view .settings-page aside button.active { color: #f4efe7; background: var(--settings-control); }
+.settings-view .settings-nav-group { display: grid; gap: 2px; margin-top: 24px; }
+.settings-view .settings-nav-group h3 { margin: 0; padding: 0 12px 7px; color: #817a70; font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.settings-view .settings-content { min-width: 0; min-height: 0; overflow: auto; padding: 34px clamp(36px, 7vw, 100px); }
+.settings-view .settings-content h1 { font-size: 48px; }
+.settings-view .setting-group { max-width: 760px; overflow: hidden; border: 1px solid var(--settings-line); border-radius: 14px; background: var(--settings-surface); }
+.settings-view .setting-group > label, .settings-view .setting-row { min-height: 72px; display: flex; justify-content: space-between; align-items: center; gap: 28px; padding: 16px 18px; border-bottom: 1px solid var(--settings-line); }
+.settings-view .setting-group > label > span, .settings-view .setting-row > span { display: grid; gap: 5px; }
+.settings-view .setting-group small { color: var(--settings-muted); }
+.settings-view .setting-group input[type="checkbox"] { width: 24px; height: 24px; flex: 0 0 24px; margin: 0; accent-color: var(--settings-accent); }
+.settings-view .setting-group select { width: 180px; max-width: 100%; flex-shrink: 0; }
+.settings-view .setting-group > button, .settings-view .setting-group details { margin: 16px; }
+.settings-view .setting-group details p { max-width: 600px; }
+.settings-view .good { color: #a8d36d; }
+.settings-view .danger-button { padding: 10px 14px; border-radius: 9px; color: #f5b7ab; background: rgba(164,54,35,.2); }
+.settings-view .download-card { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 14px; padding: 16px 18px; border-bottom: 1px solid var(--settings-line); background: rgba(232,183,92,.055); }
+.settings-view .download-card > div { display: grid; gap: 5px; }
+.settings-view .download-card span { color: var(--settings-muted); font-size: 14px; }
+.settings-view .download-card progress { grid-column: 1 / -1; width: 100%; height: 9px; accent-color: var(--settings-accent); }
+.settings-view .file-actions { display: flex; align-items: center; gap: 10px; padding: 16px 18px; flex-wrap: wrap; }
+.settings-view .file-actions small { flex-basis: 100%; }
+.settings-view .recovery-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 18px; padding: 18px; border-bottom: 1px solid var(--settings-line); background: rgba(173, 63, 42,.1); }
+.settings-view .recovery-card > div { display: grid; gap: 5px; }
+.settings-view .recovery-card span { color: var(--settings-muted); font-size: 14px; }
+.settings-view .recovery-card button, .settings-view .file-actions button, .settings-view .danger-button { display: inline-flex; align-items: center; gap: 8px; }
+.settings-view .inline-message { margin: 14px 18px; padding: 12px; border-radius: 9px; background: rgba(232,183,92,.08); }
+.settings-view .restart-row { display: flex !important; grid-template-columns: none; align-items: center; justify-content: space-between; gap: 18px; margin: 14px; padding: 14px; border-radius: 11px; background: rgba(232,183,92,.09); }
+.settings-view .settings-heading-row { max-width: 760px; display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
+.settings-view .settings-heading-row h1 { margin-top: 0; }
+.settings-view .settings-heading-row p { max-width: 560px; }
+.settings-view .settings-heading-row .primary { flex: 0 0 auto; margin-top: 8px; }
+.settings-view .settings-heading-row svg { width: 18px; }
+.settings-view .texture-pack-note { max-width: 760px; padding: 12px 14px; border: 1px solid var(--settings-line); border-radius: 11px; color: var(--settings-muted); background: rgba(232,183,92,.05); }
+.settings-view .texture-pack-list { max-width: 760px; display: grid; gap: 10px; margin: 18px 0 0; padding: 0; border: 0; }
+.settings-view .texture-pack-card { min-height: 78px; display: grid; grid-template-columns: auto minmax(0,1fr) auto auto; align-items: center; gap: 14px; padding: 14px 16px; border: 1px solid var(--settings-line); border-radius: 13px; background: var(--settings-surface); cursor: pointer; }
+.settings-view .texture-pack-card.unavailable { opacity: .7; }
+.settings-view .texture-pack-card input { width: 19px; height: 19px; accent-color: #d99b42; }
+.settings-view .texture-pack-card > span { display: grid; gap: 4px; min-width: 0; }
+.settings-view .texture-pack-card small { color: var(--settings-muted); white-space: normal; }
+.settings-view .texture-pack-card .pack-hash { font-family: ui-monospace, monospace; font-size: 11px; }
+.settings-view .pack-ready { color: #a8d36d; font-size: 13px; }
+.settings-view .pack-warning { color: #e8b75c; font-size: 13px; }
+.settings-view .texture-pack-card .icon-button { opacity: .75; }
+.settings-view .texture-pack-card .icon-button:hover { opacity: 1; }
+.settings-view .texture-pack-card .icon-button svg { width: 18px; }
+.settings-view .texture-pack-status { max-width: 736px; margin-inline: 0; }
+.settings-view .texture-pack-help { max-width: 730px; margin-top: 20px; color: var(--settings-muted); }
+.settings-view .texture-pack-help summary { color: inherit; cursor: pointer; }
+.settings-view .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+@container settings (max-width: 980px) {
+  .settings-view .settings-page { grid-template-columns: 190px 1fr; }
+  .settings-view .settings-content { padding-inline: 32px; }
+}
+@container settings (max-width: 600px) {
+  .settings-view .settings-content { padding: 24px 20px; }
+  .settings-view .settings-content h1 { font-size: 40px; }
+  .settings-view .settings-page { display: block; overflow: auto; scroll-padding-top: 72px; }
+  .settings-view .settings-page aside { position: sticky; top: 0; z-index: 4; display: flex; flex-direction: row; gap: 4px; overflow-x: auto; padding: 10px 14px; border-right: 0; border-bottom: 1px solid var(--settings-line); background: var(--settings-surface-solid); }
+  .settings-view .settings-page aside h2 { display: none; }
+  .settings-view .settings-nav-group { display: contents; }
+  .settings-view .settings-nav-group h3 { display: none; }
+  .settings-view .settings-page aside button { width: auto; flex: 0 0 auto; white-space: nowrap; }
+  .settings-view .settings-content { overflow: visible; }
+  .settings-view .setting-group { width: 100%; min-width: 0; }
+  .settings-view .setting-group > label, .settings-view .setting-row, .settings-view .download-card, .settings-view .recovery-card, .settings-view .restart-row { align-items: flex-start; flex-wrap: wrap; gap: 12px; }
+  .settings-view .setting-group select { max-width: 100%; }
+  .settings-view .file-actions { flex-wrap: wrap; }
+  .settings-view .map-line-editor { grid-template-columns: minmax(0, 1fr); }
+  .settings-view .map-line-editor legend { width: auto; }
+}
+.settings-view .setting-row { min-height: 68px; display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 14px 18px; border-bottom: 1px solid var(--settings-line); }
+.settings-view .setting-row > span { display: grid; gap: 4px; }
+.settings-view .setting-row small { color: var(--settings-muted); }
+.settings-view .map-style-actions details { padding: 16px 18px; }
+.settings-view .map-style-actions details > label { display: grid; gap: 8px; margin-block: 14px; }
+.settings-view .map-style-actions textarea { width: 100%; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.settings-view .map-style-actions details p { color: var(--settings-muted); font-size: 13px; }
+.settings-view .map-style-actions > .text-link { margin: 12px 18px; color: #ee806e; }
+.settings-view .map-style-editor h2 { margin: 0; padding: 24px 18px 8px; color: var(--settings-accent); font-family: inherit; font-size: 14px; }
+.settings-view .map-line-editor { min-width: 0; margin: 20px 0 0; padding: 0; border: 0; }
+.settings-view .map-line-editor legend { padding: 0 18px 8px; color: var(--settings-accent); font-weight: 600; }
+/* :where keeps these at the launcher's original specificity: a component's own scoped style (Maps, Shortcut) must still win. */
+:where(.settings-view) .setting-row > span, :where(.settings-view) .setting-group > label > span { min-width: 0; }
+.settings-view .setting-group > .setting-row:last-child { border-bottom: 0; }
+.settings-view .setting-row > .secondary { flex-shrink: 0; }
+.settings-view .setting-group summary { cursor: pointer; padding-block: 6px; }
+.settings-view .control-error { color: #f5b7ab; }
+@container settings (max-width: 1100px) {
+  .settings-view .settings-content { padding-inline: 24px; }
+  .settings-view .setting-row, .settings-view .setting-group > label { flex-wrap: wrap; gap: 12px 20px; }
+  .settings-view .setting-group > label > span { flex: 1; }
+}
+.settings-view .texture-pack-card { grid-template-columns: minmax(0, 1fr) auto auto; cursor: default; }
+.settings-view .texture-pack-card > label { min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 14px; cursor: pointer; }
+.settings-view .texture-pack-card label > span { display: grid; gap: 4px; min-width: 0; }
+.settings-view .texture-pack-card:focus-visible { outline: 2px solid #d99b42; outline-offset: 2px; }
+.settings-view .settings-page { height: 100%; grid-template-columns: 188px minmax(0, 1fr); overflow: hidden; }
+.settings-view .settings-page aside { min-height: 0; overflow-y: auto; padding: 24px 12px; background: #0c0c0a; }
+.settings-view .settings-page aside h2 { margin: 0 0 24px; padding: 0 12px; font-size: 17px; font-weight: 600; }
+.settings-view .settings-nav-group { margin: 0 0 24px; gap: 2px; }
+.settings-view .settings-nav-group h3 { margin: 0; padding: 0 12px 8px; color: var(--settings-muted); font-size: 12px; font-weight: 500; letter-spacing: 0; text-transform: none; }
+.settings-view .settings-page aside button { padding: 9px 12px; border-radius: 5px; font-size: 14px; }
+.settings-view .settings-page aside button.active { color: #f4d394; background: #28251e; }
+.settings-view .settings-content { position: relative; overflow: auto; padding: 28px 32px 40px; scroll-padding-block: 100px 24px; }
+.settings-view .settings-fields { min-width: 0; max-width: 840px; margin: 0; padding: 0; border: 0; }
+.settings-view .settings-fields h1 { margin: 0 0 12px; font-size: 28px; line-height: 1.2; }
+.settings-view .settings-fields > p { max-width: 70ch; margin: 0 0 24px; font-size: 13px; }
+.settings-view .setting-group { max-width: none; margin: 0 0 24px; overflow: visible; border: 0; border-radius: 0; background: transparent; }
+.settings-view .setting-group > label, .settings-view .setting-row { min-height: 56px; gap: 12px 24px; padding: 12px 0; border-bottom: 1px solid var(--settings-line); }
+.settings-view .setting-group strong { font-size: 14px; font-weight: 550; }
+.settings-view .setting-group small { font-size: 13px; line-height: 1.4; }
+.settings-view .setting-group label > span, .settings-view .setting-row > span { gap: 3px; }
+.settings-view .setting-group input[type="checkbox"] { width: 18px; height: 18px; flex-basis: 18px; }
+.settings-view .setting-group select { width: 200px; }
+.settings-view input:not([type="checkbox"]):not([type="range"]):not([type="color"]), .settings-view select { min-height: 34px; padding: 6px 10px; border-radius: 5px; font-size: 13px; }
+.settings-view .secondary:disabled { opacity: .45; }
+.settings-view .secondary, .settings-view .danger-button { min-height: 32px; padding: 6px 10px; border-radius: 5px; font-size: 13px; }
+.settings-view .setting-group .primary { min-height: 34px; padding: 8px 12px; border-radius: 5px; font-size: 13px; }
+.settings-view .text-link { padding-block: 6px; border: 0; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; }
+.settings-view .setting-group > button, .settings-view .setting-group details { margin: 12px 0; }
+.settings-view .setting-group summary { padding-block: 6px; font-size: 13px; }
+.settings-view .setting-group textarea { font-size: 12px; }
+.settings-view .settings-subheading, .settings-view .appearance-heading { margin: 28px 0 8px; font-family: inherit; font-size: 15px; font-weight: 600; }
+.settings-view .inline-message { margin: 8px 0; padding: 8px 10px; font-size: 13px; border-radius: 4px; }
+.settings-view .feature-setting { margin: 0; border-bottom: 1px solid var(--settings-line); }
+.settings-view .feature-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto 18px; align-items: center; gap: 16px; padding: 14px 0; }
+.settings-view .feature-heading > label { display: grid; gap: 3px; cursor: pointer; }
+.settings-view .feature-heading > label small { color: var(--settings-muted); }
+.settings-view .feature-heading > input { grid-column: 3; }
+.settings-view .setting-group .shortcut-options { margin: 0; }
+.settings-view .feature-setting .character-details { margin: 0 0 12px; }
+.settings-view .map-layers .feature-heading { border-bottom: 1px solid var(--settings-line); }
+.settings-view .tools-master { margin-bottom: 8px; }
+.settings-view .tools-master > label { border-bottom: 0; padding-bottom: 6px; }
+.settings-view .tools-state { color: var(--settings-muted); font-size: 13px; }
+.settings-view .restart-row { margin: 8px 0 16px; padding: 12px; border-radius: 4px; background: #252218; }
+.settings-view .restart-row > span { display: grid; gap: 6px; }
+.settings-view .restart-row button { flex-shrink: 0; }
+.settings-view .feature-availability { max-width: 840px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; padding: 0 0 16px; margin-bottom: 8px; border-bottom: 1px solid var(--settings-line); font-size: 13px; line-height: 1.5; color: var(--settings-muted); }
+.settings-view .feature-availability > span { flex: 1 1 280px; }
+.settings-view .feature-availability strong { color: #ded8cf; font-weight: 550; }
+.settings-view .map-style-choice { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 8px 0 16px; border-bottom: 1px solid var(--settings-line); }
+.settings-view .map-style-choice > label { display: flex; flex: 1; justify-content: space-between; align-items: center; gap: 16px; }
+.settings-view .map-style-choice > label > span { display: grid; gap: 3px; }
+.settings-view .map-style-choice > button { margin: 0; }
+.settings-view .map-preview { padding: 16px 0 0; }
+.settings-view .map-style-editor { padding-top: 4px; }
+.settings-view .map-style-editor h2 { margin: 16px 0 4px; padding: 0; font-size: 13px; font-weight: 600; color: var(--settings-muted); }
+.settings-view .map-style-editor > .setting-row:first-child { padding-top: 0; }
+.settings-view .map-line-editor { margin-top: 16px; }
+.settings-view .map-line-editor legend { padding: 0; font-size: 13px; }
+.settings-view .map-library { border-top: 1px solid var(--settings-line); padding-top: 12px; }
+.settings-view .map-library > .text-link { color: #f5b7ab; }
+.settings-view .map-library details > label { display: grid; gap: 6px; margin: 12px 0; }
+.settings-view .map-library textarea { width: 100%; resize: vertical; }
+.settings-view .map-library details > p { font-size: 13px; }
+.settings-view .panel-preview { padding: 16px 0; }
+.settings-view .texture-pack-note { border: 0; border-radius: 0; background: transparent; padding: 0; font-size: 13px; }
+.settings-view .texture-pack-list { gap: 0; }
+.settings-view .texture-pack-card { min-height: 64px; padding: 12px; border: 0; border-bottom: 1px solid var(--settings-line); border-radius: 0; background: transparent; }
+.settings-view .texture-pack-card.selected { background: #25231d; box-shadow: none; }
+.settings-view .texture-pack-help { font-size: 13px; }
+.settings-view .settings-heading-row { gap: 16px; }
+.settings-view .settings-heading-row .primary { font-size: 13px; padding: 8px 12px; border-radius: 5px; }
+.settings-view .download-card, .settings-view .recovery-card, .settings-view .file-actions { padding: 14px 0; background: transparent; }
+.settings-view .settings-reset { max-width: 840px; margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--settings-line); }
+.settings-view .settings-reset summary { cursor: pointer; color: #f5b7ab; font-size: 14px; }
+.settings-view .settings-reset p { max-width: 65ch; font-size: 13px; }
+.settings-view .save-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+@container settings (min-width: 1150px) {
+  .settings-view .map-appearance { display: grid; grid-template-columns: minmax(0, 1fr) 224px; column-gap: 28px; }
+  .settings-view .map-style-choice { grid-column: 1 / -1; }
+  .settings-view .map-appearance .map-preview { grid-template-columns: 1fr; align-content: start; padding-top: 16px; gap: 8px; }
+  .settings-view .map-appearance .range-control { width: 224px; }
+  .settings-view .map-appearance-controls .setting-row { display: grid; grid-template-columns: minmax(0, 1fr) 224px; }
+}
+@container settings (max-width: 980px) {
+  .settings-view .settings-content { padding: 24px; }
+}
+@container settings (max-width: 600px) {
+  .settings-view .settings-page { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .settings-view .settings-page aside { position: static; overflow-y: hidden; overflow-x: auto; padding: 4px 8px; }
+  .settings-view .settings-nav-group { display: contents; }
+  .settings-view .settings-page aside button { padding: 8px 10px; font-size: 13px; }
+  .settings-view .settings-content { padding: 16px; }
+  .settings-view .settings-fields h1 { font-size: 24px; }
+  .settings-view .feature-heading { grid-template-columns: minmax(0, 1fr) 18px; gap: 10px 12px; }
+  .settings-view .feature-heading > input { grid-column: 2; grid-row: 1; }
+  .settings-view .feature-heading > .shortcut-setting { grid-column: 1 / -1; justify-content: flex-start; }
+  .settings-view .map-style-choice > label { flex-basis: 100%; }
+  .settings-view .restart-row { flex-wrap: wrap; }
+}
+
+/* The Settings page's own layout and rows. */
+.settings-view { height: 100%; }
+.settings-view .settings-page { height: 100%; grid-template-columns: 228px minmax(0, 1fr); }
+.settings-view .settings-page aside { padding: 14px 10px; background: var(--settings-aside); }
+.settings-view .settings-page aside button { display: flex; align-items: center; gap: 10px; }
+.settings-view .settings-page aside button svg { width: 16px; height: 16px; flex: 0 0 16px; color: var(--settings-muted); }
+.settings-view .settings-page aside button.active { color: #f4d394; background: rgba(232, 183, 92, .13); }
+.settings-view .settings-page aside button.active svg { color: var(--settings-accent); }
+.settings-view .settings-nav-group { margin-bottom: 18px; }
+.settings-view .settings-nav-group h3 { padding-top: 4px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.settings-view .settings-search { position: relative; display: flex; align-items: center; margin: 0 0 18px; }
+.settings-view .settings-search > svg { position: absolute; left: 10px; width: 15px; height: 15px; color: var(--settings-muted); pointer-events: none; }
+.settings-view .settings-page .settings-search input[type="search"] { width: 100%; min-height: 32px; padding: 6px 30px 6px 32px; border: 1px solid var(--settings-line-strong); border-radius: 7px; color: inherit; background: rgba(255, 255, 255, .05); }
+.settings-view .settings-page .settings-search input[type="search"]:focus-visible { outline: 0; border-color: var(--settings-accent); box-shadow: 0 0 0 3px rgba(232, 183, 92, .22); }
+.settings-view .settings-search input::-webkit-search-cancel-button { display: none; }
+.settings-view .settings-search .icon-button { position: absolute; right: 2px; min-width: 28px; min-height: 28px; padding: 4px; color: var(--settings-accent); }
+.settings-view .settings-search .icon-button svg { width: 14px; height: 14px; }
+.settings-view .settings-main { min-width: 0; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; }
+.settings-view .settings-content { padding: 26px 32px 32px; }
+.settings-view .settings-content h1, .settings-view .settings-fields h1 { margin: 0 0 6px; font-size: 26px; line-height: 1.2; }
+.settings-view .section-intro, .settings-view .settings-fields > p { margin: 0 0 20px; color: var(--settings-muted); font-size: 13px; }
+.settings-view .settings-status { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; min-height: 40px; padding: 8px 32px; border-top: 1px solid var(--settings-line); color: var(--settings-muted); font-size: 13px; }
+.settings-view .settings-status.save-failed { color: #f5b7ab; background: rgba(164, 54, 35, .14); }
+.settings-view .settings-status > .status-line, .settings-view .settings-status > .status-alert { flex: 1 1 260px; }
+/* The live region stays in the page while empty; it takes no room. */
+.settings-view .settings-status > .status-line:empty { flex: 0 0 0; margin-inline-end: -16px; }
+/* Switches: every on/off setting in this window. */
+.settings-view .settings-page input[type="checkbox"] { appearance: none; position: relative; width: 34px; height: 20px; flex: 0 0 34px; margin: 0; border-radius: 999px; background: rgba(255, 255, 255, .18); cursor: pointer; transition: background-color .15s ease; }
+.settings-view .settings-page input[type="checkbox"]::before { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #f4efe7; box-shadow: 0 1px 2px rgba(0, 0, 0, .4); transition: transform .15s ease; }
+.settings-view .settings-page input[type="checkbox"]:checked { background: var(--settings-accent); }
+.settings-view .settings-page input[type="checkbox"]:checked::before { transform: translateX(14px); }
+.settings-view .settings-page input[type="checkbox"]:disabled { opacity: .4; cursor: default; }
+.settings-view .feature-heading { grid-template-columns: minmax(0, 1fr) auto 34px; }
+@media (prefers-reduced-motion: reduce) {
+  .settings-view .settings-page input[type="checkbox"], .settings-view .settings-page input[type="checkbox"]::before { transition: none; }
+}
+.settings-view .hub-setting { margin-bottom: 8px; }
+.settings-view .hub-setting .feature-heading { grid-template-columns: minmax(0, 1fr) auto auto; border-bottom: 1px solid var(--settings-line); }
+.settings-view .hub-setting .feature-heading > span:first-child { display: grid; gap: 3px; }
+.settings-view .hub-setting small { color: var(--settings-muted); }
+.settings-view .shortcut-keycaps { display: inline-flex; gap: 3px; }
+.settings-view .hub-setting kbd { display: grid; place-items: center; min-width: 23px; height: 25px; padding-inline: 4px; border: 1px solid var(--settings-line-strong); border-radius: 5px; background: var(--settings-control); font: inherit; font-size: 12px; }
+.settings-view .built-in { padding: 4px 9px; border: 1px solid var(--settings-line); border-radius: 999px; color: var(--settings-muted); font-size: 12px; }
+.settings-view .tool-options { margin: -4px 0 12px; }
+.settings-view .tool-options > summary { width: max-content; color: var(--settings-accent); font-size: 13px; cursor: pointer; }
+.settings-view .tool-options[open] > summary { margin-bottom: 4px; }
+.settings-view .tool-options > :not(summary) { padding-left: 14px; border-left: 2px solid var(--settings-line); }
+.settings-view .tool-link { margin: -4px 0 12px; }
+.settings-view .tool-link .text-link { color: var(--settings-accent); text-decoration: none; padding: 0; }
+.settings-view .settings-results { max-width: 840px; margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--settings-line); }
+.settings-view .settings-results button { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 8px; border-bottom: 1px solid var(--settings-line); border-radius: 0; text-align: left; }
+.settings-view .settings-results button:hover, .settings-view .settings-results button:focus-visible { background: var(--settings-hover); }
+.settings-view .settings-results button > span { display: grid; gap: 3px; min-width: 0; }
+.settings-view .settings-results small { color: var(--settings-muted); font-size: 13px; }
+.settings-view .setting-state { color: var(--settings-accent); }
+.settings-view .setting-state.good { color: #a8d36d; }
+/* A gold bar and wash just outside the row, so the row's own text does not move. */
+.settings-view .setting-focus { position: relative; }
+.settings-view .setting-focus::before { content: ""; position: absolute; inset: 0 -10px 0 -14px; border-left: 3px solid var(--settings-accent); border-radius: 6px; background: rgba(232, 183, 92, .1); pointer-events: none; }
+@container settings (max-width: 820px) {
+  .settings-view .settings-page { grid-template-columns: 188px minmax(0, 1fr); }
+  .settings-view .settings-content { padding-inline: 22px; }
+}

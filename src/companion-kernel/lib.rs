@@ -51,6 +51,7 @@ mod alcohol;
 mod player_effects;
 mod effect_icons;
 mod play_region;
+mod progress;
 mod skill_cooldowns;
 mod skill_slots;
 mod toolbox;
@@ -738,6 +739,8 @@ pub unsafe extern "C" fn companion_init(
     whisper_size: u32,
     alcohol_ptr: u32,
     alcohol_size: u32,
+    progress_ptr: u32,
+    progress_size: u32,
 ) -> u32 {
     if features == 0
         || features & !KNOWN_FEATURES != 0
@@ -777,6 +780,8 @@ pub unsafe extern "C" fn companion_init(
         || features & FEATURE_ALCOHOL_OBSERVATION != 0 && features & FEATURE_PLAYER_EFFECT_OBSERVATION == 0
         || !valid_region(features & FEATURE_ALCOHOL_OBSERVATION != 0, alcohol_ptr, alcohol_size, ALCOHOL_BYTES)
         || !valid_region(features & FEATURE_WHISPER_OBSERVATION != 0, whisper_ptr, whisper_size, WHISPER_BYTES)
+        || features & FEATURE_PROGRESS_OBSERVATION != 0 && features & FEATURE_PLAY_REGION_OBSERVATION == 0
+        || !valid_region(features & FEATURE_PROGRESS_OBSERVATION != 0, progress_ptr, progress_size, PROGRESS_BYTES)
         || config_size != CONFIG_BYTES
         || config_ptr & 3 != 0
         || !contains(config_ptr, config_size)
@@ -852,6 +857,7 @@ pub unsafe extern "C" fn companion_init(
     unsafe {
         if features & FEATURE_ALCOHOL_OBSERVATION != 0 { alcohol::initialize(alcohol_ptr); }
         if features & FEATURE_WHISPER_OBSERVATION != 0 { whispers::initialize(whisper_ptr); }
+        if features & FEATURE_PROGRESS_OBSERVATION != 0 { progress::initialize(progress_ptr); }
         SNAPSHOT_PTR = snapshot_ptr;
         LAYOUT = layout;
         FEATURES = features;
@@ -948,6 +954,9 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, c: u32, d
             }
             if active & FEATURE_PLAY_REGION_OBSERVATION != 0 {
                 unsafe { play_region::tick(layout) };
+            }
+            if active & FEATURE_PROGRESS_OBSERVATION != 0 {
+                unsafe { progress::tick(layout) };
             }
             if active & FEATURE_FRIEND_OBSERVATION != 0 {
                 unsafe { friends::tick(layout) };
@@ -1050,7 +1059,7 @@ pub unsafe extern "C" fn companion_dispatch(kind: u32, a: u32, b: u32, c: u32, d
 
 #[no_mangle]
 pub extern "C" fn companion_abi() -> u32 {
-    26
+    27
 }
 
 #[no_mangle]
@@ -1127,3 +1136,6 @@ pub extern "C" fn companion_whisper_bytes() -> u32 { WHISPER_BYTES }
 
 #[no_mangle]
 pub extern "C" fn companion_alcohol_bytes() -> u32 { ALCOHOL_BYTES }
+
+#[no_mangle]
+pub extern "C" fn companion_progress_bytes() -> u32 { PROGRESS_BYTES }

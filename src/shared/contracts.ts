@@ -19,8 +19,8 @@ import { DEFAULT_ALCOHOL_TIMER_POSITION, type AlcoholTimerPosition } from "./alc
 import type { EliteWikiRequest } from "./elite-wiki.js";
 import type { EliteMissionMapMarkers } from "./elite-map-settings.js";
 import type { EliteTracking, EliteUpdate } from "./elite-skills.js";
+import type { SettingsTarget } from "./settings-catalogue.js";
 import type { HubSettingsApi } from "./hub-settings.js";
-import type { LauncherSettingsSection } from "./launcher-contracts.js";
 import type { MarketSnapshot } from "./market-rates.js";
 import { DEFAULT_CALCULATOR_RATES, type CalculatorRates } from './hub-calculator.js';
 import type { HubShortcut } from './hub-preferences.js';
@@ -486,6 +486,13 @@ export interface AppSettings {
   /** Show exact remaining durations over the controlled player's native Effects icons. */
   effectTimersEnabled: boolean;
   alcoholTimerEnabled: boolean;
+  remindersEnabled: boolean;
+  reminderCons: boolean;
+  reminderPcons: boolean;
+  reminderAlcohol: boolean;
+  reminderBeforeEnd: boolean;
+  reminderAtEnd: boolean;
+  reminderSound: boolean;
   alcoholTimerPosition: AlcoholTimerPosition;
   /** One curated or exact RGB color shared by all eight cooldown labels. */
   skillCooldownColor: SkillCooldownColor;
@@ -660,6 +667,13 @@ export const DEFAULT_SETTINGS: AppSettings = {
   skillCooldownOverlayEnabled: true,
   effectTimersEnabled: false,
   alcoholTimerEnabled: false,
+  remindersEnabled: false,
+  reminderCons: true,
+  reminderPcons: true,
+  reminderAlcohol: true,
+  reminderBeforeEnd: true,
+  reminderAtEnd: true,
+  reminderSound: false,
   alcoholTimerPosition: DEFAULT_ALCOHOL_TIMER_POSITION,
   skillCooldownColor: DEFAULT_SKILL_COOLDOWN_COLOR,
   extendedMemoryEnabled: false,
@@ -856,6 +870,8 @@ export interface ClientCompatibility {
     characterSwitchAction: OptionalFeatureStatus;
     chatFiltering: OptionalFeatureStatus;
     quickItemMove: OptionalFeatureStatus;
+    chatPrint: OptionalFeatureStatus;
+    progressObservation: OptionalFeatureStatus;
   }>;
 }
 
@@ -1156,11 +1172,11 @@ export const CORE_IPC = {
   hubAccountsGet: "gw:hub:accounts:get",
   hubAccountOpen: "gw:hub:account:open",
   appOpenSettings: "gw:app:openSettings",
-  appShowLauncher: "gw:app:showLauncher",
   hubSettingsGet: "gw:hub:settings:get",
   hubSettingsUpdate: "gw:hub:settings:update",
   hubShortcutCapture: "gw:hub:shortcut:capture",
   hubShortcutCaptureCancel: "gw:hub:shortcut:captureCancel",
+  appShowLauncher: "gw:app:showLauncher",
   appRequestQuit: "gw:app:requestQuit",
   appShowQuitOrReload: "gw:app:showQuitOrReload",
   appReloadGame: "gw:app:reloadGame",
@@ -1379,8 +1395,8 @@ export interface CoreGwNativeApiBase {
     openExternal(kind: ExternalLinkKind): Promise<void>;
     /** Reveal a named app directory in Finder. */
     reveal(kind: RevealKind): Promise<void>;
-    /** Opens the launcher at a Settings section, for settings the Hub links to. */
-    openSettings(section: LauncherSettingsSection): Promise<void>;
+    /** Shows the launcher's Settings, at a section or control when given. */
+    openSettings(target?: SettingsTarget): Promise<void>;
     requestQuit(): Promise<void>;
     /**
      * The account's Quit-or-Reload confirmation sheet, the same one Command-Q opens. "stayed"

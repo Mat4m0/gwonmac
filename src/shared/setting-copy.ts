@@ -10,7 +10,7 @@ export type SettingApplies = "now" | "next-game" | "restart";
 export const SETTING_APPLIES_NOTE: Readonly<Record<SettingApplies, string>> = {
   now: "",
   "next-game": "Applies when you next open or reload a game window.",
-  restart: "Applies after you restart gwonmac.",
+  restart: "Applies after you restart GWonMac.",
 };
 
 type Copy = Readonly<{ label: string; detail: string; applies: SettingApplies; keywords?: string }>;
@@ -48,6 +48,18 @@ export const CHAT_FILTERS = [
   { key: "chatFilterHallOfHeroes", label: "Hide Hall of Heroes winner announcements" },
   { key: "chatFilterTitleAchievements", label: "Hide player title achievements" },
 ] as const;
+
+/** Reminders options, shown under that tool: what to remind about, when, and how. */
+export const REMINDER_GROUPS = [
+  { key: "reminderCons", label: "Cons", detail: "Essence of Celerity, Grail of Might, Armor of Salvation" },
+  { key: "reminderPcons", label: "Pcons", detail: "Cupcakes, candies, Rock Candy, War Supplies, Lunar Blessing and more" },
+  { key: "reminderAlcohol", label: "Alcohol", detail: "An estimate, so its lines say \"about\"" },
+] as const;
+export const REMINDER_TIMING = [
+  { key: "reminderBeforeEnd", label: "1 minute before it runs out" },
+  { key: "reminderAtEnd", label: "When it has run out" },
+] as const;
+export const REMINDER_SOUND = { key: "reminderSound", label: "Play a sound", detail: "One short chime, even when several reminders arrive together" } as const;
 
 /** The full note for a setting: its description, then when it applies. */
 export function settingDetail(copy: Copy): string {

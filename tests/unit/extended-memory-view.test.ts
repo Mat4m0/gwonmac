@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { extendedMemoryView } from "../../src/renderer/extended-memory-setting.js";
+import { extendedMemoryView } from "../../src/shared/extended-memory-view.js";
 import { WASM_HEAP_CAP_BYTES } from "../../src/shared/contracts.js";
 
 describe("extended memory Settings projection", () => {

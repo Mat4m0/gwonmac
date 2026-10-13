@@ -5,7 +5,7 @@
   "engines": { "node": ">=22.19" },
   "scripts": {
     "dev": "vite",
-    "build": "vite build --mode embedded",
+    "build": "vite build --mode embedded && vite build --mode hub",
     "typecheck": "vue-tsc --noEmit",
     "test": "vitest run"
   },

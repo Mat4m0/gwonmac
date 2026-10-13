@@ -58,6 +58,8 @@ function projectCompatibility(
       characterSwitchAction: status("characterSwitchAction"),
       chatFiltering: status("chatFiltering"),
       quickItemMove: status("quickItemMove"),
+      chatPrint: status("chatPrint"),
+      progressObservation: status("progressObservation"),
     }),
   });
 }

@@ -60,6 +60,8 @@ export interface ApplicationMenuActions {
 }
 
 export type LauncherReveal = (destination?: LauncherDestination) => void;
+/** Command-comma opens Settings from every window (macOS convention): the Hub's in a game, else the launcher's. Tools cannot claim it. */
+export const SETTINGS_ACCELERATOR = "CmdOrCtrl+,";
 
 export interface AccountMenuActions {
   profiles(): readonly LauncherProfileSummary[];
@@ -415,11 +417,13 @@ export function installApplicationMenu(actions: ApplicationMenuActions, settings
               {
                 id: "check-for-updates",
                 label: "Check for Updates…",
-                click: () => revealLauncher("settings/general"),
+                click: () => revealLauncher({ section: "updates" }),
               },
               {
                 id: "show-settings",
                 label: "Settings…",
+                accelerator: SETTINGS_ACCELERATOR,
+                // In a game, Settings opens in its Hub; everywhere else in the launcher.
                 click: () => {
                   const win = windowRegistry.focusedGameWindow();
                   if (win) void sendRendererCommand(win, { type: "hub.settings" });
