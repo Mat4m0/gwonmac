@@ -1,3 +1,5 @@
+import { statSync } from "node:fs";
+import { cp } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 import { closeOffline, launchPlayableClient } from "./fixtures.mjs";
 import { boxOf, startGameInput } from "./input-helpers.js";
@@ -50,6 +52,11 @@ test.describe("renderer pointer input", () => {
       await page.mouse.up({ button: "left" });
 
     } finally {
+      // TEMPORARY probe: keep the profile's small files (diagnostics) as evidence.
+      await cp(fixture.userData, test.info().outputPath("userdata"), {
+        recursive: true,
+        filter: (source) => statSync(source).isDirectory() || statSync(source).size < 5_000_000,
+      }).catch(() => undefined);
       await closeOffline(fixture);
     }
   });

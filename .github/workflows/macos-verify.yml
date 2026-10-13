@@ -132,13 +132,25 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install chromium
       - run: pnpm build
-      - name: Stress the first game launch (temporary)
+      - name: Cold first game launch (temporary probe)
+        if: matrix.shard == 1
+        continue-on-error: true
+        run: pnpm test:electron -g "on an input reset"
+      - name: Upload cold launch evidence (temporary probe)
+        if: always() && matrix.shard == 1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cold-launch-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results
+          if-no-files-found: ignore
+          retention-days: 3
+      - name: Stress first launch and teardown (temporary)
         if: matrix.shard == 1
         continue-on-error: true
         run: |
-          pnpm test:electron -g "on an input reset|renderer recovery" --repeat-each=20 --max-failures=0
+          pnpm test:electron -g "on an input reset|renderer recovery" --repeat-each=20 --max-failures=0 || true
           for _ in $(seq "$(sysctl -n hw.ncpu)"); do yes > /dev/null & done
-          pnpm test:electron -g "on an input reset|renderer recovery" --repeat-each=20 --max-failures=0
+          pnpm test:electron -g "on an input reset|renderer recovery" --repeat-each=20 --max-failures=0 || true
           kill $(jobs -p)
       - run: pnpm test:electron --shard=${{ matrix.shard }}/2
       # Chromium applies Mac text-editing shortcuts (⌘⌫, ⌘←) only on macOS, so
