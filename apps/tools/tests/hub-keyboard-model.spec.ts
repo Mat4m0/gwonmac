@@ -62,7 +62,7 @@ test('consecutive Escapes pop one level each and never close the Hub early (HUB-
   for (const route of ['Commands example', 'Heroes', 'direct Library']) {
     if (route === 'Commands example') {
       await hubSearch(page).fill('commands'); await page.keyboard.press('Enter'); await page.keyboard.press('Enter');
-      await expect(caption).toHaveText('Home'); await expect(hubSearch(page)).toHaveValue('build ');
+      await expect(caption).toHaveText('Home'); await expect(hubSearch(page)).toHaveValue('char ');
       await page.keyboard.press('Escape'); await page.keyboard.press('Escape');
     } else if (route === 'Heroes') {
       await hubSearch(page).fill('build smiter'); await page.keyboard.press('Enter');

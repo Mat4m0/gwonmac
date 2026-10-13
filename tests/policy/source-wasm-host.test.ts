@@ -418,7 +418,7 @@ test("native double-click and 4 GB use bounded local proof as sole runtime autho
     /const build = findNativeDoubleClickBuild\([^;]+\)\s*\?\?/,
   );
   assert.match(extended, /const structural = await verifyLocally\(/);
-  assert.match(host, /const VERIFIER_TIMEOUT_MS = 5_000/);
+  assert.match(host, /const VERIFIER_TIMEOUT_MS = 30_000/);
   assert.match(
     runtime,
     /prepareClientModule\([\s\S]+verifyNativeDoubleClickLocally, verifyExtendedMemoryLocally\)/,
