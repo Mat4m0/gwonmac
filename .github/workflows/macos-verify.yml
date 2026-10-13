@@ -132,6 +132,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install chromium
       - run: pnpm build
+      - name: Stress renderer recovery (temporary)
+        if: matrix.shard == 1
+        run: |
+          pnpm test:electron -g "renderer recovery" --repeat-each=20 --max-failures=0
+          for _ in $(seq "$(sysctl -n hw.ncpu)"); do yes > /dev/null & done
+          pnpm test:electron -g "renderer recovery" --repeat-each=20 --max-failures=0
+          kill $(jobs -p)
       - run: pnpm test:electron --shard=${{ matrix.shard }}/2
       - name: Upload failure evidence
         if: failure()
