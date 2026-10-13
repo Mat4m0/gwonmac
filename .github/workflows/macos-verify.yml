@@ -75,8 +75,10 @@ jobs:
         run: pnpm audit --audit-level=high --ignore-registry-errors
       - run: pnpm verify:static
 
+  # The Hub suite drives a browser against a Vite fixture and needs no Mac, so
+  # it runs on Linux: the account runs only five macOS jobs at a time.
   hub-e2e:
-    runs-on: macos-15
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -92,10 +94,8 @@ jobs:
         with:
           node-version: "24"
           cache: pnpm
-      - name: Require Apple Silicon runner
-        run: test "$(uname -m)" = "arm64"
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install chromium
+      - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm tools:test:e2e --shard=${{ matrix.shard }}/4
       - name: Upload failure evidence
         if: failure()
