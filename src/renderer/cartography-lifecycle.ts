@@ -11,12 +11,18 @@ export function createCartographyLifecycle(
   let closed = false;
   let cleanup: (() => void) | undefined;
 
+  const release = (): void => {
+    // Relinquish ownership before disposal, including a failing native release.
+    const dispose = cleanup;
+    cleanup = undefined;
+    try { dispose?.(); } catch (error) { reportFailure(error); }
+  };
+
   return {
     update(next: boolean): void {
       enabled = next && !closed;
       if (!enabled) {
-        cleanup?.();
-        cleanup = undefined;
+        release();
         return;
       }
       if (loading || cleanup) return;
@@ -30,8 +36,7 @@ export function createCartographyLifecycle(
     dispose(): void {
       closed = true;
       enabled = false;
-      cleanup?.();
-      cleanup = undefined;
+      release();
     },
   };
 }
