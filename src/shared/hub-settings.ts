@@ -49,6 +49,8 @@ export type EmbeddedSettings<Target> = Readonly<{
     extendedMemory(): Promise<ExtendedMemoryRuntimeStatus | null>;
     /** Shows a section only the launcher draws, at its control when named. */
     openInLauncher(target: SettingsTarget): void | Promise<unknown>;
+    /** Asked once the page has loaded: whether its first open may move the keyboard to it. */
+    mayTakeFocus(): boolean;
   }>): Readonly<{
     /** Shows a section, at its control when named, on the page that is already open. */
     open(target: SettingsTarget): void;

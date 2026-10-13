@@ -39,6 +39,8 @@ const props = defineProps<{
   extendedMemory?: ExtendedMemoryRuntimeStatus | null | undefined;
   /** Where to open; a new object opens it again, even at the same control. */
   target: SettingsTarget | null;
+  /** Hub only: whether the first open may take the keyboard. The page loads late, and by then the player may have moved on. */
+  mayTakeFocus?: (() => boolean) | undefined;
 }>();
 const emit = defineEmits<{
   /** Fixture mode only: the snapshot with a change applied. */
@@ -194,22 +196,22 @@ let highlightTimer: ReturnType<typeof setTimeout> | undefined;
  * scrolls it into view and marks it briefly. A control hidden with its tool off falls back to
  * the tool's row, then to the section heading.
  */
-async function open(target: SettingsTarget) {
+async function open(target: SettingsTarget, takeFocus = true) {
   if (inLauncher(target.section)) { void launch(target); return; }
-  await select(target.section, true);
+  await select(target.section, takeFocus);
   const root = content.value;
   if (!root) return;
   const entry = SETTINGS.find(candidate => candidate.id === target.control);
   const find = (id: string | undefined) => id ? root.querySelector<HTMLElement>(`[data-setting="${CSS.escape(id)}"]`) : null;
   const row = find(entry?.id) ?? find(entry?.tool && `tool:${entry.tool}`);
-  if (!row) { root.querySelector<HTMLElement>("h1")?.focus(); return; }
+  if (!row) { if (takeFocus) root.querySelector<HTMLElement>("h1")?.focus(); return; }
   for (let parent = row.parentElement; parent && parent !== root; parent = parent.parentElement) {
     if (parent instanceof HTMLDetailsElement) parent.open = true;
   }
   await nextTick();
   row.scrollIntoView({ block: "center" });
   const control = row.matches("input, select, button, textarea") ? row : row.querySelector<HTMLElement>("input:not([disabled]), select:not([disabled]), button:not([disabled]), textarea");
-  (control ?? row).focus({ preventScroll: true });
+  if (takeFocus) (control ?? row).focus({ preventScroll: true });
   root.querySelectorAll(".setting-focus").forEach(element => element.classList.remove("setting-focus"));
   row.classList.add("setting-focus");
   clearTimeout(highlightTimer);
@@ -248,7 +250,7 @@ watch(query, () => { if (saveState.value === "saved") saveState.value = "idle"; 
 watch(() => props.target, target => { if (target) void open(target); });
 onMounted(() => {
   window.addEventListener("keydown", onKey);
-  void open(props.target ?? { section: section.value });
+  void open(props.target ?? { section: section.value }, props.mayTakeFocus?.() ?? true);
 });
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", onKey);

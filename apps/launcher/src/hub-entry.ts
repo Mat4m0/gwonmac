@@ -14,7 +14,7 @@ import "./hub-settings.css";
 import type { EmbeddedSettings, HubSettingsChange, HubSettingsSnapshot } from "@shared/hub-settings";
 import type { SettingsTarget } from "@shared/settings-catalogue";
 
-export const mountSettings: EmbeddedSettings<HTMLElement>["mountSettings"] = (target, { api, target: initial, extendedMemory, openInLauncher }) => {
+export const mountSettings: EmbeddedSettings<HTMLElement>["mountSettings"] = (target, { api, target: initial, extendedMemory, openInLauncher, mayTakeFocus }) => {
   const snapshot = shallowRef<HubSettingsSnapshot | null>(null);
   const place = shallowRef<SettingsTarget | null>(initial);
   let disposed = false;
@@ -43,7 +43,7 @@ export const mountSettings: EmbeddedSettings<HTMLElement>["mountSettings"] = (ta
   };
   const app = createApp({
     setup: () => () => snapshot.value
-      ? h(SettingsView, { snapshot: snapshot.value, native, target: place.value, openInLauncher, extendedMemory: memory.value })
+      ? h(SettingsView, { snapshot: snapshot.value, native, target: place.value, openInLauncher, extendedMemory: memory.value, mayTakeFocus })
       : loadFailed.value
         ? h("div", { class: "settings-load-error" }, [
           h("p", { role: "alert" }, "Settings could not load. Try again."),

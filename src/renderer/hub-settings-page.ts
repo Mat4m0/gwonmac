@@ -26,6 +26,7 @@ function load(document: Document) {
 
 /** Shows Settings as a Hub page, at a section or control when given. */
 export function showHubSettings(hub: HubPresenter<HTMLElement>, target: SettingsTarget | null) {
+  let landing: Element | null = null;
   hub.showView('Settings', host => {
     const view = host.ownerDocument.createElement('div');
     view.className = 'hub-settings-host';
@@ -40,6 +41,8 @@ export function showHubSettings(hub: HubPresenter<HTMLElement>, target: Settings
         target,
         extendedMemory: () => window.gwNative.client.session().then(session => session.extendedMemory),
         openInLauncher: next => window.gwNative.app.openSettings(next).catch(() => { throw new Error(LAUNCHER_UNAVAILABLE); }),
+        // Focus still where the Hub put it means the player is waiting for this page; anywhere else, they moved on.
+        mayTakeFocus: () => { const focused = host.ownerDocument.activeElement; return !focused || focused === landing || focused === host.ownerDocument.body || view.contains(focused); },
       });
     }).catch(() => {
       if (!disposed) view.textContent = 'Settings could not be loaded. Use Settings in the launcher.';
@@ -53,6 +56,7 @@ export function showHubSettings(hub: HubPresenter<HTMLElement>, target: Settings
       view.remove();
     };
   }, undefined, 'settings');
+  landing = document.activeElement;
 }
 
 /** Moves a Settings page that is already shown to a section or control. */
