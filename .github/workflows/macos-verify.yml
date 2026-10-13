@@ -108,7 +108,7 @@ jobs:
 
   electron:
     runs-on: macos-15
-    timeout-minutes: 60
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -132,36 +132,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install chromium
       - run: pnpm build
-      # The cold first launch never submits its first frame (the 90 s gate
-      # fails). Record the game's own console log to see where it stops.
-      - name: Cold first game launch (temporary probe)
-        if: matrix.shard == 1
-        continue-on-error: true
-        run: |
-          mkdir -p test-results/cold-stacks
-          ( while :; do date -u +%T; ps -axo pid,pcpu,time,command | grep -E "MTLCompiler|Electron Helper --type=gpu" | grep -v grep | cut -c1-120; sleep 5; done ) \
-            > test-results/cold-stacks/gpu-activity.txt 2>&1 &
-          watch_pid=$!
-          ELECTRON_ENABLE_LOGGING=1 DEBUG=pw:browser pnpm test:electron -g "on an input reset" --timeout=180000 --reporter=list \
-            > test-results/cold-stacks/console.log 2>&1 || true
-          grep -v "backupd.sandbox.xpc" test-results/cold-stacks/console.log | cut -c1-400 | tail -250
-          kill "$watch_pid"
-      # A timed-out test never reaches its cleanup, so the profile stays in TMPDIR.
-      - name: Collect cold launch profile (temporary probe)
-        if: always() && matrix.shard == 1
-        run: |
-          mkdir -p test-results/cold-profile
-          for dir in "${TMPDIR:-/tmp}"/gw-input-e2e-*; do
-            [ -d "$dir" ] && rsync -a --max-size=5m "$dir" test-results/cold-profile/
-          done
-      - name: Upload cold launch evidence (temporary probe)
-        if: always() && matrix.shard == 1
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: cold-launch-${{ github.run_id }}-${{ github.run_attempt }}
-          path: test-results
-          if-no-files-found: ignore
-          retention-days: 3
       - run: pnpm test:electron --shard=${{ matrix.shard }}/2
       # Hub specs tagged @macos need a Mac: Chromium applies text-editing
       # shortcuts (⌘⌫, ⌘←) only on macOS, and time budgets are set for the Macs
