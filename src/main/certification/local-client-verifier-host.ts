@@ -38,7 +38,10 @@ import {
   type FriendObserverBuild,
 } from "./friend-observer-transform.js";
 
-const VERIFIER_TIMEOUT_MS = 5_000;
+// Bounds a hung or crashed parser, not a slow one: a timeout turns every proved
+// feature off for that launch. The client check takes 3-4.5 s on an M-series Mac
+// and longer on slower machines, so the bound sits far above that.
+const VERIFIER_TIMEOUT_MS = 30_000;
 
 function runIsolatedVerifier<Result>(options: {
   args: readonly string[];
