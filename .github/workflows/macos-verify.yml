@@ -132,23 +132,19 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install chromium
       - run: pnpm build
-      # While the cold first launch hangs, record which processes are busy and
-      # where each Electron process is stuck.
+      # Does the cold first launch's first frame come late or never? Give it
+      # three minutes and log GPU shader-compiler activity every 5 s.
       - name: Cold first game launch (temporary probe)
         if: matrix.shard == 1
         continue-on-error: true
         run: |
           mkdir -p test-results/cold-stacks
-          DEBUG=pw:protocol pnpm test:electron -g "on an input reset" > test-results/cold-stacks/protocol.log 2>&1 &
-          test_pid=$!
-          sleep 30
-          ps -axo pid,ppid,pcpu,rss,state,command | grep -E "Electron|MTLCompiler|syspolicyd|XProtect" | grep -v grep \
-            | tee test-results/cold-stacks/processes.txt | cut -c1-240
-          for pid in $(pgrep -f "Electron.app/Contents"); do
-            sample "$pid" 2 -file "test-results/cold-stacks/sample-$pid.txt" >/dev/null 2>&1 || true
-          done
-          ls -la test-results/cold-stacks
-          wait "$test_pid"
+          ( while :; do date -u +%T; ps -axo pid,pcpu,time,command | grep -E "MTLCompiler|Electron Helper --type=gpu" | grep -v grep | cut -c1-120; sleep 5; done ) \
+            > test-results/cold-stacks/gpu-activity.txt 2>&1 &
+          watch_pid=$!
+          pnpm test:electron -g "on an input reset" --timeout=180000 --reporter=list || true
+          kill "$watch_pid"
+          cat test-results/cold-stacks/gpu-activity.txt
       # A timed-out test never reaches its cleanup, so the profile stays in TMPDIR.
       - name: Collect cold launch profile (temporary probe)
         if: always() && matrix.shard == 1
