@@ -38,5 +38,5 @@ const boundary = "M0 120 L50 90 L92 104 L138 54 L190 70 L230 28 L320 40";
 .map-preview { display: grid; grid-template-columns: minmax(160px, 280px) minmax(0, 1fr); align-items: center; gap: 16px; margin: 0; padding: 16px; }
 .map-preview svg { width: 100%; height: auto; border-radius: 8px; }
 .map-preview figcaption { font-size: 13px; line-height: 1.5; color: var(--muted); }
-@media (max-width: 600px) { .map-preview { grid-template-columns: 1fr; }.map-preview svg { max-width: 280px; } }
+@container settings (max-width: 600px) { .map-preview { grid-template-columns: 1fr; }.map-preview svg { max-width: 280px; } }
 </style>

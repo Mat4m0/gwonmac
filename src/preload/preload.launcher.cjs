@@ -51,12 +51,10 @@ const launcherApi = {
     setFeature: (input) => ipcRenderer.invoke(LAUNCHER_IPC.toolsSetFeature, input),
     captureShortcut: (tool) => ipcRenderer.invoke(LAUNCHER_IPC.toolsCaptureShortcut, tool),
     replaceShortcut: (input) => ipcRenderer.invoke(LAUNCHER_IPC.toolsReplaceShortcut, input),
-    restoreDefaultShortcut: (tool) => ipcRenderer.invoke(LAUNCHER_IPC.toolsRestoreDefaultShortcut, tool),
     restartToApply: () => ipcRenderer.invoke(LAUNCHER_IPC.toolsRestartToApply),
   },
   gameFiles: {
     info: () => ipcRenderer.invoke(LAUNCHER_IPC.gameFilesInfo),
-    retryPreparation: () => ipcRenderer.invoke(LAUNCHER_IPC.gameFilesRetryPreparation),
     repair: () => ipcRenderer.invoke(LAUNCHER_IPC.gameFilesRepair),
     pauseDownload: () => ipcRenderer.invoke(LAUNCHER_IPC.gameFilesPauseDownload),
     resumeDownload: () => ipcRenderer.invoke(LAUNCHER_IPC.gameFilesResumeDownload),

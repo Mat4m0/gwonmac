@@ -3,6 +3,7 @@
  * the shared kernel transaction and calls this extension only in Tools mode.
  */
 import { createAlcoholObservationInstallation, readCompanionAlcohol } from "./companion-alcohol-snapshot.js";
+import { createCompanionProgressReader, createProgressObservationInstallation } from "./companion-progress-snapshot.js";
 import { createAlcoholTimerOverlay } from "./alcohol-timer-overlay.js";
 import { createNativeHudLayer } from "./native-hud-layer.js";
 import { createEliteMapInstallation } from "./elite-map-installation.js";
@@ -28,6 +29,13 @@ import type { EnhancementCommandEnqueue } from "./enhancement-team-commands.js";
 import type * as TeamCommandsModule from "./enhancement-team-commands.js";
 import type { ProfessionCommandTraceReader } from "./profession-command-trace.js";
 import { createWhisperInstallation, type WhisperInstallation } from "./whisper-installation.js";
+import { createChatPrintInstallation, type ChatPrintInstallation } from "./chat-print-installation.js";
+import { CHAT_PRINT_PREFIX } from "../shared/chat-print.js";
+import {
+  observeAlcohol, observeConsumables, reminderLine, wantsReminder,
+  type AlcoholWatch, type ConsumableWatch, type ReminderEvent, type ReminderGroup, type ReminderOptions,
+} from "../shared/reminders.js";
+import { createReminderChime } from "./reminder-chime.js";
 import { createWhisperSession } from "../shared/whisper-session.js";
 import { createHubPeople } from "./hub-people.js";
 import { createPartyInvite, type PartyInvite } from "./party-invite.js";
@@ -118,6 +126,7 @@ export async function prepareToolsCompanionExtension(
 ): Promise<PreparedCompanionExtension> {
   const foundation = capabilities.partyObservation;
   const whispers = createWhisperInstallation(exports, capabilities.whisperChat);
+  const chatPrint = createChatPrintInstallation(exports, capabilities.chatPrint);
   const friendManifest = capabilities.travelAction ? decodeFriendObserverManifest(module) : null;
   let friendPointer = 0;
   let quickItemMovePointer = 0;
@@ -126,6 +135,7 @@ export async function prepareToolsCompanionExtension(
   const slots = skills.geometry;
   const cooldowns = skills.cooldowns;
   const alcohol = createAlcoholObservationInstallation(capabilities.alcoholObservation);
+  const progress = createProgressObservationInstallation(capabilities.progressObservation);
   const playerEffects = createPlayerEffectObservationInstallation(
     capabilities.playerEffectObservation,
   );
@@ -181,6 +191,7 @@ export async function prepareToolsCompanionExtension(
       | (capabilities.targetObservation ? COMPANION_FEATURE_BITS.targetObservation : 0)
       | (capabilities.whisperChat ? COMPANION_FEATURE_BITS.whisperObservation : 0)
       | (capabilities.alcoholObservation ? COMPANION_FEATURE_BITS.alcoholObservation : 0)
+      | (capabilities.progressObservation ? COMPANION_FEATURE_BITS.progressObservation : 0)
       | skills.certifiedFeatureFlags
       | (capabilities.playerEffectObservation
         ? COMPANION_FEATURE_BITS.playerEffectObservation : 0)
@@ -200,9 +211,11 @@ export async function prepareToolsCompanionExtension(
       if (friendManifest !== null) friendPointer = Number(malloc(COMPANION_ABI.friends.bytes));
       if (quickItemMove !== null) quickItemMovePointer = Number(malloc(QUICK_ITEM_MOVE_SCRATCH_BYTES));
       whispers.allocate(malloc);
+      chatPrint.allocate(malloc);
       slots?.allocate(malloc);
       cooldowns?.allocate(malloc);
       alcohol.allocate(malloc);
+      progress.allocate(malloc);
       playerEffects.allocate(malloc);
       effectIcons.allocate(malloc);
       storage?.allocate(malloc);
@@ -212,6 +225,7 @@ export async function prepareToolsCompanionExtension(
         || (slots !== null && !slots.allocated)
         || (cooldowns !== null && !cooldowns.allocated)
         || !alcohol.allocated
+        || !progress.allocated
         || !playerEffects.allocated
         || !effectIcons.allocated
         || (storage !== null && !storage.region().pointer)
@@ -221,6 +235,7 @@ export async function prepareToolsCompanionExtension(
     },
     initialize(memory) {
       whispers.initialize(memory);
+      chatPrint.initialize(memory);
       if (friendPointer !== 0) new Uint8Array(memory.buffer, friendPointer, COMPANION_ABI.friends.bytes).fill(0);
       if (quickItemMovePointer !== 0) {
         new Uint8Array(memory.buffer, quickItemMovePointer, QUICK_ITEM_MOVE_SCRATCH_BYTES).fill(0);
@@ -239,6 +254,7 @@ export async function prepareToolsCompanionExtension(
     },
     ownedRegions: () => [
       ...(whispers.region === null ? [] : [whispers.region]),
+      ...(chatPrint.region === null ? [] : [chatPrint.region]),
       ...(friendPointer === 0 ? [] : [{ name: "friend snapshot", pointer: friendPointer,
         size: COMPANION_ABI.friends.bytes, align: 4 as const }]),
       ...(quickItemMovePointer === 0 ? [] : [{ name: "Quick Item Move payload", pointer: quickItemMovePointer,
@@ -246,6 +262,7 @@ export async function prepareToolsCompanionExtension(
       ...(slots?.region == null ? [] : [slots.region]),
       ...(cooldowns?.region == null ? [] : [cooldowns.region]),
       ...(alcohol.region == null ? [] : [alcohol.region]),
+      ...(progress.region == null ? [] : [progress.region]),
       ...(playerEffects.region == null ? [] : [playerEffects.region]),
       ...(effectIcons.region == null ? [] : [effectIcons.region]),
       ...(storage === null ? [] : [storage.region()]),
@@ -253,6 +270,7 @@ export async function prepareToolsCompanionExtension(
     ],
     kernelRegions: {
       get alcohol() { return alcohol.region === null ? EMPTY_REGION : { pointer: alcohol.pointer, bytes: alcohol.bytes }; },
+      get progress() { return progress.region === null ? EMPTY_REGION : { pointer: progress.pointer, bytes: progress.bytes }; },
       get whispers() { return { pointer: whispers.pointer, bytes: whispers.bytes }; },
       get friends() { return friendPointer === 0 ? EMPTY_REGION : { pointer: friendPointer, bytes: COMPANION_ABI.friends.bytes }; },
       friendRoot: friendManifest?.root ?? 0,
@@ -276,9 +294,9 @@ export async function prepareToolsCompanionExtension(
     },
     activate(context) {
       const session = activateTools({ mapExports: exports, context, capabilities, program, foundation, observeState,
-        skills, slots, cooldowns, playerEffects, effectIcons, alcohol, enqueue, traceReader, teamCommands, storage,
+        skills, slots, cooldowns, playerEffects, effectIcons, alcohol, progress, enqueue, traceReader, teamCommands, storage,
         travel, configureTrade, takeTrade, configureChatFilters, friendPointer,
-        resignExports: capabilities.resignAction ? exports : null, whispers,
+        resignExports: capabilities.resignAction ? exports : null, whispers, chatPrint,
         quickItemMove, quickItemMovePointer });
       activated = true;
       return session;
@@ -291,9 +309,11 @@ export async function prepareToolsCompanionExtension(
         () => slots?.release(free),
         () => cooldowns?.release(free),
         () => alcohol.release(free),
+        () => progress.release(free),
         () => playerEffects.release(free),
         () => effectIcons.release(free),
         () => whispers.dispose(free),
+        () => chatPrint.dispose(free),
         () => storage?.dispose(free),
         () => travel?.dispose(free),
       ]);
@@ -312,6 +332,7 @@ type ToolsInput = Readonly<{
   slots: ReturnType<typeof tools.createSkillOverlaysInstallation>["geometry"];
   cooldowns: ReturnType<typeof tools.createSkillOverlaysInstallation>["cooldowns"];
   alcohol: ReturnType<typeof createAlcoholObservationInstallation>;
+  progress: ReturnType<typeof createProgressObservationInstallation>;
   playerEffects: ReturnType<typeof createPlayerEffectObservationInstallation>;
   effectIcons: ReturnType<typeof createEffectIconGeometryInstallation>;
   enqueue: EnhancementCommandEnqueue | null;
@@ -319,6 +340,7 @@ type ToolsInput = Readonly<{
   teamCommands: typeof TeamCommandsModule | null;
   resignExports: WebAssembly.Exports | null;
   whispers: WhisperInstallation;
+  chatPrint: ChatPrintInstallation;
   storage: StorageInstallation | null;
   travel: TravelInstallation | null;
   configureTrade: ((enabled: number) => number) | null;
@@ -331,8 +353,10 @@ type ToolsInput = Readonly<{
 
 function activateTools(input: ToolsInput): CompanionExtensionSession {
   const { context, capabilities, program, foundation, observeState, skills,
-    slots, cooldowns, playerEffects, effectIcons, alcohol, enqueue, traceReader, teamCommands, storage, travel,
+    slots, cooldowns, playerEffects, effectIcons, alcohol, progress, enqueue, traceReader, teamCommands, storage, travel,
     configureTrade, takeTrade, configureChatFilters } = input;
+  const readProgress = createCompanionProgressReader();
+  const progressWanted = () => capabilities.progressObservation && policy().progress;
   const whispers = input.whispers;
   const whisperSession = createWhisperSession(whispers.send);
   const unsubscribeWhispers = whispers.subscribe((messages, missed) => whisperSession.observe(messages, missed));
@@ -354,8 +378,21 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
   const snapshot = () => source.snapshot;
   const policy = () => snapshot().policy;
   const alcoholRequested = () => capabilities.alcoholObservation && snapshot().settings.gwonmacTools && snapshot().settings.alcoholTimerEnabled;
+  const chatPrint = input.chatPrint;
+  const reminderOptions = (): ReminderOptions => {
+    const settings = snapshot().settings;
+    return { cons: settings.reminderCons, pcons: settings.reminderPcons, alcohol: settings.reminderAlcohol,
+      beforeEnd: settings.reminderBeforeEnd, atEnd: settings.reminderAtEnd };
+  };
+  const remindersWant = (...groups: ReminderGroup[]) => {
+    if (!capabilities.chatPrint || !policy().reminders) return false;
+    const options = reminderOptions();
+    return (options.beforeEnd || options.atEnd) && groups.some(group => options[group]);
+  };
+  const alcoholObserved = () => alcoholRequested()
+    || (capabilities.alcoholObservation && remindersWant("alcohol"));
   const playerEffectsActive = () => capabilities.playerEffectObservation
-    && (program === "effect-observer"
+    && (program === "effect-observer" || remindersWant("cons", "pcons")
       || (((capabilities.nativeHudRendering && policy().effectTimers)
         || (alcoholRequested() && policy().alcoholTimer)) && capabilities.effectIconGeometry));
   const effectIconsActive = () => capabilities.effectIconGeometry
@@ -412,9 +449,38 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
     friendFeed.update(readCompanionFriends(memory.buffer, activeFriendPointer));
   };
   const hud = capabilities.nativeHudRendering ? createNativeHudLayer(input.mapExports, document) : null;
+  // A minute before a con, pcon or alcohol runs out, and when it has, print one
+  // local chat line each. Several reminders at once still chime once.
+  let consumableWatch: ConsumableWatch = new Map();
+  let alcoholWatch: AlcoholWatch = null;
+  const reminderChime = createReminderChime();
+  const remind = (events: readonly ReminderEvent[]) => {
+    const options = reminderOptions();
+    const wanted = events.filter(event => wantsReminder(options, event));
+    let queued = false;
+    for (const event of wanted) queued = chatPrint.print(`${CHAT_PRINT_PREFIX}${reminderLine(event)}`) || queued;
+    if (queued && snapshot().settings.reminderSound) reminderChime.play();
+  };
+  // The Hub's Progress page lives in the Travel app, which already owns the trip.
+  const unsubscribeProgress = progress.subscribe(state => travel?.updateProgress(state));
+  const unsubscribeReminders = [
+    playerEffects.subscribe(state => {
+      if (!remindersWant("cons", "pcons")) { consumableWatch = new Map(); return; }
+      const observed = observeConsumables(consumableWatch, state.status === "ready"
+        ? { status: "ready", gameTimer: state.gameTimer, effects: state.effects } : { status: "waiting" });
+      consumableWatch = observed.watch; remind(observed.events);
+    }),
+    alcohol.subscribe(state => {
+      if (!remindersWant("alcohol")) { alcoholWatch = null; return; }
+      const observed = observeAlcohol(alcoholWatch, state);
+      alcoholWatch = observed.watch; remind(observed.events);
+    }),
+  ];
   const disposePresentation = () => runCleanupSteps(
     "Companion Tools presentation cleanup failed",
     [
+      () => { unsubscribeProgress();
+        for (const unsubscribe of unsubscribeReminders) unsubscribe(); reminderChime.dispose(); chatPrint.setEnabled(false); },
       () => { readout?.dispose(); readout = null; },
       () => toolbox?.dispose(),
       () => eliteMaps.dispose(),
@@ -552,7 +618,8 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
         ? COMPANION_FEATURE_BITS.targetObservation : 0)
       | (policy().whispers && capabilities.whisperChat ? COMPANION_FEATURE_BITS.whisperObservation : 0)
       | skills.activeFeatureFlags
-      | (alcoholRequested() ? COMPANION_FEATURE_BITS.alcoholObservation : 0)
+      | (alcoholObserved() ? COMPANION_FEATURE_BITS.alcoholObservation : 0)
+      | (progressWanted() ? COMPANION_FEATURE_BITS.progressObservation : 0)
       | (playerEffectsActive() ? COMPANION_FEATURE_BITS.playerEffectObservation : 0)
       | (effectIconsActive() ? COMPANION_FEATURE_BITS.effectIconGeometry : 0)
       | (activeFriendPointer !== 0 && observingFriends
@@ -592,7 +659,9 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
   const syncConsumers = () => {
     syncTarget();
     skills.sync(snapshot().settings, policy());
-    alcohol.setActive(alcoholRequested());
+    alcohol.setActive(alcoholObserved());
+    progress.setActive(progressWanted());
+    chatPrint.setEnabled(remindersWant("cons", "pcons", "alcohol"));
     alcoholOverlay?.setSettings(snapshot().settings.alcoholTimerPosition, policy().alcoholTimer && alcoholRequested());
     playerEffects.setActive(playerEffectsActive());
     effectIcons.setActive(effectIconsActive());
@@ -674,7 +743,9 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
     observer: {
       pollers: [
         { poll: () => { if (alcohol.active) alcohol.sink?.update(readCompanionAlcohol(memory.buffer, alcohol.pointer)); }, enabled: () => alcohol.active },
+        { poll: () => { if (progress.active) progress.sink?.update(readProgress(memory.buffer, progress.pointer)); }, enabled: () => progress.active },
         { poll: () => whispers.poll(), enabled: () => true },
+        { poll: () => chatPrint.poll(), enabled: () => chatPrint.enabled },
         ...(activeFriendPointer === 0 ? [] : [{ poll: pollFriends, enabled: () => true }]),
         ...(travel === null ? [] : [{
           poll: () => travel.poll(),
@@ -788,6 +859,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
         () => slots?.release(free),
         () => cooldowns?.release(free),
         () => { alcohol.release(free); alcohol.dispose(); },
+        () => { progress.release(free); progress.dispose(); },
         () => { playerEffects.release(free); playerEffects.dispose(); },
         () => { effectIcons.release(free); effectIcons.dispose(); },
       ]);
@@ -795,6 +867,7 @@ function activateTools(input: ToolsInput): CompanionExtensionSession {
     releaseCallbackResources(free) {
       runCleanupSteps("Companion Tools callback cleanup failed", [
         () => whispers.dispose(free),
+        () => chatPrint.dispose(free),
         () => storage?.dispose(free),
         () => travel?.dispose(free),
         () => { if (activeQuickItemMovePointer !== 0) free(activeQuickItemMovePointer); activeQuickItemMovePointer = 0; },

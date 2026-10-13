@@ -13,9 +13,9 @@
  * arguments and either forwards one owner-local capability directly or calls
  * the workflow owner; it returns codes rather than inventing prose.
  */
+import { parseSettingsTarget, type SettingsTarget } from "../shared/settings-catalogue.js";
 import { parseHubSettingsChange, type HubSettingsApi } from "../shared/hub-settings.js";
 import { parseShortcutAction } from "../shared/keyboard-shortcuts.js";
-import { parseLauncherSettingsSection, type LauncherSettingsSection } from "../shared/launcher-contracts.js";
 import type { HubAccountsSnapshot, HubAccountRequest } from '../shared/accounts-contracts.js';
 import { parseHubAccountRequest } from './accounts-ipc-values.js';
 import { clipboard, shell, type BrowserWindow } from "electron";
@@ -129,12 +129,12 @@ export interface IpcContext {
   ) => Promise<SteamAcquireResult>;
   hubAccountsGet: (win: BrowserWindow) => HubAccountsSnapshot;
   hubAccountOpen: (win: BrowserWindow, request: HubAccountRequest) => Promise<void>;
+  showLauncher: () => void;
+  openSettings: (win: BrowserWindow, target: SettingsTarget | undefined) => void;
   hubSettings: Omit<HubSettingsApi, "capture" | "cancelCapture"> & {
     capture: (win: BrowserWindow, action: Parameters<HubSettingsApi["capture"]>[0]) => ReturnType<HubSettingsApi["capture"]>;
     cancelCapture: (win: BrowserWindow) => void;
   };
-  showLauncher: () => void;
-  openSettings: (section: LauncherSettingsSection) => void;
   requestQuit: (win: BrowserWindow) => void;
   showQuitOrReload: (win: BrowserWindow) => Promise<"stayed" | "left" | undefined>;
   reloadGame: (win: BrowserWindow, cause: GameReloadCause) => Promise<void>;
@@ -567,7 +567,7 @@ export function registerIpcHandlers(ctx: IpcContext): {
     hubShortcutCapture: channel(one(parseShortcutAction), (win, action) => ctx.hubSettings.capture(win, action)),
     hubShortcutCaptureCancel: channel(nothing, win => ctx.hubSettings.cancelCapture(win)),
     appShowLauncher: channel(nothing, () => ctx.showLauncher()),
-    appOpenSettings: channel(one(parseLauncherSettingsSection), (_win, section) => ctx.openSettings(section)),
+    appOpenSettings: channel((args) => args.length === 0 ? undefined : one(parseSettingsTarget)(args), (win, target) => ctx.openSettings(win, target)),
     appRequestQuit: channel(nothing, (win) => ctx.requestQuit(win)),
     appShowQuitOrReload: channel(nothing, (win) => ctx.showQuitOrReload(win)),
 

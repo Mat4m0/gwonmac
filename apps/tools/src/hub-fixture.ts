@@ -5,6 +5,7 @@ import '../../../src/renderer/commands';
 import { GLOBAL_TOOLS, GLOBAL_TOOL_FEATURES, type GlobalToolSettings } from '../../../src/shared/launcher-contracts';
 import { FEATURE_SELECTION_POLICIES } from '../../../src/shared/feature-contracts';
 import { parseCalculatorRates } from '../../../src/shared/hub-calculator';
+import type { SettingsTarget } from '../../../src/shared/settings-catalogue';
 import { parseHubSettingsChange, type HubSettingsApi } from '../../../src/shared/hub-settings';
 import { resolveShortcuts, shortcutConflict, shortcutFromInput, shortcutReserved, withShortcutOverride } from '../../../src/shared/keyboard-shortcuts';
 /** Disposable Hub workbench: synthetic state, no native IPC or game commands. */
@@ -42,7 +43,9 @@ import { createHubGameFixture } from './hub-game-fixture';
 import { mountToolsApp } from './mount';
 import { mountWhispers } from './whispers-mount';
 import { createWhisperSession } from '../../../src/shared/whisper-session';
+import { watch } from 'vue';
 import { createHubTravel } from './hub-travel';
+import { progressFixture } from './progress-fixture';
 import { createDemoTravelHost } from './travel-host';
 import { travelDestination } from '../../../src/shared/travel';
 import { estimateMarketRates } from '../../../src/shared/market-rates';
@@ -109,8 +112,8 @@ export function mountHubFixture(target: HTMLElement) {
         if (event.key === 'Escape' && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) { finish({ status: 'cancelled' }); return; }
         if ((event.key === 'Backspace' || event.key === 'Delete') && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) { finish({ status: 'cleared' }); return; }
         const binding = shortcutFromInput({code:event.code, key:event.key, meta:event.metaKey, control:event.ctrlKey, shift:event.shiftKey, alt:event.altKey});
-        // Main's window capture reports what was pressed; the recorder refuses reserved chords.
-        finish(!binding ? {status:'invalid'} : {status:'captured',binding});
+        // Main's window capture refuses reserved chords itself and reports `reserved`.
+        finish(!binding ? {status:'invalid'} : shortcutReserved(binding) ? {status:'reserved'} : {status:'captured',binding});
       };
       capturingShortcut = true; cancelShortcutCapture = () => finish({ status: 'cancelled' });
       window.addEventListener('keydown', onKey, true);
@@ -129,7 +132,7 @@ export function mountHubFixture(target: HTMLElement) {
     gwToolsSettings: () => settings,
     gwNative: { ...window.gwNative, init: { enhancementSelection: { tools: true } }, hubSettings,
       // A session that started with the standard memory module, as a fresh launch does.
-      client: { ...window.gwNative?.client, session: async () => ({ appVersion: 'fixture', compatibility: null, extendedMemory: { requestedAtLaunch: false, status: 'standard', effectiveCapBytes: WASM_HEAP_CAP_BYTES, fallbackReason: null }, healthToken: null }) }, accounts: { get: async () => { await delay('accounts-load-ms'); return ({ current: '9e1bd41c-cfc0-4ca8-a57f-2f0ca159c72d', profiles: [{ id: '9e1bd41c-cfc0-4ca8-a57f-2f0ca159c72d', name: 'Main', state: 'running' }, { id: 'e98a37bc-5211-4bc5-8094-0b1286b3c42d', name: secondName, state: 'ready' }] }); }, open: async (request: { mode: string }) => { await delay('accounts-ms'); record(`Account Second ${request.mode}`); } }, settings: { get: async () => settings, onChange: (listener: (value: AppSettings) => void) => { settingsListeners.add(listener); return () => settingsListeners.delete(listener); }, set: async (patch: RendererSettingsPatch) => { await delay('settings-ms'); settings = { ...settings, ...patch }; localStorage.setItem('hub-fixture-shortcuts', JSON.stringify(settings.hubShortcuts)); if('calculatorRates' in patch&&patch.calculatorRates)localStorage.setItem('hub-fixture-calculator-rates',JSON.stringify(settings.calculatorRates)); for (const listener of settingsListeners) listener(settings); window.dispatchEvent(new Event('gw:tools-settings')); return settings; } }, clipboard: { writeText: async (value: string) => record(`Copied ${value}`) }, trade: { getMarketRates: async () => ({ ...estimateMarketRates(new URLSearchParams(location.search).has('market-empty') ? [] : ['WTS armbraces 30e/ea','WTB armbraces 28e/ea','WTS zkeys 1.5e/ea','WTB zkeys 1.4e/ea','WTS 20 ectos for 100k','WTB 25 ectos for 100k'].flatMap((message,group)=>Array.from({length:6},(_,index)=>({source:'kamadan' as const,message,sender:`Sample ${group} ${index}`,timestamp:Date.now()-index*60_000})))), sample: true }), getTraderQuotes: async () => ({ updatedAt: Date.now(), quotes: [{ modelId: '0b03a2', side: 'buy', price: 6000, timestamp: Date.now() }, { modelId: '0b03a2', side: 'sell', price: 5000, timestamp: Date.now() }], sample: true }) }, app: { showLauncher: async () => record('Launcher'), openSettings: async (section: string) => record(`Settings ${section}`), requestQuit: async () => quitFixtureGame(record), showQuitOrReload: () => fixtureMain.showQuitOrReload(), openExternal: async () => record('Website') } },
+      client: { ...window.gwNative?.client, session: async () => ({ appVersion: 'fixture', compatibility: null, extendedMemory: { requestedAtLaunch: false, status: 'standard', effectiveCapBytes: WASM_HEAP_CAP_BYTES, fallbackReason: null }, healthToken: null }) }, accounts: { get: async () => { await delay('accounts-load-ms'); return ({ current: '9e1bd41c-cfc0-4ca8-a57f-2f0ca159c72d', profiles: [{ id: '9e1bd41c-cfc0-4ca8-a57f-2f0ca159c72d', name: 'Main', state: 'running' }, { id: 'e98a37bc-5211-4bc5-8094-0b1286b3c42d', name: secondName, state: 'ready' }] }); }, open: async (request: { mode: string }) => { await delay('accounts-ms'); record(`Account Second ${request.mode}`); } }, settings: { get: async () => settings, onChange: (listener: (value: AppSettings) => void) => { settingsListeners.add(listener); return () => settingsListeners.delete(listener); }, set: async (patch: RendererSettingsPatch) => { await delay('settings-ms'); settings = { ...settings, ...patch }; localStorage.setItem('hub-fixture-shortcuts', JSON.stringify(settings.hubShortcuts)); if('calculatorRates' in patch&&patch.calculatorRates)localStorage.setItem('hub-fixture-calculator-rates',JSON.stringify(settings.calculatorRates)); for (const listener of settingsListeners) listener(settings); window.dispatchEvent(new Event('gw:tools-settings')); return settings; } }, clipboard: { writeText: async (value: string) => record(`Copied ${value}`) }, trade: { getMarketRates: async () => ({ ...estimateMarketRates(new URLSearchParams(location.search).has('market-empty') ? [] : ['WTS armbraces 30e/ea','WTB armbraces 28e/ea','WTS zkeys 1.5e/ea','WTB zkeys 1.4e/ea','WTS 20 ectos for 100k','WTB 25 ectos for 100k'].flatMap((message,group)=>Array.from({length:6},(_,index)=>({source:'kamadan' as const,message,sender:`Sample ${group} ${index}`,timestamp:Date.now()-index*60_000})))), sample: true }), getTraderQuotes: async () => ({ updatedAt: Date.now(), quotes: [{ modelId: '0b03a2', side: 'buy', price: 6000, timestamp: Date.now() }, { modelId: '0b03a2', side: 'sell', price: 5000, timestamp: Date.now() }], sample: true }) }, app: { showLauncher: async () => record('Launcher'), openSettings: async (target?: SettingsTarget) => record(target ? `Settings ${target.section}${target.control ? ` › ${target.control}` : ''}` : 'Settings'), requestQuit: async () => quitFixtureGame(record), showQuitOrReload: () => fixtureMain.showQuitOrReload(), openExternal: async () => record('Website') } },
   });
   const hub = createHub(document.body);
   const librarySize = Number(params.get('library'));
@@ -225,6 +228,8 @@ export function mountHubFixture(target: HTMLElement) {
     },
   });
   const travel = createHubTravel(travelHost, hub, (place, leave) => askLeaveArea(hub, leaveAreaCopy('travel', place), leave));
+  // Progress follows the fixture's map, as the companion republishes it after each map change.
+  watch(() => travelHost.state.value, state => travel.updateProgress(state.status === 'ready' ? progressFixture(state.mapId) : { status: 'waiting', reason: state.reason === 'loading' ? 'loading' : 'unavailable' }), { immediate: true });
   // `?travel-load-ms=` attaches Travel late, as the game loads its lazy bundle after the Hub opened.
   const travelLoadMs = Number(params.get('travel-load-ms')) || 0;
   if (travelLoadMs) setTimeout(() => hub.attach(travel.source), travelLoadMs); else hub.attach(travel.source);

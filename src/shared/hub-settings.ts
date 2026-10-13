@@ -3,10 +3,14 @@
  * The existing preferences owner persists changes; launcher administration is excluded.
  */
 import { parseGlobalTool, parseLauncherSettingsPatch, type GlobalToolUpdate, type LauncherSettings, type LauncherSnapshot, type ShortcutReplacement, type LauncherShortcutCaptureResult } from './launcher-contracts.js';
+import type { ExtendedMemoryRuntimeStatus } from './contracts.js';
+import type { SettingsTarget } from './settings-catalogue.js';
 import { isShortcutBinding, parseShortcutAction, type ShortcutAction } from './keyboard-shortcuts.js';
-export const HUB_SETTINGS_FIELDS = ['extendedMemoryEnabled', 'showDiagnostics', 'uiStyle', 'uiFont', 'uiCustomTheme', 'uiPanelOpacity', 'uiTextSize', 'controllerPromptStyle', 'renderScale', 'autoRelogAfterReload', 'characterSwitchProfession', 'characterSwitchLevel', 'characterSwitchLocation', 'skillKeyBindings', 'skillCooldownColor', 'chatFilterAllyDrops', 'chatFilterHallOfHeroes', 'chatFilterTitleAchievements', 'cartographyOverlayEnabled', 'cartographyGridEnabled', 'cartographyCompassGridEnabled', 'compassRangeIndicatorsEnabled', 'compassRangeEarshotEnabled', 'compassRangeCastEnabled', 'compassRangeSpiritEnabled', 'compassRangeSpiritExtendedEnabled', 'compassRangeEarshotOpacity', 'compassRangeCastOpacity', 'compassRangeSpiritOpacity', 'compassRangeSpiritExtendedOpacity', 'compassRangeTheme', 'cartographyRevealMode', 'cartographyPresetLibrary', 'cartographyWalkabilityOpacity', 'cartographyGridOpacity', 'cartographyControlIdleOpacity', 'eliteSkillsEnabled', 'eliteMissionMapMarkers'] as const satisfies readonly (keyof LauncherSettings)[];
-export type HubSettingsPatch = Partial<Pick<LauncherSettings, typeof HUB_SETTINGS_FIELDS[number]>>;
-export type HubSettingsSnapshot = Pick<LauncherSnapshot, 'tools' | 'shortcuts'> & { settings: HubSettingsPatch };
+export const HUB_SETTINGS_FIELDS = ['extendedMemoryEnabled', 'showDiagnostics', 'uiStyle', 'uiFont', 'uiCustomTheme', 'uiPanelOpacity', 'uiTextSize', 'controllerPromptStyle', 'renderScale', 'autoRelogAfterReload', 'characterSwitchProfession', 'characterSwitchLevel', 'characterSwitchLocation', 'skillKeyBindings', 'skillCooldownColor', 'chatFilterAllyDrops', 'chatFilterHallOfHeroes', 'chatFilterTitleAchievements', 'reminderCons', 'reminderPcons', 'reminderAlcohol', 'reminderBeforeEnd', 'reminderAtEnd', 'reminderSound', 'cartographyOverlayEnabled', 'cartographyGridEnabled', 'cartographyCompassGridEnabled', 'compassRangeIndicatorsEnabled', 'compassRangeEarshotEnabled', 'compassRangeCastEnabled', 'compassRangeSpiritEnabled', 'compassRangeSpiritExtendedEnabled', 'compassRangeEarshotOpacity', 'compassRangeCastOpacity', 'compassRangeSpiritOpacity', 'compassRangeSpiritExtendedOpacity', 'compassRangeTheme', 'cartographyRevealMode', 'cartographyPresetLibrary', 'cartographyWalkabilityOpacity', 'cartographyGridOpacity', 'cartographyControlIdleOpacity', 'eliteSkillsEnabled', 'eliteMissionMapMarkers', 'alcoholTimerPosition'] as const satisfies readonly (keyof LauncherSettings)[];
+/** The settings the game window reads and changes: those of the Settings page's in-game sections. */
+export type HubSettings = Pick<LauncherSettings, typeof HUB_SETTINGS_FIELDS[number]>;
+export type HubSettingsPatch = Partial<HubSettings>;
+export type HubSettingsSnapshot = Pick<LauncherSnapshot, 'tools' | 'shortcuts'> & { settings: HubSettings };
 export type HubSettingsChange = { kind: 'settings'; patch: HubSettingsPatch } | { kind: 'tool'; tool: GlobalToolUpdate['tool']; enabled: boolean } | { kind: 'master'; enabled: boolean } | { kind: 'shortcut'; action: ShortcutReplacement['action']; binding: ShortcutReplacement['binding'] };
 export interface HubSettingsApi {
   get(): Promise<HubSettingsSnapshot>;
@@ -16,8 +20,7 @@ export interface HubSettingsApi {
   cancelCapture(): Promise<void>;
 }
 export function hubSettingsSnapshot(snapshot: LauncherSnapshot): HubSettingsSnapshot {
-  const settings: HubSettingsPatch = {};
-  for (const key of HUB_SETTINGS_FIELDS) Object.assign(settings, { [key]: snapshot.settings[key] });
+  const settings = Object.fromEntries(HUB_SETTINGS_FIELDS.map(key => [key, snapshot.settings[key]])) as HubSettings;
   return { settings, tools: snapshot.tools, shortcuts: snapshot.shortcuts };
 }
 export function parseHubSettingsChange(value: unknown): HubSettingsChange {
@@ -35,3 +38,24 @@ export function parseHubSettingsChange(value: unknown): HubSettingsChange {
   }
   throw new Error('Invalid Hub settings change');
 }
+
+/** The exports of the Hub's Settings module (`apps/launcher/src/hub-entry.ts`, built to `settings/settings-app.js`). */
+export type EmbeddedSettings<Target> = Readonly<{
+  mountSettings(target: Target, options: Readonly<{
+    api: HubSettingsApi;
+    /** Where to open; `null` reopens the last section. */
+    target: SettingsTarget | null;
+    /** What this game session's memory module is; the Game section says so beside Extended memory. */
+    extendedMemory(): Promise<ExtendedMemoryRuntimeStatus | null>;
+    /** Shows a section only the launcher draws, at its control when named. */
+    openInLauncher(target: SettingsTarget): void | Promise<unknown>;
+    /** Asked once the page has loaded: whether its first open may move the keyboard to it. */
+    mayTakeFocus(): boolean;
+  }>): Readonly<{
+    /** Shows a section, at its control when named, on the page that is already open. */
+    open(target: SettingsTarget): void;
+    /** Reads settings again after a change saved elsewhere. */
+    refresh(): void;
+    dispose(): void;
+  }>;
+}>;

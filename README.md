@@ -60,7 +60,7 @@ Releases page also provides checksums, an SBOM, and build attestations. See
 
 Guild Wars starts as soon as the required data is ready, then downloads the
 rest of the game in the background while you play. You can see progress or
-pause the download in **Settings → Game Data**. The
+pause the download in **Settings → Game files**. The
 [user guide](docs/user-guide.md) explains sign-in, updates, Tools, recovery,
 and local data.
 

@@ -37,8 +37,8 @@ session. Inspection outlines and Compass inspection options are disclosed
 separately. **Use Cartographer defaults** selects the built-in style without
 deleting custom styles. Deletion requires confirmation with the style name.
 
-Failed saves remain visibly unsaved. **Retry save** repeats the intended change;
-**Revert change** restores the confirmed settings. Other edits are blocked until
+Failed saves remain visibly unsaved. **Retry** repeats the intended change;
+**Revert** restores the confirmed settings. Other edits are blocked until
 the player resolves the failure, preventing a stale whole-preset overwrite.
 
 ## One evidence pipeline

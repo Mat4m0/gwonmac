@@ -150,3 +150,5 @@ native callback frees it when the queue and graphics phase allow. Until then,
 geometry changes and icon replacements wait, and a cache rebuild redraws the
 queued model unchanged.
 Missing native drawing support produces no browser fallback.
+
+Chat lines before an effect or alcohol runs out are described in [Reminders](reminders.md).

@@ -72,10 +72,10 @@ test('saved font and custom title material apply to the real Hub without losing 
   }
 
   await search.fill('settings'); await search.press('Enter');
-  await page.getByRole('button', { name: 'Appearance', exact: true }).click();
-  await page.getByLabel('Panel font', { exact: true }).selectOption('inter');
+  await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: 'Appearance', exact: true }).click();
+  await page.locator('[data-setting="uiFont"] select').selectOption('inter');
   await expect.poll(() => page.locator('.hub-name').evaluate(element => getComputedStyle(element).fontFamily)).toContain('Inter');
-  await page.getByLabel('Panel style', { exact: true }).selectOption('obsidian');
+  await page.locator('[data-setting="uiStyle"] select').selectOption('obsidian');
   await expect(page.locator('#hub > .hub-panel > .ui-frame-artwork')).toBeHidden();
   await page.getByRole('button', { name: 'Back', exact: true }).click();
   await expect(search).toHaveValue('settings');
@@ -205,7 +205,8 @@ async function textContrast(page: Page, selectors: Record<string, string>) {
 const TEXT_ROLES = {
   title: '.hub-title', detail: '.hub-row > .hub-detail', group: '.hub-group', count: '.hub-count', keycap: '.hub-row-type .ui-kbd', legend: '.hub-legend > *',
   name: '.hub-name', caption: '.hub-caption', context: '.hub-context', crumb: '.hub-crumb', separator: '.hub-breadcrumbs > span[aria-hidden]',
-  summary: '.hub-summary-label', scope: '.hub-scope:not([hidden])', placeholder: '', setting: '.hub-setting-row strong, .hub-setting-row small, .hub-settings h2',
+  summary: '.hub-summary-label', scope: '.hub-scope:not([hidden])', placeholder: '',
+  setting: '.settings-fields h1, .settings-fields strong, .settings-fields small',
 };
 const BLUE_ACCENT = { material: 'classic', window: '#0B0B0B', titlebar: '#292927', surface: '#202225', recessed: '#080807', selected: '#1B3554', accent: '#4A6FA5', text: '#F1EBDD', mutedText: '#B7B09F', border: '#D8D2BF', windowGradient: true } as const;
 // Modern gold headings (HUB-249) and the Classic head (HUB-106) are the known worst cases.
@@ -256,7 +257,7 @@ for (const [name, appearance, scene] of [
     measured.push(...await textContrast(page, TEXT_ROLES));
     await page.getByRole('button', { name: 'Back', exact: true }).click();
     await search.fill('settings'); await search.press('Enter');
-    await page.getByRole('button', { name: 'Appearance', exact: true }).click();
+    await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: 'Appearance', exact: true }).click();
     await expect(page.locator('.hub-crumb').first()).toBeVisible();
     expect(await page.locator('.hub-crumb').first().evaluate(el => getComputedStyle(el).textShadow)).toBe(await page.locator('.hub-caption').evaluate(el => getComputedStyle(el).textShadow));
     measured.push(...await textContrast(page, TEXT_ROLES));
@@ -406,6 +407,7 @@ test.describe('custom theme with the Modern flat finish', () => {
     await search.fill('kam');
     const panel = page.locator('.hub-panel');
     const rows = page.locator('#hub .hub-row');
+    // Kamadan and Trade Chat; the Trade Chat setting is hidden because its title equals the tool row.
     await expect(rows).toHaveCount(2);
     for (const [border, opacity] of [['#D8D2BF', 94], ['#8A7F6A', 94], ['#1B1A18', 94], ['#5F5A52', 94], ['#D8D2BF', 65], ['#D8D2BF', 100]] as const) {
       await page.evaluate(([theme, uiPanelOpacity]) => window.gwApplyFixtureAppearance?.({ uiStyle: 'custom', uiPanelOpacity, uiCustomTheme: theme }), [customModern(border), opacity] as const);
@@ -454,15 +456,16 @@ test.describe('custom theme with the Modern flat finish', () => {
     await page.evaluate(theme => window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: { uiStyle: 'guild-wars', uiCustomTheme: theme } })), customModern('#D8D2BF'));
     await page.evaluate(() => window.gwApplyFixtureAppearance?.({ uiStyle: 'guild-wars', uiPanelOpacity: 94 }));
     await search.fill('settings'); await search.press('Enter');
-    await page.getByRole('button', { name: 'Appearance', exact: true }).click();
-    const style = page.getByLabel('Panel style', { exact: true });
+    await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: 'Appearance', exact: true }).click();
+    const style = page.locator('[data-setting="uiStyle"] select');
     // A macOS select opens its native menu on ↓, so choose the option directly;
-    // the saved change re-renders the page and must hand focus back to it.
+    // the saved change re-renders the page and must keep focus on the control.
     await style.focus(); await style.selectOption('custom');
     await expect.poll(() => page.evaluate(() => document.documentElement.dataset.uiMaterial)).toBe('modern');
     await expect(style).toHaveValue('custom');
     await expect(style).toBeFocused();
-    const row = page.locator('.hub-setting-row').filter({ has: style });
+    await expect(page.locator('.hub-caption')).toHaveText('Settings');
+    const row = page.locator('[data-setting="uiStyle"]');
     let expectedPaint: number[] | undefined;
     for (const border of ['#D8D2BF', '#8A7F6A', '#1B1A18']) {
       await page.evaluate(theme => window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: { uiCustomTheme: theme } })), customModern(border));

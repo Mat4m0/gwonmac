@@ -8,6 +8,7 @@ import type {
   AppSettings,
   AppUpdateState,
   DownloadProgress,
+  ExtendedMemoryRuntimeStatus,
 } from "../shared/contracts.js";
 import type {
   LauncherPreferencesPatch,
@@ -40,6 +41,7 @@ export interface LauncherOrchestratorOptions {
   readonly getNews: (track: AppSettings["updateTrack"], preferences: LauncherSnapshot["preferences"]) => LauncherSnapshot["news"];
   readonly toolsLoaded: () => boolean;
   readonly getTexturePacks?: () => TexturePackSnapshot;
+  readonly getExtendedMemory?: () => ExtendedMemoryRuntimeStatus | null;
   readonly developmentFixtures: boolean;
   /** Unpackaged Electron tests only: lets renderer-focused suites bypass client preparation. */
   readonly allowUnreadyLaunch?: boolean;
@@ -104,6 +106,12 @@ export class LauncherOrchestrator {
         chatFilterAllyDrops: settings.chatFilterAllyDrops,
         chatFilterHallOfHeroes: settings.chatFilterHallOfHeroes,
         chatFilterTitleAchievements: settings.chatFilterTitleAchievements,
+        reminderCons: settings.reminderCons,
+        reminderPcons: settings.reminderPcons,
+        reminderAlcohol: settings.reminderAlcohol,
+        reminderBeforeEnd: settings.reminderBeforeEnd,
+        reminderAtEnd: settings.reminderAtEnd,
+        reminderSound: settings.reminderSound,
         autoCheckUpdates: settings.autoCheckUpdates,
         updateTrack: settings.updateTrack,
         renderScale: settings.renderScale,
@@ -135,6 +143,7 @@ export class LauncherOrchestrator {
         selectedPackId: null,
         packs: [],
       },
+      extendedMemory: this.options.getExtendedMemory?.() ?? null,
       profiles: accounts.profiles.map((profile) => ({
         id: profile.id,
         name: profile.name,

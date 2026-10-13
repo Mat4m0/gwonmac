@@ -381,7 +381,7 @@ artwork without painting a second resize button. Close is a plain X with a usabl
 hit target and visible keyboard focus. Hub retains its adjusted geometry across
 pages; windows remain bounded by the viewport. Alt+arrows on Hub's unlocked lock
 control move it; arrows on its resize handle resize it. Reset Hub position is
-available in Hub preferences and Settings → Appearance. It restores default
+available in Hub preferences. It restores default
 position and size, and locks the Hub. Placement uses the shared validated window
 placement format in account-profile browser storage; a new renderer always starts
 locked. Reset removes only the Hub placement key.

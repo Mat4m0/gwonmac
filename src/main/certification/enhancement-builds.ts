@@ -722,18 +722,18 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
     Object.freeze({
       sha256: "b5f10d50833ed9390ce4faa49fb9a8c009416989e07f20690c27b39b5ef048ad",
       outputSha256: Object.freeze({
-        "features-fffff": "83eb5a8d26ca091e1dde0e23eeb6cb20da22d58c1930011c11a160b0c84943b9",
-        "features-01": "f2a0ca659d0d2fb0ca86b7fc082a027e2066cb2bc7fe0910e9c9a36826d389f7",
-        "features-e01": "589d9e075c6b331d618f53b73a8e5baff9b3d0dde05a47423837e5e28f0d1893",
-        "features-601": "45387b972824c410ce85c94dc8939bbac8c9cfd29b88aa4321d6584f1f752f9e",
-        "features-200": "d0a77026487e2e482456736c976a58e7966baefca648c132754c4f030f8b2b9c",
-        "features-202": "1711cc244a677529a3e4fb7e1b39f4c967160af2add1bb66fba5b628d0146885",
-        "features-284": "5864c033b6faf1046c60fb142a6011a713bbaf6aa3047b61349b313742411a67",
-        "features-285": "dacf76c783bad62e2389296701a945b9e83f0730e1c36c86bde4233b112acbda",
-        "features-270": "f164dabf6a0a5451f4e18a3170f22ad6842d1fe4eb48c8be3157c820d732f21e",
-        "features-2fc": "35f8f1dcce202a84857740c963bfc2ecaf8b82d2fe6943d9e492c668da2f662b",
-        "features-c200": "0eecb4cf253187cbc5a5eb62ef1433bd359c2c078310817f739ec2275fbaf18d",
-        "features-c204": "b8b516409179a39fb84707c89624aad6c35751cc31c11d588fa2088e25ce6006",
+        "features-3fffff": "e04e3244ae7c7004e80d8df67215509ba8e3c059f77d5431fa6309d1bb14aded",
+        "features-01": "711e6ad15db11be1022e32cf068992caef7eace7dbad25d82e8a856127b1ea6a",
+        "features-e01": "f64f4f8008c518c1b1fc9ccdf6ad384978b22430cc529368e87864c947516cba",
+        "features-601": "10f2eb0f8257ad3675b235bf63798f28a7c45c36b9c197d8d7d15ab808fddeb2",
+        "features-200": "e665bdf23f0f167e4bae542511bcac63b40d0ee1997857e723440edb5570eaa9",
+        "features-202": "756136c30f923c6b4caf099c907f53036c4f3f55c73515fb1c52780118275f6a",
+        "features-284": "b3d5007546bbfd07b964c383a33981208c001d2e3554de3be6f619b78da0a64f",
+        "features-285": "2f1c8dd86a263455abbedea627ddf8006a66372fbecb9f632477336d19a3f790",
+        "features-270": "3644fb3cb033803ef7b718bb8b8e86146d8e27cae0140d785587538e67b820e6",
+        "features-2fc": "06a205b82b3c6c6c2cc6f9b266112ce0917c2d124b200e9ef5a01286dc610671",
+        "features-c200": "fc0ac0fec9feb7038e514afc90fb7d1f7b58be382b6351299f6fa79065ea32c8",
+        "features-c204": "f07ca324c9935117fcf04ec3d3a1a5c49d9308867bec6a0f430e49773e8fcdfc",
       }),
       programId: 1,
       buildId: 644569738,
@@ -982,6 +982,82 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
           params: Object.freeze(["i32", "i32"] as const),
           results: Object.freeze([] as const),
           bodySha256: "af39ac84af3f910dea532421a1d27a77621d13caf6894de83b62ccf9c56841b7",
+        }),
+      }),
+      // Each accessor returns `WorldContext + offset` (or a stride-indexed row),
+      // so its exact body is the proof of the layout word beside it. The four
+      // AreaInfo row fields were checked against Kamadan, Kaineng Center and
+      // Embark Beach and ride on the AreaInfo accessor's stride and bound.
+      progressObservation: Object.freeze({
+        layout: Object.freeze({
+          worldMissionsCompleted: 0x5cc,
+          worldMissionsBonus: 0x5dc,
+          worldMissionsCompletedHm: 0x5ec,
+          worldMissionsBonusHm: 0x5fc,
+          worldVanquishedAreas: 0x83c,
+          worldTitles: 0x81c,
+          titleStride: 0x2c,
+          titleProps: 0,
+          titlePoints: 4,
+          areaInfoThumbnail: 0x14,
+          areaInfoX: 0x40,
+          areaInfoY: 0x44,
+          areaInfoName: 0x74,
+          areaInfoIcon: 0x48,
+        }),
+        accessors: Object.freeze({
+          missionsCompleted: Object.freeze({
+            functionIndex: 9189,
+            params: Object.freeze([] as const),
+            results: Object.freeze(["i32"] as const),
+            bodySha256: "55083539f7b4cc9735798476c6f1f41132a880f05fe0f80735c3d88df24a5fb4",
+          }),
+          missionsBonus: Object.freeze({
+            functionIndex: 9190,
+            params: Object.freeze([] as const),
+            results: Object.freeze(["i32"] as const),
+            bodySha256: "b2c8c1c5c29e3d65ee2146c6188a3b424edf312b1aa0f09a33bde70882553835",
+          }),
+          missionsCompletedHm: Object.freeze({
+            functionIndex: 9186,
+            params: Object.freeze([] as const),
+            results: Object.freeze(["i32"] as const),
+            bodySha256: "9f2fc258978975797eaaea36847eca28e5cea7b301acd36e9c3b49e3659909c9",
+          }),
+          missionsBonusHm: Object.freeze({
+            functionIndex: 9187,
+            params: Object.freeze([] as const),
+            results: Object.freeze(["i32"] as const),
+            bodySha256: "2400ea801789bf303891d69663d1ddd898ca9f40edb34bd0902af7e9a924244d",
+          }),
+          vanquishedAreas: Object.freeze({
+            functionIndex: 9192,
+            params: Object.freeze([] as const),
+            results: Object.freeze(["i32"] as const),
+            bodySha256: "2156f57faba6be2669bd8eef6742a4f03e97c11f54fef48ce6551a5c364637d0",
+          }),
+          titlePoints: Object.freeze({
+            functionIndex: 9307,
+            params: Object.freeze(["i32"] as const),
+            results: Object.freeze(["i32"] as const),
+            bodySha256: "a5c1bba06bf15728f177f452f266184ae622085f78ad344baed6c3e5a7133bc6",
+          }),
+          areaInfo: Object.freeze({
+            functionIndex: 17557,
+            params: Object.freeze(["i32"] as const),
+            results: Object.freeze(["i32"] as const),
+            bodySha256: "aacd25153c9917d4e0323b9569a0bfd58bb241b7fc068e389477727154ef636b",
+          }),
+        }),
+      }),
+      // The producer's `chat.valid-message` call (TextValidateCoded). Local chat
+      // lines call it first: the producer asserts on any line it rejects.
+      chatPrint: Object.freeze({
+        validator: Object.freeze({
+          functionIndex: 5881,
+          params: Object.freeze(["i32"] as const),
+          results: Object.freeze(["i32"] as const),
+          bodySha256: "1f58a402e2b2807caee4c761a61f62b060ea2c65af33eee7530f2191c727cf34",
         }),
       }),
       partyObservation: Object.freeze({
