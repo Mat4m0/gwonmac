@@ -6,7 +6,9 @@ export default defineConfig({
   testDir: ".",
   testMatch: /.*\.spec\.ts$/,
   globalSetup: "./global-setup.ts",
-  timeout: 30_000,
+  // Every game launch runs the full local client check (3-4.5 s on an M-series
+  // Mac, several times that on a loaded CI runner), and some specs launch twice.
+  timeout: 60_000,
   workers: 1,
   ...(process.env.CI ? { maxFailures: 1 } : {}),
   forbidOnly: !!process.env.CI,
