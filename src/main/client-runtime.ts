@@ -480,6 +480,13 @@ export class ClientRuntime {
         resignAction: optionalFeatureStatus(
           requested.resignAction, effective.resignAction, supported.resignAction, preparationFailed,
         ),
+        chatPrint: optionalFeatureStatus(
+          requested.chatPrint, effective.chatPrint, supported.chatPrint, preparationFailed,
+        ),
+        progressObservation: optionalFeatureStatus(
+          requested.progressObservation, effective.progressObservation,
+          supported.progressObservation, preparationFailed,
+        ),
         alcoholObservation: optionalFeatureStatus(requested.alcoholObservation, effective.alcoholObservation, supported.alcoholObservation, preparationFailed),
         nativeHudRendering: optionalFeatureStatus(
           requested.nativeHudRendering, effective.nativeHudRendering,

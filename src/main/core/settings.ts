@@ -323,6 +323,13 @@ export function parseSettings(raw: unknown): AppSettings {
     "skillCooldownOverlayEnabled",
     "effectTimersEnabled",
     "alcoholTimerEnabled",
+    "remindersEnabled",
+    "reminderCons",
+    "reminderPcons",
+    "reminderAlcohol",
+    "reminderBeforeEnd",
+    "reminderAtEnd",
+    "reminderSound",
     "extendedMemoryEnabled",
     "autoRelogAfterReload",
   ] as const) {

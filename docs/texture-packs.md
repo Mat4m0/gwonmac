@@ -11,7 +11,7 @@ files.
 
 ## Player flow
 
-1. Open **Settings → Game → Texture packs**.
+1. Open **Settings → Texture packs**.
 2. Choose **Import TPF** and select one `.tpf` file.
 3. Review the imported name, texture count, source size, and checksum.
 4. Select that pack. The next game window opened for any account uses it.

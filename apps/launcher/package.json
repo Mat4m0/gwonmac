@@ -5,13 +5,13 @@
   "engines": { "node": ">=22.19" },
   "scripts": {
     "dev": "vite",
-    "build": "vite build --mode embedded",
+    "build": "vite build --mode embedded && vite build --mode hub",
     "typecheck": "vue-tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
     "lucide-vue-next": "^0.544.0",
-    "vue": "^3.5.40"
+    "vue": "^3.5.43"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.8",

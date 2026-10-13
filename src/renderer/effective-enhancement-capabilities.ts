@@ -27,6 +27,7 @@ export function effectiveCapabilities(
     effectIconGeometry:
       features.effectIconGeometry.status === "available",
     alcoholObservation: features.alcoholObservation.status === "available",
+    progressObservation: features.progressObservation.status === "available",
     playRegionObservation:
       features.playRegionObservation.status === "available",
     preGameControls: features.preGameControls.status === "available",
@@ -36,5 +37,6 @@ export function effectiveCapabilities(
     quickItemMove: features.quickItemMove.status === "available",
     resignAction: features.resignAction.status === "available",
     whisperChat: features.whisperChat.status === "available",
+    chatPrint: features.chatPrint.status === "available",
   });
 }

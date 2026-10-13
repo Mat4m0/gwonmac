@@ -7,6 +7,7 @@ import type { EliteMapHandle, EliteMapHost } from "./elite-map.js";
 import type { HubPresenter, HubSource, HubViewMount } from "./hub.js";
 import type { WhisperSession } from "./whisper-session.js";
 import type { TravelFriends } from "./friends.js";
+import type { GameProgressState } from "./game-progress.js";
 import type { ToolboxObservation } from "./builds/live-party.js";
 import type { TeamApplyCommands } from "./builds/team-apply-runner.js";
 import type { StorageCommand } from "./storage-command.js";
@@ -90,6 +91,8 @@ export type EmbeddedToolsBundle<Target> = Readonly<{
     travel(mapId: number): Promise<void>;
     update(state: TravelGameState): void;
     updateFriends(friends: TravelFriends): void;
+    /** The character's mission, vanquish and title progress for the Progress page. */
+    updateProgress(progress: GameProgressState): void;
     dispose(): void;
   };
   mountTradeChat: (

@@ -1,19 +1,21 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from "vue";
+import type { InGameTools } from "../settings-host";
+import { computed, nextTick, onBeforeUnmount, ref } from "vue";
 import { Ellipsis } from "lucide-vue-next";
-import type { LauncherNativeApi, LauncherSnapshot } from "@shared/launcher-contracts";
+import type { LauncherSnapshot } from "@shared/launcher-contracts";
 import { DEFAULT_SHORTCUTS, SHORTCUT_LABELS, shortcutConflict, shortcutKeycaps, SHORTCUT_CAPTURE_HINT, type ShortcutAction, type ShortcutBinding } from "@shared/keyboard-shortcuts";
 
 const props = defineProps<{
   action: ShortcutAction;
   shortcuts: LauncherSnapshot["shortcuts"];
-  api?: LauncherNativeApi["tools"] | undefined;
+  api?: InGameTools | undefined;
   disabled?: boolean;
   performSave?: ((action: () => Promise<unknown>) => Promise<void>) | undefined;
 }>();
 const message = ref("");
 const capturing = ref(false);
 const pending = ref<{ binding: ShortcutBinding; owner: ShortcutAction } | null>(null);
+const value = ref<HTMLButtonElement | null>(null);
 const label = computed(() => SHORTCUT_LABELS[props.action]);
 let mounted = true;
 onBeforeUnmount(() => { mounted = false; });
@@ -27,6 +29,18 @@ async function save(binding: ShortcutBinding | null) {
     else await action();
     message.value = "";
   } catch { message.value = "The shortcut could not be saved. Try again."; }
+}
+
+/** Cancel and Escape answer a replace prompt alike; the keyboard returns to the shortcut it was about. */
+function cancelReplace() {
+  pending.value = null;
+  message.value = "Shortcut change cancelled.";
+  value.value?.focus();
+}
+function onEscape(event: KeyboardEvent) {
+  if (!pending.value || event.isComposing) return;
+  event.preventDefault();
+  if (!event.repeat) cancelReplace();
 }
 
 function choose(binding: ShortcutBinding | null) {
@@ -54,21 +68,25 @@ async function capture() {
     else if (result.status === "invalid") message.value = SHORTCUT_CAPTURE_HINT;
     else message.value = "Shortcut change cancelled.";
   } catch { message.value = "The shortcut could not be captured. Try again."; }
-  finally { capturing.value = false; }
+  finally {
+    capturing.value = false;
+    // The button was disabled while it listened, which dropped focus; every outcome gives it back so Enter records again.
+    void nextTick(() => { if (mounted && (!document.activeElement || document.activeElement === document.body)) value.value?.focus(); });
+  }
 }
 </script>
 
 <template>
-  <div class="shortcut-setting" :aria-label="`${label} shortcut`">
+  <div class="shortcut-setting" :aria-label="`${label} shortcut`" @keydown.esc="onEscape">
     <span class="visually-hidden">Shortcut</span>
-    <button class="secondary shortcut-value" :disabled="disabled || capturing" :aria-label="`Change ${label} shortcut`" @click="capture"><span v-if="capturing">Press keys…</span><span v-else-if="!shortcuts[action]">Not set</span><span v-else class="shortcut-keycaps"><kbd v-for="cap in shortcutKeycaps(shortcuts[action])" :key="cap.name" :title="cap.name">{{ cap.label }}</kbd></span><span aria-hidden="true">Change</span></button>
+    <button ref="value" class="secondary shortcut-value" :disabled="disabled || capturing" :aria-label="`Change ${label} shortcut`" @click="capture"><span v-if="capturing">Press keys…</span><span v-else-if="!shortcuts[action]">Not set</span><span v-else class="shortcut-keycaps"><kbd v-for="cap in shortcutKeycaps(shortcuts[action])" :key="cap.name" :title="cap.name">{{ cap.label }}</kbd></span><span aria-hidden="true">Change</span></button>
     <details class="shortcut-options" @keydown.esc.prevent="($event.currentTarget as HTMLDetailsElement).open = false"><summary :aria-label="`${label} shortcut options`" title="Shortcut options"><Ellipsis /></summary><div class="shortcut-actions">
       <button class="text-link" :disabled="disabled || capturing || !shortcuts[action]" :aria-label="`Clear ${label} shortcut`" @click="save(null)">Clear</button>
       <button class="text-link" :disabled="disabled || capturing" :aria-label="`Restore ${label} default shortcut`" @click="choose(DEFAULT_SHORTCUTS[action])">Restore default</button>
     </div></details>
     <p v-if="message" role="status" class="inline-message">{{ message }}</p>
     <div v-if="pending" class="shortcut-actions">
-      <button class="secondary" @click="pending = null; message = 'Shortcut change cancelled.'">Cancel</button>
+      <button class="secondary" @click="cancelReplace">Cancel</button>
       <button class="primary" :disabled="disabled" @click="save(pending.binding)">Replace shortcut</button>
     </div>
   </div>

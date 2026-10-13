@@ -62,10 +62,8 @@ export interface LauncherIpcContext {
   readonly setToolFeature: (input: GlobalToolUpdate) => Promise<void>;
   readonly captureShortcut: (win: BrowserWindow, action: ShortcutAction) => Promise<LauncherShortcutCaptureResult>;
   readonly replaceShortcut: (input: ShortcutReplacement) => Promise<void>;
-  readonly restoreDefaultShortcut: (action: ShortcutAction) => Promise<void>;
   readonly restartToApplyTools: (win: BrowserWindow) => Promise<void>;
   readonly cacheInfo: () => Promise<CacheInfo>;
-  readonly retryPreparation: () => Promise<void>;
   readonly repairGameFiles: (win: BrowserWindow) => Promise<void>;
   readonly pauseDownload: () => Promise<void>;
   readonly resumeDownload: () => Promise<void>;
@@ -161,10 +159,8 @@ export function registerLauncherIpc(ctx: LauncherIpcContext): void {
     toolsSetFeature: channel(toolUpdate, (_win, input) => ctx.setToolFeature(input), "launcher"),
     toolsCaptureShortcut: channel(one(parseShortcutAction), (win, action) => ctx.captureShortcut(win, action), "launcher"),
     toolsReplaceShortcut: channel(shortcutReplacement, (_win, input) => ctx.replaceShortcut(input), "launcher"),
-    toolsRestoreDefaultShortcut: channel(one(parseShortcutAction), (_win, action) => ctx.restoreDefaultShortcut(action), "launcher"),
     toolsRestartToApply: channel(nothing, (win) => ctx.restartToApplyTools(win), "launcher"),
     gameFilesInfo: channel(nothing, () => ctx.cacheInfo(), "launcher"),
-    gameFilesRetryPreparation: channel(nothing, () => ctx.retryPreparation(), "launcher"),
     gameFilesRepair: channel(nothing, (win) => ctx.repairGameFiles(win), "launcher"),
     gameFilesPauseDownload: channel(nothing, () => ctx.pauseDownload(), "launcher"),
     gameFilesResumeDownload: channel(nothing, () => ctx.resumeDownload(), "launcher"),

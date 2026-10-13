@@ -339,6 +339,13 @@ declare global {
       quickItemMove: boolean;
       effectTimersEnabled: boolean;
       alcoholTimerEnabled: boolean;
+      remindersEnabled: boolean;
+      reminderCons: boolean;
+      reminderPcons: boolean;
+      reminderAlcohol: boolean;
+      reminderBeforeEnd: boolean;
+      reminderAtEnd: boolean;
+      reminderSound: boolean;
       alcoholTimerPosition: AlcoholTimerPosition;
       skillCooldownColor: AppSettings['skillCooldownColor'];
     }>;

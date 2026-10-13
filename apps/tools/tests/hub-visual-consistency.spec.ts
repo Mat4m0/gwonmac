@@ -25,8 +25,6 @@ test('the footer uses glyph keycaps and rows share a 40 px anatomy (HUB-146, HUB
     expect(new Set(rows.map(row=>row.icon)).size).toBe(1);
     expect(new Set(rows.map(row=>row.cue)).size).toBe(1);
   }
-  await search.fill('settings');await search.press('Enter');await page.getByRole('button',{name:'Shortcuts',exact:true}).click();
-  await expect(page.locator('#hub kbd').first()).toBeVisible();await expect(page.locator('#hub kbd:not(.ui-kbd)')).toHaveCount(0);
 });
 
 test('Price basis keeps one label and one row with focus after changes (HUB-149)', async ({ page }) => {
@@ -66,29 +64,13 @@ test('calculator sides share one type role and preserve item capitalization (HUB
   await expect(page.locator('.hub-currency-from')).toHaveCSS('text-transform','none');
 });
 
-test('Maps uses the Settings owner and disables children without rewriting saved values (HUB-107)', async({page})=>{
-  await page.goto('/?hub'); await expect(page.locator('#app')).toHaveAttribute('data-ready','true');
-  await page.locator('.hub-search input').fill('maps'); await page.locator('.hub-search input').press('Enter');
-  await expect(page.locator('.hub-settings-body h2')).toHaveText('Maps');
-  await expect(page.getByRole('checkbox',{name:'Elite skills',exact:true})).toBeVisible();
-  const grid=page.getByRole('checkbox',{name:'Exploration grid'});await grid.uncheck();
-  await expect(page.getByRole('slider',{name:'Grid opacity'})).toBeDisabled();
-  const ranges=page.getByRole('checkbox',{name:'Compass ranges',exact:true});await ranges.uncheck();
-  await expect(page.getByRole('checkbox',{name:'Earshot range',exact:true})).toBeDisabled();
-  expect(await page.evaluate(()=>window.gwToolsSettings().compassRangeEarshotEnabled)).toBe(true);
-  await grid.check(); await expect(page.getByRole('slider',{name:'Grid opacity'})).toBeEnabled();
-});
-
-
 test('Text size doubles interface titles without zooming the game (HUB-116, D-16)', async({page})=>{
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/?hub'); await expect(page.locator('#app')).toHaveAttribute('data-ready','true');
   const canvas = await page.locator('#canvas').boundingBox(), ratio = await page.evaluate(() => devicePixelRatio);
   const before=await page.locator('.hub-panel').boundingBox();
-  const search=page.locator('.hub-search input');await search.fill('text size');await search.press('Enter');
-  const slider=page.getByRole('slider',{name:'Text size'});await slider.fill('200');await slider.dispatchEvent('change');
-  await expect(slider).toHaveValue('200');
-  const navOverflow=await page.locator('.hub-settings nav button').evaluateAll(els=>els.map(el=>el.scrollWidth-el.clientWidth));expect(navOverflow.every(value=>value<=1)).toBe(true);
+  const search=page.locator('.hub-search input');
+  await page.evaluate(() => { window.gwApplyFixtureAppearance?.({ uiTextSize: 200 }); window.dispatchEvent(new CustomEvent('hub-fixture-settings', { detail: { uiTextSize: 200 } })); });
   await page.keyboard.press('Meta+r');
   await expect(page.locator('.hub-title').first()).toHaveCSS('font-size','28px');
   const after=await page.locator('.hub-panel').boundingBox();expect(after).toEqual(before);
@@ -247,18 +229,12 @@ test('game context is separate and Characters has one visible heading (HUB-158)'
   await expect(page.getByRole('button',{name:'Character Switch settings',exact:true})).toBeVisible();
 });
 
-test('Settings nav and preference pins use row anatomy and intrinsic controls (HUB-151)',async({page})=>{
+test('preference pins use row anatomy (HUB-151)',async({page})=>{
   await page.goto('/?hub');await expect(page.locator('#app')).toHaveAttribute('data-ready','true');
   const search=page.locator('.hub-search input');await search.press('Meta+j');await page.getByRole('menuitem',{name:'Pin to Hub',exact:true}).click();
   await search.fill('hub preferences');await search.press('Enter');
   await expect(page.locator('.hub-preference-option .hub-icon')).toBeVisible();
   expect((await page.locator('.hub-preference-option').boundingBox())!.height).toBe(40);
-  await page.keyboard.press('Meta+r');await search.fill('settings');await search.press('Enter');
-  await page.getByRole('button',{name:'Appearance',exact:true}).click();
-  const nav=page.locator('.hub-settings nav [aria-current=true]');
-  expect(await nav.evaluate(el=>getComputedStyle(el,'::before').width)).toBe('2px');
-  const reset=page.getByRole('button',{name:'Reset Hub position',exact:true});
-  expect((await reset.boundingBox())!.width).toBeLessThan(200);
 });
 
 test('visible Hub text uses one token ramp and readable line heights (HUB-147)',async({page})=>{
@@ -269,7 +245,7 @@ test('visible Hub text uses one token ramp and readable line heights (HUB-147)',
     if(query==='@travel')await page.keyboard.press('Meta+t');
     else if(query==='@characters')await page.keyboard.press('Meta+e');
     else if(query==='@actions')await search.press('Meta+j');
-    else {await search.fill(query);if(['commands','titles','build library','settings','hub preferences'].includes(query))await search.press('Enter');else if(query==='team gom afk')await search.press('ArrowRight');}
+    else {await search.fill(query);if(['commands','titles','build library','hub preferences'].includes(query))await search.press('Enter');else if(query==='team gom afk')await search.press('ArrowRight');}
     const invalid=await page.locator('#hub').evaluate(root=>{
       const invalid:string[]=[];const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let node:Node|null;
       while((node=walker.nextNode())){
@@ -317,7 +293,7 @@ test('every view keeps the same frame and search box across styles, fonts and op
       if(query==='@travel')await page.keyboard.press('Meta+t');
       else if(query==='@characters')await page.keyboard.press('Meta+e');
       else if(query==='@actions')await search.press('Meta+j');
-      else {await search.fill(query);if(['commands','titles','build library','settings','hub preferences'].includes(query))await search.press('Enter');else if(query==='team gom afk')await search.press('ArrowRight');}
+      else {await search.fill(query);if(['commands','titles','build library','hub preferences'].includes(query))await search.press('Enter');else if(query==='team gom afk')await search.press('ArrowRight');}
       expect(await page.locator('.hub-panel').boundingBox(),`${uiStyle}/${uiFont}/${uiPanelOpacity}/${query}`).toEqual(frame);
       const visible=page.locator('.ui-hub-search:visible');
       if(await visible.count())expect(await visible.boundingBox(),`${uiStyle}/${uiFont}/${uiPanelOpacity}/${query}`).toEqual(field);

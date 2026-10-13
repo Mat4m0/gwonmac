@@ -1,8 +1,8 @@
 /**
- * Extended-memory setting presentation.
- * Derives and binds its copy from saved intent and effective runtime status.
+ * Extended-memory setting presentation: its state line from the saved choice and
+ * the running client's effective limit (Settings › Game).
  */
-import type { ExtendedMemoryRuntimeStatus } from "../shared/contracts.js";
+import type { ExtendedMemoryRuntimeStatus } from "./contracts.js";
 
 export type ExtendedMemoryView = Readonly<{
   label: string;
@@ -54,21 +54,5 @@ export function extendedMemoryView(
     label: "Using 2 GB",
     level: "neutral",
     detail: "The standard certified memory limit is active.",
-  };
-}
-
-export function bindExtendedMemorySetting(document: Document): Readonly<{
-  render(savedIntent: boolean, runtime: ExtendedMemoryRuntimeStatus | null): void;
-}> {
-  const badge = document.getElementById("settings-memory-badge");
-  const status = document.getElementById("settings-memory-status");
-  if (!badge || !status) throw new Error("missing extended-memory settings elements");
-  return {
-    render(savedIntent, runtime) {
-      const view = extendedMemoryView(savedIntent, runtime);
-      badge.textContent = view.label;
-      badge.dataset.level = view.level;
-      status.textContent = view.detail;
-    },
   };
 }

@@ -27,7 +27,7 @@ const answers: [query: string, primary: RegExp, finding: string][] = [
   ['trader prices', /^Open Trade Chat/, 'HUB-224: trader finds Trade Chat'],
   ['rate', /^Choose rates/, 'HUB-063: the rates editor by its word'],
   ['title', /^Open calculator/, 'HUB-063: the title calculator by its word'],
-  ['shortcuts', /^Open Shortcuts settings/, 'HUB-064: a Settings section by its name'],
+  ['updates', /^Open in Launcher/, 'HUB-064: a launcher-only section by its name'],
   ['theme', /^Open Appearance settings/, 'HUB-064: a Settings section by its words'],
   ['10 ecto', /^Copy 60 platinum/, 'HUB-102: a conversion without its target uses the labelled default, runs nothing'],
 ];
@@ -39,7 +39,8 @@ test('a typed search selects its best answer', async ({ page }) => {
     await expect(primary(page), finding).toHaveText(expected);
     await expect(primary(page), finding).toBeEnabled();
   }
-  for (const [query, id, label] of [['ascalon city', 'place:81', 'Travel to Ascalon City↵'], ['char f', 'character:ranger', 'Show Fixture Ranger in Characters↵']] as const) {
+  // `travel` is also a Tools setting; the command is the answer, not the setting row below it.
+  for (const [query, id, label] of [['ascalon city', 'place:81', 'Travel to Ascalon City↵'], ['char f', 'character:ranger', 'Show Fixture Ranger in Characters↵'], ['travel', 'travel', 'Browse travel↵']] as const) {
     await search(page).fill(query);
     await expect(page.locator('.hub-row[aria-selected=true]')).toHaveAttribute('data-id', id);
     await expect(primary(page)).toHaveText(label);
@@ -57,15 +58,38 @@ test('a character ranks ahead of a build that matches the same way', async ({ pa
   await expect(page.locator('.hub-row[aria-selected=true]')).toHaveAttribute('data-id', 'character:ritualist');
 });
 
-test('a Settings section result opens that section (HUB-064)', async ({ page }) => {
+test('a setting row opens Hub Settings at its control; launcher settings, Keys rows and the Settings command each open their own page (HUB-064)', async ({ page }) => {
   await open(page);
-  for (const [query, section] of [['shortcuts', 'Shortcuts'], ['theme', 'Appearance']] as const) {
-    await search(page).fill(query);
-    await search(page).press('Enter');
-    await expect(page.locator('.hub-settings nav [aria-current="true"]')).toHaveText(section);
-    await page.keyboard.press('Meta+Backspace');
-    await expect(page.locator('.hub-caption')).not.toHaveText('Settings');
-  }
+  const action = page.locator('#app');
+  // An in-Hub setting found by its words opens the Settings page at that control, focused.
+  await search(page).fill('elite skill');
+  await expect(primary(page)).toHaveText(/^Open setting/);
+  await search(page).press('Enter');
+  await expect(page.locator('.hub-caption')).toHaveText('Settings');
+  const control = page.locator('[data-setting="eliteSkillsEnabled"]');
+  await expect(control).toHaveClass(/setting-focus/);
+  await expect(control.locator('input')).toBeFocused();
+  await expect(action).not.toHaveAttribute('data-action', /.+/);
+  // The Settings command opens the same page without a target, not the launcher.
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await search(page).fill('settings');
+  await page.locator('.hub-row[data-id="settings"]').click();
+  await expect(page.locator('.hub-caption')).toHaveText('Settings');
+  await expect(page.getByRole('navigation', { name: 'Settings sections' })).toBeVisible();
+  // A Keys row names the tool's shortcut control, which is in the Hub's Tools section.
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await search(page).fill('commands'); await search(page).press('Enter');
+  await page.locator('.hub-row[data-id="key:travel"]').click();
+  await expect(page.locator('[data-setting="tool:quick-travel"]')).toHaveClass(/setting-focus/);
+  await expect(action).not.toHaveAttribute('data-action', /.+/);
+  // A launcher setting calls the launcher with its target and opens no Hub page.
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await search(page).fill('automatic updates');
+  await expect(primary(page)).toHaveText(/^Open in Launcher/);
+  await search(page).press('Enter');
+  await expect(action).toHaveAttribute('data-action', 'Settings updates › autoCheckUpdates');
+  await expect(page.locator('#hub')).toBeHidden();
 });
 
 test('travel <friend> offers the trip to that friend\'s outpost after the places (HUB-142)', async ({ page }) => {
@@ -115,7 +139,7 @@ test('the first screen stays on the game: Launcher and the website wait for a ty
   await expect(page.locator('#hub [role="option"]', { hasText: 'Show Launcher' })).toHaveCount(0);
   // Commands, the way into everything else, leads its group.
   await expect(page.locator('#hub [role="group"]', { has: page.locator('.hub-group', { hasText: /^Commands$/ }) }).locator('.hub-row').first()).toHaveAttribute('data-id', 'commands');
-  await search(page).fill('launcher');
+  await search(page).fill('show launcher');
   await expect(primary(page)).toHaveText(/^Show Launcher/);
 });
 

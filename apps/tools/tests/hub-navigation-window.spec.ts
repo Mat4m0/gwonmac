@@ -114,7 +114,7 @@ for (const material of ['Guild Wars', 'Modern']) test(`floating Whispers paints 
   const search = page.locator('.hub-search input');
   await search.fill('settings'); await search.press('Enter');
   await page.getByRole('button', { name: 'Appearance', exact: true }).click();
-  await page.getByLabel('Panel style', { exact: true }).selectOption({ label: material });
+  await page.locator('[data-setting="uiStyle"] select').selectOption({ label: material });
   await page.getByRole('button', { name: 'Back', exact: true }).click();
   await search.fill('whisper Romi'); await search.press('Enter');
   const panel = page.locator('#whisper-window');
