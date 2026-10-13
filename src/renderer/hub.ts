@@ -770,7 +770,7 @@ export function createHub(parent: HTMLElement) {
     const tierOf = (row: HubRow) => phraseIds.has(row.id) ? -1 : row.conversion || row.group === 'Calculator' ? 0 : hubTier(row, parsed.term) ?? 3;
     const best = new Map<string, number>();
     if (ranked) for (const row of rows) best.set(row.group, Math.min(best.get(row.group) ?? Infinity, tierOf(row)));
-    const groups = ["Pinned", "Calculator", "Teams", "Folders", "Builds", "Targets", "Current build", "Accounts", "Characters", "In your party", "Unlocked heroes", "Heroes", "People", "Places", "Friends", "Continue", "Tools", "Commands", "Settings", "Sources", "Trade", "Calculate", "Keys & shortcuts"];
+    const groups = ["Pinned", "Calculator", "Teams", "Folders", "Characters", "Builds", "Targets", "Current build", "Accounts", "In your party", "Unlocked heroes", "Heroes", "People", "Places", "Friends", "Continue", "Tools", "Commands", "Settings", "Sources", "Trade", "Calculate", "Keys & shortcuts"];
     // A typed query that names a tool or command as well as places answers with the tool: the Hub
     // has a few of those and hundreds of places (`ma` is Maps before Maguuma Stade, HUB-058).
     const typedFirst = ranked ? ['Tools', 'Commands'] : [];
@@ -814,7 +814,7 @@ export function createHub(parent: HTMLElement) {
     list.before(rates);
     const compactBuilds = !scope && !input.value.trim();
     // Reserve the preview from the complete result set, before deferred rows reach the DOM.
-    list.classList.toggle('hub-build-list', !compactBuilds && rows.some(row => !!row.skills));
+    list.classList.toggle('hub-preview-list', !compactBuilds && rows.some(row => !!row.preview));
     const paintRow = (row: HubRow, index: number) => {
       const compact = !!row.skills && compactBuilds;
       const retained = !shortcutsChanged && mounted.get(row.id)?.classList.contains('hub-build-compact') === compact && samePaint(row, previousById.get(row.id)) ? mounted.get(row.id) : undefined;
