@@ -22,6 +22,7 @@ import {
   launchOfflineAt,
   root,
   type OfflineFixture,
+  stopElectron,
 } from "./fixtures.mts";
 import { startGameInput } from "./input-helpers.js";
 
@@ -496,7 +497,7 @@ test.describe("the Steam credential seam", () => {
     fixture = await launchOffline("gw-steam-relaunch-");
     await seedStore(fixture.app, { token: TOKEN, expiry: FAR_FUTURE });
     const userData = fixture.userData;
-    await fixture.app.close();
+    await stopElectron(fixture.app);
 
     fixture = await launchOfflineAt(userData);
     expect(await getAuthToken(fixture, "Steam", true)).toEqual({

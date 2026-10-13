@@ -186,7 +186,12 @@ async function waitForExit(
   });
 }
 
-async function stopElectron(app: ElectronApplication): Promise<void> {
+/**
+ * Stops an app and keeps its user data, for a restart in the same test. Playwright's
+ * `app.close()` has taken 54 s to return on a loaded machine, so this bounds it and
+ * kills the process after 5 s.
+ */
+export async function stopElectron(app: ElectronApplication): Promise<void> {
   let child: ReturnType<ElectronApplication["process"]>;
   try {
     child = app.process();
