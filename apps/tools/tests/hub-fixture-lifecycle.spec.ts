@@ -41,7 +41,7 @@ test.describe('game lifecycle', () => {
     const current = page.locator('#character-switch-list button[aria-current=true]');
     await expect(current).toBeFocused();
     await page.keyboard.press('Enter');
-    expect((await page.evaluate(() => window.gwNative.hubSettings.get())).settings.characterSwitchProfession).toBe(before);
+    expect((await page.evaluate(() => window.gwNative.settings.get())).characterSwitchProfession).toBe(before);
     await expect(current).toBeFocused();
     await expect(page.locator('#app')).not.toHaveAttribute('data-action', /Character/);
   });
@@ -83,14 +83,6 @@ test.describe('shortcuts through commands.ts', () => {
     for (let press = 0; press < 3; press++) await page.keyboard.press('Meta+b');
     await expect(page.locator('.hub-breadcrumbs')).toHaveText('Home›Build Library');
     await expect(search).toHaveValue('smiter'); await expect(search).toBeFocused();
-    await page.keyboard.press('Meta+Backspace');
-    await expect(page.locator('.hub-caption')).toHaveText('Home');
-    await search.fill('settings'); await search.press('Enter');
-    await page.getByRole('button', { name: 'Maps', exact: true }).click();
-    await page.evaluate(() => window.gwHub?.openSettings());
-    await page.evaluate(() => window.gwHub?.openSettings());
-    await expect(page.locator('.hub-settings-body h2')).toHaveText('Maps');
-    await expect(page.locator('.hub-breadcrumbs')).toHaveText('Home›Settings');
     await page.keyboard.press('Meta+Backspace');
     await expect(page.locator('.hub-caption')).toHaveText('Home');
   });

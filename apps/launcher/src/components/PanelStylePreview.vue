@@ -1,10 +1,10 @@
 <script setup lang="ts">
+import type { InGameSettings } from "../settings-host";
 import { computed } from "vue";
-import type { LauncherSettings } from "@shared/launcher-contracts";
 import { defaultCustomUiTheme } from "@shared/ui-theme";
 import { accessibleForeground, compositeColor, contrastRatio, renderedCustomTheme } from "@shared/ui-color";
 
-const props = defineProps<{ settings: LauncherSettings }>();
+const props = defineProps<{ settings: InGameSettings }>();
 const theme = computed(() => props.settings.uiStyle === "custom" ? renderedCustomTheme(props.settings.uiCustomTheme) : defaultCustomUiTheme(props.settings.uiStyle === "obsidian" ? "modern" : "classic"));
 const backgrounds = computed(() => [compositeColor(theme.value.window, "#FFFFFF", props.settings.uiPanelOpacity / 100), compositeColor(theme.value.window, "#000000", props.settings.uiPanelOpacity / 100), theme.value.titlebar, theme.value.surface, theme.value.recessed]);
 const ink = computed(() => accessibleForeground(theme.value.text, backgrounds.value));
@@ -38,5 +38,5 @@ const font = computed(() => ({ "guild-wars": 'Palatino, serif', inter: 'Inter, s
 .sample-input { border: 1px solid; }
 figcaption { color: var(--muted); font-size: 13px; line-height: 1.5; }
 .contrast-note { padding: 0 16px 14px; margin: 0; font-size: 14px; }
-@media (max-width: 600px) { .panel-preview { grid-template-columns: 1fr; }.panel-sample { max-width: 300px; } }
+@container settings (max-width: 600px) { .panel-preview { grid-template-columns: 1fr; }.panel-sample { max-width: 300px; } }
 </style>

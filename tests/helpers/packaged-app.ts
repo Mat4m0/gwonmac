@@ -12,6 +12,15 @@ export interface RunningPackagedApp {
   readonly page: Page;
 }
 
+/** Opens the launcher's Settings page from the header gear and returns the launcher page. */
+export async function openPackagedSettings(running: RunningPackagedApp): Promise<Page> {
+  const launcher = running.launcherPage;
+  if (!launcher) throw new Error("the packaged app did not expose the unified launcher");
+  await launcher.getByRole("button", { name: "Settings", exact: true }).click();
+  await launcher.locator(".settings-page").waitFor({ timeout: 30_000 });
+  return launcher;
+}
+
 export interface PackagedAppLaunch {
   readonly appPath: string;
   readonly productName: string;

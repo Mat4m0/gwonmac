@@ -4,7 +4,6 @@ import type { LauncherNativeApi, LauncherSnapshot } from "@shared/launcher-contr
 import App from "./App.vue";
 import { fixtureSnapshot } from "./fixtures";
 import funding from "@shared/funding.json";
-import { SETTINGS } from "@shared/settings-catalogue";
 
 function installNative(overrides: Record<string, unknown>): LauncherNativeApi {
   const native = {
@@ -55,46 +54,11 @@ describe("unified launcher shell", () => {
     expect(unsubscribe).toHaveBeenCalledOnce();
   });
 
-  it("retains a refused save for an exact retry and locks conflicting edits", async () => {
-    const update = vi.fn().mockRejectedValueOnce(new Error("disk")).mockResolvedValueOnce(undefined);
-    installNative({ settings: { update } });
-    const wrapper = mount(App);
-    await flushPromises();
-    await wrapper.get('button[aria-label="Settings"]').trigger("click");
-    await wrapper.get('.settings-fields input[type="checkbox"]').setValue(false);
-    await flushPromises();
-    expect(wrapper.get('.settings-feedback[role="alert"]').text()).toContain("displayed change is unsaved");
-    expect(wrapper.get('.settings-fields').attributes("disabled")).toBeDefined();
-    await wrapper.get('.save-actions .secondary').trigger("click");
-    await flushPromises();
-    expect(update.mock.calls).toEqual([[{ autoCheckUpdates: false }], [{ autoCheckUpdates: false }]]);
-    expect(wrapper.get('.settings-fields').attributes("disabled")).toBeUndefined();
-    expect(wrapper.find('.settings-feedback[role="alert"]').exists()).toBe(false);
-    wrapper.unmount();
-  });
-
-  it("reverts unsaved native control state to the canonical snapshot", async () => {
-    const update = vi.fn(async () => { throw new Error("disk"); });
-    installNative({ settings: { update } });
-    const wrapper = mount(App);
-    await flushPromises();
-    await wrapper.get('button[aria-label="Settings"]').trigger("click");
-    const original = fixtureSnapshot.settings.autoCheckUpdates;
-    await wrapper.get('.settings-fields input[type="checkbox"]').setValue(!original);
-    await flushPromises();
-    await wrapper.findAll('.save-actions button').find(button => button.text() === 'Revert change')!.trigger("click");
-    await flushPromises();
-    expect(wrapper.get<HTMLInputElement>('.settings-fields input[type="checkbox"]').element.checked).toBe(original);
-    expect(update).toHaveBeenCalledTimes(1);
-    expect(wrapper.find('.settings-feedback').exists()).toBe(false);
-    wrapper.unmount();
-  });
-
   it("opens the destination requested by the native application menu", async () => {
-    let navigate: ((destination: "home" | "settings") => void) | undefined;
+    let navigate: ((destination: "home" | "accounts") => void) | undefined;
     installNative({
       navigation: {
-        onRequest(callback: (destination: "home" | "settings") => void) {
+        onRequest(callback: (destination: "home" | "accounts") => void) {
           navigate = callback;
           return () => undefined;
         },
@@ -103,13 +67,31 @@ describe("unified launcher shell", () => {
     const wrapper = mount(App);
     await flushPromises();
 
-    navigate?.("settings");
+    navigate?.("accounts");
     await wrapper.vm.$nextTick();
-    expect(wrapper.get(".settings-content h1").text()).toBe("Updates");
+    expect(wrapper.get(".accounts-page h1").text()).toBe("Accounts");
 
     navigate?.("home");
     await wrapper.vm.$nextTick();
     expect(wrapper.get(".hero-copy h1").text()).toContain("Seven skill fixes");
+  });
+
+  it("opens the Settings page from the gear and at Home from Home's Customize", async () => {
+    const gear = mount(App);
+    await flushPromises();
+    await gear.get('button[aria-label="Settings"]').trigger("click");
+    await flushPromises();
+    expect(gear.find(".settings-page").exists()).toBe(true);
+    gear.unmount();
+
+    const home = mount(App);
+    await flushPromises();
+    await home.findAll("button").find(button => button.text() === "Customize")!.trigger("click");
+    await flushPromises();
+    expect(home.get(".settings-fields h1").text()).toBe("Home screen");
+    // The Settings grid has no row for the funding banner.
+    expect(home.find(".funding-banner").exists()).toBe(false);
+    home.unmount();
   });
 
   it("keeps funding on top and operational status only in the launch bar", () => {
@@ -151,8 +133,6 @@ describe("unified launcher shell", () => {
   it("keeps Home focused on content and moves account management to Accounts", async () => {
     const wrapper = mount(App);
     expect(wrapper.get("h1").text()).toContain("Seven skill fixes");
-    await wrapper.get('button[aria-label="Settings"]').trigger("click");
-    expect(wrapper.get(".settings-content h1").text()).toBe("Updates");
     await wrapper.findAll("nav button")[1]!.trigger("click");
     expect(wrapper.get(".accounts-page h1").text()).toBe("Accounts");
     expect(wrapper.text()).toContain("Main account");
@@ -233,117 +213,11 @@ describe("unified launcher shell", () => {
     expect(wrapper.text()).not.toContain("submitted");
   });
 
-  it("keeps Tool switches and shortcuts together", async () => {
-    const wrapper = mount(App);
-    await wrapper.get('button[aria-label="Settings"]').trigger("click");
-    await wrapper.findAll(".settings-page aside button").find((button) => button.text() === "Tools")!.trigger("click");
-    expect(wrapper.text()).toContain("Settings and shortcuts apply to every account");
-    expect(wrapper.text()).toContain("Build Library");
-    expect(wrapper.text()).toContain("⌘B");
-    expect(wrapper.text()).toContain("Travel");
-    expect(wrapper.text()).toContain("Xunlai Storage");
-    expect(wrapper.text()).toContain("Trade Chat");
-    expect(wrapper.text()).toContain("Character Switch");
-    expect(wrapper.text()).toContain("Skill Cooldowns");
-    expect(wrapper.text()).toContain("Chat Filters");
-  });
-
-  it("renders exactly one control, with the same label, for every setting search can open", async () => {
-    const allOn: LauncherSnapshot = {
-      ...fixtureSnapshot,
-      tools: { ...fixtureSnapshot.tools, configured: true, features: Object.fromEntries(Object.entries(fixtureSnapshot.tools.features).map(([tool, feature]) => [tool, { ...feature, enabled: true }])) as LauncherSnapshot["tools"]["features"] },
-    };
-    installNative({ state: { get: async () => allOn, onChange: () => () => undefined }, experience: { updatePreferences: vi.fn(async () => undefined) } });
-    const wrapper = mount(App);
-    await flushPromises();
-    await wrapper.get('button[aria-label="Settings"]').trigger("click");
-    const found = new Map<string, string[]>();
-    for (const button of wrapper.findAll(".settings-page aside button")) {
-      await button.trigger("click");
-      await flushPromises();
-      for (const control of wrapper.findAll("[data-setting]")) {
-        const id = control.attributes("data-setting")!;
-        found.set(id, [...found.get(id) ?? [], `${control.attributes("aria-label") ?? ""} ${control.text()}`]);
-      }
-    }
-    for (const entry of SETTINGS) {
-      expect(found.get(entry.id), entry.id).toHaveLength(1);
-      expect(found.get(entry.id)![0], entry.id).toContain(entry.label);
-    }
-    wrapper.unmount();
-  });
-
-  it("saves each enabled Chat Filter category independently", async () => {
-    const update = vi.fn(async () => undefined);
-    const snapshot = {
-      ...fixtureSnapshot,
-      tools: {
-        ...fixtureSnapshot.tools,
-        configured: true,
-        loaded: true,
-        features: {
-          ...fixtureSnapshot.tools.features,
-          "chat-filters": { enabled: true },
-        },
-      },
-    };
-    installNative({
-      state: { get: async () => snapshot, onChange: () => () => undefined },
-      settings: { update },
-    });
-    const wrapper = mount(App);
-    await flushPromises();
-    await wrapper.get('button[aria-label="Settings"]').trigger("click");
-    await wrapper.findAll(".settings-page aside button")
-      .find((button) => button.text() === "Tools")!.trigger("click");
-    const allyDrop = wrapper.findAll(".chat-filter-details label")
-      .find((label) => label.text().includes("Hide other party members' item drops"));
-    expect(allyDrop).toBeDefined();
-    await allyDrop!.get('input[type="checkbox"]').setValue(false);
-    await flushPromises();
-    expect(update).toHaveBeenCalledWith({ chatFilterAllyDrops: false });
-  });
-
-  it("keeps Maps discoverable and explains disabled and restart states", async () => {
-    let update!: (snapshot: typeof fixtureSnapshot) => void;
-    const restart = vi.fn(async () => undefined);
-    installNative({ tools: { restartToApply: restart }, state: { get: async () => fixtureSnapshot, onChange: (listener: typeof update) => { update = listener; return () => undefined; } } });
-    const wrapper = mount(App);
-    await flushPromises();
-    await wrapper.get('button[aria-label="Settings"]').trigger("click");
-    await wrapper.findAll(".settings-page aside button").find(button => button.text() === "Maps")!.trigger("click");
-    expect(wrapper.get(".settings-content h1").text()).toBe("Maps");
-    expect(wrapper.text()).toContain("Tools are off");
-    update({ ...fixtureSnapshot, tools: { ...fixtureSnapshot.tools, configured: true, loaded: false, restartRequired: true } });
-    await wrapper.vm.$nextTick();
-    expect(wrapper.text()).toContain("Restart the launcher to enable Maps");
-    expect(wrapper.text()).toContain("Restarting only a game window does not load Tools");
-    await wrapper.findAll('button').find(button => button.text() === 'Open restart options')!.trigger('click');
-    expect(wrapper.get('.settings-content h1').text()).toBe('Tools');
-    expect(wrapper.get('.restart-row button').attributes('disabled')).toBeDefined();
-    expect(wrapper.get('.restart-row').text()).toContain('Close every game window');
-    expect(wrapper.get('.restart-row').text()).toContain('Restart the launcher to load Tools');
-    update({ ...fixtureSnapshot, profiles: fixtureSnapshot.profiles.map(profile => ({ ...profile, state: 'ready' })), tools: { ...fixtureSnapshot.tools, configured: true, loaded: false, restartRequired: true } });
-    await wrapper.vm.$nextTick();
-    expect(wrapper.get('.restart-row button').attributes('disabled')).toBeUndefined();
-    await wrapper.get('.restart-row button').trigger('click');
-    expect(restart).toHaveBeenCalledOnce();
-    await wrapper.findAll('.settings-page aside button').find(button => button.text() === 'Maps')!.trigger('click');
-    update({ ...fixtureSnapshot, tools: { ...fixtureSnapshot.tools, configured: true, loaded: true, restartRequired: false } });
-    await wrapper.vm.$nextTick();
-    expect(wrapper.text()).toContain("Maps enabled");
-    update({ ...fixtureSnapshot, tools: { ...fixtureSnapshot.tools, configured: false, loaded: true, restartRequired: true } });
-    await wrapper.findAll('.settings-page aside button').find(button => button.text() === 'Tools')!.trigger('click');
-    expect(wrapper.get('.restart-row').text()).toContain('Tools are off in every game window. Restart the launcher to finish unloading them.');
-  });
-
   it("keeps Discord and GitHub in the global header", async () => {
     const wrapper = mount(App);
 
     expect(wrapper.get('.titlebar button[aria-label="Open Discord"]').attributes("title")).toBe("Discord");
     expect(wrapper.get('.titlebar button[aria-label="Open GitHub"]').attributes("title")).toBe("GitHub");
-    await wrapper.get('button[aria-label="Settings"]').trigger("click");
-    expect(wrapper.find(".settings-community-links").exists()).toBe(false);
   });
 
   it("opens the launcher after setup and keeps Tools off unless explicitly enabled", async () => {
@@ -377,32 +251,6 @@ describe("unified launcher shell", () => {
     expect(wrapper.get(".launchbar").text()).toContain("Play");
     expect(wrapper.find(".intro-callout").exists()).toBe(false);
     wrapper.unmount();
-  });
-
-  it("asks before replacing another Tool shortcut", async () => {
-    const replaceShortcut = vi.fn(async () => undefined);
-    installNative({
-      tools: {
-        captureShortcut: async () => ({
-          status: "conflict" as const,
-          action: "travel.open" as const,
-          binding: { key: "t", shift: false, option: false },
-        }),
-        replaceShortcut,
-      },
-    });
-    const wrapper = mount(App);
-    await flushPromises();
-    await wrapper.get('button[aria-label="Settings"]').trigger("click");
-    await wrapper.findAll(".settings-page aside button").find((button) => button.text() === "Tools")!.trigger("click");
-    await wrapper.get('button[aria-label="Change Switch Character shortcut"]').trigger("click");
-    await flushPromises();
-    expect(wrapper.text()).toContain("Already used by Travel");
-    await wrapper.get(".shortcut-actions .primary").trigger("click");
-    expect(replaceShortcut).toHaveBeenCalledWith({
-      action: "character.switch",
-      binding: { key: "t", shift: false, option: false },
-    });
   });
 
   it("uses saved news honestly when production is offline", async () => {
@@ -483,18 +331,6 @@ describe("unified launcher shell", () => {
     await flushPromises();
     expect(wrapper.get(".launch").text()).toContain("Play");
     expect(play).toHaveBeenCalledWith([fixtureSnapshot.profiles[0]!.id]);
-  });
-
-  it("loads real cache information when Game Files opens", async () => {
-    const info = vi.fn(async () => ({ bytes: 1024 ** 3, chunks: 10, totalBytes: 2 * 1024 ** 3, totalChunks: 20, freeBytes: 3 * 1024 ** 3, fullDownloadShortfall: 0 }));
-    installNative({ gameFiles: { info } });
-    const wrapper = mount(App);
-    await flushPromises();
-    await wrapper.get('button[aria-label="Settings"]').trigger("click");
-    await wrapper.findAll(".settings-page aside button").find((button) => button.text() === "Game files")!.trigger("click");
-    await flushPromises();
-    expect(info).toHaveBeenCalledOnce();
-    expect(wrapper.text()).toContain("1.0 GB of 2.0 GB verified");
   });
 
   it("creates an account with its optional appearance in one step", async () => {

@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import type { InGamePatch, InGameSettings, InGameTools } from "../settings-host";
 import { computed, nextTick, ref } from "vue";
-import type { LauncherNativeApi, LauncherSettings, LauncherSettingsPatch, LauncherSnapshot } from "@shared/launcher-contracts";
+import type { LauncherSnapshot } from "@shared/launcher-contracts";
 import ShortcutSetting from "./ShortcutSetting.vue";
 import ColorControl from "./ColorControl.vue";
 import RangeControl from "./RangeControl.vue";
@@ -40,10 +41,10 @@ import {
 } from "@shared/cartography-presets";
 
 const props = defineProps<{
-  settings: LauncherSettings;
+  settings: InGameSettings;
   shortcuts?: LauncherSnapshot["shortcuts"];
-  api?: LauncherNativeApi["tools"] | undefined;
-  save: (patch: LauncherSettingsPatch) => Promise<void>;
+  api?: InGameTools | undefined;
+  save: (patch: InGamePatch) => Promise<void>;
   tools?: LauncherSnapshot["tools"];
   performSave?: ((action: () => Promise<unknown>) => Promise<void>) | undefined;
 }>();
@@ -74,7 +75,7 @@ const lineLabels = {
   birdsEyeRange: "7×7 range",
 } as const;
 
-async function persist(patch: LauncherSettingsPatch) {
+async function persist(patch: InGamePatch) {
   status.value = "";
   try {
     await props.save(patch);
@@ -233,7 +234,7 @@ async function updateUnseen(patch: Partial<CartographyPresetStyle["grid"]["unsee
     <div class="map-appearance-controls">
     <div v-if="active" class="setting-row" data-setting="cartographyBoundaryWidth"><span><strong>Terrain border thickness</strong><small>0 hides the border. Changing a built-in style saves a custom copy.</small></span><RangeControl label="Terrain border thickness" :value="active.style.walkability.boundaryWidth" :min="0" :max="4" unit="px" @change="updateWalkability({ boundaryWidth: $event })" /></div>
     <div class="setting-row" data-setting="cartographyGridOpacity"><span><strong>Grid opacity</strong></span><RangeControl label="Grid opacity" :value="settings.cartographyGridOpacity" :min="0" :max="100" unit="%" @change="persist({ cartographyGridOpacity: $event })" /></div>
-    <label data-setting="cartographyRevealMode"><span><strong>Reveal range</strong><small>Outlines where to stand to reveal the remaining diamonds, and marks your range on the Compass.</small></span><select :value="settings.cartographyRevealMode" @change="persist({ cartographyRevealMode: ($event.currentTarget as HTMLSelectElement).value as LauncherSettings['cartographyRevealMode'] })"><option value="off">Off</option><option value="normal">Normal · 3×3</option><option value="birds-eye">Bird’s Eye · 7×7</option></select></label>
+    <label class="setting-row" data-setting="cartographyRevealMode"><span><strong>Reveal range</strong><small>Outlines where to stand to reveal the remaining diamonds, and marks your range on the Compass.</small></span><select :value="settings.cartographyRevealMode" @change="persist({ cartographyRevealMode: ($event.currentTarget as HTMLSelectElement).value as InGameSettings['cartographyRevealMode'] })"><option value="off">Off</option><option value="normal">Normal · 3×3</option><option value="birds-eye">Bird’s Eye · 7×7</option></select></label>
     <div class="setting-row" data-setting="cartographyWalkabilityOpacity"><span><strong>Walkable terrain opacity</strong></span><RangeControl label="Walkable terrain opacity" :value="settings.cartographyWalkabilityOpacity" :min="0" :max="100" unit="%" @change="persist({ cartographyWalkabilityOpacity: $event })" /></div>
     </div>
     <MapStylePreview v-if="active" :style="active.style" :grid-opacity="settings.cartographyGridOpacity" :terrain-opacity="settings.cartographyWalkabilityOpacity" />

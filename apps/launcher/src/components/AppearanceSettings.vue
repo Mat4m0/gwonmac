@@ -1,14 +1,14 @@
 <script setup lang="ts">
+import type { InGamePatch, InGameSettings } from "../settings-host";
 import { computed, ref } from "vue";
 import { UI_FONTS, UI_PANEL_OPACITY_MIN, UI_PANEL_OPACITY_MAX, UI_TEXT_SIZE_MIN, UI_TEXT_SIZE_MAX, type UiFont, type UiStyle } from "@shared/contracts";
-import type { LauncherSettings, LauncherSettingsPatch } from "@shared/launcher-contracts";
 import { UI_THEME_COLOR_FIELDS, decodeCustomUiTheme, encodeCustomUiTheme, defaultCustomUiTheme, type CustomUiTheme, type UiThemeColorField } from "@shared/ui-theme";
 import { customThemeReadable } from "@shared/ui-color";
 import ColorControl from "./ColorControl.vue";
 import RangeControl from "./RangeControl.vue";
 import PanelStylePreview from "./PanelStylePreview.vue";
 
-const props = defineProps<{ settings: LauncherSettings; save: (patch: LauncherSettingsPatch) => Promise<void> }>();
+const props = defineProps<{ settings: InGameSettings; save: (patch: InGamePatch) => Promise<void> }>();
 const message = ref("");
 const imported = ref("");
 const shared = computed(() => encodeCustomUiTheme(props.settings.uiCustomTheme));
@@ -19,7 +19,7 @@ const colors: Record<UiThemeColorField, string> = {
   recessed: "Input background", selected: "Selection", accent: "Accent",
   text: "Text", mutedText: "Secondary text", border: "Border",
 };
-async function persist(patch: LauncherSettingsPatch) {
+async function persist(patch: InGamePatch) {
   try { await props.save(patch); message.value = ""; return true; }
   catch { message.value = "Appearance could not be saved. Try again."; return false; }
 }

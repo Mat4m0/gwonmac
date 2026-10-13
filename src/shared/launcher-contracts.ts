@@ -9,6 +9,7 @@ import type {
   AppSettings,
   AppUpdateState,
   CacheInfo,
+  ExtendedMemoryRuntimeStatus,
   DownloadActivity,
   FullDownloadState,
   NoticeCode,
@@ -35,6 +36,7 @@ import type { FeatureId } from "./feature-contracts.js";
 import { cloneSkillKeyBindings, isSkillKeyBindings } from "./skill-key-bindings.js";
 import { cloneSkillCooldownColor, isSkillCooldownColor } from "./skill-cooldowns.js";
 import type { ProfileId } from "./multiple-accounts.js";
+import type { SettingsTarget } from "./settings-catalogue.js";
 import type {
   TexturePackImportResult,
   TexturePackSnapshot,
@@ -63,10 +65,8 @@ export const LAUNCHER_IPC = Object.freeze({
   toolsSetFeature: "gw:launcher:tools:setFeature",
   toolsCaptureShortcut: "gw:launcher:tools:captureShortcut",
   toolsReplaceShortcut: "gw:launcher:tools:replaceShortcut",
-  toolsRestoreDefaultShortcut: "gw:launcher:tools:restoreDefaultShortcut",
   toolsRestartToApply: "gw:launcher:tools:restartToApply",
   gameFilesInfo: "gw:launcher:gameFiles:info",
-  gameFilesRetryPreparation: "gw:launcher:gameFiles:retryPreparation",
   gameFilesRepair: "gw:launcher:gameFiles:repair",
   gameFilesPauseDownload: "gw:launcher:gameFiles:pauseDownload",
   gameFilesResumeDownload: "gw:launcher:gameFiles:resumeDownload",
@@ -81,17 +81,8 @@ export const LAUNCHER_IPC = Object.freeze({
   updatesRestartAndInstall: "gw:launcher:updates:restartAndInstall",
 } as const);
 
-/** The launcher's Settings sections, in navigation order. */
-export const LAUNCHER_SETTINGS_SECTIONS = ["general", "content", "advanced", "game", "tools", "maps", "texture-packs", "game-files"] as const;
-export type LauncherSettingsSection = typeof LAUNCHER_SETTINGS_SECTIONS[number];
-export function parseLauncherSettingsSection(value: unknown): LauncherSettingsSection {
-  const section = LAUNCHER_SETTINGS_SECTIONS.find((candidate) => candidate === value);
-  if (!section) throw new Error("Unknown launcher settings section");
-  return section;
-}
-
-/** `settings` opens the last Settings section; `settings/<section>` opens that one. */
-export type LauncherDestination = "home" | "accounts" | "settings" | `settings/${LauncherSettingsSection}`;
+/** A launcher page another window can open: `settings` opens the last Settings section; a target opens that section or control. */
+export type LauncherDestination = "home" | "accounts" | "settings" | SettingsTarget;
 
 export type LauncherInstallationKind =
   | "fresh"
@@ -327,6 +318,8 @@ export interface LauncherSnapshot {
   readonly settings: LauncherSettings;
   readonly shortcuts: Readonly<Record<ShortcutAction, ShortcutBinding | null>>;
   readonly texturePacks: TexturePackSnapshot;
+  /** The running client's memory limit; null until a client is prepared. */
+  readonly extendedMemory: ExtendedMemoryRuntimeStatus | null;
   readonly profiles: readonly LauncherProfileSummary[];
   readonly selectedProfileIds: readonly ProfileId[];
   readonly preferences: LauncherPreferences;
@@ -364,6 +357,9 @@ export interface LauncherNativeApi {
     dismissPreferencesReset(): Promise<void>;
     updatePreferences(patch: LauncherPreferencesPatch): Promise<void>;
   };
+  readonly news: {
+    open(id: string): Promise<void>;
+  };
   readonly settings: {
     update(patch: LauncherSettingsPatch): Promise<void>;
     reset(): Promise<void>;
@@ -373,12 +369,10 @@ export interface LauncherNativeApi {
     setFeature(input: GlobalToolUpdate): Promise<void>;
     captureShortcut(action: ShortcutAction): Promise<LauncherShortcutCaptureResult>;
     replaceShortcut(input: ShortcutReplacement): Promise<void>;
-    restoreDefaultShortcut(action: ShortcutAction): Promise<void>;
     restartToApply(): Promise<void>;
   };
   readonly gameFiles: {
     info(): Promise<CacheInfo>;
-    retryPreparation(): Promise<void>;
     repair(): Promise<void>;
     pauseDownload(): Promise<void>;
     resumeDownload(): Promise<void>;
@@ -396,9 +390,6 @@ export interface LauncherNativeApi {
   readonly external: {
     open(kind: LauncherExternalLink): Promise<void>;
     revealLogs(): Promise<void>;
-  };
-  readonly news: {
-    open(id: string): Promise<void>;
   };
 }
 

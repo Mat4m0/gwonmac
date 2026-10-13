@@ -108,13 +108,15 @@ test.describe("renderer text editing", () => {
         toolsLabel: "Build Library",
         tradeLabel: "Trade Chat",
       });
-      await fixture.page.evaluate(async () => {
-        await window.gwNative.hubSettings.update({kind: 'master', enabled: true});
-        await window.gwNative.hubSettings.update({kind: 'tool', tool: 'whispers', enabled: true});
+      const launcher = fixture.app.windows().find(page => page.url().endsWith('launcher/index.html'))!;
+      await launcher.evaluate(async () => {
+        await window.launcherNative.tools.setMasterEnabled(true);
+        await window.launcherNative.tools.setFeature({tool: 'whispers', enabled: true});
       });
-      await expect.poll(() => fixture.app.evaluate(({Menu}) => Menu.getApplicationMenu()?.getMenuItemById('open-whispers')?.enabled)).toBe(true);
-      await fixture.page.evaluate(() => window.gwNative.hubSettings.update({kind: 'tool', tool: 'whispers', enabled: false}));
-      await expect.poll(() => fixture.app.evaluate(({Menu}) => Menu.getApplicationMenu()?.getMenuItemById('open-whispers')?.enabled)).toBe(false);
+      const whispersEnabled = () => fixture.app.evaluate(({Menu}) => Menu.getApplicationMenu()?.getMenuItemById('open-whispers')?.enabled);
+      await expect.poll(whispersEnabled).toBe(true);
+      await launcher.evaluate(() => window.launcherNative.tools.setFeature({tool: 'whispers', enabled: false}));
+      await expect.poll(whispersEnabled).toBe(false);
     } finally {
       await closeOffline(fixture);
     }
