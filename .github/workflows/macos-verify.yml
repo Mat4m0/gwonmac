@@ -132,8 +132,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install chromium
       - run: pnpm build
-      # Does the cold first launch's first frame come late or never? Give it
-      # three minutes and log GPU shader-compiler activity every 5 s.
+      # The cold first launch never submits its first frame (the 90 s gate
+      # fails). Record the game's own console log to see where it stops.
       - name: Cold first game launch (temporary probe)
         if: matrix.shard == 1
         continue-on-error: true
@@ -142,9 +142,10 @@ jobs:
           ( while :; do date -u +%T; ps -axo pid,pcpu,time,command | grep -E "MTLCompiler|Electron Helper --type=gpu" | grep -v grep | cut -c1-120; sleep 5; done ) \
             > test-results/cold-stacks/gpu-activity.txt 2>&1 &
           watch_pid=$!
-          pnpm test:electron -g "on an input reset" --timeout=180000 --reporter=list || true
+          ELECTRON_ENABLE_LOGGING=1 DEBUG=pw:browser pnpm test:electron -g "on an input reset" --timeout=180000 --reporter=list \
+            > test-results/cold-stacks/console.log 2>&1 || true
+          grep -v "backupd.sandbox.xpc" test-results/cold-stacks/console.log | cut -c1-400 | tail -250
           kill "$watch_pid"
-          cat test-results/cold-stacks/gpu-activity.txt
       # A timed-out test never reaches its cleanup, so the profile stays in TMPDIR.
       - name: Collect cold launch profile (temporary probe)
         if: always() && matrix.shard == 1
