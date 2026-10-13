@@ -5,7 +5,7 @@ import path from "node:path";
 import { gamePaths } from "../../src/main/core/paths.js";
 import { TexturePackManager } from "../../src/main/core/texture-pack-manager.js";
 import { tinyTpf } from "../helpers/tpf-fixture.js";
-import { closeOffline, launchCachedClient } from "./fixtures.mjs";
+import { closeOffline, launchCachedClient, openSettings } from "./fixtures.mjs";
 
 test("selects one managed TPF for a new game window and keeps its generation immutable", async () => {
   let importedPackId = "";
@@ -31,10 +31,10 @@ test("selects one managed TPF for a new game window and keeps its generation imm
       await fixture.page.getByRole("button", { name: "Continue" }).click();
       await fixture.page.getByRole("button", { name: "Not now" }).click();
     }
-    await fixture.page.getByRole("button", { name: "Settings" }).click();
-    await fixture.page.getByRole("button", { name: "Texture packs" }).click();
-    await expect(fixture.page.getByText("Minimalus UI", { exact: true })).toBeVisible();
-    await fixture.page.getByRole("radio", { name: /Minimalus UI/u }).check();
+    const settings = await openSettings(fixture);
+    await settings.locator(".settings-page aside").getByRole("button", { name: "Texture packs" }).click();
+    await expect(settings.getByText("Minimalus UI", { exact: true })).toBeVisible();
+    await settings.getByRole("radio", { name: /Minimalus UI/u }).check();
     await expect.poll(() => fixture.page.evaluate(() =>
       window.launcherNative.state.get().then((state) => state.texturePacks.selectedPackId),
     )).toBe(importedPackId);
@@ -50,7 +50,7 @@ test("selects one managed TPF for a new game window and keeps its generation imm
     await expect.poll(() => game.evaluate(() => window.gwNative.init.texturePackGeneration))
       .toBe(importedPackId);
 
-    await fixture.page.evaluate(() => window.launcherNative.texturePacks.select(null));
+    await settings.evaluate(() => window.launcherNative.texturePacks.select(null));
     expect(await game.evaluate(() => window.gwNative.init.texturePackGeneration)).toBe(importedPackId);
   } finally {
     await closeOffline(fixture);

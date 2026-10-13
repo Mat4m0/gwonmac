@@ -111,7 +111,8 @@ export const BUILD_STEPS = [
   // The main program, and the owner of build/shared.
   [process.execPath, ["node_modules/typescript/bin/tsc"]],
   // The launcher is a standalone Vue document with its own narrow preload and
-  // protocol subtree. Vite owns only build/renderer/launcher/.
+  // protocol subtree. Vite owns only build/renderer/launcher/, and
+  // build/renderer/settings/: the same Settings page as a module for the Hub.
   ["pnpm", ["--filter", "@gwonmac/launcher-ui", "build"]],
   // The Tools application, bundled once for the renderer. It is an independent
   // Vue workspace with its own tests, so this step only packages what already

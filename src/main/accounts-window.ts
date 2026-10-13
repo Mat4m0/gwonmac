@@ -15,6 +15,7 @@ import type { WindowCoordinator } from "./window-coordinator.js";
 import { windowRegistry } from "./window-registry.js";
 import {
   installNativeApplicationMenu,
+  SETTINGS_ACCELERATOR,
   type LauncherReveal,
   type AccountMenuActions,
 } from "./window-menu.js";
@@ -49,12 +50,12 @@ function installLauncherMenu(revealLauncher: LauncherReveal, accounts: AccountMe
             {
               id: "check-for-updates",
               label: "Check for Updates…",
-              click: () => revealLauncher("settings"),
+              click: () => revealLauncher({ section: "updates" }),
             },
             {
               id: "show-settings",
               label: "Settings…",
-
+              accelerator: SETTINGS_ACCELERATOR,
               click: () => revealLauncher("settings"),
             },
             { type: "separator" as const },

@@ -26,6 +26,8 @@ const base: ClientSession = {
       nativeHudRendering: { status: "off" },
       resignAction: { status: "off" },
         whisperChat: { status: "off" },
+        chatPrint: { status: "off" },
+        progressObservation: { status: "off" },
       playRegionObservation: { status: "off" },
         preGameControls: { status: "off" },
         characterSwitchAction: { status: "off" },

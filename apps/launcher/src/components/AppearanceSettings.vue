@@ -1,14 +1,14 @@
 <script setup lang="ts">
+import type { InGamePatch, InGameSettings } from "../settings-host";
 import { computed, ref } from "vue";
 import { UI_FONTS, UI_PANEL_OPACITY_MIN, UI_PANEL_OPACITY_MAX, UI_TEXT_SIZE_MIN, UI_TEXT_SIZE_MAX, type UiFont, type UiStyle } from "@shared/contracts";
-import type { LauncherSettings, LauncherSettingsPatch } from "@shared/launcher-contracts";
 import { UI_THEME_COLOR_FIELDS, decodeCustomUiTheme, encodeCustomUiTheme, defaultCustomUiTheme, type CustomUiTheme, type UiThemeColorField } from "@shared/ui-theme";
 import { customThemeReadable } from "@shared/ui-color";
 import ColorControl from "./ColorControl.vue";
 import RangeControl from "./RangeControl.vue";
 import PanelStylePreview from "./PanelStylePreview.vue";
 
-const props = defineProps<{ settings: LauncherSettings; save: (patch: LauncherSettingsPatch) => Promise<void> }>();
+const props = defineProps<{ settings: InGameSettings; save: (patch: InGamePatch) => Promise<void> }>();
 const message = ref("");
 const imported = ref("");
 const shared = computed(() => encodeCustomUiTheme(props.settings.uiCustomTheme));
@@ -19,7 +19,7 @@ const colors: Record<UiThemeColorField, string> = {
   recessed: "Input background", selected: "Selection", accent: "Accent",
   text: "Text", mutedText: "Secondary text", border: "Border",
 };
-async function persist(patch: LauncherSettingsPatch) {
+async function persist(patch: InGamePatch) {
   try { await props.save(patch); message.value = ""; return true; }
   catch { message.value = "Appearance could not be saved. Try again."; return false; }
 }
@@ -37,10 +37,10 @@ async function importTheme() {
   <h2 class="appearance-heading">In-game panels</h2>
   <p>Style, font, and opacity update gwonmac panels in every open game window. Guild Wars menus keep their own appearance.</p>
   <div class="setting-group">
-    <label><span><strong>Panel style</strong></span><select :value="settings.uiStyle" @change="persist({ uiStyle: ($event.currentTarget as HTMLSelectElement).value as UiStyle })"><option value="guild-wars">Guild Wars</option><option value="obsidian">Modern</option><option value="custom">Custom</option></select></label>
-    <label><span><strong>Panel font</strong></span><select :value="settings.uiFont" @change="persist({ uiFont: ($event.currentTarget as HTMLSelectElement).value as UiFont })"><option v-for="font in UI_FONTS" :key="font" :value="font">{{ fonts[font] }}</option></select></label>
-    <div class="setting-row"><span><strong>Text size</strong></span><RangeControl label="Text size" :value="settings.uiTextSize" :min="UI_TEXT_SIZE_MIN" :max="UI_TEXT_SIZE_MAX" unit="%" @change="persist({ uiTextSize: $event })" /></div>
-    <div class="setting-row"><span><strong>Panel opacity</strong></span><RangeControl label="Panel opacity" :value="settings.uiPanelOpacity" :min="UI_PANEL_OPACITY_MIN" :max="UI_PANEL_OPACITY_MAX" unit="%" @change="persist({ uiPanelOpacity: $event })" /></div>
+    <label data-setting="uiStyle"><span><strong>Panel style</strong></span><select :value="settings.uiStyle" @change="persist({ uiStyle: ($event.currentTarget as HTMLSelectElement).value as UiStyle })"><option value="guild-wars">Guild Wars</option><option value="obsidian">Modern</option><option value="custom">Custom</option></select></label>
+    <label data-setting="uiFont"><span><strong>Panel font</strong></span><select :value="settings.uiFont" @change="persist({ uiFont: ($event.currentTarget as HTMLSelectElement).value as UiFont })"><option v-for="font in UI_FONTS" :key="font" :value="font">{{ fonts[font] }}</option></select></label>
+    <div class="setting-row" data-setting="uiTextSize"><span><strong>Text size</strong></span><RangeControl label="Text size" :value="settings.uiTextSize" :min="UI_TEXT_SIZE_MIN" :max="UI_TEXT_SIZE_MAX" unit="%" @change="persist({ uiTextSize: $event })" /></div>
+    <div class="setting-row" data-setting="uiPanelOpacity"><span><strong>Panel opacity</strong></span><RangeControl label="Panel opacity" :value="settings.uiPanelOpacity" :min="UI_PANEL_OPACITY_MIN" :max="UI_PANEL_OPACITY_MAX" unit="%" @change="persist({ uiPanelOpacity: $event })" /></div>
     <PanelStylePreview :settings="settings" />
     <template v-if="settings.uiStyle === 'custom'">
       <label><span><strong>Panel finish</strong></span><select :value="settings.uiCustomTheme.material" @change="updateTheme({ material: ($event.currentTarget as HTMLSelectElement).value as CustomUiTheme['material'] })"><option value="classic">Classic</option><option value="modern">Modern flat</option></select></label>

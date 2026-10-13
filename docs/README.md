@@ -23,6 +23,7 @@ its rules.
 | How does the whisper companion stay in sync with original chat? | [Whispers](whispers.md) |
 | How are player skill cooldowns certified and displayed? | [Skill cooldowns](skill-cooldowns.md) |
 | How are controlled-player effect timers certified and displayed? | [Effect timers](effect-timers.md) |
+| When and how do chat reminders warn about cons, pcons, and alcohol? | [Reminders](reminders.md) |
 | How do the cartography grid and walkability overlay work? | [Cartography](cartography.md) |
 | How do elite capture markers and character plans work? | [Elite skills](elite-skills.md) |
 | How do I certify every cartography layer in a live game? | [Live cartography certification](live-cartography-certification.md) |
