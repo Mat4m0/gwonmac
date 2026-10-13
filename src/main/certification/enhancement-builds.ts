@@ -722,7 +722,7 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
     Object.freeze({
       sha256: "b5f10d50833ed9390ce4faa49fb9a8c009416989e07f20690c27b39b5ef048ad",
       outputSha256: Object.freeze({
-        "features-3fffff": "e04e3244ae7c7004e80d8df67215509ba8e3c059f77d5431fa6309d1bb14aded",
+        "features-3fffff": "acaad66c3d67e4f034f7908dcbeb2b01d1c710361102f87d9affd20d4ca0cd64",
         "features-01": "711e6ad15db11be1022e32cf068992caef7eace7dbad25d82e8a856127b1ea6a",
         "features-e01": "f64f4f8008c518c1b1fc9ccdf6ad384978b22430cc529368e87864c947516cba",
         "features-601": "10f2eb0f8257ad3675b235bf63798f28a7c45c36b9c197d8d7d15ab808fddeb2",
@@ -730,8 +730,8 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
         "features-202": "756136c30f923c6b4caf099c907f53036c4f3f55c73515fb1c52780118275f6a",
         "features-284": "b3d5007546bbfd07b964c383a33981208c001d2e3554de3be6f619b78da0a64f",
         "features-285": "2f1c8dd86a263455abbedea627ddf8006a66372fbecb9f632477336d19a3f790",
-        "features-270": "3644fb3cb033803ef7b718bb8b8e86146d8e27cae0140d785587538e67b820e6",
-        "features-2fc": "06a205b82b3c6c6c2cc6f9b266112ce0917c2d124b200e9ef5a01286dc610671",
+        "features-270": "ec31be5457b0fb468e01f29b5a0ebb92784e18be1d3847d5b9823d2c45f8d05b",
+        "features-2fc": "eaa66c92e6e92fc78b258362230b9b752599f24341839fbd44cc3002636d8ec8",
         "features-c200": "fc0ac0fec9feb7038e514afc90fb7d1f7b58be382b6351299f6fa79065ea32c8",
         "features-c204": "f07ca324c9935117fcf04ec3d3a1a5c49d9308867bec6a0f430e49773e8fcdfc",
       }),
