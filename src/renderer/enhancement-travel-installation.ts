@@ -3,6 +3,7 @@
  * teardown. The shared companion installer only composes this lifecycle.
  */
 import type { TravelFriend, TravelFriends } from "../shared/friends.js";
+import type { GameProgressState } from "../shared/game-progress.js";
 import type { TravelCommand } from "../shared/travel-command.js";
 import type {
   EnhancementTravelConfigure,
@@ -27,6 +28,7 @@ export interface TravelInstallation {
   poll(): void;
   observingFriends(): boolean;
   updateFriends(friends: TravelFriends): void;
+  updateProgress(progress: GameProgressState): void;
   command(): TravelCommand | null;
   travelToFriend(friend: TravelFriend, generation: number): Promise<void>;
   dispose(free: (pointer: number) => void): void;
@@ -76,6 +78,7 @@ export function createTravelInstallation(
       if (availability.state !== null) palette?.update(availability.state);
     },
     updateFriends(friends) { palette?.updateFriends(friends); },
+    updateProgress(progress) { palette?.updateProgress(progress); },
     observingFriends() { return palette?.observingFriends() ?? false; },
     poll() {
       if (takeToggle() === 1 && controller?.command.unavailable() === null) {
