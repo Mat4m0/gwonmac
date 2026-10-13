@@ -145,3 +145,5 @@ fixed pixel limits. Long chords shrink only when needed to fit the icon.
 The game's key bindings and icon artwork stay unchanged.
 Native icon destruction, disabling the feature, and graphics reset release the
 owned resources. Missing native drawing support produces no browser fallback.
+
+Chat lines before an effect or alcohol runs out are described in [Reminders](reminders.md).

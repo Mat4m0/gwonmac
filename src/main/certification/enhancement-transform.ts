@@ -171,7 +171,9 @@ function resolveEnhancementTransform(
   const chatFiltering = build.chatFiltering!;
   const resignAction = build.resignAction!;
   const whisperChat = build.whisperChat!;
-  const hasActionQueue = capabilities.whisperChat || capabilities.resignAction || capabilities.teamApply
+  const chatPrint = build.chatPrint!;
+  const hasActionQueue = capabilities.whisperChat || capabilities.resignAction || capabilities.chatPrint
+    || capabilities.teamApply
     || capabilities.travelAction
     || capabilities.xunlaiAction
     || capabilities.characterSwitchAction
@@ -386,6 +388,11 @@ function resolveEnhancementTransform(
     const proof = build.alcoholObservation!;
     resolveHook("Alcohol producer", proof.functionIndex, proof.params, proof.results);
     if (bodyHash(proof.functionIndex) !== proof.bodySha256) fail("Alcohol producer changed");
+  }
+  if (capabilities.chatPrint) {
+    const validator = chatPrint.validator;
+    resolveHook("chat print validator", validator.functionIndex, validator.params, validator.results);
+    if (bodyHash(validator.functionIndex) !== validator.bodySha256) fail("chat print validator changed");
   }
   if (capabilities.resignAction) {
     resolveHook("Resign native sender", resignAction.functionIndex, resignAction.params, resignAction.results);
@@ -610,6 +617,7 @@ function resolveEnhancementTransform(
     gameThread,
     resignAction,
     whisperChat,
+    chatPrint,
     chatAliases,
     chatFiltering,
     quickItemMoveResolution,
@@ -682,6 +690,8 @@ function assembleEnhancementTransform(
   const whisperPointerGlobalIndex = capabilities.whisperChat ? allocateGlobals(1) : 0;
   const whisperEnabledGlobalIndex = capabilities.whisperChat ? allocateGlobals(1) : 0;
   const resignEnabledGlobalIndex = capabilities.resignAction ? allocateGlobals(1) : 0;
+  const chatPrintPointerGlobalIndex = capabilities.chatPrint ? allocateGlobals(1) : 0;
+  const chatPrintEnabledGlobalIndex = capabilities.chatPrint ? allocateGlobals(1) : 0;
   const tradeEnabledGlobalIndex = capabilities.chatAliases ? allocateGlobals(1) : 0;
   const tradeToggleGlobalIndex = capabilities.chatAliases ? allocateGlobals(1) : 0;
   const chatFilterMaskGlobalIndex = capabilities.chatFiltering ? allocateGlobals(1) : 0;
@@ -736,6 +746,8 @@ function assembleEnhancementTransform(
   const whisperEnqueueTypeIndex = capabilities.whisperChat ? appendType({ params: [], results: [0x7f] }) : null;
   const resignConfigureTypeIndex = capabilities.resignAction ? appendType({ params: [0x7f], results: [0x7f] }) : null;
   const resignEnqueueTypeIndex = capabilities.resignAction ? appendType({ params: [], results: [0x7f] }) : null;
+  const chatPrintConfigureTypeIndex = capabilities.chatPrint ? appendType({ params: [0x7f, 0x7f], results: [0x7f] }) : null;
+  const chatPrintEnqueueTypeIndex = capabilities.chatPrint ? appendType({ params: [], results: [0x7f] }) : null;
   const tradeConfigureTypeIndex = capabilities.chatAliases
     ? appendType({ params: [0x7f], results: [0x7f] })
     : null;
@@ -886,6 +898,8 @@ function assembleEnhancementTransform(
       whisperEnqueue: whisperEnqueueTypeIndex,
       resignConfigure: resignConfigureTypeIndex,
       resignEnqueue: resignEnqueueTypeIndex,
+      chatPrintConfigure: chatPrintConfigureTypeIndex,
+      chatPrintEnqueue: chatPrintEnqueueTypeIndex,
       tradeToggle: tradeToggleTypeIndex,
       characterEnqueue: characterEnqueueTypeIndex,
       characterConfigure: characterConfigureTypeIndex,
@@ -904,6 +918,8 @@ function assembleEnhancementTransform(
       whisperPointer: whisperPointerGlobalIndex,
       whisperEnabled: whisperEnabledGlobalIndex,
       resignEnabled: resignEnabledGlobalIndex,
+      chatPrintPointer: chatPrintPointerGlobalIndex,
+      chatPrintEnabled: chatPrintEnabledGlobalIndex,
       tradeEnabled: tradeEnabledGlobalIndex,
       tradeToggle: tradeToggleGlobalIndex,
       characterPayload: characterPayloadGlobalIndex,

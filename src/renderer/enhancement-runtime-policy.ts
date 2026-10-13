@@ -55,6 +55,7 @@ export function enhancementRuntimePolicy(
     chatFilters: selected("chatFilters"),
     quickItemMove: selected("quickItemMove"),
     alcoholTimer: selected("alcoholTimer"),
+    reminders: selected("reminders"),
     effectTimers: selected("effectTimers", program === "effect-observer"),
   } satisfies Record<FeatureId, boolean>);
 }

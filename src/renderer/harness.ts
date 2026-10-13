@@ -581,6 +581,13 @@ window.gwToolsSettings = () => Object.freeze({
   quickItemMove: appSettings?.quickItemMove ?? false,
   effectTimersEnabled: appSettings?.effectTimersEnabled ?? false,
   alcoholTimerEnabled: appSettings?.alcoholTimerEnabled ?? false,
+  remindersEnabled: appSettings?.remindersEnabled ?? false,
+  reminderCons: appSettings?.reminderCons ?? true,
+  reminderPcons: appSettings?.reminderPcons ?? true,
+  reminderAlcohol: appSettings?.reminderAlcohol ?? true,
+  reminderBeforeEnd: appSettings?.reminderBeforeEnd ?? true,
+  reminderAtEnd: appSettings?.reminderAtEnd ?? true,
+  reminderSound: appSettings?.reminderSound ?? false,
   alcoholTimerPosition: appSettings?.alcoholTimerPosition ?? Object.freeze({ corner: "top-left", x: 4, y: 58, locked: true }),
   skillCooldownColor: appSettings?.skillCooldownColor
     ?? Object.freeze({ kind: 'preset', preset: 'red' }),

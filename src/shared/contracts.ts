@@ -486,6 +486,13 @@ export interface AppSettings {
   /** Show exact remaining durations over the controlled player's native Effects icons. */
   effectTimersEnabled: boolean;
   alcoholTimerEnabled: boolean;
+  remindersEnabled: boolean;
+  reminderCons: boolean;
+  reminderPcons: boolean;
+  reminderAlcohol: boolean;
+  reminderBeforeEnd: boolean;
+  reminderAtEnd: boolean;
+  reminderSound: boolean;
   alcoholTimerPosition: AlcoholTimerPosition;
   /** One curated or exact RGB color shared by all eight cooldown labels. */
   skillCooldownColor: SkillCooldownColor;
@@ -660,6 +667,13 @@ export const DEFAULT_SETTINGS: AppSettings = {
   skillCooldownOverlayEnabled: true,
   effectTimersEnabled: false,
   alcoholTimerEnabled: false,
+  remindersEnabled: false,
+  reminderCons: true,
+  reminderPcons: true,
+  reminderAlcohol: true,
+  reminderBeforeEnd: true,
+  reminderAtEnd: true,
+  reminderSound: false,
   alcoholTimerPosition: DEFAULT_ALCOHOL_TIMER_POSITION,
   skillCooldownColor: DEFAULT_SKILL_COOLDOWN_COLOR,
   extendedMemoryEnabled: false,
@@ -856,6 +870,7 @@ export interface ClientCompatibility {
     characterSwitchAction: OptionalFeatureStatus;
     chatFiltering: OptionalFeatureStatus;
     quickItemMove: OptionalFeatureStatus;
+    chatPrint: OptionalFeatureStatus;
   }>;
 }
 

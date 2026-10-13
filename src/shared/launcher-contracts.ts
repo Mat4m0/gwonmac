@@ -174,6 +174,7 @@ export const GLOBAL_TOOLS = [
   "chat-filters",
   "effect-timers",
   "alcohol-timer",
+  "reminders",
 ] as const;
 export type GlobalTool = (typeof GLOBAL_TOOLS)[number];
 export const GLOBAL_TOOL_FEATURES = Object.freeze({
@@ -193,6 +194,7 @@ export const GLOBAL_TOOL_FEATURES = Object.freeze({
   "chat-filters": "chatFilters",
   "effect-timers": "effectTimers",
   "alcohol-timer": "alcoholTimer",
+  reminders: "reminders",
 } satisfies Record<GlobalTool, FeatureId>);
 export const LAUNCHER_EXTERNAL_LINKS = ["github", "bugReport", "featureRequest", "discord", "arenaNetSupport", "donate", "releases"] as const;
 export type LauncherExternalLink = (typeof LAUNCHER_EXTERNAL_LINKS)[number];
@@ -225,6 +227,12 @@ export interface LauncherSettings {
   readonly chatFilterAllyDrops: boolean;
   readonly chatFilterHallOfHeroes: boolean;
   readonly chatFilterTitleAchievements: boolean;
+  readonly reminderCons: boolean;
+  readonly reminderPcons: boolean;
+  readonly reminderAlcohol: boolean;
+  readonly reminderBeforeEnd: boolean;
+  readonly reminderAtEnd: boolean;
+  readonly reminderSound: boolean;
   readonly cartographyOverlayEnabled: boolean;
   readonly cartographyGridEnabled: boolean;
   readonly cartographyCompassGridEnabled: boolean;
@@ -416,6 +424,7 @@ export function parseLauncherSettingsPatch(value: unknown): LauncherSettingsPatc
     "autoRelogAfterReload", "characterSwitchProfession", "characterSwitchLevel",
     "characterSwitchLocation", "skillKeyBindings", "skillCooldownColor", "alcoholTimerPosition",
     "chatFilterAllyDrops", "chatFilterHallOfHeroes", "chatFilterTitleAchievements",
+    "reminderCons", "reminderPcons", "reminderAlcohol", "reminderBeforeEnd", "reminderAtEnd", "reminderSound",
     "cartographyOverlayEnabled", "cartographyGridEnabled", "cartographyCompassGridEnabled", "compassRangeIndicatorsEnabled",
     "compassRangeEarshotEnabled", "compassRangeCastEnabled", "compassRangeSpiritEnabled", "compassRangeSpiritExtendedEnabled",
     "compassRangeEarshotOpacity", "compassRangeCastOpacity", "compassRangeSpiritOpacity", "compassRangeSpiritExtendedOpacity",
@@ -455,6 +464,7 @@ export function parseLauncherSettingsPatch(value: unknown): LauncherSettingsPatc
     "autoCheckUpdates", "extendedMemoryEnabled", "showDiagnostics",
     "autoRelogAfterReload", "characterSwitchProfession", "characterSwitchLevel", "characterSwitchLocation",
     "chatFilterAllyDrops", "chatFilterHallOfHeroes", "chatFilterTitleAchievements",
+    "reminderCons", "reminderPcons", "reminderAlcohol", "reminderBeforeEnd", "reminderAtEnd", "reminderSound",
     "cartographyOverlayEnabled", "cartographyGridEnabled", "cartographyCompassGridEnabled", "compassRangeIndicatorsEnabled",
     "compassRangeEarshotEnabled", "compassRangeCastEnabled", "compassRangeSpiritEnabled", "compassRangeSpiritExtendedEnabled",
     "eliteSkillsEnabled",

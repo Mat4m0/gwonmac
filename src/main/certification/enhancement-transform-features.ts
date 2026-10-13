@@ -5,6 +5,7 @@
 import { concat } from "../core/wasm-binary.js";
 import { partyInviteEnqueue, whisperConfigure, whisperEnqueue, whisperDrain } from "./enhancement-whisper-transform.js";
 import { resignConfigure, resignEnqueue, resignExecute, resignDrain } from "./enhancement-resign-transform.js";
+import { chatPrintConfigure, chatPrintDrain, chatPrintEnqueue } from "./enhancement-chat-print-transform.js";
 import {
   professionTraceReader,
   tracedPacketSender,
@@ -95,6 +96,7 @@ export function featureExportNames(
       ? ["enhancement_configure_whispers", "enhancement_send_whisper", "enhancement_send_party_invite"]
       : []),
     ...(capabilities.resignAction ? ["enhancement_configure_resign", "enhancement_resign"] : []),
+    ...(capabilities.chatPrint ? ["enhancement_configure_chat_print", "enhancement_print_chat"] : []),
     ...(capabilities.chatAliases
       ? ["enhancement_configure_trade_toggle", "enhancement_take_trade_toggle"]
       : []),
@@ -119,6 +121,8 @@ export type TransformTypeIndices = Readonly<{
   whisperEnqueue: number | null;
   resignConfigure: number | null;
   resignEnqueue: number | null;
+  chatPrintConfigure: number | null;
+  chatPrintEnqueue: number | null;
   tradeConfigure: number | null;
   tradeToggle: number | null;
   characterEnqueue: number | null;
@@ -139,6 +143,8 @@ export type TransformGlobalIndices = Readonly<{
   whisperPointer: number;
   whisperEnabled: number;
   resignEnabled: number;
+  chatPrintPointer: number;
+  chatPrintEnabled: number;
   tradeEnabled: number;
   tradeToggle: number;
   characterPayload: number;
@@ -302,6 +308,16 @@ export function applyFeatureContributions(
         resignEnqueue(globalIndices.commandPending, globalIndices.resignEnabled)) },
     );
   }
+  if (capabilities.chatPrint) {
+    addedFunctionExports.push(
+      { name: "enhancement_configure_chat_print", index: appendFunction(
+        required(typeIndices.chatPrintConfigure, "chat print configure type"),
+        chatPrintConfigure(globalIndices.commandPending, globalIndices.chatPrintPointer, globalIndices.chatPrintEnabled)) },
+      { name: "enhancement_print_chat", index: appendFunction(
+        required(typeIndices.chatPrintEnqueue, "chat print enqueue type"),
+        chatPrintEnqueue(globalIndices.commandPending, globalIndices.chatPrintPointer, globalIndices.chatPrintEnabled)) },
+    );
+  }
   if (capabilities.whisperChat) {
     addedFunctionExports.push(
       { name: "enhancement_configure_whispers", index: appendFunction(
@@ -382,6 +398,11 @@ export function applyFeatureContributions(
         capabilities.whisperChat ? whisperDrain(globalIndices.commandPending,
           globalIndices.whisperPointer, globalIndices.whisperEnabled, resolution.whisperChat.functionIndex,
           { hookGlobal: globalIndices.whisperHook, dispatchType: typeIndices.whisperDispatch })
+          : new Uint8Array(),
+        capabilities.chatPrint ? chatPrintDrain(globalIndices.commandPending,
+          globalIndices.chatPrintPointer, globalIndices.chatPrintEnabled,
+          { validator: resolution.chatPrint.validator.functionIndex,
+            producer: resolution.chatFiltering.producer.functionIndex })
           : new Uint8Array(),
       ),
     ),

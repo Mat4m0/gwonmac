@@ -35,6 +35,7 @@ const NONE: EnhancementCapabilities = Object.freeze({
     nativeHudRendering: false,
     resignAction: false,
     whisperChat: false,
+    chatPrint: false,
   playRegionObservation: false,
     preGameControls: false,
     characterSwitchAction: false,
@@ -58,6 +59,7 @@ const ALL: EnhancementCapabilities = Object.freeze({
     nativeHudRendering: false,
     resignAction: false,
     whisperChat: false,
+    chatPrint: false,
   playRegionObservation: true,
   preGameControls: true,
   characterSwitchAction: true,
@@ -103,6 +105,7 @@ const STORAGE: EnhancementCapabilities = Object.freeze({
     alcoholObservation: false,
     resignAction: false,
     whisperChat: false,
+    chatPrint: false,
 });
 const PARTY_TEAM: EnhancementCapabilities = Object.freeze({
   ...NONE,
@@ -133,6 +136,7 @@ const COOLDOWN: EnhancementCapabilities = Object.freeze({
     alcoholObservation: false,
     resignAction: false,
     whisperChat: false,
+    chatPrint: false,
 });
 const PROVED_FILE = Object.freeze({
   status: "proved" as const,
@@ -475,6 +479,31 @@ describe("local client verification boundary", () => {
         },
       },
     }, TEMPLATE.sha256, ALL_WITH_FILTER), false);
+  });
+
+  it("withdraws only chatPrint when a client update changes the text validator", () => {
+    const baseline = ENHANCEMENT_BUILDS.find((build) => build.chatPrint)!;
+    const requested: EnhancementCapabilities = Object.freeze({
+      ...NONE,
+      playRegionObservation: true,
+      chatFiltering: true,
+      whisperChat: true,
+      chatPrint: true,
+    });
+    const proved = localFeatureVerdictsForBuild("a".repeat(64), requested, baseline);
+    assert.equal(proved.chatPrint.status, "proved");
+
+    // The verifier omits `chatPrint` when TextValidateCoded no longer matches.
+    const { chatPrint, ...withoutValidator } = baseline;
+    assert.ok(chatPrint);
+    const verdicts = localFeatureVerdictsForBuild("a".repeat(64), requested, withoutValidator);
+    assert.equal(verdicts.chatPrint.status, "changed");
+    assert.equal(
+      (verdicts.chatPrint as { invariant: string }).invariant,
+      "chat.print-validator",
+    );
+    assert.equal(verdicts.chatFiltering.status, "proved");
+    assert.equal(verdicts.whisperChat.status, "proved");
   });
 
   it("rejects an exact authored row that did not cross semantic proof", () => {
