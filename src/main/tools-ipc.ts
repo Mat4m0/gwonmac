@@ -2,6 +2,14 @@
  * Owns the optional Tools renderer-to-main channels. Main imports this module
  * only for a Tools-capable launch, so Core registers no tool implementation.
  */
+import { exportCartographyEvidence } from "./cartography-evidence-export.js";
+import { parseCartographyEvidenceCapture } from "./cartography-evidence/capture.js";
+import {
+  parseCartographyMapKnowledge,
+  type CartographyMapKnowledge,
+} from "../shared/cartography-map-knowledge.js";
+import { isDigest } from "../shared/digest.js";
+import type { ClientSession, AppSettings } from "../shared/contracts.js";
 import { eliteWikiUrl } from "../shared/elite-wiki.js";
 import { parseEliteCharacter, parseEliteUpdate, type EliteTracking, type EliteUpdate } from "../shared/elite-skills.js";
 import type { BrowserWindow } from "electron";
@@ -36,6 +44,14 @@ export type { ToolsInvokeChannel } from "../shared/contracts.js";
 
 export interface ToolsIpcContext extends TradeIpcContext {
   readonly windows: WindowRegistry;
+  getCartographyMapKnowledge: (
+    kernelSha256: string,
+  ) => Promise<readonly CartographyMapKnowledge[]>;
+  recordCartographyMapKnowledge: (
+    value: CartographyMapKnowledge,
+  ) => Promise<readonly CartographyMapKnowledge[]>;
+  getClientSession(win: BrowserWindow): ClientSession;
+  getSettings(): Promise<AppSettings>;
   getBuildLibrary(win: BrowserWindow): Promise<{
     readonly library: BuildLibrary;
     readonly recovered: boolean;
@@ -68,6 +84,29 @@ const one = <Input>(parse: (value: unknown) => Input): Parser<Input> => (args) =
 export function registerToolsIpcHandlers(ctx: ToolsIpcContext): void {
   const handlers = {
     ...tradeChannelDefinitions(ctx),
+    cartographyEvidenceExport: channel(
+      one(parseCartographyEvidenceCapture),
+      (win, value) => ctx.runFeature("cartography", "Maps", () => exportCartographyEvidence(
+        win,
+        value,
+        ctx.getClientSession(win),
+        ctx.getSettings,
+      )),
+    ),
+
+    cartographyMapKnowledgeGet: channel(
+      one((value) => {
+        if (!isDigest(value)) throw new ValidationError("invalid digest");
+        return value;
+      }),
+      (_win, kernelSha256) => ctx.runFeature("cartography", "Maps", () => ctx.getCartographyMapKnowledge(kernelSha256)),
+    ),
+
+    cartographyMapKnowledgeRecord: channel(
+      one(parseCartographyMapKnowledge),
+      (_win, value) => ctx.runFeature("cartography", "Maps", () => ctx.recordCartographyMapKnowledge(value)),
+    ),
+
     eliteWikiOpen: channel(one(eliteWikiUrl), (_win, url) =>
       ctx.runFeature("cartography", "Maps", () => ctx.openEliteWiki(url))),
     eliteTrackingGet: channel(one(parseEliteCharacter), (win, value) =>
