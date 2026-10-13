@@ -108,7 +108,7 @@ jobs:
 
   electron:
     runs-on: macos-15
-    timeout-minutes: 30
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -136,9 +136,9 @@ jobs:
         if: matrix.shard == 1
         continue-on-error: true
         run: |
-          pnpm test:electron -g "on an input reset" --repeat-each=20 --max-failures=0
+          pnpm test:electron -g "on an input reset|renderer recovery" --repeat-each=20 --max-failures=0
           for _ in $(seq "$(sysctl -n hw.ncpu)"); do yes > /dev/null & done
-          pnpm test:electron -g "on an input reset" --repeat-each=20 --max-failures=0
+          pnpm test:electron -g "on an input reset|renderer recovery" --repeat-each=20 --max-failures=0
           kill $(jobs -p)
       - run: pnpm test:electron --shard=${{ matrix.shard }}/2
       # Chromium applies Mac text-editing shortcuts (⌘⌫, ⌘←) only on macOS, so
