@@ -180,7 +180,7 @@ export interface PrepareClientModuleOptions {
       inputSha256: string;
     }) => Promise<FriendObserverBuild | null>;
   }>;
-  /** Omitted only for diagnostic profiles that require the untouched client. */
+  /** Present only for a Tools-capable launch; Core never installs Maps hooks. */
   readonly cartographySpike?: Readonly<{
     cacheRoot: string;
     verifyLocally: (options: {

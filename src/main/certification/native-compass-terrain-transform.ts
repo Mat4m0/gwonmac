@@ -40,6 +40,7 @@ const CHECKED = [
   [2187, "fe75a199add4d8ffb71a03e694144b903e3e82a7c165558b7593a8e5f9495415"],
   [748, "150d8921520d98fbfa28dc4faf5e2fe488a65c69832b13d7dcf489b2f07d7b60"],
   [6827, "f8adede1f8a366bdce292461977643bb760e8e846bc30689312781dcab0630c7"],
+  [6593, "7c2c5556e6546a9059f7f3c654c1d214ae7bf06ce4fabeefbadc2b8d6691f153"],
   ...NATIVE_RENDER_REFERENCE_FUNCTIONS,
 ] as const;
 const SEGMENTS = 64;
@@ -88,21 +89,38 @@ function appendCompassSurface(input: Uint8Array, screenSpace: boolean, bindings:
   const first = module.functionImportCount + bodies.length;
   const hideIndex = first; const destroyIndex = first + 1; const initIndex = first + 2;
   const attachIndex = first + 3; const updateIndex = first + 4; const publishIndex = first + 5;
+  const reapIndex = first + 6, ensureIndex = first + 7;
+  // Private flags 20/21 retain retirement and one deferred index clear.
   const increment = (index: number) => concat(g(index), i(1), op(0x6a), put(index));
   const contextValid = () => concat(g(3), i(0), op(0x4a), g(3), op(0x23), uleb(epoch), op(0x46, 0x71), op(0x23), uleb(status), i(1), op(0x46, 0x71));
   const finite = (value: Uint8Array, limit: number) => concat(value, op(0x8b), f(limit), op(0x5f));
-  const hide = concat(op(0), g(3), op(0x04, 0x40), i(0), put(3),
-    g(1), op(0x04, 0x40), g(1), i(0), call(bindings.functionIndex(1445)), op(0x1a), g(1), call(bindings.functionIndex(1448)), op(0x0b, 0x0b, 0x0b));
+  const reap = concat(op(1, 1, 0x7f), g(20), op(0x45, 0x04, 0x40, 0x0f, 0x0b),
+    g(2), op(0x04, 0x40), nativeGraphicsBusy(0, bindings), op(0x04, 0x40, 0x0f, 0x0b),
+    nativeModelBusy(g(2), 0, bindings), op(0x04, 0x40, 0x0f, 0x0b),
+    g(2), call(bindings.functionIndex(748)), g(1), call(bindings.functionIndex(748)),
+    increment(8), op(0x0b), ...[1, 2, 20, 21].map((index) => concat(i(0), put(index))), op(0x0b));
+  // Host withdrawal must not rewrite indices in a queue-held mesh. Native
+  // update retries the hidden geometry after the render reference drains.
+  const hide = concat(op(1, 1, 0x7f), g(3), op(0x04, 0x40), call(bindings.functionIndex(6593)), i(1), put(21), op(0x0b), i(0), put(3), call(reapIndex),
+    g(21), op(0x45, 0x04, 0x40, 0x0f, 0x0b),
+    g(1), op(0x04, 0x40),
+    nativeGraphicsBusy(0, bindings), op(0x04, 0x40, 0x0f, 0x0b),
+    nativeModelBusy(g(2), 0, bindings), op(0x04, 0x40, 0x0f, 0x0b),
+    g(1), i(0), call(bindings.functionIndex(1445)), op(0x1a), g(1), call(bindings.functionIndex(1448)), i(0), put(21), op(0x0b, 0x0b));
   const destroy = concat(op(0), l(0), g(0), op(0x46), g(0), i(0), op(0x47, 0x71, 0x04, 0x40),
-    call(hideIndex), g(2), call(bindings.functionIndex(748)), g(1), call(bindings.functionIndex(748)),
-    ...[0, 1, 2, 3, 4, 9].map((index) => concat(i(0), put(index))), increment(8), op(0x0b, 0x0b));
-  // Clone only this Canvas's retained draw object, then replace its one mesh.
-  // The constructor hook runs after the native transform has been established.
-  const init = concat(op(0), g(0), call(destroyIndex), l(0), put(0),
-    i(265), i(0), call(bindings.functionIndex(1444)), put(1), l(0), load(144), call(bindings.functionIndex(1556)), put(2),
+    call(bindings.functionIndex(6593)), i(0), put(0), i(0), put(3), i(0), put(4), i(0), put(9), i(1), put(20),
+    op(0x0b), call(reapIndex), op(0x0b));
+  // Lazy creation avoids overwriting a pending pair when another Canvas opens.
+  // Only a live native callback dereferences the current Canvas after a retry.
+  const ensure = concat(op(1, 1, 0x7f), call(reapIndex),
+    g(20), g(2), op(0x72, 0x04, 0x40, 0x0f, 0x0b),
+    nativeGraphicsBusy(0, bindings), op(0x04, 0x40, 0x0f, 0x0b),
+    i(265), i(0), call(bindings.functionIndex(1444)), put(1), g(0), load(144), call(bindings.functionIndex(1556)), put(2),
     g(2), i(0), g(1), call(bindings.functionIndex(1565)), g(2), i(0), call(bindings.functionIndex(1579)), increment(7), op(0x0b));
+  const init = concat(op(0), g(0), call(destroyIndex), l(0), put(0), call(ensureIndex), op(0x0b));
   const attach = concat(op(1, 1, 0x7f),
-    l(0), g(0), op(0x46), g(2), i(0), op(0x47, 0x71, 0x04, 0x40), stack(2, 16),
+    l(0), g(0), op(0x46, 0x04, 0x40), call(ensureIndex), op(0x0b),
+    l(0), g(0), op(0x46), g(20), op(0x45, 0x71), g(2), i(0), op(0x47, 0x71, 0x04, 0x40), stack(2, 16),
     l(2), g(2), save(0), l(1), i(1), l(2), i(4), call(bindings.functionIndex(6827)), unstack(2, 16), op(0x0b, 0x0b));
 
   const vertexStores: Uint8Array[] = [];
@@ -138,7 +156,8 @@ function appendCompassSurface(input: Uint8Array, screenSpace: boolean, bindings:
     });
   }
   const update = concat(op(2, 3, 0x7f, 10, 0x7d),
-    l(0), g(0), op(0x47, 0x04, 0x40, 0x0f, 0x0b),
+    call(reapIndex), l(0), g(0), op(0x47, 0x04, 0x40, 0x0f, 0x0b), call(ensureIndex),
+    g(20), g(2), op(0x45, 0x72, 0x04, 0x40, 0x0f, 0x0b),
     l(0), load(180, true), l(0), load(172, true), op(0x93), s(6),
     l(0), load(184, true), l(0), load(176, true), op(0x93), s(7),
     l(2), load(0, true), s(8), l(2), load(4, true), s(9),
@@ -152,6 +171,12 @@ function appendCompassSurface(input: Uint8Array, screenSpace: boolean, bindings:
     op(0x04, 0x40, 0x0f, 0x0b),
     l(8), put(17), l(9), put(18),
     l(10), put(13), l(11), put(14), l(6), put(15), l(7), put(16),
+    // The host sizes its first terrain tile from the camera and rectangle
+    // above, so they are published before any context check. Without a
+    // published area the hidden mesh stays withdrawn; while the renderer holds
+    // the model, geometry waits and the cleared serial forces the next rewrite.
+    contextValid(), op(0x45, 0x04, 0x40), call(hideIndex), op(0x0f, 0x0b),
+    nativeGraphicsBusy(3, bindings), nativeModelBusy(g(2), 3, bindings), op(0x72, 0x04, 0x40), i(-1), put(19), op(0x0f, 0x0b),
     contextValid(), finite(l(6), 16384), op(0x71), l(6), f(2), op(0x5e, 0x71),
     finite(l(7), 16384), op(0x71), l(7), f(2), op(0x5e, 0x71),
     finite(l(10), 1000000), op(0x71), finite(l(11), 1000000), op(0x71),
@@ -173,7 +198,8 @@ function appendCompassSurface(input: Uint8Array, screenSpace: boolean, bindings:
   const memoryEnd = (bytes: Uint8Array) => concat(l(0), op(0xad), bytes, op(0xad, 0x7c), op(0x3f, 0, 0xad), op(0x42), sleb(65536), op(0x7e, 0x58));
   // The texture swap below asserts while the renderer holds the model; this
   // runs from the host's frame, so report busy before hiding or allocating.
-  const publish = concat(op(1, 6, 0x7f),
+  const publish = concat(op(1, 6, 0x7f), call(reapIndex),
+    g(20), op(0x04, 0x40), i(NATIVE_PUBLISH_BUSY), op(0x0f, 0x0b),
     nativeGraphicsBusy(7, bindings), op(0x04, 0x40), i(NATIVE_PUBLISH_BUSY), op(0x0f, 0x0b),
     g(2), op(0x04, 0x40), nativeModelBusy(g(2), 7, bindings), op(0x04, 0x40), i(NATIVE_PUBLISH_BUSY), op(0x0f, 0x0b, 0x0b),
     call(hideIndex),
@@ -221,12 +247,12 @@ function appendCompassSurface(input: Uint8Array, screenSpace: boolean, bindings:
     op(0x60, 0, 0), op(0x60, 1, 0x7f, 0), op(0x60, 2, 0x7f, 0x7f, 0),
     op(0x60, 3, 0x7f, 0x7f, 0x7f, 0), op(0x60, 2, 0x7f, 0x7f, 1, 0x7f),
   ];
-  bodies.push(hide, destroy, init, attach, update, publish);
-  const globalTypes = [...Array.from({length: 10}, () => 0x7f), ...Array.from({length: 9}, () => 0x7d), 0x7f];
+  bodies.push(hide, destroy, init, attach, update, publish, reap, ensure);
+  const globalTypes = [...Array.from({length: 10}, () => 0x7f), ...Array.from({length: 9}, () => 0x7d), 0x7f, 0x7f, 0x7f];
   const scalarExports = [["area", 3], ["serial", 4], ["updates", 5], ["uploads", 6], ["created", 7], ["destroyed", 8], ["size", 9], ["camera_x", 13], ["camera_y", 14], ["width", 15], ["height", 16]] as const;
   return concat(WASM_HEADER, ...sections.map((section) => encodeSection({id: section.id,
     body: section.id === 1 ? concat(uleb(signatures.count + extraTypes.length), signatures.entries, ...extraTypes)
-      : section.id === 3 ? encodeIndexVector([...types, ...[0, 1, 1, 2, 3, 4].map((type) => signatures.count + type)])
+      : section.id === 3 ? encodeIndexVector([...types, ...[0, 1, 1, 2, 3, 4, 0, 0].map((type) => signatures.count + type)])
       : section.id === 6 ? concat(uleb(base + globalTypes.length), globals.entries, ...globalTypes.map((type) => concat(op(type, 1), type === 0x7f ? i(0) : f(0), op(0x0b))))
       : section.id === 7 ? concat(uleb(exportVector.count + scalarExports.length + 2), exportVector.entries,
         encodeName(`${prefix}_publish`), op(0), uleb(publishIndex),
