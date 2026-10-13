@@ -132,12 +132,23 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install chromium
       - run: pnpm build
+      # While the cold first launch hangs, record which processes are busy and
+      # where each Electron process is stuck.
       - name: Cold first game launch (temporary probe)
         if: matrix.shard == 1
         continue-on-error: true
-        env:
-          DEBUG: pw:browser
-        run: pnpm test:electron -g "on an input reset"
+        run: |
+          pnpm test:electron -g "on an input reset" &
+          test_pid=$!
+          sleep 30
+          mkdir -p test-results/cold-stacks
+          ps -axo pid,ppid,pcpu,rss,state,command | grep -E "Electron|MTLCompiler|syspolicyd|XProtect" | grep -v grep \
+            | tee test-results/cold-stacks/processes.txt | cut -c1-240
+          for pid in $(pgrep -f "Electron.app/Contents"); do
+            sample "$pid" 2 -file "test-results/cold-stacks/sample-$pid.txt" >/dev/null 2>&1 || true
+          done
+          ls -la test-results/cold-stacks
+          wait "$test_pid"
       # A timed-out test never reaches its cleanup, so the profile stays in TMPDIR.
       - name: Collect cold launch profile (temporary probe)
         if: always() && matrix.shard == 1
@@ -146,7 +157,6 @@ jobs:
           for dir in "${TMPDIR:-/tmp}"/gw-input-e2e-*; do
             [ -d "$dir" ] && rsync -a --max-size=5m "$dir" test-results/cold-profile/
           done
-          ls -R test-results/cold-profile | head -80
       - name: Upload cold launch evidence (temporary probe)
         if: always() && matrix.shard == 1
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -155,14 +165,6 @@ jobs:
           path: test-results
           if-no-files-found: ignore
           retention-days: 3
-      - name: Stress first launch and teardown (temporary)
-        if: matrix.shard == 1
-        continue-on-error: true
-        run: |
-          pnpm test:electron -g "on an input reset|renderer recovery" --repeat-each=20 --max-failures=0 || true
-          for _ in $(seq "$(sysctl -n hw.ncpu)"); do yes > /dev/null & done
-          pnpm test:electron -g "on an input reset|renderer recovery" --repeat-each=20 --max-failures=0 || true
-          kill $(jobs -p)
       - run: pnpm test:electron --shard=${{ matrix.shard }}/2
       # Hub specs tagged @macos need a Mac: Chromium applies text-editing
       # shortcuts (⌘⌫, ⌘←) only on macOS, and time budgets are set for the Macs
