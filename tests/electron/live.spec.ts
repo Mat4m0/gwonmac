@@ -145,7 +145,7 @@ test.describe("live client", () => {
               selected: document.documentElement.dataset.uiFont,
               loaded: document.fonts.check('16px "Guild Wars Original"'),
               applied: getComputedStyle(document.documentElement)
-                .getPropertyValue("--ui-font-family")
+                .getPropertyValue("--ui-font")
                 .includes("Guild Wars Original"),
             })),
             { timeout: 30_000, intervals: [100, 250, 500] },
