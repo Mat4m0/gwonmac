@@ -135,7 +135,18 @@ jobs:
       - name: Cold first game launch (temporary probe)
         if: matrix.shard == 1
         continue-on-error: true
+        env:
+          DEBUG: pw:browser
         run: pnpm test:electron -g "on an input reset"
+      # A timed-out test never reaches its cleanup, so the profile stays in TMPDIR.
+      - name: Collect cold launch profile (temporary probe)
+        if: always() && matrix.shard == 1
+        run: |
+          mkdir -p test-results/cold-profile
+          for dir in "${TMPDIR:-/tmp}"/gw-input-e2e-*; do
+            [ -d "$dir" ] && rsync -a --max-size=5m "$dir" test-results/cold-profile/
+          done
+          ls -R test-results/cold-profile | head -80
       - name: Upload cold launch evidence (temporary probe)
         if: always() && matrix.shard == 1
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
