@@ -125,6 +125,7 @@ const builds: Build[] = [
   build("b-barrage", "Splinter Barrage", "R", 24, ["player", "damage"]),
   build("b-resto", "Ritualist restoration", "Rt", 5, ["support", "spirits"]),
   build("b-ele", "Air pressure", "E", 12, ["damage", "general"]),
+  build("b-fixture-ritual", "Fixture ritual", "Rt", 30, ["support"]),
 ];
 
 const heroIds = [null, heroId(21), heroId(4), heroId(1), heroId(24), heroId(3), heroId(15), heroId(26)] as const;
