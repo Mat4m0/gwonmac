@@ -108,7 +108,7 @@ jobs:
 
   electron:
     runs-on: macos-15
-    timeout-minutes: 30
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -132,12 +132,24 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install chromium
       - run: pnpm build
-      - run: pnpm test:electron --shard=${{ matrix.shard }}/2
+      # Temporary flake proof for the playable fixture; this branch is never merged.
+      # Both shards start on a fresh runner, so run 1 is the cold first launch.
+      - name: Playable launch 20x idle
+        if: matrix.shard == 1
+        run: pnpm test:electron tests/electron/input-pointer.spec.ts tests/electron/call-target.spec.ts --repeat-each=20 --max-failures=0
+      - name: Playable launch 20x with every core saturated
+        if: matrix.shard == 2
+        run: |
+          for _ in $(seq "$(sysctl -n hw.ncpu)"); do yes > /dev/null & done
+          status=0
+          pnpm test:electron tests/electron/input-pointer.spec.ts tests/electron/call-target.spec.ts --repeat-each=20 --max-failures=0 || status=$?
+          kill $(jobs -p)
+          exit $status
       # Hub specs tagged @macos need a Mac: Chromium applies text-editing
       # shortcuts (⌘⌫, ⌘←) only on macOS, and time budgets are set for the Macs
       # the app ships on. They run here instead of on the Linux shards.
       - name: Hub specs that need macOS
-        if: matrix.shard == 2
+        if: false
         run: pnpm tools:test:e2e --grep @macos
       - name: Upload failure evidence
         if: failure()
