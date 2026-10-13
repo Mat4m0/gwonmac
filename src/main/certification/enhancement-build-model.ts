@@ -30,6 +30,7 @@ import {
   type EnhancementPartySkillbarLayout,
   type EnhancementPlayRegionLayout,
   type EnhancementPlayerEffectLayout,
+  type EnhancementProgressLayout,
   type EnhancementPlayerSkillbarLayout,
   type EnhancementPartyLayout,
   type EnhancementSkillCooldownLayout,
@@ -164,6 +165,9 @@ export function enhancementConfigWords(
         case "player-effects":
           value = build.playerEffectObservation?.layout[field.key];
           break;
+        case "progress":
+          value = build.progressObservation?.layout[field.key];
+          break;
         default: {
           const unreachable: never = field;
           return unreachable;
@@ -200,6 +204,19 @@ export function enhancementConfigWords(
     return party.partyDirtyMessages[field.index] ?? 0;
   });
 }
+
+type ProgressFieldAccessor = Readonly<{
+  functionIndex: number;
+  params: readonly [];
+  results: readonly ["i32"];
+  bodySha256: string;
+}>;
+type ProgressIndexedAccessor = Readonly<{
+  functionIndex: number;
+  params: readonly ["i32"];
+  results: readonly ["i32"];
+  bodySha256: string;
+}>;
 
 export interface KnownEnhancementBuild {
   /** Exact native icon draw ownership; independent of observation facts. */
@@ -444,6 +461,22 @@ export interface KnownEnhancementBuild {
     }>;
   }>;
   /**
+   * WorldContext mission, vanquish and title fields plus the AreaInfo row
+   * fields. Each accessor's exact body carries the offset it proves.
+   */
+  progressObservation?: Readonly<{
+    layout: EnhancementProgressLayout;
+    accessors: Readonly<{
+      missionsCompleted: ProgressFieldAccessor;
+      missionsBonus: ProgressFieldAccessor;
+      missionsCompletedHm: ProgressFieldAccessor;
+      missionsBonusHm: ProgressFieldAccessor;
+      vanquishedAreas: ProgressFieldAccessor;
+      titlePoints: ProgressIndexedAccessor;
+      areaInfo: ProgressIndexedAccessor;
+    }>;
+  }>;
+  /**
    * The game's encoded-text validator that the certified chat-log producer
    * asserts on. Local chat lines call it first, then that producer.
    */
@@ -678,6 +711,8 @@ export function supportedEnhancementCapabilities(
     resignAction: playRegionObservation && gameThread && build.resignAction !== undefined,
     chatPrint: playRegionObservation && gameThread && build.uiDispatcher !== undefined
       && build.chatFiltering !== undefined && build.chatPrint !== undefined,
+    progressObservation: playRegionObservation && observationBase
+      && build.progressObservation !== undefined,
   });
   // Evidence locators decide only what they proved. The shared registry owns
   // every dependency and closes the available set in one canonical place.

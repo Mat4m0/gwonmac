@@ -71,6 +71,7 @@ describe("companion policy source", () => {
           quickItemMove: false,
           effectTimers: false,
     alcoholTimer: false,
+    progress: false,
     reminders: false,
         },
       },

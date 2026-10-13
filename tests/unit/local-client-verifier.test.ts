@@ -36,6 +36,7 @@ const NONE: EnhancementCapabilities = Object.freeze({
     resignAction: false,
     whisperChat: false,
     chatPrint: false,
+    progressObservation: false,
   playRegionObservation: false,
     preGameControls: false,
     characterSwitchAction: false,
@@ -60,6 +61,7 @@ const ALL: EnhancementCapabilities = Object.freeze({
     resignAction: false,
     whisperChat: false,
     chatPrint: false,
+    progressObservation: false,
   playRegionObservation: true,
   preGameControls: true,
   characterSwitchAction: true,
@@ -106,6 +108,7 @@ const STORAGE: EnhancementCapabilities = Object.freeze({
     resignAction: false,
     whisperChat: false,
     chatPrint: false,
+    progressObservation: false,
 });
 const PARTY_TEAM: EnhancementCapabilities = Object.freeze({
   ...NONE,
@@ -137,6 +140,7 @@ const COOLDOWN: EnhancementCapabilities = Object.freeze({
     resignAction: false,
     whisperChat: false,
     chatPrint: false,
+    progressObservation: false,
 });
 const PROVED_FILE = Object.freeze({
   status: "proved" as const,
@@ -504,6 +508,28 @@ describe("local client verification boundary", () => {
     );
     assert.equal(verdicts.chatFiltering.status, "proved");
     assert.equal(verdicts.whisperChat.status, "proved");
+  });
+
+  it("withdraws only progressObservation when a client update moves a progress accessor", () => {
+    const baseline = ENHANCEMENT_BUILDS.find((build) => build.progressObservation)!;
+    const requested: EnhancementCapabilities = Object.freeze({
+      ...NONE,
+      playRegionObservation: true,
+      progressObservation: true,
+    });
+    const proved = localFeatureVerdictsForBuild("a".repeat(64), requested, baseline);
+    assert.equal(proved.progressObservation.status, "proved");
+
+    // The verifier omits `progressObservation` when its accessors no longer match.
+    const { progressObservation, ...withoutProgress } = baseline;
+    assert.ok(progressObservation);
+    const verdicts = localFeatureVerdictsForBuild("a".repeat(64), requested, withoutProgress);
+    assert.equal(verdicts.progressObservation.status, "changed");
+    assert.equal(
+      (verdicts.progressObservation as { invariant: string }).invariant,
+      "progress.field-accessors",
+    );
+    assert.equal(verdicts.playRegionObservation.status, "proved");
   });
 
   it("rejects an exact authored row that did not cross semantic proof", () => {

@@ -39,6 +39,7 @@ function generation(wasmPath: string, size: number): ClientGeneration {
         resignAction: { status: "off" },
         whisperChat: { status: "off" },
         chatPrint: { status: "off" },
+        progressObservation: { status: "off" },
       },
     },
     extendedMemory: supported

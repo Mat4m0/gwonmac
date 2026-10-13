@@ -871,6 +871,7 @@ export interface ClientCompatibility {
     chatFiltering: OptionalFeatureStatus;
     quickItemMove: OptionalFeatureStatus;
     chatPrint: OptionalFeatureStatus;
+    progressObservation: OptionalFeatureStatus;
   }>;
 }
 
