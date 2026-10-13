@@ -612,6 +612,11 @@ test("renderer recovery stays inside one profile and leaves the launcher alive",
     if (!initialGame) throw new Error("Main account game window is required");
     await initialGame.evaluate(() => window.gwNative.client.readyToPresent());
     await fixture.page.evaluate(() => window.__concurrentProfileOpen);
+    // The window counts as presented only after both its first frame and
+    // `ready-to-show`. A crash before that is a failed launch, not a recovery.
+    await expect.poll(() => fixture.page.evaluate(async () =>
+      (await window.launcherNative.state.get()).profiles[0]?.state,
+    )).toBe("running");
 
     const mainWindowId = await fixture.app.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows().find((win) => win.getTitle().endsWith("Main account"))?.id,
