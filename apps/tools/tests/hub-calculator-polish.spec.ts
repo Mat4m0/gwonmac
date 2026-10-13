@@ -171,7 +171,7 @@ test('switching source with blank rates restores the named prompt, rather than a
 });
 
 // A cached result must remain actionable through the shell's two restore paths.
-test('resumed and rates-saved quotes retain selection, empty status and Enter copy (HUB-104, HUB-098)', async ({ page }) => {
+test('resumed and rates-saved quotes retain selection, empty status and Enter copy (HUB-104, HUB-098)', { tag: '@macos' }, async ({ page }) => {
   await page.goto('/?hub');
   const search = page.locator('.hub-search input');
   await expect(search).toBeVisible();

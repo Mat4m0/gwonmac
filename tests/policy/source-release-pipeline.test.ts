@@ -507,7 +507,11 @@ test("developer builds are exact, ad-hoc, bounded, and isolated from releases", 
     verification,
     /contents: write|attestations: write|id-token: write/,
   );
-  assert.match(verification, /run: pnpm verify:runtime/);
+  // CI runs the parts of verify:runtime in parallel; together they are the whole gate.
+  assert.match(verification, /run: pnpm verify:static/);
+  assert.match(verification, /run: pnpm tools:test:e2e --shard=\$\{\{ matrix\.shard \}\}\/4/);
+  assert.match(verification, /run: pnpm test:electron --shard=\$\{\{ matrix\.shard \}\}\/2/);
+  assert.match(verification, /package:\n {4}needs: \[static, hub-e2e, electron\]/);
   assert.match(
     verification,
     /base-ref: \$\{\{ github\.event\.pull_request\.base\.sha \|\| github\.event\.repository\.default_branch \}\}/,
@@ -679,8 +683,9 @@ test("the default gate is deterministic and certifies every shipped test layer",
   const verification = read(".github/workflows/macos-verify.yml");
   assert.doesNotMatch(script("test:unit"), /coverage|GW_CLIENT_WASM/);
   assert.match(script("test:client-artifact"), /tests\/client-artifact\/\*\.ts/);
-  assert.match(script("verify:runtime"), /tools:test:e2e/);
-  assert.match(script("verify:runtime"), /test:electron/);
+  assert.match(script("verify:runtime"), /^pnpm verify:static && pnpm tools:test:e2e && pnpm test:electron$/);
+  assert.match(script("verify:static"), /pnpm check && pnpm build/);
+  assert.match(script("verify:static"), /test:integration && pnpm test:release/);
   assert.match(script("verify"), /package:built && pnpm test:packaged/);
   assert.match(verification, /pnpm exec playwright install chromium/);
   assert.doesNotMatch(verification, /unit-coverage/);

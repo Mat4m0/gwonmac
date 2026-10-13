@@ -229,7 +229,7 @@ test('only the selected whisper transcript announces appended messages (HUB-081)
   await expect(page.locator('[data-transcript][role="log"]')).toHaveCount(0);
 });
 
-test('root typing and complete library entry stay within the scale budget (HUB-110, 112, 169)', async ({ page }, info) => {
+test('root typing and complete library entry stay within the scale budget (HUB-110, 112, 169)', { tag: '@macos' }, async ({ page }, info) => {
   await page.goto('/?hub&library=1000');
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
   const timings = await page.evaluate(async () => {
@@ -445,7 +445,7 @@ test('breadcrumb keyboard focus leaves space around its text and outline (HUB-16
 });
 
 
-test('twenty opens and resumes search once per transition without accumulating DOM (HUB-111, 171)', async ({ page }, info) => {
+test('twenty opens and resumes search once per transition without accumulating DOM (HUB-111, 171)', { tag: '@macos' }, async ({ page }, info) => {
   await page.goto('/?hub&library=1000&templates-ms=1000');
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
   const result = await page.evaluate(async () => {
@@ -475,7 +475,7 @@ test('twenty opens and resumes search once per transition without accumulating D
 });
 
 
-test('incoming bursts keep a deep build selection and bounded arrow mutations (HUB-111, 112)', async ({ page }, info) => {
+test('incoming bursts keep a deep build selection and bounded arrow mutations (HUB-111, 112)', { tag: '@macos' }, async ({ page }, info) => {
   await page.goto('/?hub&library=1000');
   await expect(page.locator('#app')).toHaveAttribute('data-ready', 'true');
   const search = page.locator('.hub-search input');

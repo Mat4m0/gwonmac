@@ -298,7 +298,7 @@ test('clicks during a running account action never start or retarget a second on
   expect(await actions(page)).toEqual(['Account Second open']);
 });
 
-test('an account open that focuses another window still ends the task, so the next opening starts at Home (HUB-004)', async ({ page }) => {
+test('an account open that focuses another window still ends the task, so the next opening starts at Home (HUB-004)', { tag: '@macos' }, async ({ page }) => {
   await open(page, '&accounts-ms=1500');
   await enter(page, 'acc s');
   await expect(page.locator('.hub-caption')).toHaveText('Second');

@@ -408,7 +408,7 @@ test('arrow keys scroll Build details and never jump to Back (HUB-088)', async (
   await expect(details).toBeFocused();
 });
 
-test('Whispers: Escape clears the picker text first, ↓ walks the people, ⌘⌫ keeps its native meaning in the message (HUB-079)', async ({ page }) => {
+test('Whispers: Escape clears the picker text first, ↓ walks the people, ⌘⌫ keeps its native meaning in the message (HUB-079)', { tag: '@macos' }, async ({ page }) => {
   // One continued conversation (Romi) ahead of the online friends, so ↓ crosses from one group to the next.
   await openHub(page, '&party');
   await page.evaluate(() => window.dispatchEvent(new Event('hub-fixture-incoming')));

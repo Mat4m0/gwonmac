@@ -1,5 +1,6 @@
 import {
   _electron as electron,
+  expect,
   type ElectronApplication,
   type Locator,
   type Page,
@@ -148,10 +149,25 @@ export async function launchOfflineAt(
       )?.id,
     );
     if (!profileId) throw new Error("launcher fixture has no active profile");
+    const playable = env.GW_TEST_ALLOW_UNREADY_LAUNCH === "0";
+    // Play queues the launch while the client check runs and waits for the
+    // game's first frame once the client is ready. Which one happens depends on
+    // how fast this machine is, so a playable launch always waits for the ready
+    // client first and takes the second path.
+    if (playable) {
+      await expect.poll(() => page.evaluate(async () =>
+        (await window.launcherNative.state.get()).readiness.state,
+      ), { timeout: 30_000 }).toMatch(/^(offline-)?playable$/);
+    }
     const gamePage = app.waitForEvent("window", { timeout: 30_000 });
-    await page.evaluate((id) => window.launcherNative.profiles.play([id]), profileId);
-    const game = await gamePage;
+    const played = page.evaluate((id) => window.launcherNative.profiles.play([id]), profileId);
+    // A play that fails before the window opens reports its own error at once.
+    const game = await Promise.race([gamePage, played.then(() => gamePage)]);
     await game.waitForLoadState("domcontentloaded");
+    // The seeded client has no graphics, so it can never submit the first frame
+    // that play waits for. Report that frame in its place.
+    if (playable) await game.evaluate(() => window.gwNative.client.readyToPresent());
+    await played;
     return { app, page: game, userData };
   } catch (error) {
     if (!app) throw error;

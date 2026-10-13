@@ -97,7 +97,7 @@ test('temporary blur resumes the stage and focus while explicit close starts fre
   await expect(search).toHaveValue(''); await expect(search).toBeFocused();
 });
 
-test('native editing shortcuts from results return to the same search', async ({ page }) => {
+test('native editing shortcuts from results return to the same search', { tag: '@macos' }, async ({ page }) => {
   await page.goto('/?hub');
   const search = page.locator('.hub-search input');
   await search.fill('build monk'); await search.press('ArrowDown');

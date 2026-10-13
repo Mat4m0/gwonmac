@@ -38,11 +38,13 @@ permissions:
   contents: read
 
 jobs:
-  verify:
+  # `pnpm verify:runtime` is the definition of verified: verify:static, then the
+  # Hub and Electron end-to-end suites. CI runs those three parts on separate
+  # runners at once, and each end-to-end suite in shards. Every shard keeps one
+  # test worker, so the timing budgets still measure an otherwise idle machine.
+  static:
     runs-on: macos-15
-    timeout-minutes: 60
-    env:
-      GW_PACKAGE_INTENT: ${{ inputs.package-intent }}
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -69,19 +71,116 @@ jobs:
       - name: Install the pinned Rust toolchain
         run: rustup toolchain install
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install chromium
       - name: Audit dependencies
         run: pnpm audit --audit-level=high --ignore-registry-errors
-      - run: pnpm verify:runtime
-      - name: Package and test the verified build
-        if: inputs.packaged-smoke || inputs.artifact-name != ''
-        run: pnpm package:built && pnpm test:packaged
+      - run: pnpm verify:static
 
-      - name: Upload Electron failure evidence
+  # The Hub suite drives a browser against a Vite fixture and needs no Mac, so
+  # it runs on Linux: the account runs only five macOS jobs at a time.
+  hub-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@d15e628ca66d93ee5f352c71671a7bc6a97af5c9 # v6.0.8
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "24"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm tools:test:e2e --shard=${{ matrix.shard }}/4 --grep-invert @macos
+      - name: Upload failure evidence
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: electron-failure-${{ github.run_id }}-${{ github.run_attempt }}
+          name: hub-e2e-failure-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.shard }}
+          path: test-results
+          if-no-files-found: ignore
+          retention-days: 7
+
+  electron:
+    runs-on: macos-15
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@d15e628ca66d93ee5f352c71671a7bc6a97af5c9 # v6.0.8
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "24"
+          cache: pnpm
+      - name: Require Apple Silicon runner
+        run: test "$(uname -m)" = "arm64"
+      # The runner image's default toolchain is not this repository's. Installs
+      # the one rust-toolchain.toml names, with no version repeated here.
+      - name: Install the pinned Rust toolchain
+        run: rustup toolchain install
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install chromium
+      - run: pnpm build
+      - run: pnpm test:electron --shard=${{ matrix.shard }}/2
+      # Hub specs tagged @macos need a Mac: Chromium applies text-editing
+      # shortcuts (⌘⌫, ⌘←) only on macOS, and time budgets are set for the Macs
+      # the app ships on. They run here instead of on the Linux shards.
+      - name: Hub specs that need macOS
+        if: matrix.shard == 2
+        run: pnpm tools:test:e2e --grep @macos
+      - name: Upload failure evidence
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: electron-failure-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.shard }}
+          path: test-results
+          if-no-files-found: ignore
+          retention-days: 7
+
+  package:
+    needs: [static, hub-e2e, electron]
+    if: inputs.packaged-smoke || inputs.artifact-name != ''
+    runs-on: macos-15
+    timeout-minutes: 30
+    env:
+      GW_PACKAGE_INTENT: ${{ inputs.package-intent }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.checkout-ref || github.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@d15e628ca66d93ee5f352c71671a7bc6a97af5c9 # v6.0.8
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "24"
+          cache: pnpm
+      - name: Require Apple Silicon runner
+        run: test "$(uname -m)" = "arm64"
+      # The runner image's default toolchain is not this repository's. Installs
+      # the one rust-toolchain.toml names, with no version repeated here.
+      - name: Install the pinned Rust toolchain
+        run: rustup toolchain install
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Package and test the verified build
+        if: inputs.packaged-smoke || inputs.artifact-name != ''
+        run: pnpm package:built && pnpm test:packaged
+      - name: Upload failure evidence
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: package-failure-${{ github.run_id }}-${{ github.run_attempt }}
           path: test-results
           if-no-files-found: ignore
           retention-days: 7
