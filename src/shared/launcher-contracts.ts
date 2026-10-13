@@ -9,6 +9,7 @@ import type {
   AppSettings,
   AppUpdateState,
   CacheInfo,
+  ExtendedMemoryRuntimeStatus,
   DownloadActivity,
   FullDownloadState,
   NoticeCode,
@@ -35,6 +36,7 @@ import type { FeatureId } from "./feature-contracts.js";
 import { cloneSkillKeyBindings, isSkillKeyBindings } from "./skill-key-bindings.js";
 import { cloneSkillCooldownColor, isSkillCooldownColor } from "./skill-cooldowns.js";
 import type { ProfileId } from "./multiple-accounts.js";
+import type { SettingsTarget } from "./settings-catalogue.js";
 import type {
   TexturePackImportResult,
   TexturePackSnapshot,
@@ -63,10 +65,8 @@ export const LAUNCHER_IPC = Object.freeze({
   toolsSetFeature: "gw:launcher:tools:setFeature",
   toolsCaptureShortcut: "gw:launcher:tools:captureShortcut",
   toolsReplaceShortcut: "gw:launcher:tools:replaceShortcut",
-  toolsRestoreDefaultShortcut: "gw:launcher:tools:restoreDefaultShortcut",
   toolsRestartToApply: "gw:launcher:tools:restartToApply",
   gameFilesInfo: "gw:launcher:gameFiles:info",
-  gameFilesRetryPreparation: "gw:launcher:gameFiles:retryPreparation",
   gameFilesRepair: "gw:launcher:gameFiles:repair",
   gameFilesPauseDownload: "gw:launcher:gameFiles:pauseDownload",
   gameFilesResumeDownload: "gw:launcher:gameFiles:resumeDownload",
@@ -81,17 +81,8 @@ export const LAUNCHER_IPC = Object.freeze({
   updatesRestartAndInstall: "gw:launcher:updates:restartAndInstall",
 } as const);
 
-/** The launcher's Settings sections, in navigation order. */
-export const LAUNCHER_SETTINGS_SECTIONS = ["general", "content", "advanced", "game", "tools", "maps", "texture-packs", "game-files"] as const;
-export type LauncherSettingsSection = typeof LAUNCHER_SETTINGS_SECTIONS[number];
-export function parseLauncherSettingsSection(value: unknown): LauncherSettingsSection {
-  const section = LAUNCHER_SETTINGS_SECTIONS.find((candidate) => candidate === value);
-  if (!section) throw new Error("Unknown launcher settings section");
-  return section;
-}
-
-/** `settings` opens the last Settings section; `settings/<section>` opens that one. */
-export type LauncherDestination = "home" | "accounts" | "settings" | `settings/${LauncherSettingsSection}`;
+/** A launcher page another window can open: `settings` opens the last Settings section; a target opens that section or control. */
+export type LauncherDestination = "home" | "accounts" | "settings" | SettingsTarget;
 
 export type LauncherInstallationKind =
   | "fresh"
@@ -174,6 +165,7 @@ export const GLOBAL_TOOLS = [
   "chat-filters",
   "effect-timers",
   "alcohol-timer",
+  "reminders",
 ] as const;
 export type GlobalTool = (typeof GLOBAL_TOOLS)[number];
 export const GLOBAL_TOOL_FEATURES = Object.freeze({
@@ -193,6 +185,7 @@ export const GLOBAL_TOOL_FEATURES = Object.freeze({
   "chat-filters": "chatFilters",
   "effect-timers": "effectTimers",
   "alcohol-timer": "alcoholTimer",
+  reminders: "reminders",
 } satisfies Record<GlobalTool, FeatureId>);
 export const LAUNCHER_EXTERNAL_LINKS = ["github", "bugReport", "featureRequest", "discord", "arenaNetSupport", "donate", "releases"] as const;
 export type LauncherExternalLink = (typeof LAUNCHER_EXTERNAL_LINKS)[number];
@@ -225,6 +218,12 @@ export interface LauncherSettings {
   readonly chatFilterAllyDrops: boolean;
   readonly chatFilterHallOfHeroes: boolean;
   readonly chatFilterTitleAchievements: boolean;
+  readonly reminderCons: boolean;
+  readonly reminderPcons: boolean;
+  readonly reminderAlcohol: boolean;
+  readonly reminderBeforeEnd: boolean;
+  readonly reminderAtEnd: boolean;
+  readonly reminderSound: boolean;
   readonly cartographyOverlayEnabled: boolean;
   readonly cartographyGridEnabled: boolean;
   readonly cartographyCompassGridEnabled: boolean;
@@ -319,6 +318,8 @@ export interface LauncherSnapshot {
   readonly settings: LauncherSettings;
   readonly shortcuts: Readonly<Record<ShortcutAction, ShortcutBinding | null>>;
   readonly texturePacks: TexturePackSnapshot;
+  /** The running client's memory limit; null until a client is prepared. */
+  readonly extendedMemory: ExtendedMemoryRuntimeStatus | null;
   readonly profiles: readonly LauncherProfileSummary[];
   readonly selectedProfileIds: readonly ProfileId[];
   readonly preferences: LauncherPreferences;
@@ -356,6 +357,9 @@ export interface LauncherNativeApi {
     dismissPreferencesReset(): Promise<void>;
     updatePreferences(patch: LauncherPreferencesPatch): Promise<void>;
   };
+  readonly news: {
+    open(id: string): Promise<void>;
+  };
   readonly settings: {
     update(patch: LauncherSettingsPatch): Promise<void>;
     reset(): Promise<void>;
@@ -365,12 +369,10 @@ export interface LauncherNativeApi {
     setFeature(input: GlobalToolUpdate): Promise<void>;
     captureShortcut(action: ShortcutAction): Promise<LauncherShortcutCaptureResult>;
     replaceShortcut(input: ShortcutReplacement): Promise<void>;
-    restoreDefaultShortcut(action: ShortcutAction): Promise<void>;
     restartToApply(): Promise<void>;
   };
   readonly gameFiles: {
     info(): Promise<CacheInfo>;
-    retryPreparation(): Promise<void>;
     repair(): Promise<void>;
     pauseDownload(): Promise<void>;
     resumeDownload(): Promise<void>;
@@ -388,9 +390,6 @@ export interface LauncherNativeApi {
   readonly external: {
     open(kind: LauncherExternalLink): Promise<void>;
     revealLogs(): Promise<void>;
-  };
-  readonly news: {
-    open(id: string): Promise<void>;
   };
 }
 
@@ -416,6 +415,7 @@ export function parseLauncherSettingsPatch(value: unknown): LauncherSettingsPatc
     "autoRelogAfterReload", "characterSwitchProfession", "characterSwitchLevel",
     "characterSwitchLocation", "skillKeyBindings", "skillCooldownColor", "alcoholTimerPosition",
     "chatFilterAllyDrops", "chatFilterHallOfHeroes", "chatFilterTitleAchievements",
+    "reminderCons", "reminderPcons", "reminderAlcohol", "reminderBeforeEnd", "reminderAtEnd", "reminderSound",
     "cartographyOverlayEnabled", "cartographyGridEnabled", "cartographyCompassGridEnabled", "compassRangeIndicatorsEnabled",
     "compassRangeEarshotEnabled", "compassRangeCastEnabled", "compassRangeSpiritEnabled", "compassRangeSpiritExtendedEnabled",
     "compassRangeEarshotOpacity", "compassRangeCastOpacity", "compassRangeSpiritOpacity", "compassRangeSpiritExtendedOpacity",
@@ -455,6 +455,7 @@ export function parseLauncherSettingsPatch(value: unknown): LauncherSettingsPatc
     "autoCheckUpdates", "extendedMemoryEnabled", "showDiagnostics",
     "autoRelogAfterReload", "characterSwitchProfession", "characterSwitchLevel", "characterSwitchLocation",
     "chatFilterAllyDrops", "chatFilterHallOfHeroes", "chatFilterTitleAchievements",
+    "reminderCons", "reminderPcons", "reminderAlcohol", "reminderBeforeEnd", "reminderAtEnd", "reminderSound",
     "cartographyOverlayEnabled", "cartographyGridEnabled", "cartographyCompassGridEnabled", "compassRangeIndicatorsEnabled",
     "compassRangeEarshotEnabled", "compassRangeCastEnabled", "compassRangeSpiritEnabled", "compassRangeSpiritExtendedEnabled",
     "eliteSkillsEnabled",

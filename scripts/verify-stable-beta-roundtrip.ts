@@ -64,6 +64,7 @@ import {
 import {
   closePackagedApp,
   launchPackagedApp,
+  openPackagedSettings,
   type RunningPackagedApp,
 } from "../tests/helpers/packaged-app.ts";
 import { seedCachedClient } from "../tests/helpers/cached-client.ts";
@@ -300,9 +301,8 @@ async function updateCandidateSettings(
   running: RunningPackagedApp,
   patch: LauncherSettingsPatch,
 ): Promise<unknown> {
-  const launcher = running.launcherPage;
-  if (!launcher) throw new Error("the candidate did not expose the unified launcher");
-  await launcher.evaluate(
+  const settings = await openPackagedSettings(running);
+  await settings.evaluate(
     (value) => window.launcherNative.settings.update(value),
     patch,
   );
@@ -465,6 +465,13 @@ const candidateSettingsDomains = Array.from(
       quickItemMove: false,
       effectTimersEnabled: cycle(booleanValues, index + 1),
       alcoholTimerEnabled: cycle(booleanValues, index),
+      remindersEnabled: cycle(booleanValues, index + 0),
+      reminderCons: cycle(booleanValues, index + 1),
+      reminderPcons: cycle(booleanValues, index + 2),
+      reminderAlcohol: cycle(booleanValues, index + 3),
+      reminderBeforeEnd: cycle(booleanValues, index + 4),
+      reminderAtEnd: cycle(booleanValues, index + 5),
+      reminderSound: cycle(booleanValues, index + 6),
       alcoholTimerPosition: { corner: "top-left", x: index * 10, y: 58, locked: true },
       skillCooldownColor: { kind: "preset", preset: "red" },
       extendedMemoryEnabled: cycle(booleanValues, index + 1),
@@ -824,14 +831,13 @@ async function proveToolsRoundTrip(toolsCohort: Cohort): Promise<void> {
     assert.deepEqual(candidateInitial.library, initialLibrary);
     await assertWindowMatchesPersistedState(candidateWindowState, running.page);
     await roundTripProfileStore(running.page, "stable-template", "candidate-template");
-    const launcher = running.launcherPage;
-    if (!launcher) throw new Error("the candidate did not expose the unified launcher");
     await running.page.evaluate(async (library) => {
       const api = window.gwNative;
       if (!("buildLibrary" in api)) throw new Error("Tools preload is unavailable");
       await api.buildLibrary.set(library);
     }, candidateLibrary);
-    await launcher.evaluate(async () => {
+    const settings = await openPackagedSettings(running);
+    await settings.evaluate(async () => {
       await window.launcherNative.settings.update({ showDiagnostics: true });
       await window.launcherNative.tools.setFeature({
         tool: "build-management",

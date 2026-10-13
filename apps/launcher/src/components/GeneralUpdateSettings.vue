@@ -33,14 +33,14 @@ function performAction(): Promise<void> {
 <template>
   <h1>Updates</h1>
   <div class="setting-group">
-    <label>
+    <label data-setting="autoCheckUpdates">
       <span>
         <strong>Automatically check for launcher updates</strong>
         <small>Checks for Guild Wars Reforged app updates. Guild Wars game files update separately.</small>
       </span>
       <input type="checkbox" :checked="settings.autoCheckUpdates" @change="save({ autoCheckUpdates: checked($event) })" />
     </label>
-    <label>
+    <label data-setting="updateTrack">
       <span><strong>Launcher update channel</strong><small>Stable is recommended.</small></span>
       <select :value="settings.updateTrack" @change="save({ updateTrack: track($event) })">
         <option value="stable">Stable</option>

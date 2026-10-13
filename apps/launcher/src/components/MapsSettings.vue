@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import type { InGamePatch, InGameSettings, InGameTools } from "../settings-host";
 import { computed, nextTick, ref } from "vue";
-import type { LauncherNativeApi, LauncherSettings, LauncherSettingsPatch, LauncherSnapshot } from "@shared/launcher-contracts";
+import type { LauncherSnapshot } from "@shared/launcher-contracts";
 import ShortcutSetting from "./ShortcutSetting.vue";
 import ColorControl from "./ColorControl.vue";
 import RangeControl from "./RangeControl.vue";
@@ -40,10 +41,10 @@ import {
 } from "@shared/cartography-presets";
 
 const props = defineProps<{
-  settings: LauncherSettings;
+  settings: InGameSettings;
   shortcuts?: LauncherSnapshot["shortcuts"];
-  api?: LauncherNativeApi["tools"] | undefined;
-  save: (patch: LauncherSettingsPatch) => Promise<void>;
+  api?: InGameTools | undefined;
+  save: (patch: InGamePatch) => Promise<void>;
   tools?: LauncherSnapshot["tools"];
   performSave?: ((action: () => Promise<unknown>) => Promise<void>) | undefined;
 }>();
@@ -74,7 +75,7 @@ const lineLabels = {
   birdsEyeRange: "7×7 range",
 } as const;
 
-async function persist(patch: LauncherSettingsPatch) {
+async function persist(patch: InGamePatch) {
   status.value = "";
   try {
     await props.save(patch);
@@ -200,13 +201,13 @@ async function updateUnseen(patch: Partial<CartographyPresetStyle["grid"]["unsee
     <span v-else><strong>Maps enabled</strong> · Changes update open game windows. Layers appear in supported PvE areas.</span>
   </div>
   <div class="setting-group map-layers">
-    <div class="feature-heading">
+    <div class="feature-heading" data-setting="cartographyGridEnabled">
       <label for="map-grid"><strong>Exploration grid</strong><small id="map-grid-help">Shows remaining exploration on the Mission Map and World Map. Hollow amber markers are estimates.</small></label>
       <ShortcutSetting v-if="shortcuts" action="cartography.grid.toggle" :shortcuts="shortcuts" :api="api" :perform-save="performSave" />
       <input id="map-grid" type="checkbox" aria-label="Exploration grid" aria-describedby="map-grid-help" :checked="settings.cartographyGridEnabled" @change="persist({ cartographyGridEnabled: ($event.currentTarget as HTMLInputElement).checked })" />
     </div>
-    <label><span><strong>Markers on Compass</strong><small>Show nearby unexplored cells that this map can reveal. Off by default.</small></span><input type="checkbox" :checked="settings.cartographyCompassGridEnabled" :disabled="!settings.cartographyGridEnabled" @change="persist({ cartographyCompassGridEnabled: ($event.currentTarget as HTMLInputElement).checked })" /></label>
-    <label><span><strong>Compass ranges</strong><small>Show Shout, Cast, Spirit, and Ext. Spirit range rings.</small></span><input type="checkbox" aria-label="Compass ranges" :checked="settings.compassRangeIndicatorsEnabled" @change="persist({ compassRangeIndicatorsEnabled: ($event.currentTarget as HTMLInputElement).checked })" /></label>
+    <label data-setting="cartographyCompassGridEnabled"><span><strong>Markers on Compass</strong><small>Show nearby unexplored cells that this map can reveal. Off by default.</small></span><input type="checkbox" :checked="settings.cartographyCompassGridEnabled" :disabled="!settings.cartographyGridEnabled" @change="persist({ cartographyCompassGridEnabled: ($event.currentTarget as HTMLInputElement).checked })" /></label>
+    <label data-setting="compassRangeIndicatorsEnabled"><span><strong>Compass ranges</strong><small>Show Shout, Cast, Spirit, and Ext. Spirit range rings.</small></span><input type="checkbox" aria-label="Compass ranges" :checked="settings.compassRangeIndicatorsEnabled" @change="persist({ compassRangeIndicatorsEnabled: ($event.currentTarget as HTMLInputElement).checked })" /></label>
     <details class="compass-range-settings">
       <summary>Configure Compass ranges</summary>
       <p>Choose each ring and its opacity. These choices remain saved while Compass ranges are off.</p>
@@ -216,7 +217,7 @@ async function updateUnseen(patch: Partial<CartographyPresetStyle["grid"]["unsee
         <RangeControl :label="`${range.label} opacity`" :value="settings[range.opacitySetting]" :min="0" :max="100" unit="%" @change="setRangeOpacity(range, $event)" />
       </div>
     </details>
-    <div class="feature-heading">
+    <div class="feature-heading" data-setting="cartographyOverlayEnabled">
       <label for="map-terrain"><strong>Walkable terrain</strong><small id="map-terrain-help">Shade areas you cannot walk on.</small></label>
       <ShortcutSetting v-if="shortcuts" action="cartography.walkability.toggle" :shortcuts="shortcuts" :api="api" :perform-save="performSave" />
       <input id="map-terrain" type="checkbox" aria-label="Walkable terrain" aria-describedby="map-terrain-help" :checked="settings.cartographyOverlayEnabled" @change="persist({ cartographyOverlayEnabled: ($event.currentTarget as HTMLInputElement).checked })" />
@@ -224,17 +225,17 @@ async function updateUnseen(patch: Partial<CartographyPresetStyle["grid"]["unsee
   </div>
   <h2 class="settings-subheading">Elite skills</h2>
   <div class="setting-group map-elite-skills">
-    <label><span><strong>Elite skill planner</strong><small>Adds the planner to the World Map and your Hunt list to the Mission Map.</small></span><input type="checkbox" aria-label="Elite skill planner" :checked="settings.eliteSkillsEnabled" @change="persist({ eliteSkillsEnabled: ($event.currentTarget as HTMLInputElement).checked })" /></label>
-    <label><span><strong>Mission Map markers</strong><small>What the Mission Map shows while you play. The Hunt list includes your target.</small></span><select aria-label="Mission Map markers" :value="settings.eliteMissionMapMarkers" :disabled="!settings.eliteSkillsEnabled" @change="persist({ eliteMissionMapMarkers: ($event.currentTarget as HTMLSelectElement).value as EliteMissionMapMarkers })"><option v-for="mode in ELITE_MISSION_MAP_MARKERS" :key="mode" :value="mode">{{ ELITE_MISSION_MAP_MARKER_LABELS[mode] }}</option></select></label>
+    <label data-setting="eliteSkillsEnabled"><span><strong>Elite skill planner</strong><small>Adds the planner to the World Map and your Hunt list to the Mission Map.</small></span><input type="checkbox" aria-label="Elite skill planner" :checked="settings.eliteSkillsEnabled" @change="persist({ eliteSkillsEnabled: ($event.currentTarget as HTMLInputElement).checked })" /></label>
+    <label data-setting="eliteMissionMapMarkers"><span><strong>Mission Map markers</strong><small>What the Mission Map shows while you play. The Hunt list includes your target.</small></span><select aria-label="Mission Map markers" :value="settings.eliteMissionMapMarkers" :disabled="!settings.eliteSkillsEnabled" @change="persist({ eliteMissionMapMarkers: ($event.currentTarget as HTMLSelectElement).value as EliteMissionMapMarkers })"><option v-for="mode in ELITE_MISSION_MAP_MARKERS" :key="mode" :value="mode">{{ ELITE_MISSION_MAP_MARKER_LABELS[mode] }}</option></select></label>
   </div>
   <h2 class="settings-subheading">Map appearance</h2>
   <div class="setting-group map-appearance">
-    <div class="map-style-choice map-style-actions"><label><span><strong>Style</strong><small>Used by both map layers.</small></span><select :value="`${settings.cartographyPresetLibrary.activePreset.kind}:${settings.cartographyPresetLibrary.activePreset.id}`" @change="selectPreset(($event.currentTarget as HTMLSelectElement).value)"><optgroup label="Built in"><option v-for="(preset, id) in CARTOGRAPHY_BUILTIN_PRESETS" :key="id" :value="`builtin:${id}`">{{ preset.name }}</option></optgroup><optgroup v-if="settings.cartographyPresetLibrary.customPresets.length" label="My styles"><option v-for="preset in settings.cartographyPresetLibrary.customPresets" :key="preset.id" :value="`custom:${preset.id}`">{{ preset.name }}</option></optgroup></select></label><button ref="customizeButton" class="secondary" @click="customize">{{ active?.custom ? 'Edit style' : 'Customize style' }}</button></div>
+    <div class="map-style-choice map-style-actions"><label data-setting="cartographyPresetLibrary"><span><strong>Map style</strong><small>Used by both map layers.</small></span><select :value="`${settings.cartographyPresetLibrary.activePreset.kind}:${settings.cartographyPresetLibrary.activePreset.id}`" @change="selectPreset(($event.currentTarget as HTMLSelectElement).value)"><optgroup label="Built in"><option v-for="(preset, id) in CARTOGRAPHY_BUILTIN_PRESETS" :key="id" :value="`builtin:${id}`">{{ preset.name }}</option></optgroup><optgroup v-if="settings.cartographyPresetLibrary.customPresets.length" label="My styles"><option v-for="preset in settings.cartographyPresetLibrary.customPresets" :key="preset.id" :value="`custom:${preset.id}`">{{ preset.name }}</option></optgroup></select></label><button ref="customizeButton" class="secondary" @click="customize">{{ active?.custom ? 'Edit style' : 'Customize style' }}</button></div>
     <div class="map-appearance-controls">
-    <div v-if="active" class="setting-row"><span><strong>Terrain border thickness</strong><small>0 hides the border. Changing a built-in style saves a custom copy.</small></span><RangeControl label="Terrain border thickness" :value="active.style.walkability.boundaryWidth" :min="0" :max="4" unit="px" @change="updateWalkability({ boundaryWidth: $event })" /></div>
-    <div class="setting-row"><span><strong>Grid opacity</strong></span><RangeControl label="Grid opacity" :value="settings.cartographyGridOpacity" :min="0" :max="100" unit="%" @change="persist({ cartographyGridOpacity: $event })" /></div>
-    <label><span><strong>Reveal range</strong><small>Outlines where to stand to reveal the remaining diamonds, and marks your range on the Compass.</small></span><select :value="settings.cartographyRevealMode" @change="persist({ cartographyRevealMode: ($event.currentTarget as HTMLSelectElement).value as LauncherSettings['cartographyRevealMode'] })"><option value="off">Off</option><option value="normal">Normal · 3×3</option><option value="birds-eye">Bird’s Eye · 7×7</option></select></label>
-    <div class="setting-row"><span><strong>Walkable terrain opacity</strong></span><RangeControl label="Walkable terrain opacity" :value="settings.cartographyWalkabilityOpacity" :min="0" :max="100" unit="%" @change="persist({ cartographyWalkabilityOpacity: $event })" /></div>
+    <div v-if="active" class="setting-row" data-setting="cartographyBoundaryWidth"><span><strong>Terrain border thickness</strong><small>0 hides the border. Changing a built-in style saves a custom copy.</small></span><RangeControl label="Terrain border thickness" :value="active.style.walkability.boundaryWidth" :min="0" :max="4" unit="px" @change="updateWalkability({ boundaryWidth: $event })" /></div>
+    <div class="setting-row" data-setting="cartographyGridOpacity"><span><strong>Grid opacity</strong></span><RangeControl label="Grid opacity" :value="settings.cartographyGridOpacity" :min="0" :max="100" unit="%" @change="persist({ cartographyGridOpacity: $event })" /></div>
+    <label class="setting-row" data-setting="cartographyRevealMode"><span><strong>Reveal range</strong><small>Outlines where to stand to reveal the remaining diamonds, and marks your range on the Compass.</small></span><select :value="settings.cartographyRevealMode" @change="persist({ cartographyRevealMode: ($event.currentTarget as HTMLSelectElement).value as InGameSettings['cartographyRevealMode'] })"><option value="off">Off</option><option value="normal">Normal · 3×3</option><option value="birds-eye">Bird’s Eye · 7×7</option></select></label>
+    <div class="setting-row" data-setting="cartographyWalkabilityOpacity"><span><strong>Walkable terrain opacity</strong></span><RangeControl label="Walkable terrain opacity" :value="settings.cartographyWalkabilityOpacity" :min="0" :max="100" unit="%" @change="persist({ cartographyWalkabilityOpacity: $event })" /></div>
     </div>
     <MapStylePreview v-if="active" :style="active.style" :grid-opacity="settings.cartographyGridOpacity" :terrain-opacity="settings.cartographyWalkabilityOpacity" />
   </div>
@@ -258,7 +259,7 @@ async function updateUnseen(patch: Partial<CartographyPresetStyle["grid"]["unsee
     </details>
   </div>
   <details class="setting-group compass-options"><summary>Compass controls</summary>
-    <div class="setting-row"><span><strong>Compass control visibility</strong><small>Visibility while the control is idle.</small></span><RangeControl label="Compass control visibility" :value="settings.cartographyControlIdleOpacity" :min="15" :max="100" unit="%" @change="persist({ cartographyControlIdleOpacity: $event })" /></div>
+    <div class="setting-row" data-setting="cartographyControlIdleOpacity"><span><strong>Compass control visibility</strong><small>Visibility while the control is idle.</small></span><RangeControl label="Compass control visibility" :value="settings.cartographyControlIdleOpacity" :min="15" :max="100" unit="%" @change="persist({ cartographyControlIdleOpacity: $event })" /></div>
   </details>
 
   <div class="setting-group map-library">

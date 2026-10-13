@@ -1,9 +1,9 @@
 <script setup lang="ts">
+import type { InGamePatch } from "../settings-host";
 import { nextTick, ref } from "vue";
-import type { LauncherSettingsPatch } from "@shared/launcher-contracts";
 import { isSkillKeyInput, skillKeyPresentation, withSkillKeyBinding, type SkillKeyBindings, type SkillKeyInput } from "@shared/skill-key-bindings";
 
-const props = defineProps<{ bindings: SkillKeyBindings; save: (patch: LauncherSettingsPatch) => Promise<void> }>();
+const props = defineProps<{ bindings: SkillKeyBindings; save: (patch: InGamePatch) => Promise<void> }>();
 const slot = ref<number | null>(null);
 const target = ref<HTMLElement | null>(null);
 const message = ref("");

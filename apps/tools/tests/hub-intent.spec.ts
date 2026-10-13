@@ -122,10 +122,10 @@ test('Travel and Settings restore their own state after a temporary hide', async
   await page.getByRole('button', { name: 'Home', exact: true }).click();
   await search.fill('settings'); await search.press('Enter');
   await page.getByRole('button', { name: 'Appearance', exact: true }).click();
-  await page.getByLabel('Panel style', { exact: true }).focus();
+  await page.locator('[data-setting="uiStyle"] select').focus();
   await page.evaluate(() => window.dispatchEvent(new Event('blur')));
   await page.getByRole('button', { name: 'Open Hub', exact: true }).click();
-  await expect(page.getByLabel('Panel style', { exact: true })).toBeFocused();
+  await expect(page.locator('[data-setting="uiStyle"] select')).toBeFocused();
   await page.keyboard.press('Meta+r');
   await search.fill('team gom afk'); await page.keyboard.press('Meta+j');
   await page.getByRole('menuitem', { name: /Set search phrase/ }).click();
@@ -160,8 +160,7 @@ test('Hub placement survives reload, stays locked, and resets durably', async ({
   await page.setViewportSize({ width: 360, height: 500 });
   await expect(page.getByRole('button', { name: 'Close Hub', exact: true })).toBeInViewport();
   const search = page.locator('.hub-search input');
-  await search.fill('settings'); await search.press('Enter');
-  await page.getByRole('button', { name: 'Appearance', exact: true }).click();
+  await search.fill('hub preferences'); await search.press('Enter');
   await page.getByRole('button', { name: 'Reset Hub position', exact: true }).click();
   expect(await page.evaluate(() => localStorage.getItem('gwonmac.hub-window-placement'))).toBeNull();
   await page.reload(); await expect(panel).not.toHaveAttribute('style', /transform: none/);
@@ -282,7 +281,8 @@ test('the phrase editor refuses a phrase that is already another result’s name
   await expect(page.getByRole('alert')).toHaveText('“romi” already finds Romi. Choose another phrase.');
   await page.keyboard.press('Meta+Backspace');
   await search.fill('maps');
-  await expect(page.locator('#hub .hub-row')).toHaveCount(1);
+  // The Maps tool is the one answer; its setting rows only follow it.
+  await expect(page.locator('#hub .hub-row:not([data-id^="setting"])')).toHaveCount(1);
   await expect(page.locator('#hub .hub-row[aria-selected="true"]')).toHaveAttribute('data-id', 'maps');
 });
 
