@@ -14,6 +14,7 @@ import {
   launchOfflineAt,
   root,
   openSettings,
+  stopElectron,
 } from "./fixtures.mjs";
 
 declare global {
@@ -86,7 +87,7 @@ for (const scenario of ["multi", "mixed", "interrupted"] as const) {
         path.join(fixture.userData, "launcher-state.json"),
       );
 
-      await fixture.app.close();
+      await stopElectron(fixture.app);
       restarted = await launchOfflineAt(fixture.userData, {
         GW_TEST_RETURN_LAUNCHER: "1",
       });
@@ -131,7 +132,7 @@ test("corrupt launcher preferences recover conservatively and remain visible acr
     expect(backupName).toBeTruthy();
     expect(await readFile(path.join(fixture.userData, backupName!))).toEqual(corruptBytes);
 
-    await fixture.app.close();
+    await stopElectron(fixture.app);
     restarted = await launchOfflineAt(fixture.userData, {
       GW_TEST_RETURN_LAUNCHER: "1",
     });
@@ -142,7 +143,7 @@ test("corrupt launcher preferences recover conservatively and remain visible acr
     await expect(restarted.page.getByText("Your existing account is ready.")).toBeVisible();
     await restarted.page.getByRole("button", { name: "Dismiss" }).click();
 
-    await restarted.app.close();
+    await stopElectron(restarted.app);
     acknowledged = await launchOfflineAt(fixture.userData, {
       GW_TEST_RETURN_LAUNCHER: "1",
     });
@@ -537,7 +538,7 @@ test("the account workspace survives a full application restart", async () => {
     await first.page.getByLabel("Name").fill("Second account");
     await first.page.getByRole("button", { name: "Add account", exact: true }).last().click();
     await expect(first.page.getByRole("heading", { name: "Second account", exact: true })).toBeVisible();
-    await first.app.close();
+    await stopElectron(first.app);
 
     restarted = await launchOfflineAt(first.userData, {
       GW_TEST_RETURN_LAUNCHER: "1",
@@ -575,7 +576,7 @@ test("global map settings live in the launcher and survive restart", async () =>
     const beforeRestart = await first.page.evaluate(() => window.launcherNative.state.get());
     expect(beforeRestart.settings.cartographyGridEnabled).toBe(true);
     expect(beforeRestart.settings.cartographyPresetLibrary.activePreset.kind).toBe("custom");
-    await first.app.close();
+    await stopElectron(first.app);
 
     restarted = await launchOfflineAt(first.userData, {
       GW_TEST_RETURN_LAUNCHER: "1",

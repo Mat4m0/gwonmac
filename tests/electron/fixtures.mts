@@ -186,7 +186,27 @@ async function waitForExit(
   });
 }
 
-async function stopElectron(app: ElectronApplication): Promise<void> {
+/**
+ * Playwright starts Electron as the leader of its own process group and forgets the
+ * app only when its output pipes close. Killing the main process alone leaves the
+ * GPU, renderer and utility helpers holding those pipes until they notice, which
+ * under load outlasts Playwright's 30 s worker teardown. So kill the whole group.
+ */
+function killProcessGroup(child: ReturnType<ElectronApplication["process"]>): void {
+  if (child.pid === undefined) return;
+  try {
+    process.kill(-child.pid, "SIGKILL");
+  } catch {
+    // ESRCH: every process in the group has already exited.
+  }
+}
+
+/**
+ * Stops an app and keeps its user data, for a restart in the same test. Playwright's
+ * `app.close()` has taken 54 s to return on a loaded machine, so this bounds it and
+ * kills the app after 5 s.
+ */
+export async function stopElectron(app: ElectronApplication): Promise<void> {
   let child: ReturnType<ElectronApplication["process"]>;
   try {
     child = app.process();
@@ -205,11 +225,9 @@ async function stopElectron(app: ElectronApplication): Promise<void> {
       () => finish(false),
     );
   });
-  if (!closed && child.exitCode === null && child.signalCode === null) {
-    child.kill("SIGKILL");
-  }
+  if (!closed) killProcessGroup(child);
   if (await waitForExit(child, 5_000)) return;
-  if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+  killProcessGroup(child);
   if (!(await waitForExit(child, 5_000))) {
     throw new Error("Electron process did not exit after SIGKILL");
   }
