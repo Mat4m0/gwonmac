@@ -102,7 +102,7 @@ describe("ToolsApp shell and library", () => {
     await wrapper.get("#builds-library-tab").trigger("click");
     await wrapper.get('input[type="search"]').setValue("not in this library");
     expect(wrapper.text()).toContain("No matches");
-    expect(wrapper.text()).toContain("0 of 8 builds");
+    expect(wrapper.text()).toContain("0 of 9 builds");
     expect(wrapper.text()).toContain("Clear filters");
     wrapper.unmount();
   });
