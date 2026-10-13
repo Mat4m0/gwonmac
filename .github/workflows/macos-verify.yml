@@ -96,7 +96,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
-      - run: pnpm tools:test:e2e --shard=${{ matrix.shard }}/4 --grep-invert @mac-editing
+      - run: pnpm tools:test:e2e --shard=${{ matrix.shard }}/4 --grep-invert @macos
       - name: Upload failure evidence
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -153,11 +153,12 @@ jobs:
           pnpm test:electron -g "on an input reset|renderer recovery" --repeat-each=20 --max-failures=0 || true
           kill $(jobs -p)
       - run: pnpm test:electron --shard=${{ matrix.shard }}/2
-      # Chromium applies Mac text-editing shortcuts (⌘⌫, ⌘←) only on macOS, so
-      # the Hub specs that check them run here instead of on the Linux shards.
-      - name: Hub Mac text-editing specs
+      # Hub specs tagged @macos need a Mac: Chromium applies text-editing
+      # shortcuts (⌘⌫, ⌘←) only on macOS, and time budgets are set for the Macs
+      # the app ships on. They run here instead of on the Linux shards.
+      - name: Hub specs that need macOS
         if: matrix.shard == 2
-        run: pnpm tools:test:e2e --grep @mac-editing
+        run: pnpm tools:test:e2e --grep @macos
       - name: Upload failure evidence
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
