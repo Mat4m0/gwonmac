@@ -652,6 +652,7 @@ test("runtime package entries and audit exceptions stay explicit", () => {
   assert.deepEqual(
     workspace.match(/GHSA-[a-z0-9-]+/gu),
     [
+      "GHSA-587h-7wmj-h5pm",
       "GHSA-w3rx-r6r6-pgpr",
       "GHSA-5p2g-fcmc-qvqq",
       "GHSA-g7r4-m6w7-qqqr",

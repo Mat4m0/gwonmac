@@ -37,8 +37,11 @@ overrides:
   tinypool: 2.2.0
   shell-quote: 1.12.0
   sharp: 0.35.5
-  "@modelcontextprotocol/sdk": 1.31.0
+  "@modelcontextprotocol/sdk": 1.32.1
   source-map-js: 1.2.2
+  launch-editor: 2.14.2
+  devalue: 5.9.3
+  "vite@<8.1.6": 8.3.5
 packageExtensions:
   "@nuxt/scripts@0.13.4":
     dependencies:
@@ -57,6 +60,12 @@ allowBuilds:
 # repository-owned PNG background and copies the ICNS icon without parsing it.
 auditConfig:
   ignoreGhsas:
+    # vite-plus 0.1.24 is the website's own pinned toolchain. Its local dev
+    # server can reveal whether a path exists through the open-in-editor
+    # endpoint. Only maintainers run that server locally; the app and the
+    # published website never ship it. The fix needs vite-plus 1.x. Remove
+    # this exception when the website moves to vite-plus >=1.0.1.
+    - GHSA-587h-7wmj-h5pm
     - GHSA-w3rx-r6r6-pgpr
     - GHSA-5p2g-fcmc-qvqq
     # The affected esbuild serve-directory path exists only on Windows. Owned
