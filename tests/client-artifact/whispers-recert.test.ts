@@ -20,6 +20,8 @@ test("whisper certification binds the current sender, copier and observer encode
   const october = [
     "266b5a8aa88fe6440b10737d3eda27f4ceae2401d51d263debc0bca5c2075d87",
     "f4e529f9c9b6b6a1dfd3e0e7c8d8c518a48c45d8a9a526d89512b5e9c37c075e",
+    // The same-day October 22 rebuild.
+    "3dc01a8295d179450b16e2059ad056d4062fcad01e79ddae834bb2028596102b",
   ];
   const functions = october.includes(result.officialSha256)
     ? [358, 11744, 11742, 8847, 5779, 5865, 5871, 7879]

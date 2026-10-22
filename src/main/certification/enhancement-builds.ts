@@ -19,7 +19,7 @@ export * from "./enhancement-build-model.js";
 // original table size and every data address below are certified separately for
 // each template-save output. The semantic roles use these reviewed facts as
 // evidence or regression expectations, not as a launch allowlist.
-export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
+const REVIEWED_BUILDS: readonly KnownEnhancementBuild[] =
   Object.freeze([
     Object.freeze({
       sha256:
@@ -1467,18 +1467,18 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
     Object.freeze({
       sha256: "c32b9ec13dc3d64fb50623bfd042e43ebddd8fa60f4090c508da73a2330af686",
       outputSha256: Object.freeze({
-        "features-3fffff": "cde8e22c07edb17e34b634d539ee48b689b49f31dfeead0763de3c1dcbf7a1e0",
-        "features-01": "f1f9ed27ec2d094a6d4f3741b82da34530aaa597add4399ecfcbb305a3b5bc33",
-        "features-e01": "141b6a7ac1d9932947d56517f9054a9deb0b442411656431ae93002dbb1af5a1",
-        "features-601": "05b123559aeb8e810687fdddaf744efd2204f1c979683619f3163d0ccf52ef44",
-        "features-200": "ab613e6b0317ed590f50bf9cebf336ad363cd39cda7f93bd6e20b8953451c401",
-        "features-202": "f0f8173101936019ca32cbdf888c2e5b2cac971bc3c224db8f9e8098960e08ef",
-        "features-284": "f18a802386e319353c8e991c0e78cc03cc1f308dcec9bd40904a2ec39b10cf0a",
-        "features-285": "be662ac187efc0f933deab65ce8d667f04bd83010b33b61cee517982ff42164a",
-        "features-270": "8efa044c3afd28e782780b723b75e4ea61a55d611051df082171138a6b6dc9fa",
-        "features-2fc": "11cbd848feefb824a2cf13eb7846f689bdcc827848331e030da5ab4211f77dba",
-        "features-c200": "3d90edcfa64d5f41844e441a2e914b4d1b47f24f2866da3bc09af6a2a182495a",
-        "features-c204": "632f434f07ef4e48d98f915f26ad5013977aa8c854ad35384d282f1eb88e65e8",
+        "features-fffff": "ca91c248d9fda2696a68efe6c6ae6b946b7186ee950f27f10785ec264a8ca89b",
+        "features-01": "9b57022d665510af2fd2296678b2da442aff0081e66f3fc702d7106057818845",
+        "features-e01": "f804b49835dcca5822852aeee31f16a722f679593ec14ee54136a67d7f08e704",
+        "features-601": "e6c257ed7657c00622779c0a36fd017c9f9d61b9206ac80393f90ceef412d554",
+        "features-200": "f8a475b864d932dbadf1a2b40f46f96c06404d7702e6d54820116832774141d7",
+        "features-202": "b11172bf3a3e39770a432f03d449b1af79942119982d31019f74c89e2930d528",
+        "features-284": "e87f20f4176ab4cb4478c0f440e4b7580b5f61903c58607d95b2c87282adb6bd",
+        "features-285": "06fce1628c6f6f76ce0afc5e36144516eaf241fa6a0193e2f2f2b0c3704be64e",
+        "features-270": "0f64a4e06b33c6cc3b6fca6a2104b31739b5d4d787f4a2ce3766c8f89ca9b6be",
+        "features-2fc": "9da747d114d3ccfee71fa5d16e97fd95584975ddd23499ed46bd60b9038bb663",
+        "features-c200": "c14a9d4f477542eff2e2222232ecf0f7546c9f80b58254d59181a583277b337d",
+        "features-c204": "b61e3c1709b5ca3c1b5c9b20de6d13f13e527a9f54b28d2f79c7ad063041ee1c",
       }),
       programId: 1,
       buildId: 4108659193,
@@ -1727,82 +1727,6 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
           params: Object.freeze(["i32", "i32"] as const),
           results: Object.freeze([] as const),
           bodySha256: "3317e78afc6f79ebe49e205870dd7776c79856917cd6865a6e0ff1a87a5195e2",
-        }),
-      }),
-      // Each accessor returns `WorldContext + offset` (or a stride-indexed row),
-      // so its exact body is the proof of the layout word beside it. The four
-      // AreaInfo row fields were checked against Kamadan, Kaineng Center and
-      // Embark Beach and ride on the AreaInfo accessor's stride and bound.
-      progressObservation: Object.freeze({
-        layout: Object.freeze({
-          worldMissionsCompleted: 0x5cc,
-          worldMissionsBonus: 0x5dc,
-          worldMissionsCompletedHm: 0x5ec,
-          worldMissionsBonusHm: 0x5fc,
-          worldVanquishedAreas: 0x83c,
-          worldTitles: 0x81c,
-          titleStride: 0x2c,
-          titleProps: 0,
-          titlePoints: 4,
-          areaInfoThumbnail: 0x14,
-          areaInfoX: 0x40,
-          areaInfoY: 0x44,
-          areaInfoName: 0x74,
-          areaInfoIcon: 0x48,
-        }),
-        accessors: Object.freeze({
-          missionsCompleted: Object.freeze({
-            functionIndex: 9189,
-            params: Object.freeze([] as const),
-            results: Object.freeze(["i32"] as const),
-            bodySha256: "55083539f7b4cc9735798476c6f1f41132a880f05fe0f80735c3d88df24a5fb4",
-          }),
-          missionsBonus: Object.freeze({
-            functionIndex: 9190,
-            params: Object.freeze([] as const),
-            results: Object.freeze(["i32"] as const),
-            bodySha256: "b2c8c1c5c29e3d65ee2146c6188a3b424edf312b1aa0f09a33bde70882553835",
-          }),
-          missionsCompletedHm: Object.freeze({
-            functionIndex: 9186,
-            params: Object.freeze([] as const),
-            results: Object.freeze(["i32"] as const),
-            bodySha256: "9f2fc258978975797eaaea36847eca28e5cea7b301acd36e9c3b49e3659909c9",
-          }),
-          missionsBonusHm: Object.freeze({
-            functionIndex: 9187,
-            params: Object.freeze([] as const),
-            results: Object.freeze(["i32"] as const),
-            bodySha256: "2400ea801789bf303891d69663d1ddd898ca9f40edb34bd0902af7e9a924244d",
-          }),
-          vanquishedAreas: Object.freeze({
-            functionIndex: 9192,
-            params: Object.freeze([] as const),
-            results: Object.freeze(["i32"] as const),
-            bodySha256: "2156f57faba6be2669bd8eef6742a4f03e97c11f54fef48ce6551a5c364637d0",
-          }),
-          titlePoints: Object.freeze({
-            functionIndex: 9307,
-            params: Object.freeze(["i32"] as const),
-            results: Object.freeze(["i32"] as const),
-            bodySha256: "a5c1bba06bf15728f177f452f266184ae622085f78ad344baed6c3e5a7133bc6",
-          }),
-          areaInfo: Object.freeze({
-            functionIndex: 17518,
-            params: Object.freeze(["i32"] as const),
-            results: Object.freeze(["i32"] as const),
-            bodySha256: "081506484a3019e40c1a934f95f88ff3911d70640c0f446afc6c3a3fb4975e5e",
-          }),
-        }),
-      }),
-      // The producer's `chat.valid-message` call (TextValidateCoded). Local chat
-      // lines call it first: the producer asserts on any line it rejects.
-      chatPrint: Object.freeze({
-        validator: Object.freeze({
-          functionIndex: 5881,
-          params: Object.freeze(["i32"] as const),
-          results: Object.freeze(["i32"] as const),
-          bodySha256: "1f58a402e2b2807caee4c761a61f62b060ea2c65af33eee7530f2191c727cf34",
         }),
       }),
       partyObservation: Object.freeze({
@@ -2284,6 +2208,35 @@ export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] =
       }),
     }),
   ]);
+
+const OCTOBER_22_BUILD = REVIEWED_BUILDS.find((build) =>
+  build.sha256 === "c32b9ec13dc3d64fb50623bfd042e43ebddd8fa60f4090c508da73a2330af686")!;
+
+export const ENHANCEMENT_BUILDS: readonly KnownEnhancementBuild[] = Object.freeze([
+  ...REVIEWED_BUILDS,
+  // ArenaNet rebuilt the October 22 client the same day. Only two constant
+  // getters, one initialized-data block and the build ID changed, so every
+  // reviewed fact carries over; the exact identity and outputs are its own.
+  Object.freeze({
+    ...OCTOBER_22_BUILD,
+    sha256: "f5a3c6aa1ccc2613e3593dc3e4a188c2313f8134d2262f2173dae608fb5ee82f",
+    outputSha256: Object.freeze({
+      "features-fffff": "3a58963158af522d828dea841b8d56ae03ee0c11fc6c34898102940b19cecf31",
+      "features-01": "e291e608cd13115aeb9c970070c58939ab43e5529044477fdc4f8e66397468a8",
+      "features-e01": "6b6d93ec2b0eca86039003187ca61bfd1eeab733c93c85090b02344bda240589",
+      "features-601": "c6cc93f9764a9fa41aa45df90ff12f449b028f1649ad4940f34f6da27f55dbc9",
+      "features-200": "15df185cefeb7b6019648e6b6a9a6e47c83cd625ad5e794eadb6506520a7a585",
+      "features-202": "4e02f937713bc1d1a62aebe9edd24407f850c8873ed506feda444cd156aeea8f",
+      "features-284": "f2ee0a4b3fe83d33ae7fdbaac1eea23606d1108c3f4c00af198502bbcc298847",
+      "features-285": "2d7ab744e4364ee1f2ccd02a81fbffb8a0a63c52d515156e593e23e31a78b875",
+      "features-270": "a835e5016d936340154f5ccb56c038dfc023c7f960c9f2592b855ad00816296b",
+      "features-2fc": "2bb071ea17155ff475890483904c47ef5a6cbc1ad35c660c0b7cc4e793ea60dd",
+      "features-c200": "4f31a67040edb316f477bf0db4caeb1703e6a0bbce231c865b5ae2f9e19f2625",
+      "features-c204": "de71ae93a99b7093246ddb4e0328ae33ae504d60eb45bcce99ca21b0645b5137",
+    }),
+    buildId: 0x3dc01a82,
+  }),
+]);
 
 export function findEnhancementBuild(
   sha256: string,

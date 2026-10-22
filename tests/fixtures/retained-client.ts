@@ -30,6 +30,26 @@ const AUGUST: RetainedClient = {
   moved: {}, addresses: {},
 };
 
+const OCTOBER_22: RetainedClient = {
+  memoryLayout: "october22",
+  graphicsDevice: 2744952, modelTypeOffset: 1341088, underMouse: 5921340,
+  compassOwner: 15736, worldVisibilityOwner: 15905,
+  missionDispatcher: 16123, missionTableSlot: 4004,
+  worldDispatcher: 16210, worldTableSlot: 4150,
+  gameplayContext: 13533,
+  moved: {
+    13125: 13096, 13162: 13133, 14063: 14036, 14112: 14085,
+    14116: 14089, 14126: 14099, 14132: 14105, 14137: 14110,
+    14147: 14120, 16125: 16112, 16136: 16123, 16170: 16157,
+    16224: 16211, 17640: 17628, 17791: 17779, 17793: 17781,
+  },
+  addresses: {
+    5913696: 5923952, 5913576: 5923832, 5913568: 5923824,
+    5910124: 5920364, 5910128: 5920368, 5913680: 5923936,
+    5913684: 5923940, 5913688: 5923944, 1420256: 1420176,
+  },
+};
+
 const CLIENTS: Readonly<Record<string, RetainedClient>> = {
   "266b5a8aa88fe6440b10737d3eda27f4ceae2401d51d263debc0bca5c2075d87": {
     memoryLayout: "october",
@@ -50,25 +70,9 @@ const CLIENTS: Readonly<Record<string, RetainedClient>> = {
       5913684: 5923620, 5913688: 5923624, 1420256: 1420176,
     },
   },
-  "f4e529f9c9b6b6a1dfd3e0e7c8d8c518a48c45d8a9a526d89512b5e9c37c075e": {
-    memoryLayout: "october22",
-    graphicsDevice: 2744952, modelTypeOffset: 1341088, underMouse: 5921340,
-    compassOwner: 15736, worldVisibilityOwner: 15905,
-    missionDispatcher: 16123, missionTableSlot: 4004,
-    worldDispatcher: 16210, worldTableSlot: 4150,
-    gameplayContext: 13533,
-    moved: {
-      13125: 13096, 13162: 13133, 14063: 14036, 14112: 14085,
-      14116: 14089, 14126: 14099, 14132: 14105, 14137: 14110,
-      14147: 14120, 16125: 16112, 16136: 16123, 16170: 16157,
-      16224: 16211, 17640: 17628, 17791: 17779, 17793: 17781,
-    },
-    addresses: {
-      5913696: 5923952, 5913576: 5923832, 5913568: 5923824,
-      5910124: 5920364, 5910128: 5920368, 5913680: 5923936,
-      5913684: 5923940, 5913688: 5923944, 1420256: 1420176,
-    },
-  },
+  "f4e529f9c9b6b6a1dfd3e0e7c8d8c518a48c45d8a9a526d89512b5e9c37c075e": OCTOBER_22,
+  // The same-day rebuild changed no fixture index or address.
+  "3dc01a8295d179450b16e2059ad056d4062fcad01e79ddae834bb2028596102b": OCTOBER_22,
 };
 
 export function retainedClientFixture(input: Uint8Array) {
