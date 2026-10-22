@@ -527,7 +527,17 @@ export const semanticRole = (
   spans: readonly RelocationSpan[],
   params: readonly string[],
   results: readonly string[],
-): SemanticRole => Object.freeze({ bodyLength, fingerprint, spans, params, results });
+  reviewedVariants: readonly string[] = [],
+): SemanticRole => Object.freeze({
+  bodyLength,
+  fingerprint,
+  ...(reviewedVariants.length > 0
+    ? { reviewedVariants: Object.freeze([...reviewedVariants]) }
+    : {}),
+  spans,
+  params,
+  results,
+});
 
 export function functionBody(module: ModuleShape, functionIndex: number): Uint8Array {
   const body = module.bodies[functionIndex - module.functionImportCount];
@@ -555,8 +565,10 @@ export function signatureMatches(
 }
 
 export function bodyMatchesRole(body: Uint8Array, role: SemanticRole): boolean {
-  return body.byteLength === role.bodyLength
-    && relocationAwareFingerprint(body, role.spans) === role.fingerprint;
+  if (body.byteLength !== role.bodyLength) return false;
+  const fingerprint = relocationAwareFingerprint(body, role.spans);
+  return fingerprint === role.fingerprint
+    || (role.reviewedVariants?.includes(fingerprint) ?? false);
 }
 
 export function uniqueRoleFunction(module: ModuleShape, role: SemanticRole): number | null {

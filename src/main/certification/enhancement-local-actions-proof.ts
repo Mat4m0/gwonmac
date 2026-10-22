@@ -167,6 +167,8 @@ const GAME_THREAD_DRAIN_ROLE = semanticRole(
   ]),
   ["i32", "i32"],
   [],
+  // October 22 client: identical body; one reviewed callee index moved.
+  ["e97bf7c3b2f0e47b07f1cde77500e509a88ec364a94fec0980ea3862ce04b7ca"],
 );
 
 const CHAT_ALIASES_ROLE = semanticRole(
@@ -226,6 +228,8 @@ const UI_DISPATCHER_ROLE = semanticRole(
   ]),
   ["i32", "i32", "i32"],
   [],
+  // October 22 client: same body; the assertion source line moved (3901 -> 3907).
+  ["bd1a37645f311cea53ba09df62c09c40a1c67aa3c7f61faf5694d5b5f1ca06ce"],
 );
 
 const TRAVEL_PRODUCER_ROLE = semanticRole(
@@ -337,7 +341,10 @@ const XUNLAI_AGENT_READER_ROLES = [
 const XUNLAI_AREA_TYPE_READER_ROLES = [
   XUNLAI_AREA_TYPE_READER_ROLE,
   semanticRole(362, "0c2c573245b37ef4f38986a791bccd3f7700c82b3f6cfb5d9173748d8d63a599",
-    XUNLAI_AREA_TYPE_READER_ROLE.spans, ["i32"], ["i32"]),
+    XUNLAI_AREA_TYPE_READER_ROLE.spans, ["i32"], ["i32"],
+    // October 22 client: one callee moved; the area-type bound follows the
+    // reviewed area table (1465 -> 1477).
+    ["031c32b077f941074c67c0c0d4215a1694e8ddf0ed51463c51a1093b768f44bb"]),
 ];
 const TRAVEL_UNLOCK_CONSUMER_ROLES = [
   TRAVEL_UNLOCK_CONSUMER_ROLE,
@@ -360,7 +367,12 @@ const HERO_PANEL_ROLES = [
   semanticRole(181, "42027129007fdd8ffb7dd34e79a3ad8a5ed0126f857ab48dfa77224170c857fa", [{"start": 78, "end": 83, "role": "panel.pack", "addressClass": "function-index"}, {"start": 141, "end": 146, "role": "panel.ui", "addressClass": "function-index"}, {"start": 163, "end": 168, "role": "panel.ui", "addressClass": "function-index"}], ["i32", "i32"], []),
   semanticRole(181, "920bdcddd2e428f6263519e2dfbb314dd7f73439e0f2b6defdfe10c0b29b7d7e", [{"start": 78, "end": 83, "role": "panel.pack", "addressClass": "function-index"}, {"start": 141, "end": 146, "role": "panel.ui", "addressClass": "function-index"}, {"start": 163, "end": 168, "role": "panel.ui", "addressClass": "function-index"}], ["i32", "i32"], []),
 ];
-const HERO_PANEL_PACKER_HASHES = ["b107cbd1f2b0c9596df848b19cab8219285e6f4ff45bb5d3bd06cd3d643afe57", "10aaa2a03010eea192af9f03466665a3036ecd2dc6b94ebe8ff8bdbc9471ba9e"];
+const HERO_PANEL_PACKER_HASHES = [
+  "b107cbd1f2b0c9596df848b19cab8219285e6f4ff45bb5d3bd06cd3d643afe57",
+  "10aaa2a03010eea192af9f03466665a3036ecd2dc6b94ebe8ff8bdbc9471ba9e",
+  // October 22 client: same packer; only assertion string pointers moved.
+  "46b73500a7f2d248c607d281f91c3fb6b9337297c1f6fd71dc831f10efdc865b",
+];
 
 function deriveHeroPanelMessages(module: ModuleShape, dispatcher: number) {
   const candidate = uniqueRoleVariant(module, HERO_PANEL_ROLES);

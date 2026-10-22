@@ -95,6 +95,8 @@ function preGameProofFamily(family: "main" | "august" | "october") {
     ]),
     ["i32", "i32", "i32", "i32", "i32", "i32"],
     ["i32"],
+    // October 22 client: identical body; one reviewed callee index moved.
+    ["d163b9fd10495ddd5fae4947a468532425290ee316ba66190e59e91b7471d5a0"],
   );
 
   const FRAME_HASH_READER_SHA256 =
