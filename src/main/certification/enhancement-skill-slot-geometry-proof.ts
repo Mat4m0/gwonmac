@@ -30,13 +30,17 @@ import { isDeepStrictEqual } from "node:util";
 const SKILL_SLOT_CONSTRUCTOR_ROLE = semanticRole(137,
   "c6e2c7620ad7fc34a4ed78c716639e648755cf8010a73a03eade8873e202cb4e",
   [{ start: 38, end: 43, role: "frame.file", addressClass: "immutable-data" }],
-  ["i32", "i32", "i32", "i32", "i32", "i32"], ["i32"]);
+  ["i32", "i32", "i32", "i32", "i32", "i32"], ["i32"],
+  // October 22 client: identical body; one reviewed callee index moved.
+  ["c4edab6f9b07609efbb005194c4bf075b504c0da552637acf79c6b8805aa3013"]);
 const SKILL_SLOT_ALLOCATOR_ROLE = semanticRole(359,
   "c42147cced310b1a2caffa8c91e6a824f156ce274c413a5033fa233598a64b7c",
   [
     { start: 277, end: 282, role: "allocator.assertion", addressClass: "immutable-data" },
     { start: 283, end: 288, role: "allocator.file", addressClass: "immutable-data" },
-  ], ["i32", "i32", "i32", "i32", "i32"], ["i32"]);
+  ], ["i32", "i32", "i32", "i32", "i32"], ["i32"],
+  // October 22 client: identical body; four reviewed callee indices moved.
+  ["cd19729848a8981a6c93b2e6df14d8c65a6b9861557319b876b27e176e8bb2d3"]);
 const SKILL_SLOT_REGISTRAR_ROLE = semanticRole(360,
   "b9b40600c58634730684ebf668a33af0c500f99c7e6e4c113e131e0692730e94",
   [

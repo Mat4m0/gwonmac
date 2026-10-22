@@ -139,7 +139,10 @@ const TARGET_SELECTOR_ROLES = [
     { start: 611, end: 616, role: "target.assert-file", addressClass: "immutable-data" },
     { start: 661, end: 666, role: "target.manual", addressClass: "mutable-static" },
     { start: 672, end: 677, role: "target.automatic", addressClass: "mutable-static" },
-  ], ["i32", "i32"], []),
+  ], ["i32", "i32"], [],
+  // October 22 client: identical control flow; the related target fields
+  // moved with the shared observation storage.
+  ["3789c63f2f9c7189d49ac9d02ba40a7c555fb5f07027d34c6872ff079ee97d16"]),
 ];
 const TARGET_CALLER_ROLES = [
   TARGET_CALLER_ROLE,
@@ -194,6 +197,12 @@ const AREA_TABLE_CERTIFICATES = Object.freeze([
     sentinelRows: 595,
     lookupFingerprint: "bd4e7ffc1a5f105cac4588c61229977f7617d871438ce8c604feff9a39b4e0db",
     normalizedTableSha256: "5bcfe11516ffb36ada1f259e55d4390443cb2d45e0d1d1886167920dbbb19019",
+    // October 22 client: same layout and bound. Content changed only in the
+    // default of field 56 (1465 -> 1477, a count-style sentinel like field 60)
+    // and two text identifiers of row 886. No proved field reads either.
+    reviewedTableSha256: Object.freeze([
+      "8f473df78116172e5f6f4c4cc4e6a6bc1e02cadbd7d592eaa2da60e633106df2",
+    ]),
   }),
 ]);
 
@@ -525,10 +534,16 @@ export function derivePlayRegionLayout(
       sentinelRows += 1;
     }
   }
+  const tableSha256 = createHash("sha256").update(normalizedTable).digest("hex");
+  const reviewedTables: readonly string[] = [
+    lookup.certificate.normalizedTableSha256,
+    ...("reviewedTableSha256" in lookup.certificate
+      ? lookup.certificate.reviewedTableSha256
+      : []),
+  ];
   if (
     sentinelRows !== lookup.certificate.sentinelRows
-    || createHash("sha256").update(normalizedTable).digest("hex")
-      !== lookup.certificate.normalizedTableSha256
+    || !reviewedTables.includes(tableSha256)
   ) return null;
 
   return verifyLayout(observation, {
