@@ -31,6 +31,13 @@ const CHAT_PATHS = Object.freeze([
     sender: Object.freeze({ functionIndex: 7879,
       params: Object.freeze(["i32", "i32"] as const), results: Object.freeze([] as const),
       bodySha256: "3947df1c888113fe94a12fea2f3d500387b71f2e56b8ddf970d571621248b584" }) },
+  // October 22: the October path renumbered; bodies differ only in reviewed
+  // callee indices and relocated operands.
+  { editor: [13691, "1db8ba05f768aac797e225582b746434ca4b75d565d94aad4c3814afc3bd6af6"],
+    history: [7887, "f4649cdc08d2f6cec6d2719956745aabd769ef5787dba529cc476457de2daa66"],
+    sender: Object.freeze({ functionIndex: 7879,
+      params: Object.freeze(["i32", "i32"] as const), results: Object.freeze([] as const),
+      bodySha256: "3947df1c888113fe94a12fea2f3d500387b71f2e56b8ddf970d571621248b584" }) },
 ] as const);
 
 export function isResignNativeSender(value: unknown): boolean {

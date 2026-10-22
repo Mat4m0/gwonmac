@@ -169,11 +169,11 @@ for (const channel of ["cooldowns", "keys", "effects"] as const) {
   u(laterPanel + 32, 18100); u(laterPanel + 40, 1); u(18100, 19004); u(18108, 1); u(19004, 779);
   u(stockKey, 1); u(stockKey + 184, 6); u(stockKey + 188, 53); u(stockKey + 296, frame + 296);
   u(stockKey + 28, 19400); u(19404, 780); // Stock keycap uses the implicit draw, without layer slots.
-  u((clientFixture.memoryLayout === "october" ? 5923632 : 5913696), 1); u((clientFixture.memoryLayout === "october" ? 5923512 : 5913576), 4); u((clientFixture.memoryLayout === "october" ? 5923504 : 5913568), 4800); u(4800, frame); u(4804, veil); u(4808, stockKey); u(4812, laterPanel);
-  f((clientFixture.memoryLayout === "october" ? 5920060 : 5910124), 1024); f((clientFixture.memoryLayout === "october" ? 5920064 : 5910128), 768);
-  u((clientFixture.memoryLayout === "october" ? 5923616 : 5913680), 8000); u((clientFixture.memoryLayout === "october" ? 5923620 : 5913684), 16); u((clientFixture.memoryLayout === "october" ? 5923624 : 5913688), 16);
+  u(clientFixture.address(5913696), 1); u(clientFixture.address(5913576), 4); u(clientFixture.address(5913568), 4800); u(4800, frame); u(4804, veil); u(4808, stockKey); u(4812, laterPanel);
+  f(clientFixture.address(5910124), 1024); f(clientFixture.address(5910128), 768);
+  u(clientFixture.address(5913680), 8000); u(clientFixture.address(5913684), 16); u(clientFixture.address(5913688), 16);
   for (let n = 0; n < 16; n++) { u(8000 + n * 16, 9000 + n * 256); u(8004 + n * 16, 64); }
-  [0, 3, 1710, 1711, 4, 8, 1712, 1713, 9, 9, 1710, 1711].forEach((v, n) => u((clientFixture.memoryLayout === "october" ? 1420176 : 1420256) + n * 4, v));
+  [0, 3, 1710, 1711, 4, 8, 1712, 1713, 9, 9, 1710, 1711].forEach((v, n) => u(clientFixture.address(1420256) + n * 4, v));
   invoke("buildCache");
   assert.equal(collected[0], 777, "stock bitmap drawing is preserved");
   assert.equal(collected.length, channel === "keys" ? 4 : 5, "only active key labels suppress the stock keycap");

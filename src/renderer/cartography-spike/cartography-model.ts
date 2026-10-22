@@ -5,6 +5,7 @@
  */
 import type {
   CartographyContextController,
+  CartographyLayoutId,
   CompassFrameSpikeController,
   ExplorationSpikeController,
   MissionMapFrameSpikeController,
@@ -101,7 +102,7 @@ export type CartographyState = Readonly<{
     sequence: number;
     mapId: number;
     areaEpoch: number;
-    layoutId: 1 | 2 | 3;
+    layoutId: CartographyLayoutId;
   }> | null;
   continent: CartographyContinentState;
   currentInstance: CartographyCurrentInstanceState;

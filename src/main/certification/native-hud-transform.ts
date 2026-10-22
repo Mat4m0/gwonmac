@@ -6,7 +6,8 @@ import { concat, encodeCode, encodeIndexVector, encodeSection, parseCode, parseE
   parseIndexVector, sectionById, sleb, splitSections, uleb, vectorPayload, WASM_HEADER } from "../core/wasm-binary.js";
 import { encodeName } from "./cartography-transform-internals.js";
 import { NATIVE_RENDER_REFERENCE_FUNCTIONS, nativeGraphicsBusy, nativeModelBusy,
-  resolveNativeRenderBindings, reviewedNativeRenderFunctions, type NativeRenderFunctionBodies } from "./native-render-reference.js";
+  resolveNativeRenderBindings, reviewedNativeRenderFunctions, NATIVE_RENDER_FAMILY_COUNT,
+  type NativeRenderFunctionBodies } from "./native-render-reference.js";
 import { isDeepStrictEqual } from "node:util";
 import { wasmEvidence } from "./wasm-evidence.js";
 import { NATIVE_PUBLISH_BUSY } from "../../shared/native-publish.js";
@@ -110,8 +111,8 @@ export const NATIVE_HUD_RENDERING_PROOF: Readonly<{ functionBodies: NativeRender
   Object.freeze({ functionBodies: CHECKED });
 
 export function isNativeHudRenderingProof(value: unknown): boolean {
-  return [false, true].some(october => isDeepStrictEqual(value,
-    { functionBodies: reviewedNativeRenderFunctions(CHECKED, october) }));
+  return Array.from({ length: NATIVE_RENDER_FAMILY_COUNT }).some((_, family) => isDeepStrictEqual(value,
+    { functionBodies: reviewedNativeRenderFunctions(CHECKED, family) }));
 }
 
 export function deriveNativeHudRendering(evidence: NonNullable<ReturnType<typeof wasmEvidence>>) {

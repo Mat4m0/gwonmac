@@ -29,6 +29,17 @@ const WHISPER_PATHS = Object.freeze([
       [8847, "6694fdf5dc2395af5adab5e60840eba7467316720b57c4e3a64f4526bb027b5c", ["i32"], ["i32"]],
       [5779, "6bbd6f5802d760ba6d72568c07901c0ae989ba290458b8cdeaa5db39da7a0cd4", ["i32", "i32", "i32", "i32", "i32"], ["i32"]],
     ] },
+  // October 22: the October path renumbered (reviewed callee and operand moves only).
+  { sender: 7879,
+    functions: [
+      [358, "1c87ab4b0831420341935898d106c902d85897a116b4beb7492bf4ab3b1ea9c7", ["i32", "i32", "i32"], []],
+      [11744, "6e67ac04077857e0da665be75ad5ed98a9927a5607bc1ddbd78fb1ab8039f04c", ["i32"], []],
+      [5865, "f7a2017ce827175b1c593cc6f62f34bcc06c43593157a8f267305eec062e9a0a", ["i32", "i32", "i32"], ["i32"]],
+      [5871, "013e7a049e0be2d3e4597d1feee0bad39f0ba1fe1d5ffd82cf35397630264e10", ["i32", "i32", "i32", "i32"], ["i32"]],
+      [11742, "a6c78374f4e6a901900a6f8102a49fa487170877630e532b9e1d9388bda1d93a", ["i32", "i32"], []],
+      [8847, "6694fdf5dc2395af5adab5e60840eba7467316720b57c4e3a64f4526bb027b5c", ["i32"], ["i32"]],
+      [5779, "5fd1c714b97dfb852012420d0e8d5f32e28bd9fee000590de08958ba78a11031", ["i32", "i32", "i32", "i32", "i32"], ["i32"]],
+    ] },
 ] as const);
 
 export function deriveWhisperChat(module: ModuleShape) {

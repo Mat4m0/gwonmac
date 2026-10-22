@@ -715,12 +715,19 @@ function deriveEnhancementBuild(
     ? deriveWhisperChat(context.moduleView()) : null;
   const includeWhispers = whisperChat !== null && includePlayRegion && includeChatFiltering
     && locatedLocal?.gameThread != null;
-  // A missing or ambiguous validator withdraws only chatPrint.
-  const chatPrint = requestedCapabilities.chatPrint && includeChatFiltering
+  // A missing or ambiguous validator withdraws only chatPrint. The local
+  // location keeps its oldest matching record, which can predate chatPrint, so
+  // every reviewed chatPrint record must agree on one validator.
+  const chatPrintCandidates = requestedCapabilities.chatPrint && includeChatFiltering
       && locatedLocal?.gameThread != null && locatedLocal.chatFiltering != null
-    ? isolatedProof(() => deriveChatPrint(
-        context.moduleView(), locatedLocal.baseline, locatedLocal.chatFiltering!,
-      ))
+    ? ENHANCEMENT_BUILDS.filter((baseline) => baseline.chatPrint).flatMap((baseline) =>
+      isolatedProof(() => deriveChatPrint(
+        context.moduleView(), baseline, locatedLocal.chatFiltering!,
+      )) ?? [])
+    : [];
+  const chatPrint = chatPrintCandidates.length > 0 && chatPrintCandidates.every((candidate) =>
+    isDeepStrictEqual(candidate, chatPrintCandidates[0]))
+    ? chatPrintCandidates[0]!
     : null;
   const includeChatPrint = chatPrint != null && includePlayRegion;
   // Display-only: a moved or changed accessor withdraws only progressObservation.

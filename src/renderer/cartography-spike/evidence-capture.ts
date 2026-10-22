@@ -7,6 +7,7 @@ import type {
   CartographyKernelDiagnostic,
   CartographyUnavailableReason,
 } from "../../shared/cartography-evidence.js";
+import { isCartographyLayoutId } from "../../shared/cartography-spike.js";
 import type { CartographyModelSources, CartographyState } from "./cartography-model.js";
 import { TOOLBOX_CARTOGRAPHY_SOURCE } from "./toolbox-cartography-data.js";
 import type { CartographyReachabilityDiagnostic } from "./reachability-kernel.js";
@@ -179,11 +180,9 @@ export function captureCartographyEvidence(
       });
   return Object.freeze({
     source: Object.freeze({
-      layoutId: state.context?.layoutId === 1 || state.context?.layoutId === 2 || state.context?.layoutId === 3
+      layoutId: isCartographyLayoutId(state.context?.layoutId)
         ? state.context.layoutId
-        : diagnostic?.layoutId === 1 || diagnostic?.layoutId === 2 || diagnostic?.layoutId === 3
-          ? diagnostic.layoutId
-          : null,
+        : isCartographyLayoutId(diagnostic?.layoutId) ? diagnostic.layoutId : null,
       gridRevision: GRID_REVISION,
       toolboxSha256: TOOLBOX_CARTOGRAPHY_SOURCE.sha256,
       kernelSha256: sources.kernel.sha256,
