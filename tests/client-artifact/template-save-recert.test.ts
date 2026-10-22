@@ -228,8 +228,8 @@ test("the template-save verifier makes a fail-closed decision for a real client"
     nativeHudRendering: true,
     resignAction: true,
     whisperChat: true,
-    chatPrint: false,
-    progressObservation: false,
+    chatPrint: true,
+    progressObservation: true,
   } satisfies EnhancementCapabilities);
   // If this is a statically shipped build, the shape locator must still
   // reproduce that record exactly. Unknown builds are intentionally decided
