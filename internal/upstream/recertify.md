@@ -273,3 +273,50 @@ Current requirements and remaining locator limits belong to
 [feature development](../../docs/enhancement-development.md), and
 [Cartography](../../docs/cartography.md). Exact values remain in code and tests.
 No offline result establishes live gameplay acceptance or signing readiness.
+
+## October 22 recovery findings
+
+Generation `ce3192033b14` refused template saving and every Tools feature
+except the cursor on both Stable and Beta. About 90% of the client was the same
+code with renumbered functions and moved static data. Only a few changes were
+real:
+
+- one 4-byte neighbour of the screenshot-directory record disappeared;
+- a count-style area-table sentinel grew (1465 to 1477) and one map row changed
+  two text identifiers;
+- one sequential identifier in skill-bar static data moved by one; and
+- Party attribute commit now also resets the stored value for lookup result
+  11. The written states are unchanged.
+
+Efficient procedure:
+
+1. Map each refused role or exact body hash from the preceding retained client
+   to the new client by comparing bodies with call indices, static operands,
+   and constants erased. Require one unique match.
+2. Diff each matched pair instruction by instruction. Accept call-index and
+   static-address changes; read every changed constant: string pointers must
+   reach the same text, small integers must be explained (assertion lines,
+   content counts). Read every control-flow change in full.
+3. Add the reviewed result as a variant next to the existing one
+   (`reviewedVariants` on a semantic role, a reviewed table digest, or a
+   reviewed static-content digest). Keep the previous client proving.
+4. Trace the remaining refusal to its first failing check before reading
+   code. Shared checks, such as the area table, can disable many features.
+
+Anchor only the bytes a feature owns. The screenshot anchor also covered
+neighbouring storage, so an unrelated neighbour change refused template saving.
+
+Beta has more per-client tables than Stable. For this client they needed:
+
+- a template-save record (`pnpm certification template --write`) and the
+  Tools record in `enhancement-builds.ts`;
+- a friend lifecycle family (moved state, source lines and message IDs +1),
+  which changes `FRIEND_OBSERVER_SEMANTIC_SHA256`;
+- a Cartography memory layout (`october22`, kernel layout 4) with its Compass,
+  Mission Map and World Map certificates. The reachability kernel in
+  `src/cartography-reachability-kernel/lib.rs` holds the same context root and
+  agent array per layout, so every new layout also changes the kernel;
+- the World Map display owner, Compass owner, pathing hashes, Guild Hall
+  producer and area-type accessor, and the native render family; and
+- `tests/fixtures/retained-client.ts`, which maps the August function indices
+  and static addresses the real-client tests use.

@@ -4,6 +4,13 @@
  * Exposes no raw WebAssembly pointers across the renderer boundary.
  */
 
+/** Native memory layouts known to the sealed reachability kernel (its lib.rs). */
+export const CARTOGRAPHY_LAYOUT_IDS = Object.freeze([1, 2, 3, 4] as const);
+export type CartographyLayoutId = (typeof CARTOGRAPHY_LAYOUT_IDS)[number];
+export function isCartographyLayoutId(value: unknown): value is CartographyLayoutId {
+  return CARTOGRAPHY_LAYOUT_IDS.includes(value as CartographyLayoutId);
+}
+
 export const CARTOGRAPHY_CONTEXT_GLOBALS = Object.freeze({
   status: "gwonmac_cartography_context_status",
   sequence: "gwonmac_cartography_context_sequence",
@@ -261,7 +268,7 @@ export type CartographyContextSnapshot = Readonly<{
   sequence: number;
   areaEpoch: number;
   mapId: number;
-  layoutId: 1 | 2 | 3;
+  layoutId: CartographyLayoutId;
 }>;
 
 export type CartographyContextController = SpikeController<CartographyContextSnapshot> & Readonly<{

@@ -63,6 +63,12 @@ const IMMUTABLE = Object.freeze({
   assertionFile: "1d36d5bd2d905fd9a1baef7c625097a144e3ba04829a3a2697c5afcc9e4f4d2b",
   arrayFile: "47d3990810bf698e496109cd7d900538167fa8ee92f01099aad6bde4e5046357",
 });
+// October 22 client: the third word of world.assert-a is a sequential
+// identifier that moved by one (2214 -> 2215) after an inserted entry.
+const REVIEWED_WORLD_A = Object.freeze([
+  IMMUTABLE.worldA,
+  "7edf4521e827d816dee6a51b30d2265c4639b85135f90c1ffc3e3e431cc4792b",
+]);
 
 export function playerSkillbarRoleCandidateCounts(module: ModuleShape): readonly number[] {
   const exactCount = (role: Readonly<{
@@ -118,8 +124,9 @@ export function derivePlayerSkillbarObservation(
       !== IMMUTABLE.assertionFile
     || staticCStringHash(module, soleValue(updateValues, "skillbar.array-file"))
       !== IMMUTABLE.arrayFile
-    || staticBytesHash(module, soleValue(worldValues, "world.assert-a"), 12)
-      !== IMMUTABLE.worldA
+    || !REVIEWED_WORLD_A.includes(
+      staticBytesHash(module, soleValue(worldValues, "world.assert-a"), 12) ?? "",
+    )
     || staticBytesHash(module, soleValue(worldValues, "world.assert-b"), 12)
       !== IMMUTABLE.worldB
   ) return null;

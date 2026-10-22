@@ -144,7 +144,8 @@ function anchorAddress(
   const anchor = TEMPLATE_STATIC_ANCHORS[storage];
   const address = anchor.kind === "initialized-data"
     ? (() => {
-      const matches = found.view.dataAddresses(anchor.bytes);
+      const matches = [anchor.bytes, ...anchor.variants ?? []]
+        .flatMap((bytes) => found.view.dataAddresses(bytes));
       if (matches.length !== 1) fail(`initialized static anchor ${storage} changed or is ambiguous`);
       return matches[0]!;
     })()
