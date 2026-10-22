@@ -39,8 +39,27 @@ const OCTOBER_BODY_HASHES: Readonly<Record<string, string>> = Object.freeze({
   "d5e3a36c3336cf3e42867228919ae973072dc54fb442d80244067a3f308b5fd5": "1a93ec1b273d42e3af7c36ecfd2737dd1537cc47c47671a576f66df01e2c0ca2",
 });
 
-function effectProofFamily(october: boolean) {
-  const reviewedHash = (hash: string) => october ? OCTOBER_BODY_HASHES[hash] ?? hash : hash;
+// October 22 renumbered the October bodies; only reviewed callee indices and
+// relocated operands differ. Keys are the August reference hashes.
+const OCTOBER_22_BODY_HASHES: Readonly<Record<string, string>> = Object.freeze({
+  "7df2376537653cac9b32172fb51073fa57503b1a2bcceb317a6d282d1e13fb0b": "8bbf0be7d8031c7a3ebb9a6d9311d4849f120352bd61e0a1abfc02735107686c",
+  "18899c4be6bf2fd51f6dbf6e52241456cdaed94d912ed23f307c95917bf615b8": "d420d0eabfb51b9ecdb930d532f282b101febd003fffd8c993ebc9fdcd4dd33b",
+  "1f2d462100add0c160d62265d2eaf292a00bfd1cde84c38c1e51f2aac0a2cc57": "4737741bf201a48b379bbee09bc56731be209b5c886c4215c42bf8c3dc9abd88",
+  "a560a223d9756fc3579f057137601853ec23c2b6bbd57248216b77ce550d29af": "fc2afe3ac91e845eae941170a63964156daad419c4d82d54e17227b694bac250",
+  "ecfa62c1bfaaebe98c2047ad986e137e9695a3cf2f0f7d5f6367b6e44cc10894": "9a39085dfb13220e6f834ec96f99df624116e8a207c57c07f22466705530c5e8",
+  "3fecf883ff7543db3cfdd8f3d77fc5cf3ef1e78282252f4f3caedbbe4f80bac0": "72adab1b90ab319ebf714722d199675dabdbf945affaabecabaa215cbcb858ac",
+  "fe97a736b61e83cc5ea5a84f38aecedd384476339c5b02594fcefeebc5ce5203": "946992af3680b0217734172ccc0a70e7c283a44eda54edcf399a734791e347c3",
+  "cafd172e56cbc1efcc64eb281fd8dadcfb6aa305eb4c165c0959f0903f98f769": "c9d06f44e8f7c99f976ffeb728e1d8e8490a8b0202b857e130f834098ccae03d",
+  "5e0ab6365510501ff760de8c3bdfb8682bf918e092d9263441d8fc7f56403533": "5e0ab6365510501ff760de8c3bdfb8682bf918e092d9263441d8fc7f56403533",
+  "7340dbe70f3f4bf731d23f80882df99553e837f825d8bbebee7f8eac45d8ef58": "d4066bccfd04635db551e12e16406e952e90e7cb3135b10b22f1c2c99ca2d93c",
+  "9267c76c395a6ca5bc2efd0f9eb1cd3234feb5c95041a3e6230c98f23f9a4d60": "57a88a1a84b4ba6c6f9d5c38dd215238dcd3e7cf2888d6b2be41429673878f64",
+  "d5e3a36c3336cf3e42867228919ae973072dc54fb442d80244067a3f308b5fd5": "845200d2aae2d929e80fa3ebf334133e6d9dfa4fb1d2dfca3383c0a5c6186b14",
+});
+
+function effectProofFamily(family: "august" | "october" | "october22") {
+  const reviewedHash = (hash: string) => family === "october22"
+    ? OCTOBER_22_BODY_HASHES[hash] ?? hash
+    : family === "october" ? OCTOBER_BODY_HASHES[hash] ?? hash : hash;
   const ACCESSORS: readonly ExactRole[] = Object.freeze([
     { hash: reviewedHash("7df2376537653cac9b32172fb51073fa57503b1a2bcceb317a6d282d1e13fb0b"), bodyLength: 30, params: ["i32", "i32", "i32", "i32", "i32"], results: [] },
     { hash: reviewedHash("18899c4be6bf2fd51f6dbf6e52241456cdaed94d912ed23f307c95917bf615b8"), bodyLength: 24, params: ["i32", "i32"], results: [] },
@@ -73,7 +92,7 @@ function effectProofFamily(october: boolean) {
     frameScreenTop: 0x118, frameRelation: 0x128, frameState: 0x18c,
   });
   const DIRTY_MESSAGES = Object.freeze([
-    0x10000055, 0x10000056, 0x10000057, october ? 0x10000142 : 0x10000141,
+    0x10000055, 0x10000056, 0x10000057, family === "august" ? 0x10000141 : 0x10000142,
   ] as const);
   const PLAYER_EFFECT_LAYOUT = Object.freeze({
     worldPartyEffects: 0x508,
@@ -289,7 +308,9 @@ function effectProofFamily(october: boolean) {
     isEffectIconGeometryProof, deriveEffectIconGeometry };
 }
 
-const FAMILIES = Object.freeze([effectProofFamily(false), effectProofFamily(true)]);
+const FAMILIES = Object.freeze([
+  effectProofFamily("august"), effectProofFamily("october"), effectProofFamily("october22"),
+]);
 
 export function isPlayerEffectObservationProof(value: unknown): value is PlayerEffectProof {
   return FAMILIES.some(family => family.isPlayerEffectObservationProof(value));

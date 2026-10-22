@@ -79,12 +79,36 @@ const GUILD_HALL_AREA_TYPE_ROLE = semanticRole(
   ["i32"],
 );
 
-const GUILD_HALL_NATIVE_MESSAGES = Object.freeze([
-  { hash: "ff6bcc8db69cbb7fddc17af6d4b7a4c052cb6cd17e335155db495c2e435290c9",
-    enter: 0x1000_0180, leave: 0x1000_0182 },
-  { hash: "fab247e15279c61c5783bc16f6c02cbf411b3056979f6a765b61763e52bc7d87",
-    enter: 0x1000_0183, leave: 0x1000_0185 },
+const GUILD_HALL_NATIVE_MESSAGES: readonly Readonly<{
+  enter: number; leave: number; hashes: readonly string[];
+}>[] = Object.freeze([
+  { enter: 0x1000_0180, leave: 0x1000_0182,
+    hashes: ["ff6bcc8db69cbb7fddc17af6d4b7a4c052cb6cd17e335155db495c2e435290c9"] },
+  { enter: 0x1000_0183, leave: 0x1000_0185, hashes: [
+    "fab247e15279c61c5783bc16f6c02cbf411b3056979f6a765b61763e52bc7d87",
+    // October 22: the same producer with renumbered callees.
+    "3adcc506569c2134909f4a1429062c579d9e28a9bcdecae5bafa55b9120b71c9",
+  ] },
 ]);
+
+// Clients whose area-type accessor no longer matches the semantic role: the
+// reviewed accessor counts only beside its exact area context and lookup.
+const GUILD_HALL_AREA_TYPE_FAMILIES = Object.freeze([
+  { context: [228, "47c33ee2f7272a3a33d56b448bda7db8fcfe1e16c69048a3eff07ee0222a4c31"],
+    lookup: [17557, "aacd25153c9917d4e0323b9569a0bfd58bb241b7fc068e389477727154ef636b"],
+    accessor: "f405d7b00e65454a318152154a1bf02744fdbdd61c4ec7da800650aab8d2e2aa" },
+  { context: [228, "4c7ccdfd23aa3144a9d44b439df0293493ac7b04c19475cbb224580610c0e29e"],
+    lookup: [17518, "081506484a3019e40c1a934f95f88ff3911d70640c0f446afc6c3a3fb4975e5e"],
+    accessor: "43acce2aef9325f192efa422dee707362fe3b16feaa891447c5256d6eae86099" },
+] as const);
+
+function reviewedGuildHallAreaTypeAccessor(module: ModuleShape): number | null {
+  const matches = GUILD_HALL_AREA_TYPE_FAMILIES.flatMap(({ context, lookup, accessor }) =>
+    uniqueExactFunction(module, context[1], ["i32"], ["i32"]) === context[0]
+    && uniqueExactFunction(module, lookup[1], ["i32"], ["i32"]) === lookup[0]
+      ? [uniqueExactFunction(module, accessor, [], ["i32"])] : []);
+  return matches.length === 1 ? matches[0] ?? null : null;
+}
 
 function containsBytes(body: Uint8Array, bytes: readonly number[]): boolean {
   for (let start = body.indexOf(bytes[0]!); start >= 0; start = body.indexOf(bytes[0]!, start + 1)) {
@@ -119,7 +143,8 @@ function guildHallProducer(
       && containsBytes(body, enter) && containsBytes(body, leave) && containsBytes(body, area)
       && GUILD_HALL_NATIVE_MESSAGES.some(messages =>
         messages.enter === enterMessage && messages.leave === leaveMessage
-        && functionBodySha256(module, module.functionImportCount + localIndex) === messages.hash)
+        && messages.hashes.includes(
+          functionBodySha256(module, module.functionImportCount + localIndex)))
       ? [module.functionImportCount + localIndex] : []);
   return matches.length === 1 ? matches[0]! : null;
 }
@@ -932,12 +957,7 @@ export function locateAutomaticLocalActions(
         ? uniqueRoleFunction(module, GUILD_HALL_KEY_ACCESSOR_ROLE) : null;
       const guildAreaTypeAccessor = guildExpected
         ? uniqueRoleFunction(module, GUILD_HALL_AREA_TYPE_ROLE)
-          ?? (uniqueExactFunction(module,
-            "47c33ee2f7272a3a33d56b448bda7db8fcfe1e16c69048a3eff07ee0222a4c31", ["i32"], ["i32"]) === 228
-          && uniqueExactFunction(module,
-            "aacd25153c9917d4e0323b9569a0bfd58bb241b7fc068e389477727154ef636b", ["i32"], ["i32"]) === 17557
-            ? uniqueExactFunction(module,
-              "f405d7b00e65454a318152154a1bf02744fdbdd61c4ec7da800650aab8d2e2aa", [], ["i32"]) : null) : null;
+          ?? reviewedGuildHallAreaTypeAccessor(module) : null;
       const guildMessages = guildExpected && guildKeyAccessor !== null
         && guildAreaTypeAccessor !== null && uiDispatcher
         ? GUILD_HALL_NATIVE_MESSAGES.flatMap(messages => {

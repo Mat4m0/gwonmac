@@ -305,3 +305,18 @@ Efficient procedure:
 
 Anchor only the bytes a feature owns. The screenshot anchor also covered
 neighbouring storage, so an unrelated neighbour change refused template saving.
+
+Beta has more per-client tables than Stable. For this client they needed:
+
+- a template-save record (`pnpm certification template --write`) and the
+  Tools record in `enhancement-builds.ts`;
+- a friend lifecycle family (moved state, source lines and message IDs +1),
+  which changes `FRIEND_OBSERVER_SEMANTIC_SHA256`;
+- a Cartography memory layout (`october22`, kernel layout 4) with its Compass,
+  Mission Map and World Map certificates. The reachability kernel in
+  `src/cartography-reachability-kernel/lib.rs` holds the same context root and
+  agent array per layout, so every new layout also changes the kernel;
+- the World Map display owner, Compass owner, pathing hashes, Guild Hall
+  producer and area-type accessor, and the native render family; and
+- `tests/fixtures/retained-client.ts`, which maps the August function indices
+  and static addresses the real-client tests use.

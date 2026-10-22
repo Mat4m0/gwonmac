@@ -38,6 +38,14 @@ const OCTOBER_HASHES = Object.freeze({
   boundWriter: "52a491a5a9e6eb96624f279ff8911612ae6dc7758c939b6abbf5e2c9d4762bec",
 });
 
+// October 22 moved only source-path and assertion string pointers.
+const OCTOBER_22_HASHES = Object.freeze({
+  ...EXPECTED_HASHES,
+  loader: "0c06d90dc7e34f23599e1bdee39e88834caaecd3af7a90d504189190cab7801e",
+  converter: "ee19b011e40f47e602a1bfb68b7cff9baca3a959b4bc6a2b8aba9830b321f193",
+  boundWriter: "8850a945edc4d36ed0032841c451d40844b6bdab864de79e8847c5a7cb4d975e",
+});
+
 const I32_LOAD = 0x28;
 const I32_LOAD16_U = 0x2f;
 const F32_LOAD = 0x2a;
@@ -157,7 +165,7 @@ function decodedAt(
 function exactHash(
   evidence: WasmEvidence,
   key: keyof typeof EXPECTED_FUNCTIONS,
-  hashes: typeof EXPECTED_HASHES | typeof OCTOBER_HASHES,
+  hashes: Readonly<Record<keyof typeof EXPECTED_FUNCTIONS, string>>,
 ): boolean {
   return functionBodySha256(evidence.moduleView(), EXPECTED_FUNCTIONS[key])
     === hashes[key];
@@ -187,7 +195,7 @@ export function certifyPathingShape(input: Uint8Array): PathingShapeProof | null
     || anchoredFunction(evidence, decoded, ANCHORS.bound) !== EXPECTED_FUNCTIONS.boundWriter
     || anchoredFunction(evidence, decoded, ANCHORS.infinite)
       !== EXPECTED_FUNCTIONS.coordinateWriter
-    || ![EXPECTED_HASHES, OCTOBER_HASHES].some(hashes =>
+    || ![EXPECTED_HASHES, OCTOBER_HASHES, OCTOBER_22_HASHES].some(hashes =>
       Object.keys(EXPECTED_FUNCTIONS).every(
         key => exactHash(evidence, key as keyof typeof EXPECTED_FUNCTIONS, hashes)))
     || !exactSignature(evidence, EXPECTED_FUNCTIONS.loader, ["i32", "i32", "i32", "i32"], ["i32"])

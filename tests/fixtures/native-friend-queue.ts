@@ -30,8 +30,17 @@ export async function queueFixture(input: Uint8Array, observer?: Readonly<{
 }>) {
   const originalEvidence = wasmEvidence(input);
   assert.ok(originalEvidence);
-  const october = originalEvidence.inputSha256 ===
-    "266b5a8aa88fe6440b10737d3eda27f4ceae2401d51d263debc0bca5c2075d87";
+  // October 22 kept the October queue roles; only the allocator and the
+  // static request state moved.
+  const octoberClients: Readonly<Record<string, Readonly<Record<
+    "allocator" | "context" | "pending" | "request", number>>>> = {
+    "266b5a8aa88fe6440b10737d3eda27f4ceae2401d51d263debc0bca5c2075d87":
+      { allocator: 17836, context: 5938412, pending: 5938332, request: 5938340 },
+    "f4e529f9c9b6b6a1dfd3e0e7c8d8c518a48c45d8a9a526d89512b5e9c37c075e":
+      { allocator: 17797, context: 5938732, pending: 5938652, request: 5938660 },
+  };
+  const octoberClient = octoberClients[originalEvidence.inputSha256];
+  const october = octoberClient !== undefined;
   assert.ok(october || originalEvidence.inputSha256 === INPUT_SHA256,
     "reinspect queue roles for another retained client");
   const NATIVE = october ? {
@@ -40,7 +49,7 @@ export async function queueFixture(input: Uint8Array, observer?: Readonly<{
     removeFriend: 8826, setFriendLocation: 8841, setFriendStatus: 8840,
   } : PREVIOUS_NATIVE;
   const moved: Readonly<Record<number, number>> = {
-    17809: 17836, 9999: 10010, 8844: 8850, 10000: 10011, 9968: 9979,
+    17809: octoberClient?.allocator ?? 17809, 9999: 10010, 8844: 8850, 10000: 10011, 9968: 9979,
     8823: 8829, 8824: 8830, 10329: 10340, 10242: 10253, 10264: 10275,
   };
   const fixtureIndex = (index: number) => october ? moved[index] ?? index : index;
@@ -192,9 +201,9 @@ export async function queueFixture(input: Uint8Array, observer?: Readonly<{
     write(list + 4, list + 4);
     write(list + 8, list - 7);
   }
-  write(october ? 5938412 : 5928476, CONTEXT);
-  write(october ? 5938332 : 5928396, 4);
-  write(october ? 5938340 : 5928404, REQUEST);
+  write(octoberClient?.context ?? 5928476, CONTEXT);
+  write(octoberClient?.pending ?? 5928396, 4);
+  write(octoberClient?.request ?? 5928404, REQUEST);
   write(REQUEST + 8, 1);
   write(REQUEST + 12, 1); // Login request kind, already sent on the synthetic connection.
   write(REQUEST + 20, 3);
