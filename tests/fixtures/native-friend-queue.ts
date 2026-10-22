@@ -38,6 +38,9 @@ export async function queueFixture(input: Uint8Array, observer?: Readonly<{
       { allocator: 17836, context: 5938412, pending: 5938332, request: 5938340 },
     "f4e529f9c9b6b6a1dfd3e0e7c8d8c518a48c45d8a9a526d89512b5e9c37c075e":
       { allocator: 17797, context: 5938732, pending: 5938652, request: 5938660 },
+    // The same-day October 22 rebuild changed no queue role or static address.
+    "3dc01a8295d179450b16e2059ad056d4062fcad01e79ddae834bb2028596102b":
+      { allocator: 17797, context: 5938732, pending: 5938652, request: 5938660 },
   };
   const octoberClient = octoberClients[originalEvidence.inputSha256];
   const october = octoberClient !== undefined;

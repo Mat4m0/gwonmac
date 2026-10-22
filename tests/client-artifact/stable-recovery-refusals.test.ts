@@ -21,17 +21,28 @@ import { rewriteTemplateSaveWasm } from "../../src/main/certification/template-s
 import { locateAutomaticLocalActions } from "../../src/main/certification/enhancement-local-actions-proof.js";
 
 const OCTOBER_CLIENT = "266b5a8aa88fe6440b10737d3eda27f4ceae2401d51d263debc0bca5c2075d87";
-const OCTOBER_22_CLIENT = "f4e529f9c9b6b6a1dfd3e0e7c8d8c518a48c45d8a9a526d89512b5e9c37c075e";
+// ArenaNet rebuilt the October 22 client the same day. The rebuild changes
+// only two constant getters, initialized data and the build ID.
+const OCTOBER_22_CLIENTS = [
+  "f4e529f9c9b6b6a1dfd3e0e7c8d8c518a48c45d8a9a526d89512b5e9c37c075e",
+  "3dc01a8295d179450b16e2059ad056d4062fcad01e79ddae834bb2028596102b",
+] as const;
 
-/** The retained artifact with this digest, from either named fixture. */
-async function retainedClient(sha256: string): Promise<Uint8Array | null> {
+/** The retained artifact with one of these digests, from either named fixture. */
+async function retainedClient(sha256s: readonly string[]): Promise<Uint8Array | null> {
   for (const path of [process.env.GW_CLIENT_WASM, process.env.GW_PREVIOUS_CLIENT_WASM]) {
     if (!path) continue;
     const input = new Uint8Array(await readFile(path));
-    if (wasmEvidence(input)?.inputSha256 === sha256) return input;
+    const digest = wasmEvidence(input)?.inputSha256;
+    if (digest !== undefined && sha256s.includes(digest)) return input;
   }
   return null;
 }
+
+// Release qualification supplies only the live client. A retained fixture
+// that is not supplied is skipped, never treated as passing.
+const octoberInput = await retainedClient([OCTOBER_CLIENT]);
+const october22Input = await retainedClient(OCTOBER_22_CLIENTS);
 
 function withBodyByte(
   input: Uint8Array,
@@ -51,9 +62,9 @@ function withBodyByte(
 
 test("changed native Team gate or Hero panel message refuses live integration", {
   timeout: 120_000,
+  skip: octoberInput === null ? "the retained October 1 artifact is not supplied" : false,
 }, async () => {
-  const input = await retainedClient(OCTOBER_CLIENT);
-  assert.ok(input, "GW_CLIENT_WASM or GW_PREVIOUS_CLIENT_WASM must name the retained October artifact");
+  const input = octoberInput!;
   const original = verifyLocalClientBytes(input);
   assert.equal(original.fileVerdict?.status, "proved");
   for (const verdict of Object.values(original.featureVerdicts!)) {
@@ -138,9 +149,9 @@ test("partial historic records preserve independently proved current actions", {
 
 test("October 22 client proves every capability; its reviewed Party change stays bound", {
   timeout: 120_000,
+  skip: october22Input === null ? "no retained October 22 artifact is supplied" : false,
 }, async () => {
-  const input = await retainedClient(OCTOBER_22_CLIENT);
-  assert.ok(input, "GW_CLIENT_WASM must name the retained October 22 artifact");
+  const input = october22Input!;
   const result = verifyLocalClientBytes(input);
   assert.equal(isLocalClientVerification(result, result.officialSha256), true);
   assert.equal(result.fileVerdict?.status, "proved");
