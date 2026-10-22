@@ -13,7 +13,10 @@ publicHoistPattern:
 confirmModulesPurge: false
 blockExoticSubdeps: false
 overrides:
-  "brace-expansion@": 5.0.11
+  # Keep Forge's legacy minimatch graph on its patched brace-expansion majors.
+  "brace-expansion@1": 1.1.20
+  "brace-expansion@2": 2.1.6
+  "brace-expansion@5": 5.0.11
   fast-uri: 3.1.7
   ip-address: 10.3.1
   nanoid: 3.3.18
@@ -28,6 +31,17 @@ overrides:
   # family, which mismatches the 3.x API and breaks the website build/server.
   unhead: 3.2.3
   "@unhead/vue": 3.2.3
+  # Website tooling advisories, October 2026.
+  seroval: 1.6.8
+  proxy-addr: 2.0.8
+  tinypool: 2.2.0
+  shell-quote: 1.12.0
+  sharp: 0.35.5
+  "@modelcontextprotocol/sdk": 1.32.1
+  source-map-js: 1.2.2
+  launch-editor: 2.14.2
+  devalue: 5.9.3
+  "vite@<8.1.6": 8.3.5
 packageExtensions:
   "@nuxt/scripts@0.13.4":
     dependencies:
@@ -48,8 +62,39 @@ allowBuilds:
 # repository-owned PNG background and copies the ICNS icon without parsing it.
 auditConfig:
   ignoreGhsas:
+    # vite-plus 0.1.24 is the website's own pinned toolchain. Its local dev
+    # server can reveal whether a path exists through the open-in-editor
+    # endpoint. Only maintainers run that server locally; the app and the
+    # published website never ship it. The fix needs vite-plus 1.x. Remove
+    # this exception when the website moves to vite-plus >=1.0.1.
+    - GHSA-587h-7wmj-h5pm
     - GHSA-w3rx-r6r6-pgpr
     - GHSA-5p2g-fcmc-qvqq
     # The affected esbuild serve-directory path exists only on Windows. Owned
     # automation runs on macOS/Linux, and fontless invokes only transform.
     - GHSA-g7r4-m6w7-qqqr
+    # listhen 1.10.1 creates development HTTPS certificates with node-forge.
+    # It signs certificates but never calls the affected RSA verifier. Node's
+    # TLS implementation handles network verification. No patch is published.
+    # Remove this exception when upstream publishes a patched node-forge, or
+    # reassess it before adding a consumer that verifies signatures with forge.
+    - GHSA-86w9-cpqp-85rv
+    # Forge reaches http-cache-semantics only in build-time download clients.
+    # The app does not ship it or expose a shared authenticated response cache.
+    # No patch is published. Remove when a patched release becomes available,
+    # or reassess before adding an authenticated shared-cache consumer.
+    - GHSA-ch52-4w7c-c8xp
+    # braces receives repository-owned build glob patterns through Forge,
+    # Nuxt, and i18n tooling. Player input never becomes a glob pattern.
+    # No patch is published. Remove when a patched release becomes available,
+    # or reassess before accepting untrusted glob patterns.
+    - GHSA-vfj7-8cjw-p6xm
+    # Nuxt DevTools 3.x needs simple-git 3, which has no patched release, and
+    # simple-git 4 breaks DevTools at `nuxt prepare`. DevTools runs only for a
+    # local `nuxt dev` and calls fixed commands (branch, rev-parse --short HEAD,
+    # status) without caller options, so the bypassed option guards never see
+    # untrusted input. Remove when Nuxt ships a stable DevTools on simple-git 4.
+    - GHSA-v5rq-49vh-5v5c
+    - GHSA-x6jw-m9v5-85vh
+    - GHSA-g4wm-2vf7-vfgr
+    - GHSA-858h-whjf-mvg5

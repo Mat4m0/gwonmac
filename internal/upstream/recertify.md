@@ -233,3 +233,35 @@ use a nested template as a success criterion for the bridge.
 - Do not certify a static address without a live invariant.
 - Do not weaken a locator until it returns one result.
 - Do not make optional Tools a requirement for the official client.
+
+## October 22 recovery findings
+
+Generation `ce3192033b14` refused template saving and every Tools feature
+except the cursor on both Stable and Beta. About 90% of the client was the same
+code with renumbered functions and moved static data. Only a few changes were
+real:
+
+- one 4-byte neighbour of the screenshot-directory record disappeared;
+- a count-style area-table sentinel grew (1465 to 1477) and one map row changed
+  two text identifiers;
+- one sequential identifier in skill-bar static data moved by one; and
+- Party attribute commit now also resets the stored value for lookup result
+  11. The written states are unchanged.
+
+Efficient procedure:
+
+1. Map each refused role or exact body hash from the preceding retained client
+   to the new client by comparing bodies with call indices, static operands,
+   and constants erased. Require one unique match.
+2. Diff each matched pair instruction by instruction. Accept call-index and
+   static-address changes; read every changed constant: string pointers must
+   reach the same text, small integers must be explained (assertion lines,
+   content counts). Read every control-flow change in full.
+3. Add the reviewed result as a variant next to the existing one
+   (`reviewedVariants` on a semantic role, a reviewed table digest, or a
+   reviewed static-content digest). Keep the previous client proving.
+4. Trace the remaining refusal to its first failing check before reading
+   code. Shared checks, such as the area table, can disable many features.
+
+Anchor only the bytes a feature owns. The screenshot anchor also covered
+neighbouring storage, so an unrelated neighbour change refused template saving.

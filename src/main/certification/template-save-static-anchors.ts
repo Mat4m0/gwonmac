@@ -32,7 +32,13 @@ export type StaticRelocation = Readonly<StaticOperand & (
 )>;
 
 type TemplateStaticAnchor = Readonly<
-  | { kind: "initialized-data"; baseline: number; bytes: Uint8Array }
+  | {
+    kind: "initialized-data";
+    baseline: number;
+    bytes: Uint8Array;
+    /** Reviewed content of later clients; one occurrence across all forms. */
+    variants?: readonly Uint8Array[];
+  }
   | { kind: "zero-initialized"; baseline: number }
 >;
 
@@ -91,5 +97,12 @@ export const TEMPLATE_STATIC_ANCHORS: Readonly<
       "0100000001000000ffffffff00000000"
       + "00000000070000000200000000000000",
     ),
+    // The record owns its first 16 bytes; the rest is neighbouring storage.
+    // The October 22 client dropped one 4-byte neighbour, so later words
+    // moved down by 4. Every reader of the record kept its field offsets.
+    variants: [bytesFromHex(
+      "0100000001000000ffffffff00000000"
+      + "07000000020000000000000000000000",
+    )],
   }),
 });
