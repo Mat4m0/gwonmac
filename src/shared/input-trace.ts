@@ -140,6 +140,12 @@ export type InputTraceEntry =
     }
   | {
       source: 'renderer';
+      kind: 'stale-modifier-release';
+      modifier: 'ctrl' | 'shift' | 'alt';
+      trigger: 'key' | 'pointer';
+    }
+  | {
+      source: 'renderer';
       kind: 'release-all';
       cause: 'blur' | 'hidden' | 'command' | 'pagehide';
     }
