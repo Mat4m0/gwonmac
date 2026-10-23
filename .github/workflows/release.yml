@@ -283,7 +283,19 @@ jobs:
             --key "$APPLE_API_KEY_PATH" \
             --key-id "$APPLE_API_KEY_ID" \
             --issuer "$APPLE_API_ISSUER_ID"
-          xcrun stapler staple -v "$dmg"
+          # Hosted runners sometimes drop the connection to Apple's ticket
+          # service. Retry only that transport error.
+          for attempt in 1 2 3 4 5; do
+            if output="$(xcrun stapler staple -v "$dmg" 2>&1)"; then
+              echo "$output"
+              break
+            fi
+            echo "$output"
+            if [ "$attempt" = 5 ] || ! grep -q NSURLErrorDomain <<<"$output"; then
+              exit 1
+            fi
+            sleep 30
+          done
 
       # Every assertion this makes lives in scripts/verify-signed-app.ts, so a
       # release that fails one can be reproduced against the same package on a
