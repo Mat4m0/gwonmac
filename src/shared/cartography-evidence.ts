@@ -5,6 +5,8 @@
  * field in this contract.
  */
 
+import type { CartographyLayoutId } from "./cartography-spike.js";
+
 export const CARTOGRAPHY_EVIDENCE_FORMAT = 1 as const;
 export const CARTOGRAPHY_MAX_CONTINENT_CELLS = 131_072;
 export const CARTOGRAPHY_MAX_TERRAIN_CELLS = 262_144;
@@ -68,7 +70,7 @@ export type CartographyEncodedBitset = Readonly<{
 export type CartographyEvidenceSource = Readonly<{
   applicationVersion: string;
   clientSha256: string | null;
-  layoutId: 1 | 2 | 3 | null;
+  layoutId: CartographyLayoutId | null;
   gridRevision: number;
   toolboxSha256: string;
   kernelSha256: string | null;
@@ -166,7 +168,7 @@ export type CartographyBitsetCapture = Readonly<{
 
 export type CartographyEvidenceCapture = Readonly<{
   source: Readonly<{
-    layoutId: 1 | 2 | 3 | null;
+    layoutId: CartographyLayoutId | null;
     gridRevision: number;
     toolboxSha256: string;
     kernelSha256: string | null;

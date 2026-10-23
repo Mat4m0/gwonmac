@@ -14,6 +14,7 @@ import {
   valuesForRole,
 } from "./wasm-evidence.js";
 import type { ModuleShape, SemanticRole } from "./enhancement-evidence-types.js";
+import type { RelocationSpan } from "./semantic-proof.js";
 import { dataEvidence } from "./wasm-data-evidence.js";
 
 const span = (
@@ -120,8 +121,13 @@ const PARTY_CALLEE_ROLES_NOTIFYDISPATCH_VARIANTS = [PARTY_CALLEE_ROLES.notifyDis
 const PARTY_LEAF_ROLES_FINISHFLUSH_VARIANTS = [PARTY_LEAF_ROLES.finishFlush,
   semanticRole(4425, "11bc275741ce7dcc12a15fefd4325972cf706d7d73cf9f8b284b6fda720a71ca", PARTY_LEAF_ROLES.finishFlush.spans, ["i32", "i32", "i32"], []),
 ];
+const ATTRIBUTE_COMMIT_CALL_SPANS: readonly RelocationSpan[] = [{"start": 6, "end": 11, "role": "commit.resolve", "addressClass": "function-index"}, {"start": 21, "end": 26, "role": "commit.first", "addressClass": "function-index"}, {"start": 37, "end": 42, "role": "commit.second", "addressClass": "function-index"}, {"start": 51, "end": 56, "role": "commit.third", "addressClass": "function-index"}, {"start": 65, "end": 70, "role": "commit.context-guard", "addressClass": "function-index"}, {"start": 93, "end": 98, "role": "commit.fourth", "addressClass": "function-index"}, {"start": 111, "end": 116, "role": "commit.fifth", "addressClass": "function-index"}, {"start": 125, "end": 130, "role": "commit.sixth", "addressClass": "function-index"}];
 const ATTRIBUTE_COMMIT_VARIANTS = [PARTY_CALLEE_ROLES.attributeCommit,
-  semanticRole(152, "cf7aa8709af2199c7f266560d807fffa582f3573521513ef6547aadecec8d5e8", [{"start": 6, "end": 11, "role": "commit.resolve", "addressClass": "function-index"}, {"start": 21, "end": 26, "role": "commit.first", "addressClass": "function-index"}, {"start": 37, "end": 42, "role": "commit.second", "addressClass": "function-index"}, {"start": 51, "end": 56, "role": "commit.third", "addressClass": "function-index"}, {"start": 65, "end": 70, "role": "commit.context-guard", "addressClass": "function-index"}, {"start": 93, "end": 98, "role": "commit.fourth", "addressClass": "function-index"}, {"start": 111, "end": 116, "role": "commit.fifth", "addressClass": "function-index"}, {"start": 125, "end": 130, "role": "commit.sixth", "addressClass": "function-index"}], ["i32", "i32", "i32"], []),
+  semanticRole(152, "cf7aa8709af2199c7f266560d807fffa582f3573521513ef6547aadecec8d5e8", ATTRIBUTE_COMMIT_CALL_SPANS, ["i32", "i32", "i32"], []),
+  // October 22 client: same eight calls in the same order. One reviewed
+  // behaviour change: lookup result 11 now also takes the existing reset path
+  // (field +16 = -1), alongside 0. No new stored state appears.
+  semanticRole(166, "f87a53c521f38915783764c18327bb345ac6b4e1ee89e4b7a7a6c8fede9c2d76", ATTRIBUTE_COMMIT_CALL_SPANS, ["i32", "i32", "i32"], []),
 ];
 const ATTRIBUTE_CONTEXT_GUARD_ROLE = semanticRole(20, "16968cd2810aadb90cac6a524ead33cccc3d633400cacb599770391361847b99", [{"start": 4, "end": 9, "role": "guard.resolve", "addressClass": "function-index"}], [], ["i32"]);
 

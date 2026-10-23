@@ -18,6 +18,7 @@ import type { KnownEnhancementBuild } from "./enhancement-builds.js";
 const COMPASS_OWNER_BODY_HASHES = Object.freeze([
   "9df419f84c93ec674540ef60dc74cae03495e3308843ab3fcc594cad93e97043",
   "968c145474ccf26e7b2b8bd64ee11c06cecd0e9d0af011474560111c421cf209",
+  "914b7d302bc76177c3b75ba3372d795198eb9b132545638b69c56996770f2b14",
 ]);
 
 type PreGameProof = NonNullable<KnownEnhancementBuild["preGameControls"]>;

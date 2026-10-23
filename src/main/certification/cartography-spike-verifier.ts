@@ -23,11 +23,7 @@ import {
 import { enhancementProofContext } from "./wasm-evidence.js";
 
 const SHA256 = /^[0-9a-f]{64}$/;
-const MEMORY_LAYOUT_IDS: readonly CartographyMemoryLayoutId[] = [
-  "official",
-  "relocated",
-  "october",
-];
+const MEMORY_LAYOUT_IDS = Object.keys(CARTOGRAPHY_MEMORY_LAYOUTS) as CartographyMemoryLayoutId[];
 
 export interface CartographySpikeBuild {
   readonly inputSha256: string;
@@ -91,7 +87,7 @@ export function isCartographySpikeBuild(
     && build.inputSha256 === inputSha256
     && SHA256.test(build.inputSha256)
     && build.transformAbi === CARTOGRAPHY_SPIKE_TRANSFORM_ABI
-    && (build.memoryLayout === "official" || build.memoryLayout === "relocated" || build.memoryLayout === "october")
+    && MEMORY_LAYOUT_IDS.includes(build.memoryLayout as CartographyMemoryLayoutId)
     && typeof build.outputSha256 === "string"
     && SHA256.test(build.outputSha256);
 }

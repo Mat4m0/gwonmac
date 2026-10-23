@@ -16,6 +16,7 @@ import {
   type CartographyEvidenceReport,
   type CartographyKernelDiagnostic,
 } from "../../shared/cartography-evidence.js";
+import { isCartographyLayoutId } from "../../shared/cartography-spike.js";
 import { ValidationError } from "../../shared/errors.js";
 
 const DIGEST = /^[a-f0-9]{64}$/u;
@@ -419,7 +420,7 @@ export function validateCartographyEvidence(value: unknown): string[] {
   ]) && typeof value.source.applicationVersion === "string"
     && VERSION.test(value.source.applicationVersion)
     && (value.source.clientSha256 === null || digest(value.source.clientSha256))
-    && (value.source.layoutId === null || value.source.layoutId === 1 || value.source.layoutId === 2 || value.source.layoutId === 3)
+    && (value.source.layoutId === null || isCartographyLayoutId(value.source.layoutId))
     && positiveUint(value.source.gridRevision)
     && digest(value.source.toolboxSha256)
     && (value.source.kernelSha256 === null || digest(value.source.kernelSha256));

@@ -86,11 +86,12 @@ function trap(
   return at;
 }
 
-async function createKernel(layoutId: 1 | 2 | 3 = 1): Promise<Kernel> {
+async function createKernel(layoutId: 1 | 2 | 3 | 4 = 1): Promise<Kernel> {
   const layout = {
     1: { contextRoot: 0x5a0e70, agentArray: 0x5a4de8 },
     2: { contextRoot: 0x5a29b0, agentArray: 0x5a6928 },
     3: { contextRoot: 5918848, agentArray: 5935096 },
+    4: { contextRoot: 5919152, agentArray: 5935416 },
   }[layoutId];
   const bytes = await readFile("build/renderer/cartography-reachability-kernel.wasm");
   const module = new WebAssembly.Module(bytes);
@@ -261,7 +262,7 @@ describe("Cartography reachability kernel", () => {
     assert.equal(kernel.view.getUint32(A.region + 36, true), 512);
   });
 
-  for (const layoutId of [1, 2, 3] as const) it(`layout ${layoutId} includes connected ground and excludes disconnected ground`, async () => {
+  for (const layoutId of [1, 2, 3, 4] as const) it(`layout ${layoutId} includes connected ground and excludes disconnected ground`, async () => {
     const kernel = await createKernel(layoutId);
     assert.equal(kernel.classify(), 1);
     const header = new DataView(kernel.memory.buffer, A.region, 72);

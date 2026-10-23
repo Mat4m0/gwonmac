@@ -10,6 +10,7 @@ import {
   uleb,
   type FunctionType,
 } from "../core/wasm-binary.js";
+import type { CartographyLayoutId } from "../../shared/cartography-spike.js";
 
 const FRAME_LAYOUT = Object.freeze({
   frameBytes: 0x1c8,
@@ -99,6 +100,30 @@ export const OCTOBER_WORLD_MAP_CERTIFICATE = Object.freeze({
   eventDispatcherTableSlot: 4166,
 });
 
+// October 22 renumbered these owners and their callees; bodies are otherwise
+// unchanged apart from moved static addresses.
+export const OCTOBER_22_COMPASS_CERTIFICATE = Object.freeze({
+  ...COMPASS_CERTIFICATE,
+  renderFunction: 14213,
+  renderBodySha256: "1082760d337d455ea976e2b6c9b99132e0e529417af2037e70ca08eeed819f0d",
+  mapRenderFunction: 14152,
+  mapRenderBodySha256: "9c5177d9ca50b7fe47f7ecf52a452e4eb793537066efd1110795dbd07b52bf26",
+});
+export const OCTOBER_22_MISSION_MAP_CERTIFICATE = Object.freeze({
+  ...MISSION_MAP_CERTIFICATE,
+  eventDispatcherFunction: 16123,
+  eventDispatcherBodySha256: "73c890f5440d0ee73e0b71408fc0b04cb728660f8d34e5c5cfbe2a94dd2b1667",
+  eventDispatcherTableSlot: 4004,
+  gameplayContextFunction: 13533,
+  gameplayContextBodySha256: "a7791775e7756465b85e9fde1f69dfdcfebc0004d3e9183421de2e1cb5f5e379",
+});
+export const OCTOBER_22_WORLD_MAP_CERTIFICATE = Object.freeze({
+  ...WORLD_MAP_CERTIFICATE,
+  eventDispatcherFunction: 16210,
+  eventDispatcherBodySha256: "3667feefe1f218d803112d8c3d2c3f7c60efdaba9694b80a0ed86fe1a849d646",
+  eventDispatcherTableSlot: 4150,
+});
+
 export const EXPLORATION_CERTIFICATE = Object.freeze({
   gameContextSlot: 6,
   worldContext: 0x2c,
@@ -128,7 +153,16 @@ export const WORLD_MAP_ANCHOR_CERTIFICATE = Object.freeze({
   iconEndYDupe: 0x64,
 });
 
+/** A client's certificate: the reference fields, with per-client values. */
+type Certificate<T> = Readonly<{ [K in keyof T]: T[K] extends number ? number : string }>;
+type WorldMapCertificate = Certificate<typeof WORLD_MAP_CERTIFICATE>;
+
 export type CartographyMemoryLayout = Readonly<{
+  /** The kernel's layout number; lib.rs holds the same roots under it. */
+  layoutId: CartographyLayoutId;
+  compass: Certificate<typeof COMPASS_CERTIFICATE>;
+  missionMap: Certificate<typeof MISSION_MAP_CERTIFICATE>;
+  worldMap: WorldMapCertificate;
   frameArray: number;
   frameCount: number;
   contextRoot: number;
@@ -138,6 +172,10 @@ export type CartographyMemoryLayout = Readonly<{
 
 export const CARTOGRAPHY_MEMORY_LAYOUTS = Object.freeze({
   official: Object.freeze({
+    layoutId: 1,
+    compass: COMPASS_CERTIFICATE,
+    missionMap: MISSION_MAP_CERTIFICATE,
+    worldMap: WORLD_MAP_CERTIFICATE,
     frameArray: 0x5a1fdc,
     frameCount: 0x5a1fe4,
     contextRoot: 0x5a0e70,
@@ -145,6 +183,10 @@ export const CARTOGRAPHY_MEMORY_LAYOUTS = Object.freeze({
     agentArray: 0x5a4de8,
   }),
   relocated: Object.freeze({
+    layoutId: 2,
+    compass: COMPASS_CERTIFICATE,
+    missionMap: MISSION_MAP_CERTIFICATE,
+    worldMap: WORLD_MAP_CERTIFICATE,
     frameArray: 0x5a3b1c,
     frameCount: 0x5a3b24,
     contextRoot: 0x5a29b0,
@@ -152,13 +194,28 @@ export const CARTOGRAPHY_MEMORY_LAYOUTS = Object.freeze({
     agentArray: 0x5a6928,
   }),
   october: Object.freeze({
+    layoutId: 3,
+    compass: OCTOBER_COMPASS_CERTIFICATE,
+    missionMap: OCTOBER_MISSION_MAP_CERTIFICATE,
+    worldMap: OCTOBER_WORLD_MAP_CERTIFICATE,
     frameArray: 5923308,
     frameCount: 5923316,
     contextRoot: 5918848,
     areaInfo: 1892352,
     agentArray: 5935096,
   }),
-} satisfies Readonly<Record<"official" | "relocated" | "october", CartographyMemoryLayout>>);
+  october22: Object.freeze({
+    layoutId: 4,
+    compass: OCTOBER_22_COMPASS_CERTIFICATE,
+    missionMap: OCTOBER_22_MISSION_MAP_CERTIFICATE,
+    worldMap: OCTOBER_22_WORLD_MAP_CERTIFICATE,
+    frameArray: 5923628,
+    frameCount: 5923636,
+    contextRoot: 5919152,
+    areaInfo: 1891136,
+    agentArray: 5935416,
+  }),
+} satisfies Readonly<Record<string, CartographyMemoryLayout>>);
 
 export function fail(message: string): never {
   throw new Error(`pathing spike transform: ${message}`);
@@ -217,7 +274,7 @@ export type CartographyContextCertificate = Readonly<{
   gameContextSlot: number;
   mapContext: number;
   mapId: number;
-  layoutId: 1 | 2 | 3;
+  layoutId: CartographyLayoutId;
 }>;
 
 export type FrameGlobals = Readonly<{
@@ -603,7 +660,7 @@ export function worldMapEventWrapper(
   dispatcher: number,
   globals: WorldMapGlobals,
   areaEpoch: number,
-  certificate: (typeof WORLD_MAP_CERTIFICATE | typeof OCTOBER_WORLD_MAP_CERTIFICATE)
+  certificate: WorldMapCertificate
     & Pick<CartographyMemoryLayout, "frameArray" | "frameCount">,
 ): Uint8Array {
   // The dispatcher carries events that do not all contain a usable World Map

@@ -200,6 +200,11 @@ export interface DirectCallSite {
 export type SemanticRole = Readonly<{
   bodyLength: number;
   fingerprint: string;
+  /**
+   * Reviewed fingerprints of later clients whose body has the same length and
+   * spans and differs only in reviewed callee or address operands.
+   */
+  reviewedVariants?: readonly string[];
   spans: readonly RelocationSpan[];
   params: readonly string[];
   results: readonly string[];

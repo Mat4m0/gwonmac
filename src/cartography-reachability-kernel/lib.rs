@@ -80,6 +80,9 @@ const LAYOUT_RELOCATED: u32 = 2;
 const LAYOUT_OCTOBER: u32 = 3;
 const OCTOBER_CONTEXT_ROOT: u32 = 5918848;
 const OCTOBER_AGENT_ARRAY: u32 = 5935096;
+const LAYOUT_OCTOBER_22: u32 = 4;
+const OCTOBER_22_CONTEXT_ROOT: u32 = 5919152;
+const OCTOBER_22_AGENT_ARRAY: u32 = 5935416;
 
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
@@ -303,6 +306,9 @@ unsafe fn context(layout_id: u32, map_id: u32, player_id: u32) -> Result<Context
         },
         LAYOUT_OCTOBER => unsafe {
             resolve_layout(OCTOBER_CONTEXT_ROOT, OCTOBER_AGENT_ARRAY, map_id, player_id)
+        },
+        LAYOUT_OCTOBER_22 => unsafe {
+            resolve_layout(OCTOBER_22_CONTEXT_ROOT, OCTOBER_22_AGENT_ARRAY, map_id, player_id)
         },
         _ => Err(STATUS_AMBIGUOUS_LAYOUT),
     }
@@ -1221,7 +1227,10 @@ pub unsafe extern "C" fn cartography_reachability_classify(
 ) -> u32 {
     if region == 0 || region & 3 != 0 || region_bytes != REGION_BYTES
         || !contains(region, REGION_BYTES)
-        || !(layout_id == LAYOUT_OFFICIAL || layout_id == LAYOUT_RELOCATED || layout_id == LAYOUT_OCTOBER)
+        || !(layout_id == LAYOUT_OFFICIAL
+            || layout_id == LAYOUT_RELOCATED
+            || layout_id == LAYOUT_OCTOBER
+            || layout_id == LAYOUT_OCTOBER_22)
         || map_id == 0 || map_id > 2_000 || area_epoch == 0
         || player_id == 0 || width == 0 || height == 0
         || width.checked_mul(height).is_none_or(|cells| cells > MAX_CELLS)

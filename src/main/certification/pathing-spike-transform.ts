@@ -44,13 +44,7 @@ import { functionBodySha256, wasmEvidence } from "./wasm-evidence.js";
 import { worldMapDisplayStateAddress } from "./world-map-visibility-proof.js";
 import {
   CARTOGRAPHY_MEMORY_LAYOUTS,
-  COMPASS_CERTIFICATE,
-  OCTOBER_COMPASS_CERTIFICATE,
-  OCTOBER_MISSION_MAP_CERTIFICATE,
-  OCTOBER_WORLD_MAP_CERTIFICATE,
   EXPLORATION_CERTIFICATE,
-  MISSION_MAP_CERTIFICATE,
-  WORLD_MAP_CERTIFICATE,
   WORLD_MAP_ANCHOR_CERTIFICATE,
   cartographyContextObserver,
   compassMapRenderWrapper,
@@ -218,11 +212,8 @@ export function transformCartographySpikeWasm(
   input: Uint8Array,
   memoryLayoutId: CartographyMemoryLayoutId,
 ): Uint8Array {
-  const nativeCompass = memoryLayoutId === "october" ? OCTOBER_COMPASS_CERTIFICATE : COMPASS_CERTIFICATE;
-  const nativeMission = memoryLayoutId === "october" ? OCTOBER_MISSION_MAP_CERTIFICATE : MISSION_MAP_CERTIFICATE;
-  const nativeWorld = memoryLayoutId === "october" ? OCTOBER_WORLD_MAP_CERTIFICATE : WORLD_MAP_CERTIFICATE;
   const memoryLayout: CartographyMemoryLayout = CARTOGRAPHY_MEMORY_LAYOUTS[memoryLayoutId];
-  const layoutId = memoryLayoutId === "official" ? 1 : memoryLayoutId === "relocated" ? 2 : 3;
+  const { compass: nativeCompass, missionMap: nativeMission, worldMap: nativeWorld, layoutId } = memoryLayout;
   const compassCertificate = Object.freeze({
     ...nativeCompass,
     frameArray: memoryLayout.frameArray,

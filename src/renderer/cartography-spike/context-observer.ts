@@ -5,6 +5,7 @@
 import {
   CARTOGRAPHY_CONTEXT_GLOBALS,
   CARTOGRAPHY_CONTEXT_SCALARS,
+  isCartographyLayoutId,
   type CartographyContextController,
   type CartographyContextSnapshot,
 } from "../../shared/cartography-spike.js";
@@ -41,7 +42,7 @@ export function createCartographyContextReader(
       || status === null || areaEpoch === null || mapId === null || layoutId === null
       || status < 1 || status > 5
       || areaEpoch < 0
-      || (layoutId !== 1 && layoutId !== 2 && layoutId !== 3 && status === 1)
+      || (!isCartographyLayoutId(layoutId) && status === 1)
       || (status === 1 && (areaEpoch === 0 || mapId <= 0 || mapId > 2_000))
     ) return null;
     return Object.freeze({
