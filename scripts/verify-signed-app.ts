@@ -56,6 +56,22 @@ function capture(command: string, args: readonly string[]): string {
   return output;
 }
 
+// stapler looks the ticket up in Apple's CloudKit service. Hosted runners
+// sometimes drop that connection; retry only that transport error, so a
+// missing or invalid ticket still fails on the first answer.
+function validateStapledTicket(target: string): void {
+  for (let attempt = 1; ; attempt += 1) {
+    const result = spawnSync("xcrun", ["stapler", "validate", "-v", target], { encoding: "utf8" });
+    if (result.error) throw result.error;
+    if (result.status === 0) return;
+    const output = `${result.stdout}${result.stderr}`;
+    if (attempt === 5 || !output.includes("NSURLErrorDomain")) {
+      fail(`xcrun stapler validate -v ${target} exited ${result.status}\n${output}`);
+    }
+    spawnSync("sleep", ["30"]);
+  }
+}
+
 function expectSignature(target: string, required: readonly string[]): void {
   const signature = capture("codesign", ["-dv", "--verbose=4", target]);
   for (const needle of required) {
@@ -152,7 +168,7 @@ export function verifySignedApplication(
     fail(`${application} is not signed with the approved ${channel} entitlements`);
   }
   verifyHelpers(channel, application);
-  capture("xcrun", ["stapler", "validate", "-v", application]);
+  validateStapledTicket(application);
   capture("spctl", ["--assess", "--type", "execute", "--verbose=4", application]);
 }
 
@@ -166,7 +182,7 @@ export function verifySignedDiskImage(
     `TeamIdentifier=${APPLE_TEAM_ID}`,
     "Timestamp=",
   ]);
-  capture("xcrun", ["stapler", "validate", "-v", diskImage]);
+  validateStapledTicket(diskImage);
   // Gatekeeper assesses an image the way an opening user does, against the
   // image's own signature rather than a quarantine record it has not got yet.
   capture("spctl", [
