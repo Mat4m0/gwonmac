@@ -194,6 +194,16 @@ Command modifier, so pressing or releasing Command cannot interrupt another
 key that is still physically held. A real focus loss remains the final cleanup
 for interrupted input.
 
+Guild Wars reads Control, Shift, and Alt from key transitions. A key-up that
+never reaches it leaves the modifier down for the game: the next A selects all,
+a drag offers the split-stack prompt, and H hides the interface. Every trusted
+key-down that is not a modifier, and every trusted mouse press, carries the true
+modifier flags. Before such an event reaches the game, the renderer releases each
+held Control, Shift, or Alt entry whose flag is false, through the same
+release path as a normalized release. A modifier whose flag is true, and a
+modifier key's own event, never trigger a release. The input harness records
+each release as "stale ctrl released before key" (or shift, alt, and pointer).
+
 A press that starts on a GWonMac surface (the Hub, a popout or a dialog) owns
 its repeats and its release. When that press closes the surface and focus
 returns to the canvas, the surface controller keeps the remaining repeats and
