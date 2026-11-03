@@ -55,7 +55,16 @@ const OCTOBER_22_ROLE_SPECS = Object.freeze({
   disconnect: [70, ["i32"], [], "6af541a904883bfec8e0ae09525157f10819c96ced8b11d48acf273f0b25e0c1"],
   connected: [342, ["i32", "i32"], ["i32"], "b5258d2937ae73dcacc82e55cd94868b2085bfa2749d9b3ffcde3f0cbd2eb879"],
 } as const);
-const ROLE_FAMILIES = Object.freeze([ROLE_SPECS, OCTOBER_ROLE_SPECS, OCTOBER_22_ROLE_SPECS]);
+// November 3 moved callees and static state again; the connection event and
+// logout handlers assert with GcAuthCmd.cpp source lines that moved by seven.
+const NOVEMBER_3_ROLE_SPECS = Object.freeze({
+  ...OCTOBER_22_ROLE_SPECS,
+  connectionEvent: [1084, ["i32", "i32", "i32", "i32", "i32"], ["i32"], "3f8f84593f5d9efe8fe6bf43b2829a8f827ce70ee56430e762afde39661ae620"],
+  logout: [206, ["i32"], [], "7921999e36adfdafbb88f041c42a5bdf4fa305da01c36045aba56610725e33c8"],
+} as const);
+const ROLE_FAMILIES = Object.freeze([
+  ROLE_SPECS, OCTOBER_ROLE_SPECS, OCTOBER_22_ROLE_SPECS, NOVEMBER_3_ROLE_SPECS,
+]);
 
 export const FRIEND_LIFECYCLE_SEMANTIC_SHA256 = createHash("sha256").update(JSON.stringify({
   roles: ROLE_FAMILIES,

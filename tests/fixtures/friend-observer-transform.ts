@@ -41,9 +41,15 @@ export async function observerTransformFixture(
   const view = new DataView(memory.buffer);
   const events: Array<{ kind: "notification" | "native"; name: string; args: number[] }> = [];
   const handlers = new Map<Wrapper, (...args: number[]) => number | void>();
+  // Native callees of the wrapped roles, chosen by each client's disconnect
+  // owner: October 22 (10251), November 3 (10252), otherwise August.
+  const dependencies = ({
+    10251: [10252, 10333, 879],
+    10252: [10253, 10334, 880],
+  } as Readonly<Record<number, readonly [number, number, number]>>)[
+    certificate.lifecycle.roles.disconnect] ?? [10241, 10322, 879];
   const dependencyStubs = new Map<number, (...args: number[]) => number | void>([
-    [certificate.lifecycle.roles.disconnect === 10251 ? 10252 : 10241, () => {}],
-    [certificate.lifecycle.roles.disconnect === 10251 ? 10333 : 10322, () => 1], [879, () => {}],
+    [dependencies[0], () => {}], [dependencies[1], () => 1], [dependencies[2], () => {}],
   ]);
   const stubs = new Map<number, (...args: number[]) => number | void>([
     ...[...clones].map(([role, index]) => [index, (...args: number[]) => {

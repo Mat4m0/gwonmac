@@ -1,5 +1,6 @@
 /** Proves native HUD refusal stays independent of the observation capabilities. */
 import assert from "node:assert/strict";
+import { retainedClientFixture } from "../fixtures/retained-client.js";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { verifyLocalClientBytes, isLocalClientVerification } from "../../src/main/certification/local-client-verifier.js";
@@ -17,7 +18,7 @@ test("changed native HUD ownership refuses only rendering and preserves independ
     const input = new Uint8Array(bytes);
     const evidence = wasmEvidence(input); assert.ok(evidence);
     const sections = splitSections(input), bodies = parseCode(sectionById(sections, 10));
-    const local = 6492 - evidence.moduleView().functionImportCount;
+    const local = retainedClientFixture(input).functionIndex(6492) - evidence.moduleView().functionImportCount;
     const original = bodies[local]!;
     // Harmless code drift must revoke the exact draw-owner proof while leaving
     // the separately proved skill/effect observation and other Tools intact.

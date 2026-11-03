@@ -17,13 +17,17 @@ for (const channel of ["cooldowns", "keys", "effects"] as const) {
   assert.ok(process.env.GW_CLIENT_WASM);
   const input = new Uint8Array(await readFile(process.env.GW_CLIENT_WASM));
   const clientFixture = retainedClientFixture(input);
+  // Handlers are written against August indices; the fixture moves them.
+  const clientImports = (handlers: Record<number, (...args: number[]) => unknown>): WebAssembly.ModuleImports =>
+    Object.fromEntries(Object.entries(handlers).map(([index, handler]) =>
+      [clientFixture.functionIndex(Number(index)), handler]));
   const output = appendNativeHud(input, 1);
   const sections = splitSections(output), bodies = parseCode(sectionById(sections, 10));
   const evidence = wasmEvidence(output); assert.ok(evidence); const module = evidence.moduleView();
   const exported = parseExports(sectionById(sections, 7));
   const label = exported.find((entry) => entry.name === "gwonmac_hud_label")?.index; assert.ok(label);
   const first = label - 8;
-  const selected = [...Array.from({length: 7}, (_, n) => first + 2 + n), first, 6492, 6585, first + 9, first + 10, first + 11];
+  const selected = [...Array.from({length: 7}, (_, n) => first + 2 + n), first, clientFixture.functionIndex(6492), clientFixture.functionIndex(6585), first + 9, first + 10, first + 11];
   const peers = [17640, 6587, 294, 295, 322, 334, 6588, 6598, 6599, 6601, 6602, first + 1, 6593, 748, 17791, 17793, 1444, 1445, 1446, 1448, 1449, 1554, 1572, 6446, 1563, 1569, 1579, 1333, 1334, 1357, 264, 1559, 5595, 2249, 3137, 750].map(index => clientFixture.functionIndex(index));
   const indices = new Map([...peers, ...selected].map((index, position) => [index, position]));
   const decoded = evidence.decodeFunctions([]);
@@ -53,7 +57,7 @@ for (const channel of ["cooldowns", "keys", "effects"] as const) {
       ...labels.map((name, index) => concat(encodeName(name), Uint8Array.of(0), uleb(peers.length + index))),
       encodeName("memory"), Uint8Array.of(2, 0), encodeName("stack"), Uint8Array.of(3, 0), encodeName("skillbar"), Uint8Array.of(3, 1),
       ...scalarExports.map((entry) => concat(encodeName(entry.name), Uint8Array.of(3), uleb(entry.index))))),
-    section(9, concat(uleb(1), Uint8Array.of(0, 0x41, 0xae, 0x0d, 0x0b), uleb(4), ...[6598, 6599, 6601, 6602].map((index) => uleb(indices.get(index)!)))),
+    section(9, concat(uleb(1), Uint8Array.of(0, 0x41, 0xae, 0x0d, 0x0b), uleb(4), ...[6598, 6599, 6601, 6602].map((index) => uleb(indices.get(clientFixture.functionIndex(index))!)))),
     section(10, encodeCode(rewritten)));
   let textureCreates = 0, invalidations = 0, meshes = 0, destroyed = 0, nextHandle = 100;
   const draws = new Set<number>();
@@ -61,8 +65,8 @@ for (const channel of ["cooldowns", "keys", "effects"] as const) {
   const create = () => { const handle = nextHandle++; refs.set(handle, 1); return handle; };
   const collected: number[] = [];
   let heap = 5_000_000; const allocations = new Set<number>();
-  const exports: WebAssembly.Exports = new WebAssembly.Instance(new WebAssembly.Module(Uint8Array.from(fixture)), {peer: {
-    [clientFixture.functionIndex(17640)]: () => { throw new Error("fixture cache must be initialized"); },
+  const exports: WebAssembly.Exports = new WebAssembly.Instance(new WebAssembly.Module(Uint8Array.from(fixture)), {peer: clientImports({
+    17640: () => { throw new Error("fixture cache must be initialized"); },
     6587: (count: number, vectors: number) => {
       for (let n = 0; n < count; n++) {
         const vector = vectors + n * 16;
@@ -90,8 +94,8 @@ for (const channel of ["cooldowns", "keys", "effects"] as const) {
         draws.delete(handle);
       }
       assert.ok(refs.has(handle), `release unknown ${handle}`); refs.delete(handle); },
-    [clientFixture.functionIndex(17791)]: (bytes: number) => { const p = heap; heap += bytes; allocations.add(p); return p; },
-    [clientFixture.functionIndex(17793)]: (pointer: number) => { assert.ok(allocations.delete(pointer)); },
+    17791: (bytes: number) => { const p = heap; heap += bytes; allocations.add(p); return p; },
+    17793: (pointer: number) => { assert.ok(allocations.delete(pointer)); },
     1444: () => create(),
     1445: () => 7_000_000,
     1446: (handle: number) => { const p = 6_000_000; meshVertices.set(handle, p); meshes++; return p; },
@@ -117,7 +121,7 @@ for (const channel of ["cooldowns", "keys", "effects"] as const) {
     3137: (_count: number, _texture: number, stage: number, _shader: number, _a: number, _b: number, _flags: number, order: number) => {
       assert.deepEqual([view.getUint32(stage, true), order], [7, 11]); return create();
     },
-  }}).exports;
+  })}).exports;
   assert.ok(exports.memory instanceof WebAssembly.Memory); let view = new DataView(exports.memory.buffer);
   const invoke = (name: string, ...args: number[]) => { const target = exports[name]; assert.equal(typeof target, "function"); if (typeof target === "function") return target(...args); };
   const scalar = (name: string, value: number) => { const target = exports[name]; assert.ok(target instanceof WebAssembly.Global); target.value = value; };

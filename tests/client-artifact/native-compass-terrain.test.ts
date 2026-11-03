@@ -14,6 +14,10 @@ test("native terrain owns bounded resources, follows its Canvas and refuses inva
   const input = new Uint8Array(await readFile(process.env.GW_CLIENT_WASM));
   const fixture = retainedClientFixture(input);
   const output = transformCartographySpikeWasm(input, fixture.memoryLayout);
+  // Handlers are written against August indices; the fixture moves them.
+  const clientImports = (handlers: Record<number, (...args: number[]) => unknown>): WebAssembly.ModuleImports =>
+    Object.fromEntries(Object.entries(handlers).map(([index, handler]) =>
+      [fixture.functionIndex(Number(index)), handler]));
   const sections = splitSections(output); const bodies = parseCode(sectionById(sections, 10));
   const evidence = wasmEvidence(output); assert.ok(evidence); const module = evidence.moduleView();
   const exported = parseExports(sectionById(sections, 7));
@@ -23,7 +27,7 @@ test("native terrain owns bounded resources, follows its Canvas and refuses inva
   assert.ok(publishIndex !== undefined);
   const first = publishIndex - 5;
   const selected = Array.from({length: 8}, (_, index) => first + index);
-  const peers = [1444, 1445, 1446, 1448, 1449, 1556, 1565, 1579, 748, 6827, 2249, 3137, 1569, 750, 6593];
+  const peers = [1444, 1445, 1446, 1448, 1449, 1556, 1565, 1579, 748, 6827, 2249, 3137, 1569, 750, 6593].map((index) => fixture.functionIndex(index));
   const indices = new Map([...peers, ...selected].map((index, position) => [index, position]));
   const decoded = evidence.decodeFunctions([]);
   const rewritten = selected.map((index) => {
@@ -54,7 +58,7 @@ test("native terrain owns bounded resources, follows its Canvas and refuses inva
     section(10, encodeCode(rewritten)));
   const released: number[] = []; const vertices: number[] = []; const indicesAllocated: number[] = [];
   let textureCreates = 0; let attachments = 0;
-  const { exports } = new WebAssembly.Instance(new WebAssembly.Module(Uint8Array.from(capsule)), {peer: {
+  const exports: WebAssembly.Exports = new WebAssembly.Instance(new WebAssembly.Module(Uint8Array.from(capsule)), {peer: clientImports({
     1444: (format: number, flags: number) => { assert.deepEqual([format, flags], [265, 0]); return 11; },
     1445: (handle: number, count: number) => { assert.equal(handle, 11); assert.equal(view.getUint32(MODEL + 152, true), 0, "never rewrite queued Compass indices"); indicesAllocated.push(count); return 131072; },
     1446: (handle: number, count: number) => { assert.equal(handle, 11); vertices.push(count); return 65536; },
@@ -85,7 +89,7 @@ test("native terrain owns bounded resources, follows its Canvas and refuses inva
       assert.deepEqual([draw, index, material], [12, 0, 22]);
     },
     750: (handle: number, type: number) => { assert.deepEqual([handle, type], [12, MODEL_TYPE]); return MODEL; },
-  }});
+  })}).exports;
   assert.ok(exports.memory instanceof WebAssembly.Memory); const view = new DataView(exports.memory.buffer);
   const scalar = (name: string, value: number) => { const target = exports[name]; assert.ok(target instanceof WebAssembly.Global); target.value = value; };
   const invoke = (name: string, ...args: number[]) => { const target = exports[name]; assert.equal(typeof target, "function"); if (typeof target === "function") return target(...args); };
@@ -208,7 +212,7 @@ test("changed native cache invalidation refuses Compass drawing while maps remai
   const fixture = retainedClientFixture(input);
   const evidence = wasmEvidence(input); assert.ok(evidence);
   const sections = splitSections(input), bodies = parseCode(sectionById(sections, 10));
-  const local = 6593 - evidence.moduleView().functionImportCount;
+  const local = fixture.functionIndex(6593) - evidence.moduleView().functionImportCount;
   const original = bodies[local]!;
   bodies[local] = concat(original.slice(0, -1), Uint8Array.of(0x01, 0x0b));
   const changed = concat(WASM_HEADER, ...sections.map((section) => encodeSection(section.id === 10
