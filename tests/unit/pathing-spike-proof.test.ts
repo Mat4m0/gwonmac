@@ -21,8 +21,10 @@ const VALID: PathingShapeFacts = Object.freeze({
 describe("the pathing shape spike", () => {
   it("accepts only the jointly proved exact shape", () => {
     assert.equal(validPathingShapeFacts(VALID), true);
+    // November 3 moved the loader by one; each reviewed client keeps its own.
+    assert.equal(validPathingShapeFacts({ ...VALID, converterCaller: 3209 }), true);
+    assert.equal(validPathingShapeFacts({ ...VALID, converterCaller: 3210 }), false, "converterCaller");
     for (const key of [
-      "converterCaller",
       "converterCallSiteOffset",
       "pathMapHolderOffset",
       "pathMapTrapezoidCount",

@@ -320,3 +320,45 @@ Beta has more per-client tables than Stable. For this client they needed:
   producer and area-type accessor, and the native render family; and
 - `tests/fixtures/retained-client.ts`, which maps the August function indices
   and static addresses the real-client tests use.
+
+## November 3 recovery findings
+
+Generation `f2a2b07c9c56` refused template saving, so every Tools feature
+withdrew. Against the October 22 client the reviewed code was unchanged apart
+from relocation, but the relocation reached code the earlier recoveries never
+saw move:
+
+- one function was inserted at local 60, so every index above 279 moved by
+  one; five more were inserted, three removed and a few replaced between
+  locals 10836 and 11761, ending at +5;
+- static data moved by +384, +400 or +416 per region and read-only data by
+  +224, including the pointers stored inside it;
+- the area-table count sentinel grew again (1477 to 1480);
+- the logout producer passes two function-table slots that dropped by one
+  (2801/2802 to 2800/2801): each names the same callback, moved down one
+  slot; and
+- the friend connection-event and logout handlers assert with `GcAuthCmd.cpp`
+  source lines that moved by seven.
+
+Template saving needed a source change, not only reviewed variants. Its
+caller fingerprint left helper calls un-normalized because they had never
+moved. `MOVED_CALLEES` in `template-save-callee-proof.ts` now binds each such
+call to its reviewed October 22 and November 3 callee body, including the
+delete and `File::Open` bodies, and the semantic baseline fingerprint changed
+with it. Older clients refuse template saving; ArenaNet serves only the
+current client, so they never run again.
+
+Two cheap checks caught mistakes during this recovery:
+
+- Raw body hashes can collide across clients when a one-call wrapper and its
+  neighbour both shift by one index. Map each role by its relations, not by
+  its hash alone.
+- Remapping a record by literal substitution can rewrite an unchanged field
+  that shares a value with a moved index. The October 22 record's title
+  templates (9186, 9189, 9190) equal function indices that moved. Check every
+  literal that is both changed and unchanged before substituting.
+
+`tests/fixtures/retained-client.ts` now renumbers October 22 indices with
+`NOVEMBER_3_SEGMENTS` instead of listing single moves, because almost every
+index moved. Real-client tests that used August literals now pass them
+through the fixture.

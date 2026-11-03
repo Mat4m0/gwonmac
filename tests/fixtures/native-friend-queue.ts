@@ -2,11 +2,13 @@
 import assert from "node:assert/strict";
 import type { FriendObserverCertificate } from "../../src/main/certification/friend-observer-certificate.js";
 import { wasmEvidence } from "../../src/main/certification/wasm-evidence.js";
+import { november3Index } from "./retained-client.js";
 import {
   concat, encodeCode, encodeIndexVector, encodeSection, parseExports,
   sectionById, sleb, splitSections, uleb, WASM_HEADER,
 } from "../../src/main/core/wasm-binary.js";
 
+const NOVEMBER_3_SHA256 = "b19f16fd415b2bdef6701921921ef3c7eaf40ca03b95385d4ac2ba8624dead98";
 const INPUT_SHA256 = "1eb07332632e2fca8aabf5baa14fa1a1e6a2a59ec7134dfb8f6231d924c9fd7b";
 const CONTEXT = 0x700000;
 const PAYLOAD = 0x780000;
@@ -41,21 +43,29 @@ export async function queueFixture(input: Uint8Array, observer?: Readonly<{
     // The same-day October 22 rebuild changed no queue role or static address.
     "3dc01a8295d179450b16e2059ad056d4062fcad01e79ddae834bb2028596102b":
       { allocator: 17797, context: 5938732, pending: 5938652, request: 5938660 },
+    // November 3 renumbered the October 22 roles (see `client` below).
+    [NOVEMBER_3_SHA256]:
+      { allocator: 17797, context: 5939132, pending: 5939052, request: 5939060 },
   };
   const octoberClient = octoberClients[originalEvidence.inputSha256];
   const october = octoberClient !== undefined;
+  // Indices below are October 22 (or August) owners; November 3 moves them.
+  const client = (index: number) =>
+    originalEvidence.inputSha256 === NOVEMBER_3_SHA256 ? november3Index(index) : index;
   assert.ok(october || originalEvidence.inputSha256 === INPUT_SHA256,
     "reinspect queue roles for another retained client");
-  const NATIVE = october ? {
+  const NATIVE_OWNERS = october ? {
     ...PREVIOUS_NATIVE, rosterEntry: 10095, completeRequest: 10079,
     loginComplete: 10009, createFriend: 8828, growArray: 8824,
     removeFriend: 8826, setFriendLocation: 8841, setFriendStatus: 8840,
   } : PREVIOUS_NATIVE;
+  const NATIVE = Object.fromEntries(Object.entries(NATIVE_OWNERS)
+    .map(([name, index]) => [name, client(index)])) as Record<keyof typeof PREVIOUS_NATIVE, number>;
   const moved: Readonly<Record<number, number>> = {
     17809: octoberClient?.allocator ?? 17809, 9999: 10010, 8844: 8850, 10000: 10011, 9968: 9979,
     8823: 8829, 8824: 8830, 10329: 10340, 10242: 10253, 10264: 10275,
   };
-  const fixtureIndex = (index: number) => october ? moved[index] ?? index : index;
+  const fixtureIndex = (index: number) => client(october ? moved[index] ?? index : index);
   const evidence = observer ? wasmEvidence(observer.bytes) : originalEvidence;
   assert.ok(evidence);
   const module = evidence.moduleView();
@@ -67,7 +77,7 @@ export async function queueFixture(input: Uint8Array, observer?: Readonly<{
     assert.equal(calls.length, 1);
     return calls[0]!;
   };
-  const callbackIndex = observer ? clone("rosterCallback") : october ? 8855 : 8849;
+  const callbackIndex = observer ? clone("rosterCallback") : client(october ? 8855 : 8849);
   const observerNotifications: number[][] = [];
   const memory = new WebAssembly.Memory({ initial: 256, maximum: 256 });
   const view = new DataView(memory.buffer);
@@ -82,19 +92,20 @@ export async function queueFixture(input: Uint8Array, observer?: Readonly<{
     completionProcessed(): void;
   }> | undefined;
   const unsupported = () => { throw new Error("unmodeled event queue dependency"); };
+  // Bare stub indices are August owners that October kept in place.
   const stubs = new Map<number, (...args: number[]) => number | void>([
-    [322, (expression, source, line) => { throw new Error(`native assertion ${expression}/${source}:${line}`); }],
+    [client(322), (expression, source, line) => { throw new Error(`native assertion ${expression}/${source}:${line}`); }],
     // Single-threaded fixture: no scheduler, locks, or client telemetry executes.
-    [224, (address) => address], [226, () => {}], [227, () => {}],
-    [872, () => { scheduled += 1; }], [827, () => {}],
-    [332, (size) => {
+    [client(224), (address) => address], [client(226), () => {}], [client(227), () => {}],
+    [client(872), () => { scheduled += 1; }], [client(827), () => {}],
+    [client(332), (size) => {
       assert.ok(size !== undefined && size > 0 && size <= 16384);
       const address = allocated;
       allocated += (size + 15) & ~15;
       assert.ok(allocated < 0x900000);
       return address;
     }],
-    [264, (destination, source, size) => {
+    [client(264), (destination, source, size) => {
       assert.ok(destination !== undefined && source !== undefined && size !== undefined && size <= 1024);
       new Uint8Array(memory.buffer, destination, size).set(new Uint8Array(memory.buffer, source, size).slice());
       return destination;
@@ -113,22 +124,22 @@ export async function queueFixture(input: Uint8Array, observer?: Readonly<{
       assert.ok(address !== undefined && address >= 0x800000 && address < allocated);
       assert.ok(size === 24 || size === 172); // Queue block or friend record; allocator reuse is not modeled.
     }],
-    [267, (address, size) => {
+    [client(267), (address, size) => {
       assert.ok(address !== undefined && size !== undefined && size <= 352);
       new Uint8Array(memory.buffer, address, size).fill(0);
       return address;
     }],
     [fixtureIndex(9999), (_array, count) => { assert.equal(count, 0, "this fixture has no account properties"); }],
     // Suppress formatting/logging of the synthetic account fields; never emit identities.
-    [fixtureIndex(8844), () => {}], [325, () => {}], [400, () => 0],
+    [fixtureIndex(8844), () => {}], [client(325), () => {}], [client(400), () => 0],
     [fixtureIndex(10000), () => {}], [fixtureIndex(9968), () => {}],
     // Record experiments reserve their pointer arrays up front. Hash membership
     // is outside the reader: the empty lookup bucket and these substitutes do
     // not establish native alias replacement or real hash-list ownership.
-    [fixtureIndex(8823), () => {}], [fixtureIndex(8824), () => 0], [294, unsupported], [295, unsupported],
-    [fixtureIndex(10329), unsupported], [fixtureIndex(10242), unsupported], [fixtureIndex(10264), unsupported], [334, unsupported],
-    [223, unsupported], [245, unsupported], [246, unsupported],
-    [848, unsupported], [482, unsupported], [480, unsupported], [495, unsupported],
+    [fixtureIndex(8823), () => {}], [fixtureIndex(8824), () => 0], [client(294), unsupported], [client(295), unsupported],
+    [fixtureIndex(10329), unsupported], [fixtureIndex(10242), unsupported], [fixtureIndex(10264), unsupported], [client(334), unsupported],
+    [client(223), unsupported], [client(245), unsupported], [client(246), unsupported],
+    [client(848), unsupported], [client(482), unsupported], [client(480), unsupported], [client(495), unsupported],
   ]);
   for (const [index, stub] of stubs) {
     if (stub === unsupported) stubs.set(index, () => { throw new Error(`unmodeled queue dependency ${index}`); });

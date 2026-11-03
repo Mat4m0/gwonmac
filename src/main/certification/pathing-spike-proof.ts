@@ -46,6 +46,32 @@ const OCTOBER_22_HASHES = Object.freeze({
   boundWriter: "8850a945edc4d36ed0032841c451d40844b6bdab864de79e8847c5a7cb4d975e",
 });
 
+// November 3 renumbered the five pathing functions (+1) and moved their callee
+// indices and string pointers; record shapes and relations are unchanged.
+const NOVEMBER_3_FUNCTIONS: Readonly<Record<keyof typeof EXPECTED_FUNCTIONS, number>> = Object.freeze({
+  loader: 3209,
+  converter: 3217,
+  boundWriter: 3274,
+  coordinateWriter: 3282,
+  builder: 3289,
+});
+const NOVEMBER_3_HASHES = Object.freeze({
+  loader: "3666716979fde05badb08fcb7be50a64e47bc8aeb80bc27bc8a82865442be3cb",
+  converter: "9ff3014e767f4925d635bdfc83c1e94079510145b56475ce01ea75c670fe1c05",
+  boundWriter: "7cfb9f1b504575c2dce539b38de6d741b1009ba5b0607de7c9161b03a5db06fd",
+  coordinateWriter: "7c38b28eb9782a324d24130841e2c109feb172a33f657522ced3278d9c7e7d25",
+  builder: "0f1dfd8047975dd5e605a27fef529729a4b2f1dde78153897a79ad4fa8fcad2a",
+});
+
+/** Each reviewed function set with the body hashes accepted at those indices. */
+const PATHING_FAMILIES: readonly Readonly<{
+  functions: Readonly<Record<keyof typeof EXPECTED_FUNCTIONS, number>>;
+  hashes: readonly Readonly<Record<keyof typeof EXPECTED_FUNCTIONS, string>>[];
+}>[] = Object.freeze([
+  { functions: EXPECTED_FUNCTIONS, hashes: [EXPECTED_HASHES, OCTOBER_HASHES, OCTOBER_22_HASHES] },
+  { functions: NOVEMBER_3_FUNCTIONS, hashes: [NOVEMBER_3_HASHES] },
+]);
+
 const I32_LOAD = 0x28;
 const I32_LOAD16_U = 0x2f;
 const F32_LOAD = 0x2a;
@@ -103,7 +129,7 @@ function sameNumbers(actual: readonly number[], expected: readonly number[]): bo
 
 /** Mutation-test boundary for every shape value the spike is willing to claim. */
 export function validPathingShapeFacts(candidate: PathingShapeFacts): boolean {
-  return candidate.converterCaller === EXPECTED_FACTS.converterCaller
+  return PATHING_FAMILIES.some(({ functions }) => candidate.converterCaller === functions.loader)
     && candidate.converterCallSiteOffset === EXPECTED_FACTS.converterCallSiteOffset
     && candidate.pathMapHolderOffset === EXPECTED_FACTS.pathMapHolderOffset
     && candidate.pathMapTrapezoidCount === EXPECTED_FACTS.pathMapTrapezoidCount
@@ -164,10 +190,11 @@ function decodedAt(
 
 function exactHash(
   evidence: WasmEvidence,
+  functions: Readonly<Record<keyof typeof EXPECTED_FUNCTIONS, number>>,
   key: keyof typeof EXPECTED_FUNCTIONS,
   hashes: Readonly<Record<keyof typeof EXPECTED_FUNCTIONS, string>>,
 ): boolean {
-  return functionBodySha256(evidence.moduleView(), EXPECTED_FUNCTIONS[key])
+  return functionBodySha256(evidence.moduleView(), functions[key])
     === hashes[key];
 }
 
@@ -180,52 +207,64 @@ export function certifyPathingShape(input: Uint8Array): PathingShapeProof | null
   const evidence = wasmEvidence(input);
   if (!evidence) return null;
   const decoded = evidence.decodeFunctions([0x30, 1024]);
-  const converter = decodedAt(decoded, EXPECTED_FUNCTIONS.converter);
-  const loader = decodedAt(decoded, EXPECTED_FUNCTIONS.loader);
-  const boundWriter = decodedAt(decoded, EXPECTED_FUNCTIONS.boundWriter);
-  const coordinateWriter = decodedAt(decoded, EXPECTED_FUNCTIONS.coordinateWriter);
-  const builder = decodedAt(decoded, EXPECTED_FUNCTIONS.builder);
+  const proofs = PATHING_FAMILIES.flatMap(({ functions, hashes }) =>
+    certifyPathingFamily(evidence, decoded, functions, hashes) ?? []);
+  return proofs.length === 1 ? proofs[0]! : null;
+}
+
+function certifyPathingFamily(
+  evidence: WasmEvidence,
+  decoded: readonly DecodedFunction[],
+  family: Readonly<Record<keyof typeof EXPECTED_FUNCTIONS, number>>,
+  hashSets: readonly Readonly<Record<keyof typeof EXPECTED_FUNCTIONS, string>>[],
+): PathingShapeProof | null {
+  const facts: PathingShapeFacts = Object.freeze({ ...EXPECTED_FACTS, converterCaller: family.loader });
+  const converter = decodedAt(decoded, family.converter);
+  const loader = decodedAt(decoded, family.loader);
+  const boundWriter = decodedAt(decoded, family.boundWriter);
+  const coordinateWriter = decodedAt(decoded, family.coordinateWriter);
+  const builder = decodedAt(decoded, family.builder);
   const converterCallers = decoded.filter(
-    (candidate) => (candidate.calls.get(EXPECTED_FUNCTIONS.converter) ?? 0) > 0,
+    (candidate) => (candidate.calls.get(family.converter) ?? 0) > 0,
   );
-  const converterCallSites = loader?.callSites.get(EXPECTED_FUNCTIONS.converter) ?? [];
+  const converterCallSites = loader?.callSites.get(family.converter) ?? [];
   if (!converter || !loader || !boundWriter || !coordinateWriter || !builder) return null;
   if (
-    anchoredFunction(evidence, decoded, ANCHORS.index) !== EXPECTED_FUNCTIONS.converter
-    || anchoredFunction(evidence, decoded, ANCHORS.bound) !== EXPECTED_FUNCTIONS.boundWriter
+    anchoredFunction(evidence, decoded, ANCHORS.index) !== family.converter
+    || anchoredFunction(evidence, decoded, ANCHORS.bound) !== family.boundWriter
     || anchoredFunction(evidence, decoded, ANCHORS.infinite)
-      !== EXPECTED_FUNCTIONS.coordinateWriter
-    || ![EXPECTED_HASHES, OCTOBER_HASHES, OCTOBER_22_HASHES].some(hashes =>
-      Object.keys(EXPECTED_FUNCTIONS).every(
-        key => exactHash(evidence, key as keyof typeof EXPECTED_FUNCTIONS, hashes)))
-    || !exactSignature(evidence, EXPECTED_FUNCTIONS.loader, ["i32", "i32", "i32", "i32"], ["i32"])
-    || !exactSignature(evidence, EXPECTED_FUNCTIONS.converter, ["i32", "i32", "i32", "i32"], ["i32"])
-    || !exactSignature(evidence, EXPECTED_FUNCTIONS.boundWriter, ["i32", "i32", "i32"], [])
-    || !exactSignature(evidence, EXPECTED_FUNCTIONS.coordinateWriter, ["i32", "i32", "i32"], [])
-    || !exactSignature(evidence, EXPECTED_FUNCTIONS.builder, ["i32", "i32", "i32"], ["i32"])
+      !== family.coordinateWriter
+    || !hashSets.some(hashes =>
+      Object.keys(family).every(
+        key => exactHash(evidence, family, key as keyof typeof EXPECTED_FUNCTIONS, hashes)))
+    || !exactSignature(evidence, family.loader, ["i32", "i32", "i32", "i32"], ["i32"])
+    || !exactSignature(evidence, family.converter, ["i32", "i32", "i32", "i32"], ["i32"])
+    || !exactSignature(evidence, family.boundWriter, ["i32", "i32", "i32"], [])
+    || !exactSignature(evidence, family.coordinateWriter, ["i32", "i32", "i32"], [])
+    || !exactSignature(evidence, family.builder, ["i32", "i32", "i32"], ["i32"])
     || converterCallers.length !== 1
-    || converterCallers[0]?.functionIndex !== EXPECTED_FACTS.converterCaller
-    || loader.calls.get(EXPECTED_FUNCTIONS.converter) !== 1
+    || converterCallers[0]?.functionIndex !== facts.converterCaller
+    || loader.calls.get(family.converter) !== 1
     || converterCallSites.length !== 1
-    || converterCallSites[0]?.offset !== EXPECTED_FACTS.converterCallSiteOffset
-    || builder.calls.get(EXPECTED_FUNCTIONS.coordinateWriter) !== 1
-    || builder.calls.get(EXPECTED_FUNCTIONS.boundWriter) !== 1
+    || converterCallSites[0]?.offset !== facts.converterCallSiteOffset
+    || builder.calls.get(family.coordinateWriter) !== 1
+    || builder.calls.get(family.boundWriter) !== 1
     || converter.constantSites.filter((site) => site.value === 0x30).length !== 6
     || boundWriter.constantSites.filter((site) => site.value === 1024).length !== 1
     || !containsOffsets(converter.memorySites, I32_LOAD, [
-      EXPECTED_FACTS.pathMapHolderOffset,
-      EXPECTED_FACTS.pathMapTrapezoidCount,
-      EXPECTED_FACTS.pathMapTrapezoidPointer,
+      facts.pathMapHolderOffset,
+      facts.pathMapTrapezoidCount,
+      facts.pathMapTrapezoidPointer,
     ])
     || !containsOffsets(converter.memorySites, I32_LOAD16_U, [0x10, 0x12])
     || !containsOffsets(converter.memorySites, I32_STORE16, [0x14, 0x16])
-    || !containsOffsets(converter.memorySites, F32_LOAD, EXPECTED_FACTS.definitionCoordinateFields)
-    || !containsOffsets(converter.memorySites, F32_STORE, EXPECTED_FACTS.liveCoordinateFields)
+    || !containsOffsets(converter.memorySites, F32_LOAD, facts.definitionCoordinateFields)
+    || !containsOffsets(converter.memorySites, F32_STORE, facts.liveCoordinateFields)
     || !containsOffsets(coordinateWriter.memorySites, F64_LOAD, [0x28, 0x30, 0x40, 0x48, 0x50, 0x60])
   ) return null;
 
   const functions = Object.fromEntries(
-    Object.entries(EXPECTED_FUNCTIONS).map(([key, functionIndex]) => [key, Object.freeze({
+    Object.entries(family).map(([key, functionIndex]) => [key, Object.freeze({
       functionIndex,
       bodySha256: functionBodySha256(evidence.moduleView(), functionIndex),
     })]),
@@ -234,7 +273,7 @@ export function certifyPathingShape(input: Uint8Array): PathingShapeProof | null
     status: "shape-only",
     clientSha256: evidence.inputSha256,
     functions: Object.freeze(functions),
-    facts: EXPECTED_FACTS,
+    facts: facts,
     refused: Object.freeze([
       "game-context-to-map-context",
       "map-context-to-path-context",

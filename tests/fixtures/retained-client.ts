@@ -18,6 +18,10 @@ type RetainedClient = Readonly<{
   moved: Readonly<Record<number, number>>;
   /** August static address -> this client's address, where it moved. */
   addresses: Readonly<Record<number, number>>;
+  /** Replaces `moved` for clients that renumber whole index ranges. */
+  renumber?: (august: number) => number;
+  /** Replaces `addresses` for clients that move whole static ranges. */
+  relocate?: (august: number) => number;
 }>;
 
 const AUGUST: RetainedClient = {
@@ -50,6 +54,46 @@ const OCTOBER_22: RetainedClient = {
   },
 };
 
+// November 3 inserted and removed functions at a few points, so every
+// October 22 index above 279 moved. Each segment starts at an October 22
+// index and holds until the next; the alignment is reviewed evidence.
+const NOVEMBER_3_SEGMENTS: readonly (readonly [from: number, delta: number])[] = [
+  [279, 1], [11_055, 6], [11_435, 3], [11_441, 4], [11_463, 3], [11_982, 5],
+];
+
+// Indices at or above the October 22 function count are appended by a
+// gwonmac transform and follow that output, not the client.
+const OCTOBER_22_FUNCTION_COUNT = 17_817;
+
+export function november3Index(october22: number): number {
+  if (october22 >= OCTOBER_22_FUNCTION_COUNT) return october22;
+  const segment = [...NOVEMBER_3_SEGMENTS].reverse().find(([from]) => october22 >= from);
+  return october22 + (segment?.[1] ?? 0);
+}
+
+/** Static addresses that moved again after October 22 (all by +400). */
+const NOVEMBER_3_ADDRESSES: Readonly<Record<number, number>> = {
+  5923952: 5924352, 5923832: 5924232, 5923824: 5924224,
+  5920364: 5920764, 5920368: 5920768, 5923936: 5924336,
+  5923940: 5924340, 5923944: 5924344,
+};
+
+const NOVEMBER_3: RetainedClient = {
+  memoryLayout: "november3",
+  graphicsDevice: 2745352, modelTypeOffset: 1341088, underMouse: 5921740,
+  compassOwner: 15741, worldVisibilityOwner: 15910,
+  missionDispatcher: 16128, missionTableSlot: 4004,
+  worldDispatcher: 16215, worldTableSlot: 4150,
+  gameplayContext: 13538,
+  moved: {},
+  addresses: {},
+  renumber: (august) => november3Index(OCTOBER_22.moved[august] ?? august),
+  relocate: (august) => {
+    const october22 = OCTOBER_22.addresses[august] ?? august;
+    return NOVEMBER_3_ADDRESSES[october22] ?? october22;
+  },
+};
+
 const CLIENTS: Readonly<Record<string, RetainedClient>> = {
   "266b5a8aa88fe6440b10737d3eda27f4ceae2401d51d263debc0bca5c2075d87": {
     memoryLayout: "october",
@@ -73,13 +117,14 @@ const CLIENTS: Readonly<Record<string, RetainedClient>> = {
   "f4e529f9c9b6b6a1dfd3e0e7c8d8c518a48c45d8a9a526d89512b5e9c37c075e": OCTOBER_22,
   // The same-day rebuild changed no fixture index or address.
   "3dc01a8295d179450b16e2059ad056d4062fcad01e79ddae834bb2028596102b": OCTOBER_22,
+  "b19f16fd415b2bdef6701921921ef3c7eaf40ca03b95385d4ac2ba8624dead98": NOVEMBER_3,
 };
 
 export function retainedClientFixture(input: Uint8Array) {
   const client = CLIENTS[createHash("sha256").update(input).digest("hex")] ?? AUGUST;
   return {
     ...client,
-    functionIndex: (index: number) => client.moved[index] ?? index,
-    address: (august: number) => client.addresses[august] ?? august,
+    functionIndex: (index: number) => client.renumber?.(index) ?? client.moved[index] ?? index,
+    address: (august: number) => client.relocate?.(august) ?? client.addresses[august] ?? august,
   };
 }

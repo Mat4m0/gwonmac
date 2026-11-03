@@ -311,6 +311,7 @@ function fileExistsFingerprint(found: TemplateSemanticLocation): string {
     fail("File::Open immutable vtable reference changed or is ambiguous");
   }
   normalized.fill(0, 295, 300); normalized[295] = 16;
+  normalizeTemplateCalleeCalls(found.view, found.targets.fileExists.localFunction, "file-exists", normalized);
   return sha256(normalized);
 }
 
