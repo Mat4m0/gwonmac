@@ -126,11 +126,9 @@ test("minimum window and 200% zoom keep primary launcher controls reachable", as
     await expect(fixture.page.locator(".hero-panel h1")).toBeVisible();
     await expectCurrentContentFitsHorizontally(fixture);
 
-    await fixture.page.getByRole("button", { name: "Known issues", exact: true }).click();
-    await expect(fixture.page.getByRole("heading", { name: "Known issues" })).toBeVisible();
-    await expectCurrentContentFitsHorizontally(fixture);
-    await fixture.page.getByRole("button", { name: "Feedback", exact: true }).click();
-    await expect(fixture.page.getByRole("heading", { name: "Tell us what happened" })).toBeVisible();
+    await fixture.page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Help", exact: true }).click();
+    await expect(fixture.page.getByRole("heading", { name: "Known issues", level: 1 })).toBeVisible();
+    await expect(fixture.page.getByRole("heading", { name: "Tell us about a problem or an idea" })).toBeVisible();
     await expectCurrentContentFitsHorizontally(fixture);
 
     await fixture.page.getByRole("button", { name: "Settings" }).click();
