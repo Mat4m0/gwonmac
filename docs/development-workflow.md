@@ -303,6 +303,12 @@ Repository settings enforce the model outside the codebase:
 - the `release` environment requires Matthias's approval and does not allow an
   administrator bypass.
 
+When GitHub has no free macOS runner, it cancels the waiting job with "not
+acquired by Runner", and `verify / verify` fails although nothing was tested.
+The `Retry runner shortages` workflow reruns such a run, up to three attempts
+in all. It never reruns a run with a real failure or another kind of
+cancellation, and it does not cover the Versioned release workflow.
+
 The Versioned release workflow accepts only `release/YYYY.M.PATCH`. It reuses
 the exact commit's required Application verification result. It does not rerun
 that complete macOS gate. The signed build still qualifies the current ArenaNet
