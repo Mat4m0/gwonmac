@@ -7,6 +7,7 @@
  * the recertification workflow runs it against the artifact it downloaded.
  */
 import assert from "node:assert/strict";
+import { retainedClientFixture } from "../fixtures/retained-client.js";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
@@ -177,6 +178,8 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   );
   const bytes = await readFile(artifact);
   const derived = deriveTemplateSaveBuild(bytes);
+  // Literal indices below are August owners; the fixture moves them per client.
+  const august = (index: number) => retainedClientFixture(bytes).functionIndex(index);
   const report = inspectTemplateSaveCandidate(bytes);
   const local = verifyLocalClientBytes(bytes);
   assert.equal(isLocalClientVerification(local, local.officialSha256), true);
@@ -421,7 +424,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   assert.equal(selectorLocals.length, 1);
   const targetMutations = [
     { local: selectorLocals[0]!, offset: 132, label: "target occurrence ledger", shared: false },
-    { local: 5109 - derived.importCount, offset: 39, label: "map field offset", shared: true },
+    { local: august(5109) - derived.importCount, offset: 39, label: "map field offset", shared: true },
     { local: areaLookupLocal, offset: 36, label: "area table stride", shared: true },
   ] as const;
   for (const mutation of targetMutations) {
@@ -450,9 +453,9 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   }
 
   const cursorMutations = [
-    { local: 446 - derived.importCount, offset: 10, label: "main-loop control flow", shared: true, equivalent: false },
-    { local: 2828 - derived.importCount, offset: 68, label: "non-canonical producer encoding", shared: false, equivalent: true },
-    { local: 6234 - derived.importCount, offset: 45, label: "cursor art offset", shared: false, equivalent: false },
+    { local: august(446) - derived.importCount, offset: 10, label: "main-loop control flow", shared: true, equivalent: false },
+    { local: august(2828) - derived.importCount, offset: 68, label: "non-canonical producer encoding", shared: false, equivalent: true },
+    { local: august(6234) - derived.importCount, offset: 45, label: "cursor art offset", shared: false, equivalent: false },
   ] as const;
   for (const mutation of cursorMutations) {
     const changedCursorProof = rewriteCode(bytes, (bodies) => {
@@ -699,7 +702,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   assert.equal(rechargeRefusal.skillCooldownObservation, false);
 
   const changedSkillTimer = rewriteCode(bytes, (bodies) => {
-    const body = bodies[249 - derived.importCount]!;
+    const body = bodies[august(249) - derived.importCount]!;
     const opcode = body.findIndex(
       (byte, index) => byte === 0x41 && (body[index + 1] ?? 0x80) < 0x80,
     );
@@ -712,7 +715,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   assert.equal(timerRefusal.skillCooldownObservation, false);
 
   const reindexedLocalActions = rewriteCode(bytes, (bodies) => {
-    swapDefinedFunctions(bodies, derived.importCount, uiDispatcher, 6840);
+    swapDefinedFunctions(bodies, derived.importCount, uiDispatcher, august(6840));
   });
   assert.equal(WebAssembly.validate(new Uint8Array(reindexedLocalActions)), true);
   const reindexedCapabilities = capabilitiesOf(
@@ -727,7 +730,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   // Function 1083 has the same signature but no direct caller or active table
   // slot in both retained generations, so relocating this role cannot disturb
   // an unrelated feature merely by taking over the destination.
-  const travelContextDestination = 1083;
+  const travelContextDestination = august(1083);
   assert.deepEqual(
     signatureEvidence(parsed, travelContextDestination),
     signatureEvidence(parsed, travelContext),
@@ -757,15 +760,15 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   const partyFlagNotifier = partyFunctions[partyFlagWriter - derived.importCount]!
     .calls.keys().next().value!;
   const protectedPartyCallees = new Set([
-    228, 322, 334, uiDispatcher, partyFlagNotifier,
+    august(228), august(322), august(334), uiDispatcher, partyFlagNotifier,
   ]);
   const partyCallRetargets = [
-    { caller: partyInfoWriter, operand: 76, target: 334, label: "PartyInfo release" },
+    { caller: partyInfoWriter, operand: 76, target: august(334), label: "PartyInfo release" },
     { caller: partyFlagWriter, operand: 9, target: partyFlagNotifier, label: "party flag notifier" },
-    { caller: fixtureFunction(parsed, 19, ["i32"], [], 6, { fingerprint: "92bfe16ed2f66d3394546ca883489b0e3fc629125a99c6d8d67309bd1600677b", role: "unlocks.resolve" }), operand: 6, target: 228, label: "account unlock resolver" },
-    { caller: fixtureFunction(parsed, 150, ["i32", "i32", "i32"], [], 143, { fingerprint: "9f4ea1d46ddf8beeb429cbedcf0fc6ca45f9405e3c0f2be8ba43891721ad3375", role: "hero-flags.ui" }), operand: 143, target: 6842, label: "hero flag UI" },
-    { caller: fixtureFunction(parsed, 439, ["i32", "i32", "i32"], [], 164), operand: 164, target: 322, label: "attribute apply" },
-    { caller: fixtureFunction(parsed, 128, ["i32", "i32"], [], 23), operand: 23, target: 228, label: "character unlock resolver" },
+    { caller: fixtureFunction(parsed, 19, ["i32"], [], 6, { fingerprint: "92bfe16ed2f66d3394546ca883489b0e3fc629125a99c6d8d67309bd1600677b", role: "unlocks.resolve" }), operand: 6, target: august(228), label: "account unlock resolver" },
+    { caller: fixtureFunction(parsed, 150, ["i32", "i32", "i32"], [], 143, { fingerprint: "9f4ea1d46ddf8beeb429cbedcf0fc6ca45f9405e3c0f2be8ba43891721ad3375", role: "hero-flags.ui" }), operand: 143, target: august(6842), label: "hero flag UI" },
+    { caller: fixtureFunction(parsed, 439, ["i32", "i32", "i32"], [], 164), operand: 164, target: august(322), label: "attribute apply" },
+    { caller: fixtureFunction(parsed, 128, ["i32", "i32"], [], 23), operand: 23, target: august(228), label: "character unlock resolver" },
   ] as const;
   for (const mutation of partyCallRetargets) {
     const destination = sameSignatureDestination(
@@ -786,7 +789,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   }
 
   const changedTravelCall = rewriteCode(bytes, (bodies) => {
-    bodies[travelProducer - derived.importCount]!.set(paddedIndex(6840), 132);
+    bodies[travelProducer - derived.importCount]!.set(paddedIndex(august(6840)), 132);
   });
   assert.equal(WebAssembly.validate(new Uint8Array(changedTravelCall)), true);
   const travelCallRefusal = capabilitiesOf(verifyFeatureMutation(changedTravelCall))!;
@@ -795,7 +798,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   assert.equal(travelCallRefusal.chatAliases, true);
 
   const changedXunlaiCall = rewriteCode(bytes, (bodies) => {
-    bodies[xunlaiHandler - derived.importCount]!.set(paddedIndex(6840), 98);
+    bodies[xunlaiHandler - derived.importCount]!.set(paddedIndex(august(6840)), 98);
   });
   assert.equal(WebAssembly.validate(new Uint8Array(changedXunlaiCall)), true);
   const xunlaiCallRefusal = capabilitiesOf(verifyFeatureMutation(changedXunlaiCall))!;
@@ -804,7 +807,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   assert.equal(xunlaiCallRefusal.chatAliases, true);
 
   const ambiguousTravel = rewriteCode(bytes, (bodies) => {
-    bodies[311 - derived.importCount] = bodies[travelProducer - derived.importCount]!.slice();
+    bodies[august(311) - derived.importCount] = bodies[travelProducer - derived.importCount]!.slice();
   });
   assert.equal(WebAssembly.validate(new Uint8Array(ambiguousTravel)), true);
   const ambiguousTravelDecision = verifyFeatureMutation(ambiguousTravel);
@@ -847,7 +850,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   assert.equal(capabilitiesOf(ambiguousTravelContextDecision)?.xunlaiAction, true);
 
   const ambiguousDispatcher = rewriteCode(bytes, (bodies) => {
-    bodies[6840 - derived.importCount] = bodies[uiDispatcher - derived.importCount]!.slice();
+    bodies[august(6840) - derived.importCount] = bodies[uiDispatcher - derived.importCount]!.slice();
   });
   assert.equal(WebAssembly.validate(new Uint8Array(ambiguousDispatcher)), true);
   const ambiguousDispatcherDecision = verifyFeatureMutation(ambiguousDispatcher);
@@ -872,7 +875,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   assert.equal(ambiguousDispatcherRefusal.chatAliases, false);
 
   const ambiguousXunlai = rewriteCode(bytes, (bodies) => {
-    bodies[223 - derived.importCount] = bodies[xunlaiHandler - derived.importCount]!.slice();
+    bodies[august(223) - derived.importCount] = bodies[xunlaiHandler - derived.importCount]!.slice();
   });
   assert.equal(WebAssembly.validate(new Uint8Array(ambiguousXunlai)), true);
   assert.deepEqual(inspectLocalActionRoleCandidates(ambiguousXunlai)?.xunlaiAction, {
@@ -888,7 +891,7 @@ test("the template-save verifier makes a fail-closed decision for a real client"
   }
 
   const ambiguousAliases = rewriteCode(bytes, (bodies) => {
-    bodies[350 - derived.importCount] = bodies[aliasParser - derived.importCount]!.slice();
+    bodies[august(350) - derived.importCount] = bodies[aliasParser - derived.importCount]!.slice();
   });
   assert.equal(WebAssembly.validate(new Uint8Array(ambiguousAliases)), true);
   assert.deepEqual(inspectLocalActionRoleCandidates(ambiguousAliases)?.chatAliases, {

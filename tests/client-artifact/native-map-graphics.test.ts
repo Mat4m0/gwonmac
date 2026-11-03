@@ -15,6 +15,10 @@ test("each native map owns its mesh, restores matrices and refuses stale or malf
   const input = new Uint8Array(await readFile(process.env.GW_CLIENT_WASM));
   const fixture = retainedClientFixture(input);
   const output = transformCartographySpikeWasm(input, fixture.memoryLayout);
+  // Handlers are written against August indices; the fixture moves them.
+  const clientImports = (handlers: Record<number, (...args: number[]) => unknown>): WebAssembly.ModuleImports =>
+    Object.fromEntries(Object.entries(handlers).map(([index, handler]) =>
+      [fixture.functionIndex(Number(index)), handler]));
   const sections = splitSections(output); const bodies = parseCode(sectionById(sections, 10));
   const evidence = wasmEvidence(output); assert.ok(evidence); const module = evidence.moduleView();
   const exported = parseExports(sectionById(sections, 7)); const decoded = evidence.decodeFunctions([]);
@@ -24,7 +28,7 @@ test("each native map owns its mesh, restores matrices and refuses stale or malf
     const publishIndex = exported.find((entry) => entry.name === `gwonmac_${surface}_graphics_publish`)?.index;
     assert.ok(publishIndex !== undefined);
     const selected = Array.from({length: 5}, (_, index) => publishIndex - 3 + index);
-    const peers = [1444, 1445, 1446, 1448, 1449, 1554, 1564, 1569, 1579, 1333, 1334, 1357, 264, 2956, 2249, 3137, 748, 750];
+    const peers = [1444, 1445, 1446, 1448, 1449, 1554, 1564, 1569, 1579, 1333, 1334, 1357, 264, 2956, 2249, 3137, 748, 750].map((index) => fixture.functionIndex(index));
     const indices = new Map([...peers, ...selected].map((index, position) => [index, position]));
     const rewritten = selected.map((index) => {
       const body = bodies[index - module.functionImportCount]!;
@@ -53,7 +57,7 @@ test("each native map owns its mesh, restores matrices and refuses stale or malf
       section(10, encodeCode(rewritten)));
     const released: number[] = []; const matrixEvents: string[] = [];
     let textures = 0; let meshes = 0; let draws = 0;
-    const { exports } = new WebAssembly.Instance(new WebAssembly.Module(Uint8Array.from(capsule)), {peer: {
+    const exports: WebAssembly.Exports = new WebAssembly.Instance(new WebAssembly.Module(Uint8Array.from(capsule)), {peer: clientImports({
       1444: (format: number, flags: number) => { assert.deepEqual([format, flags], [265, 0]); meshes += 1; return 11; },
       1445: (handle: number, indices: number) => { assert.deepEqual([handle, indices], [11, 6 * count]); return 131072; },
       1446: (handle: number, vertices: number) => { assert.deepEqual([handle, vertices], [11, 4 * count]); return 65536; },
@@ -85,7 +89,7 @@ test("each native map owns its mesh, restores matrices and refuses stale or malf
         }
         released.push(handle);
       },
-    }});
+    })}).exports;
     const memory = exports.memory; assert.ok(memory instanceof WebAssembly.Memory); const view = new DataView(memory.buffer);
     const scalar = (name: string, value: number) => { const target = exports[name]; assert.ok(target instanceof WebAssembly.Global); target.value = value; };
     const invoke = (name: string, ...args: number[]) => { const target = exports[name]; assert.equal(typeof target, "function"); if (typeof target === "function") return target(...args); };

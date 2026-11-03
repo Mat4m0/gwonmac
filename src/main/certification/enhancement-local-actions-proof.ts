@@ -88,6 +88,8 @@ const GUILD_HALL_NATIVE_MESSAGES: readonly Readonly<{
     "fab247e15279c61c5783bc16f6c02cbf411b3056979f6a765b61763e52bc7d87",
     // October 22: the same producer with renumbered callees.
     "3adcc506569c2134909f4a1429062c579d9e28a9bcdecae5bafa55b9120b71c9",
+    // November 3: renumbered callees again.
+    "3563511b7223799d3cd47d4cc508f59fa540ba5752830c4133a76a26a33a70b0",
   ] },
 ]);
 
@@ -100,6 +102,10 @@ const GUILD_HALL_AREA_TYPE_FAMILIES = Object.freeze([
   { context: [228, "4c7ccdfd23aa3144a9d44b439df0293493ac7b04c19475cbb224580610c0e29e"],
     lookup: [17518, "081506484a3019e40c1a934f95f88ff3911d70640c0f446afc6c3a3fb4975e5e"],
     accessor: "43acce2aef9325f192efa422dee707362fe3b16feaa891447c5256d6eae86099" },
+  // November 3: the October 22 family with moved callees and statics.
+  { context: [228, "37bf1fdca1fb8d89195b6c6249bcd24560776e2690f02e228e742b9b4720405d"],
+    lookup: [17523, "8a03004d07d4ee46451ba57d61dc246fa32aa1d54639c6aad6c36653f32c55be"],
+    accessor: "e648aa327d0a0e4e4667950191f2353c672cb2ce760e2e12f670fbcb52d0574b" },
 ] as const);
 
 function reviewedGuildHallAreaTypeAccessor(module: ModuleShape): number | null {
@@ -193,7 +199,10 @@ const GAME_THREAD_DRAIN_ROLE = semanticRole(
   ["i32", "i32"],
   [],
   // October 22 client: identical body; one reviewed callee index moved.
-  ["e97bf7c3b2f0e47b07f1cde77500e509a88ec364a94fec0980ea3862ce04b7ca"],
+  ["e97bf7c3b2f0e47b07f1cde77500e509a88ec364a94fec0980ea3862ce04b7ca",
+    // November 3 client: callee indices and static addresses moved.
+    "dcbbc19ace03aecb891cc35f0429fb54d3ad28f7a1ddb5b66e2167b595f45898",
+  ],
 );
 
 const CHAT_ALIASES_ROLE = semanticRole(
@@ -240,6 +249,8 @@ const XUNLAI_ACCESS_READER_ROLE = semanticRole(
   ]),
   ["i32"],
   ["i32"],
+  // November 3 client: callee indices and static addresses moved.
+  ["2786981f767b269a30df25ca8c86a4336f6fb3d5005dbf3c4dcea85ca1623ac5"],
 );
 
 const UI_DISPATCHER_ROLE = semanticRole(
@@ -331,6 +342,8 @@ const XUNLAI_PLAYER_READER_ROLE = semanticRole(
   ]),
   ["i32"],
   ["i32"],
+  // November 3 client: callee indices and static addresses moved.
+  ["714d29ef28419728d80053af6dd7172e8a5ea8447d8f6e20d5bfad6712f6fd80"],
 );
 
 const XUNLAI_AREA_TYPE_READER_ROLE = semanticRole(
@@ -361,7 +374,9 @@ const TRAVEL_UNLOCK_CONSUMER_ROLE = semanticRole(
 const XUNLAI_AGENT_READER_ROLES = [
   XUNLAI_AGENT_READER_ROLE,
   semanticRole(418, "eeeac28028981ae6f233b2c0e6ba4cbe5cdba999bd1063c2a703bd3f6cc1f6fb",
-    XUNLAI_AGENT_READER_ROLE.spans, ["i32"], ["i32"]),
+    XUNLAI_AGENT_READER_ROLE.spans, ["i32"], ["i32"],
+    // November 3 client: callee indices and static addresses moved.
+    ["a37cb8efeae12c31daa65bca075f430b338300bd49669381344575a902e471d5"]),
 ];
 const XUNLAI_AREA_TYPE_READER_ROLES = [
   XUNLAI_AREA_TYPE_READER_ROLE,
@@ -369,12 +384,17 @@ const XUNLAI_AREA_TYPE_READER_ROLES = [
     XUNLAI_AREA_TYPE_READER_ROLE.spans, ["i32"], ["i32"],
     // October 22 client: one callee moved; the area-type bound follows the
     // reviewed area table (1465 -> 1477).
-    ["031c32b077f941074c67c0c0d4215a1694e8ddf0ed51463c51a1093b768f44bb"]),
+    // November 3 client: callees moved again; the bound follows the reviewed
+    // area table (1477 -> 1480).
+    ["031c32b077f941074c67c0c0d4215a1694e8ddf0ed51463c51a1093b768f44bb",
+      "b93c5a3ea73686bf4bff518a1ad18d445d7155d545db47928175209326ca74c3"]),
 ];
 const TRAVEL_UNLOCK_CONSUMER_ROLES = [
   TRAVEL_UNLOCK_CONSUMER_ROLE,
   semanticRole(360, "257c03eaa91dc6baae2768b6829ada5e8cee32df0649482ca2f6950ecc766762",
-    TRAVEL_UNLOCK_CONSUMER_ROLE.spans, ["i32"], ["i32"]),
+    TRAVEL_UNLOCK_CONSUMER_ROLE.spans, ["i32"], ["i32"],
+    // November 3 client: callee indices and static addresses moved.
+    ["662152b962e4a5c81e18dc9f406332ef12f94ac747005a29e1831213d77dbe55"]),
 ];
 const TRAVEL_PRODUCER_ROLES = [
   TRAVEL_PRODUCER_ROLE,
@@ -384,19 +404,25 @@ const TRAVEL_PRODUCER_ROLES = [
 const CHAT_ALIASES_ROLES = [
   CHAT_ALIASES_ROLE,
   semanticRole(380, "fa6eabfec92de162981e0cd861736dbaf8b7b4f43db37224829947441f480a73",
-    CHAT_ALIASES_ROLE.spans, ["i32", "i32"], ["i32"]),
+    CHAT_ALIASES_ROLE.spans, ["i32", "i32"], ["i32"],
+    // November 3 client: callee indices and static addresses moved.
+    ["a0ac2973eb03ea9dc64585611d720fabe9e61621a1040ea16748867b02ffed26"]),
 ];
 
 // Bind Hero panel IDs to the complete native show/hide producer and its packer.
 const HERO_PANEL_ROLES = [
   semanticRole(181, "42027129007fdd8ffb7dd34e79a3ad8a5ed0126f857ab48dfa77224170c857fa", [{"start": 78, "end": 83, "role": "panel.pack", "addressClass": "function-index"}, {"start": 141, "end": 146, "role": "panel.ui", "addressClass": "function-index"}, {"start": 163, "end": 168, "role": "panel.ui", "addressClass": "function-index"}], ["i32", "i32"], []),
-  semanticRole(181, "920bdcddd2e428f6263519e2dfbb314dd7f73439e0f2b6defdfe10c0b29b7d7e", [{"start": 78, "end": 83, "role": "panel.pack", "addressClass": "function-index"}, {"start": 141, "end": 146, "role": "panel.ui", "addressClass": "function-index"}, {"start": 163, "end": 168, "role": "panel.ui", "addressClass": "function-index"}], ["i32", "i32"], []),
+  semanticRole(181, "920bdcddd2e428f6263519e2dfbb314dd7f73439e0f2b6defdfe10c0b29b7d7e", [{"start": 78, "end": 83, "role": "panel.pack", "addressClass": "function-index"}, {"start": 141, "end": 146, "role": "panel.ui", "addressClass": "function-index"}, {"start": 163, "end": 168, "role": "panel.ui", "addressClass": "function-index"}], ["i32", "i32"], [],
+    // November 3 client: callee indices and static addresses moved.
+    ["ed85b814d50a69119a30204bd7f4501311338e20d963c1a918a65d6a6fbb81e0"]),
 ];
 const HERO_PANEL_PACKER_HASHES = [
   "b107cbd1f2b0c9596df848b19cab8219285e6f4ff45bb5d3bd06cd3d643afe57",
   "10aaa2a03010eea192af9f03466665a3036ecd2dc6b94ebe8ff8bdbc9471ba9e",
   // October 22 client: same packer; only assertion string pointers moved.
   "46b73500a7f2d248c607d281f91c3fb6b9337297c1f6fd71dc831f10efdc865b",
+  // November 3 client: same packer; callee indices and string pointers moved.
+  "04aeae48a5e6dd724c95f312c65354b2f434cf1ed67d008bf2f667d57cb52fb1",
 ];
 
 function deriveHeroPanelMessages(module: ModuleShape, dispatcher: number) {

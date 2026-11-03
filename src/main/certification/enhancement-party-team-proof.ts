@@ -124,7 +124,9 @@ const PARTY_DIRTY_ROLES = Object.freeze([
     { start: 175, end: 180, role: "dirty.assertion", addressClass: "immutable-data" },
     ...[242, 287, 383].map((start) => ({ start, end: start + 5, role: "dirty.array-file", addressClass: "immutable-data" as const })),
     { start: 665, end: 670, role: "party.ui", addressClass: "function-index" },
-  ]), Array.from({ length: 15 }, () => "i32"), []),
+  ]), Array.from({ length: 15 }, () => "i32"), [],
+    // November 3 client: callee indices and static addresses moved.
+    ["c7b57eb4e701df0d7ed1cea393c241d7f384a5db43e3ac7141f5a383d4907a8c"]),
   semanticRole(127, "509bab21ca8be2a1f6287793e50f88825bb1d9f4432d3b29e3a394b117a72d3a", Object.freeze([
     { start: 88, end: 93, role: "map.lifecycle-static", addressClass: "mutable-static" },
     { start: 119, end: 124, role: "party.ui", addressClass: "function-index" },
@@ -134,7 +136,9 @@ const PARTY_DIRTY_ROLES = Object.freeze([
   ]), ["i32", "i32", "i32", "f32", "i32", "i32"], []),
   semanticRole(186, "6f06eff3b66948891fe3e291a62709706f41b2a47dfb20c00054655f917ed187", Object.freeze([
     { start: 169, end: 174, role: "party.ui", addressClass: "function-index" },
-  ]), ["i32", "i32"], []),
+  ]), ["i32", "i32"], [],
+    // November 3 client: callee indices and static addresses moved.
+    ["45403e6db9a12a55fbecac78d861eb31ca4e4043f5c4ff9b1dcf0b4b657a4fd2"]),
   semanticRole(288, "3891f1163ce484f0244b5e16308b3a8d08eb95dbebf143fe2681af6112099468", Object.freeze([
     { start: 109, end: 114, role: "party.ui", addressClass: "function-index" },
   ]), Array.from({ length: 9 }, () => "i32"), []),
@@ -160,34 +164,54 @@ const PARTY_DIRTY_ROLES = Object.freeze([
 // Each reviewed upstream change retains its complete native control flow.
 // Message IDs and context fields remain exact within that role variant.
 const PARTY_PLAYER_PARTY_ROLE_VARIANTS = [PARTY_PLAYER_PARTY_ROLE,
-  semanticRole(338, "8492fb8cf18d58dfb55b4659663684f521cca7e762393d2e9657b0cb59236e26", PARTY_PLAYER_PARTY_ROLE.spans, ["i32", "i32", "i32", "i32"], []),
+  semanticRole(338, "8492fb8cf18d58dfb55b4659663684f521cca7e762393d2e9657b0cb59236e26", PARTY_PLAYER_PARTY_ROLE.spans, ["i32", "i32", "i32", "i32"], [],
+    // November 3 client: callee indices and static addresses moved.
+    ["2a3b507f59ca482d1560ac9f26ae1de52e1bb642bd0348d2109f991921d02555"]),
 ];
 const TEAM_SENDER_ROLE_VARIANTS = [TEAM_SENDER_ROLE,
-  semanticRole(4425, "4e08fe75a036f87d7582c61078a1ff2a88be012654c44008499ea48facb9ad17", TEAM_SENDER_ROLE.spans, ["i32", "i32", "i32"], []),
+  semanticRole(4425, "4e08fe75a036f87d7582c61078a1ff2a88be012654c44008499ea48facb9ad17", TEAM_SENDER_ROLE.spans, ["i32", "i32", "i32"], [],
+    // November 3 client: callee indices and static addresses moved.
+    ["60e83ba888fc4c94c41bbeae9d86b55db139ab796fa4dead69de7cfb59f602ae"]),
 ];
 const PARTY_DIRTY_ROLES_0_VARIANTS = [PARTY_DIRTY_ROLES[0],
-  semanticRole(622, "d2b5f3bb6b551397cff3949a5a3b9e758beb1251cfdb47fc12115f4300697ef6", PARTY_DIRTY_ROLES[0].spans, ["i32", "i32", "i32", "i32", "i32"], []),
+  semanticRole(622, "d2b5f3bb6b551397cff3949a5a3b9e758beb1251cfdb47fc12115f4300697ef6", PARTY_DIRTY_ROLES[0].spans, ["i32", "i32", "i32", "i32", "i32"], [],
+    // November 3 client: callee indices and static addresses moved.
+    ["3d68d37ed01ca6b8486cbbeae1ed79fa1cd764c4d6d623abfe6a3ca38b076a93"]),
 ];
 const PARTY_DIRTY_ROLES_2_VARIANTS = [PARTY_DIRTY_ROLES[2],
-  semanticRole(127, "fb40f0e9f5c3cabc04af92178d9c724a4af8233c60360df2e12487614598b66c", PARTY_DIRTY_ROLES[2].spans, ["i32", "i32"], ["i32"]),
+  semanticRole(127, "fb40f0e9f5c3cabc04af92178d9c724a4af8233c60360df2e12487614598b66c", PARTY_DIRTY_ROLES[2].spans, ["i32", "i32"], ["i32"],
+    // November 3 client: callee indices and static addresses moved.
+    ["49a3d424c858117445653b0fe6b80d05e3ac2d524401f0a05bc91d641d618299"]),
 ];
 const PARTY_DIRTY_ROLES_3_VARIANTS = [PARTY_DIRTY_ROLES[3],
-  semanticRole(262, "638f35e1e5946dfa4db8234df2a68bf493a5f7b4ed71d1498aa50285ee4f2595", PARTY_DIRTY_ROLES[3].spans, ["i32", "i32", "i32", "f32", "i32", "i32"], []),
+  semanticRole(262, "638f35e1e5946dfa4db8234df2a68bf493a5f7b4ed71d1498aa50285ee4f2595", PARTY_DIRTY_ROLES[3].spans, ["i32", "i32", "i32", "f32", "i32", "i32"], [],
+    // November 3 client: callee indices and static addresses moved.
+    ["259ff16da75ea8dbd01b987c507fbdbc1f642ff19e07a58868bd7dd02fde91b1"]),
 ];
 const PARTY_DIRTY_ROLES_5_VARIANTS = [PARTY_DIRTY_ROLES[5],
-  semanticRole(288, "e540fcec2dd0710537d27a0418831dd6beab57871171ce96b7295539d93e37ce", PARTY_DIRTY_ROLES[5].spans, ["i32", "i32", "i32", "i32", "i32", "i32", "i32", "i32", "i32"], []),
+  semanticRole(288, "e540fcec2dd0710537d27a0418831dd6beab57871171ce96b7295539d93e37ce", PARTY_DIRTY_ROLES[5].spans, ["i32", "i32", "i32", "i32", "i32", "i32", "i32", "i32", "i32"], [],
+    // November 3 client: callee indices and static addresses moved.
+    ["a087443fdfd5b668c89c6679a9878abb76c81cd16da35e9899abc184d902f59a"]),
 ];
 const PARTY_DIRTY_ROLES_6_VARIANTS = [PARTY_DIRTY_ROLES[6],
-  semanticRole(305, "0ee5b5c9467d14b8c3e9e18c1de5d05c7dfd558d588e3c90a6b6ca3f37db1b25", PARTY_DIRTY_ROLES[6].spans, ["i32", "i32", "i32", "i32", "i32", "i32", "i32", "i32"], []),
+  semanticRole(305, "0ee5b5c9467d14b8c3e9e18c1de5d05c7dfd558d588e3c90a6b6ca3f37db1b25", PARTY_DIRTY_ROLES[6].spans, ["i32", "i32", "i32", "i32", "i32", "i32", "i32", "i32"], [],
+    // November 3 client: callee indices and static addresses moved.
+    ["338f6e4453a294d8bc788fa1519edce3219b8951a1cf251853b17aa60606341b"]),
 ];
 const PARTY_DIRTY_ROLES_7_VARIANTS = [PARTY_DIRTY_ROLES[7],
-  semanticRole(459, "909d3055f381e82ee012e2c97a30fd47770352ae4708fcb34c4ae65313dd55c7", PARTY_DIRTY_ROLES[7].spans, ["i32", "i32", "i32", "i32"], []),
+  semanticRole(459, "909d3055f381e82ee012e2c97a30fd47770352ae4708fcb34c4ae65313dd55c7", PARTY_DIRTY_ROLES[7].spans, ["i32", "i32", "i32", "i32"], [],
+    // November 3 client: callee indices and static addresses moved.
+    ["d6cad2440baa4ca48c7a29a634ac5fc998f9b666caeda2ef2df158cb8f54039a"]),
 ];
 const PARTY_DIRTY_ROLES_8_VARIANTS = [PARTY_DIRTY_ROLES[8],
-  semanticRole(279, "35e374a944b7401965998e31575be14cd7fa30daaad6dc03804f713bff8d916f", PARTY_DIRTY_ROLES[8].spans, ["i32", "i32", "i32"], []),
+  semanticRole(279, "35e374a944b7401965998e31575be14cd7fa30daaad6dc03804f713bff8d916f", PARTY_DIRTY_ROLES[8].spans, ["i32", "i32", "i32"], [],
+    // November 3 client: callee indices and static addresses moved.
+    ["7b750c6b8ce20cab72dcb42e9bef79031275f428fe5b778d77425bac64aec963"]),
 ];
 const PARTY_DIRTY_ROLES_9_VARIANTS = [PARTY_DIRTY_ROLES[9],
-  semanticRole(256, "b56d90085c4ecd135580c0a56b6442e35dcdd5762c3a129bb09c7d7aa8ef8a64", PARTY_DIRTY_ROLES[9].spans, ["i32", "i32", "i32"], []),
+  semanticRole(256, "b56d90085c4ecd135580c0a56b6442e35dcdd5762c3a129bb09c7d7aa8ef8a64", PARTY_DIRTY_ROLES[9].spans, ["i32", "i32", "i32"], [],
+    // November 3 client: callee indices and static addresses moved.
+    ["fceb4cc78580c2e2d36e9c78c979d2bc6f0ba5140b8b18b67fcd56581af6c45f"]),
 ];
 
 const PARTY_DIRTY_ROLE_VARIANTS = PARTY_DIRTY_ROLES.map((role, index) => {

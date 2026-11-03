@@ -26,6 +26,8 @@ const RECHARGE_READER = semanticRole(
   ]),
   ["i32", "i32", "i32"],
   ["i32"],
+  // November 3 client: callee indices and static addresses moved.
+  ["3ec2c7648741ffd8b003bab212b1a2c4c9e1e2cf137f576f740c4b2127a35983"],
 );
 
 const PRECISE_SKILL_TIMER = semanticRole(
@@ -38,6 +40,8 @@ const PRECISE_SKILL_TIMER = semanticRole(
   ]),
   [],
   ["i32"],
+  // November 3 client: callee indices and static addresses moved.
+  ["d4d83e28a10243726019c438c62ad828488e093dbe707708e145d2aa96f2b664"],
 );
 
 const IMMUTABLE = Object.freeze({
