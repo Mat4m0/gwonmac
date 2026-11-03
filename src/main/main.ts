@@ -44,7 +44,6 @@ import { AUTOMATION_COMMAND } from "../shared/automation.js";
 import { ClientRuntime } from "./client-runtime.js";
 import { RendererClientSessions } from "./renderer-client-sessions.js";
 import { loadSettings } from "./core/settings.js";
-import { BUNDLED_FUNDING, fetchLauncherFunding } from "./core/launcher-funding.js";
 import { LauncherNewsService } from "./core/launcher-news.js";
 import {
   loadDiagnosticProfile,
@@ -147,6 +146,7 @@ import {
 } from "./core/launcher-state.js";
 import { LauncherOrchestrator } from "./launcher-orchestrator.js";
 import { registerLauncherIpc } from "./launcher-ipc.js";
+import { sendLauncherFeedback } from "./core/launcher-feedback.js";
 import { LAUNCHER_IPC } from "../shared/launcher-contracts.js";
 import type {
   LauncherDestination,
@@ -572,7 +572,6 @@ if (primaryInstance) void app.whenReady().then(async () => {
     paths.launcherState,
     loadedLauncherState.document,
   );
-  let launcherFunding = BUNDLED_FUNDING;
   const launcherNews = new LauncherNewsService({
     cachePath: paths.launcherNewsCache,
     fetch: (url, init) => net.fetch(url, init),
@@ -813,12 +812,10 @@ if (primaryInstance) void app.whenReady().then(async () => {
     getProgress: () => clientRuntime.progress,
     getAppUpdate: () => appUpdaterController!.getState(),
     getSettings: () => currentSettings ?? settings,
-    getFunding: () => launcherFunding,
     getNews: (track, contentPreferences) => launcherNews.snapshot(track, contentPreferences),
     toolsLoaded: () => enhancementSelection.tools,
     getTexturePacks: () => texturePacks.snapshot(),
     getExtendedMemory: () => clientRuntime.extendedMemory,
-    developmentFixtures: !app.isPackaged || process.env.GW_LAUNCHER_FIXTURES === "1",
     allowUnreadyLaunch,
     publish: (snapshot) => {
       const launcher = windowRegistry.launcherWindow();
@@ -855,16 +852,12 @@ if (primaryInstance) void app.whenReady().then(async () => {
     return operation;
   };
 
+  let feedbackInFlight = false;
   registerLauncherIpc({
     windows: windowRegistry,
     connected: () => {
       logEvent({ k: "launcher.connected" });
       void launcherNews.refresh().then(() => launcherOrchestrator!.publish());
-      void fetchLauncherFunding((url, init) => net.fetch(url, init)).then((funding) => {
-        if (!funding) return;
-        launcherFunding = funding;
-        launcherOrchestrator!.publish();
-      });
     },
     snapshot: () => launcherOrchestrator!.snapshot(),
     create: async ({ name, appearance }) => {
@@ -978,6 +971,20 @@ if (primaryInstance) void app.whenReady().then(async () => {
       app.quit();
     },
     ...createTexturePackActions(texturePacks),
+    sendFeedback: async (feedback) => {
+      // One report at a time: a second click must not post the same text twice.
+      if (feedbackInFlight) throw new Error("feedback is already being sent");
+      feedbackInFlight = true;
+      try {
+        await sendLauncherFeedback((url, init) => net.fetch(url, init), feedback, {
+          appVersion: HOST_VERSION,
+          updateTrack: (await preferences.getSettings()).updateTrack,
+          macosVersion: process.getSystemVersion(),
+        });
+      } finally {
+        feedbackInFlight = false;
+      }
+    },
     openExternal: async (kind) => {
       await shell.openExternal(EXTERNAL_URLS[kind]);
     },

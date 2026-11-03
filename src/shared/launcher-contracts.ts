@@ -75,6 +75,7 @@ export const LAUNCHER_IPC = Object.freeze({
   texturePacksImport: "gw:launcher:texturePacks:import",
   texturePacksSelect: "gw:launcher:texturePacks:select",
   texturePacksRemove: "gw:launcher:texturePacks:remove",
+  feedbackSend: "gw:launcher:feedback:send",
   externalOpen: "gw:launcher:external:open",
   externalRevealLogs: "gw:launcher:external:revealLogs",
   updatesCheck: "gw:launcher:updates:check",
@@ -299,7 +300,6 @@ export type LauncherReadiness =
   | { readonly state: "offline-playable" };
 
 export interface LauncherSnapshot {
-  readonly funding: Readonly<{ raisedEuros: number; goalEuros: number }>;
   readonly revision: number;
   readonly experience: Readonly<{
     installationKind: LauncherInstallationKind;
@@ -324,12 +324,6 @@ export interface LauncherSnapshot {
   readonly selectedProfileIds: readonly ProfileId[];
   readonly preferences: LauncherPreferences;
   readonly news: LauncherNewsState;
-  readonly contentAvailability: Readonly<{
-    news: "fixture" | "placeholder";
-    dailies: "fixture" | "placeholder";
-    knownIssues: "fixture" | "placeholder";
-    feedback: "fixture" | "placeholder";
-  }>;
 }
 
 export interface LauncherNativeApi {
@@ -387,10 +381,39 @@ export interface LauncherNativeApi {
     check(): Promise<void>;
     restartAndInstall(): Promise<void>;
   };
+  readonly feedback: {
+    send(input: LauncherFeedback): Promise<void>;
+  };
   readonly external: {
     open(kind: LauncherExternalLink): Promise<void>;
     revealLogs(): Promise<void>;
   };
+}
+
+export const LAUNCHER_FEEDBACK_KINDS = ["problem", "idea", "other"] as const;
+export type LauncherFeedbackKind = (typeof LAUNCHER_FEEDBACK_KINDS)[number];
+export const LAUNCHER_FEEDBACK_MESSAGE_LIMIT = 4000;
+
+/** What a player chose to send. The main process adds only version facts. */
+export interface LauncherFeedback {
+  readonly kind: LauncherFeedbackKind;
+  readonly message: string;
+  /** Present only when the player asked for an answer. */
+  readonly email?: string;
+}
+
+export function parseLauncherFeedback(value: unknown): LauncherFeedback {
+  const source = exactObject(value, ["kind", "message", "email"], "feedback");
+  if (typeof source.kind !== "string" || !LAUNCHER_FEEDBACK_KINDS.includes(source.kind as LauncherFeedbackKind)) throw new Error("feedback kind is invalid");
+  const kind = source.kind as LauncherFeedbackKind;
+  if (typeof source.message !== "string") throw new Error("feedback message is invalid");
+  const message = source.message.trim();
+  if (!message || message.length > LAUNCHER_FEEDBACK_MESSAGE_LIMIT) throw new Error("feedback message is invalid");
+  if (source.email === undefined) return { kind, message };
+  if (typeof source.email !== "string") throw new Error("feedback email is invalid");
+  const email = source.email.trim();
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email)) throw new Error("feedback email is invalid");
+  return { kind, message, email };
 }
 
 export function parseGlobalTool(value: unknown): GlobalTool {

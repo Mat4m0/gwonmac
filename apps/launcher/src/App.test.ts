@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { LauncherNativeApi, LauncherSnapshot } from "@shared/launcher-contracts";
 import App from "./App.vue";
 import { fixtureSnapshot } from "./fixtures";
-import funding from "@shared/funding.json";
 
 function installNative(overrides: Record<string, unknown>): LauncherNativeApi {
   const native = {
@@ -89,45 +88,17 @@ describe("unified launcher shell", () => {
     await home.findAll("button").find(button => button.text() === "Customize")!.trigger("click");
     await flushPromises();
     expect(home.get(".settings-fields h1").text()).toBe("Home screen");
-    // The Settings grid has no row for the funding banner.
-    expect(home.find(".funding-banner").exists()).toBe(false);
     home.unmount();
   });
 
-  it("keeps funding on top and operational status only in the launch bar", () => {
+  it("keeps support in the title bar without a funding counter and operational status only in the launch bar", () => {
     const wrapper = mount(App);
 
-    expect(wrapper.get(".funding-banner").text()).toContain("Support gwonmac");
-    const progress = wrapper.get('[role="progressbar"][aria-label="Project funding"]');
-    expect(progress.attributes("aria-valuenow")).toBe(String(funding.raisedEuros));
-    expect(progress.attributes("aria-valuemax")).toBe(String(funding.goalEuros));
-    expect(progress.attributes("aria-valuetext")).toBe(`€${funding.raisedEuros} of €${funding.goalEuros} funded`);
-    expect(progress.text()).toContain(`€${funding.raisedEuros}`);
-    expect(progress.text()).toContain(`€${funding.goalEuros}`);
-    expect(progress.get("i").attributes("style")).toContain(`${Math.min(100, funding.raisedEuros / funding.goalEuros * 100)}%`);
-    expect(wrapper.get(".funding-banner").text()).not.toContain("yearly project costs");
-    expect(wrapper.get(".funding-banner").text()).not.toContain("Downloading game files");
+    expect(wrapper.get(".titlebar .support-pill").attributes("aria-label")).toBe("Support gwonmac on Ko-fi");
+    expect(wrapper.find('[role="progressbar"]').exists()).toBe(false);
+    expect(wrapper.get(".titlebar").text()).not.toContain("€");
     expect(wrapper.get(".launchbar").text()).toContain("Downloading game files");
     expect(wrapper.find(".priority-banner").exists()).toBe(false);
-  });
-
-  it("updates funding from the native snapshot and caps a fully funded bar", async () => {
-    let publish: (snapshot: LauncherSnapshot) => void = () => undefined;
-    installNative({ state: {
-      get: async () => fixtureSnapshot,
-      onChange(listener: typeof publish) { publish = listener; return () => undefined; },
-    } });
-    const wrapper = mount(App);
-    await flushPromises();
-    publish({ ...fixtureSnapshot, revision: fixtureSnapshot.revision + 1, funding: { raisedEuros: 160, goalEuros: 150 } });
-    await flushPromises();
-    const progress = wrapper.get('[role="progressbar"][aria-label="Project funding"]');
-    expect(progress.attributes("aria-valuetext")).toBe("€160 of €150 funded");
-    expect(progress.attributes("aria-valuenow")).toBe("150");
-    expect(progress.get("i").attributes("style")).toContain("100%");
-    expect(progress.text()).toContain("€160");
-    expect(progress.text()).toContain("€150");
-    wrapper.unmount();
   });
 
   it("keeps Home focused on content and moves account management to Accounts", async () => {
@@ -206,11 +177,20 @@ describe("unified launcher shell", () => {
     matchMedia.mockRestore();
   });
 
-  it("uses truthful production wording for feedback submission", async () => {
+  it("sends Help feedback through the native bridge", async () => {
+    const send = vi.fn(async () => undefined);
+    installNative({ feedback: { send } });
     const wrapper = mount(App);
-    await wrapper.findAll("nav button")[3]!.trigger("click");
-    expect(wrapper.get(".placeholder-note").text()).toContain("not connected yet");
-    expect(wrapper.text()).not.toContain("submitted");
+    await flushPromises();
+    expect(wrapper.findAll("nav button").map((button) => button.text())).toEqual(["Home", "Accounts", "Help"]);
+    await wrapper.findAll("nav button")[2]!.trigger("click");
+    expect(wrapper.get(".help-page h1").text()).toBe("Known issues");
+    await wrapper.get(".feedback-form textarea").setValue("Add a damage monitor.");
+    await wrapper.get(".feedback-form select").setValue("idea");
+    await wrapper.get(".feedback-form").trigger("submit");
+    await flushPromises();
+    expect(send).toHaveBeenCalledWith({ kind: "idea", message: "Add a damage monitor." });
+    wrapper.unmount();
   });
 
   it("keeps Discord and GitHub in the global header", async () => {
@@ -260,7 +240,6 @@ describe("unified launcher shell", () => {
           ...fixtureSnapshot,
           experience: { ...fixtureSnapshot.experience, showMigrationNotice: false },
           news: { status: "offline", stories: fixtureSnapshot.news.stories },
-          contentAvailability: { news: "placeholder", dailies: "placeholder", knownIssues: "placeholder", feedback: "placeholder" },
         }),
         onChange: () => () => undefined,
       },
@@ -271,10 +250,6 @@ describe("unified launcher shell", () => {
     expect(wrapper.get("#news-panel").text()).toContain("Saved news · offline");
     expect(wrapper.get(".segmented").text()).toContain("Dailies");
     expect(wrapper.text()).not.toContain("Wayfarer’s Reverie");
-    await wrapper.findAll("nav button")[3]!.trigger("click");
-    expect(wrapper.text()).toContain("Direct feedback is not connected yet.");
-    expect(wrapper.find("textarea").exists()).toBe(false);
-    expect(wrapper.text()).not.toContain("Add screenshot or file");
   });
 
   it("persists and clears the migrated-account notice after one short appearance", async () => {
@@ -371,7 +346,7 @@ describe("unified launcher shell", () => {
     expect(wrapper.text()).not.toContain("Archive");
     await wrapper.findAll(".account-appearance")[1]!.trigger("click");
     expect(document.body.textContent).toContain("Hide this account without deleting its data");
-    document.querySelector<HTMLButtonElement>(".archive-account-row .archive-button")!.click();
+    document.querySelector<HTMLButtonElement>(".archive-account-row button")!.click();
     await flushPromises();
 
     expect(archive).toHaveBeenCalledWith(readyProfiles[1]!.id);

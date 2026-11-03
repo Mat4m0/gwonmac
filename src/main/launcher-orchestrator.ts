@@ -36,13 +36,11 @@ export interface LauncherOrchestratorOptions {
   readonly hasActiveClient: () => boolean;
   readonly getProgress: () => DownloadProgress;
   readonly getAppUpdate: () => AppUpdateState;
-  readonly getFunding: () => LauncherSnapshot["funding"];
   readonly getSettings: () => AppSettings;
   readonly getNews: (track: AppSettings["updateTrack"], preferences: LauncherSnapshot["preferences"]) => LauncherSnapshot["news"];
   readonly toolsLoaded: () => boolean;
   readonly getTexturePacks?: () => TexturePackSnapshot;
   readonly getExtendedMemory?: () => ExtendedMemoryRuntimeStatus | null;
-  readonly developmentFixtures: boolean;
   /** Unpackaged Electron tests only: lets renderer-focused suites bypass client preparation. */
   readonly allowUnreadyLaunch?: boolean;
   readonly publish: (snapshot: LauncherSnapshot) => void;
@@ -70,10 +68,8 @@ export class LauncherOrchestrator {
     const progress = this.options.getProgress();
     const readiness = this.readiness(progress);
     const settings = this.options.getSettings();
-    const fixture = this.options.developmentFixtures ? "fixture" as const : "placeholder" as const;
     return {
       revision: this.revision,
-      funding: this.options.getFunding(),
       experience: {
         installationKind: document.installationKind,
         setup: document.setupVersion > 0 ? "complete" : "pending",
@@ -155,12 +151,6 @@ export class LauncherOrchestrator {
       selectedProfileIds,
       preferences: document.preferences,
       news: this.options.getNews(settings.updateTrack, document.preferences),
-      contentAvailability: {
-        news: fixture,
-        dailies: fixture,
-        knownIssues: fixture,
-        feedback: fixture,
-      },
     };
   }
 

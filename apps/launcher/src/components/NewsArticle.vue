@@ -2,6 +2,7 @@
 import { ExternalLink, X } from "lucide-vue-next";
 import type { LauncherNewsInline, LauncherNewsStory } from "@shared/launcher-contracts";
 import BaseModal from "./BaseModal.vue";
+import NewsSourceMark from "./NewsSourceMark.vue";
 
 defineProps<{ story: LauncherNewsStory }>();
 const emit = defineEmits<{ close: []; external: [id: string] }>();
@@ -15,7 +16,7 @@ function label(part: LauncherNewsInline): string {
   <BaseModal labelledby="news-article-title" wide @close="emit('close')">
     <article class="news-article">
       <header>
-        <div><span class="news-kicker">GWonMac · {{ story.channel === 'beta' ? 'Beta' : 'Release' }}</span><h1 id="news-article-title">{{ story.title }}</h1><time :datetime="story.publishedAt">{{ new Date(story.publishedAt).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }) }}</time></div>
+        <div><h1 id="news-article-title">{{ story.title }}</h1><p class="article-meta"><NewsSourceMark :source="story.source" /><span>{{ story.channel === 'beta' ? 'GWonMac Beta' : 'GWonMac release' }}</span><span aria-hidden="true">·</span><time :datetime="story.publishedAt">{{ new Date(story.publishedAt).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }) }}</time></p></div>
         <button class="icon-button" aria-label="Close release notes" autofocus @click="emit('close')"><X /></button>
       </header>
       <div class="article-body">
@@ -34,21 +35,21 @@ function label(part: LauncherNewsInline): string {
 <style scoped>
 .news-article { max-height: min(78vh, 760px); display: flex; flex-direction: column; }
 header { display: flex; align-items: flex-start; justify-content: space-between; gap: 28px; padding: 26px 30px 20px; border-bottom: 1px solid var(--line); }
-header h1 { max-width: 720px; margin: 6px 0 5px; font-size: clamp(25px, 3vw, 34px); line-height: 1.08; }
-header time, figcaption { color: var(--muted); font-size: 12px; }
-.news-kicker { color: var(--gold); font-size: 11px; font-weight: 750; letter-spacing: .13em; text-transform: uppercase; }
-.icon-button { flex: 0 0 auto; padding: 8px; color: var(--muted); background: transparent; }
+header h1 { max-width: 720px; margin: 0 0 10px; font-size: clamp(25px, 3vw, 34px); line-height: 1.08; }
+figcaption { color: var(--muted); font-size: var(--fs-xs); }
+.article-meta { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--muted); font-size: var(--fs-sm); }
+.icon-button { flex: 0 0 auto; }
 .icon-button svg { width: 18px; }
-.article-body { overflow: auto; padding: 20px 30px 30px; color: #d6d0c4; font-size: 15px; line-height: 1.65; }
+.article-body { overflow: auto; padding: 20px 30px 30px; color: var(--text-soft); font-size: 15px; line-height: 1.65; }
 .article-body h2 { margin: 28px 0 8px; color: var(--text); font-size: 20px; }
 .article-body p { max-width: 72ch; margin: 0 0 16px; }
 .article-body ul { max-width: 70ch; margin: 8px 0 20px; padding-left: 22px; }
 .article-body li { margin: 6px 0; }
-.article-body code { padding: 2px 5px; border: 1px solid var(--line); background: #14130f; color: #f1d6a3; }
-.article-link { display: inline; padding: 0; border: 0; color: var(--gold); background: transparent; font: inherit; text-decoration: underline; text-underline-offset: 3px; }
-.article-link:hover, .article-link:focus-visible { color: #f6d99f; }
+.article-body code { padding: 2px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--field); color: var(--gold-text); }
+.article-link { display: inline; padding: 0; border: 0; color: var(--gold-text); background: transparent; font: inherit; text-decoration: underline; text-underline-offset: 3px; }
+.article-link:hover, .article-link:focus-visible { color: var(--focus); }
 figure { margin: 22px 0; }
-figure img { display: block; width: 100%; max-height: 460px; object-fit: cover; border: 1px solid var(--line); }
+figure img { display: block; width: 100%; max-height: 460px; object-fit: cover; border: 1px solid var(--line); border-radius: var(--radius-md); }
 figcaption { margin-top: 7px; }
 footer { display: flex; justify-content: flex-end; gap: 10px; padding: 16px 30px 24px; border-top: 1px solid var(--line); }
 footer button { display: inline-flex; align-items: center; gap: 8px; }

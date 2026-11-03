@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import { ExternalLink, SlidersHorizontal } from "lucide-vue-next";
+import { ChevronRight, ExternalLink, SlidersHorizontal } from "lucide-vue-next";
 import type { LauncherNewsState, LauncherNewsStory, LauncherNewsSource } from "@shared/launcher-contracts";
+import NewsSourceMark from "./NewsSourceMark.vue";
 
 const props = defineProps<{ news: LauncherNewsState }>();
 const emit = defineEmits<{ select: [story: LauncherNewsStory]; settings: [] }>();
@@ -29,39 +30,38 @@ function shortDate(value: string): string { return new Date(value).toLocaleDateS
   <div v-else-if="visible.length === 0" class="news-status">No news matches this filter.</div>
   <div v-else class="news-feed-list">
     <button v-for="story in visible" :key="story.id" class="news-row" @click="emit('select', story)">
-      <span class="story-source" :class="`source-${story.source}`">{{ sourceLabel[story.source] }}<small v-if="story.channel === 'beta'">Beta</small></span>
+      <span class="story-source" :class="`source-${story.source}`"><NewsSourceMark :source="story.source" /><span class="source-name">{{ sourceLabel[story.source] }}<small v-if="story.channel === 'beta'" class="chip accent">Beta</small></span></span>
       <span class="story-copy"><strong>{{ story.title }}</strong><span>{{ story.summary }}</span></span>
       <time :datetime="story.publishedAt">{{ shortDate(story.publishedAt) }}</time>
       <ExternalLink v-if="story.action === 'external'" class="row-action" aria-hidden="true" />
-      <span v-else class="row-action" aria-hidden="true">Read</span>
+      <ChevronRight v-else class="row-action" aria-hidden="true" />
     </button>
   </div>
 </template>
 
 <style scoped>
-.news-panel-head { position: sticky; top: -28px; z-index: 2; display: flex; align-items: center; justify-content: space-between; padding-bottom: 14px; background: linear-gradient(#0c0c0a 82%, transparent); }
+.news-panel-head { position: sticky; top: -28px; z-index: 2; display: flex; align-items: center; justify-content: space-between; padding-bottom: 14px; background: linear-gradient(var(--sunken) 82%, transparent); }
 .news-panel-head h2 { margin: 0; font-size: 20px; }
 .news-panel-head > div { display: flex; align-items: baseline; gap: 10px; }
-.offline-note { color: var(--muted); font-size: 11px; }
-.customize { display: flex; align-items: center; gap: 7px; padding: 8px; color: var(--muted); background: transparent; }
-.customize svg { width: 15px; }
+.offline-note { color: var(--muted); font-size: var(--fs-2xs); }
 .news-filters { display: flex; gap: 5px; padding-bottom: 13px; border-bottom: 1px solid var(--line); }
-.news-filters button { padding: 6px 10px; color: var(--muted); background: transparent; border: 1px solid transparent; font-size: 12px; }
+.news-filters button { padding: 6px 12px; border: 1px solid transparent; border-radius: var(--radius-pill); color: var(--muted); background: transparent; font-size: var(--fs-xs); }
+.news-filters button:hover { color: var(--text); }
 .news-filters button.active { color: var(--text); background: var(--control); border-color: var(--line); }
 .news-feed-list { display: grid; }
-.news-row { position: relative; display: grid; grid-template-columns: 82px minmax(0, 1fr) auto; gap: 14px; width: 100%; padding: 18px 3px; color: inherit; text-align: left; background: transparent; border-bottom: 1px solid var(--line); }
-.news-row:hover, .news-row:focus-visible { background: linear-gradient(90deg, rgba(230,177,84,.06), transparent); }
-.story-source { align-self: start; color: var(--gold); font-size: 10px; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
-.story-source small { display: block; width: fit-content; margin-top: 5px; padding: 2px 5px; color: #171009; background: #df9d55; font-size: 9px; letter-spacing: .08em; }
-.source-event { color: #b8c982; }
+.news-row { position: relative; display: grid; grid-template-columns: 118px minmax(0, 1fr) auto; gap: 14px; width: 100%; padding: 18px 3px; color: inherit; text-align: left; background: transparent; border-bottom: 1px solid var(--line); }
+.news-row:hover, .news-row:focus-visible { background: linear-gradient(90deg, var(--gold-tint), transparent); }
+.story-source { align-self: start; display: flex; align-items: flex-start; gap: 8px; color: var(--text-soft); font-size: var(--fs-xs); font-weight: 600; line-height: 20px; }
+.story-source small { display: flex; margin-top: 2px; padding: 0 7px; font-size: var(--fs-2xs); line-height: 18px; }
 .story-copy { display: grid; gap: 5px; min-width: 0; }
-.story-copy strong { color: var(--text); font-size: 15px; line-height: 1.25; }
-.story-copy > span { display: -webkit-box; overflow: hidden; color: var(--muted); font-size: 12px; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-.news-row time { padding-right: 30px; color: var(--muted); font-size: 11px; white-space: nowrap; }
-.row-action { position: absolute; right: 2px; top: 18px; width: 14px; color: #bd9b62; font-size: 10px; text-transform: uppercase; }
+.story-copy strong { color: var(--text); font-size: var(--fs-md); line-height: 1.25; }
+.story-copy > span { display: -webkit-box; overflow: hidden; color: var(--muted); font-size: var(--fs-xs); line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.news-row time { padding-right: 30px; color: var(--muted); font-size: var(--fs-2xs); white-space: nowrap; }
+.row-action { position: absolute; right: 4px; top: 18px; width: 15px; height: 15px; color: var(--muted); }
+.news-row:hover .row-action { color: var(--gold-text); }
 .news-status { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 180px; color: var(--muted); }
 .news-spinner { width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--gold); border-radius: 50%; animation: news-spin .8s linear infinite; }
 @keyframes news-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .news-spinner { animation: none; } }
-@media (max-width: 720px) { .news-row { grid-template-columns: 72px minmax(0, 1fr); }.news-row time { display: none; } }
+@media (max-width: 720px) { .news-row { grid-template-columns: 22px minmax(0, 1fr); }.source-name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }.news-row time { display: none; } }
 </style>

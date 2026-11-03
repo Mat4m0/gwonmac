@@ -13,25 +13,23 @@ import {
   Crown,
   X,
 } from "lucide-vue-next";
-import type { LauncherDestination, LauncherPreferencesPatch, LauncherSnapshot } from "@shared/launcher-contracts";
+import type { LauncherDestination, LauncherFeedback, LauncherPreferencesPatch, LauncherSnapshot } from "@shared/launcher-contracts";
 import type { SettingsSection, SettingsTarget } from "@shared/settings-catalogue";
 import type { ProfileId } from "@shared/multiple-accounts";
 import { parseProfileName, profileNameKey } from "@shared/multiple-accounts";
 import { fixtureSnapshotFor } from "./fixtures";
 import AccountsView from "./components/AccountsView.vue";
 import BaseModal from "./components/BaseModal.vue";
-import FeedbackView from "./components/FeedbackView.vue";
 import LauncherHeader from "./components/LauncherHeader.vue";
 import LaunchBar from "./components/LaunchBar.vue";
 import HomeView from "./components/HomeView.vue";
-import KnownIssuesView from "./components/KnownIssuesView.vue";
+import HelpView from "./components/HelpView.vue";
 import SettingsView from "./components/SettingsView.vue";
 import ColorControl from "./components/ColorControl.vue";
 import type { LauncherRoute } from "./routes";
 
 const route = ref<LauncherRoute>("home");
 const snapshot = shallowRef<LauncherSnapshot>(fixtureSnapshotFor(window.location.search));
-const funding = computed(() => snapshot.value.funding);
 const selected = ref<ProfileId[]>([...snapshot.value.selectedProfileIds]);
 const addOpen = ref(false);
 const appearanceProfile = ref<ProfileId | null>(null);
@@ -281,6 +279,11 @@ async function openExternal(kind: Parameters<NonNullable<typeof native>["externa
   await runAction("The link could not be opened.", () => native?.external.open(kind));
 }
 
+// A browser preview has no main process, so it accepts the report without sending it.
+async function sendFeedback(feedback: LauncherFeedback) {
+  await native?.feedback.send(feedback);
+}
+
 async function openNews(id: string) {
   await runAction("The news item could not be opened.", () => native?.news.open(id));
 }
@@ -298,16 +301,9 @@ async function updateContent(content: NonNullable<LauncherPreferencesPatch["cont
 <template>
   <div v-if="startupError" class="launcher-boot launcher-error" role="alert"><AlertTriangle /><h1>The launcher could not open</h1><p>Your accounts and game files were not changed.</p><button class="primary" @click="retryStartup">Try again</button></div>
   <div v-else-if="!synchronized" class="launcher-boot" role="status">Opening launcher…</div>
-  <div v-else class="app-shell" :class="{ 'settings-shell': route === 'settings', 'accounts-shell': route === 'accounts' }">
+  <div v-else class="app-shell" :class="{ 'settings-shell': route === 'settings' }">
     <LauncherHeader :route="route" @navigate="route = $event" @settings="openSettings()" @external="openExternal" />
 
-    <section v-if="route !== 'settings'" class="funding-banner" aria-label="Project funding">
-      <div><strong>Support gwonmac</strong></div>
-      <div class="funding-progress" role="progressbar" aria-label="Project funding" :aria-valuenow="Math.min(funding.raisedEuros, funding.goalEuros)" :aria-valuemax="funding.goalEuros" :aria-valuemin="0" :aria-valuetext="`€${funding.raisedEuros} of €${funding.goalEuros} funded`">
-        <span>€{{ funding.raisedEuros }}</span><div><i :style="{ width: `${Math.min(100, funding.raisedEuros / funding.goalEuros * 100)}%` }" /></div><span>€{{ funding.goalEuros }}</span>
-      </div>
-      <button @click="openExternal('donate')">Support</button>
-    </section>
 
     <main :class="{ 'artwork-only': route === 'home' && !snapshot.preferences.content.news && !snapshot.preferences.content.dailies }">
       <HomeView v-if="route === 'home'" :snapshot="snapshot" @settings="openSettings('home')" @preferences="updateContent" @news="openNews" />
@@ -327,9 +323,7 @@ async function updateContent(content: NonNullable<LauncherPreferencesPatch["cont
         @delete="id => runAction('The account could not be deleted.', () => native?.profiles.delete(id))"
       />
 
-      <KnownIssuesView v-else-if="route === 'issues'" :availability="snapshot.contentAvailability.knownIssues" @external="openExternal" />
-
-      <FeedbackView v-else-if="route === 'feedback'" :availability="snapshot.contentAvailability.feedback" @external="openExternal" />
+      <HelpView v-else-if="route === 'help'" :send="sendFeedback" @external="openExternal" />
 
       <SettingsView v-else :snapshot="snapshot" :native="native" :launcher="{ snapshot, native }" :target="settingsTarget" @fixture="snapshot = $event" @section="settingsSection = $event" />
     </main>
@@ -358,7 +352,7 @@ async function updateContent(content: NonNullable<LauncherPreferencesPatch["cont
     </BaseModal>
 
     <BaseModal v-if="appearanceProfile" labelledby="appearance-title" :dismissible="!appearanceSaving" @close="appearanceProfile = null">
-      <form @submit.prevent="saveAppearance"><fieldset class="account-edit-fields" :disabled="appearanceSaving"><div class="modal-head"><h2 id="appearance-title">Edit account</h2><button type="button" class="icon-button" aria-label="Close" :disabled="appearanceSaving" @click="appearanceProfile = null"><X /></button></div><p>Choose a name and appearance you can recognize at a glance.</p><label>Name<input v-model="appearanceName" maxlength="48" required :disabled="appearanceSaving" :aria-invalid="!!appearanceError" :aria-describedby="appearanceError ? 'account-edit-error' : undefined" /></label><p v-if="appearanceError" id="account-edit-error" class="account-edit-error" role="alert">{{ appearanceError }}</p><fieldset class="icon-options"><legend>Icon</legend><button v-for="(component, icon) in profileIcons" :key="icon" type="button" :aria-label="icon" :aria-pressed="appearanceIcon === icon" :class="{ selected: appearanceIcon === icon }" @click="appearanceIcon = icon"><component :is="component" /></button></fieldset><fieldset class="color-options"><legend>Color</legend><button v-for="color in ['#9a6638', '#496b58', '#46658a', '#76558b', '#9a4f4f', '#76703c', '#4c777d', '#6f6258']" :key="color" type="button" :aria-label="`Use ${color}`" :aria-pressed="appearanceColor === color" :class="{ selected: appearanceColor === color }" :style="{ background: color }" @click="appearanceColor = color" /><ColorControl label="Custom account color" :value="appearanceColor" @change="appearanceColor = $event" /></fieldset><div v-if="canArchiveAppearanceProfile" class="archive-account-row"><span><strong>Archive account</strong><small>Hide this account without deleting its data.</small></span><button type="button" class="archive-button" @click="archiveAppearanceProfile"><Archive />Archive</button></div><div class="form-actions"><button type="button" class="secondary" :disabled="appearanceSaving" @click="appearanceProfile = null">Cancel</button><button class="primary" :disabled="appearanceSaving">{{ appearanceSaving ? 'Saving…' : 'Save changes' }}</button></div></fieldset></form>
+      <form @submit.prevent="saveAppearance"><fieldset class="account-edit-fields" :disabled="appearanceSaving"><div class="modal-head"><h2 id="appearance-title">Edit account</h2><button type="button" class="icon-button" aria-label="Close" :disabled="appearanceSaving" @click="appearanceProfile = null"><X /></button></div><p>Choose a name and appearance you can recognize at a glance.</p><label>Name<input v-model="appearanceName" maxlength="48" required :disabled="appearanceSaving" :aria-invalid="!!appearanceError" :aria-describedby="appearanceError ? 'account-edit-error' : undefined" /></label><p v-if="appearanceError" id="account-edit-error" class="account-edit-error" role="alert">{{ appearanceError }}</p><fieldset class="icon-options"><legend>Icon</legend><button v-for="(component, icon) in profileIcons" :key="icon" type="button" :aria-label="icon" :aria-pressed="appearanceIcon === icon" :class="{ selected: appearanceIcon === icon }" @click="appearanceIcon = icon"><component :is="component" /></button></fieldset><fieldset class="color-options"><legend>Color</legend><button v-for="color in ['#9a6638', '#496b58', '#46658a', '#76558b', '#9a4f4f', '#76703c', '#4c777d', '#6f6258']" :key="color" type="button" :aria-label="`Use ${color}`" :aria-pressed="appearanceColor === color" :class="{ selected: appearanceColor === color }" :style="{ background: color }" @click="appearanceColor = color" /><ColorControl label="Custom account color" :value="appearanceColor" @change="appearanceColor = $event" /></fieldset><div v-if="canArchiveAppearanceProfile" class="archive-account-row"><span><strong>Archive account</strong><small>Hide this account without deleting its data.</small></span><button type="button" class="secondary" @click="archiveAppearanceProfile"><Archive />Archive</button></div><div class="form-actions"><button type="button" class="secondary" :disabled="appearanceSaving" @click="appearanceProfile = null">Cancel</button><button class="primary" :disabled="appearanceSaving">{{ appearanceSaving ? 'Saving…' : 'Save changes' }}</button></div></fieldset></form>
     </BaseModal>
 
     <div v-if="snapshot.experience.preferencesReset" class="toast"><AlertTriangle /><div><strong>Launcher preferences were reset.</strong><span>Your accounts, saved login, game files, builds, and templates were not changed.</span></div><button class="icon-button" aria-label="Dismiss" @click="dismissPreferencesReset"><X /></button></div>
