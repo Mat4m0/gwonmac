@@ -334,8 +334,9 @@ saw move:
 - static data moved by +384, +400 or +416 per region and read-only data by
   +224, including the pointers stored inside it;
 - the area-table count sentinel grew again (1477 to 1480);
-- the logout producer passes two frame identifiers that dropped by one
-  (2801/2802 to 2800/2801); and
+- the logout producer passes two function-table slots that dropped by one
+  (2801/2802 to 2800/2801): each names the same callback, moved down one
+  slot; and
 - the friend connection-event and logout handlers assert with `GcAuthCmd.cpp`
   source lines that moved by seven.
 
