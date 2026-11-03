@@ -32,7 +32,10 @@ const SKILL_SLOT_CONSTRUCTOR_ROLE = semanticRole(137,
   [{ start: 38, end: 43, role: "frame.file", addressClass: "immutable-data" }],
   ["i32", "i32", "i32", "i32", "i32", "i32"], ["i32"],
   // October 22 client: identical body; one reviewed callee index moved.
-  ["c4edab6f9b07609efbb005194c4bf075b504c0da552637acf79c6b8805aa3013"]);
+  ["c4edab6f9b07609efbb005194c4bf075b504c0da552637acf79c6b8805aa3013",
+    // November 3 client: callee indices and static addresses moved.
+    "94f81fdeec5b0c0ee273d6f438ba866a5f44afbc39ad21f1967d2276fb6fad21",
+  ]);
 const SKILL_SLOT_ALLOCATOR_ROLE = semanticRole(359,
   "c42147cced310b1a2caffa8c91e6a824f156ce274c413a5033fa233598a64b7c",
   [
@@ -40,7 +43,10 @@ const SKILL_SLOT_ALLOCATOR_ROLE = semanticRole(359,
     { start: 283, end: 288, role: "allocator.file", addressClass: "immutable-data" },
   ], ["i32", "i32", "i32", "i32", "i32"], ["i32"],
   // October 22 client: identical body; four reviewed callee indices moved.
-  ["cd19729848a8981a6c93b2e6df14d8c65a6b9861557319b876b27e176e8bb2d3"]);
+  ["cd19729848a8981a6c93b2e6df14d8c65a6b9861557319b876b27e176e8bb2d3",
+    // November 3 client: callee indices and static addresses moved.
+    "4caf1f012d85c8f327eeef12601bfe15a22e9f16b1d48e153e26c1d0fc6fe779",
+  ]);
 const SKILL_SLOT_REGISTRAR_ROLE = semanticRole(360,
   "b9b40600c58634730684ebf668a33af0c500f99c7e6e4c113e131e0692730e94",
   [
@@ -52,7 +58,9 @@ const SKILL_SLOT_REGISTRAR_ROLE = semanticRole(360,
     { start: 288, end: 293, role: "registrar.assertion", addressClass: "immutable-data" },
     { start: 294, end: 299, role: "registrar.file", addressClass: "immutable-data" },
     ...[342, 352].map((start) => ({ start, end: start + 5, role: "frame.plus48", addressClass: "mutable-static" as const })),
-  ], ["i32", "i32"], ["i32"]);
+  ], ["i32", "i32"], ["i32"],
+  // November 3 client: callee indices and static addresses moved.
+  ["84e0533a1c0730cb1fdef70fe9c4b18f3e9826dcbc6aca48bcb7d8f2369106e8"]);
 const SKILL_SLOT_ID_RESOLVER_ROLE = semanticRole(247,
   "f67fce69172713e734d2a8ee44548898f878ed2de1821beb06a9e5ba872797b5",
   [
@@ -60,7 +68,9 @@ const SKILL_SLOT_ID_RESOLVER_ROLE = semanticRole(247,
     ...[23, 152, 232].map((start) => ({ start, end: start + 5, role: "frame.array", addressClass: "mutable-static" as const })),
     ...([[47, "resolver.assert-a"], [53, "resolver.file-a"], [82, "resolver.assert-b"], [88, "resolver.file-b"], [133, "frame.array-file"], [169, "resolver.assert-c"], [175, "resolver.file-b"], [213, "frame.array-file"]] as const)
       .map(([start, role]) => ({ start, end: start + 5, role, addressClass: "immutable-data" as const })),
-  ], ["i32"], ["i32"]);
+  ], ["i32"], ["i32"],
+  // November 3 client: callee indices and static addresses moved.
+  ["ea7257fa392bf38224d796f5508ab325d98f63368a30a9972ed5a0b2e95da924"]);
 
 const IMMUTABLE = Object.freeze({
   frameFile: "ae09386d3c010580726df6fd3ebda81021733a84674bf912c72adfd8ad07429b",

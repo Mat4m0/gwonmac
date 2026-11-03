@@ -94,10 +94,18 @@ const PARTY_RELEASE_STORAGE_ROLE = semanticRole(
 );
 
 const PARTY_LEAF_ROLES = Object.freeze({
-  first: semanticRole(60, "2295ea545e420022895bf4084eaa03bd8e47bce067db291c7e9ce2e1c390e89d", [span(13, "first.error", "immutable-data"), span(19, "first.source-file", "immutable-data"), span(50, "first.empty", "immutable-data")], ["i32"], ["i32"]),
-  second: semanticRole(45, "a99cc45b1dc37974f3ab2032d30f7617ebb5f0d45cdf249b2453094b8d49bb41", [span(11, "second.error", "immutable-data"), span(17, "second.source-file", "immutable-data"), span(39, "second.empty", "immutable-data")], ["i32"], ["i32"]),
-  third: semanticRole(48, "c6ef04ab4bddab108d5b0f7c90acb55f7d6eab79b0c28355ca89b43751c02060", [span(11, "third.error", "immutable-data"), span(17, "third.source-file", "immutable-data"), span(38, "third.empty", "immutable-data")], ["i32"], ["i32"]),
-  sixth: semanticRole(48, "7aaa435337e435feda9d0d29ab7f66079f92cadbcd52c1bf2749de775e883799", [span(11, "sixth.error", "immutable-data"), span(17, "sixth.source-file", "immutable-data"), span(38, "sixth.empty", "immutable-data")], ["i32"], ["i32"]),
+  first: semanticRole(60, "2295ea545e420022895bf4084eaa03bd8e47bce067db291c7e9ce2e1c390e89d", [span(13, "first.error", "immutable-data"), span(19, "first.source-file", "immutable-data"), span(50, "first.empty", "immutable-data")], ["i32"], ["i32"],
+  // November 3 client: callee indices and static addresses moved.
+  ["e3050e5c981ede20ffdd2be703d4984e8ab6dff971f9ff4bb74f89b47a7aa761"]),
+  second: semanticRole(45, "a99cc45b1dc37974f3ab2032d30f7617ebb5f0d45cdf249b2453094b8d49bb41", [span(11, "second.error", "immutable-data"), span(17, "second.source-file", "immutable-data"), span(39, "second.empty", "immutable-data")], ["i32"], ["i32"],
+  // November 3 client: callee indices and static addresses moved.
+  ["480036a0bb9bc4daa018efa03252b86ea408e9f3ee025e0fffa26b12e0bef65a"]),
+  third: semanticRole(48, "c6ef04ab4bddab108d5b0f7c90acb55f7d6eab79b0c28355ca89b43751c02060", [span(11, "third.error", "immutable-data"), span(17, "third.source-file", "immutable-data"), span(38, "third.empty", "immutable-data")], ["i32"], ["i32"],
+  // November 3 client: callee indices and static addresses moved.
+  ["e7993f940d602db0ee24bebf3ddfb21ead8c2771bc90bb2eb699684aa827167a"]),
+  sixth: semanticRole(48, "7aaa435337e435feda9d0d29ab7f66079f92cadbcd52c1bf2749de775e883799", [span(11, "sixth.error", "immutable-data"), span(17, "sixth.source-file", "immutable-data"), span(38, "sixth.empty", "immutable-data")], ["i32"], ["i32"],
+  // November 3 client: callee indices and static addresses moved.
+  ["59354c725794b0b502308d858ef7cd0fcf8f5f95dbd545ba25d011c025ddc4c9"]),
   finishState: semanticRole(11, "8e87304b020e158179c2a265fec3d2b82230104b60f1c55db6aaafe7ecfc7936", [span(5, "finish.state", "mutable-static")], [], ["i32"]),
   finishFlush: semanticRole(4_425, "c9e18e4f6773e7b7dde9c9b171ba89429f1a9c35e6b2e6f5d46d8220da5f9418", [
     span(28, "flush.assert-e", "immutable-data"), span(34, "flush.source-file", "immutable-data"),
@@ -116,10 +124,14 @@ const PARTY_LEAF_ROLES = Object.freeze({
 // Each reviewed upstream change retains its complete native control flow.
 // Message IDs and context fields remain exact within that role variant.
 const PARTY_CALLEE_ROLES_NOTIFYDISPATCH_VARIANTS = [PARTY_CALLEE_ROLES.notifyDispatch,
-  semanticRole(1054, "11aefb16d58b062416e00f748e1e57bb52c879322b319287dfee3f478200f9ac", PARTY_CALLEE_ROLES.notifyDispatch.spans, ["i32"], []),
+  semanticRole(1054, "11aefb16d58b062416e00f748e1e57bb52c879322b319287dfee3f478200f9ac", PARTY_CALLEE_ROLES.notifyDispatch.spans, ["i32"], [],
+  // November 3 client: callee indices and static addresses moved.
+  ["c4754502ff7e759525ee6249165be5a5f2d04524265d79254b5655cc34a5bca5"]),
 ];
 const PARTY_LEAF_ROLES_FINISHFLUSH_VARIANTS = [PARTY_LEAF_ROLES.finishFlush,
-  semanticRole(4425, "11bc275741ce7dcc12a15fefd4325972cf706d7d73cf9f8b284b6fda720a71ca", PARTY_LEAF_ROLES.finishFlush.spans, ["i32", "i32", "i32"], []),
+  semanticRole(4425, "11bc275741ce7dcc12a15fefd4325972cf706d7d73cf9f8b284b6fda720a71ca", PARTY_LEAF_ROLES.finishFlush.spans, ["i32", "i32", "i32"], [],
+  // November 3 client: callee indices and static addresses moved.
+  ["163e7e83240a4a77347504488db735a6f33a798da21174f9d51ac626a6acf680"]),
 ];
 const ATTRIBUTE_COMMIT_CALL_SPANS: readonly RelocationSpan[] = [{"start": 6, "end": 11, "role": "commit.resolve", "addressClass": "function-index"}, {"start": 21, "end": 26, "role": "commit.first", "addressClass": "function-index"}, {"start": 37, "end": 42, "role": "commit.second", "addressClass": "function-index"}, {"start": 51, "end": 56, "role": "commit.third", "addressClass": "function-index"}, {"start": 65, "end": 70, "role": "commit.context-guard", "addressClass": "function-index"}, {"start": 93, "end": 98, "role": "commit.fourth", "addressClass": "function-index"}, {"start": 111, "end": 116, "role": "commit.fifth", "addressClass": "function-index"}, {"start": 125, "end": 130, "role": "commit.sixth", "addressClass": "function-index"}];
 const ATTRIBUTE_COMMIT_VARIANTS = [PARTY_CALLEE_ROLES.attributeCommit,
@@ -157,11 +169,15 @@ const PARTY_APPLY_PREPARE_ROLE = semanticRole(113,
   [span(33, "prepare.source-file", "immutable-data"),
     span(58, "prepare.assertion", "immutable-data"),
     span(64, "prepare.source-file", "immutable-data")],
-  ["i32", "i32", "i32"], []);
+  ["i32", "i32", "i32"], [],
+  // November 3 client: callee indices and static addresses moved.
+  ["ecdb122743b3098906e4eb3e90cf10b3c99e32e736774e5ca3dc817852e69e61"]);
 const PARTY_DECODE_SECOND_ROLE = semanticRole(66,
   "f7d8b9b0af470b4b8811847f143b5dc08b3a929ce1bbd70773d97ff13e3efda7",
   [span(46, "second.empty", "immutable-data")],
-  ["i32", "i32", "i32"], ["i32"]);
+  ["i32", "i32", "i32"], ["i32"],
+  // November 3 client: callee indices and static addresses moved.
+  ["d85e537fb0594d4392b016f4b7930a95b67f40d1c6fec8698449d22740492cb9"]);
 const PARTY_DECODE_COPY_ROLE = semanticRole(15,
   "55503d8f407c3fe2635098719d71efbd50ce88afb596b08cee0b62005e89554a",
   [span(8, "copy.helper", "function-index")],
