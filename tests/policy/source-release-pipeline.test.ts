@@ -656,7 +656,6 @@ test("runtime package entries and audit exceptions stay explicit", () => {
       "GHSA-w3rx-r6r6-pgpr",
       "GHSA-5p2g-fcmc-qvqq",
       "GHSA-g7r4-m6w7-qqqr",
-      "GHSA-86w9-cpqp-85rv",
       "GHSA-ch52-4w7c-c8xp",
       "GHSA-vfj7-8cjw-p6xm",
       "GHSA-v5rq-49vh-5v5c",
