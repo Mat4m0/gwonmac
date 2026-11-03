@@ -38,18 +38,23 @@ export function headingAnchor(text: string): string {
 
 export function markdownInline(source: string, resolvers: MarkdownResolvers): readonly MarkdownInline[] {
   const parts: MarkdownInline[] = [];
-  const expression = /(!?\[([^\]]*)\]\(([^)]+)\)(?:\{[^}]*\})?|\*\*([^*]+)\*\*|`([^`]+)`|<kbd>([^<]+)<\/kbd>)/gu;
+  // `:setting[Label]{to="section/control"}` is the website's inline component for a
+  // setting; it reaches the resolver as a `settings:` link.
+  const expression = /(!?\[([^\]]*)\]\(([^)]+)\)(?:\{[^}]*\})?|:setting\[([^\]]+)\]\{to="([^"]+)"\}|\*\*([^*]+)\*\*|`([^`]+)`|<kbd>([^<]+)<\/kbd>)/gu;
   let cursor = 0;
   for (const match of source.matchAll(expression)) {
     const start = match.index ?? 0;
     if (start > cursor) parts.push({ text: source.slice(cursor, start) });
+    const link = (text: string, href: string) => {
+      const actionId = resolvers.link(href);
+      parts.push(actionId ? { text, actionId } : { text });
+    };
     if (match[1]?.startsWith("!")) parts.push({ text: match[2] || "Image" });
-    else if (match[2] !== undefined) {
-      const actionId = resolvers.link(match[3]!);
-      parts.push(actionId ? { text: match[2], actionId } : { text: match[2] });
-    } else if (match[4] !== undefined) parts.push({ text: match[4], emphasis: "strong" });
-    else if (match[5] !== undefined) parts.push({ text: match[5], emphasis: "code" });
-    else if (match[6] !== undefined) parts.push({ text: match[6], emphasis: "kbd" });
+    else if (match[2] !== undefined) link(match[2], match[3]!);
+    else if (match[4] !== undefined) link(match[4], `settings:${match[5]}`);
+    else if (match[6] !== undefined) parts.push({ text: match[6], emphasis: "strong" });
+    else if (match[7] !== undefined) parts.push({ text: match[7], emphasis: "code" });
+    else if (match[8] !== undefined) parts.push({ text: match[8], emphasis: "kbd" });
     cursor = start + match[0].length;
   }
   if (cursor < source.length) parts.push({ text: source.slice(cursor) });
