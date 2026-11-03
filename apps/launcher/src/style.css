@@ -374,7 +374,7 @@ textarea { resize: vertical; }
 }
 @media (max-width: 600px) {
   .app-shell { grid-template-rows: 64px minmax(0, 1fr) auto; }
-  .titlebar { grid-template-columns: 112px minmax(0, 1fr) auto; gap: 6px; padding: 12px 14px 8px; }
+  .titlebar { grid-template-columns: auto minmax(0, 1fr) auto; gap: 6px; padding: 12px 14px 8px; }
   .brand span { display: none; }
   .titlebar nav { gap: 0; }
   .titlebar nav button, .title-actions .icon-button { padding-inline: 8px; }
@@ -412,6 +412,8 @@ textarea { resize: vertical; }
   .accounts-list-heading span:last-child { display: none; }
 }
 @media (max-width: 480px) {
+  /* Four labelled tabs still fit beside the Support pill once the icons go; the labels stay. */
+  .titlebar nav button svg { display: none; }
   .issue-help-actions { display: grid; }
   .issue-help-actions button { width: 100%; }
 }
