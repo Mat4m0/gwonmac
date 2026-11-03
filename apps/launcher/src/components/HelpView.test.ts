@@ -6,13 +6,14 @@ describe("help", () => {
   it("lists only open ArenaNet client issues, each with what players can do now", () => {
     const wrapper = mount(HelpView, { props: { send: async () => undefined } });
 
-    expect(wrapper.findAll(".issue-card")).toHaveLength(4);
-    expect(wrapper.findAll(".workaround")).toHaveLength(4);
+    expect(wrapper.findAll(".issue-card")).toHaveLength(5);
+    expect(wrapper.findAll(".workaround")).toHaveLength(5);
     expect(wrapper.findAll(".issue-status").map((status) => status.text())).toEqual([
       "Reload helps",
       "Reload helps",
       "Display only",
       "Display only",
+      "Minor",
     ]);
     expect(wrapper.text()).not.toContain("Resolved");
     expect(wrapper.text()).toContain("Press ⌘Q in that game window and choose Reload Guild Wars");

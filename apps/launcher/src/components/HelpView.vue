@@ -65,6 +65,12 @@ const issues = [
     status: "Display only",
     hint: "The skills work normally.",
   },
+  {
+    title: "The cursor keeps moving while you rotate your character",
+    symptom: "When you hold the left mouse button to turn your character’s preview in the inventory, the cursor is not held in place and keeps moving across the screen.",
+    status: "Minor",
+    hint: "The preview still turns. Release the button to stop.",
+  },
 ] as const;
 </script>
 
