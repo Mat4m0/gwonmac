@@ -30,15 +30,16 @@ const wiki = {
   query: { pages: { "1": {
     title: "Feedback:Game updates/20260901",
     fullurl: "https://wiki.guildwars.com/wiki/Feedback:Game_updates/20260901",
-    extract: `
-== Update - September 1, 2026 ==
+    revisions: [{ slots: { main: { "*": `== Update - September 1, 2026 ==
 
 === Skill updates ===
- Mirage Cloak: Adjust additional block chance to 4..10 (so that Earth investment is required) and fixed a bug where damage from enchantment removal was getting improperly multiplied.
- Focused Shot: Removed errant cast time.
+* {{skill icon|Mirage Cloak}}: Adjust additional block chance to 4..10 (so that Earth investment is required) and fixed a bug where damage from enchantment removal was getting improperly multiplied.
+** Applies to [[Mirage Cloak (PvP)|the PvP version]] too.
+* '''Focused Shot''': Removed errant cast time.
 
 === Guild Wars Wiki notes ===
-Build: 38,888`,
+* Build: 38,888
+<noinclude>[[Category:2026 updates]]</noinclude>` } } }],
   } } },
 };
 
@@ -97,6 +98,16 @@ describe("launcher news", () => {
       snapshot.stories[0]?.summary,
       "Skill updates — Mirage Cloak: Adjust additional block chance to 4..10 (so that Earth investment is required) and fixed a bug where damage from enchantment removal was getting improperly multiplied.",
     );
+    assert.equal(snapshot.stories[0]?.action, "article");
+    assert.deepEqual(snapshot.stories[0]?.body.map((block) => block.type === "heading" ? block.text : block.type === "list" ? block.items.map((item) => item.map((part) => part.text).join("")) : block.type), [
+      "Update - September 1, 2026",
+      "Skill updates",
+      [
+        "Mirage Cloak: Adjust additional block chance to 4..10 (so that Earth investment is required) and fixed a bug where damage from enchantment removal was getting improperly multiplied.",
+        "Applies to the PvP version too.",
+        "Focused Shot: Removed errant cast time.",
+      ],
+    ]);
     const article = snapshot.stories[1]!.body[0];
     if (article?.type !== "paragraph") throw new Error("expected the release introduction");
     const actionId = article.content.find((part) => part.actionId)?.actionId;

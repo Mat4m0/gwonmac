@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Coffee, Github, Home, LifeBuoy, Settings, Users } from "lucide-vue-next";
+import { Coffee, Github, Home, LifeBuoy, Newspaper, Settings, Users } from "lucide-vue-next";
 import type { LauncherExternalLink } from "@shared/launcher-contracts";
 import type { LauncherRoute } from "../routes";
 import DiscordIcon from "./DiscordIcon.vue";
@@ -18,6 +18,7 @@ const emit = defineEmits<{
     <button class="brand" aria-label="GWonMac home" @click="emit('navigate', 'home')"><img :src="iconUrl" alt="" /><span>GWonMac</span></button>
     <nav aria-label="Main navigation">
       <button :class="{ active: route === 'home' }" :aria-current="route === 'home' ? 'page' : undefined" @click="emit('navigate', 'home')"><Home />Home</button>
+      <button :class="{ active: route === 'news' }" :aria-current="route === 'news' ? 'page' : undefined" @click="emit('navigate', 'news')"><Newspaper />News</button>
       <button :class="{ active: route === 'accounts' }" :aria-current="route === 'accounts' ? 'page' : undefined" @click="emit('navigate', 'accounts')"><Users />Accounts</button>
       <button :class="{ active: route === 'help' }" :aria-current="route === 'help' ? 'page' : undefined" @click="emit('navigate', 'help')"><LifeBuoy />Help</button>
     </nav>

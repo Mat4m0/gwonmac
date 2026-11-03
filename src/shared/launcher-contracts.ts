@@ -23,6 +23,7 @@ import {
 } from "./compass-ranges.js";
 import { normaliseCustomUiTheme } from "./ui-theme.js";
 import type { ErrorCode } from "./errors.js";
+import type { MarkdownBlock, MarkdownInline } from "./launcher-markdown.js";
 import {
   CARTOGRAPHY_CONTROL_IDLE_OPACITY_MAX,
   CARTOGRAPHY_CONTROL_IDLE_OPACITY_MIN,
@@ -77,6 +78,7 @@ export const LAUNCHER_IPC = Object.freeze({
   texturePacksRemove: "gw:launcher:texturePacks:remove",
   feedbackSend: "gw:launcher:feedback:send",
   externalOpen: "gw:launcher:external:open",
+  externalOpenUrl: "gw:launcher:external:openUrl",
   externalRevealLogs: "gw:launcher:external:revealLogs",
   updatesCheck: "gw:launcher:updates:check",
   updatesRestartAndInstall: "gw:launcher:updates:restartAndInstall",
@@ -114,16 +116,8 @@ export interface LauncherPreferences {
 }
 
 export type LauncherNewsSource = "game" | "event" | "launcher";
-export type LauncherNewsInline = Readonly<{
-  text: string;
-  emphasis?: "strong" | "code";
-  actionId?: string;
-}>;
-export type LauncherNewsBlock =
-  | Readonly<{ type: "paragraph"; content: readonly LauncherNewsInline[] }>
-  | Readonly<{ type: "heading"; text: string }>
-  | Readonly<{ type: "list"; items: readonly (readonly LauncherNewsInline[])[] }>
-  | Readonly<{ type: "image"; src: string; alt: string }>;
+export type LauncherNewsInline = MarkdownInline;
+export type LauncherNewsBlock = MarkdownBlock;
 export interface LauncherNewsStory {
   readonly id: string;
   readonly source: LauncherNewsSource;
@@ -386,6 +380,8 @@ export interface LauncherNativeApi {
   };
   readonly external: {
     open(kind: LauncherExternalLink): Promise<void>;
+    /** A web page the bundled Guide links to; main opens only the origins in LAUNCHER_GUIDE_ORIGINS. */
+    openUrl(url: string): Promise<void>;
     revealLogs(): Promise<void>;
   };
 }
@@ -424,6 +420,26 @@ export function parseGlobalTool(value: unknown): GlobalTool {
 export function parseLauncherExternalLink(value: unknown): LauncherExternalLink {
   if (typeof value === "string" && LAUNCHER_EXTERNAL_LINKS.includes(value as LauncherExternalLink)) return value as LauncherExternalLink;
   throw new Error("external link is invalid");
+}
+
+/** The sites the bundled Guide may open in the browser. The Guide is built into the app, so this is the whole list. */
+export const LAUNCHER_GUIDE_ORIGINS: ReadonlySet<string> = new Set([
+  "https://gwonmac.vercel.app",
+  "https://github.com",
+  "https://discord.gg",
+  "https://wiki.guildwars.com",
+  "https://help.guildwars.com",
+  "https://account.arena.net",
+]);
+
+export function parseLauncherGuideUrl(value: unknown): string {
+  if (typeof value === "string" && value.length <= 512) {
+    try {
+      const url = new URL(value);
+      if (url.protocol === "https:" && !url.username && !url.password && LAUNCHER_GUIDE_ORIGINS.has(url.origin)) return url.href;
+    } catch { /* falls through */ }
+  }
+  throw new Error("guide link is invalid");
 }
 
 export function parseLauncherNewsId(value: unknown): string {

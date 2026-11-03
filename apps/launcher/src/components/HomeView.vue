@@ -10,7 +10,6 @@ import {
 } from "lucide-vue-next";
 import type { LauncherNewsStory, LauncherPreferencesPatch, LauncherSnapshot } from "@shared/launcher-contracts";
 import { dailyDaysFrom, type DailyCategory, type DailyDay } from "@shared/daily-activities";
-import NewsArticle from "./NewsArticle.vue";
 import NewsFeed from "./NewsFeed.vue";
 import NewsSourceMark from "./NewsSourceMark.vue";
 
@@ -19,11 +18,11 @@ const emit = defineEmits<{
   settings: [];
   preferences: [content: NonNullable<LauncherPreferencesPatch["content"]>];
   news: [id: string];
+  read: [id: string | null];
 }>();
 const contentTab = ref<"news" | "dailies">(props.snapshot.preferences.content.first);
 const weekExpanded = ref(false);
 const featuredIndex = ref(0);
-const selectedArticle = ref<LauncherNewsStory | null>(null);
 const hovered = ref(false);
 const focusWithin = ref(false);
 const hidden = ref(false);
@@ -99,7 +98,7 @@ function moveFeatured(direction: number) {
   restartRotation();
 }
 function openStory(story: LauncherNewsStory) {
-  if (story.action === "article") selectedArticle.value = story;
+  if (story.action === "article") emit("read", story.id);
   else emit("news", story.id);
 }
 async function moveTab(event: KeyboardEvent) {
@@ -121,7 +120,7 @@ function dateLabel(story: LauncherNewsStory): string {
 <template>
   <section class="hero-panel news-hero" @mouseenter="hovered = true" @mouseleave="hovered = false" @focusin="focusWithin = true" @focusout="leaveHeroFocus">
     <div v-if="contentTab === 'news' && snapshot.preferences.content.news && activeStory" class="hero-copy news-hero-copy">
-      <Transition name="news-fade" mode="out-in"><div :key="activeStory.id"><h1>{{ activeStory.title }}</h1><div class="hero-source"><NewsSourceMark :source="activeStory.source" large /><span>{{ sourceLabel(activeStory) }}</span><span aria-hidden="true">·</span><time :datetime="activeStory.startsAt ?? activeStory.publishedAt">{{ dateLabel(activeStory) }}</time></div><p>{{ activeStory.summary }}</p><button class="text-link" @click="openStory(activeStory)">{{ activeStory.action === 'article' ? 'Read release notes' : 'Open on Guild Wars Wiki' }} <ExternalLink v-if="activeStory.action === 'external'" /></button></div></Transition>
+      <Transition name="news-fade" mode="out-in"><div :key="activeStory.id"><h1>{{ activeStory.title }}</h1><div class="hero-source"><NewsSourceMark :source="activeStory.source" large /><span>{{ sourceLabel(activeStory) }}</span><span aria-hidden="true">·</span><time :datetime="activeStory.startsAt ?? activeStory.publishedAt">{{ dateLabel(activeStory) }}</time></div><p>{{ activeStory.summary }}</p><button class="text-link" @click="openStory(activeStory)">{{ activeStory.action === 'article' ? 'Read more' : 'Open on Guild Wars Wiki' }} <ExternalLink v-if="activeStory.action === 'external'" /></button></div></Transition>
       <div v-if="featured.length > 1" class="story-controls" aria-label="Featured news controls">
         <button aria-label="Previous story" @click="moveFeatured(-1)"><ChevronLeft /></button>
         <span>{{ featuredIndex + 1 }} / {{ featured.length }}</span>
@@ -140,7 +139,7 @@ function dateLabel(story: LauncherNewsStory): string {
       <button id="news-tab" role="tab" :tabindex="contentTab === 'news' ? 0 : -1" :aria-selected="contentTab === 'news'" aria-controls="news-panel" @click="contentTab = 'news'"><Newspaper />News</button>
       <button id="dailies-tab" role="tab" :tabindex="contentTab === 'dailies' ? 0 : -1" :aria-selected="contentTab === 'dailies'" aria-controls="dailies-panel" @click="contentTab = 'dailies'"><Clock3 />Dailies</button>
     </div>
-    <div v-if="contentTab === 'news'" id="news-panel" role="tabpanel" aria-labelledby="news-tab"><NewsFeed :news="snapshot.news" @select="openStory" @settings="emit('settings')" /></div>
+    <div v-if="contentTab === 'news'" id="news-panel" role="tabpanel" aria-labelledby="news-tab"><NewsFeed :news="snapshot.news" :limit="5" @select="openStory" @settings="emit('settings')" @all="emit('read', null)" /></div>
     <div v-else id="dailies-panel" role="tabpanel" aria-labelledby="dailies-tab" class="daily-view">
       <div class="panel-head"><h2>Dailies</h2><button class="customize" @click="emit('settings')"><SlidersHorizontal />Customize</button></div>
       <div class="daily-date"><span>Today · {{ dayFormat.format(now) }}</span><strong>{{ changesIn }}</strong><small>{{ timeFormat.format(today.endsAt) }} local time</small></div>
@@ -152,7 +151,6 @@ function dateLabel(story: LauncherNewsStory): string {
       <button class="secondary load-more" :aria-expanded="weekExpanded" @click="weekExpanded = !weekExpanded">{{ weekExpanded ? 'Show today only' : 'Show full week' }}</button>
     </div>
   </section>
-  <NewsArticle v-if="selectedArticle" :story="selectedArticle" @close="selectedArticle = null" @external="emit('news', $event)" />
 </template>
 
 <style scoped>

@@ -23,13 +23,36 @@ import BaseModal from "./components/BaseModal.vue";
 import LauncherHeader from "./components/LauncherHeader.vue";
 import LaunchBar from "./components/LaunchBar.vue";
 import HomeView from "./components/HomeView.vue";
-import HelpView from "./components/HelpView.vue";
+import HelpView, { type HelpPage } from "./components/HelpView.vue";
+import { releaseNotesFor } from "./release-notes";
+import { parseGuideAction } from "./guide";
+import NewsView from "./components/NewsView.vue";
 import SettingsView from "./components/SettingsView.vue";
 import ColorControl from "./components/ColorControl.vue";
 import type { LauncherRoute } from "./routes";
 
 const route = ref<LauncherRoute>("home");
 const snapshot = shallowRef<LauncherSnapshot>(fixtureSnapshotFor(window.location.search));
+const helpPage = ref<HelpPage>();
+const releaseNotes = computed(() => releaseNotesFor(snapshot.value.appUpdate.currentVersion));
+const newsArticle = ref<string | null>(null);
+watch(route, (next) => { if (next !== "help") helpPage.value = undefined; });
+
+const WHATS_NEW_KEY = "gwonmac.whatsNewSeen";
+/**
+ * True once per version, on the first launch after an update. A new installation
+ * (setup still pending) only records the version: it has nothing to compare with.
+ * Losing this browser-storage flag costs one extra What's new page, nothing more.
+ */
+function firstLaunchOf(version: string): boolean {
+  try {
+    const seen = localStorage.getItem(WHATS_NEW_KEY);
+    localStorage.setItem(WHATS_NEW_KEY, version);
+    return seen !== version && !(seen === null && snapshot.value.experience.setup === "pending");
+  } catch {
+    return false;
+  }
+}
 const selected = ref<ProfileId[]>([...snapshot.value.selectedProfileIds]);
 const addOpen = ref(false);
 const appearanceProfile = ref<ProfileId | null>(null);
@@ -85,6 +108,10 @@ onMounted(async () => {
   try {
     applySnapshot(await native.state.get());
     if (!navigationRequested) route.value = snapshot.value.preferences.lastPlayPage ?? "home";
+    if (!navigationRequested && releaseNotes.value && firstLaunchOf(snapshot.value.appUpdate.currentVersion)) {
+      newsArticle.value = releaseNotes.value.id;
+      route.value = "news";
+    }
     synchronized.value = true;
   } catch {
     startupError.value = true;
@@ -279,9 +306,33 @@ async function openExternal(kind: Parameters<NonNullable<typeof native>["externa
   await runAction("The link could not be opened.", () => native?.external.open(kind));
 }
 
+async function openUrl(url: string) {
+  await runAction("The link could not be opened.", () => native?.external.openUrl(url));
+}
+
 // A browser preview has no main process, so it accepts the report without sending it.
 async function sendFeedback(feedback: LauncherFeedback) {
   await native?.feedback.send(feedback);
+}
+
+function navigate(next: LauncherRoute) {
+  if (next === "news") newsArticle.value = null;
+  route.value = next;
+}
+
+function readNews(id: string | null) {
+  newsArticle.value = id;
+  route.value = "news";
+}
+
+/** A Guide-style link from the bundled release notes. */
+function followGuideLink(actionId: string) {
+  const action = parseGuideAction(actionId);
+  if (action?.kind === "guide") {
+    helpPage.value = action.page;
+    route.value = "help";
+  } else if (action?.kind === "settings") openSettings(action.target);
+  else if (action?.kind === "url") void openUrl(action.url);
 }
 
 async function openNews(id: string) {
@@ -302,11 +353,12 @@ async function updateContent(content: NonNullable<LauncherPreferencesPatch["cont
   <div v-if="startupError" class="launcher-boot launcher-error" role="alert"><AlertTriangle /><h1>The launcher could not open</h1><p>Your accounts and game files were not changed.</p><button class="primary" @click="retryStartup">Try again</button></div>
   <div v-else-if="!synchronized" class="launcher-boot" role="status">Opening launcher…</div>
   <div v-else class="app-shell" :class="{ 'settings-shell': route === 'settings' }">
-    <LauncherHeader :route="route" @navigate="route = $event" @settings="openSettings()" @external="openExternal" />
+    <LauncherHeader :route="route" @navigate="navigate" @settings="openSettings()" @external="openExternal" />
 
 
     <main :class="{ 'artwork-only': route === 'home' && !snapshot.preferences.content.news && !snapshot.preferences.content.dailies }">
-      <HomeView v-if="route === 'home'" :snapshot="snapshot" @settings="openSettings('home')" @preferences="updateContent" @news="openNews" />
+      <HomeView v-if="route === 'home'" :snapshot="snapshot" @settings="openSettings('home')" @preferences="updateContent" @news="openNews" @read="readNews" />
+      <NewsView v-else-if="route === 'news'" v-model:article="newsArticle" :news="snapshot.news" :release-notes="releaseNotes" @open="openNews" @link="followGuideLink" @settings="openSettings('home')" />
 
       <AccountsView
         v-else-if="route === 'accounts'"
@@ -323,7 +375,7 @@ async function updateContent(content: NonNullable<LauncherPreferencesPatch["cont
         @delete="id => runAction('The account could not be deleted.', () => native?.profiles.delete(id))"
       />
 
-      <HelpView v-else-if="route === 'help'" :send="sendFeedback" @external="openExternal" />
+      <HelpView v-else-if="route === 'help'" :send="sendFeedback" :page="helpPage" @external="openExternal" @url="openUrl" @settings="openSettings" />
 
       <SettingsView v-else :snapshot="snapshot" :native="native" :launcher="{ snapshot, native }" :target="settingsTarget" @fixture="snapshot = $event" @section="settingsSection = $event" />
     </main>

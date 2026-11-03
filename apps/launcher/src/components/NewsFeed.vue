@@ -4,8 +4,8 @@ import { ChevronRight, ExternalLink, SlidersHorizontal } from "lucide-vue-next";
 import type { LauncherNewsState, LauncherNewsStory, LauncherNewsSource } from "@shared/launcher-contracts";
 import NewsSourceMark from "./NewsSourceMark.vue";
 
-const props = defineProps<{ news: LauncherNewsState }>();
-const emit = defineEmits<{ select: [story: LauncherNewsStory]; settings: [] }>();
+const props = withDefaults(defineProps<{ news: LauncherNewsState; heading?: boolean; limit?: number }>(), { heading: true });
+const emit = defineEmits<{ select: [story: LauncherNewsStory]; settings: []; all: [] }>();
 const filter = ref<"all" | LauncherNewsSource>("all");
 const filters = [
   { id: "all", label: "All" },
@@ -13,13 +13,14 @@ const filters = [
   { id: "event", label: "Events" },
   { id: "launcher", label: "GWonMac" },
 ] as const;
-const visible = computed(() => filter.value === "all" ? props.news.stories : props.news.stories.filter((story) => story.source === filter.value));
+const matching = computed(() => filter.value === "all" ? props.news.stories : props.news.stories.filter((story) => story.source === filter.value));
+const visible = computed(() => props.limit ? matching.value.slice(0, props.limit) : matching.value);
 const sourceLabel: Record<LauncherNewsSource, string> = { game: "Guild Wars", event: "Event", launcher: "GWonMac" };
 function shortDate(value: string): string { return new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric" }); }
 </script>
 
 <template>
-  <div class="news-panel-head">
+  <div v-if="heading" class="news-panel-head">
     <div><h2>Latest news</h2><span v-if="news.status === 'offline'" class="offline-note">Saved news · offline</span></div>
     <button class="customize" @click="emit('settings')"><SlidersHorizontal />Customize</button>
   </div>
@@ -37,6 +38,7 @@ function shortDate(value: string): string { return new Date(value).toLocaleDateS
       <ChevronRight v-else class="row-action" aria-hidden="true" />
     </button>
   </div>
+  <button v-if="limit && matching.length > limit" class="secondary load-more" @click="emit('all')">All news</button>
 </template>
 
 <style scoped>

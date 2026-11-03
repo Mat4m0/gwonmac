@@ -19,6 +19,7 @@ import {
   LAUNCHER_IPC,
   parseGlobalTool,
   parseLauncherExternalLink,
+  parseLauncherGuideUrl,
   parseLauncherFeedback,
   parseLauncherNewsId,
   parseLauncherProfileAppearance,
@@ -75,6 +76,7 @@ export interface LauncherIpcContext {
   readonly removeTexturePack: (win: BrowserWindow, id: string) => Promise<void>;
   readonly sendFeedback: (feedback: LauncherFeedback) => Promise<void>;
   readonly openExternal: (kind: LauncherExternalLink) => Promise<void>;
+  readonly openUrl: (url: string) => Promise<void>;
   readonly openNews: (id: string) => Promise<void>;
   readonly revealLogs: () => void;
   readonly checkUpdates: () => Promise<void>;
@@ -174,6 +176,7 @@ export function registerLauncherIpc(ctx: LauncherIpcContext): void {
     texturePacksRemove: channel(one(parseTexturePackId), (win, id) => ctx.removeTexturePack(win, id), "launcher"),
     feedbackSend: channel(one(parseLauncherFeedback), (_win, feedback) => ctx.sendFeedback(feedback), "launcher"),
     externalOpen: channel(one(parseLauncherExternalLink), (_win, kind) => ctx.openExternal(kind), "launcher"),
+    externalOpenUrl: channel(one(parseLauncherGuideUrl), (_win, url) => ctx.openUrl(url), "launcher"),
     externalRevealLogs: channel(nothing, () => ctx.revealLogs(), "launcher"),
     updatesCheck: channel(nothing, () => ctx.checkUpdates(), "launcher"),
     updatesRestartAndInstall: channel(nothing, (win) => ctx.restartAndInstall(win), "launcher"),

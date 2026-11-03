@@ -73,6 +73,7 @@ const launcherApi = {
   },
   external: {
     open: (kind) => ipcRenderer.invoke(LAUNCHER_IPC.externalOpen, kind),
+    openUrl: (url) => ipcRenderer.invoke(LAUNCHER_IPC.externalOpenUrl, url),
     revealLogs: () => ipcRenderer.invoke(LAUNCHER_IPC.externalRevealLogs),
   },
   updates: {

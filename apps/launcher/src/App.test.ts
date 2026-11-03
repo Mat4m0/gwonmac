@@ -1,5 +1,5 @@
 import { flushPromises, mount } from "@vue/test-utils";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { LauncherNativeApi, LauncherSnapshot } from "@shared/launcher-contracts";
 import App from "./App.vue";
 import { fixtureSnapshot } from "./fixtures";
@@ -13,6 +13,9 @@ function installNative(overrides: Record<string, unknown>): LauncherNativeApi {
   Object.defineProperty(window, "launcherNative", { configurable: true, value: native });
   return native;
 }
+
+// Other tests start where the player left off, not on the one-time What's new page.
+beforeEach(() => localStorage.setItem("gwonmac.whatsNewSeen", fixtureSnapshot.appUpdate.currentVersion));
 
 afterEach(() => {
   vi.useRealTimers();
@@ -104,7 +107,7 @@ describe("unified launcher shell", () => {
   it("keeps Home focused on content and moves account management to Accounts", async () => {
     const wrapper = mount(App);
     expect(wrapper.get("h1").text()).toContain("Seven skill fixes");
-    await wrapper.findAll("nav button")[1]!.trigger("click");
+    await wrapper.findAll(".titlebar nav button")[2]!.trigger("click");
     expect(wrapper.get(".accounts-page h1").text()).toBe("Accounts");
     expect(wrapper.text()).toContain("Main account");
   });
@@ -131,20 +134,25 @@ describe("unified launcher shell", () => {
     await wrapper.get('button[aria-label="Pause automatic story rotation"]').trigger("click");
     expect(updatePreferences).toHaveBeenCalledWith({ content: { autoRotateNews: false } });
     await wrapper.findAll(".news-row")[0]!.trigger("click");
+    await wrapper.get(".news-reader footer button").trigger("click");
     expect(open).toHaveBeenCalledWith("guild-wars-update-2026-09-01");
   });
 
-  it("renders GWonMac notes as native article elements and opens opaque inline actions", async () => {
+  it("reads a GWonMac note as a full page in News and opens its inline links through main", async () => {
     const open = vi.fn(async () => undefined);
     installNative({ news: { open } });
     const wrapper = mount(App);
     await flushPromises();
     await wrapper.findAll(".news-row")[2]!.trigger("click");
-    expect(document.querySelector(".news-article h1")?.textContent).toContain("2026.8.10");
-    expect(document.querySelectorAll(".news-article li")).toHaveLength(2);
-    expect(document.querySelector(".news-article")?.innerHTML).not.toContain("v-html");
-    document.querySelector<HTMLButtonElement>(".news-article .article-link")!.click();
+    expect(wrapper.get(".titlebar nav .active").text()).toBe("News");
+    expect(wrapper.get(".news-reader h1").text()).toContain("2026.8.10");
+    expect(wrapper.findAll(".news-reader li")).toHaveLength(2);
+    expect(document.querySelector(".modal-backdrop")).toBeNull();
+    await wrapper.get(".news-reader .markdown-link").trigger("click");
     expect(open).toHaveBeenCalledWith("news-link-deadbeef");
+    await wrapper.get(".news-back").trigger("click");
+    expect(wrapper.find(".news-reader").exists()).toBe(false);
+    expect(wrapper.findAll(".news-page .news-row").length).toBeGreaterThan(0);
   });
 
   it("uses a neutral home hero when both optional content sections are hidden", async () => {
@@ -177,14 +185,34 @@ describe("unified launcher shell", () => {
     matchMedia.mockRestore();
   });
 
+  it("opens the release notes in News once after an update, and never on a new installation", async () => {
+    localStorage.clear();
+    const at = (version: string, setup: "pending" | "complete") => ({ ...fixtureSnapshot, appUpdate: { phase: "idle", currentVersion: version }, experience: { ...fixtureSnapshot.experience, setup } }) as LauncherSnapshot;
+    const launch = async (snapshot: LauncherSnapshot) => {
+      installNative({ state: { get: async () => snapshot, onChange: () => () => undefined } });
+      const wrapper = mount(App);
+      await flushPromises();
+      const heading = wrapper.find(".news-reader h1").exists() ? wrapper.get(".news-reader h1").text() : null;
+      wrapper.unmount();
+      return heading;
+    };
+
+    expect(await launch(at("2026.11.0", "pending"))).toBeNull();
+    localStorage.clear();
+    expect(await launch(at("2026.11.0", "complete"))).toBe("GWonMac 2026.11.0");
+    expect(await launch(at("2026.11.0", "complete"))).toBeNull();
+    expect(await launch(at("2026.12.0-dev", "complete"))).toBeNull();
+  });
+
   it("sends Help feedback through the native bridge", async () => {
     const send = vi.fn(async () => undefined);
     installNative({ feedback: { send } });
     const wrapper = mount(App);
     await flushPromises();
-    expect(wrapper.findAll("nav button").map((button) => button.text())).toEqual(["Home", "Accounts", "Help"]);
-    await wrapper.findAll("nav button")[2]!.trigger("click");
+    expect(wrapper.findAll(".titlebar nav button").map((button) => button.text())).toEqual(["Home", "News", "Accounts", "Help"]);
+    await wrapper.findAll(".titlebar nav button")[3]!.trigger("click");
     expect(wrapper.get(".help-page h1").text()).toBe("Known issues");
+    await wrapper.findAll(".help-nav button").find((button) => button.text() === "Report a problem")!.trigger("click");
     await wrapper.get(".feedback-form textarea").setValue("Add a damage monitor.");
     await wrapper.get(".feedback-form select").setValue("idea");
     await wrapper.get(".feedback-form").trigger("submit");
@@ -313,7 +341,7 @@ describe("unified launcher shell", () => {
     installNative({ profiles: { create } });
     const wrapper = mount(App);
     await flushPromises();
-    await wrapper.findAll("nav button")[1]!.trigger("click");
+    await wrapper.findAll(".titlebar nav button")[2]!.trigger("click");
     await wrapper.get(".page-head .secondary").trigger("click");
     const name = document.querySelector<HTMLInputElement>('input[placeholder="Second account"]')!;
     name.value = "PvP account";
@@ -341,7 +369,7 @@ describe("unified launcher shell", () => {
     });
     const wrapper = mount(App);
     await flushPromises();
-    await wrapper.findAll("nav button")[1]!.trigger("click");
+    await wrapper.findAll(".titlebar nav button")[2]!.trigger("click");
 
     expect(wrapper.text()).not.toContain("Archive");
     await wrapper.findAll(".account-appearance")[1]!.trigger("click");

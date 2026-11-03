@@ -988,6 +988,7 @@ if (primaryInstance) void app.whenReady().then(async () => {
     openExternal: async (kind) => {
       await shell.openExternal(EXTERNAL_URLS[kind]);
     },
+    openUrl: (url) => shell.openExternal(url),
     revealLogs: () => shell.showItemInFolder(paths.diagnostics),
     checkUpdates: () => checkForAppUpdates(),
     restartAndInstall: restartAndInstallUpdate,
