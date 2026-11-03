@@ -29,6 +29,7 @@ const embedded: EmbeddedToolsBundle<HTMLElement> = Object.freeze({
       options.development,
       options.observationUnavailable,
       options.readTemplates,
+      options.templateFiles,
     ),
     mode: "embedded",
     ...options,

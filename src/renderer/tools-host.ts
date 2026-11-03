@@ -37,6 +37,7 @@ import {
   templateFilesystem,
 } from "./template-store.js";
 import { sanitiseTemplateName } from "./template-format.js";
+import { createTemplateFiles } from "./template-files.js";
 import { ensureToolsStylesheet } from "./tools-stylesheet.js";
 import { requireToolsApi } from "./tools-native-api.js";
 
@@ -149,6 +150,11 @@ export function mountToolsInto(
         onVisibilityChange,
         readTemplates: async () => { const fs = templateFilesystem(); return fs ? exportEntries(fs) : []; },
         publishTemplate: templatePublishingAvailable ? publishTemplate : null,
+        // The same gate as publishing: a client that cannot discover what is
+        // written to the mount would list none of an import.
+        templateFiles: templatePublishingAvailable
+          ? createTemplateFiles({ filesystem: templateFilesystem, exportToDisk: (entries) => window.gwNative.templates.export(entries) })
+          : null,
         commands,
         storage,
         applyUnavailable,

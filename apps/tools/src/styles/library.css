@@ -22,8 +22,6 @@
   gap: var(--ui-space-2);
 }
 
-.create-actions--single { grid-template-columns: 1fr; }
-
 .composer-dialog {
   display: grid;
   width: min(460px, 100%);
@@ -64,6 +62,45 @@
 
 .composer-dialog footer {
   justify-content: flex-end;
+}
+
+.template-files-status {
+  color: var(--ui-text);
+  font-family: var(--ui-font-reading);
+}
+
+.template-files-task {
+  display: grid;
+  gap: var(--ui-space-2);
+  padding-top: var(--ui-space-3);
+  border-top: 1px solid var(--ui-line-soft);
+}
+
+.template-files-task h3 {
+  margin: 0;
+  font-size: var(--ui-font-size-sm);
+}
+
+.template-files-task p {
+  margin: 0;
+}
+
+.template-files-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ui-space-2);
+}
+
+.composer-dialog .template-files-note {
+  margin: 0;
+  font-size: var(--ui-font-size-sm);
+}
+
+.template-files-choice {
+  display: grid;
+  gap: var(--ui-space-1);
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-sm);
 }
 
 .template-code {

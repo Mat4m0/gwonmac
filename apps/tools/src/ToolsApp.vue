@@ -31,6 +31,7 @@ import BuildDetail from "./components/BuildDetail.vue";
 import LiveParty from "./components/LiveParty.vue";
 import SkillBar from "./components/SkillBar.vue";
 import TeamDetail from "./components/TeamDetail.vue";
+import TemplateFilesDialog from "./components/TemplateFilesDialog.vue";
 import UiDialog from "./ui/UiDialog.vue";
 import { navigateRows, navigateTabs } from "./tab-keyboard";
 import { useClassicFrame } from "./ui/use-classic-frame";
@@ -69,6 +70,7 @@ const { panel, resizeGrip, panelStyle, startDrag } = useFloatingWindow({
   minHeight: 360,
 });
 const composer = ref<"build" | "team" | "import-team" | null>(null);
+const templateFilesOpen = ref(false);
 const draftCode = ref("");
 const draftName = ref("");
 const clipboardProblem = ref("");
@@ -398,10 +400,11 @@ useClassicFrame(panel);
                 team that uses it; create a related copy when only one team should differ.
               </p>
             </details>
-            <div v-else class="create-actions create-actions--single">
+            <div v-else class="create-actions">
               <button class="ui-button" data-variant="primary" @click="composer = 'build'">
                 Import build
               </button>
+              <button class="ui-button" @click="templateFilesOpen = true">Template files</button>
             </div>
 
             <label class="ui-input-group">
@@ -628,6 +631,13 @@ useClassicFrame(panel);
         </div>
         </section>
       </UiDialog>
+
+      <TemplateFilesDialog
+        :open="templateFilesOpen"
+        :files="host.templateFiles"
+        :unavailable="host.publishUnavailable"
+        @close="templateFilesOpen = false"
+      />
 
       <UiDialog
         :open="composer !== null"

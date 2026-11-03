@@ -767,7 +767,7 @@ test('a native held Enter applies one team and owns its repeats and release (HUB
       const nativeApi = window.gwNative;
       if (!('buildLibrary' in nativeApi)) throw new Error('Tools native API is missing');
       const app = mountToolsApp(host, { nativeApi: { ...nativeApi, buildLibrary: { get: async () => ({ library, recovered: false }), set: async value => value } },
-        hub: window.gwHub!, initiallyVisible: false, publishTemplate: null, storage: null, applyUnavailable: null, observationUnavailable: null, development: false,
+        hub: window.gwHub!, initiallyVisible: false, publishTemplate: null, templateFiles: null, storage: null, applyUnavailable: null, observationUnavailable: null, development: false,
         commands: { cancelPending() {}, setHardMode(enabled) { modes.push(enabled); app.update(observation(enabled)); },
           setPlayerSecondary: unexpected, setPlayerSkills: unexpected, setPlayerAttributes: unexpected, addHero: unexpected, kickHero: unexpected,
           setHeroBehaviour: unexpected, setHeroSecondary: unexpected, setHeroSkills: unexpected, setHeroAttributes: unexpected } });
