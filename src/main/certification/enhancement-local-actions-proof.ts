@@ -375,8 +375,8 @@ const XUNLAI_AGENT_READER_ROLES = [
   XUNLAI_AGENT_READER_ROLE,
   semanticRole(418, "eeeac28028981ae6f233b2c0e6ba4cbe5cdba999bd1063c2a703bd3f6cc1f6fb",
     XUNLAI_AGENT_READER_ROLE.spans, ["i32"], ["i32"],
-  // November 3 client: callee indices and static addresses moved.
-  ["a37cb8efeae12c31daa65bca075f430b338300bd49669381344575a902e471d5"]),
+    // November 3 client: callee indices and static addresses moved.
+    ["a37cb8efeae12c31daa65bca075f430b338300bd49669381344575a902e471d5"]),
 ];
 const XUNLAI_AREA_TYPE_READER_ROLES = [
   XUNLAI_AREA_TYPE_READER_ROLE,
@@ -393,8 +393,8 @@ const TRAVEL_UNLOCK_CONSUMER_ROLES = [
   TRAVEL_UNLOCK_CONSUMER_ROLE,
   semanticRole(360, "257c03eaa91dc6baae2768b6829ada5e8cee32df0649482ca2f6950ecc766762",
     TRAVEL_UNLOCK_CONSUMER_ROLE.spans, ["i32"], ["i32"],
-  // November 3 client: callee indices and static addresses moved.
-  ["662152b962e4a5c81e18dc9f406332ef12f94ac747005a29e1831213d77dbe55"]),
+    // November 3 client: callee indices and static addresses moved.
+    ["662152b962e4a5c81e18dc9f406332ef12f94ac747005a29e1831213d77dbe55"]),
 ];
 const TRAVEL_PRODUCER_ROLES = [
   TRAVEL_PRODUCER_ROLE,
@@ -405,16 +405,16 @@ const CHAT_ALIASES_ROLES = [
   CHAT_ALIASES_ROLE,
   semanticRole(380, "fa6eabfec92de162981e0cd861736dbaf8b7b4f43db37224829947441f480a73",
     CHAT_ALIASES_ROLE.spans, ["i32", "i32"], ["i32"],
-  // November 3 client: callee indices and static addresses moved.
-  ["a0ac2973eb03ea9dc64585611d720fabe9e61621a1040ea16748867b02ffed26"]),
+    // November 3 client: callee indices and static addresses moved.
+    ["a0ac2973eb03ea9dc64585611d720fabe9e61621a1040ea16748867b02ffed26"]),
 ];
 
 // Bind Hero panel IDs to the complete native show/hide producer and its packer.
 const HERO_PANEL_ROLES = [
   semanticRole(181, "42027129007fdd8ffb7dd34e79a3ad8a5ed0126f857ab48dfa77224170c857fa", [{"start": 78, "end": 83, "role": "panel.pack", "addressClass": "function-index"}, {"start": 141, "end": 146, "role": "panel.ui", "addressClass": "function-index"}, {"start": 163, "end": 168, "role": "panel.ui", "addressClass": "function-index"}], ["i32", "i32"], []),
   semanticRole(181, "920bdcddd2e428f6263519e2dfbb314dd7f73439e0f2b6defdfe10c0b29b7d7e", [{"start": 78, "end": 83, "role": "panel.pack", "addressClass": "function-index"}, {"start": 141, "end": 146, "role": "panel.ui", "addressClass": "function-index"}, {"start": 163, "end": 168, "role": "panel.ui", "addressClass": "function-index"}], ["i32", "i32"], [],
-  // November 3 client: callee indices and static addresses moved.
-  ["ed85b814d50a69119a30204bd7f4501311338e20d963c1a918a65d6a6fbb81e0"]),
+    // November 3 client: callee indices and static addresses moved.
+    ["ed85b814d50a69119a30204bd7f4501311338e20d963c1a918a65d6a6fbb81e0"]),
 ];
 const HERO_PANEL_PACKER_HASHES = [
   "b107cbd1f2b0c9596df848b19cab8219285e6f4ff45bb5d3bd06cd3d643afe57",

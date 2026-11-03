@@ -155,8 +155,8 @@ const TARGET_CALLER_ROLES = [
   TARGET_CALLER_ROLE,
   semanticRole(214, "a8dcb08cbc985ec871d8537d056bb9a702c0b3dd33c1efdf19dfc6ba6cfbcd4c",
     TARGET_CALLER_ROLE.spans, ["i32"], [],
-  // November 3 client: callee indices and static addresses moved.
-  ["da100aafc52c295c6e93e2e8905956e728b0b99fa3b025b8ed2dfb53e458968c"]),
+    // November 3 client: callee indices and static addresses moved.
+    ["da100aafc52c295c6e93e2e8905956e728b0b99fa3b025b8ed2dfb53e458968c"]),
 ];
 
 const AGENT_ARRAY_LIFECYCLE_ROLE = semanticRole(
