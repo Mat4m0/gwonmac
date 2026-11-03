@@ -271,8 +271,11 @@ export class LauncherNewsService {
   }
 
   snapshot(track: "stable" | "beta", preferences: LauncherPreferences): LauncherNewsState {
+    const now = (this.options.now ?? (() => new Date()))().getTime();
     const stories = this.raw
       .filter((story) => story.channel !== "beta" || track === "beta")
+      // A finished event is no longer news; its post stays on the website.
+      .filter((story) => !story.endsAt || Date.parse(story.endsAt) > now)
       .filter((story) => story.source === "launcher" ? preferences.content.reforgedNews : story.source === "event" ? preferences.content.eventNews : preferences.content.officialNews)
       .map((story): LauncherNewsStory => ({
         id: story.id,
