@@ -10,6 +10,10 @@ const root = path.resolve(import.meta.dirname, "..");
 const contentRoot = path.join(root, "content/en/2.blog");
 const outputPath = path.join(root, "public/launcher/news-v1.json");
 const check = process.argv.includes("--check");
+// The app refuses the whole feed beyond these limits (src/main/core/launcher-news.ts).
+const MAX_STORIES = 24;
+const MAX_TITLE = 140;
+const MAX_SUMMARY = 360;
 const allowed = new Set([
   "title", "description", "badge", "date", "readingTime", "author",
   "launcherId", "launcherSource", "launcherChannel", "launcherFeatured",
@@ -48,13 +52,17 @@ function storyFrom(name, source) {
   if (metadata.launcherFeatured && metadata.launcherFeatured !== "true" && metadata.launcherFeatured !== "false") {
     throw new Error(`${name}: launcherFeatured must be true or false`);
   }
+  const title = required(metadata, "title", name);
+  const summary = required(metadata, "description", name);
+  if (title.length > MAX_TITLE) throw new Error(`${name}: title is longer than ${MAX_TITLE} characters`);
+  if (summary.length > MAX_SUMMARY) throw new Error(`${name}: description is longer than ${MAX_SUMMARY} characters`);
   const slug = name.replace(/\.md$/u, "").replace(/^\d+\./u, "");
   return {
     id: metadata.launcherId,
     source: itemSource,
     channel,
-    title: required(metadata, "title", name),
-    summary: required(metadata, "description", name),
+    title,
+    summary,
     publishedAt: `${required(metadata, "date", name)}T12:00:00Z`,
     featured: metadata.launcherFeatured === "true",
     url: metadata.launcherExternalUrl || `https://gwonmac.vercel.app/blog/${slug}`,
@@ -76,7 +84,7 @@ for (const story of stories) {
   ids.add(story.id);
 }
 stories.sort((left, right) => right.publishedAt.localeCompare(left.publishedAt));
-const generated = `${JSON.stringify({ version: 1, stories }, null, 2)}\n`;
+const generated = `${JSON.stringify({ version: 1, stories: stories.slice(0, MAX_STORIES) }, null, 2)}\n`;
 if (check) {
   const current = await readFile(outputPath, "utf8").catch(() => "");
   if (current !== generated) throw new Error("launcher news feed is stale; run pnpm --dir apps/website generate:launcher-news");
