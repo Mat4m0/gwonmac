@@ -1,0 +1,66 @@
+# GitHub's hosted macOS arm64 pool sometimes runs out of machines. A job that
+# waits too long is cancelled with "not acquired by Runner", and the required
+# gate then fails although nothing was tested. This reruns such a run, and only
+# such a run: any real failure, or a cancellation for another reason, stops the
+# retry. It reads job results only and never checks out or runs PR code.
+name: Retry runner shortages
+
+on:
+  workflow_run:
+    workflows:
+      - Application verification
+      - ArenaNet client canary
+      - ArenaNet client recertification
+    types: [completed]
+
+permissions:
+  actions: write
+  checks: read
+
+jobs:
+  rerun:
+    # Three attempts in all, so a long shortage cannot loop.
+    if: >-
+      contains(fromJSON('["failure", "cancelled"]'), github.event.workflow_run.conclusion) &&
+      github.event.workflow_run.run_attempt < 3
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Rerun jobs that never got a runner
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+        run: |
+          # A file, not a pipe, so a failed API call fails this step.
+          gh api --paginate "repos/$GH_REPO/actions/runs/$RUN_ID/attempts/$ATTEMPT/jobs" \
+            --jq '.jobs[] | select(.conclusion == "failure" or .conclusion == "cancelled")
+              | [.id, .name, .conclusion,
+                 ([(.steps // [])[] | select(.conclusion == "failure") | .name] | join(", "))]
+              | @tsv' > jobs.tsv
+
+          shortage=0
+          other=0
+          while IFS=$'\t' read -r id name conclusion failed_steps; do
+            if [ "$conclusion" = "cancelled" ]; then
+              messages="$(gh api "repos/$GH_REPO/check-runs/$id/annotations" --jq '.[].message')"
+              if [[ "$messages" == *"not acquired by Runner"* ]]; then
+                shortage=$((shortage + 1))
+                continue
+              fi
+            # The Application verification gate fails whenever a job it needs
+            # was cancelled; that failure is a consequence, not a test result.
+            elif [ "$failed_steps" = "Require the selected verification path" ]; then
+              continue
+            fi
+            echo "Not a runner shortage: $name ($conclusion${failed_steps:+: $failed_steps})"
+            other=$((other + 1))
+          done < jobs.tsv
+
+          if [ "$shortage" -gt 0 ] && [ "$other" -eq 0 ]; then
+            echo "Rerunning $shortage job(s) that never got a runner (attempt $ATTEMPT)."
+            gh run rerun "$RUN_ID" --failed
+          else
+            echo "No rerun: $shortage runner shortage(s), $other other failure(s)."
+          fi
