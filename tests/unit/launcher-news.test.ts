@@ -33,9 +33,11 @@ const wiki = {
     revisions: [{ slots: { main: { "*": `== Update - September 1, 2026 ==
 
 === Skill updates ===
+<!-- Keep skills in the order of the
+official notes. -->
 * {{skill icon|Mirage Cloak}}: Adjust additional block chance to 4..10 (so that Earth investment is required) and fixed a bug where damage from enchantment removal was getting improperly multiplied.
 ** Applies to [[Mirage Cloak (PvP)|the PvP version]] too.
-* '''Focused Shot''': Removed errant cast time.
+* '''Focused Shot''': Removed errant cast time.<span title="Build 38,888"
 
 === Guild Wars Wiki notes ===
 * Build: 38,888
