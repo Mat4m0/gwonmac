@@ -30,6 +30,8 @@ export const PLAYER_SKILLBAR_WORLD_ROLE = semanticRole(
   ]),
   ["i32"],
   ["i32"],
+  // November 3 client: callee indices and static addresses moved.
+  ["44de84accfa69af1a4fc85d600616c6b4a7bda41fa22ec3feff7c5bae70bf75c"],
 );
 
 export const PLAYER_SKILLBAR_UPDATE_ROLE = semanticRole(
@@ -44,6 +46,8 @@ export const PLAYER_SKILLBAR_UPDATE_ROLE = semanticRole(
   ]),
   [],
   [],
+  // November 3 client: callee indices and static addresses moved.
+  ["37d11cda24f84a07ec366e30099607633fe68d015ab79bd946b6efd350a92247"],
 );
 
 const ROW_READER = Object.freeze({

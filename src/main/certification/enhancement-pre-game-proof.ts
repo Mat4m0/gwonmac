@@ -34,7 +34,7 @@ export type CertifiedFrameLabel = Readonly<{
 
 type Proof = NonNullable<KnownEnhancementBuild["preGameControls"]>;
 
-function preGameProofFamily(family: "main" | "august" | "october" | "october22") {
+function preGameProofFamily(family: "main" | "august" | "october" | "october22" | "november3") {
   const HASH_FUNCTION_ROLE = semanticRole(
     123,
     "b12924d38e54a8aa3ac1804ce10d5946da4c3d41a1819f6ad32dac2e017864d0",
@@ -64,6 +64,8 @@ function preGameProofFamily(family: "main" | "august" | "october" | "october22")
     ]),
     ["i32"],
     ["i32"],
+  // November 3 client: callee indices and static addresses moved.
+  ["3335ef706848e1bbd0df48c7ea149b58bc13ab7d96e049217ed58733c57c1cb5"],
   );
 
   const FRAME_REGISTRAR_ROLE = semanticRole(
@@ -85,6 +87,8 @@ function preGameProofFamily(family: "main" | "august" | "october" | "october22")
     ]),
     ["i32", "i32"],
     ["i32"],
+  // November 3 client: callee indices and static addresses moved.
+  ["ac0a29a7882f5581b3f264c0766b2d79399758995f1a7451b63d4de9c30448e8"],
   );
 
   const FRAME_CONSTRUCTOR_ROLE = semanticRole(
@@ -96,23 +100,26 @@ function preGameProofFamily(family: "main" | "august" | "october" | "october22")
     ["i32", "i32", "i32", "i32", "i32", "i32"],
     ["i32"],
     // October 22 client: identical body; one reviewed callee index moved.
-    ["d163b9fd10495ddd5fae4947a468532425290ee316ba66190e59e91b7471d5a0"],
+    ["d163b9fd10495ddd5fae4947a468532425290ee316ba66190e59e91b7471d5a0",
+    // November 3 client: callee indices and static addresses moved.
+    "29d7f91b651a2640bbdbb5dd623433d4fd79d24b13cb578b2855a8b0b5da2c58",
+  ],
   );
 
   const FRAME_HASH_READER_SHA256 =
     "462cfc24428d5bd180773c5cec7a693a01b9cb5fcd790e8f63bb2ab10f5d2840";
   const CHARACTER_ARRAY_READER_SHA256 =
-    family === "october22" ? "f8b8bedf6f71429d4c03eac5b02a1b0b397ca696361cf014dc89c2639b4f1875" : family === "october" ? "6a06520c167ee5693f963ae52777221d6fd961222104e853212a359065a65e98" : family === "august" ? "7cffea294c7a93cd50c086c5dca1c8efbc472ca72cfce580c108edc2a917a3bc" : "87b6b897fd8df7688f46fcaf517b78b1af5334d00e85f4c20d9d9978a4f799e0";
+    family === "november3" ? "f4b8b2a0f420c10fe055bd367ac5eaf17e8671f6109548ffb9e0b8eafa841363" : family === "october22" ? "f8b8bedf6f71429d4c03eac5b02a1b0b397ca696361cf014dc89c2639b4f1875" : family === "october" ? "6a06520c167ee5693f963ae52777221d6fd961222104e853212a359065a65e98" : family === "august" ? "7cffea294c7a93cd50c086c5dca1c8efbc472ca72cfce580c108edc2a917a3bc" : "87b6b897fd8df7688f46fcaf517b78b1af5334d00e85f4c20d9d9978a4f799e0";
   const SELECTED_CHARACTER_READER_SHA256 =
-    family === "october22" ? "f1bdea374b3bf67822e7fc8ed4a173b7e213ee865d77469c8a4f77c560aad0ce" : family === "october" ? "98199404d6647d4992d54073b08e0436123f87cd6d30d734d0ffb46c5f7ad552" : family === "august" ? "6cc09615f04c6259c8618749696972ed27803d3c1d3d7cca590686d092f4e184" : "49eb229605004bc69ce17787f6e38d1b453892e740a1b0f3e071d86e4685d6aa";
+    family === "november3" ? "f6e15713e867997f9b55bcc84d5c12c7457df7cd14daeceeed3a1435f43391e1" : family === "october22" ? "f1bdea374b3bf67822e7fc8ed4a173b7e213ee865d77469c8a4f77c560aad0ce" : family === "october" ? "98199404d6647d4992d54073b08e0436123f87cd6d30d734d0ffb46c5f7ad552" : family === "august" ? "6cc09615f04c6259c8618749696972ed27803d3c1d3d7cca590686d092f4e184" : "49eb229605004bc69ce17787f6e38d1b453892e740a1b0f3e071d86e4685d6aa";
   const FRAME_CHILD_SHA256 =
-    "9f73f1018d0bf99fd0d16b6ede0921dbe29cf70a4da4a61c9b24c1e68dbb0bf0";
+    family === "november3" ? "e685be64793b92276bb35b667c0b80fcec14025fd834a4a4c4e83b5fbb89729c" : "9f73f1018d0bf99fd0d16b6ede0921dbe29cf70a4da4a61c9b24c1e68dbb0bf0";
   const FRAME_PARENT_SHA256 =
-    family === "october22" ? "3b866a4e5d9e1e09b60c7e92acb62fb069c800e96ca0113e971e8353655e7ab0" : family === "october" ? "47471cef99aa5e8df678cddb7a7340e4ef1ad05c9a67f6ab90ed61875a910c71" : "46c90817c6ab335d5b8d57fdc1e38abd146c2b123dd8dcf0f08aca8245b8a9f2";
+    family === "november3" ? "5c903f02d97e7039ced8d5c4b1c7babd88de27bacf1659b86df96a17255cfae8" : family === "october22" ? "3b866a4e5d9e1e09b60c7e92acb62fb069c800e96ca0113e971e8353655e7ab0" : family === "october" ? "47471cef99aa5e8df678cddb7a7340e4ef1ad05c9a67f6ab90ed61875a910c71" : "46c90817c6ab335d5b8d57fdc1e38abd146c2b123dd8dcf0f08aca8245b8a9f2";
   const FRAME_MESSAGE_SHA256 =
-    family === "october22" ? "aa73fe42c13b207f22b9fb3ec2a7a390119f8fc0f35a3a1a2cb60e84f43115fd" : family === "october" ? "c90eccbb0cb8c13058b017e4edb6452161f04c800d10f35b26f280921e6714ca" : "29041a4f537194fae813ddd84c99a06b6f716dd6fe2b4adc64d60f32857abd9f";
+    family === "november3" ? "0c5231192d41015ae4a0ef25ca1bbcd147d6dfcbf288d075a91126c27578ff2e" : family === "october22" ? "aa73fe42c13b207f22b9fb3ec2a7a390119f8fc0f35a3a1a2cb60e84f43115fd" : family === "october" ? "c90eccbb0cb8c13058b017e4edb6452161f04c800d10f35b26f280921e6714ca" : "29041a4f537194fae813ddd84c99a06b6f716dd6fe2b4adc64d60f32857abd9f";
   const LOGOUT_PRODUCER_SHA256 =
-    family === "october22" ? "85dd3fead9b386dc920924374f8d12bc8a0d6ab7d3f84e9240c0a6a918c87ee7" : family === "october" ? "c28e4801b717aaafddcd99305edf49aa938fd6e9adb19829a60a22e6215db435" : family === "august" ? "4c34a4a03c7c0367795edfda578152b5ec16142c2b28e464da5650be97928a9f" : "b618abba3579ffe6f149a23e2550f6b86571b0f3beaa30acea059153f7cd6b06";
+    family === "november3" ? "315a494b6555a9b812c3b7f1d79fe03cdd021d9a0debde7d8554e880a4b8bd7d" : family === "october22" ? "85dd3fead9b386dc920924374f8d12bc8a0d6ab7d3f84e9240c0a6a918c87ee7" : family === "october" ? "c28e4801b717aaafddcd99305edf49aa938fd6e9adb19829a60a22e6215db435" : family === "august" ? "4c34a4a03c7c0367795edfda578152b5ec16142c2b28e464da5650be97928a9f" : "b618abba3579ffe6f149a23e2550f6b86571b0f3beaa30acea059153f7cd6b06";
 
   const LABELS = Object.freeze({
     play: "Play",
@@ -466,10 +473,14 @@ function preGameProofFamily(family: "main" | "august" | "october" | "october22")
   return { derivePreGameControls, deriveCertifiedFrameLabel };
 }
 // October 22 renumbered the October owners; only callee indices and
-// relocated operands differ in these complete bodies.
+// relocated operands differ in these complete bodies. November 3 renumbered
+// them again; its logout producer also passes two frame identifiers that
+// dropped by one (2801/2802 -> 2800/2801). No proof reads those identifiers:
+// frames are found by their label hashes.
 const PRE_GAME_FAMILIES = Object.freeze([
   preGameProofFamily("main"), preGameProofFamily("august"),
   preGameProofFamily("october"), preGameProofFamily("october22"),
+  preGameProofFamily("november3"),
 ]);
 
 export function derivePreGameControls(context: EnhancementProofContext,

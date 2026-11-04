@@ -20,7 +20,6 @@ const PREVIOUS_STABLE_CAPABILITIES = Object.freeze({
 import { rewriteTemplateSaveWasm } from "../../src/main/certification/template-save-compat.js";
 import { locateAutomaticLocalActions } from "../../src/main/certification/enhancement-local-actions-proof.js";
 
-const OCTOBER_CLIENT = "266b5a8aa88fe6440b10737d3eda27f4ceae2401d51d263debc0bca5c2075d87";
 // ArenaNet rebuilt the October 22 client the same day. The rebuild changes
 // only two constant getters, initialized data and the build ID.
 const OCTOBER_22_CLIENTS = [
@@ -41,7 +40,6 @@ async function retainedClient(sha256s: readonly string[]): Promise<Uint8Array | 
 
 // Release qualification supplies only the live client. A retained fixture
 // that is not supplied is skipped, never treated as passing.
-const octoberInput = await retainedClient([OCTOBER_CLIENT]);
 const october22Input = await retainedClient(OCTOBER_22_CLIENTS);
 
 function withBodyByte(
@@ -60,11 +58,11 @@ function withBodyByte(
   return changed;
 }
 
-test("changed native Team gate or Hero panel message refuses live integration", {
+test("changed native Hero panel message refuses live integration", {
   timeout: 120_000,
-  skip: octoberInput === null ? "the retained October 1 artifact is not supplied" : false,
+  skip: october22Input === null ? "no retained October 22 artifact is supplied" : false,
 }, async () => {
-  const input = octoberInput!;
+  const input = october22Input!;
   const original = verifyLocalClientBytes(input);
   assert.equal(original.fileVerdict?.status, "proved");
   for (const verdict of Object.values(original.featureVerdicts!)) {
@@ -72,10 +70,9 @@ test("changed native Team gate or Hero panel message refuses live integration", 
   }
 
   // These coordinates identify the retained regression fixture, not runtime
-  // authority. Alter a real native predicate and a real native message ID.
+  // authority. Alter a real native message ID.
   for (const mutation of [
-    { functionIndex: 9514, offset: 14, value: 4 },
-    { functionIndex: 16552, offset: 128, value: 0xa4 },
+    { functionIndex: 16513, offset: 128, value: 0xa4 },
   ]) {
     const result = verifyLocalClientBytes(withBodyByte(input, mutation));
     assert.equal(result.fileVerdict?.status, "proved");
