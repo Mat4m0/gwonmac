@@ -155,7 +155,8 @@ export function wikitextToMarkdown(source: string): string {
   const article = (title: string) => `${WIKI_ORIGIN}/wiki/${encodeURIComponent(title.trim().replace(/ /gu, "_")).replace(/%2F/gu, "/").replace(/\(/gu, "%28").replace(/\)/gu, "%29")}`;
   const lines: string[] = [];
   let skip = false;
-  for (const raw of source.replace(/\r/gu, "").replace(/<noinclude>[\s\S]*?<\/noinclude>|<!--[\s\S]*?-->/gu, "").split("\n")) {
+  // Like MediaWiki, an unclosed comment runs to the end of the page.
+  for (const raw of source.replace(/\r/gu, "").replace(/<noinclude>[\s\S]*?<\/noinclude>|<!--[\s\S]*?(?:-->|$)/gu, "").split("\n")) {
     const heading = /^(={2,6})\s*(.*?)\s*\1\s*$/u.exec(raw.trim());
     if (heading) {
       skip = /^Guild Wars Wiki notes$/iu.test(heading[2]!);
