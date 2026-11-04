@@ -39,9 +39,9 @@ test("the certified context is added without intercepting native pathing", {
   const evidence = wasmEvidence(transformed);
   assert.ok(evidence);
   const decoded = evidence.decodeFunctions([]);
-  const loader = decoded.find((candidate) => candidate.functionIndex === 3208);
+  const loader = decoded.find((candidate) => candidate.functionIndex === fixture.functionIndex(3208));
   assert.ok(loader);
-  assert.equal(loader.calls.get(3216), 1, "the client's converter call must remain intact");
+  assert.equal(loader.calls.get(fixture.functionIndex(3216)), 1, "the client's converter call must remain intact");
   const exportNames = new Set(WebAssembly.Module.exports(new WebAssembly.Module(Uint8Array.from(transformed)))
     .map(({ name }) => name));
   assert.ok(Object.values(CARTOGRAPHY_CONTEXT_GLOBALS)

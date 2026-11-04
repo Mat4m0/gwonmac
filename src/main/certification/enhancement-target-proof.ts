@@ -50,6 +50,8 @@ const TARGET_CONTEXT_ROOT_ROLE = semanticRole(
   mutableSpans([[11, 16, "context.root"]]),
   [],
   [],
+  // November 3 client: callee indices and static addresses moved.
+  ["202b2877e9f09f10e195d2fad9f1e84fa80e1441e40f755faa7e008c753e4b47"],
 );
 
 const TARGET_SELECTOR_ROLE = semanticRole(
@@ -95,6 +97,8 @@ const TARGET_RESET_ROLE = semanticRole(
   ]),
   [],
   [],
+  // November 3 client: callee indices and static addresses moved.
+  ["bfe9fef37f8493258ba1aad86dc771e9cd73397c3c63de911494da4e691cdea0"],
 );
 
 const TARGET_CALLER_ROLE = semanticRole(
@@ -142,12 +146,17 @@ const TARGET_SELECTOR_ROLES = [
   ], ["i32", "i32"], [],
   // October 22 client: identical control flow; the related target fields
   // moved with the shared observation storage.
-  ["3789c63f2f9c7189d49ac9d02ba40a7c555fb5f07027d34c6872ff079ee97d16"]),
+  ["3789c63f2f9c7189d49ac9d02ba40a7c555fb5f07027d34c6872ff079ee97d16",
+    // November 3 client: callee indices and static addresses moved.
+    "dec129d2452d74af4ad804903de6e7a8461d59bec69fce0c3eaee85bbf0943fa",
+  ]),
 ];
 const TARGET_CALLER_ROLES = [
   TARGET_CALLER_ROLE,
   semanticRole(214, "a8dcb08cbc985ec871d8537d056bb9a702c0b3dd33c1efdf19dfc6ba6cfbcd4c",
-    TARGET_CALLER_ROLE.spans, ["i32"], []),
+    TARGET_CALLER_ROLE.spans, ["i32"], [],
+    // November 3 client: callee indices and static addresses moved.
+    ["da100aafc52c295c6e93e2e8905956e728b0b99fa3b025b8ed2dfb53e458968c"]),
 ];
 
 const AGENT_ARRAY_LIFECYCLE_ROLE = semanticRole(
@@ -159,6 +168,8 @@ const AGENT_ARRAY_LIFECYCLE_ROLE = semanticRole(
   ]),
   ["i32"],
   [],
+  // November 3 client: callee indices and static addresses moved.
+  ["64adc3404d2ff0e81ed26e45cef55e77c86c5607d252b066c5b1c3b5df0f1414"],
 );
 
 const AGENT_ARRAY_ACCESSOR_ROLE = semanticRole(
@@ -200,8 +211,14 @@ const AREA_TABLE_CERTIFICATES = Object.freeze([
     // October 22 client: same layout and bound. Content changed only in the
     // default of field 56 (1465 -> 1477, a count-style sentinel like field 60)
     // and two text identifiers of row 886. No proved field reads either.
+    // November 3 client: same layout and bound; the field 56 default moved
+    // again (1477 -> 1480). The lookup's assert callee index moved.
     reviewedTableSha256: Object.freeze([
       "8f473df78116172e5f6f4c4cc4e6a6bc1e02cadbd7d592eaa2da60e633106df2",
+      "a2dfacbc2c575a32b5012cbe6176a83fd422794564992185f4bbfdcf2bb973e8",
+    ]),
+    reviewedLookupFingerprints: Object.freeze([
+      "3ac5e4e190500ae3258eb58f046f53b92a704589dc2c4312d67a0fc4fdcd57d4",
     ]),
   }),
 ]);
@@ -212,6 +229,7 @@ const AREA_LOOKUP_ROLES = AREA_TABLE_CERTIFICATES.map((certificate) => semanticR
   AREA_LOOKUP_SPANS,
   ["i32"],
   ["i32"],
+  "reviewedLookupFingerprints" in certificate ? certificate.reviewedLookupFingerprints : [],
 ));
 
 const PLAY_REGION_SEMANTIC_ROLES = Object.freeze({
@@ -224,6 +242,8 @@ const PLAY_REGION_SEMANTIC_ROLES = Object.freeze({
     ]),
     ["i32", "i32"],
     [],
+  // November 3 client: callee indices and static addresses moved.
+  ["a97d5b0022492b9cd7913a015b7041d3b044375afbe513118fbde2c9dfcead4c"],
   ),
   areaCount: semanticRole(
     137,
@@ -235,6 +255,8 @@ const PLAY_REGION_SEMANTIC_ROLES = Object.freeze({
     ]),
     ["i32", "i32", "i32"],
     ["i32"],
+  // November 3 client: callee indices and static addresses moved.
+  ["95867045d496b9bcb0455ad29e81dcb05bd2e88500e570516930c05b6069c68c"],
   ),
   areaFlags: semanticRole(
     23,
@@ -254,16 +276,18 @@ type ExactTargetRole = Readonly<{
   results: readonly string[];
 }>;
 
+// November 3 client: the additional mapId, agentFields and agentModel bodies
+// differ only in callee indices and static addresses.
 const EXACT_TARGET_ROLES = Object.freeze({
   gameCharacter: { bodySha256: "f234e09fc78c540418d7ee1e02bb339caf4e95b91dad5803dd87f1b1f229eede", params: ["i32"], results: ["i32"] },
-  mapId: { bodySha256: "6698663ffed7669e3fa3922260e1e773179b41a5147fd961af44acc157839914", params: ["i32"], results: ["i32"] },
+  mapId: { bodySha256: "6698663ffed7669e3fa3922260e1e773179b41a5147fd961af44acc157839914", additionalBodySha256: ["e7fbbc497109cfa7683ff89600e26e0e0fa486506865de27f5341f9102c8f256"], params: ["i32"], results: ["i32"] },
   mapState: { bodySha256: "35cea95a660e3e1964f2fab0342b60c9a96ebc563638feceb328231fb97b27cd", params: ["i32", "i32"], results: [] },
   currentMap: { bodySha256: "c6e2e54332d133eb208974890b255570fb2fcc9a802ea52957b4a64116f7e72c", params: [], results: ["i32"] },
   instanceType: { bodySha256: "b9898076fd712f74e586f60df2a7e551c68db82b3726025815f46b78f32b8413", params: ["i32"], results: ["i32"] },
   playerNumber: { bodySha256: "3656f5655d9704c608247be52aaf1654141bce2db8f085c6cef4c967c7068acf", additionalBodySha256: ["562b11e132a331b10a14d793a7b334997a6ecf2bdffd3115c9252391bbe4b0f0"], params: [], results: ["i32"] },
   worldContext: { bodySha256: "35541e26cd5badf9bbf37b1e7a57489cb762e5ecffcb0f90e4069d4c63bd4c09", params: ["i32"], results: ["i32"] },
-  agentFields: { bodySha256: "b9d3e9ffd560b43d918aa004088193c11e51da699d754682f651b02b5cdb8ab4", params: ["i32"], results: [] },
-  agentModel: { bodySha256: "cf152611218510e0d086fb2808834d0381f64c237c9b4ee185eabcd58a850a6b", params: ["i32", "i32", "i32"], results: ["i32"] },
+  agentFields: { bodySha256: "b9d3e9ffd560b43d918aa004088193c11e51da699d754682f651b02b5cdb8ab4", additionalBodySha256: ["2c91f376bb30a4cbea12f9557b1e274f993d3e6f008698e3019ee5e9c851554b"], params: ["i32"], results: [] },
+  agentModel: { bodySha256: "cf152611218510e0d086fb2808834d0381f64c237c9b4ee185eabcd58a850a6b", additionalBodySha256: ["40389b68860c884753ef1fd10af52165f7a2a8457611cb33bf68c8077dba0403"], params: ["i32", "i32", "i32"], results: ["i32"] },
   areaCount: { bodySha256: "dc05263b317b11744dc07fdd0ee520bf3d9811e9869580c570ff81959ef2fd9b", params: ["i32", "i32", "i32"], results: ["i32"] },
   areaFlags: { bodySha256: "1cc6aeaa4c4f9228ee4984a26506f2f72d2b6ad4aeec4e50b1dd019504516382", params: [], results: ["i32"] },
 } as const satisfies Readonly<Record<string, ExactTargetRole>>);

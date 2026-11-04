@@ -36,6 +36,8 @@ const CURSOR_PRODUCER_ROLES: readonly [SemanticRole, SemanticRole] = Object.free
   Object.freeze({
     bodyLength: 1_099,
     fingerprint: "aa5940ad3b732088ba52c01622933fca7ae1127e81f413112153ea674d38a0ff",
+    // November 3 client: callee indices and static addresses moved.
+    reviewedVariants: Object.freeze(["b3a730632fd565f2e6838e60a31cc962ffa41ea6f1edf992bdfb6705d12e9112"]),
     spans: Object.freeze([
       ...mutableSpans([
         [68, 73, "producer.busy"], [104, 109, "producer.busy"],
@@ -55,6 +57,8 @@ const CURSOR_PRODUCER_ROLES: readonly [SemanticRole, SemanticRole] = Object.free
   Object.freeze({
     bodyLength: 254,
     fingerprint: "7f1603650a1e2428354420bdc3ca9d4b4c9e678a2736234277cdf46755090311",
+    // November 3 client: callee indices and static addresses moved.
+    reviewedVariants: Object.freeze(["75ec31aeb4cf4025ba53064486576c1ef9280f12e1d2dde2e32ada8dc218e9f3"]),
     spans: mutableSpans([
       [78, 83, "producer.scratch"], [102, 107, "cursor.color-buffer"],
       [132, 137, "producer.scratch"], [151, 156, "cursor.color-buffer"],
@@ -70,6 +74,8 @@ const CURSOR_PRODUCER_ROLES: readonly [SemanticRole, SemanticRole] = Object.free
 const CURSOR_ART_RENDERER_ROLE: SemanticRole = Object.freeze({
   bodyLength: 277,
   fingerprint: "539c4f2f58df94f79a13441626ba0847181d55070e601c89245c052b7ac7cb40",
+  // November 3 client: callee indices and static addresses moved.
+  reviewedVariants: Object.freeze(["f87691406c231f7a73956d35b0592ae0b007ea887b4203df3025b582a4e60308"]),
   spans: Object.freeze([
     ...mutableSpans([
       [84, 89, "cursor.art-cache-a"],
@@ -86,6 +92,8 @@ const CURSOR_ART_RENDERER_ROLE: SemanticRole = Object.freeze({
 const CURSOR_STATE_READER_ROLE: SemanticRole = Object.freeze({
   bodyLength: 102,
   fingerprint: "31bd16b381bde0d9be77a421877194b870e95014ae46764982fa335d07dacb9a",
+  // November 3 client: callee indices and static addresses moved.
+  reviewedVariants: Object.freeze(["bee54f312cf4a54488d256c2073046763bc235757a740e0a881f49f09a013302"]),
   spans: Object.freeze([
     ...mutableSpans([
       [9, 14, "cursor.software-model"],
@@ -102,6 +110,8 @@ const CURSOR_STATE_READER_ROLE: SemanticRole = Object.freeze({
 const CURSOR_TABLE_AFTER_ROLE: SemanticRole = Object.freeze({
   bodyLength: 155,
   fingerprint: "27ad597ce36f810602ece7a1f39259e3ecc9381332ad4cdf7fc461b4a6bd9cef",
+  // November 3 client: callee indices and static addresses moved.
+  reviewedVariants: Object.freeze(["4bf70be6fd6295bf00f570bc206e4154f3e1588e65dcef64c01ed1ed1edeee1d"]),
   spans: mutableSpans([[116, 121, "cursor.table-after-vtable"]]),
   params: Object.freeze(["i32"]),
   results: Object.freeze(["i32"]),

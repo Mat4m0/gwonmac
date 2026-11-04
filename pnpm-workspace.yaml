@@ -22,8 +22,8 @@ overrides:
   nanoid: 3.3.18
   tar: 7.5.21
   tmp: 0.2.7
-  "undici@7": 7.29.1
-  "undici@8": 8.10.2
+  "undici@7": 7.30.1
+  "undici@8": 8.12.2
   # Forge's Packager 18 still names the retired extractor. Electron's hardened
   # drop-in keeps that API while rejecting symlink escapes.
   extract-zip: "npm:@electron-internal/extract-zip@1.0.4"
@@ -42,6 +42,10 @@ overrides:
   launch-editor: 2.14.2
   devalue: 5.9.3
   "vite@<8.1.6": 8.3.5
+  # Website tooling advisories, November 2026. Nuxt DevTools pins zod 4.4.3,
+  # and express keeps the lockfile on body-parser 2.3.0.
+  "zod@<4.6.6": 4.6.7
+  "body-parser@<2.4.0": 2.4.0
 packageExtensions:
   "@nuxt/scripts@0.13.4":
     dependencies:
@@ -71,12 +75,6 @@ auditConfig:
     # The affected esbuild serve-directory path exists only on Windows. Owned
     # automation runs on macOS/Linux, and fontless invokes only transform.
     - GHSA-g7r4-m6w7-qqqr
-    # listhen 1.10.1 creates development HTTPS certificates with node-forge.
-    # It signs certificates but never calls the affected RSA verifier. Node's
-    # TLS implementation handles network verification. No patch is published.
-    # Remove this exception when upstream publishes a patched node-forge, or
-    # reassess it before adding a consumer that verifies signatures with forge.
-    - GHSA-86w9-cpqp-85rv
     # Forge reaches http-cache-semantics only in build-time download clients.
     # The app does not ship it or expose a shared authenticated response cache.
     # No patch is published. Remove when a patched release becomes available,
