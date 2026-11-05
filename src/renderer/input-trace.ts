@@ -102,6 +102,11 @@ const label = (record: InputTraceRecord): { text: string; tone: string } => {
       return { tone: 'decision', text: `${prefix} pointer lock ${record.locked ? 'engaged' : 'released'}` };
     case 'wheel':
       return { tone: 'event', text: `${prefix} wheel ${record.direction} ${record.mode}` };
+    case 'stale-modifier-release':
+      return {
+        tone: 'decision',
+        text: `${prefix} stale ${record.modifier} released before ${record.trigger}`,
+      };
     case 'release-all':
       return { tone: 'refused', text: `${prefix} input released (${record.cause})` };
     case 'gamepad':
