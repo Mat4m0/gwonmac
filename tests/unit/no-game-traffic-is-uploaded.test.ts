@@ -105,7 +105,7 @@ describe("no game traffic is uploaded: the only reachable destination", () => {
       ["100.64.0.1:443", "carrier-grade NAT"],
       ["203.0.113.10:8080", "a public host on a port the game never uses"],
       ["203.0.113.10:22", "a public host on SSH"],
-      ["gwonmac.vercel.app:443", "this project's own website, by name"],
+      ["www.gwonmac.com:443", "this project's own website, by name"],
       ["203.0.113.10", "a bare address with no port"],
     ] as const;
 
@@ -140,7 +140,7 @@ describe("no game traffic is uploaded: the only reachable destination", () => {
 
   it("resolves no name outside ArenaNet's, including this project's own", () => {
     for (const host of [
-      "gwonmac.vercel.app",
+      "www.gwonmac.com",
       "api.github.com",
       "plausible.io",
       "ko-fi.com",

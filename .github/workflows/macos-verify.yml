@@ -70,6 +70,16 @@ jobs:
       # the one rust-toolchain.toml names, with no version repeated here.
       - name: Install the pinned Rust toolchain
         run: rustup toolchain install
+      # Electron's install downloads a ~100 MB binary from GitHub releases,
+      # which sometimes answers 5xx for minutes. Keep one copy per locked
+      # version so a Mac job downloads it only when Electron changes.
+      - name: Read the locked Electron version
+        id: electron
+        run: echo "version=$(grep -m1 -oE '^  electron@[0-9.]+' pnpm-lock.yaml | cut -d@ -f2)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Caches/electron
+          key: electron-${{ runner.os }}-${{ runner.arch }}-${{ steps.electron.outputs.version }}
       - run: pnpm install --frozen-lockfile
       - name: Audit dependencies
         run: pnpm audit --audit-level=high --ignore-registry-errors
@@ -94,7 +104,10 @@ jobs:
         with:
           node-version: "24"
           cache: pnpm
+      # The Hub suite runs in Chromium and never starts Electron.
       - run: pnpm install --frozen-lockfile
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm tools:test:e2e --shard=${{ matrix.shard }}/4 --grep-invert @macos
       - name: Upload failure evidence
@@ -129,6 +142,16 @@ jobs:
       # the one rust-toolchain.toml names, with no version repeated here.
       - name: Install the pinned Rust toolchain
         run: rustup toolchain install
+      # Electron's install downloads a ~100 MB binary from GitHub releases,
+      # which sometimes answers 5xx for minutes. Keep one copy per locked
+      # version so a Mac job downloads it only when Electron changes.
+      - name: Read the locked Electron version
+        id: electron
+        run: echo "version=$(grep -m1 -oE '^  electron@[0-9.]+' pnpm-lock.yaml | cut -d@ -f2)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Caches/electron
+          key: electron-${{ runner.os }}-${{ runner.arch }}-${{ steps.electron.outputs.version }}
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install chromium
       - run: pnpm build
@@ -171,6 +194,16 @@ jobs:
       # the one rust-toolchain.toml names, with no version repeated here.
       - name: Install the pinned Rust toolchain
         run: rustup toolchain install
+      # Electron's install downloads a ~100 MB binary from GitHub releases,
+      # which sometimes answers 5xx for minutes. Keep one copy per locked
+      # version so a Mac job downloads it only when Electron changes.
+      - name: Read the locked Electron version
+        id: electron
+        run: echo "version=$(grep -m1 -oE '^  electron@[0-9.]+' pnpm-lock.yaml | cut -d@ -f2)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/Library/Caches/electron
+          key: electron-${{ runner.os }}-${{ runner.arch }}-${{ steps.electron.outputs.version }}
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - name: Package and test the verified build

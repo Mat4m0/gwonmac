@@ -14,6 +14,7 @@ import {
   seedCachedClient,
 } from "../helpers/cached-client.js";
 import { SETTINGS_SECTIONS } from "../../src/shared/settings-catalogue.js";
+import { PROJECT_NEWS_URL, WIKI_UPDATES_URL } from "../../src/main/core/launcher-news.js";
 
 export const root = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -25,6 +26,13 @@ export const electronBin = path.join(
   root,
   "node_modules/electron/dist/Electron.app/Contents/MacOS/Electron",
 );
+
+// The launcher fetches live news on connect. News rows are buttons named after
+// whatever the latest release notes say, so a live feed makes role lookups
+// depend on that text and on network timing. Failing both hosts' DNS keeps
+// every launch on the empty, offline news state.
+const newsHosts = [PROJECT_NEWS_URL, WIKI_UPDATES_URL].map((url) => new URL(url).hostname);
+export const offlineNewsSwitch = `--host-resolver-rules=${newsHosts.map((host) => `MAP ${host} ~NOTFOUND`).join(", ")}`;
 
 export interface OfflineFixture {
   readonly app: ElectronApplication;
@@ -134,7 +142,7 @@ export async function launchOfflineAt(
   try {
     app = await electron.launch({
       cwd: root,
-      args: [".", `--user-data-dir=${userData}`],
+      args: [".", `--user-data-dir=${userData}`, offlineNewsSwitch],
       env,
       executablePath: electronBin,
     });

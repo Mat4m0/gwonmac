@@ -10,7 +10,7 @@ import { parseMarkdown, type MarkdownBlock } from "@shared/launcher-markdown";
 import { parseSettingsTarget, type SettingsTarget } from "@shared/settings-catalogue";
 import { LAUNCHER_GUIDE_ORIGINS } from "@shared/launcher-contracts";
 
-const WEBSITE = "https://gwonmac.vercel.app";
+const WEBSITE = "https://www.gwonmac.com";
 const IMAGE_DIRECTORY = "../../website/public";
 
 /**

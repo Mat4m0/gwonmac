@@ -177,7 +177,7 @@ test("fresh startup creates Main and adds an account without restart", async () 
     await expect(fixture.page).toHaveURL("gw://app/launcher/index.html");
     await fixture.page.getByRole("button", { name: "Continue" }).click();
     await fixture.page.getByRole("button", { name: "Not now" }).click();
-    await expect(fixture.page.getByRole("button", { name: "Play" })).toBeVisible();
+    await expect(fixture.page.getByRole("button", { name: "Play", exact: true })).toBeVisible();
     await fixture.page.getByRole("button", { name: "Accounts", exact: true }).click();
     await expect(fixture.page.getByRole("heading", { name: "Main account", exact: true })).toBeVisible();
     const processId = fixture.app.process().pid;

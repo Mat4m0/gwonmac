@@ -19,7 +19,7 @@
     "node": ">=22.19"
   },
   "scripts": {
-    "postinstall": "install-electron",
+    "postinstall": "node scripts/install-electron.mjs",
     "build": "node scripts/build.mjs",
     "dev": "node --import ./scripts/ts-hook.mjs scripts/run-dev.ts",
     "dev:signed": "node --import ./scripts/ts-hook.mjs scripts/run-signed-dev.ts",
