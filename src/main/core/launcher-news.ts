@@ -4,14 +4,17 @@
  * The renderer receives presentation data and opaque IDs, never remote URLs.
  */
 import { readFile } from "node:fs/promises";
-import type { LauncherPreferences, LauncherNewsBlock, LauncherNewsInline, LauncherNewsState, LauncherNewsStory } from "../../shared/launcher-contracts.js";
+import type { LauncherPreferences, LauncherNewsBlock, LauncherNewsState, LauncherNewsStory } from "../../shared/launcher-contracts.js";
+import { parseMarkdown } from "../../shared/launcher-markdown.js";
 import { readBoundedResponse } from "./bounded-response.js";
 import { writeAtomicJson } from "./atomic-file.js";
 
-export const PROJECT_NEWS_URL = "https://gwonmac.vercel.app/launcher/news-v1.json";
-const WIKI_EXTRACT_MODE = ["ex", "plain", "text"].join("");
-export const WIKI_UPDATES_URL = `https://wiki.guildwars.com/api.php?action=query&generator=allpages&gapnamespace=202&gapprefix=Game%20updates%2F&gaplimit=5&gapdir=descending&prop=extracts%7Cinfo%7Crevisions&${WIKI_EXTRACT_MODE}=1&inprop=url&rvprop=timestamp&format=json&origin=*`;
-const PROJECT_ORIGIN = "https://gwonmac.vercel.app";
+export const PROJECT_NEWS_URL = "https://www.gwonmac.com/launcher/news-v1.json";
+// The page source, not a plain-text extract: the wiki returns a whole-page extract for only
+// one page per request, and the source keeps the bullet lists that update notes are made of.
+export const WIKI_UPDATES_URL = "https://wiki.guildwars.com/api.php?action=query&generator=allpages&gapnamespace=202&gapprefix=Game%20updates%2F&gaplimit=5&gapdir=descending&prop=revisions%7Cinfo&rvprop=content%7Ctimestamp&rvslots=main&inprop=url&format=json&origin=*";
+const WIKI_ORIGIN = "https://wiki.guildwars.com";
+const PROJECT_ORIGIN = "https://www.gwonmac.com";
 const MAX_FEED_BYTES = 512 * 1024;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_STORIES = 24;
@@ -106,25 +109,6 @@ function linkActionId(storyId: string, url: string, index: number): string {
   return `news-link-${(hash >>> 0).toString(16).padStart(8, "0")}`;
 }
 
-function inline(textValue: string, registerLink: (url: string) => string): readonly LauncherNewsInline[] {
-  const parts: LauncherNewsInline[] = [];
-  const expression = /(!?\[([^\]]*)\]\(([^)]+)\)(?:\{[^}]*\})?|\*\*([^*]+)\*\*|`([^`]+)`)/gu;
-  let cursor = 0;
-  for (const match of textValue.matchAll(expression)) {
-    const start = match.index ?? 0;
-    if (start > cursor) parts.push({ text: textValue.slice(cursor, start) });
-    if (match[1]?.startsWith("!")) parts.push({ text: match[2] ?? "Image" });
-    else if (match[2] !== undefined) {
-      try { parts.push({ text: match[2], actionId: registerLink(trustedUrl(match[3], "article link")) }); }
-      catch { parts.push({ text: match[2] }); }
-    } else if (match[4] !== undefined) parts.push({ text: match[4], emphasis: "strong" });
-    else if (match[5] !== undefined) parts.push({ text: match[5], emphasis: "code" });
-    cursor = start + match[0].length;
-  }
-  if (cursor < textValue.length) parts.push({ text: textValue.slice(cursor) });
-  return parts;
-}
-
 function imageUrl(source: string): string | null {
   try {
     const url = new URL(source, PROJECT_ORIGIN);
@@ -133,50 +117,26 @@ function imageUrl(source: string): string | null {
 }
 
 function markdown(body: string, storyId: string, media: Map<string, string>, links: Map<string, string>): readonly LauncherNewsBlock[] {
-  const blocks: LauncherNewsBlock[] = [];
   let mediaIndex = 0;
   let linkIndex = 0;
-  const registerLink = (url: string): string => {
-    const id = linkActionId(storyId, url, linkIndex);
-    linkIndex += 1;
-    links.set(id, url);
-    return id;
-  };
-  const lines = body.replace(/\r/gu, "").split("\n");
-  for (let index = 0; index < lines.length;) {
-    const line = lines[index]?.trim() ?? "";
-    if (!line) { index += 1; continue; }
-    const image = /^!\[([^\]]*)\]\(([^)]+)\)$/u.exec(line);
-    if (image) {
-      const url = imageUrl(image[2]!);
-      if (url) {
-        const key = `${storyId}/${mediaIndex}`;
-        mediaIndex += 1;
-        media.set(key, url);
-        blocks.push({ type: "image", src: `gw://app/launcher-media/${key}`, alt: image[1]! });
-      }
-      index += 1;
-      continue;
-    }
-    if (line.startsWith("## ")) { blocks.push({ type: "heading", text: line.slice(3) }); index += 1; continue; }
-    if (line.startsWith("- ")) {
-      const items: LauncherNewsInline[][] = [];
-      while ((lines[index]?.trim() ?? "").startsWith("- ")) {
-        items.push([...inline((lines[index]?.trim() ?? "").slice(2), registerLink)]);
-        index += 1;
-      }
-      blocks.push({ type: "list", items });
-      continue;
-    }
-    const paragraph = [line];
-    index += 1;
-    while (index < lines.length && lines[index]?.trim() && !/^(## |-|!\[)/u.test(lines[index]?.trim() ?? "")) {
-      paragraph.push(lines[index]!.trim());
-      index += 1;
-    }
-    blocks.push({ type: "paragraph", content: inline(paragraph.join(" "), registerLink) });
-  }
-  return blocks.slice(0, 80);
+  return parseMarkdown(body, {
+    link: (href) => {
+      let url: string;
+      try { url = trustedUrl(href, "article link"); } catch { return null; }
+      const id = linkActionId(storyId, url, linkIndex);
+      linkIndex += 1;
+      links.set(id, url);
+      return id;
+    },
+    image: (source) => {
+      const url = imageUrl(source);
+      if (!url) return null;
+      const key = `${storyId}/${mediaIndex}`;
+      mediaIndex += 1;
+      media.set(key, url);
+      return `gw://app/launcher-media/${key}`;
+    },
+  });
 }
 
 function truncateAtWord(value: string, maxLength: number): string {
@@ -186,20 +146,56 @@ function truncateAtWord(value: string, maxLength: number): string {
   return `${candidate.slice(0, lastSpace > 0 ? lastSpace : undefined).trimEnd()}…`;
 }
 
-function wikiSummary(extract: string): string {
-  let section = "";
-  let skipSection = false;
-  for (const rawLine of extract.replace(/\r/gu, "").split("\n")) {
-    const line = rawLine.trim();
-    if (!line) continue;
-    const heading = /^(={2,6})\s*(.*?)\s*\1$/u.exec(line)?.[2]?.trim();
-    if (heading !== undefined) {
-      skipSection = /^Guild Wars Wiki notes$/iu.test(heading);
-      if (!skipSection && !/^Update\s*-/iu.test(heading)) section = heading;
+/**
+ * Wiki update notes as the launcher's Markdown subset: headings, bullets (nested
+ * bullets flatten), bold, and links to wiki articles. Templates, tags, files and
+ * categories are dropped; the wiki's own editorial notes section is left out.
+ */
+export function wikitextToMarkdown(source: string): string {
+  const article = (title: string) => `${WIKI_ORIGIN}/wiki/${encodeURIComponent(title.trim().replace(/ /gu, "_")).replace(/%2F/gu, "/").replace(/\(/gu, "%28").replace(/\)/gu, "%29")}`;
+  const lines: string[] = [];
+  let skip = false;
+  // Like MediaWiki, an unclosed comment runs to the end of the page.
+  for (const raw of source.replace(/\r/gu, "").replace(/<noinclude>[\s\S]*?<\/noinclude>|<!--[\s\S]*?(?:-->|$)/gu, "").split("\n")) {
+    const heading = /^(={2,6})\s*(.*?)\s*\1\s*$/u.exec(raw.trim());
+    if (heading) {
+      skip = /^Guild Wars Wiki notes$/iu.test(heading[2]!);
+      if (!skip) lines.push("", `${heading[1]!.length === 2 ? "##" : "###"} ${heading[2]}`, "");
       continue;
     }
-    if (skipSection || /^Build:\s*/iu.test(line)) continue;
-    return truncateAtWord(section ? `${section} — ${line}` : line, MAX_WIKI_SUMMARY_LENGTH);
+    if (skip) continue;
+    let line = raw
+      .replace(/\{\{\s*skill icon\s*\|([^|}]+)[^}]*\}\}/giu, "$1")
+      .replace(/\{\{[^{}]*\}\}/gu, "")
+      .replace(/\[\[(?:File|Image|Category):[^\]]*\]\]/giu, "")
+      .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/gu, (_match, title: string, label: string) => `[${label}](${article(title)})`)
+      .replace(/\[\[([^\]]+)\]\]/gu, (_match, title: string) => `[${title}](${article(title)})`)
+      .replace(/\[(https?:\/\/\S+) ([^\]]+)\]/gu, "$2")
+      .replace(/'''(.+?)'''/gu, "**$1**")
+      .replace(/''(.+?)''/gu, "$1")
+      // A tag can continue on the next line; drop its start up to the line end.
+      .replace(/<[^>]*(?:>|$)/gu, "")
+      .trim();
+    const bullet = /^([*#]+)\s*(.*)$/u.exec(line);
+    if (bullet) line = bullet[2] ? `- ${bullet[2]}` : "";
+    lines.push(line);
+  }
+  return lines.join("\n").replace(/\n{3,}/gu, "\n\n").trim();
+}
+
+function wikiSummary(markdown: string): string {
+  let section = "";
+  for (const rawLine of markdown.split("\n")) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const heading = /^#{2,3} (.*)$/u.exec(line)?.[1]?.trim();
+    if (heading !== undefined) {
+      if (!/^Update\b/iu.test(heading)) section = heading;
+      continue;
+    }
+    if (/^Build:\s*/iu.test(line)) continue;
+    const text = line.replace(/^- /u, "").replace(/\[([^\]]+)\]\([^)]+\)/gu, "$1").replace(/\*\*/gu, "");
+    return truncateAtWord(section ? `${section} — ${text}` : text, MAX_WIKI_SUMMARY_LENGTH);
   }
   return "Read the full update notes on the Guild Wars Wiki.";
 }
@@ -210,20 +206,23 @@ function wikiStories(value: unknown): RawStory[] {
     const page = object(raw, "Wiki page");
     const titleValue = typeof page.title === "string" ? page.title : "";
     const match = /^Feedback:Game updates\/(\d{4})(\d{2})(\d{2})$/u.exec(titleValue);
-    if (!match || typeof page.fullurl !== "string" || typeof page.extract !== "string" || !page.extract.trim()) return [];
+    const revision = Array.isArray(page.revisions) ? page.revisions[0] as { slots?: { main?: Record<string, unknown> } } | undefined : undefined;
+    const source = revision?.slots?.main?.["*"];
+    if (!match || typeof page.fullurl !== "string" || typeof source !== "string") return [];
+    const body = wikitextToMarkdown(source);
+    if (!body) return [];
     const publishedAt = `${match[1]}-${match[2]}-${match[3]}T12:00:00Z`;
     const dateLabel = new Intl.DateTimeFormat("en", { month: "long", day: "numeric" }).format(new Date(publishedAt));
-    const clean = page.extract.replace(/\s+/gu, " ").trim();
     return [{
       id: `guild-wars-update-${match[1]}-${match[2]}-${match[3]}`,
       source: "game",
       channel: "all",
       title: `Guild Wars update — ${dateLabel}`,
-      summary: wikiSummary(page.extract),
+      summary: wikiSummary(body),
       publishedAt,
       featured: true,
       url: trustedUrl(page.fullurl, "Wiki page url"),
-      body: clean,
+      body,
     }];
   });
 }
@@ -271,8 +270,11 @@ export class LauncherNewsService {
   }
 
   snapshot(track: "stable" | "beta", preferences: LauncherPreferences): LauncherNewsState {
+    const now = (this.options.now ?? (() => new Date()))().getTime();
     const stories = this.raw
       .filter((story) => story.channel !== "beta" || track === "beta")
+      // A finished event is no longer news; its post stays on the website.
+      .filter((story) => !story.endsAt || Date.parse(story.endsAt) > now)
       .filter((story) => story.source === "launcher" ? preferences.content.reforgedNews : story.source === "event" ? preferences.content.eventNews : preferences.content.officialNews)
       .map((story): LauncherNewsStory => ({
         id: story.id,
@@ -282,10 +284,10 @@ export class LauncherNewsService {
         summary: story.summary,
         publishedAt: story.publishedAt,
         featured: story.featured,
-        action: story.source === "launcher" ? "article" : "external",
+        action: story.body.trim() ? "article" : "external",
         ...(story.startsAt ? { startsAt: story.startsAt } : {}),
         ...(story.endsAt ? { endsAt: story.endsAt } : {}),
-        body: story.source === "launcher" ? markdown(story.body, story.id, this.media, this.links) : [],
+        body: markdown(story.body, story.id, this.media, this.links),
       }));
     if (this.state === "ready") return { status: "ready", stories, refreshedAt: this.refreshedAt };
     return { status: this.state, stories };

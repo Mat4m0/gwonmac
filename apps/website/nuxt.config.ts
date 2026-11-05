@@ -60,6 +60,29 @@ export default defineNuxtConfig({
     ],
   },
   content: {
+    // Registered in app/plugins/guide-components.ts. A mapped name must differ
+    // from its tag in kebab case, or ginko returns the tag unresolved.
+    markdown: {
+      tags: { "media-placeholder": "GuideMediaPlaceholder", setting: "GuideSetting" },
+    },
+    // The guide pages are also the launcher's built-in Guide, so they use two
+    // components of their own; the render policy refuses any undeclared tag.
+    componentPolicy: {
+      components: {
+        "media-placeholder": {
+          kind: "block",
+          props: { type: { type: "string", required: false } },
+          slots: ["default"],
+          media: null,
+        },
+        setting: {
+          kind: "inline",
+          props: { to: { type: "string", required: true } },
+          slots: ["default"],
+          media: null,
+        },
+      },
+    },
     i18n: {
       fallback: { de: ["en"] },
     },

@@ -16,6 +16,7 @@ export function worldMapDisplayStateAddress(evidence: WasmEvidence): number | nu
     [15_919, "23f59ceb29627fbbe1cddf258d6f1051ebb6690a52f7519603d0ec659890ed16"],
     [15_944, "bae49b4c4049cf2511557d413152253c330f6efb8c4a75116a1a03a5721c76cb"],
     [15_905, "2dfaee054163a104c3c15547e6ecd8b517835c87ea1cd5132e57e167b1175047"],
+    [15_910, "af6cb57dd743408f60931502ab22868d66a5018a2bd7335362302b5fdd493d37"],
   ] as const;
   const matches = owners.filter(([index, shape]) => {
   const body = functionBody(module, index);

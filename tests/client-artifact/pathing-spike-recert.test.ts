@@ -1,6 +1,7 @@
 /** Exact-client mutation refusal for the development-only pathing shape proof. */
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { retainedClientFixture } from "../fixtures/retained-client.js";
 import test from "node:test";
 import { certifyPathingShape } from "../../src/main/certification/pathing-spike-proof.js";
 import { wasmEvidence } from "../../src/main/certification/wasm-evidence.js";
@@ -14,6 +15,7 @@ import {
   WASM_HEADER,
 } from "../../src/main/core/wasm-binary.js";
 
+/** August indices; the retained-client fixture moves them per client. */
 const PATHING_FUNCTIONS = Object.freeze([3208, 3216, 3273, 3281, 3288]);
 
 function mutateFunction(input: Uint8Array, functionIndex: number): Uint8Array {
@@ -36,7 +38,8 @@ test("the exact pathing shape refuses every changed participating body", {
   assert.ok(artifact, "GW_CLIENT_WASM must name the exact official artifact");
   const input = new Uint8Array(await readFile(artifact));
   assert.ok(certifyPathingShape(input));
-  for (const functionIndex of PATHING_FUNCTIONS) {
+  const fixture = retainedClientFixture(input);
+  for (const functionIndex of PATHING_FUNCTIONS.map((index) => fixture.functionIndex(index))) {
     assert.equal(
       certifyPathingShape(mutateFunction(input, functionIndex)),
       null,

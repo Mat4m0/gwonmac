@@ -7,6 +7,7 @@ import {
   dispatchHeldKeyRelease,
   HeldKeys,
   isMovementKey,
+  modifierOfCode,
 } from './held-keys.js';
 
 // Canvases a held drag may wander from the one it started on. The client keeps
@@ -537,6 +538,22 @@ export const installGameInput = ({
     }
   });
 
+  // The game reads its modifier state from key transitions, so a key-up it
+  // never received leaves Control or Shift down for it: the next A selects all,
+  // a drag offers a split stack. A trusted event's own flags always tell the
+  // truth, so a held modifier the flags deny gets its missing release first.
+  const healStaleModifiers = (
+    event: KeyboardEvent | MouseEvent,
+    trigger: 'key' | 'pointer',
+  ) => {
+    for (const { code, modifier } of heldKeys.staleModifiers(event)) {
+      heldKeys.releaseNormalized(code);
+      trace?.record({
+        source: 'renderer', kind: 'stale-modifier-release', modifier, trigger,
+      });
+    }
+  };
+
   window.addEventListener('keydown', (event) => {
     if (!event.isTrusted) return;
     // Guild Wars has no Command modifier. Let Chromium and the main-process
@@ -551,6 +568,9 @@ export const installGameInput = ({
       traceKey(event, 'down', 'suppressed');
       return;
     }
+    // A modifier key's own press is the transition; every other key proves the
+    // current modifier state through its flags.
+    if (modifierOfCode(event.code) === undefined) healStaleModifiers(event, 'key');
     if (
       event.isTrusted &&
       (event.target === canvas || textInputs.has(event.target)) &&
@@ -644,6 +664,7 @@ export const installGameInput = ({
   }, true);
   window.addEventListener('mousedown', (event) => {
     if (!event.isTrusted) return;
+    healStaleModifiers(event, 'pointer');
     trace?.record({
       source: 'renderer',
       kind: 'press',

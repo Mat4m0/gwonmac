@@ -16,8 +16,9 @@ test("graphics guard rejects every phase that triggers the official GrDev flush 
   const bindings = resolveNativeRenderBindings(module, NATIVE_RENDER_REFERENCE_FUNCTIONS);
   assert.ok(bindings);
   const sections = splitSections(input);
-  const body = parseCode(sectionById(sections, 10))[2902 - module.functionImportCount]!;
-  const sites = evidence.decodeFunctions([]).find(row => row.functionIndex === 2902)?.callSites; assert.ok(sites);
+  const queue = fixture.functionIndex(2902), assertion = fixture.functionIndex(322);
+  const body = parseCode(sectionById(sections, 10))[queue - module.functionImportCount]!;
+  const sites = evidence.decodeFunctions([]).find(row => row.functionIndex === queue)?.callSites; assert.ok(sites);
   const peers = [...sites.keys()];
   const edits = [...sites].flatMap(([target, calls]) => calls.map(site => ({...site, target})))
     .sort((a, b) => a.offset - b.offset);
@@ -27,7 +28,7 @@ test("graphics guard rejects every phase that triggers the official GrDev flush 
     cursor = edit.operandEnd;
   }
   const section = (id: number, bytes: Uint8Array) => encodeSection({id, body: bytes});
-  const type = module.functionTypeIndices[2902]!;
+  const type = module.functionTypeIndices[queue]!;
   const capsule = concat(WASM_HEADER, section(1, sectionById(sections, 1)),
     section(2, concat(uleb(peers.length), ...peers.map(index => concat(encodeName("peer"), encodeName(String(index)),
       Uint8Array.of(0), uleb(module.functionTypeIndices[index]!))))),
@@ -37,7 +38,7 @@ test("graphics guard rejects every phase that triggers the official GrDev flush 
     section(10, encodeCode([concat(...parts, body.slice(cursor)), concat(Uint8Array.of(0), nativeGraphicsBusy(0, bindings), Uint8Array.of(0x0b))])));
   // Execute the real queue state machine; only backend work and assertion reporting are stubbed.
   const imports = Object.fromEntries(peers.map(index => [String(index), (...args: number[]) => {
-    if (index === 322) throw new Error(`native assertion line ${args[2]}`);
+    if (index === assertion) throw new Error(`native assertion line ${args[2]}`);
     return 0;
   }]));
   const { exports } = new WebAssembly.Instance(new WebAssembly.Module(Uint8Array.from(capsule)), {peer: imports});

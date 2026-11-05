@@ -21,6 +21,7 @@ test("the Vue launcher owns a narrow frozen bridge and offline subtree", async (
       launcherKeys: [
         "experience",
         "external",
+        "feedback",
         "gameFiles",
         "navigation",
         "news",
@@ -36,6 +37,9 @@ test("the Vue launcher owns a narrow frozen bridge and offline subtree", async (
       nodeRequire: "undefined",
       nodeProcess: "undefined",
     });
+    // A news host the fixture does not block would turn this "ready" with live stories.
+    await expect.poll(async () => (await fixture.page.evaluate(() => window.launcherNative.state.get())).news)
+      .toEqual({ status: "offline", stories: [] });
     if (await fixture.page.getByRole("button", { name: "Continue" }).isVisible()) {
       await fixture.page.getByRole("button", { name: "Continue" }).click();
       await fixture.page.getByRole("button", { name: "Not now" }).click();

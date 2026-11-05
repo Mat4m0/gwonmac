@@ -92,7 +92,9 @@ test("the built launcher preload exposes every launcher command and nothing else
   await api.texturePacks.remove(texturePackId);
   await api.updates.check();
   await api.updates.restartAndInstall();
+  await api.feedback.send({ kind: "problem", message: "Help does not open." });
   await api.external.open("github");
+  await api.external.openUrl("https://www.gwonmac.com/");
   await api.external.revealLogs();
 
   assert.deepEqual(

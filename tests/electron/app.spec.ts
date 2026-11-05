@@ -12,7 +12,7 @@ import {
 } from "node:fs/promises";
 import net from "node:net";
 import { tmpdir } from "node:os";
-import { electronBin, root } from "./fixtures.mjs";
+import { electronBin, offlineNewsSwitch, root } from "./fixtures.mjs";
 
 /** How a spawned Electron process ended, as `child_process` reports it. */
 type ProcessExit = { code: number | null; signal: NodeJS.Signals | null };
@@ -67,7 +67,7 @@ const launchEnv = (
 const launch = (userData: string, env: Record<string, string>) =>
   electron.launch({
     cwd: root,
-    args: [".", `--user-data-dir=${userData}`],
+    args: [".", `--user-data-dir=${userData}`, offlineNewsSwitch],
     env,
     executablePath: electronBin,
   });

@@ -71,8 +71,7 @@ Home can show News and Dailies. In the launcher, open **Settings → Home screen
 section and choose which one appears first. If only one is enabled, Home removes
 the tab switcher. If both are disabled, the artwork uses the full Home area.
 
-News, Dailies, maintained Known Issues, and direct feedback submission are not
-connected in the first production cutover. The launcher says this plainly and
+News and Dailies are not connected in the first production cutover. The launcher says this plainly and
 links to the project website, GitHub, Discord, or Guild Wars Wiki. Development
 fixtures are sample data and are never presented as current production content.
 
@@ -469,17 +468,26 @@ tests one client generation for every profile. The first opened game acts as a
 canary. Later selected profiles open only after that first game proves the new
 client is healthy. A failure in one profile does not close healthy profiles.
 
-## Known issues and feedback
+## Help and support
 
-Use **Known issues** to see problems that ship with the current launcher
-version. Each open issue describes the symptom and its current workaround. The
-page also explains how to check the same action in ArenaNet's official client.
-Report an issue to ArenaNet when it also happens there. Report a macOS-only
-issue to gwonmac on GitHub or Discord.
+Use **Help** to see the open issues in ArenaNet's official game client. The
+list ships with the current launcher version. Each issue describes the symptom
+and what you can do now; for most, reload that game window with **⌘Q → Reload
+Guild Wars**. Fixed issues leave the list. The page also explains how to check
+the same action in ArenaNet's official client. Report an issue to ArenaNet when
+it also happens there. Report a macOS-only issue to gwonmac on Discord or
+GitHub, or with the feedback form.
 
-Use **Feedback** to prepare a short problem report or idea. Direct submission
-and file upload are intentionally not connected in this cutover. Continue on
-GitHub or Discord; the launcher never claims an unsubmitted form succeeded.
+Use **Send feedback** for a problem or an idea. The launcher sends only what you
+write, an optional email address, your app version, update channel, and macOS
+version. The report goes to the gwonmac team through Basin, a form service. The
+form confirms only a report that Basin accepted; if sending fails, your text
+stays in the form. The form does not upload files. To attach diagnostics,
+choose **Help → Diagnostics → Export Recent Diagnostics…** in a game window and
+add the file to a Discord or GitHub report.
+
+The **Support** button in the strip below the title bar opens the project's
+Ko-fi page. The launcher shows no funding amount.
 
 ## Recovery
 

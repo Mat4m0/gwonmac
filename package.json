@@ -19,7 +19,7 @@
     "node": ">=22.19"
   },
   "scripts": {
-    "postinstall": "install-electron",
+    "postinstall": "node scripts/install-electron.mjs",
     "build": "node scripts/build.mjs",
     "dev": "node --import ./scripts/ts-hook.mjs scripts/run-dev.ts",
     "dev:signed": "node --import ./scripts/ts-hook.mjs scripts/run-signed-dev.ts",
@@ -89,7 +89,7 @@
     "@types/node": "^24.13.3",
     "@types/pngjs": "^6.0.5",
     "@types/ws": "^8.18.1",
-    "electron": "^43.5.0",
+    "electron": "^43.8.1",
     "eslint": "^10.7.0",
     "eslint-plugin-vue": "^10.10.0",
     "node-api-headers": "1.9.0",

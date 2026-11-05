@@ -1,7 +1,7 @@
 {
   "name": "GWonMac",
   "description": "Play Guild Wars on your Apple Silicon Mac without Windows, Wine, or a virtual machine. Free, signed, and notarized.",
-  "url": "https://gwonmac.vercel.app",
+  "url": "https://www.gwonmac.com",
   "links": {
     "github": "https://github.com/Mat4m0/gwonmac",
     "discord": "https://discord.gg/Z9ft52RBD3"
