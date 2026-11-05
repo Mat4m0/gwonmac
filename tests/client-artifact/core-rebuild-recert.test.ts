@@ -1,5 +1,6 @@
 /** Exact-shortcut-disabled qualification for the three Core client proofs. */
 import assert from "node:assert/strict";
+import { retainedClientFixture } from "../fixtures/retained-client.js";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
@@ -61,6 +62,7 @@ test("Core proofs survive the retained client rebuild and fail locally", {
   const artifact = process.env.GW_CLIENT_WASM;
   assert.ok(artifact, "GW_CLIENT_WASM must name a retained official artifact");
   const bytes = new Uint8Array(await readFile(artifact));
+  const fixture = retainedClientFixture(bytes);
   const result = verifyLocalClientBytes(bytes, CORE_CAPABILITIES);
   assert.equal(result.status, "proved");
   assert.equal(
@@ -89,12 +91,12 @@ test("Core proofs survive the retained client rebuild and fail locally", {
   );
   assert.notEqual(
     build.preGameControls.characterSwitchAction.frameDispatch.functionIndex,
-    6841,
+    fixture.functionIndex(6841),
     "low frame messages must not use the external API that rejects IDs below FRAME_MSG_EX",
   );
   assert.equal(
     build.preGameControls.characterSwitchAction.frameResolver.functionIndex,
-    6534,
+    fixture.functionIndex(6534),
     "native child and parent IDs must be checked through the client's own ID manager",
   );
 

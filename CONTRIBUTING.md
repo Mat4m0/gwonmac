@@ -45,8 +45,9 @@ prepare, fix, or publish a release.
 
 ## Report a bug
 
-In the app, select **Help → Report a Problem…**. Attach the exported diagnostics
-`.zip` file to the bug report if it is useful.
+In a game window, select **Help → Report a Bug…**. Choose
+**Help → Diagnostics → Export Recent Diagnostics…** to create a diagnostics
+`.zip` file. Attach it to the bug report if it is useful.
 
 Do not attach credentials, packet captures, private account data, game
 binaries, or crash dumps. Report a security issue through the private process

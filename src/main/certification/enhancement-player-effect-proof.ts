@@ -56,8 +56,27 @@ const OCTOBER_22_BODY_HASHES: Readonly<Record<string, string>> = Object.freeze({
   "d5e3a36c3336cf3e42867228919ae973072dc54fb442d80244067a3f308b5fd5": "845200d2aae2d929e80fa3ebf334133e6d9dfa4fb1d2dfca3383c0a5c6186b14",
 });
 
-function effectProofFamily(family: "august" | "october" | "october22") {
-  const reviewedHash = (hash: string) => family === "october22"
+// November 3 renumbered the October 22 bodies again; only reviewed callee
+// indices and relocated operands differ. Keys are the August reference hashes.
+const NOVEMBER_3_BODY_HASHES: Readonly<Record<string, string>> = Object.freeze({
+  "7df2376537653cac9b32172fb51073fa57503b1a2bcceb317a6d282d1e13fb0b": "f4c17bb7fb0bc0bb9a06973c06a963ef2fe93d1c35231630b0695f6c172ea202",
+  "18899c4be6bf2fd51f6dbf6e52241456cdaed94d912ed23f307c95917bf615b8": "2f4ff4d5219da4d88211c0f133ad01c1aedfab1fc135f8501b5969feb36607b2",
+  "1f2d462100add0c160d62265d2eaf292a00bfd1cde84c38c1e51f2aac0a2cc57": "a560a223d9756fc3579f057137601853ec23c2b6bbd57248216b77ce550d29af",
+  "a560a223d9756fc3579f057137601853ec23c2b6bbd57248216b77ce550d29af": "6855a6e32260141c19dc6254dde29416a22a749f3ceaf30915ebf1d6b0d4387c",
+  "ecfa62c1bfaaebe98c2047ad986e137e9695a3cf2f0f7d5f6367b6e44cc10894": "0d5710dd6b45cd590a4cbad35cc7cfe1ef8c123566c91b36d252386d7d72c2f2",
+  "3fecf883ff7543db3cfdd8f3d77fc5cf3ef1e78282252f4f3caedbbe4f80bac0": "d6cf9fdadb6b0dbb118f080bfa319be92abc941df93f17606a732d8ca69943fa",
+  "fe97a736b61e83cc5ea5a84f38aecedd384476339c5b02594fcefeebc5ce5203": "6c88594d54694899dc3ba794cbc20766cb09818bcd1313b195c23e348f6d2a06",
+  "cafd172e56cbc1efcc64eb281fd8dadcfb6aa305eb4c165c0959f0903f98f769": "eeb5dbaafe38feff1f204a88097fee908fba36ae427ba10cb18c319aa2ee30f4",
+  "5e0ab6365510501ff760de8c3bdfb8682bf918e092d9263441d8fc7f56403533": "c09646cce2a296f5a031d9e919fa799285c371c3e9546484a390b9c5c0f4d0c1",
+  "7340dbe70f3f4bf731d23f80882df99553e837f825d8bbebee7f8eac45d8ef58": "e7a7adeb46c24e4f889e39042d025795a1b801fc854e7058208e5e272f14c8c6",
+  "9267c76c395a6ca5bc2efd0f9eb1cd3234feb5c95041a3e6230c98f23f9a4d60": "9e2f337f5dac54398615ea2e1f8be49edb450b147558b6046404560e897948dd",
+  "d5e3a36c3336cf3e42867228919ae973072dc54fb442d80244067a3f308b5fd5": "cb2351264724c96192d923cfaf5b1894c366feeff58de8dc75775ba8d40f84f5",
+});
+
+function effectProofFamily(family: "august" | "october" | "october22" | "november3") {
+  const reviewedHash = (hash: string) => family === "november3"
+    ? NOVEMBER_3_BODY_HASHES[hash] ?? hash
+    : family === "october22"
     ? OCTOBER_22_BODY_HASHES[hash] ?? hash
     : family === "october" ? OCTOBER_BODY_HASHES[hash] ?? hash : hash;
   const ACCESSORS: readonly ExactRole[] = Object.freeze([
@@ -310,6 +329,7 @@ function effectProofFamily(family: "august" | "october" | "october22") {
 
 const FAMILIES = Object.freeze([
   effectProofFamily("august"), effectProofFamily("october"), effectProofFamily("october22"),
+  effectProofFamily("november3"),
 ]);
 
 export function isPlayerEffectObservationProof(value: unknown): value is PlayerEffectProof {

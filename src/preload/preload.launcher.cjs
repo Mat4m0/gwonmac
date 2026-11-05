@@ -68,8 +68,12 @@ const launcherApi = {
     select: (id) => ipcRenderer.invoke(LAUNCHER_IPC.texturePacksSelect, id),
     remove: (id) => ipcRenderer.invoke(LAUNCHER_IPC.texturePacksRemove, id),
   },
+  feedback: {
+    send: (input) => ipcRenderer.invoke(LAUNCHER_IPC.feedbackSend, input),
+  },
   external: {
     open: (kind) => ipcRenderer.invoke(LAUNCHER_IPC.externalOpen, kind),
+    openUrl: (url) => ipcRenderer.invoke(LAUNCHER_IPC.externalOpenUrl, url),
     revealLogs: () => ipcRenderer.invoke(LAUNCHER_IPC.externalRevealLogs),
   },
   updates: {

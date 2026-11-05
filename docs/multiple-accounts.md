@@ -30,7 +30,7 @@ writes use their existing owners. If one write fails, the editor stays open
 and warns that some changes may already be saved. Retrying is safe.
 
 The launcher remembers the last Home or Accounts page in its presentation
-preferences. Settings, Known issues, and Feedback do not replace this startup
+preferences. Settings and Help do not replace this startup
 destination. Missing preferences keep Home as the default. Existing documents
 need no migration. Older builds ignore these additive presentation fields;
 saving with an older build can discard the remembered page or adopted name.

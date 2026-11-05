@@ -9,6 +9,5 @@ describe("launcher fixture scenarios", () => {
     expect(fixtureSnapshotFor("?fixture=offline").readiness.state).toBe("offline-playable");
     expect(fixtureSnapshotFor("?fixture=update").appUpdate.phase).toBe("ready");
     expect(fixtureSnapshotFor("?fixture=failed").profiles[0]!.state).toBe("failed");
-    expect(fixtureSnapshotFor("?fixture=production").contentAvailability.feedback).toBe("placeholder");
   });
 });

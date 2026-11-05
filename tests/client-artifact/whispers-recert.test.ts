@@ -23,9 +23,13 @@ test("whisper certification binds the current sender, copier and observer encode
     // The same-day October 22 rebuild.
     "3dc01a8295d179450b16e2059ad056d4062fcad01e79ddae834bb2028596102b",
   ];
-  const functions = october.includes(result.officialSha256)
-    ? [358, 11744, 11742, 8847, 5779, 5865, 5871, 7879]
-    : [358, 11733, 11731, 8841, 5779, 5865, 5871, 7875];
+  // November 3 renumbered the October path.
+  const november3 = "b19f16fd415b2bdef6701921921ef3c7eaf40ca03b95385d4ac2ba8624dead98";
+  const functions = result.officialSha256 === november3
+    ? [359, 11747, 11745, 8848, 5780, 5866, 5872, 7880]
+    : october.includes(result.officialSha256)
+      ? [358, 11744, 11742, 8847, 5779, 5865, 5871, 7879]
+      : [358, 11733, 11731, 8841, 5779, 5865, 5871, 7875];
   for (const changed of functions) {
     const sections = splitSections(bytes);
     const bodies = parseCode(sectionById(sections, 10));

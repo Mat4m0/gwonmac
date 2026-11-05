@@ -5,7 +5,7 @@
  */
 
 /** Native memory layouts known to the sealed reachability kernel (its lib.rs). */
-export const CARTOGRAPHY_LAYOUT_IDS = Object.freeze([1, 2, 3, 4] as const);
+export const CARTOGRAPHY_LAYOUT_IDS = Object.freeze([1, 2, 3, 4, 5] as const);
 export type CartographyLayoutId = (typeof CARTOGRAPHY_LAYOUT_IDS)[number];
 export function isCartographyLayoutId(value: unknown): value is CartographyLayoutId {
   return CARTOGRAPHY_LAYOUT_IDS.includes(value as CartographyLayoutId);

@@ -126,14 +126,18 @@ test("minimum window and 200% zoom keep primary launcher controls reachable", as
     await expect(fixture.page.locator(".hero-panel h1")).toBeVisible();
     await expectCurrentContentFitsHorizontally(fixture);
 
-    await fixture.page.getByRole("button", { name: "Known issues", exact: true }).click();
-    await expect(fixture.page.getByRole("heading", { name: "Known issues" })).toBeVisible();
+    await fixture.page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Help", exact: true }).click();
+    await expect(fixture.page.getByRole("heading", { name: "Known issues", level: 1 })).toBeVisible();
     await expectCurrentContentFitsHorizontally(fixture);
-    await fixture.page.getByRole("button", { name: "Feedback", exact: true }).click();
-    await expect(fixture.page.getByRole("heading", { name: "Tell us what happened" })).toBeVisible();
+    const helpNav = fixture.page.locator(".help-nav");
+    await helpNav.getByRole("button", { name: "Report a problem", exact: true }).click();
+    await expect(fixture.page.getByRole("heading", { name: "Tell us about a problem or an idea" })).toBeVisible();
+    await expectCurrentContentFitsHorizontally(fixture);
+    await helpNav.getByRole("button", { name: "Travel and maps", exact: true }).click();
+    await expect(fixture.page.getByRole("heading", { name: "Travel and maps", level: 1 })).toBeVisible();
     await expectCurrentContentFitsHorizontally(fixture);
 
-    await fixture.page.getByRole("button", { name: "Settings" }).click();
+    await fixture.page.locator(".titlebar").getByRole("button", { name: "Settings", exact: true }).click();
     await fixture.page.evaluate(() => window.launcherNative.tools.setMasterEnabled(true));
     for (const section of ["Updates", "Home screen", "Advanced", "Game", "Appearance", "Tools", "Maps", "Game files"]) {
       await fixture.page.locator(".settings-page aside").getByRole("button", { name: section, exact: true }).click();

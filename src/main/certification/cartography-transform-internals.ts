@@ -124,6 +124,30 @@ export const OCTOBER_22_WORLD_MAP_CERTIFICATE = Object.freeze({
   eventDispatcherTableSlot: 4150,
 });
 
+// November 3 renumbered the October 22 owners and their callees again;
+// bodies are otherwise unchanged apart from moved static addresses.
+export const NOVEMBER_3_COMPASS_CERTIFICATE = Object.freeze({
+  ...COMPASS_CERTIFICATE,
+  renderFunction: 14218,
+  renderBodySha256: "4e396c79daa5e7cda8b63cf8bdc22466e791bfeb7b3784749efbfed29a177321",
+  mapRenderFunction: 14157,
+  mapRenderBodySha256: "a8f76f3892254f91a364da37609373d80c436dc0eba5c20d91659ec253f6b331",
+});
+export const NOVEMBER_3_MISSION_MAP_CERTIFICATE = Object.freeze({
+  ...MISSION_MAP_CERTIFICATE,
+  eventDispatcherFunction: 16128,
+  eventDispatcherBodySha256: "95bd218acc4357157fda114932452986e9f43868ea8d3108c2921393b0962002",
+  eventDispatcherTableSlot: 4004,
+  gameplayContextFunction: 13538,
+  gameplayContextBodySha256: "ec7abc11398b79a64770a9594e58d7e934c300a844e29b35a52d0862acdbc770",
+});
+export const NOVEMBER_3_WORLD_MAP_CERTIFICATE = Object.freeze({
+  ...WORLD_MAP_CERTIFICATE,
+  eventDispatcherFunction: 16215,
+  eventDispatcherBodySha256: "583c263546baf00180e27fe15d08e79e2f37e9b2b84d65d64f017e2078901fd5",
+  eventDispatcherTableSlot: 4150,
+});
+
 export const EXPLORATION_CERTIFICATE = Object.freeze({
   gameContextSlot: 6,
   worldContext: 0x2c,
@@ -214,6 +238,17 @@ export const CARTOGRAPHY_MEMORY_LAYOUTS = Object.freeze({
     contextRoot: 5919152,
     areaInfo: 1891136,
     agentArray: 5935416,
+  }),
+  november3: Object.freeze({
+    layoutId: 5,
+    compass: NOVEMBER_3_COMPASS_CERTIFICATE,
+    missionMap: NOVEMBER_3_MISSION_MAP_CERTIFICATE,
+    worldMap: NOVEMBER_3_WORLD_MAP_CERTIFICATE,
+    frameArray: 5924028,
+    frameCount: 5924036,
+    contextRoot: 5919552,
+    areaInfo: 1891376,
+    agentArray: 5935816,
   }),
 } satisfies Readonly<Record<string, CartographyMemoryLayout>>);
 
