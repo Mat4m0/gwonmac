@@ -64,3 +64,29 @@ test("the single-weight Guild Wars face is never synthetically emboldened", () =
   assert.match(root, /--ui-font-weight-bold:\s*400;/u);
   assert.doesNotMatch(css, /font-synthesis-weight:\s*auto;/u);
 });
+
+// The launcher shell outside Settings, which keeps the --settings-* set it shares with the game's Hub.
+const launcherShellStyles = () => [
+  "apps/launcher/src/style.css",
+  ...walk("apps/launcher/src")
+    .filter((file) => file.endsWith(".vue") && !/Settings|Preview|Control/u.test(path.basename(file))),
+].map((file) => {
+  const source = readFileSync(file, "utf8");
+  const css = file.endsWith(".vue") ? [...source.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gu)].map((match) => match[1]).join("\n") : source;
+  return { file, css: css.replace(/\/\*[\s\S]*?\*\//gu, "") };
+});
+
+test("launcher shell colours come only from the design tokens in :root", () => {
+  const offenders = launcherShellStyles().flatMap(({ file, css }) =>
+    [...css.replace(/:root\s*\{[^}]*\}/gu, "").matchAll(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/giu)]
+      .map((match) => `${file}: ${match[0]}`));
+  assert.deepEqual(offenders, []);
+});
+
+test("every custom property the launcher shell reads is defined", () => {
+  const defined = new Set(["apps/launcher/src/style.css", "apps/launcher/src/settings-view.css"]
+    .flatMap((file) => [...readFileSync(file, "utf8").matchAll(/(--[\w-]+)\s*:/gu)].map((match) => match[1])));
+  const offenders = launcherShellStyles().flatMap(({ file, css }) =>
+    [...css.matchAll(/var\((--[\w-]+)/gu)].map((match) => match[1]!).filter((name) => !defined.has(name)).map((name) => `${file}: ${name}`));
+  assert.deepEqual(offenders, []);
+});

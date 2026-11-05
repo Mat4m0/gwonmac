@@ -30,15 +30,18 @@ const wiki = {
   query: { pages: { "1": {
     title: "Feedback:Game updates/20260901",
     fullurl: "https://wiki.guildwars.com/wiki/Feedback:Game_updates/20260901",
-    extract: `
-== Update - September 1, 2026 ==
+    revisions: [{ slots: { main: { "*": `== Update - September 1, 2026 ==
 
 === Skill updates ===
- Mirage Cloak: Adjust additional block chance to 4..10 (so that Earth investment is required) and fixed a bug where damage from enchantment removal was getting improperly multiplied.
- Focused Shot: Removed errant cast time.
+<!-- Keep skills in the order of the
+official notes. -->
+* {{skill icon|Mirage Cloak}}: Adjust additional block chance to 4..10 (so that Earth investment is required) and fixed a bug where damage from enchantment removal was getting improperly multiplied.
+** Applies to [[Mirage Cloak (PvP)|the PvP version]] too.
+* '''Focused Shot''': Removed errant cast time.<span title="Build 38,888"
 
 === Guild Wars Wiki notes ===
-Build: 38,888`,
+* Build: 38,888
+<noinclude>[[Category:2026 updates]]</noinclude>` } } }],
   } } },
 };
 
@@ -63,6 +66,21 @@ describe("launcher news", () => {
     assert.equal((beta.stories[0]?.body[0] as { content: readonly { emphasis?: string }[] }).content[1]?.emphasis, "strong");
   });
 
+  it("drops an event once it has ended", async () => {
+    const root = await mkdtemp(join(tmpdir(), "gwonmac-news-"));
+    roots.push(root);
+    const cachePath = join(root, "news.json");
+    const input = feed();
+    input.stories.push({ ...input.stories[0]!, id: "pirate-week", source: "event", endsAt: "2026-09-20T19:00:00Z" } as typeof input.stories[0]);
+    await writeFile(cachePath, JSON.stringify(input));
+    const at = (iso: string) => new LauncherNewsService({ cachePath, fetch: async () => { throw new Error("offline"); }, openExternal: async () => undefined, now: () => new Date(iso) });
+    for (const [iso, ids] of [["2026-09-20T18:59:00Z", ["release-stable", "pirate-week"]], ["2026-11-03T09:00:00Z", ["release-stable"]]] as const) {
+      const service = at(iso);
+      await service.loadCache();
+      assert.deepEqual(service.snapshot("stable", DEFAULT_LAUNCHER_PREFERENCES).stories.map((story) => story.id), ids);
+    }
+  });
+
   it("combines the exact project and Wiki feeds, caches project notes, and opens only known IDs", async () => {
     const root = await mkdtemp(join(tmpdir(), "gwonmac-news-"));
     roots.push(root);
@@ -82,6 +100,16 @@ describe("launcher news", () => {
       snapshot.stories[0]?.summary,
       "Skill updates — Mirage Cloak: Adjust additional block chance to 4..10 (so that Earth investment is required) and fixed a bug where damage from enchantment removal was getting improperly multiplied.",
     );
+    assert.equal(snapshot.stories[0]?.action, "article");
+    assert.deepEqual(snapshot.stories[0]?.body.map((block) => block.type === "heading" ? block.text : block.type === "list" ? block.items.map((item) => item.map((part) => part.text).join("")) : block.type), [
+      "Update - September 1, 2026",
+      "Skill updates",
+      [
+        "Mirage Cloak: Adjust additional block chance to 4..10 (so that Earth investment is required) and fixed a bug where damage from enchantment removal was getting improperly multiplied.",
+        "Applies to the PvP version too.",
+        "Focused Shot: Removed errant cast time.",
+      ],
+    ]);
     const article = snapshot.stories[1]!.body[0];
     if (article?.type !== "paragraph") throw new Error("expected the release introduction");
     const actionId = article.content.find((part) => part.actionId)?.actionId;

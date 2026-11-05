@@ -254,6 +254,7 @@ test("the launcher preload exposes only its frozen launcher bridge", async () =>
   assert.deepEqual(Object.keys(launcher).sort(), [
     "experience",
     "external",
+    "feedback",
     "gameFiles",
     "navigation",
     "news",

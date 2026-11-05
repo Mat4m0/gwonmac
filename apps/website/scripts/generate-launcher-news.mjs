@@ -44,7 +44,8 @@ function required(metadata, key, name) {
 
 function storyFrom(name, source) {
   const { metadata, body } = frontmatter(source, name);
-  if (!metadata.launcherId) return null;
+  // A draft is the next release's notes: the app bundles them, the feed waits for the release.
+  if (!metadata.launcherId || metadata.draft === "true") return null;
   const itemSource = required(metadata, "launcherSource", name);
   const channel = required(metadata, "launcherChannel", name);
   if (!["launcher", "event"].includes(itemSource)) throw new Error(`${name}: launcherSource is invalid`);

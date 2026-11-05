@@ -66,7 +66,8 @@ and local data.
 
 ## Privacy and safety
 
-- The Mac app sends no gwonmac telemetry.
+- The Mac app sends no gwonmac telemetry. Feedback you write in **Help** goes
+  to the gwonmac team through the Basin form service, only when you send it.
 - Diagnostics stay on your Mac until you attach an export to a report.
 - The diagnostics system does not record credentials, packet contents,
   cookies, request bodies, or local paths.

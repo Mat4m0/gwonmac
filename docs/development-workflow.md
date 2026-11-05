@@ -107,25 +107,6 @@ launcher; restore it with **Window → Show Launcher**. Do not click Play merely
 to verify startup. Report the worktree, launch mode, and profile. Rebuild before
 checking changed compiled code; preserve the session requested for handoff.
 
-## Update project funding
-
-Edit [`src/shared/funding.json`](../src/shared/funding.json) on GitHub and merge
-the change into `main`. Set `raisedEuros` to the confirmed amount and
-`goalEuros` to the target, using whole euros. The goal must be greater than zero.
-Keep only these two fields. No app release or website deployment is needed.
-
-The launcher fetches this exact file from GitHub when its window first
-connects. Restart the app to check a changed amount; GitHub caching can delay
-its appearance. Fetching never blocks startup or Play. Invalid responses and
-network failures leave the displayed figures unchanged. Each app ships a copy
-of the same file as its offline fallback. A successful fetch updates memory
-for the current session; no separate disk cache is stored.
-
-This requires an app version with remote funding support. Older versions keep
-their bundled figures. Validate changes with
-`node --import ./scripts/ts-hook.mjs --test tests/unit/launcher-funding.test.ts`
-and `pnpm run check`.
-
 ## Disposable launcher fixtures
 
 Use `pnpm launcher:fixture` to open a fresh launcher against a temporary

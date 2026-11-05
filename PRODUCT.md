@@ -114,7 +114,8 @@ cannot run code or access game state. The complete contract and limits live in
 - No generic memory, packet, command, or plugin API.
 - No port of the Windows plugin ABI.
 - No general mod loader, executable TPF content, texture stacking, or pack editor.
-- No gwonmac telemetry from the Mac app.
+- No gwonmac telemetry from the Mac app. Launcher feedback is sent only when
+  the player submits it.
 - No silent eviction policy or fixed disk-usage promise.
 - No forced mid-session restart.
 - No compatibility layer that keeps an obsolete internal design alive.

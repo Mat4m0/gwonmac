@@ -23,6 +23,7 @@ import {
 } from "./compass-ranges.js";
 import { normaliseCustomUiTheme } from "./ui-theme.js";
 import type { ErrorCode } from "./errors.js";
+import type { MarkdownBlock, MarkdownInline } from "./launcher-markdown.js";
 import {
   CARTOGRAPHY_CONTROL_IDLE_OPACITY_MAX,
   CARTOGRAPHY_CONTROL_IDLE_OPACITY_MIN,
@@ -75,7 +76,9 @@ export const LAUNCHER_IPC = Object.freeze({
   texturePacksImport: "gw:launcher:texturePacks:import",
   texturePacksSelect: "gw:launcher:texturePacks:select",
   texturePacksRemove: "gw:launcher:texturePacks:remove",
+  feedbackSend: "gw:launcher:feedback:send",
   externalOpen: "gw:launcher:external:open",
+  externalOpenUrl: "gw:launcher:external:openUrl",
   externalRevealLogs: "gw:launcher:external:revealLogs",
   updatesCheck: "gw:launcher:updates:check",
   updatesRestartAndInstall: "gw:launcher:updates:restartAndInstall",
@@ -113,16 +116,8 @@ export interface LauncherPreferences {
 }
 
 export type LauncherNewsSource = "game" | "event" | "launcher";
-export type LauncherNewsInline = Readonly<{
-  text: string;
-  emphasis?: "strong" | "code";
-  actionId?: string;
-}>;
-export type LauncherNewsBlock =
-  | Readonly<{ type: "paragraph"; content: readonly LauncherNewsInline[] }>
-  | Readonly<{ type: "heading"; text: string }>
-  | Readonly<{ type: "list"; items: readonly (readonly LauncherNewsInline[])[] }>
-  | Readonly<{ type: "image"; src: string; alt: string }>;
+export type LauncherNewsInline = MarkdownInline;
+export type LauncherNewsBlock = MarkdownBlock;
 export interface LauncherNewsStory {
   readonly id: string;
   readonly source: LauncherNewsSource;
@@ -299,7 +294,6 @@ export type LauncherReadiness =
   | { readonly state: "offline-playable" };
 
 export interface LauncherSnapshot {
-  readonly funding: Readonly<{ raisedEuros: number; goalEuros: number }>;
   readonly revision: number;
   readonly experience: Readonly<{
     installationKind: LauncherInstallationKind;
@@ -324,12 +318,6 @@ export interface LauncherSnapshot {
   readonly selectedProfileIds: readonly ProfileId[];
   readonly preferences: LauncherPreferences;
   readonly news: LauncherNewsState;
-  readonly contentAvailability: Readonly<{
-    news: "fixture" | "placeholder";
-    dailies: "fixture" | "placeholder";
-    knownIssues: "fixture" | "placeholder";
-    feedback: "fixture" | "placeholder";
-  }>;
 }
 
 export interface LauncherNativeApi {
@@ -387,10 +375,41 @@ export interface LauncherNativeApi {
     check(): Promise<void>;
     restartAndInstall(): Promise<void>;
   };
+  readonly feedback: {
+    send(input: LauncherFeedback): Promise<void>;
+  };
   readonly external: {
     open(kind: LauncherExternalLink): Promise<void>;
+    /** A web page the bundled Guide links to; main opens only the origins in LAUNCHER_GUIDE_ORIGINS. */
+    openUrl(url: string): Promise<void>;
     revealLogs(): Promise<void>;
   };
+}
+
+export const LAUNCHER_FEEDBACK_KINDS = ["problem", "idea", "other"] as const;
+export type LauncherFeedbackKind = (typeof LAUNCHER_FEEDBACK_KINDS)[number];
+export const LAUNCHER_FEEDBACK_MESSAGE_LIMIT = 4000;
+
+/** What a player chose to send. The main process adds only version facts. */
+export interface LauncherFeedback {
+  readonly kind: LauncherFeedbackKind;
+  readonly message: string;
+  /** Present only when the player asked for an answer. */
+  readonly email?: string;
+}
+
+export function parseLauncherFeedback(value: unknown): LauncherFeedback {
+  const source = exactObject(value, ["kind", "message", "email"], "feedback");
+  if (typeof source.kind !== "string" || !LAUNCHER_FEEDBACK_KINDS.includes(source.kind as LauncherFeedbackKind)) throw new Error("feedback kind is invalid");
+  const kind = source.kind as LauncherFeedbackKind;
+  if (typeof source.message !== "string") throw new Error("feedback message is invalid");
+  const message = source.message.trim();
+  if (!message || message.length > LAUNCHER_FEEDBACK_MESSAGE_LIMIT) throw new Error("feedback message is invalid");
+  if (source.email === undefined) return { kind, message };
+  if (typeof source.email !== "string") throw new Error("feedback email is invalid");
+  const email = source.email.trim();
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email)) throw new Error("feedback email is invalid");
+  return { kind, message, email };
 }
 
 export function parseGlobalTool(value: unknown): GlobalTool {
@@ -401,6 +420,26 @@ export function parseGlobalTool(value: unknown): GlobalTool {
 export function parseLauncherExternalLink(value: unknown): LauncherExternalLink {
   if (typeof value === "string" && LAUNCHER_EXTERNAL_LINKS.includes(value as LauncherExternalLink)) return value as LauncherExternalLink;
   throw new Error("external link is invalid");
+}
+
+/** The sites the bundled Guide may open in the browser. The Guide is built into the app, so this is the whole list. */
+export const LAUNCHER_GUIDE_ORIGINS: ReadonlySet<string> = new Set([
+  "https://gwonmac.vercel.app",
+  "https://github.com",
+  "https://discord.gg",
+  "https://wiki.guildwars.com",
+  "https://help.guildwars.com",
+  "https://account.arena.net",
+]);
+
+export function parseLauncherGuideUrl(value: unknown): string {
+  if (typeof value === "string" && value.length <= 512) {
+    try {
+      const url = new URL(value);
+      if (url.protocol === "https:" && !url.username && !url.password && LAUNCHER_GUIDE_ORIGINS.has(url.origin)) return url.href;
+    } catch { /* falls through */ }
+  }
+  throw new Error("guide link is invalid");
 }
 
 export function parseLauncherNewsId(value: unknown): string {
