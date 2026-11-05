@@ -458,29 +458,27 @@ test.describe("Electron application", () => {
         if (!win) throw new Error("window missing");
         return win.getBounds();
       });
-      const savedReset = JSON.parse(await readFile(statePath, "utf8")) as {
-        formatVersion: number;
-        bounds: typeof actualReset;
-        displayWorkArea: typeof actualReset;
-        mode: string;
-      };
-      expect(
-        await app.evaluate(({ screen }, bounds) =>
+      const fitsADisplay = (bounds: typeof actualReset) =>
+        app.evaluate(({ screen }, candidate) =>
           screen.getAllDisplays().some(({ workArea }) =>
-            bounds.x >= workArea.x
-            && bounds.y >= workArea.y
-            && bounds.x + bounds.width <= workArea.x + workArea.width
-            && bounds.y + bounds.height <= workArea.y + workArea.height
-          ), actualReset),
-      ).toBe(true);
-      expect(savedReset).toMatchObject({ formatVersion: 1, mode: "normal" });
-      expect(await app.evaluate(({ screen }, bounds) =>
-        screen.getAllDisplays().some(({ workArea }) =>
-          bounds.x >= workArea.x
-          && bounds.y >= workArea.y
-          && bounds.x + bounds.width <= workArea.x + workArea.width
-          && bounds.y + bounds.height <= workArea.y + workArea.height
-        ), savedReset.bounds)).toBe(true);
+            candidate.x >= workArea.x
+            && candidate.y >= workArea.y
+            && candidate.x + candidate.width <= workArea.x + workArea.width
+            && candidate.y + candidate.height <= workArea.y + workArea.height
+          ), bounds);
+      expect(await fitsADisplay(actualReset)).toBe(true);
+      // Leaving fullscreen settles over several window events, each saved
+      // 300 ms later, so the first "normal" write can still hold a frame from
+      // the transition. The invariant is the placement the file settles on.
+      await expect.poll(async () => {
+        const saved = JSON.parse(await readFile(statePath, "utf8")) as {
+          bounds: typeof actualReset;
+          mode: string;
+        };
+        return saved.mode === "normal" && await fitsADisplay(saved.bounds);
+      }, { timeout: 15_000 }).toBe(true);
+      expect(JSON.parse(await readFile(statePath, "utf8")))
+        .toMatchObject({ formatVersion: 1, mode: "normal" });
       await closeCleanly(app);
     } finally {
       await app.close().catch(() => undefined);
