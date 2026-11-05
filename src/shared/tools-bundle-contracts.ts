@@ -22,6 +22,34 @@ export type PublishedTemplate = Readonly<{
 /** A build the Tools bundle has already encoded for the renderer to publish. */
 export type PublishableTemplate = Readonly<{ name: string; code: string }>;
 
+/** What to do when an imported template's name is already used by a different build. */
+export type TemplateCollisionPolicy = "skip" | "replace";
+
+export type TemplateFilesState =
+  | Readonly<{ available: false; reason: string }>
+  | Readonly<{ available: true; stored: string; count: number; stranded: string | null }>;
+
+/** Picked files, read once; nothing is written until `apply`. */
+export interface TemplateSelection {
+  preview(policy: TemplateCollisionPolicy): Readonly<{ summary: string; skipped: string; count: number }>;
+  /** The sentence that reports the import; rejects with one when nothing could be saved. */
+  apply(policy: TemplateCollisionPolicy): Promise<string>;
+}
+
+/**
+ * The game's saved template files, moved in and out as .txt files. Only the
+ * renderer can reach the mount, so it implements this and the Build Library
+ * draws it; every string it returns is ready to show.
+ */
+export interface TemplateFiles {
+  state(): TemplateFilesState;
+  read(files: readonly File[]): Promise<TemplateSelection>;
+  /** The outcome sentence, or null when the player cancelled the folder picker. */
+  exportAll(): Promise<string | null>;
+  /** Moves templates out of folders Guild Wars cannot list; returns the outcome sentence. */
+  rescue(): Promise<string>;
+}
+
 export type ToolsAppHandle = Readonly<{
   show: () => void;
   hide: () => void;
@@ -40,6 +68,7 @@ export type ToolsAppMountOptions = Readonly<{
   publishTemplate:
     | ((template: PublishableTemplate) => Promise<PublishedTemplate>)
     | null;
+  templateFiles: TemplateFiles | null;
   commands: TeamApplyCommands | null;
   storage: StorageCommand | null;
   applyUnavailable: string | null;

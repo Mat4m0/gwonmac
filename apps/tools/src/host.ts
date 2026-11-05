@@ -20,6 +20,7 @@ import type { StorageCommand } from "../../../src/shared/storage-command";
 import type {
   PublishedTemplate,
   PublishableTemplate,
+  TemplateFiles,
 } from "../../../src/shared/tools-bundle-contracts";
 import { encodeSkillTemplate } from "../../../src/shared/builds/skill-template";
 import {
@@ -80,6 +81,8 @@ export interface ToolsHost {
   ): Promise<TeamApplyResult>;
   applyBuild(build: Build, hero: HeroId | null, onEvent?: (event: TeamApplyEvent) => void): Promise<TeamApplyResult>;
   loadTemplates(): Promise<readonly { path: string; contents: string }[]>;
+  /** Import and export of the game's template files, or null where no game can run. */
+  readonly templateFiles: TemplateFiles | null;
   cancelApply(): void;
   /**
    * Why `applyTeam` cannot reach the running game, or `null` when it can.
@@ -215,6 +218,7 @@ export function createDemoHost(storage: Storage | null = null): ToolsHost {
       return { fileName: safeFileName(build.name), location: "Templates/Skills" };
     },
     async loadTemplates() { return []; },
+    templateFiles: null,
     async applyBuild() { return { commandId: 1, completedChanges: 0, skippedSkills: [] }; },
     async applyTeam() {
       await new Promise((resolve) => setTimeout(resolve, 180));
@@ -254,6 +258,7 @@ export function createNativeHost(
   development = false,
   observationUnavailable: string | null = null,
   readTemplates?: ToolsHost["loadTemplates"],
+  templateFiles: TemplateFiles | null = null,
 ): ToolsHost {
   const party = ref(unavailableParty());
   // One counter per session, so a result can be tied to the request that asked
@@ -437,6 +442,7 @@ export function createNativeHost(
       ? [{ hero, build, behaviour: null }]
       : [{ hero: null, build: null, behaviour: null }, { hero, build, behaviour: null }] }, onEvent, { build, hero }),
     async loadTemplates() { return readTemplates ? readTemplates() : (await api.profileTemplates.loadTemplates())?.entries ?? []; },
+    templateFiles,
     async openStorage() {
       if (storage === null) {
         throw new Error("Storage is unavailable after this Guild Wars update.");

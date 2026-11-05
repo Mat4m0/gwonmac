@@ -1,13 +1,14 @@
-// The sentences the Build Templates pane says. They are pure functions so they
-// can be executed here rather than asserted about, and the one that matters
-// most is the least obvious: the client caches its template scan, so an import
-// that does not name Refresh List reads to the player as an import that did
-// nothing.
+// The sentences the Template files dialog says, and the one path that writes.
+// The sentences are pure functions so they can be executed here rather than
+// asserted about, and the one that matters most is the least obvious: the
+// client caches its template scan, so an import that does not name Refresh List
+// reads to the player as an import that did nothing.
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  createTemplateFiles,
   describeExport,
   describeImported,
   describeRescue,
@@ -15,11 +16,13 @@ import {
   describePreview,
   describeSkips,
   describeStored,
-} from "../../src/renderer/template-pane.js";
+} from "../../src/renderer/template-files.js";
+import { SKILLS_DIR, fakeFilesystem } from "./template-filesystem-fixture.js";
 import type { TemplateParse } from "../../src/renderer/template-format.js";
 import type { ImportPlan } from "../../src/renderer/template-store.js";
 
 const SKILLS = "OQCiUyo8AkVwR4KMMGAAAEAA";
+const OTHER_SKILLS = "OQCiUyo8AkVwR4KMMGAAAEAB";
 const EQUIPMENT = "Pk5hbug2fkaiklWVqQhyI90YjyIBLziyIBTpgyIBr7hyIbB";
 
 const skill = (name: string) =>
@@ -140,4 +143,28 @@ test("an export says what it wrote, and a cancel says nothing at all", () => {
     describeExport({ status: "failed", errorCode: "unknown" }) ?? "",
     /unchanged/,
   );
+});
+
+test("an import writes nothing before Import, and Keep existing never overwrites a different build", async () => {
+  const fs = fakeFilesystem({ [`${SKILLS_DIR}/Native.txt`]: OTHER_SKILLS });
+  const files = createTemplateFiles({ filesystem: () => fs, exportToDisk: async () => ({ status: "cancelled" }) });
+  const picked = await files.read([
+    new File([SKILLS], "Native.txt"),
+    new File([SKILLS], "Fresh.txt"),
+    new File(["not a template"], "gw.dat"),
+  ]);
+  assert.deepEqual(picked.preview("skip"), {
+    summary: "1 skill template will be imported.",
+    skipped: "Skipped or adjusted: 1 would replace a different build of the same name.",
+    count: 1,
+  });
+  assert.equal(picked.preview("replace").count, 2);
+  assert.deepEqual([...fs.files.keys()], [`${SKILLS_DIR}/Native.txt`]);
+
+  assert.match(await picked.apply("skip"), /^Imported 1 template\. .*Refresh List/u);
+  assert.equal(fs.files.get(`${SKILLS_DIR}/Native.txt`), OTHER_SKILLS);
+  assert.equal(fs.files.get(`${SKILLS_DIR}/Fresh.txt`), SKILLS);
+
+  await picked.apply("replace");
+  assert.equal(fs.files.get(`${SKILLS_DIR}/Native.txt`), SKILLS);
 });
