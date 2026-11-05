@@ -20,7 +20,7 @@ function feed(channel: "stable" | "beta" = "stable") {
       summary: "A useful player-facing summary.",
       publishedAt: "2026-09-01T12:00:00Z",
       featured: true,
-      url: "https://gwonmac.vercel.app/blog/release",
+      url: "https://www.gwonmac.com/blog/release",
       body: "Intro with **important text** and a [technical record](https://github.com/Mat4m0/gwonmac/releases/tag/v1).\n\n## Changes\n\n- First change\n\n![Screenshot](/blog/image.png)",
     }],
   };

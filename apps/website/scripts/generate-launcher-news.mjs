@@ -66,7 +66,9 @@ function storyFrom(name, source) {
     summary,
     publishedAt: `${required(metadata, "date", name)}T12:00:00Z`,
     featured: metadata.launcherFeatured === "true",
-    url: metadata.launcherExternalUrl || `https://gwonmac.vercel.app/blog/${slug}`,
+    // Relative, so every app resolves it against the origin it fetched the feed
+    // from: released betas still read it from the website's old address.
+    url: metadata.launcherExternalUrl || `/blog/${slug}`,
     ...(metadata.launcherStartsAt ? { startsAt: metadata.launcherStartsAt } : {}),
     ...(metadata.launcherEndsAt ? { endsAt: metadata.launcherEndsAt } : {}),
     body,

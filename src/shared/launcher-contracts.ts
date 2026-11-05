@@ -424,7 +424,7 @@ export function parseLauncherExternalLink(value: unknown): LauncherExternalLink 
 
 /** The sites the bundled Guide may open in the browser. The Guide is built into the app, so this is the whole list. */
 export const LAUNCHER_GUIDE_ORIGINS: ReadonlySet<string> = new Set([
-  "https://gwonmac.vercel.app",
+  "https://www.gwonmac.com",
   "https://github.com",
   "https://discord.gg",
   "https://wiki.guildwars.com",

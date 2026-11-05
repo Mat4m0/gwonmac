@@ -9,12 +9,12 @@ import { parseMarkdown } from "../../shared/launcher-markdown.js";
 import { readBoundedResponse } from "./bounded-response.js";
 import { writeAtomicJson } from "./atomic-file.js";
 
-export const PROJECT_NEWS_URL = "https://gwonmac.vercel.app/launcher/news-v1.json";
+export const PROJECT_NEWS_URL = "https://www.gwonmac.com/launcher/news-v1.json";
 // The page source, not a plain-text extract: the wiki returns a whole-page extract for only
 // one page per request, and the source keeps the bullet lists that update notes are made of.
 export const WIKI_UPDATES_URL = "https://wiki.guildwars.com/api.php?action=query&generator=allpages&gapnamespace=202&gapprefix=Game%20updates%2F&gaplimit=5&gapdir=descending&prop=revisions%7Cinfo&rvprop=content%7Ctimestamp&rvslots=main&inprop=url&format=json&origin=*";
 const WIKI_ORIGIN = "https://wiki.guildwars.com";
-const PROJECT_ORIGIN = "https://gwonmac.vercel.app";
+const PROJECT_ORIGIN = "https://www.gwonmac.com";
 const MAX_FEED_BYTES = 512 * 1024;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_STORIES = 24;
