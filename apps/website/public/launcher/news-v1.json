@@ -19,7 +19,7 @@
       "title": "GWonMac 2026.8.12",
       "summary": "Restores every GWonMac feature after the large Guild Wars update of October 22. Nothing else changes.",
       "publishedAt": "2026-10-23T12:00:00Z",
-      "featured": true,
+      "featured": false,
       "url": "/blog/gwonmac-2026-8-12",
       "body": "Restores every GWonMac feature after the large Guild Wars update of October 22. Nothing else changes.\n\n- **Compatibility:** GWonMac and all Tools work again with the current Guild Wars client.\n\n[Technical release record](https://github.com/Mat4m0/gwonmac/releases/tag/v2026.8.12){target=\"_blank\"}"
     },
